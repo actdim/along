@@ -94,6 +94,16 @@ the protocol's own memory.
   references to that directory.
 - REQ-6: Tests: a broken link inside `.along/SESSIONS/` is reported; a legacy link inside
   `.along/HISTORY.md` is rewritten; legacy directory is not deleted while references remain.
+- REQ-7: Enforce the Stable Entry Point Rule in the same gate. A relative link in a file
+  outside `.along/` whose resolved target lies inside `.along/` is a violation, and should be
+  reported together with the canonical `docs/` alternative. The rule is prose only today:
+  grepping `Stable Entry Point` across `scripts/` returns nothing, so nothing has ever
+  checked it. It became mechanically checkable on 2026-09-01, when the wording was
+  generalized from a list of legacy folder names (`.along/KB/`, `.agents/KB/`, both long
+  deleted) to the service directory as a whole. Note the direction is the opposite of
+  REQ-1: REQ-1 walks files inside `.along/`, this checks links pointing into it from
+  outside. `AGENTS.md:213` is a live violation, catalogued in
+  `[bug--generated-docs-emit-file-uri-links]`.
 
 ## Acceptance Criteria
 
@@ -102,3 +112,4 @@ the protocol's own memory.
 - [ ] Shared, documented exclusion set used by both passes.
 - [ ] `--json` report available.
 - [ ] Legacy deletion blocked while unresolved references exist.
+- [ ] Inbound deep links from outside into `.along/` are reported with a `docs/` alternative.

@@ -1,9 +1,10 @@
 ---
 protocol: along
-protocol_version: 2.2.8
+protocol_version: "2.2.8"
 slug: tests-mutate-working-tree
 type: bug
-status: open
+status: done
+completed: 2026-09-01
 priority: high
 created: 2026-09-01
 updated: 2026-09-01
@@ -89,8 +90,35 @@ noise.
 
 ## Acceptance Criteria
 
-- [ ] No test passes `REPO_ROOT` to a writing engine.
-- [ ] Meta-test proves the suite leaves the tree clean.
-- [ ] `test_06` reports the real failure cause.
-- [ ] `test_09` compares full artifact sets.
-- [ ] Hermetic-test rule documented.
+- [x] No test passes `REPO_ROOT` to a writing engine.
+- [x] Meta-test proves the suite leaves the tree clean.
+- [x] `test_06` reports the real failure cause.
+- [x] `test_09` compares full artifact sets.
+- [x] Hermetic-test rule documented.
+
+## Resolution
+
+- `tests/hermetic.py` builds a throwaway repository that looks like a current Along project
+  (managed protocol block, one valid entity, an ADR, the board, a small `docs/`), and is
+  deliberately not a git repository. `test_06`, `test_07`, `test_08`, and `test_12` target it;
+  `test_12` passes it as `cwd`, because `along_exec` resolves its target from the working
+  directory.
+- REQ-1 note on `test_06`: the two assertions it made about `.along/DASHBOARD.md` and
+  `.along/dashboard.html` in `REPO_ROOT` were vacuous. `--cli` writes nothing, so they only
+  proved two committed artifacts were still checked in. The writer is `--export`, which is
+  now what the test exercises, into the fixture. The DASHBOARD.md churn described above is
+  therefore not caused by the suite; it stays with `[debt--generated-dashboard-artifact-committed]`.
+- REQ-4: `proc.run_capture` already normalizes `stdout`/`stderr` to `""`, so the `None`
+  path cannot recur; the `returncode` check and the clean `uv` skip are in place.
+- REQ-5 pulled in one line of the neighbouring issue: the parity test fails unless
+  `install.sh` installs `rules/`, so it now does, copying over the destination rather than
+  deleting it first. The destructive `Remove-Item -Recurse -Force` on `~/.<tool>/rules` in
+  `install.ps1` is untouched and remains with
+  `[bug--installer-parity-and-destructive-rules-overwrite]`.
+- `tests/test_zz_hermetic_suite.py` holds both gates. Verified by construction: with an
+  empty baseline the porcelain gate fails and names the entries; the AST gate flags
+  `[sys.executable, mig_script, REPO_ROOT]` and passes `os.path.join(REPO_ROOT, ...)` and
+  plain data lists.
+- Documented in the protocol block (`AGENTS.md` + `skills/along-init/protocol.md`), in
+  `AGENTS.md` Project specifics, in `docs/topic--setup-and-workflow.md` section 6, and in
+  the structural-guards section of `docs/topic--architecture.md`.

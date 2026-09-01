@@ -140,7 +140,9 @@ reader, so ADR search returned zero results in every released version.
 | `alongkit/textio.py` | Strict reads, line-ending preservation, atomic writes. |
 | `alongkit/markdown.py` | Link parsing, fenced-code tracking, GitHub heading anchors, `file://` resolution. |
 | `alongkit/typography.py` | The forbidden-character table, shared with the quality gate. |
-| `alongkit/gates.py` | Pre-commit and pre-release test and sanitizer gates. |
+| `alongkit/sanitizer.py` | Which files that table governs, strict reads, the modes, and the JSON report. |
+| `alongkit/gates.py` | Pre-commit and pre-release test, typography, and Markdown link gates. |
+| `alongkit/transaction.py` | Snapshot and byte-exact rollback around a multi-file mutation. |
 | `alongkit/semver.py` | Version parsing, increments, comparison. |
 | `alongkit/version.py` | The protocol version constant, declared exactly once. |
 | `alongkit/bootstrap.py` | Dependency resolution for a directly invoked engine. |
@@ -157,6 +159,50 @@ keys and leave every other line byte-identical.
 
 See [ADR-2026-09-01--frontmatter-on-ruamel-yaml](../.along/DECISIONS.md) and
 [ADR-2026-09-01--shared-engine-package](../.along/DECISIONS.md).
+
+### The typography rule: what it governs, and who may rewrite
+
+Two modules, deliberately split. `alongkit/typography.py` is the character table and a
+pure string transformation; it never opens a file. `alongkit/sanitizer.py` owns every
+decision that touches a user's disk.
+
+| Question | Answer |
+| :--- | :--- |
+| Which files? | `.md`, `.py`, `.sh`, `.ps1`, `.bat`. Data files (`.json`, `.yaml`, `.yml`, `.toml`) only with `--include-data`. Localized resource directories (`locales/`, `i18n/`, `translations/`, ...) never. |
+| Which directories? | All of them, hidden included, so a byte order mark in `.along/**` is finally visible. Excludable per repository with `.alongsanitizeignore` or `--exclude`. |
+| Who may write? | Only an explicit `--write` (standalone) or `--fix-typography` (commit, release). The gates verify and abort. |
+| What about a file that is not UTF-8? | Skipped, reported by path with the decode reason, left byte-identical. Never decoded lossily and rewritten. |
+| What about line endings? | Preserved verbatim. Nothing parses `.gitattributes`, because preserving what a file already uses cannot contradict it. |
+| What do callers consume? | `sanitizer.Report` (`--json` on stdout, human output on stderr), never printed text. |
+
+The previous implementation did the opposite of each row and ran that way unattended
+before every commit and every release. See
+[ADR-2026-09-01--typography-rule-scope](../.along/DECISIONS.md).
+
+### Gates precede mutations, and mutations roll back
+
+A gate that reports after the fact is not a gate. The release engine used to bump the
+version, rewrite the tree with the sanitizer, flip the milestone to `completed`, and
+regenerate the dashboard, and only then run the tests - and only when `--commit` was
+passed. When they failed it printed "Release aborted" and exited over a tree that was
+already half-released, with nothing to undo it.
+
+Two rules follow, and `[bug--release-engine-mutates-before-tests-and-reinstalls-globals]`
+records what each of them cost:
+
+1. **Every gate runs on the untouched tree, unconditionally.** Tests, the typography check,
+   and the Markdown link check all run before the first byte is written, whatever flags the
+   invocation carries. `--no-verify` is the single documented way past them.
+2. **Every mutation is recorded.** `alongkit/transaction.py` snapshots a file's exact bytes
+   (or its absence) before anything writes to it. On failure the transaction restores each
+   one and names it; a mutation it cannot undo - a project's own
+   `.along/scripts/bump_version.py` writing paths the engine cannot see - is reported
+   rather than assumed away. The transaction closes at the git commit, past which a
+   rollback would destroy committed work instead of repairing anything.
+
+The release also stages only the paths it wrote, rather than `git add -A`, and touches no
+machine-global state: it used to finish by running `install.ps1 -Target all`, which deletes
+and recreates `~/.claude/rules`.
 
 ### Three invocation paths, one package
 
@@ -189,6 +235,14 @@ Two tests keep the duplication from growing back
 
 A third asserts that an engine still runs from a flat directory copy, and a fourth that
 both installers carry the package.
+
+Two more guard the suite itself
+([tests/test_zz_hermetic_suite.py](../tests/test_zz_hermetic_suite.py)): the working tree
+must be byte-identical before and after a run, and no test may build an engine command
+line whose target is the repository root. Engines write, so a test that passes the real
+root can rewrite project memory mid-session; fixtures come from
+[tests/hermetic.py](../tests/hermetic.py). See
+[Writing Tests: the Hermetic Rule](./topic--setup-and-workflow.md).
 
 ---
 ## 6. End-to-End Human & Developer Workflow

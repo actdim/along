@@ -22,6 +22,14 @@ CODEX_HOME="${CODEX_HOME:-$HOME/.codex}"
 OPENCODE_HOME="${OPENCODE_HOME:-$HOME/.config/opencode}"
 ANTIGRAVITY_HOME="${ANTIGRAVITY_HOME:-$HOME/.gemini/config}"
 
+# Un-namespaced OpenCode commands from before the /along-* prefix. Kept at parity with
+# $shortAliases in install.ps1; tests/test_skills_and_scripts.py compares the two.
+SHORT_ALIASES=(
+  "build" "commit" "context-sync" "dash" "decision-sync" "dep-scan" "dev"
+  "graph-check" "history-sync" "init" "issue-sync" "kb-search" "kb-sync"
+  "test" "update" "version-bump" "wrap"
+)
+
 LEGACY_SKILLS=(
   "init-agents" "update-agents" "dashboard" "repo-dashboard"
   "bump-version" "check-graph" "wrap-session" "wrap-stage"
@@ -101,6 +109,17 @@ install_skillfolders() {  # $1 = tool home dir; installs SKILL.md folders verbat
   done
 }
 
+install_rulefolders() {  # $1 = tool home dir; installs the language & platform rule packs
+  local rules_src="$SCRIPT_DIR/rules"
+  [ -d "$rules_src" ] || return 0
+  local dst="$1/rules"
+  mkdir -p "$dst"
+  # Copied over, not replaced: a tool home may hold rule files the user wrote, and
+  # deleting the destination first would take them with it.
+  cp -r "$rules_src"/. "$dst/"
+  echo "   rules copied -> $dst"
+}
+
 install_along_scripts() {
   local along_home="$HOME/.along"
   local along_bin="$along_home/bin"
@@ -131,9 +150,12 @@ install_opencode() {  # generate flat commands + place along-init helper
   mkdir -p "$cmddir" "$helper"
   rm -rf "$old_helper"
 
-  # Clean legacy commands
+  # Clean legacy commands and the un-namespaced short aliases
   for leg in "${LEGACY_SKILLS[@]}"; do
     rm -f "$cmddir/$leg.md"
+  done
+  for short in "${SHORT_ALIASES[@]}"; do
+    rm -f "$cmddir/$short.md"
   done
 
   local scripts_src="$SCRIPT_DIR/scripts"
@@ -209,11 +231,13 @@ install_along_scripts
 
 if [ "$do_claude" -eq 1 ]; then
   install_skillfolders "$CLAUDE_HOME"
+  install_rulefolders "$CLAUDE_HOME"
   configure_mcp_server "$(dirname "$CLAUDE_HOME")/.claude.json"
   configure_mcp_server "$CLAUDE_HOME/mcp_config.json"
 fi
 if [ "$do_codex" -eq 1 ]; then
   install_skillfolders "$CODEX_HOME"
+  install_rulefolders "$CODEX_HOME"
   configure_mcp_server "$CODEX_HOME/mcp_config.json"
 fi
 if [ "$do_opencode" -eq 1 ]; then
@@ -222,6 +246,7 @@ if [ "$do_opencode" -eq 1 ]; then
 fi
 if [ "$do_antigravity" -eq 1 ]; then
   install_skillfolders "$ANTIGRAVITY_HOME"
+  install_rulefolders "$ANTIGRAVITY_HOME"
   configure_mcp_server "$ANTIGRAVITY_HOME/mcp_config.json"
 fi
 

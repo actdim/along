@@ -1,6 +1,8 @@
 # Active Issues
 
 ## Active
+- [ ] `(feat)` [kb-source-provenance-and-reconstruction](file://.along/ISSUES/feat--kb-source-provenance-and-reconstruction.md)
+- [ ] `(debt)` [library-modules-runnable-as-scripts](file://.along/ISSUES/debt--library-modules-runnable-as-scripts.md)
 - [ ] `(bug)` [commit-binds-arbitrary-active-issue](file://.along/ISSUES/bug--commit-binds-arbitrary-active-issue.md)
 - [ ] `(bug)` [commit-stages-all-and-dead-test-detection](file://.along/ISSUES/bug--commit-stages-all-and-dead-test-detection.md)
 - [ ] `(bug)` [generated-docs-emit-file-uri-links](file://.along/ISSUES/bug--generated-docs-emit-file-uri-links.md)
@@ -12,11 +14,8 @@
 - [ ] `(bug)` [link-gates-skip-along-directory](file://.along/ISSUES/bug--link-gates-skip-along-directory.md)
 - [ ] `(bug)` [migration-deletes-destination-without-backup](file://.along/ISSUES/bug--migration-deletes-destination-without-backup.md)
 - [ ] `(bug)` [quality-gates-skip-hidden-directories](file://.along/ISSUES/bug--quality-gates-skip-hidden-directories.md)
-- [ ] `(bug)` [release-engine-mutates-before-tests-and-reinstalls-globals](file://.along/ISSUES/bug--release-engine-mutates-before-tests-and-reinstalls-globals.md)
 - [ ] `(bug)` [skill-commands-reference-missing-script-paths](file://.along/ISSUES/bug--skill-commands-reference-missing-script-paths.md)
 - [ ] `(bug)` [team-skill-uses-provider-specific-subagent-api](file://.along/ISSUES/bug--team-skill-uses-provider-specific-subagent-api.md)
-- [ ] `(bug)` [tests-mutate-working-tree](file://.along/ISSUES/bug--tests-mutate-working-tree.md)
-- [ ] `(bug)` [typography-sanitizer-destroys-non-utf8-files](file://.along/ISSUES/bug--typography-sanitizer-destroys-non-utf8-files.md)
 - [ ] `(debt)` [always-on-context-budget-exceeds-claims](file://.along/ISSUES/debt--always-on-context-budget-exceeds-claims.md)
 - [ ] `(debt)` [entity-status-enum-and-unused-taxonomy](file://.along/ISSUES/debt--entity-status-enum-and-unused-taxonomy.md)
 - [ ] `(debt)` [exception-swallowing-hides-failures](file://.along/ISSUES/debt--exception-swallowing-hides-failures.md)
@@ -38,6 +37,9 @@
 <!-- Planned or deferred issues -->
 
 ## Done (recent)
+- [x] `(bug)` [release-engine-mutates-before-tests-and-reinstalls-globals](file://.along/ISSUES/done/bug--release-engine-mutates-before-tests-and-reinstalls-globals.md)
+- [x] `(bug)` [typography-sanitizer-destroys-non-utf8-files](file://.along/ISSUES/done/bug--typography-sanitizer-destroys-non-utf8-files.md)
+- [x] `(bug)` [tests-mutate-working-tree](file://.along/ISSUES/done/bug--tests-mutate-working-tree.md)
 - [x] `(feat)` [version-bump-automation-and-release-hardening](file://.along/ISSUES/done/feat--version-bump-automation-and-release-hardening.md)
 - [x] `(feat)` [update-agents-skill-and-automation](file://.along/ISSUES/done/feat--update-agents-skill-and-automation.md)
 - [x] `(feat)` [universal-project-version-bumping-and-along-scripts](file://.along/ISSUES/done/feat--universal-project-version-bumping-and-along-scripts.md)

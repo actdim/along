@@ -18,7 +18,7 @@ Idempotent LLM-Wiki Knowledge Base synchronization, inbound link rewriting, comp
 ## Universal Rendering & Stable Entry Points
 
 All Markdown generated or maintained by `along-kb-sync` MUST strictly adhere to universal rendering standards:
-- **Stable Entry Point Rule**: Direct links from `README.md` or external docs to internal storage directories (e.g. `.along/KB/`) are strictly forbidden. All public entry points must reference stable canonical paths in `docs/` (`docs/INDEX.md` or `docs/topic--<slug>.md`).
+- **Stable Entry Point Rule**: Files outside the service directory (`README.md`, `docs/`, package manifests, external documentation) MUST NOT link directly into `.along/`, nor into legacy service paths from earlier protocol versions. Route every such reference through a stable canonical path in `docs/` (`docs/INDEX.md` or `docs/topic--<slug>.md`). The rule governs published links only: agents still read `.along/ISSUES.md` and `.along/DECISIONS.md` directly, as instructed at session start.
 - **Monorepo Scope Rule**: Knowledge Base synchronization, link rewriting, and link verification operate recursively across all subprojects, packages (`packages/*`, `apps/*`), and directories.
 - **Relative Markdown Links**: Use standard relative paths (`./docs/topic--<name>.md` from root, `./topic--<name>.md` within `docs/`). Never use absolute URLs, local filesystem schemes (`file:///`), or OS-specific backslashes.
 - **Cross-Platform Renderers**: Guarantees 100% clean rendering across **GitHub**, **GitLab**, **GitHub Pages** (Jekyll, Astro, Docusaurus, MkDocs), **npm**, **NuGet**, **PyPI**, and **crates.io**.

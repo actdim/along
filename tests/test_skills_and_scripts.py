@@ -9,7 +9,12 @@ Guarantees:
 4. Protocol Version Consistency: Versions across manifests, protocol.md, README.md, and scripts match.
 5. Typography Sanitization: Zero non-ASCII typographic characters (em-dash, curly quotes, NBSP, ZWSP).
 6. Engine CLI Execution: along_dash, along_update, migrate_protocol, along_exec, and along_commit run without errors.
-7. Installer Integrity: All skill folders are covered by install scripts.
+7. Installer Integrity: install.ps1 and install.sh install the same artifact set.
+
+Hermetic rule: every engine invocation below targets a throwaway fixture from
+`tests/hermetic.py`, never REPO_ROOT. Tests that need live repository content read it and
+never run a writing engine over it. See `[bug--tests-mutate-working-tree]` and the
+meta-test in `tests/test_zz_hermetic_suite.py`.
 """
 
 import os
@@ -28,12 +33,20 @@ if REPO_ROOT not in sys.path:
 SCRIPTS_DIR = os.path.join(REPO_ROOT, "scripts")
 if SCRIPTS_DIR not in sys.path:
     sys.path.insert(0, SCRIPTS_DIR)
+TESTS_DIR = os.path.dirname(os.path.abspath(__file__))
+if TESTS_DIR not in sys.path:
+    sys.path.insert(0, TESTS_DIR)
 
 from alongkit import proc, typography
+import hermetic
 
 
-def run(cmd, **kwargs):
+def run_engine(cmd, **kwargs):
     """Capture a child process with the encoding conventions fixed in one place.
+
+    Named `run_engine` rather than `run`: `alongkit.sanitizer.run` now owns that name
+    in the shared package, and `test_no_engine_redefines_a_shared_helper` fails when a
+    module outside the package shadows one of its helpers.
 
     `subprocess.run(..., text=True)` without `encoding=` decodes with the host locale.
     On a cp1251 or cp936 Windows install a single non-ASCII byte raised
@@ -272,7 +285,7 @@ class TestAlongSkillsAndScripts(unittest.TestCase):
             target = os.path.join(tmp, "AGENTS.md")
             with open(target, "w", encoding="utf-8", newline="") as f:
                 f.write(agents_md)
-            run([sys.executable, mig_script, tmp])
+            run_engine([sys.executable, mig_script, tmp])
             with open(target, "r", encoding="utf-8") as f:
                 return f.read()
 
@@ -303,66 +316,171 @@ class TestAlongSkillsAndScripts(unittest.TestCase):
                       "a real path containing /dashboard must survive")
         self.assertNotIn("along-dash-ui", after)
 
-    def test_06_along_dash_cli_execution(self):
-        """Verify that along_dash.py runs in CLI mode and produces DASHBOARD.md and dashboard.html."""
+    def _run_dash(self, target, *extra):
+        """Run along_dash.py against `target`, falling back to uv for the dash extra.
+
+        Returns the Result, or skips the test when neither the dashboard dependencies
+        nor `uv` are available.
+        """
         dash_script = os.path.join(REPO_ROOT, "scripts", "along_dash.py")
         self.assertTrue(os.path.exists(dash_script), "scripts/along_dash.py must exist")
 
-        cmd = [sys.executable, dash_script, REPO_ROOT, "--cli"]
-        res = run(cmd)
+        res = run_engine([sys.executable, dash_script, target] + list(extra))
         if res.returncode != 0 and "No module named 'fastapi'" in res.stderr:
             # Fallback to uv when the dashboard stack is managed there. `httpx2` was a
             # typo for `httpx`, so this path had never worked, and `uv` was invoked
             # unconditionally, raising FileNotFoundError instead of skipping.
             if not shutil.which("uv"):
                 self.skipTest("dashboard dependencies are absent and uv is not installed")
-            cmd = ["uv", "run",
-                   "--with", "fastapi", "--with", "uvicorn", "--with", "httpx",
-                   "--with", "ruamel.yaml", "--with", "rich",
-                   dash_script, REPO_ROOT, "--cli"]
-            res = run(cmd)
+            res = run_engine(["uv", "run",
+                       "--with", "fastapi", "--with", "uvicorn", "--with", "httpx",
+                       "--with", "ruamel.yaml", "--with", "rich",
+                       dash_script, target] + list(extra))
+        return res
 
-        self.assertEqual(res.returncode, 0, f"along_dash.py --cli failed:\n{res.stderr}")
-        self.assertIn("Along Executive Dashboard", res.stdout)
-        self.assertIn("Project Metrics Summary", res.stdout)
+    def test_06_along_dash_cli_execution(self):
+        """Verify that along_dash.py renders the CLI summary and exports HTML on request.
 
-        self.assertTrue(os.path.exists(os.path.join(REPO_ROOT, ".along", "DASHBOARD.md")))
-        self.assertTrue(os.path.exists(os.path.join(REPO_ROOT, ".along", "dashboard.html")))
+        The old version pointed the engine at REPO_ROOT and then asserted that
+        `.along/DASHBOARD.md` and `.along/dashboard.html` existed there. Both assertions
+        were vacuous: `--cli` writes nothing, so they only proved that two committed
+        artifacts were still checked in. The export path is what writes, so that is what
+        is tested, into a fixture.
+        """
+        with hermetic.repo_fixture(prefix="along-dash-") as fixture:
+            res = self._run_dash(fixture, "--cli")
+            self.assertEqual(res.returncode, 0, f"along_dash.py --cli failed:\n{res.stderr}")
+            self.assertIn("Along Executive Dashboard", res.stdout)
+            self.assertIn("Project Metrics Summary", res.stdout)
+
+            exported = self._run_dash(fixture, "--export")
+            self.assertEqual(exported.returncode, 0,
+                             f"along_dash.py --export failed:\n{exported.stderr}")
+            html = os.path.join(fixture, ".along", "dashboard.html")
+            self.assertTrue(os.path.exists(html),
+                            f"--export must write {html}; stdout:\n{exported.stdout}")
+            self.assertGreater(os.path.getsize(html), 0, "exported dashboard must not be empty")
 
     def test_07_migrate_protocol_execution(self):
-        """Verify that migrate_protocol.py executes cleanly without runtime errors."""
+        """Verify that migrate_protocol.py executes cleanly over an already-current repository.
+
+        This ran against REPO_ROOT, which is how the suite came to rewrite project
+        memory: the engine normalizes front-matter, sanitizes typography, and rewrites
+        Markdown links across the whole tree, with no --dry-run to hold it back
+        (`[bug--migration-deletes-destination-without-backup]`).
+        """
         mig_script = os.path.join(REPO_ROOT, "scripts", "migrate_protocol.py")
         self.assertTrue(os.path.exists(mig_script), "scripts/migrate_protocol.py must exist")
 
-        res = run([sys.executable, mig_script, REPO_ROOT])
-        self.assertEqual(res.returncode, 0, f"migrate_protocol.py failed:\n{res.stderr}")
-        self.assertIn("migrations & validations completed successfully", res.stdout)
+        with hermetic.repo_fixture(prefix="along-migrate-") as fixture:
+            res = run_engine([sys.executable, mig_script, fixture])
+            self.assertEqual(res.returncode, 0, f"migrate_protocol.py failed:\n{res.stderr}")
+            self.assertIn("migrations & validations completed successfully", res.stdout)
+            self.assertNotIn("[ERROR]", res.stdout,
+                             "a current repository must migrate without graph errors")
+
+            # The fixture is already current, so the engine must leave its entity alone.
+            issue = os.path.join(fixture, ".along", "ISSUES", "task--fixture-sample-task.md")
+            with open(issue, "r", encoding="utf-8") as f:
+                self.assertIn('protocol_version: "', f.read(),
+                              "migration must not unquote front-matter of a current entity")
 
     def test_08_along_update_check_only(self):
         """Verify that along_update.py runs in check-only mode cleanly."""
         update_script = os.path.join(REPO_ROOT, "scripts", "along_update.py")
         self.assertTrue(os.path.exists(update_script), "scripts/along_update.py must exist")
 
-        res = run([sys.executable, update_script, REPO_ROOT, "--check-only", "--local-only"])
-        self.assertEqual(res.returncode, 0, f"along_update.py --check-only failed:\n{res.stderr}")
-        self.assertIn("Check-Only Mode", res.stdout)
+        with hermetic.repo_fixture(prefix="along-update-check-") as fixture:
+            res = run_engine([sys.executable, update_script, fixture, "--check-only", "--local-only"])
+            self.assertEqual(res.returncode, 0,
+                             f"along_update.py --check-only failed:\n{res.stderr}")
+            self.assertIn("Check-Only Mode", res.stdout)
 
-    def test_09_install_scripts_match_skills(self):
-        """Verify that install.ps1 and install.sh contain references to all current along skills."""
-        skill_dirs = [os.path.basename(p) for p in glob.glob(os.path.join(REPO_ROOT, "skills", "along-*"))]
-        
-        with open(os.path.join(REPO_ROOT, "install.ps1"), "r", encoding="utf-8") as f:
-            ps1_content = f.read()
-        with open(os.path.join(REPO_ROOT, "install.sh"), "r", encoding="utf-8") as f:
-            sh_content = f.read()
+    #: What an installer must put on disk, with the probe that proves each side does it.
+    #: The previous test compared skill folder NAMES only, which is why install.sh could
+    #: ship without installing `rules/` at all and nothing noticed
+    #: (`[bug--installer-parity-and-destructive-rules-overwrite]`). Artifacts, not names.
+    INSTALLER_ARTIFACTS = (
+        ("enumerate the skill folders in skills/ dynamically",
+         r"Get-ChildItem -Directory \$src", r'for d in "\$src"/\*/'),
+        ("purge legacy skill folders",
+         r"Purge-LegacySkillFolders", r"purge_legacy_skills"),
+        ("install the rule packs from rules/",
+         r"Join-Path \$PSScriptRoot 'rules'", r"\$SCRIPT_DIR/rules"),
+        ("install the engines into ~/.along/bin",
+         r"Join-Path \$alongHome 'bin'", r"\$along_home/bin"),
+        ("strip interpreter-specific __pycache__ from the installed engines",
+         r"__pycache__", r"__pycache__"),
+        ("seed the default configuration from config/along-config.example.json",
+         r"along-config\.example\.json", r"along-config\.example\.json"),
+        ("generate the flat OpenCode commands",
+         r"Join-Path \$OpencodeHome 'commands'", r"\$OPENCODE_HOME/commands"),
+        ("place protocol.md in the OpenCode helper directory",
+         r"along-init.protocol\.md", r"along-init/protocol\.md"),
+        ("remove the un-namespaced OpenCode command aliases",
+         r"shortAliases", r"SHORT_ALIASES"),
+        ("register the code-review-graph MCP server",
+         r"Set-McpConfigJson", r"configure_mcp_server"),
+        ("migrate the current repository at the end",
+         r"migrate_protocol\.py", r"migrate_protocol\.py"),
+    )
 
-        self.assertIn("Get-ChildItem -Directory $src", ps1_content)
-        self.assertIn('for d in "$src"/*/', sh_content)
+    #: Tool homes both installers must be able to target.
+    INSTALLER_TARGETS = ("claude", "codex", "opencode", "antigravity")
 
-        self.assertIn("scripts", ps1_content)
-        self.assertIn("scripts", sh_content)
-        self.assertIn("protocol.md", ps1_content)
-        self.assertIn("protocol.md", sh_content)
+    def _installer_sources(self):
+        sources = {}
+        for name in ("install.ps1", "install.sh"):
+            with open(os.path.join(REPO_ROOT, name), "r", encoding="utf-8") as f:
+                sources[name] = f.read()
+        return sources
+
+    def test_09_installer_artifact_parity(self):
+        """install.ps1 and install.sh must install the same set of artifacts."""
+        sources = self._installer_sources()
+        missing = []
+        for label, ps1_probe, sh_probe in self.INSTALLER_ARTIFACTS:
+            for name, probe in (("install.ps1", ps1_probe), ("install.sh", sh_probe)):
+                if not re.search(probe, sources[name]):
+                    missing.append(f"{name} does not appear to {label} (probe: {probe})")
+        self.assertEqual(
+            missing, [],
+            "the two installers must stay at parity; one of them is missing an artifact:\n"
+            + "\n".join(missing))
+
+        for name, text in sources.items():
+            for target in self.INSTALLER_TARGETS:
+                self.assertIn(target, text, f"{name} must support the {target} target")
+
+    def test_09b_installer_legacy_purge_lists_are_identical(self):
+        """
+        Both installers delete the same obsolete skills, or one leaves ghosts behind.
+
+        A name dropped from one list only means the corresponding platform keeps serving a
+        renamed skill from a previous protocol version, which then shadows the current one.
+        """
+        sources = self._installer_sources()
+        ps1_block = re.search(r"\$LegacySkills\s*=\s*@\((.*?)\n\)", sources["install.ps1"],
+                              re.DOTALL)
+        sh_block = re.search(r"LEGACY_SKILLS=\((.*?)\n\)", sources["install.sh"], re.DOTALL)
+        self.assertIsNotNone(ps1_block, "install.ps1 must declare $LegacySkills = @(...)")
+        self.assertIsNotNone(sh_block, "install.sh must declare LEGACY_SKILLS=(...)")
+
+        def names(block):
+            return set(re.findall(r"""["']([a-z0-9][a-z0-9-]*)["']""", block))
+
+        ps1_names, sh_names = names(ps1_block.group(1)), names(sh_block.group(1))
+        self.assertEqual(
+            ps1_names, sh_names,
+            "legacy purge lists diverge.\n"
+            f"  only in install.ps1: {sorted(ps1_names - sh_names)}\n"
+            f"  only in install.sh:  {sorted(sh_names - ps1_names)}")
+
+        current = {os.path.basename(p)
+                   for p in glob.glob(os.path.join(REPO_ROOT, "skills", "along-*"))}
+        self.assertEqual(
+            current & ps1_names, set(),
+            "the purge list names a skill that currently ships; installing would delete it")
 
     def test_10_skills_pure_declarative(self):
         """Verify that skills/ directory contains only clean Markdown manifests and zero .py or __pycache__ files."""
@@ -379,34 +497,49 @@ class TestAlongSkillsAndScripts(unittest.TestCase):
         exec_script = os.path.join(REPO_ROOT, "scripts", "along_exec.py")
         self.assertTrue(os.path.exists(exec_script), "scripts/along_exec.py must exist")
 
-        res = run([sys.executable, exec_script, "--help"])
+        res = run_engine([sys.executable, exec_script, "--help"])
         self.assertEqual(res.returncode, 0)
         self.assertIn("Along Command Router", res.stdout)
         self.assertIn("kb-sync", res.stdout)
         self.assertIn("dep-scan", res.stdout)
 
     def test_12_along_exec_entity_management(self):
-        """Verify that along_exec.py manages issues, sessions, and scratchpads cleanly without inline shell scripts."""
+        """Verify that along_exec.py manages issues and scratchpads cleanly without inline shell scripts.
+
+        `along_exec` resolves its target from the working directory, so the fixture is
+        passed as `cwd`. It used to create and purge `.along/.session/unit-test-task/`
+        inside this repository.
+        """
         exec_script = os.path.join(REPO_ROOT, "scripts", "along_exec.py")
-        
-        # 1. Scratchpad lifecycle
-        init_res = run([sys.executable, exec_script, "scratch", "init", "unit-test-task"])
-        self.assertEqual(init_res.returncode, 0)
-        scratch_dir = os.path.join(REPO_ROOT, ".along", ".session", "unit-test-task")
-        self.assertTrue(os.path.exists(scratch_dir), "Scratchpad directory should exist")
-        self.assertTrue(os.path.exists(os.path.join(scratch_dir, "plan.md")), "plan.md should exist")
 
-        purge_res = run([sys.executable, exec_script, "scratch", "purge", "unit-test-task"])
-        self.assertEqual(purge_res.returncode, 0)
-        self.assertFalse(os.path.exists(scratch_dir), "Scratchpad directory should be purged")
+        with hermetic.repo_fixture(prefix="along-exec-") as fixture:
+            # 1. Scratchpad lifecycle
+            init_res = run_engine([sys.executable, exec_script, "scratch", "init", "unit-test-task"],
+                           cwd=fixture)
+            self.assertEqual(init_res.returncode, 0, init_res.stderr)
+            scratch_dir = os.path.join(fixture, ".along", ".session", "unit-test-task")
+            self.assertTrue(os.path.exists(scratch_dir), "Scratchpad directory should exist")
+            self.assertTrue(os.path.exists(os.path.join(scratch_dir, "plan.md")), "plan.md should exist")
 
-        # 2. Issue list command
-        list_res = run([sys.executable, exec_script, "issue", "list"])
-        self.assertEqual(list_res.returncode, 0)
-        self.assertIn("Active issues in", list_res.stdout)
+            purge_res = run_engine([sys.executable, exec_script, "scratch", "purge", "unit-test-task"],
+                            cwd=fixture)
+            self.assertEqual(purge_res.returncode, 0, purge_res.stderr)
+            self.assertFalse(os.path.exists(scratch_dir), "Scratchpad directory should be purged")
+
+            # 2. Issue list command
+            list_res = run_engine([sys.executable, exec_script, "issue", "list"], cwd=fixture)
+            self.assertEqual(list_res.returncode, 0, list_res.stderr)
+            self.assertIn("Active issues in", list_res.stdout)
+            self.assertIn("fixture-sample-task", list_res.stdout,
+                          "the fixture entity must be listed, proving the fixture was the target")
 
     def test_13_dashboard_graph_builder_with_kb_and_adr(self):
-        """Verify that dashboard graph builder creates valid nodes and edges for KB articles and ADRs."""
+        """Verify that dashboard graph builder creates valid nodes and edges for KB articles and ADRs.
+
+        Read-only against the live `.along/`, which is the only permitted use of it:
+        `EntityCollector` and `build_entity_dag_graph` parse and never write. The graph is
+        worth building from real project memory, because a fixture cannot drift.
+        """
         from dashboard.core.collector import EntityCollector
         from dashboard.core.graph import build_entity_dag_graph
 
@@ -464,7 +597,7 @@ class TestAlongSkillsAndScripts(unittest.TestCase):
 
             # 2. Run migration script
             mig_script = os.path.join(REPO_ROOT, "scripts", "migrate_protocol.py")
-            res = run([sys.executable, mig_script, temp_dir])
+            res = run_engine([sys.executable, mig_script, temp_dir])
             self.assertEqual(res.returncode, 0, f"migrate_protocol failed in test:\n{res.stderr}")
 
             # 3. Assertions
@@ -513,7 +646,7 @@ class TestAlongSkillsAndScripts(unittest.TestCase):
 
             # Run along_update.py with --all-sync
             update_script = os.path.join(REPO_ROOT, "scripts", "along_update.py")
-            res = run([sys.executable, update_script, temp_dir, "--all-sync", "--local-only"])
+            res = run_engine([sys.executable, update_script, temp_dir, "--all-sync", "--local-only"])
             self.assertEqual(res.returncode, 0, f"along_update failed:\n{res.stderr}\nSTDOUT:\n{res.stdout}")
 
             # Assertions
@@ -565,7 +698,7 @@ class TestAlongSkillsAndScripts(unittest.TestCase):
 
             # Run along_kb_sync
             kb_script = os.path.join(REPO_ROOT, "scripts", "along_kb_sync.py")
-            res = run([sys.executable, kb_script, temp_dir])
+            res = run_engine([sys.executable, kb_script, temp_dir])
             self.assertEqual(res.returncode, 0, f"along_kb_sync failed:\n{res.stderr}\nSTDOUT:\n{res.stdout}")
 
             # Verify root README was rewritten
@@ -627,7 +760,7 @@ class TestAlongSkillsAndScripts(unittest.TestCase):
                 )
 
             update_script = os.path.join(REPO_ROOT, "scripts", "along_update.py")
-            res = run([sys.executable, update_script, temp_dir, "--local-only"])
+            res = run_engine([sys.executable, update_script, temp_dir, "--local-only"])
             self.assertEqual(res.returncode, 0, f"along_update failed:\n{res.stderr}\nSTDOUT:\n{res.stdout}")
 
             with open(agents_md, "r", encoding="utf-8") as f:
@@ -671,7 +804,7 @@ class TestAlongSkillsAndScripts(unittest.TestCase):
                 )
 
             update_script = os.path.join(REPO_ROOT, "scripts", "along_update.py")
-            res = run([sys.executable, update_script, temp_dir, "--local-only"])
+            res = run_engine([sys.executable, update_script, temp_dir, "--local-only"])
             self.assertEqual(res.returncode, 0, f"along_update failed:\n{res.stderr}\nSTDOUT:\n{res.stdout}")
 
             with open(readme_path, "r", encoding="utf-8") as f:

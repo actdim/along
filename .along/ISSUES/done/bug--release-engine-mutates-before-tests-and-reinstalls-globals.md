@@ -3,7 +3,8 @@ protocol: along
 protocol_version: 2.2.8
 slug: release-engine-mutates-before-tests-and-reinstalls-globals
 type: bug
-status: open
+status: done
+completed: 2026-09-01
 priority: critical
 created: 2026-09-01
 updated: 2026-09-01
@@ -107,8 +108,33 @@ if new_version in os.path.basename(mf):
 
 ## Acceptance Criteria
 
-- [ ] Failed release leaves zero modifications on disk.
-- [ ] No global machine state is touched by a version bump.
-- [ ] Milestone reconciliation only edits front-matter of the matching milestone.
-- [ ] Git tag created (or the claim removed from documentation).
-- [ ] Regression tests cover the abort path.
+- [x] Failed release leaves zero modifications on disk.
+- [x] No global machine state is touched by a version bump.
+- [x] Milestone reconciliation only edits front-matter of the matching milestone.
+- [x] Git tag created (or the claim removed from documentation).
+- [x] Regression tests cover the abort path.
+
+## Resolution
+
+The release is now two phases with a hard boundary between them: gates on the untouched
+tree, then mutations recorded by `alongkit/transaction.py` (`FileTransaction`), a new shared
+module that snapshots a file's exact bytes - or its absence - before anything writes to it
+and restores every one of them on failure.
+
+| REQ | Where |
+| :--- | :--- |
+| REQ-1 gate first, unconditionally | `release_preflight()` runs the tests, the typography check (check mode), and `gates.link_integrity_gate` before the first write, on every invocation. `-n` / `--no-verify` is the only way past, matching `along_commit.py`. |
+| REQ-2 transactional | `alongkit/transaction.py`. Every write goes through `tx.write`; `main` catches `ReleaseAborted` (and any unexpected exception), calls `report_rollback`, and names each restored path on stderr. Nothing in the engine calls `sys.exit` past argument parsing, because an exit would skip the rollback. The transaction closes at the commit. |
+| REQ-3 no global install | `sync_local_global_install` deleted, not gated. `TestReleaseTouchesNoGlobalState` fails on an installer literal in engine code (docstrings excluded, so the defect can still be documented) or on any `expanduser`. |
+| REQ-4 return codes | Every child process is checked: the custom bump hook, `git add`, `git commit`, `git tag`, `git push`, and the link gate. The dead `along_dash.py --markdown` call is removed - that flag has never existed, and `.along/DASHBOARD.md` is a derived projection under review in `[debt--generated-dashboard-artifact-committed]`. No success line can print over a failed child. |
+| REQ-5 front-matter writer | `update_along_milestones` uses `frontmatter.update`; `milestone_matches_version` requires the version as a whole hyphen-separated slug component, so `v1.4.30` survives a release of `1.4.3` and a milestone matched only by filename is left alone. |
+| REQ-6 explicit staging | `create_release_commit` stages `tx.changed()` - exactly the paths this release wrote. `git add -A` is gone. |
+| REQ-7 tag and changelog | Annotated `v<version>` tag; `update_changelog` prepends a `## v<version>` section listing `git log <last tag>..HEAD` subjects. A tag or push failure exits non-zero rather than warning. |
+| REQ-8 tests | `tests/test_release_engine.py`, 19 cases: the gate records the pre-bump version it saw, a failing hook leaves the tree byte-identical, a mid-release failure rolls back and names the files, milestone body text survives, the decoy and neighbour milestones are untouched, an unrelated dirty file stays out of the release commit, the tag is annotated, and the transaction primitive is unit-tested for byte-exact restore. |
+
+Also changed in passing: the ten duplicated read-substitute-write blocks in
+`bump_along_dev_repo` became one `rewrite_version_in_file` call each, with a strict UTF-8
+read - the version bump could previously have been the operation that lossily rewrote a
+file, the same defect class as
+`[bug--typography-sanitizer-destroys-non-utf8-files]`. `gates.link_integrity_gate` is new
+and available to any engine; a repository without the Knowledge Base engine passes it.

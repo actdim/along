@@ -202,12 +202,12 @@ Along Protocol Tools:
   kb-search      Search Knowledge Base and project memory
   dep-scan       Scan multi-project dependencies and AI rules
   history-sync   Reconcile Git commit history and synthesize entities
-  commit         Safe Conventional Commits with typography sanitization
+  commit         Safe Conventional Commits with a typography gate
   version-bump   Increment project version and create release commit
   update         Update Along protocol and skills across workspaces
   dash           Launch executive dashboard and OpenAPI service
   migrate        Run protocol migration and YAML front-matter fixes
-  sanitize       Sanitize non-ASCII typography across repository files
+  sanitize       Check (default) or repair non-ASCII typography; --write to apply
   feedback       Global diagnostics, error capture, and feedback dispatch (Telegram/Webhook/File)
 """)
 

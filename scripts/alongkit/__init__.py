@@ -15,6 +15,8 @@ each shared concern:
 - `textio`      strict reads, line-ending preservation, atomic writes
 - `markdown`    links, fenced-code tracking, heading anchors
 - `typography`  the forbidden-character table
+- `sanitizer`   which files that table governs, and the report a caller consumes
+- `transaction` snapshot and byte-exact rollback around a multi-file mutation
 - `version`     the protocol version constant
 - `bootstrap`   dependency resolution for a directly invoked engine
 
@@ -26,7 +28,8 @@ always copied next to the engines.
 
 from __future__ import annotations
 
-from . import bootstrap, entities, markdown, proc, repo, textio, typography, version
+from . import (bootstrap, entities, markdown, proc, repo, sanitizer, textio,
+               transaction, typography, version)
 from .proc import Result, run_capture, run_passthrough, run_python
 from .repo import find_repo_root, find_state_dir, resolve_tool_script, safe_relpath, state_dir
 from .textio import read_text, write_text
@@ -38,7 +41,9 @@ __all__ = [
     "markdown",
     "proc",
     "repo",
+    "sanitizer",
     "textio",
+    "transaction",
     "typography",
     "version",
     "CURRENT_PROTOCOL_VERSION",

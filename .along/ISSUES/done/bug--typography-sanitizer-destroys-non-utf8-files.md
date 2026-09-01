@@ -3,7 +3,8 @@ protocol: along
 protocol_version: 2.2.8
 slug: typography-sanitizer-destroys-non-utf8-files
 type: bug
-status: open
+status: done
+completed: 2026-09-01
 priority: critical
 created: 2026-09-01
 updated: 2026-09-01
@@ -121,8 +122,32 @@ harmful. This issue should decide the boundary and record it as an ADR.
 
 ## Acceptance Criteria
 
-- [ ] A cp1251 fixture survives a sanitizer run byte-for-byte.
-- [ ] A `.ps1` fixture keeps CRLF after a run.
-- [ ] `--dry-run` / `--check` implemented; commit path uses check mode by default.
-- [ ] ADR recorded for the typography rule scope.
-- [ ] Callers no longer parse stdout strings.
+- [x] A cp1251 fixture survives a sanitizer run byte-for-byte.
+- [x] A `.ps1` fixture keeps CRLF after a run.
+- [x] `--dry-run` / `--check` implemented; commit path uses check mode by default.
+- [x] ADR recorded for the typography rule scope.
+- [x] Callers no longer parse stdout strings.
+
+## Resolution
+
+`alongkit/sanitizer.py` is the new home for everything the rule does to a file;
+`alongkit/typography.py` keeps only the character table and the pure transformation.
+`scripts/sanitize_typography.py` is now a command line over it.
+
+| REQ | Where |
+| :--- | :--- |
+| REQ-1 strict reads | `sanitizer.inspect_file` reads through `textio.read_text(strict=True)`; a `UnicodeDecodeError` becomes a `SkippedFile` carrying the decode reason, and the file is never opened for writing. |
+| REQ-2 line endings | Reads use `newline=""` and writes pass `newline=None`, so the bytes a file uses are the bytes it keeps. Nothing parses `.gitattributes`, because preserving what is there cannot contradict it. |
+| REQ-3 scope | `DEFAULT_SUFFIXES` is `.md`, `.py`, `.sh`, `.ps1`, `.bat`; `DATA_SUFFIXES` needs `--include-data`; `LOCALIZED_DIRS` is never scanned in any mode. |
+| REQ-4 controls | `Mode.CHECK` (default), `Mode.DRY_RUN`, `Mode.WRITE`; `--exclude` globs and `.alongsanitizeignore`. |
+| REQ-5 machine-readable | `sanitizer.Report.as_dict()`, `--json` on stdout, human output on stderr. `tests/test_sanitizer.py` fails if `"Total files sanitized"` reappears in any engine. |
+| REQ-6 automated paths | `gates.typography_gate` runs in check mode and returns False; `along_commit.py` and `along_version_bump.py` abort unless `--fix-typography` is passed. |
+| REQ-7 ADR | `ADR-2026-09-01--typography-rule-scope`. |
+| REQ-8 BOM | The walk uses `repo.iter_files(include_hidden=True)`, so `.along/**` is reachable; every strip is listed in `Report.boms_removed` and named in the printed report. Enforcement stays with `[bug--quality-gates-skip-hidden-directories]`. |
+| REQ-9 tests | `tests/test_sanitizer.py`, 34 cases over a temporary fixture tree carrying a cp1251 file, a CRLF `.ps1`, a localized `locales/fr.json`, a data `config.json`, and a BOM inside `.along/`. |
+
+Also fixed in passing: `migrate_protocol.sanitize_markdown_typography` used the same
+`errors="ignore"` read before a full rewrite and knew only two dash glyphs; it now runs
+the shared implementation in write mode, because a migration is an explicitly requested
+mutation. The test helper `run` in `tests/test_skills_and_scripts.py` was renamed
+`run_engine`, since `sanitizer.run` now owns that name in the shared package.

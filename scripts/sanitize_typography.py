@@ -1,63 +1,123 @@
 #!/usr/bin/env python3
 """
-sanitize_typography.py - Replace non-ASCII typographic and invisible characters
-with standard ASCII equivalents across code, scripts, and markdown documentation.
+sanitize_typography.py - Report, and on request repair, non-ASCII typographic and
+invisible characters across repository text.
+
+The policy, the file walking, the strict reads, and the report all live in
+`alongkit.sanitizer`; this file is the command line over them. It defaults to
+`--check`: the tool reports and exits non-zero, and rewrites nothing unless asked.
+That default is deliberate and is the point of
+`[bug--typography-sanitizer-destroys-non-utf8-files]` - the previous version
+rewrote the whole repository unattended before every commit and every release,
+read candidate files with `errors="ignore"`, and forced LF onto files that
+`.gitattributes` declares CRLF.
+
+Stream contract (rules/platforms/cli.md): the JSON summary is the data and goes to
+stdout; progress and findings are logs and go to stderr. Exit 0 clean, 1 findings in
+check mode, 2 usage error.
 """
 
+import json
 import os
 import sys
-import glob
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
-from alongkit import typography
+from alongkit import repo, sanitizer
 
-# The forbidden-character table lives in alongkit.typography, shared with the quality
-# gate in tests/. Two copies of the rule meant a character could be banned by the gate
-# and unknown to this sanitizer, or the reverse.
-REPLACEMENTS = typography.REPLACEMENTS
+USAGE = """Usage: python sanitize_typography.py [ROOT] [options]
 
+Modes (default --check):
+  --check              report findings and exit 1; never writes
+  --dry-run            report findings and exit 0; never writes
+  --write, --fix       apply the ASCII replacements
 
-def sanitize_content(content):
-    """Replace every banned character; returns (cleaned, changed)."""
-    return typography.clean(content)
+Scope:
+  --include-data       also scan .json, .yaml, .yml, .toml (off by default)
+  --include EXT        scan an additional suffix as well (repeatable)
+  --exclude GLOB       skip paths matching GLOB (repeatable)
+  --no-ignore-file     ignore .alongsanitizeignore
 
+Output:
+  --json               machine-readable summary on stdout
+  -q, --quiet          summary only, no per-file detail
+  -h, --help           this message
 
-def sanitize_file(filepath):
-    try:
-        with open(filepath, 'r', encoding='utf-8', errors='ignore') as f:
-            content = f.read()
-    except Exception as e:
-        print(f"Error reading {filepath}: {e}", file=sys.stderr)
-        return False
+Localized resource directories (locales/, i18n/, translations/, ...) are never
+scanned. Files that are not valid UTF-8 are skipped and reported, never rewritten.
+"""
 
-    cleaned, modified = sanitize_content(content)
-    if not modified:
-        return False
-
-    try:
-        with open(filepath, 'w', encoding='utf-8', newline='\n') as f:
-            f.write(cleaned)
-        return True
-    except Exception as e:
-        print(f"Error writing {filepath}: {e}", file=sys.stderr)
-        return False
 
 def main():
-    root = sys.argv[1] if len(sys.argv) > 1 else os.getcwd()
-    modified_count = 0
-    patterns = ['**/*.md', '**/*.py', '**/*.sh', '**/*.ps1', '**/*.bat', '**/*.json', '**/*.yaml', '**/*.yml', '**/*.toml']
+    argv = sys.argv[1:]
+    mode = sanitizer.Mode.CHECK
+    include_data = False
+    extra_suffixes = []
+    excludes = []
+    use_ignore_file = True
+    as_json = False
+    verbose = True
+    root = None
 
-    for p in patterns:
-        for f in glob.glob(os.path.join(root, p), recursive=True):
-            rel_parts = os.path.relpath(f, root).replace('\\', '/').split('/')
-            if any(part in ('.git', 'node_modules', 'dist', 'build', '.venv', 'venv') for part in rel_parts):
-                continue
-            if sanitize_file(f):
-                print(f"Sanitized: {os.path.relpath(f, root)}")
-                modified_count += 1
+    index = 0
+    while index < len(argv):
+        arg = argv[index]
+        if arg in ("-h", "--help"):
+            print(USAGE)
+            return 0
+        elif arg == "--check":
+            mode = sanitizer.Mode.CHECK
+        elif arg == "--dry-run":
+            mode = sanitizer.Mode.DRY_RUN
+        elif arg in ("--write", "--fix"):
+            mode = sanitizer.Mode.WRITE
+        elif arg == "--include-data":
+            include_data = True
+        elif arg == "--no-ignore-file":
+            use_ignore_file = False
+        elif arg == "--json":
+            as_json = True
+        elif arg in ("-q", "--quiet"):
+            verbose = False
+        elif arg in ("--include", "--exclude"):
+            index += 1
+            if index >= len(argv):
+                print(f"[Error] {arg} requires a value.\n\n{USAGE}", file=sys.stderr)
+                return 2
+            (extra_suffixes if arg == "--include" else excludes).append(argv[index])
+        elif arg.startswith("--include=") or arg.startswith("--exclude="):
+            flag, _, value = arg.partition("=")
+            (extra_suffixes if flag == "--include" else excludes).append(value)
+        elif arg.startswith("-"):
+            print(f"[Error] unknown option: {arg}\n\n{USAGE}", file=sys.stderr)
+            return 2
+        elif root is None:
+            root = arg
+        else:
+            print(f"[Error] unexpected argument: {arg}\n\n{USAGE}", file=sys.stderr)
+            return 2
+        index += 1
 
-    print(f"Total files sanitized: {modified_count}")
+    target = os.path.abspath(root) if root else repo.find_repo_root()
+    if not os.path.isdir(target):
+        print(f"[Error] not a directory: {target}", file=sys.stderr)
+        return 2
 
-if __name__ == '__main__':
-    main()
+    report = sanitizer.run(target, mode=mode, include_data=include_data,
+                           extra_suffixes=extra_suffixes, excludes=excludes,
+                           use_ignore_file=use_ignore_file)
+
+    if as_json:
+        print(json.dumps(report.as_dict(), indent=2, sort_keys=True))
+        if verbose and not report.clean:
+            print(sanitizer.format_report(report, verbose=False), file=sys.stderr)
+    else:
+        print(sanitizer.format_report(report, verbose=verbose), file=sys.stderr)
+        if mode == sanitizer.Mode.CHECK and not report.clean:
+            print("Run with --write to apply these replacements.", file=sys.stderr)
+
+    return report.exit_code
+
+
+if __name__ == "__main__":
+    sys.exit(main())

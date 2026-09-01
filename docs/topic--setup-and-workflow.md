@@ -1,6 +1,6 @@
 ---
 protocol: along
-protocol_version: "2.2.6"
+protocol_version: "2.2.9"
 slug: topic--setup-and-workflow
 title: Setup & Developer Workflow
 type: setup-workflow
@@ -114,6 +114,50 @@ flowchart LR
 | `/along-dev` | `.along/scripts/dev.py` | `npm run dev` \| `cargo run` \| `dotnet run` \| `python main.py` | Starts local development server. |
 | `/along-version-bump` | `.along/scripts/bump_version.py` | Node `package.json` \| Python `pyproject.toml` \| Rust `Cargo.toml` \| .NET `*.csproj` | Bumps version and orchestrates release. |
 
+### Typography: checking and repairing
+
+`along sanitize` (or `python scripts/sanitize_typography.py`) reports banned characters
+by file and line. It **checks by default and writes nothing**; repairing is an explicit act.
+
+| Invocation | Effect |
+| :--- | :--- |
+| `along sanitize` | Report findings, exit 1. Nothing is written. |
+| `along sanitize --dry-run` | Report findings, exit 0. Nothing is written. |
+| `along sanitize --write` | Apply the ASCII replacements. |
+| `along sanitize --json` | The same report as JSON on stdout, for tooling and CI. |
+| `along sanitize --include-data` | Also scan `.json`, `.yaml`, `.yml`, `.toml`. |
+| `along sanitize --exclude '<glob>'` | Skip matching paths; `.alongsanitizeignore` in the repository root does the same, one glob per line. |
+
+Scope is `.md`, `.py`, `.sh`, `.ps1`, `.bat`; hidden directories such as `.along/` are
+included; localized resource directories (`locales/`, `i18n/`, `translations/`, ...) are
+never scanned. A file that is not valid UTF-8 is skipped and reported, and existing line
+endings are preserved, so a CRLF `.ps1` stays CRLF. See
+[ADR-2026-09-01--typography-rule-scope](../.along/DECISIONS.md).
+
+### Releasing: gates first, then a transaction
+
+`/along-version-bump [patch|minor|major|<version>]` runs in a fixed order, and the order is
+the point: the tests, the typography check, and the Markdown link check all run **before the
+first byte is written**, on every invocation. A bump without `--commit` is verified exactly
+as strictly as one with it.
+
+| Step | What it writes |
+| :--- | :--- |
+| 1. Gates | Nothing. Tests, typography check, `along_kb_sync.py --check --strict`. |
+| 2. Version | `.along/scripts/bump_version.py` if present, else the detected manifest (`package.json`, `pyproject.toml`, `Cargo.toml`, `VERSION`, or the Along protocol files). |
+| 3. Milestone | Front-matter of the milestone in `.along/MILESTONES/` whose `slug` names the version: `status: completed`, `progress_pct: 100`. The body is never touched. |
+| 4. CHANGELOG | A `## v<version>` section listing commit subjects since the previous tag. |
+| 5. Commit and tag (`-c`) | Stages only the paths steps 2 to 4 wrote, commits `release: v<version>`, creates the annotated tag `v<version>`. `-p` pushes both. |
+
+Steps 2 to 4 are transactional. A failure in any of them, or in staging, restores every file
+byte for byte and prints what it put back; the transaction closes once the commit exists,
+because past that point a rollback would discard committed work. `--fix-typography` opts
+into repairing the findings from step 1 and is itself covered by the rollback. `-n` /
+`--no-verify` is the one documented way past the gates.
+
+A release writes nothing outside the repository. Installing skills for your providers is
+`/along-update` or `install.ps1` / `install.sh`, run deliberately.
+
 ---
 
 ## 5. Day-in-the-Life Developer & Agent Workflow
@@ -165,7 +209,12 @@ sequenceDiagram
 
 ### Step 5: Clean Conventional Commit
 - Execute `/along-commit -i <slug> -m "<summary>"`.
-- Automatically enforces clean ASCII typography (no em-dashes, no curly quotes) and binds the commit to the active issue.
+- Verifies clean ASCII typography (no em-dashes, no curly quotes) and binds the commit to the active issue.
+- The typography gate **reports and aborts**; it does not rewrite the working tree. Findings
+  are printed with file and line. Add `--fix-typography` to apply the replacements in the
+  same run, or clean them by hand.
+- A file that is not valid UTF-8 is skipped and named, never decoded lossily and rewritten.
+  See [ADR-2026-09-01--typography-rule-scope](../.along/DECISIONS.md).
 
 ### Step 6: Session Wrap-Up
 - Invoke `/along-wrap` to execute the mandatory completion checklist:
@@ -176,3 +225,55 @@ sequenceDiagram
   5. Record work session log in `.along/SESSIONS/<YYYY>/`.
   6. Append history line to `.along/HISTORY.md`.
   7. Purge ephemeral blackboard `.along/.session/<slug>/`.
+
+---
+
+## 6. Writing Tests: the Hermetic Rule
+
+Agents write most of the tests in this repository, so the rule that keeps the suite
+trustworthy is stated here as well as in the protocol block of `AGENTS.md`.
+
+**A test must never point an engine at the repository that contains it.** The engines
+write: `migrate_protocol.py` normalizes front-matter, sanitizes typography, and rewrites
+Markdown links across the whole tree; `along_update.py` regenerates the managed protocol
+block; `along_exec.py` creates and moves entities. Three tests used to pass `REPO_ROOT`
+straight into those engines, and one of them rewrote a newly created issue file mid-session,
+turning `protocol_version: "2.2.8"` into `protocol_version: 2.2.8`. A suite in that state
+cannot act as a gate, because "the suite is green" and "the tree is clean" are no longer
+simultaneously achievable, and CI cannot tell a real change from test noise.
+
+### How to write one
+
+```python
+import hermetic          # tests/hermetic.py
+
+def test_engine_does_the_thing(self):
+    with hermetic.repo_fixture(prefix="along-mything-") as fixture:
+        res = proc.run_capture([sys.executable, engine_script, fixture])
+        self.assertEqual(res.returncode, 0, res.stderr)
+```
+
+`hermetic.repo_fixture()` builds a throwaway repository that looks like a current Along
+project (`AGENTS.md` with the managed block, `.along/` with one valid entity, an ADR, the
+board, and a small `docs/` Knowledge Base) and removes it afterwards. It is deliberately
+not a git repository, so nothing a test runs can reach a real index or history. For an
+engine that resolves its target from the working directory, such as `along_exec.py`, pass
+the fixture as `cwd` instead of as an argument.
+
+Reading live repository content is still allowed and several guards depend on it: the ADR
+format guard in `tests/test_kb_search.py`, the entity-status guard in
+`tests/test_issue_lifecycle.py`, and the typography and link gates. Those tests open files
+read-only and never invoke an engine that writes.
+
+### What enforces it
+
+`tests/test_zz_hermetic_suite.py` runs last (alphabetically, under `unittest discover`) and
+holds two gates:
+
+| Gate | What it does |
+| :--- | :--- |
+| `test_01_working_tree_is_unchanged_by_the_suite` | Snapshots `git status --porcelain -u` at import time and again after the suite, failing on any path that appeared, vanished, or changed status. |
+| `test_02_no_test_targets_the_repository_root` | Parses every `tests/*.py` and fails on a command-shaped list literal built with `REPO_ROOT` as an argument, so a regression is caught when it is written rather than when it happens to do damage. |
+
+Run the suite with `python .along/scripts/test.py` (it resolves `ruamel.yaml` through `uv`
+when the interpreter lacks it) or `uv run python -m unittest discover tests -q`.

@@ -125,7 +125,7 @@ To keep `.along/` lean and avoid token bloat:
   - `docs/topic--<slug>.md`: Specific domain topics and module specifications.
 - **Source Archival (`.archive/`)**: Processed raw sources, unmanaged notes, and drafts are archived into `.archive/` (excluded from active KB search and site generators).
 - **Front-matter Schema**: Every `docs/*.md` article MUST include YAML front-matter: `protocol: along`, `protocol_version` (the current protocol version, quoted), `slug`, `title`, `type` (`topic` | `architecture` | `domain-model` | `setup-workflow` | `index`), `created`, `updated`, `tags: []`.
-- **Stable Entry Point Rule**: Direct linking from external files or `README.md` into internal service folders (`.along/KB/`, `.agents/KB/`) is strictly forbidden. All public entry points must reference stable canonical paths in `docs/` (`docs/INDEX.md` or `docs/topic--<slug>.md`).
+- **Stable Entry Point Rule**: Files outside the service directory (`README.md`, `docs/`, package manifests, external documentation) MUST NOT link directly into `.along/`, nor into legacy service paths from earlier protocol versions. Route every such reference through a stable canonical path in `docs/` (`docs/INDEX.md` or `docs/topic--<slug>.md`). The rule governs published links only: agents still read `.along/ISSUES.md` and `.along/DECISIONS.md` directly, as instructed at session start.
 - **Inbound Link Rewriting Engine & Migration Invariance**: Whenever documentation schemas change, migration engines (`/along-update`, `/along-kb-sync`) MUST recursively rewrite legacy path references across all repository Markdown files before deleting legacy directories.
 - **Monorepo Scope Rule**: Knowledge Base synchronization, link rewriting, and link verification operate recursively across all subprojects, packages (`packages/*`, `apps/*`), and directories.
 - **Portable Markdown Links**: All internal cross-references MUST use standard relative Markdown links (`[Title](./target.md)`) for universal rendering across GitHub, GitHub Pages, IDEs, and npm.
@@ -186,6 +186,10 @@ When a Stage or session completes, agents MUST execute this verification checkli
   - **File Content Never Travels Through a Command Line**: Create files with the agent's file-writing tool and change them with its edit tool. NEVER carry file content in a heredoc, a `python -c` string, or any inline shell command. Such content crosses several parsers in sequence (shell, heredoc or `-c`, the language string literal, sometimes a regex), and any one of them may consume a backslash or a quote: the file is then silently corrupted, or fails with an unterminated-literal error. Symptoms observed in practice: `"\r\n"` arriving as a real newline, an apostrophe in prose ending a quoted heredoc early, and a multi-line `python -c` losing its newlines entirely.
   - **Deterministic Entity & Command Execution**: Use deterministic subcommands via `python scripts/along_exec.py` (`issue create`, `session create`, `scratch init`) for entity work. When a script is genuinely required, write it to a file first and execute that path; never inline it. Build backslashes in code (`chr(92)`, `os.linesep`, `re.escape`) instead of escaping them through layers, and never reuse line indices captured before a list of lines was mutated.
   - **Verify Every Written File**: After writing or patching a file, confirm it still parses before moving on: `python -m compileall -q` for Python, `bash -n` for shell, `[System.Management.Automation.Language.Parser]::ParseFile()` for PowerShell, and the project's own reader for structured data. Parsing is not proof of correctness, but a file that does not parse must never be left on disk. (A fixed, content-free command like `bash -n <file>` is not what the rule above forbids: the ban is on carrying file CONTENT through a command line.)
+- **Hermetic Tests (No Test May Mutate Its Own Repository)**:
+  - **Fixtures, Never the Real Root**: A test MUST point every engine, script, or command it executes at a throwaway fixture (`tempfile.mkdtemp()`), never at the repository that contains the test. Engines write: they normalize front-matter, sanitize typography, rewrite links, and move entities, so a test that passes the real root can silently edit work in progress.
+  - **Read-Only Access to Live State**: Tests MAY read live repository content (project memory, `docs/`, manifests) to guard against format drift, and MUST open it read-only without invoking an engine that writes.
+  - **Prove It**: Keep a meta-test that snapshots `git status --porcelain -u` before and after the suite and fails if the suite dirtied the tree. "The suite is green" and "the tree is clean" must be simultaneously achievable; otherwise the suite cannot serve as a gate and CI cannot tell a real change from test noise.
 - Windows-safe filenames: dates `YYYY-MM-DD` (no `:`), date first.
 - Keep `ISSUES.md` compact - it costs context every session.
 - Never write secrets/credentials/tokens/keys into these files; they are committed.
@@ -197,16 +201,36 @@ This repository is `Along` (`actdim-along`) - the provider-agnostic agent-contex
 - **Skills Source**: `skills/` (`along-init`, `along-update`, `along-dash`, `along-wrap`, `along-commit`, `along-build`, `along-test`, `along-dev`, `along-team`, `along-kb-sync`, `along-kb-search`, `along-issue-sync`, `along-context-sync`, `along-decision-sync`, `along-history-sync`, `along-graph-check`, `along-dep-scan`, `along-version-bump`, `along-feedback`).
 - **Engine Source**: `scripts/` (one engine per skill) over the shared implementation
   package `scripts/alongkit/` (`repo`, `frontmatter`, `entities`, `proc`, `textio`,
-  `markdown`, `typography`, `gates`, `semver`, `version`, `bootstrap`, `cli`). Helpers
-  are defined there and nowhere else: two tests in `tests/test_alongkit.py` fail if an
-  engine defines a name that already exists in the package, or that another engine
-  defines. Runtime dependency: `ruamel.yaml` (see `pyproject.toml`).
+  `markdown`, `typography`, `sanitizer`, `transaction`, `gates`, `semver`, `version`,
+  `bootstrap`, `cli`). Helpers are defined there and nowhere else: two tests in
+  `tests/test_alongkit.py` fail if an engine defines a name that already exists in the
+  package, or that another engine defines. Runtime dependency: `ruamel.yaml` (see
+  `pyproject.toml`).
+- **Typography Gate**: `along sanitize` checks and exits non-zero; it writes only with
+  `--write`. `/along-commit` and `/along-version-bump` verify and abort, and rewrite only
+  with `--fix-typography`. Scope is `.md`, `.py`, `.sh`, `.ps1`, `.bat` (data files
+  opt-in, localized resource directories never); non-UTF8 files are skipped and reported,
+  line endings preserved. See ADR-2026-09-01--typography-rule-scope in
+  `.along/DECISIONS.md`.
+- **Release Path (`/along-version-bump`)**: gates first, on the untouched tree (tests,
+  typography check, Markdown link check), unconditionally rather than only with
+  `--commit`; then the version, the matching milestone's front-matter, `CHANGELOG.md`,
+  the commit of exactly those paths, and the annotated tag `v<version>`. Every mutation
+  is recorded by `alongkit.transaction.FileTransaction` and restored byte for byte if a
+  later step fails. A release never invokes an installer or touches machine-global
+  state. See ADR-2026-09-01--release-gates-before-mutations in `.along/DECISIONS.md`.
 - **Install Commands**:
   - Windows: `powershell -NoProfile -ExecutionPolicy Bypass -File install.ps1 -Target all` (or `install.bat`).
   - Linux / macOS: `bash install.sh`.
 - **Lifecycle Commands**:
   - Run Tests: `python .along/scripts/test.py` (resolves dependencies via `uv` if needed),
     or `uv run python -m unittest discover tests -q`.
+- **Test Suite (`tests/`)**: plain `unittest`. Every engine invocation targets a throwaway
+  fixture from `tests/hermetic.py` (`repo_fixture()`), never the repository root;
+  `tests/test_zz_hermetic_suite.py` runs last and fails if the suite dirtied the working
+  tree or if a test built an engine command line with `REPO_ROOT` as the target. Reading
+  live project memory is allowed and must stay read-only. See
+  `[docs/topic--setup-and-workflow.md](./docs/topic--setup-and-workflow.md)`.
   - Run Dev Server: `npm run dev` (or `python .along/scripts/dev.py`).
   - Build Assets: `npm run build` (or `python .along/scripts/build.py`).
 - **Frontend Architecture (`packages/dashboard-ui/`)**:

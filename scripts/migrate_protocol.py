@@ -36,7 +36,7 @@ from alongkit import bootstrap
 # installers and the documented skill commands invoke it.
 bootstrap.ensure_deps()
 
-from alongkit import frontmatter, proc, repo, textio
+from alongkit import frontmatter, proc, repo, sanitizer, textio
 from alongkit.version import CURRENT_PROTOCOL_VERSION
 
 
@@ -496,17 +496,21 @@ def step_migrate_v2_0_along_directory(repo_root):
     return moved_count
 
 def sanitize_markdown_typography(target_dir):
-    md_files = glob.glob(os.path.join(target_dir, "**", "*.md"), recursive=True)
-    count = 0
-    for fpath in md_files:
-        with open(fpath, "r", encoding="utf-8", errors="ignore") as f:
-            content = f.read()
-        if "\u2014" in content or "\u2013" in content:
-            cleaned = content.replace(" \u2014 ", " - ").replace("\u2014", "-").replace(" \u2013 ", " - ").replace("\u2013", "-")
-            with open(fpath, "w", encoding="utf-8") as f:
-                f.write(cleaned)
-            count += 1
-    return count
+    """Repair banned typography under `target_dir`, returning the file count.
+
+    A migration is an explicitly requested rewrite, so write mode is correct here -
+    unlike the commit and release paths, which only verify. What is not correct, and
+    was the previous behaviour, is reading each candidate with `errors="ignore"` and
+    then overwriting it: that deleted every undecodable byte in any file that was not
+    valid UTF-8. `alongkit.sanitizer` reads strictly, skips and reports such a file,
+    and preserves the line endings of the ones it does rewrite. It also applies the
+    whole forbidden-character table rather than only the two dashes this function
+    used to know about.
+    """
+    report = sanitizer.run(target_dir, mode=sanitizer.Mode.WRITE)
+    for skipped in report.skipped:
+        print(f"   [Warning] typography: skipped {skipped.path} ({skipped.reason})")
+    return report.files_with_findings
 
 def validate_and_build_entity_graph(along_dir):
     """

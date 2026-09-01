@@ -71,6 +71,28 @@ Base, has four dead links in its "Related Context" section. The integrity gate p
 because it resolves `file://` against the filesystem with bespoke logic
 (`along_kb_sync.py:437-448`) instead of flagging the scheme.
 
+## Worked instance: one link, three broken rules
+
+`AGENTS.md:213`, in the unmanaged Project specifics section:
+
+```markdown
+`[.along/DECISIONS.md](file://.along/DECISIONS.md#011)`
+```
+
+Three separate rules fail in a single reference:
+
+1. The `file://` scheme, which is the defect this issue tracks.
+2. A deep link from a public entry point into the service directory `.along/`, forbidden by
+   the Stable Entry Point Rule. Enforcement of that rule is tracked in
+   `[bug--link-gates-skip-along-directory]`.
+3. A stale anchor. `#011` addresses the numbered-ADR scheme that was replaced by slug
+   headers (`## ADR-YYYY-MM-DD--<slug>`), so the fragment resolves to nothing even once the
+   scheme and the path are fixed.
+
+An agent following this link lands nowhere, three times over, which is the concrete argument
+that these are not cosmetic. It also shows the migration in REQ-3 must handle anchors and
+not only paths.
+
 ## Requirements
 
 - REQ-1: Resolve the rule conflict in favor of standard relative markdown links, and record
@@ -90,6 +112,9 @@ because it resolves `file://` against the filesystem with bespoke logic
   test, or soften the wording.
 - REQ-7: Tests: generators produce no `file://`; gate fails on a `file://` link; migration
   converts a fixture correctly including anchors.
+- REQ-8: The migration must repair or drop fragments that no longer resolve in the target,
+  not only rewrite the path. Numbered-ADR anchors (`#011` and siblings) predate the
+  slug-header scheme and cannot resolve under it.
 
 ## Acceptance Criteria
 
@@ -98,3 +123,4 @@ because it resolves `file://` against the filesystem with bespoke logic
 - [ ] Integrity gate flags `file://` as a violation.
 - [ ] Rule stated identically in `AGENTS.md`, `protocol.md`, and all skills.
 - [ ] ADR recorded.
+- [ ] Stale ADR anchors resolved or dropped by the migration.

@@ -98,12 +98,14 @@ flowchart TD
 - **What it is**: Universal multi-stack semantic version bumper and release orchestrator. Updates project versions across Node (`package.json`), Python (`pyproject.toml`), Rust (`Cargo.toml`), .NET (`*.csproj`), or Along protocol files.
 - **Architectural Rationale**:
   - *Stack-Agnostic Hook Architecture*: Executes repository-specific hooks in `.along/scripts/bump_version.py` with automatic fallback to stack auto-detection.
-  - *Pre-Release Quality Gate*: Runs automated test suites and ASCII cleanliness checks before allowing a version bump.
+  - *Pre-Release Quality Gate*: Runs the test suite, the typography check, and the Markdown link check BEFORE the first byte is written, on every invocation rather than only when `--commit` is passed. The typography step aborts on a finding rather than rewriting the tree; `--fix-typography` opts into the repair.
+  - *Transactional Release*: Every mutation is recorded by `alongkit.transaction.FileTransaction`. A failure anywhere up to the git commit restores each file byte for byte and reports what it put back, so an aborted release leaves no half-released tree. The transaction closes once the commit exists.
+  - *No Global Side Effects*: A version bump never reinstalls the machine's agent configuration. Installing globally is `/along-update` or the installer.
 - **Invocation Triggers**:
-  - *Explicit*: `/along-version-bump [patch|minor|major|<version>] [-c|--commit] [-p|--push]`, `python scripts/along_version_bump.py`.
+  - *Explicit*: `/along-version-bump [patch|minor|major|<version>] [-c|--commit] [-p|--push] [--fix-typography] [-n|--no-verify]`, `python scripts/along_version_bump.py`.
   - *Semantic / Automatic*: Triggered when preparing a release, completing a milestone sprint, or prompted with *"Release version 2.3.0"*, *"Bump patch version"*.
-- **Entities Operated On**: `package.json`, `pyproject.toml`, `Cargo.toml`, `*.csproj`, `AGENTS.md`, `.along/HISTORY.md`.
-- **Ecosystem Chaining**: Chains with `/along-test` for pre-release validation and `/along-commit` for release tag commits.
+- **Entities Operated On**: `package.json`, `pyproject.toml`, `Cargo.toml`, `*.csproj`, `VERSION`, `AGENTS.md`, `CHANGELOG.md`, the milestone in `.along/MILESTONES/` whose front-matter `slug` names the released version.
+- **Ecosystem Chaining**: Chains with `/along-test` for pre-release validation, `/along-kb-sync --check --strict` for the link gate, and creates the release commit plus the annotated `v<version>` tag itself.
 
 ---
 
@@ -191,10 +193,10 @@ flowchart TD
 ### `along-commit`
 - **What it is**: Smart, ASCII-clean Conventional Committer. Validates typography, binds commit messages to active `.along/` issues, and creates clean Git commits.
 - **Architectural Rationale**:
-  - *Typography & Non-ASCII Gate*: Scans staged files and commit messages to block forbidden typographic characters (em-dash, smart curly quotes, non-breaking spaces) that corrupt Windows shell execution or AST parsers.
+  - *Typography & Non-ASCII Gate*: Scans repository text to block forbidden typographic characters (em-dash, smart curly quotes, non-breaking spaces, byte order marks) that corrupt Windows shell execution or AST parsers. It reports findings by file and line and aborts; it does not rewrite the tree unless `--fix-typography` is passed, and it never rewrites a file that is not valid UTF-8. See [ADR-2026-09-01--typography-rule-scope](../.along/DECISIONS.md).
   - *Issue Traceability*: Enforces issue slug references (`(refs #<slug>)` or `[<slug>]`) for 100% auditability.
 - **Invocation Triggers**:
-  - *Explicit*: `/along-commit -i <slug> -m "<message>"`, `python scripts/along_commit.py`.
+  - *Explicit*: `/along-commit -i <slug> -m "<message>" [--fix-typography]`, `python scripts/along_commit.py`.
   - *Semantic / Automatic*: Triggered when completing a task or when prompted with *"Commit changes"*.
 - **Entities Operated On**: Git staging index, `.along/ISSUES/`, active commit logs.
 - **Ecosystem Chaining**: Precedes `/along-wrap`.

@@ -34,6 +34,7 @@ flowchart TD
     INDEX --> T_SETUP_AND_WORKFLOW
     T_SKILLS_REFERENCE["Skills & Slash Commands Technical Reference"]
     INDEX --> T_SKILLS_REFERENCE
+    T_ARCHITECTURE -.->|references| T_SETUP_AND_WORKFLOW
     T_LLM_WIKI_ARCHITECTURE -.->|references| T_ARCHITECTURE
     T_LLM_WIKI_ARCHITECTURE -.->|references| T_DOMAIN_MODEL
     T_LLM_WIKI_ARCHITECTURE -.->|references| T_SKILLS_REFERENCE

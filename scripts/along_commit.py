@@ -3,10 +3,17 @@
 along_commit.py - Smart, ASCII-safe, and issue-linked Conventional Committer for Along.
 
 Features:
-- Enforces clean ASCII typography before committing (cleans NBSP, ZWSP, curly quotes, etc.)
+- Checks for banned typography before committing (NBSP, ZWSP, curly quotes, etc.)
 - Auto-extracts active issue from .along/ISSUES.md and appends issue reference
 - Enforces or formats Conventional Commits (feat, fix, docs, refactor, test, chore)
 - Supports optional --push flag
+
+The typography gate reports and aborts; it does not rewrite the working tree on its
+own. It used to: every commit triggered a repository-wide read-modify-write with a
+lossy read, so a single non-UTF8 file lost its undecodable bytes and the same command
+then staged and committed the damage. Passing --fix-typography opts back into the
+rewrite, explicitly and per invocation. See
+`[bug--typography-sanitizer-destroys-non-utf8-files]`.
 """
 
 import os
@@ -20,7 +27,7 @@ from alongkit import gates, proc, repo
 
 # Both gates live in alongkit.gates, shared with the release engine, which used to
 # carry its own copies that discarded the sanitizer's output.
-sanitize_typography = gates.run_sanitizer
+typography_gate = gates.typography_gate
 
 
 def get_active_issue(repo_root):
@@ -74,9 +81,11 @@ def main():
 
     push = "--push" in flags or "-p" in flags
     skip_tests = "--no-verify" in flags or "-n" in flags
+    fix_typography = "--fix-typography" in flags
 
     if not args:
-        print("Usage: python along_commit.py \"<commit message>\" [--push] [--no-verify]")
+        print("Usage: python along_commit.py \"<commit message>\" "
+              "[--push] [--no-verify] [--fix-typography]")
         print("Example: python along_commit.py \"add cytoscape graph view\" -p")
         sys.exit(1)
 
@@ -93,8 +102,13 @@ def main():
             print("Commit aborted. Fix failing tests before committing.", file=sys.stderr)
             sys.exit(1)
 
-    # 2. Pre-commit typography check
-    sanitize_typography(repo_root)
+    # 2. Pre-commit typography check. Reports and aborts; --fix-typography rewrites.
+    if not skip_tests:
+        if not typography_gate(repo_root, "Pre-Commit Quality Gate",
+                               allow_fix=fix_typography):
+            print("Commit aborted. Clean the typography before committing.",
+                  file=sys.stderr)
+            sys.exit(1)
 
     # 3. Extract active issue context
     active_issue = get_active_issue(repo_root)

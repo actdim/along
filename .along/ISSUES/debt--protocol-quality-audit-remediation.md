@@ -47,9 +47,9 @@ Three recurring mechanisms produce most defects:
 - [x] `[bug--subprocess-encoding-breaks-on-non-utf8-locale]` - encoding fixed at one shared call site (fixed 2026-09-01)
 - [ ] `[bug--skill-commands-reference-missing-script-paths]`
 - [ ] `[bug--commit-binds-arbitrary-active-issue]`
-- [ ] `[bug--typography-sanitizer-destroys-non-utf8-files]`
+- [x] `[bug--typography-sanitizer-destroys-non-utf8-files]` - strict reads, check-by-default gates, scope ADR (fixed 2026-09-01)
 - [ ] `[bug--migration-deletes-destination-without-backup]`
-- [ ] `[bug--release-engine-mutates-before-tests-and-reinstalls-globals]`
+- [x] `[bug--release-engine-mutates-before-tests-and-reinstalls-globals]` - gates before mutations, transactional rollback, no global install, tag and CHANGELOG (fixed 2026-09-01)
 - [x] `[bug--handrolled-yaml-loses-block-lists]` - front-matter on ruamel.yaml; 6 invalid files repaired (fixed 2026-09-01)
 - [ ] `[bug--installer-parity-and-destructive-rules-overwrite]`
 - [ ] `[bug--team-skill-uses-provider-specific-subagent-api]`
@@ -63,7 +63,7 @@ Three recurring mechanisms produce most defects:
 - [ ] `[bug--kb-sync-ingestion-not-idempotent]`
 - [ ] `[bug--link-gates-skip-along-directory]`
 - [ ] `[bug--generated-docs-emit-file-uri-links]`
-- [ ] `[bug--tests-mutate-working-tree]`
+- [x] `[bug--tests-mutate-working-tree]` - hermetic fixtures plus a meta-test on the working tree (fixed 2026-09-01)
 - [ ] `[bug--issue-create-stamps-wrong-agent-and-milestone]`
 - [ ] `[debt--protocol-documentation-drift]`
 - [x] `[debt--extract-shared-python-library]` - scripts/alongkit/ extracted; duplication guarded by tests (fixed 2026-09-01)
@@ -96,6 +96,16 @@ rather than only documented:
 - *Meta tests*: the suite grew from 57 to 125 tests, and the new ones assert behaviour
   (a child process emitting non-ASCII output decodes; an engine runs from a flat file
   copy; a block sequence survives an edit) rather than the presence of documentation.
+
+**Step 2 (stop the bleeding) in progress.** Two of the four destructive engines are done:
+the typography sanitizer, and now
+`[bug--release-engine-mutates-before-tests-and-reinstalls-globals]`. The release engine
+adds the third structural block against the mechanisms above: a mutation that is not
+preceded by its gate, and a gate whose failure cannot undo what already ran.
+`alongkit/transaction.py` makes rollback a primitive rather than a per-engine decision, so
+the remaining destructive engines (`migration`, `installer`) have something to build on.
+Remaining in step 2: `[bug--migration-deletes-destination-without-backup]` and
+`[bug--installer-parity-and-destructive-rules-overwrite]`.
 
 Found and fixed while converting, none of which had an issue: `migrate_protocol.py` was
 reverting front-matter repairs on every test run, the npm test gate was a silent no-op
