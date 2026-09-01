@@ -117,6 +117,66 @@ class TestAlongSkillsAndScripts(unittest.TestCase):
             self.assertIn(f"name: {sname}", content, f"{sname}/SKILL.md front-matter must specify 'name: {sname}'")
             self.assertIn("description:", content, f"{sname}/SKILL.md front-matter must specify 'description:'")
 
+    END_MARKER = "<!-- END ALONG-PROTOCOL -->"
+
+    def test_03b_managed_block_matches_its_source(self):
+        """
+        The AGENTS.md managed block must equal skills/along-init/protocol.md exactly.
+
+        `protocol.md` is the source; the block in `AGENTS.md` is a projection that
+        `along-init` and `along-update` regenerate from it. Without this test the two
+        drift silently: the link-rewriting engine had replaced `.agents/KB/` with
+        `.along/KB/` inside ordinary prose in the projection only, producing a sentence
+        that named the same directory twice and no longer mentioned the legacy one. That
+        is the "unanchored regex over whole files" mechanism from
+        `[debt--protocol-quality-audit-remediation]`, caught here in the projection it
+        damaged.
+        """
+        with open(os.path.join(REPO_ROOT, "skills", "along-init", "protocol.md"),
+                  "r", encoding="utf-8") as f:
+            source = f.read().replace("\r\n", "\n").strip()
+        with open(os.path.join(REPO_ROOT, "AGENTS.md"), "r", encoding="utf-8") as f:
+            agents = f.read().replace("\r\n", "\n")
+
+        self.assertIn(self.END_MARKER, agents,
+                      "AGENTS.md must delimit the managed block with an END marker")
+        block = agents[: agents.index(self.END_MARKER) + len(self.END_MARKER)].strip()
+
+        if block != source:
+            import difflib
+
+            diff = "\n".join(list(difflib.unified_diff(
+                source.splitlines(), block.splitlines(),
+                "skills/along-init/protocol.md", "AGENTS.md managed block",
+                lineterm="", n=1))[:40])
+            self.fail("the managed block has drifted from its source. Regenerate it with "
+                      f"/along-init rather than editing AGENTS.md by hand:\n{diff}")
+
+    def test_03c_protocol_pins_no_stale_version_examples(self):
+        """
+        Illustrative version numbers in the protocol text must not name a release.
+
+        `protocol_version: "2.2.4"` sat in the front-matter schema and in the issue field
+        list while the protocol was at 2.2.9. Nothing kept them in step:
+        `along_version_bump.py` rewrites `ALONG-PROTOCOL vX.Y.Z` and
+        `CURRENT_PROTOCOL_VERSION`, not prose examples. Naming no version is the fix.
+        """
+        for name in ("AGENTS.md", os.path.join("skills", "along-init", "protocol.md")):
+            path = os.path.join(REPO_ROOT, name)
+            with open(path, "r", encoding="utf-8") as f:
+                text = f.read()
+            body = text.split(self.END_MARKER)[0]
+            # The only version the protocol text may name is the one in its own title,
+            # written unquoted as `# ALONG-PROTOCOL vX.Y.Z` and kept in step by
+            # along_version_bump.py. Any QUOTED version literal is an illustrative
+            # example that nothing updates, so it is drift waiting to happen.
+            quoted = re.findall(r'"(\d+\.\d+\.\d+)"', body)
+            self.assertEqual(
+                quoted, [],
+                f"{name} quotes version literal(s) {quoted} in the protocol text. "
+                "Describe the field instead of naming a release: nothing keeps prose "
+                "examples in step with the version.")
+
     def test_04_protocol_version_consistency(self):
         """Verify that protocol version is identical across protocol.md, AGENTS.md, README.md, and scripts."""
         proto_file = os.path.join(REPO_ROOT, "skills", "along-init", "protocol.md")

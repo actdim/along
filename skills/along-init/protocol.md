@@ -53,7 +53,7 @@ All entities are designed for zero-friction auto-parsing by dashboards and tools
 - **Placement**: Nearest `.along/ISSUES/`. Types: `feat`, `bug`, `debt`, `task`, `docs`.
 - **Front-matter**:
   - `protocol`: `along` (mandatory protocol marker).
-  - `protocol_version`: optional protocol version at creation (e.g. `"2.2.4"`).
+  - `protocol_version`: optional quoted protocol version at creation, taken from the version in this document's title.
   - `slug`: lowercase kebab-case slug (2-5 words).
   - `type`: `feat` | `bug` | `debt` | `task` | `docs`.
   - `status`: `open` | `in-progress` | `blocked` | `done`.
@@ -124,7 +124,7 @@ To keep `.along/` lean and avoid token bloat:
   - `docs/topic--setup-and-workflow.md`: Build, run, test, and workflow instructions.
   - `docs/topic--<slug>.md`: Specific domain topics and module specifications.
 - **Source Archival (`.archive/`)**: Processed raw sources, unmanaged notes, and drafts are archived into `.archive/` (excluded from active KB search and site generators).
-- **Front-matter Schema**: Every `docs/*.md` article MUST include YAML front-matter: `protocol: along`, `protocol_version: "2.2.4"`, `slug`, `title`, `type` (`topic` | `architecture` | `domain-model` | `setup-workflow` | `index`), `created`, `updated`, `tags: []`.
+- **Front-matter Schema**: Every `docs/*.md` article MUST include YAML front-matter: `protocol: along`, `protocol_version` (the current protocol version, quoted), `slug`, `title`, `type` (`topic` | `architecture` | `domain-model` | `setup-workflow` | `index`), `created`, `updated`, `tags: []`.
 - **Stable Entry Point Rule**: Direct linking from external files or `README.md` into internal service folders (`.along/KB/`, `.agents/KB/`) is strictly forbidden. All public entry points must reference stable canonical paths in `docs/` (`docs/INDEX.md` or `docs/topic--<slug>.md`).
 - **Inbound Link Rewriting Engine & Migration Invariance**: Whenever documentation schemas change, migration engines (`/along-update`, `/along-kb-sync`) MUST recursively rewrite legacy path references across all repository Markdown files before deleting legacy directories.
 - **Monorepo Scope Rule**: Knowledge Base synchronization, link rewriting, and link verification operate recursively across all subprojects, packages (`packages/*`, `apps/*`), and directories.
@@ -183,7 +183,9 @@ When a Stage or session completes, agents MUST execute this verification checkli
   - **Explicit Code Fence Languages**: Always specify the language identifier on code fences (e.g. ```` ```bash ````, ```` ```yaml ````, ```` ```typescript ````, ```` ```python ````). Never use bare unlabelled fences.
   - **Relative & Portable Links**: Always use relative paths (`file://...` or standard markdown links) without hardcoding local absolute paths.
   - **UTF-8 Clean Encoding**: Keep all text files in clean UTF-8 without BOM.
-  - **Deterministic Entity & Command Execution**: Never execute fragile multi-line inline shell strings (`python -c "..."`) containing escaped quotes on Windows / PowerShell. Always use deterministic subcommands via `python scripts/along_exec.py` (`issue create`, `session create`, `scratch init`) or execute clean standalone Python scripts.
+  - **File Content Never Travels Through a Command Line**: Create files with the agent's file-writing tool and change them with its edit tool. NEVER carry file content in a heredoc, a `python -c` string, or any inline shell command. Such content crosses several parsers in sequence (shell, heredoc or `-c`, the language string literal, sometimes a regex), and any one of them may consume a backslash or a quote: the file is then silently corrupted, or fails with an unterminated-literal error. Symptoms observed in practice: `"\r\n"` arriving as a real newline, an apostrophe in prose ending a quoted heredoc early, and a multi-line `python -c` losing its newlines entirely.
+  - **Deterministic Entity & Command Execution**: Use deterministic subcommands via `python scripts/along_exec.py` (`issue create`, `session create`, `scratch init`) for entity work. When a script is genuinely required, write it to a file first and execute that path; never inline it. Build backslashes in code (`chr(92)`, `os.linesep`, `re.escape`) instead of escaping them through layers, and never reuse line indices captured before a list of lines was mutated.
+  - **Verify Every Written File**: After writing or patching a file, confirm it still parses before moving on: `python -m compileall -q` for Python, `bash -n` for shell, `[System.Management.Automation.Language.Parser]::ParseFile()` for PowerShell, and the project's own reader for structured data. Parsing is not proof of correctness, but a file that does not parse must never be left on disk. (A fixed, content-free command like `bash -n <file>` is not what the rule above forbids: the ban is on carrying file CONTENT through a command line.)
 - Windows-safe filenames: dates `YYYY-MM-DD` (no `:`), date first.
 - Keep `ISSUES.md` compact - it costs context every session.
 - Never write secrets/credentials/tokens/keys into these files; they are committed.
