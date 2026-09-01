@@ -520,32 +520,80 @@ def step_migrate_v2_0_along_directory(mig, repo_root):
 
     return moved_count
 
-def sanitize_markdown_typography(mig, target_dir):
-    """Repair banned typography under `target_dir`, returning the file count.
+def sanitize_markdown_typography(mig, target_dir, extra_targets=()):
+    """Repair banned typography under `target_dir` and any `extra_targets`.
 
-    A migration is an explicitly requested rewrite, so write mode is correct here -
-    unlike the commit and release paths, which only verify. What is not correct, and
-    was the previous behaviour, is reading each candidate with `errors="ignore"` and
-    then overwriting it: that deleted every undecodable byte in any file that was not
-    valid UTF-8. `alongkit.sanitizer` reads strictly, skips and reports such a file,
-    and preserves the line endings of the ones it does rewrite. It also applies the
-    whole forbidden-character table rather than only the two dashes this function
-    used to know about.
+    `target_dir` is the primary directory (`.along/`). `extra_targets` is an
+    optional sequence of additional absolute paths, each of which may be either
+    a directory (scanned recursively via `sanitizer.run`) or a single file
+    (processed via `sanitizer.inspect_file` directly, since `sanitizer.run`
+    only accepts a directory root).
+
+    A migration is an explicitly requested rewrite, so write mode is correct
+    here - unlike the commit and release paths, which only verify. Files that
+    are not valid UTF-8 are skipped, reported, and left byte-identical.
     """
-    # Looked at before it is touched, so a clean tree neither takes a backup nor
-    # reports an operation it did not perform.
-    report = sanitizer.run(target_dir, mode=sanitizer.Mode.DRY_RUN)
-    for skipped in report.skipped:
+
+    def _count_dir(path, mode):
+        rep = sanitizer.run(path, mode=mode)
+        return rep.files_with_findings, rep.skipped
+
+    def _count_file(path, mode):
+        # `inspect_file` needs a root for computing the relative path in the report.
+        root = os.path.dirname(path)
+        finding, skipped_item = sanitizer.inspect_file(path, root, mode)
+        findings = 1 if finding else 0
+        skipped = [skipped_item] if skipped_item else []
+        return findings, skipped
+
+    # Dry pass first across all targets: nothing is written yet.
+    total_findings = 0
+    all_skipped = []
+
+    dirs_to_scan = [target_dir] if os.path.isdir(target_dir) else []
+    files_to_scan = []
+    for t in extra_targets:
+        if os.path.isdir(t):
+            dirs_to_scan.append(t)
+        elif os.path.isfile(t):
+            files_to_scan.append(t)
+
+    for d in dirs_to_scan:
+        count, skipped = _count_dir(d, sanitizer.Mode.DRY_RUN)
+        total_findings += count
+        all_skipped.extend(skipped)
+
+    for f in files_to_scan:
+        count, skipped = _count_file(f, sanitizer.Mode.DRY_RUN)
+        total_findings += count
+        all_skipped.extend(skipped)
+
+    for skipped in all_skipped:
         mig.note_skipped(skipped.path, f"typography: {skipped.reason}")
         print(f"   [Warning] typography: skipped {skipped.path} ({skipped.reason})")
-    if not report.files_with_findings:
+
+    if not total_findings:
         return 0
+
     if not mig.dry_run:
         mig.ensure_backup()
-        report = sanitizer.run(target_dir, mode=sanitizer.Mode.WRITE)
-    mig.record("sanitize typography", target_dir,
-               f"{report.files_with_findings} file(s)")
-    return report.files_with_findings
+        written = 0
+        for d in dirs_to_scan:
+            count, _ = _count_dir(d, sanitizer.Mode.WRITE)
+            written += count
+        for f in files_to_scan:
+            count, _ = _count_file(f, sanitizer.Mode.WRITE)
+            written += count
+        total_findings = written
+
+    all_targets_label = target_dir
+    if extra_targets:
+        all_targets_label += " + " + ", ".join(
+            os.path.basename(t) for t in extra_targets
+        )
+    mig.record("sanitize typography", all_targets_label,
+               f"{total_findings} file(s)")
+    return total_findings
 
 def validate_and_build_entity_graph(along_dir):
     """
@@ -760,9 +808,22 @@ def run_migrations(repo_root, dry_run=True, force=False, backup=True):
     active_along_dir = os.path.join(repo_root, ".along")
 
     # Step 5: Typography sanitation
+    # Scope: .along/ (primary), docs/ and the two root agent context files
+    # (AGENTS.md, README.md). Source code, configs, and provider-specific shims
+    # (CLAUDE.md, GEMINI.md) are intentionally excluded.
     print("-> Step 5: Sanitizing Markdown typography (replacing banned characters with ASCII)...")
-    sanitized_count = (sanitize_markdown_typography(mig, active_along_dir)
-                       if os.path.exists(active_along_dir) else 0)
+    _sanitize_extra = [
+        t for t in [
+            os.path.join(repo_root, "docs"),
+            os.path.join(repo_root, "AGENTS.md"),
+            os.path.join(repo_root, "README.md"),
+        ]
+        if os.path.exists(t)
+    ]
+    sanitized_count = (
+        sanitize_markdown_typography(mig, active_along_dir, extra_targets=_sanitize_extra)
+        if os.path.exists(active_along_dir) else 0
+    )
     if sanitized_count > 0:
         verb = "would sanitize" if dry_run else "Sanitized"
         print(f"   {verb} typography in {sanitized_count} Markdown files.")

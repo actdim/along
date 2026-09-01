@@ -447,5 +447,68 @@ class TestNoRawFileOperations(unittest.TestCase):
             f"backs up and honours --dry-run; found: {offenders}")
 
 
+# An em-dash (U+2014) - one of the characters the Along typography rule forbids.
+_EM_DASH = "\u2014"
+
+
+class TestTypographySanitizerScope(unittest.TestCase):
+    """Step 5 must repair banned characters in docs/ and AGENTS.md, not only .along/.
+
+    REQ-1/REQ-2 from task--extend-sanitizer-scope-to-docs-and-root: the migration
+    step must cover docs/ (the Knowledge Base) and the two root agent context files
+    AGENTS.md and README.md.  CLAUDE.md and GEMINI.md are excluded by design.
+
+    All fixtures are throwaway trees; REPO_ROOT is never passed to the engine.
+    """
+
+    def test_em_dash_in_docs_is_repaired_by_migration(self):
+        root = hermetic.make_repo_fixture(prefix="along-sanit-docs-")
+        try:
+            topic = os.path.join(root, "docs", "topic--architecture.md")
+            original = read(topic)
+            textio.write_text(topic, original + f"\nThis sentence has an em{_EM_DASH}dash.\n")
+
+            result = migrate(root, "--apply")
+            self.assertEqual(result.returncode, 0, result.stderr)
+            after = read(topic)
+            self.assertNotIn(_EM_DASH, after,
+                             "Step 5 must repair a banned character in docs/")
+        finally:
+            shutil.rmtree(root, ignore_errors=True)
+
+    def test_em_dash_in_agents_md_is_repaired_by_migration(self):
+        root = hermetic.make_repo_fixture(prefix="along-sanit-agents-")
+        try:
+            agents_md = os.path.join(root, "AGENTS.md")
+            original = read(agents_md)
+            textio.write_text(agents_md, original + f"\nNote{_EM_DASH}an em-dash here.\n")
+
+            result = migrate(root, "--apply")
+            self.assertEqual(result.returncode, 0, result.stderr)
+            after = read(agents_md)
+            self.assertNotIn(_EM_DASH, after,
+                             "Step 5 must repair a banned character in AGENTS.md")
+        finally:
+            shutil.rmtree(root, ignore_errors=True)
+
+    def test_dry_run_does_not_write_typography_repairs(self):
+        root = hermetic.make_repo_fixture(prefix="along-sanit-dry-")
+        try:
+            topic = os.path.join(root, "docs", "topic--architecture.md")
+            agents_md = os.path.join(root, "AGENTS.md")
+            contaminated = read(topic) + f"\nEm{_EM_DASH}dash present.\n"
+            textio.write_text(topic, contaminated)
+            agents_contaminated = read(agents_md) + f"\nAlso em{_EM_DASH}dash.\n"
+            textio.write_text(agents_md, agents_contaminated)
+
+            before = tree_digest(root)
+            result = migrate(root, "--dry-run")
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertEqual(tree_digest(root), before,
+                             "dry-run must not rewrite any file, including docs/ and AGENTS.md")
+        finally:
+            shutil.rmtree(root, ignore_errors=True)
+
+
 if __name__ == "__main__":
     unittest.main()
