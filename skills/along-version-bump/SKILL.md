@@ -3,7 +3,7 @@ name: along-version-bump
 description: Increment project or protocol version (patch by default) behind a pre-release quality gate, reconcile the target milestone, update CHANGELOG.md, and create the release commit and annotated tag. Universal support for Node, Python, Rust, .NET, and custom .along/scripts/bump_version.py hooks. Use when invoking /along-version-bump.
 ---
 
-# Along Version Bump  [v2.2.9]
+# Along Version Bump  [v2.2.10]
 
 Universal project version bumper and release pipeline engine for repositories adopting Along.
 
