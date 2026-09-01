@@ -40,10 +40,15 @@ protocol's own "Zero Unintended Deletions" and "Anti-Stub & Size Regression Inva
 
 ### 2. Destroys legitimate non-English content
 
-The replacement map rewrites `«` / `»` (guillemets), `’` (apostrophe),
-`…` (ellipsis), and NBSP inside **any** `.json` / `.yaml` / `.toml` / `.py` file. That
-includes i18n resource bundles, test fixtures, and localized user-facing strings. A French
-`locales/fr.json` or a Russian message catalog is corrupted as a side effect of a commit.
+The replacement map rewrites guillemets (`U+00AB` / `U+00BB`), the typographic apostrophe
+(`U+2019`), the ellipsis glyph (`U+2026`), and NBSP (`U+00A0`) inside **any** `.json` /
+`.yaml` / `.toml` / `.py` file. That includes i18n resource bundles, test fixtures, and
+localized user-facing strings. A French `locales/fr.json` or a Russian message catalog is
+corrupted as a side effect of a commit.
+
+(Characters are named by code point here on purpose: the protocol forbids the literal glyphs
+in repository text, so documenting them requires the `U+XXXX` notation rather than the
+characters themselves. The first version of this issue file violated that rule.)
 
 ### 3. Forces LF onto files that `.gitattributes` declares CRLF
 
@@ -103,8 +108,16 @@ harmful. This issue should decide the boundary and record it as an ADR.
 - REQ-6: Automated paths (`along-commit`, `version-bump`) must default to `--check` and
   refuse to rewrite silently. Rewriting requires an explicit flag or user confirmation.
 - REQ-7: Record an ADR defining which file classes the ASCII typography rule governs.
-- REQ-8: Tests: non-UTF8 file is skipped and left byte-identical; CRLF file keeps CRLF;
-  a localized JSON fixture is untouched by default; `--check` exits non-zero without writing.
+- REQ-8: BOM handling is already partly correct and must stay: `REPLACEMENTS` maps `U+FEFF`
+  to the empty string, and the file is read with `encoding='utf-8'` rather than `utf-8-sig`,
+  so a leading BOM decodes to a U+FEFF character and is stripped on rewrite. Two gaps
+  remain: (a) `glob` never reaches hidden directories or dotfiles, so a BOM in `.along/**`
+  or in a root dotfile is never stripped, and (b) the strip is silent. The sanitizer must
+  report each BOM removal by path, and must not be the mechanism that enforces the rule:
+  enforcement belongs to the gate, see `[bug--quality-gates-skip-hidden-directories]` REQ-8.
+- REQ-9: Tests: non-UTF8 file is skipped and left byte-identical; CRLF file keeps CRLF;
+  a localized JSON fixture is untouched by default; `--check` exits non-zero without writing;
+  a BOM-prefixed fixture inside a hidden directory is detected and reported.
 
 ## Acceptance Criteria
 

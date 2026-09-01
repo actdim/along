@@ -92,8 +92,25 @@ verifies a subset it happens to reach, and the coverage hole is invisible.
 - REQ-5: Populate `LICENSE` with the MIT text the README promises, and add a test asserting
   every file referenced from `README.md` exists and is non-empty.
 - REQ-6: Fix the `.mise.toml` em-dash once the gate can see it.
-- REQ-7: Tests: a fixture with a violation inside a hidden directory must fail the gate; a
-  path containing the substring `dist` must not be skipped.
+- REQ-7: The typography gate must also cover `tests/`. Line 153 excludes any path containing
+  the substring `tests`, so test sources are exempt from the rule they are meant to uphold.
+  Two real violations found on 2026-09-01 were invisible to the gate for exactly this reason:
+  an em-dash in `.mise.toml` (a root dotfile, unreachable by `glob`) and literal guillemets,
+  a typographic apostrophe, and an ellipsis glyph inside a `.along/ISSUES/*.md` file (a hidden
+  directory). Both were found only by an ad-hoc out-of-band scan.
+- REQ-8: The gate owns BOM enforcement, and it must be byte-level, not character-level.
+  A leading UTF-8 BOM (`ef bb bf`) is an encoding artifact, so testing for the U+FEFF
+  character after decoding is not equivalent: read the first three bytes and fail on a BOM.
+  Rationale for placing enforcement here rather than in the engines: an engine should
+  tolerate a BOM and report it (as `along_exec.py issue done` now does), while the
+  repository invariant "no BOM in committed text" belongs to one gate. Baseline measured on
+  2026-09-01: 0 of 249 files carry a BOM, so the gate starts green and only has to keep it
+  that way. Windows PowerShell 5.1 emits a BOM from `Set-Content -Encoding utf8`,
+  `Out-File -Encoding utf8`, and plain `>` redirection, so agents and scripts on this
+  platform can introduce one at any time.
+- REQ-9: Tests: a fixture with a violation inside a hidden directory must fail the gate; a
+  path containing the substring `dist` must not be skipped; a BOM-prefixed fixture must fail
+  the gate; a violation inside `tests/` must fail the gate.
 
 ## Acceptance Criteria
 
@@ -102,3 +119,5 @@ verifies a subset it happens to reach, and the coverage hole is invisible.
 - [ ] One shared forbidden-character constant used by sanitizer and tests.
 - [ ] `LICENSE` non-empty; README-referenced files verified by test.
 - [ ] No substring-based path exclusions remain.
+- [ ] Typography gate covers `tests/` and `.along/`.
+- [ ] BOM detection is byte-level and enforced by the gate; repository stays at zero BOMs.

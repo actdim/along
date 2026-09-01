@@ -15,10 +15,22 @@ The substitution was also unanchored, so prose or code samples in the markdown b
 containing `status:` were rewritten too.
 
 These tests pin the full lifecycle (open -> in-progress -> done) and body immutability.
+
+The load-bearing invariant is in `TestIssueDoneCommand`: a lifecycle command must never
+report success while changing nothing. Unparseable front-matter has to fail loudly.
+
+A leading UTF-8 BOM (`test_06b`) is one specific historical instance of that class, not an
+expected input: this repository contains zero BOM-prefixed files, and the engines never
+write one. It is covered because Windows PowerShell 5.1 emits a BOM from `Set-Content -Encoding utf8`,
+`Out-File -Encoding utf8`, and plain `>` redirection, so a BOM can arrive from tooling even
+though the protocol forbids it in committed text. Detecting and rejecting BOMs is the
+gate's job, not each engine's; see `[bug--quality-gates-skip-hidden-directories]`.
 """
 
 import os
+import subprocess
 import sys
+import tempfile
 import unittest
 
 REPO_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -139,7 +151,14 @@ class TestFrontmatterFieldUpdate(unittest.TestCase):
         self.assertEqual(self._fm(out)["status"], "done")
 
     def test_06b_utf8_bom_prefixed_entity_still_updates(self):
-        """PowerShell redirects and Windows editors emit a BOM; updates must not become a no-op."""
+        """
+        A BOM must not silently turn an update into a no-op.
+
+        Not an expected input: the protocol forbids BOMs and this repository has none.
+        Covered because Windows PowerShell 5.1 emits one from `Set-Content -Encoding utf8`,
+        `Out-File -Encoding utf8`, and `>` redirection, which is how the original defect was
+        found. The general guarantee is in `TestIssueDoneCommand`.
+        """
         bom = "\ufeff" + IN_PROGRESS_ISSUE
 
         self.assertTrue(ax.has_frontmatter(bom), "BOM-prefixed front-matter must be detected")
@@ -217,6 +236,73 @@ class TestRepositoryEntityIntegrity(unittest.TestCase):
             missing, [],
             "Protocol requires 'completed: YYYY-MM-DD' on issues moved to done/:\n" + "\n".join(missing)
         )
+
+
+class TestIssueDoneCommand(unittest.TestCase):
+    """
+    End-to-end guarantee: `issue done` must never report success while changing nothing.
+
+    Runs against a temporary repository, never REPO_ROOT, so the suite cannot mutate the
+    working tree (see [bug--tests-mutate-working-tree]).
+    """
+
+    EXEC = os.path.join(REPO_ROOT, "scripts", "along_exec.py")
+
+    def setUp(self):
+        self.repo = tempfile.mkdtemp(prefix="along-lifecycle-")
+        self.issues = os.path.join(self.repo, ".along", "ISSUES")
+        self.done = os.path.join(self.issues, "done")
+        os.makedirs(self.done, exist_ok=True)
+
+    def tearDown(self):
+        import shutil
+        shutil.rmtree(self.repo, ignore_errors=True)
+
+    def _write(self, name, text, bom=False):
+        path = os.path.join(self.issues, name)
+        with open(path, "w", encoding="utf-8", newline="") as fh:
+            fh.write(("\ufeff" if bom else "") + text)
+        return path
+
+    def _run_done(self, slug):
+        return subprocess.run(
+            [sys.executable, self.EXEC, "issue", "done", slug],
+            cwd=self.repo, capture_output=True, text=True, check=False,
+            encoding="utf-8", errors="replace",
+        )
+
+    def test_11_unparseable_frontmatter_fails_loudly_and_moves_nothing(self):
+        src = self._write("task--broken-header.md", "# No front-matter here\n\nstatus: open\n")
+
+        res = self._run_done("broken-header")
+
+        self.assertEqual(res.returncode, 1, f"expected exit 1, got {res.returncode}\n{res.stdout}{res.stderr}")
+        self.assertIn("front-matter", (res.stderr or "").lower())
+        self.assertTrue(os.path.exists(src), "the issue file must stay where it was")
+        self.assertFalse(
+            os.path.exists(os.path.join(self.done, "task--broken-header.md")),
+            "a file with unparseable front-matter must not be moved to done/",
+        )
+
+    def test_12_bom_prefixed_entity_closes_and_reports_normalization(self):
+        self._write("task--bom-entity.md", IN_PROGRESS_ISSUE, bom=True)
+
+        res = self._run_done("bom-entity")
+        self.assertEqual(res.returncode, 0, f"{res.stdout}{res.stderr}")
+
+        combined = (res.stdout or "") + (res.stderr or "")
+        self.assertIn("BOM", combined, "normalizing a BOM is a byte-level change and must be reported")
+
+        moved = os.path.join(self.done, "task--bom-entity.md")
+        self.assertTrue(os.path.exists(moved))
+        with open(moved, "rb") as fh:
+            raw = fh.read()
+        self.assertFalse(raw.startswith(b"\xef\xbb\xbf"), "output must be BOM-free")
+
+        text = raw.decode("utf-8")
+        fm = text.split("---", 2)[1]
+        self.assertIn("status: done", fm)
+        self.assertIn("completed:", fm)
 
 
 if __name__ == "__main__":

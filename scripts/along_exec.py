@@ -107,8 +107,12 @@ def update_frontmatter_fields(content: str, updates: Dict[str, str],
     Keys absent from the front-matter are inserted after their `place_after`
     anchor key when given, otherwise appended to the end of the block.
 
-    A leading UTF-8 BOM is tolerated and removed: Windows editors and PowerShell
-    redirects emit it routinely, while the protocol requires BOM-free UTF-8.
+    A leading UTF-8 BOM is tolerated and removed, because Windows PowerShell 5.1 emits one
+    from `Set-Content -Encoding utf8`, `Out-File -Encoding utf8`, and `>` redirection, while
+    the protocol requires BOM-free UTF-8. Removal is a byte-level change the caller did not
+    ask for, so callers MUST report it: check `content.startswith("\\ufeff")` before calling
+    and print a notice. Detecting and rejecting BOMs in committed text is the quality gate's
+    responsibility, not this function's.
     """
     m = FRONTMATTER_RE.match(content)
     if not m:
@@ -391,6 +395,14 @@ Describe the feature, requirements, and background context here.
                 file=sys.stderr,
             )
             sys.exit(1)
+
+        if content.startswith("\ufeff"):
+            print(
+                f"-> [Notice] Normalized a UTF-8 BOM in {filename}. "
+                "The protocol requires BOM-free UTF-8. To avoid producing one: PowerShell 7+ "
+                "has -Encoding utf8NoBOM; Windows PowerShell 5.1 has no such value, so use "
+                "[IO.File]::WriteAllText(path, text, (New-Object System.Text.UTF8Encoding($false)))."
+            )
 
         content = update_frontmatter_fields(
             content,
