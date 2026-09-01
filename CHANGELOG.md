@@ -2,6 +2,12 @@
 
 All notable changes to this project, newest first.
 
+## v2.2.12 - 2026-09-01
+
+- test: properly skip bash installer tests if WSL is broken on Windows
+- feat(installers): install manifest, MCP honesty, installer parity without deletion
+- fix(migration): extend Step 5 typography scope to docs/ and AGENTS.md/README.md
+
 ## v2.2.11 - 2026-09-01
 
 - fix(migration): merge instead of overwriting, back up first, dry run by default

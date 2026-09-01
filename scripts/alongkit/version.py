@@ -13,7 +13,7 @@ a version that had not existed for three releases.
 
 from __future__ import annotations
 
-CURRENT_PROTOCOL_VERSION = "2.2.11"
+CURRENT_PROTOCOL_VERSION = "2.2.12"
 
 #: Alias for readers that care about the toolchain rather than the protocol. They move
 #: together: the engines and the protocol ship as one artifact.

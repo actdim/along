@@ -3,7 +3,7 @@ name: along-wrap
 description: Wrap up the current coding session or completed work stage by updating the repo's .along/ state - execute code review checklist, write a session log file, synchronize ISSUES.md projection, move completed issues to ISSUES/done/, append a HISTORY line, and record decisions/glossary terms. Use when ending work, wrapping up, or when invoking /along-wrap.
 ---
 
-# Along Wrap  [v2.2.11]
+# Along Wrap  [v2.2.12]
 
 Universal finalization and memory synchronization protocol for sessions, tasks, and milestone stages.
 
