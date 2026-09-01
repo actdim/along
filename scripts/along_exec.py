@@ -89,6 +89,62 @@ def resolve_tool_script(script_name: str, repo_root: str) -> Optional[str]:
     return None
 
 
+FRONTMATTER_RE = re.compile(r"^\ufeff?(---\r?\n)(.*?)(\r?\n---[ \t]*\r?\n?)", re.DOTALL)
+
+
+def has_frontmatter(content: str) -> bool:
+    """True when the content opens with a parseable YAML front-matter block."""
+    return FRONTMATTER_RE.match(content) is not None
+
+
+def update_frontmatter_fields(content: str, updates: Dict[str, str],
+                              place_after: Optional[Dict[str, str]] = None) -> str:
+    """
+    Update or insert keys in the LEADING YAML front-matter block only.
+
+    The markdown body is never touched, so prose or code samples mentioning
+    'status:' cannot be corrupted. Existing line endings are preserved.
+    Keys absent from the front-matter are inserted after their `place_after`
+    anchor key when given, otherwise appended to the end of the block.
+
+    A leading UTF-8 BOM is tolerated and removed: Windows editors and PowerShell
+    redirects emit it routinely, while the protocol requires BOM-free UTF-8.
+    """
+    m = FRONTMATTER_RE.match(content)
+    if not m:
+        return content
+
+    head, fm_block, tail = m.group(1), m.group(2), m.group(3)
+    rest = content[m.end():]
+    newline = "\r\n" if "\r\n" in m.group(0) else "\n"
+    place_after = place_after or {}
+
+    remaining = dict(updates)
+    lines = re.split(r"\r?\n", fm_block)
+    out: List[str] = []
+    for line in lines:
+        key_m = re.match(r"^([A-Za-z0-9_-]+)[ \t]*:", line)
+        key = key_m.group(1) if key_m else None
+        if key and key in remaining:
+            out.append(f"{key}: {remaining.pop(key)}")
+        else:
+            out.append(line)
+
+    for key, value in remaining.items():
+        anchor = place_after.get(key)
+        inserted = False
+        if anchor:
+            for idx, line in enumerate(out):
+                if re.match(rf"^{re.escape(anchor)}[ \t]*:", line):
+                    out.insert(idx + 1, f"{key}: {value}")
+                    inserted = True
+                    break
+        if not inserted:
+            out.append(f"{key}: {value}")
+
+    return head + newline.join(out) + tail + rest
+
+
 def try_record_incident(component: str, error_message: str, stack_trace: str = "", command: str = "", repo_root: str = ""):
     """Safely traps and records internal Along exceptions into ~/.along/diagnostics/ without crashing."""
     try:
@@ -328,12 +384,19 @@ Describe the feature, requirements, and background context here.
         with open(found_file, "r", encoding="utf-8") as f:
             content = f.read()
 
-        content = re.sub(r'status:\s*\w+', 'status: done', content)
-        content = re.sub(r'updated:\s*\S+', f'updated: {today}', content)
-        if "completed:" not in content:
-            content = re.sub(r'(status:\s*done\n)', f'\\1completed: {today}\n', content)
-        else:
-            content = re.sub(r'completed:\s*\S+', f'completed: {today}', content)
+        if not has_frontmatter(content):
+            print(
+                f"[Error] {filename} has no parseable YAML front-matter. "
+                "Refusing to close it silently: fix the entity header, then retry.",
+                file=sys.stderr,
+            )
+            sys.exit(1)
+
+        content = update_frontmatter_fields(
+            content,
+            {"status": "done", "updated": today, "completed": today},
+            place_after={"completed": "status"},
+        )
 
         with open(dest_file, "w", encoding="utf-8") as f:
             f.write(content)

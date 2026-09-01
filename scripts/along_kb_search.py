@@ -6,6 +6,86 @@ import re
 import sys
 import argparse
 
+# Current format:  ## ADR-YYYY-MM-DD--<slug> - <Title>      (protocol >= v2.2.0)
+# Legacy format:   ## <NNN> - <Title> / ## <NNN>: <Title>  (protocol < v2.2.0)
+# A bare ISO date heading (## 2026-08-15 ...) is explicitly not an ADR.
+_ADR_HEADING = (
+    r"(?:ADR-\d{4}-\d{2}-\d{2}--[A-Za-z0-9._-]+|(?!\d{4}-\d{2}-\d{2})\d{1,4}\s*[-.:])"
+)
+ADR_SPLIT_RE = re.compile(r"\n(?=##\s+" + _ADR_HEADING + r")")
+ADR_HEADER_RE = re.compile(
+    r"^##\s+(?:(?P<key>ADR-\d{4}-\d{2}-\d{2}--[A-Za-z0-9._-]+)"
+    r"|(?!\d{4}-\d{2}-\d{2})(?P<num>\d{1,4})\s*[-.:])"
+    r"\s*(?:-\s*)?(?P<title>.*)$"
+)
+
+
+def github_heading_anchor(heading):
+    """Mirror the GitHub Markdown heading anchor algorithm for stable deep links."""
+    anchor = heading.strip().lower()
+    anchor = re.sub(r"[^\w\s-]", "", anchor)
+    return re.sub(r"\s+", "-", anchor).strip("-")
+
+
+def parse_decision_entries(dec_raw, rel_path=".along/DECISIONS.md"):
+    """
+    Split an append-only DECISIONS.md into individual searchable ADR entries.
+
+    Supports both header formats:
+    - Current decentralized slug format (protocol >= v2.2.0):
+        ## ADR-YYYY-MM-DD--<slug> - <Title>
+    - Legacy numeric format (protocol < v2.2.0):
+        ## <NNN> - <Title>
+
+    The schema template placeholder (literal `<slug>` / `YYYY-MM-DD` header) is skipped so
+    it never surfaces as a search result.
+    """
+    entries = []
+    for blk in ADR_SPLIT_RE.split(dec_raw):
+        blk = blk.strip()
+        if not blk:
+            continue
+        lines = blk.splitlines()
+        heading = lines[0].strip()
+        header_m = ADR_HEADER_RE.match(heading)
+        if not header_m:
+            continue
+
+        # An ADR block ends at the next level-2 heading of any kind, so unrelated
+        # sections appended to the log never bleed into an ADR body or snippet.
+        end = len(lines)
+        for i, ln in enumerate(lines[1:], 1):
+            if ln.startswith("## "):
+                end = i
+                break
+        blk = "\n".join(lines[:end]).strip()
+
+        key = header_m.group("key")
+        human_title = (header_m.group("title") or "").strip()
+
+        if key:
+            if "<" in key or "YYYY" in key:
+                continue
+            adr_key = key
+            slug = key.lower()
+        else:
+            adr_key = f"ADR-{header_m.group('num')}"
+            slug = adr_key.lower()
+
+        entries.append({
+            "category": "decision",
+            "category_label": "ADR",
+            "title": f"{adr_key} - {human_title}" if human_title else adr_key,
+            "slug": slug,
+            "type": "adr",
+            "tags": ["adr", "architecture", "decision"],
+            "status": "superseded" if re.search(r"superseded\s+by", blk, re.IGNORECASE) else "active",
+            "file_path": f"{rel_path}#{github_heading_anchor(heading.lstrip('#').strip())}",
+            "body": blk,
+        })
+    return entries
+
+
 def parse_frontmatter(content):
     match = re.match(r"^---\r?\n(.*?)\r?\n---\r?\n(.*)$", content, re.DOTALL)
     if not match:
@@ -97,24 +177,8 @@ def collect_all_entries(repo_root):
         try:
             with open(decisions_path, "r", encoding="utf-8", errors="replace") as p:
                 dec_raw = p.read()
-            adr_blocks = re.split(r"\n(?=##\s+\d+[\.:])", dec_raw)
-            for blk in adr_blocks:
-                header_m = re.match(r"^##\s+(\d+[\.:]?\s*[^\n]+)", blk.strip())
-                if header_m:
-                    adr_title = header_m.group(1).strip()
-                    adr_num_m = re.match(r"^(\d+)", adr_title)
-                    adr_num = adr_num_m.group(1) if adr_num_m else "ADR"
-                    entries.append({
-                        "category": "decision",
-                        "category_label": "ADR",
-                        "title": f"ADR #{adr_title}",
-                        "slug": f"adr-{adr_num}",
-                        "type": "adr",
-                        "tags": ["adr", "architecture", "decision"],
-                        "status": "superseded" if "Superseded" in blk else "active",
-                        "file_path": f".along/DECISIONS.md#{adr_num}",
-                        "body": blk
-                    })
+            dec_rel = os.path.relpath(decisions_path, repo_root).replace("\\", "/")
+            entries.extend(parse_decision_entries(dec_raw, rel_path=dec_rel))
         except Exception:
             pass
 
