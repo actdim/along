@@ -411,9 +411,13 @@ def step_migrate_v2_0_along_directory(repo_root):
     # 5. Update AGENTS.md references & markers
     agents_md_files = glob.glob(os.path.join(repo_root, "**", "AGENTS.md"), recursive=True)
     for amd in agents_md_files:
-        with open(amd, "r", encoding="utf-8", errors="ignore") as f:
-            content = f.read()
-        
+        try:
+            content = textio.read_text(amd)
+        except UnicodeDecodeError as exc:
+            print(f"   [WARN] {amd} is not valid UTF-8 ({exc.reason}); skipped.", file=sys.stderr)
+            continue
+        original = content
+
         # Replace markers and deduplicate
         content = re.sub(
             r"<!-- BEGIN ACTDIM-AGENTS-PROTOCOL (.*?) -->",
@@ -425,19 +429,39 @@ def step_migrate_v2_0_along_directory(repo_root):
         content = re.sub(r"(?:<!-- END ALONG-PROTOCOL -->\s*)+", r"<!-- END ALONG-PROTOCOL -->\n", content)
         content = re.sub(r"# ACTDIM-AGENTS-PROTOCOL v\d+\.\d+\.\d+", f"# ALONG-PROTOCOL v{CURRENT_PROTOCOL_VERSION}", content)
         content = re.sub(r"# ALONG-PROTOCOL v\d+\.\d+\.\d+", f"# ALONG-PROTOCOL v{CURRENT_PROTOCOL_VERSION}", content)
-        
-        # Replace path references
-        content = content.replace(".agents/", ".along/")
-        content = content.replace("/init-agents", "/along-init")
-        content = content.replace("/update-agents", "/along-update")
-        content = content.replace("/init-kb", "/along-init-kb")
-        content = content.replace("/sync-kb", "/along-sync-kb")
-        content = content.replace("/search-kb", "/along-search-kb")
-        content = content.replace("/repo-dashboard", "/along-dash")
-        content = content.replace("/dashboard", "/along-dash")
 
-        with open(amd, "w", encoding="utf-8") as f:
-            f.write(content)
+        # Legacy path and command renames, applied ONLY to a file that still carries a
+        # pre-v2.0.0 marker or a legacy skill name. Running them unconditionally over a
+        # current AGENTS.md is not a no-op, it is damage: the substitutions below are
+        # substring replacements over prose.
+        #
+        # Both failure modes were observed in this repository. `.agents/` -> `.along/`
+        # rewrote a deliberate mention of the legacy directory inside the managed protocol
+        # block, leaving a sentence that named `.along/KB/` twice. `/dashboard` ->
+        # `/along-dash` turned the real path `packages/dashboard-ui/` into
+        # `packages/along-dash-ui/`, which does not exist. Neither was detectable until
+        # `test_03b_managed_block_matches_its_source` compared the block with its source.
+        needs_legacy_rename = (
+            "ACTDIM-AGENTS-PROTOCOL" in original
+            or (".agents/" in original and ".along/" not in original)
+            or re.search(r"(?<![\w/-])/(init-agents|update-agents|repo-dashboard)(?![\w-])",
+                         original) is not None
+        )
+        if needs_legacy_rename:
+            content = content.replace(".agents/", ".along/")
+            # Anchored so a slash-command name is only rewritten when it stands alone.
+            # `/dashboard` inside `packages/dashboard-ui` must not match.
+            for legacy, current in (("init-agents", "along-init"),
+                                    ("update-agents", "along-update"),
+                                    ("init-kb", "along-init-kb"),
+                                    ("sync-kb", "along-sync-kb"),
+                                    ("search-kb", "along-search-kb"),
+                                    ("repo-dashboard", "along-dash"),
+                                    ("dashboard", "along-dash")):
+                content = re.sub(rf"(?<![\w/-])/{legacy}(?![\w-])", f"/{current}", content)
+
+        if content != original:
+            textio.write_text(amd, content)
 
     # 6. Update .code-review-graph-ignore
     crg_ignore = os.path.join(repo_root, ".code-review-graph-ignore")

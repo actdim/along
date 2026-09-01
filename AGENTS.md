@@ -125,7 +125,7 @@ To keep `.along/` lean and avoid token bloat:
   - `docs/topic--<slug>.md`: Specific domain topics and module specifications.
 - **Source Archival (`.archive/`)**: Processed raw sources, unmanaged notes, and drafts are archived into `.archive/` (excluded from active KB search and site generators).
 - **Front-matter Schema**: Every `docs/*.md` article MUST include YAML front-matter: `protocol: along`, `protocol_version` (the current protocol version, quoted), `slug`, `title`, `type` (`topic` | `architecture` | `domain-model` | `setup-workflow` | `index`), `created`, `updated`, `tags: []`.
-- **Stable Entry Point Rule**: Direct linking from external files or `README.md` into internal service folders (`.along/KB/`, `.along/KB/`) is strictly forbidden. All public entry points must reference stable canonical paths in `docs/` (`docs/INDEX.md` or `docs/topic--<slug>.md`).
+- **Stable Entry Point Rule**: Direct linking from external files or `README.md` into internal service folders (`.along/KB/`, `.agents/KB/`) is strictly forbidden. All public entry points must reference stable canonical paths in `docs/` (`docs/INDEX.md` or `docs/topic--<slug>.md`).
 - **Inbound Link Rewriting Engine & Migration Invariance**: Whenever documentation schemas change, migration engines (`/along-update`, `/along-kb-sync`) MUST recursively rewrite legacy path references across all repository Markdown files before deleting legacy directories.
 - **Monorepo Scope Rule**: Knowledge Base synchronization, link rewriting, and link verification operate recursively across all subprojects, packages (`packages/*`, `apps/*`), and directories.
 - **Portable Markdown Links**: All internal cross-references MUST use standard relative Markdown links (`[Title](./target.md)`) for universal rendering across GitHub, GitHub Pages, IDEs, and npm.
@@ -209,7 +209,7 @@ This repository is `Along` (`actdim-along`) - the provider-agnostic agent-contex
     or `uv run python -m unittest discover tests -q`.
   - Run Dev Server: `npm run dev` (or `python .along/scripts/dev.py`).
   - Build Assets: `npm run build` (or `python .along/scripts/build.py`).
-- **Frontend Architecture (`packages/along-dash-ui/`)**:
+- **Frontend Architecture (`packages/dashboard-ui/`)**:
   - Full architectural rules in `[docs/topic--frontend-frameworks.md](file://docs/topic--frontend-frameworks.md)` and `[.along/DECISIONS.md](file://.along/DECISIONS.md#011)`.
   - Strict `@actdim/dynstruct` component architecture with MobX reactive state; zero raw `useState`/`useEffect` hooks.
   - Zero manual API channels or manual `fetch` calls: client generated via NSwag (`pnpm run generate:api`) and wired dynamically using `@actdim/msgmesh/adapters` (`ToMsgChannelPrefix`, `ToMsgStruct`, `registerAdapters`).

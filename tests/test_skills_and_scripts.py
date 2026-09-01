@@ -247,6 +247,62 @@ class TestAlongSkillsAndScripts(unittest.TestCase):
 
         self.assertEqual(len(violations), 0, f"Typography violations found:\n" + "\n".join(violations[:15]))
 
+    LEGACY_AGENTS_MD = (
+        "<!-- BEGIN ACTDIM-AGENTS-PROTOCOL root -->\n"
+        "# ACTDIM-AGENTS-PROTOCOL v1.5.0\n\n"
+        "Entities live in `.agents/ISSUES/`. Run /init-agents then /update-agents.\n"
+        "Open the board with /repo-dashboard or /dashboard. Sync with /sync-kb.\n"
+        "<!-- END ACTDIM-AGENTS-PROTOCOL -->\n"
+    )
+
+    CURRENT_AGENTS_MD = (
+        "<!-- BEGIN ALONG-PROTOCOL root (managed by along-init - do not edit by hand) -->\n"
+        "# ALONG-PROTOCOL v2.2.9\n\n"
+        "Direct linking into internal service folders (`.along/KB/`, `.agents/KB/`) is forbidden.\n"
+        "<!-- END ALONG-PROTOCOL -->\n\n"
+        "## Project specifics\n\n"
+        "- Frontend lives in `packages/dashboard-ui/` and is served by /along-dash.\n"
+    )
+
+    def _migrate_temp_repo(self, agents_md):
+        """Run the migration over a throwaway repository and return the resulting AGENTS.md."""
+        mig_script = os.path.join(REPO_ROOT, "scripts", "migrate_protocol.py")
+        with tempfile.TemporaryDirectory() as tmp:
+            os.makedirs(os.path.join(tmp, ".along", "ISSUES"))
+            target = os.path.join(tmp, "AGENTS.md")
+            with open(target, "w", encoding="utf-8", newline="") as f:
+                f.write(agents_md)
+            run([sys.executable, mig_script, tmp])
+            with open(target, "r", encoding="utf-8") as f:
+                return f.read()
+
+    def test_07b_migration_renames_a_legacy_agents_md(self):
+        """A pre-v2.0.0 AGENTS.md must be migrated to the Along names."""
+        after = self._migrate_temp_repo(self.LEGACY_AGENTS_MD)
+        self.assertNotIn("ACTDIM-AGENTS-PROTOCOL", after)
+        self.assertNotIn(".agents/ISSUES/", after)
+        self.assertIn("/along-init", after)
+        self.assertNotIn("/init-agents", after)
+        self.assertNotIn("/dashboard", after, "the legacy /dashboard command must be renamed")
+
+    def test_07c_migration_leaves_a_current_agents_md_alone(self):
+        """
+        The migration must not rewrite prose in an already-current AGENTS.md.
+
+        Both substitutions it applies are substring replacements, and both damaged this
+        repository: `.agents/` -> `.along/` rewrote a deliberate mention of the legacy
+        directory inside the managed protocol block, and `/dashboard` -> `/along-dash`
+        turned the real path `packages/dashboard-ui/` into `packages/along-dash-ui/`,
+        which does not exist. The renames now apply only to a file that still carries a
+        legacy marker.
+        """
+        after = self._migrate_temp_repo(self.CURRENT_AGENTS_MD)
+        self.assertIn(".agents/KB/", after,
+                      "a deliberate mention of the legacy directory must survive")
+        self.assertIn("packages/dashboard-ui/", after,
+                      "a real path containing /dashboard must survive")
+        self.assertNotIn("along-dash-ui", after)
+
     def test_06_along_dash_cli_execution(self):
         """Verify that along_dash.py runs in CLI mode and produces DASHBOARD.md and dashboard.html."""
         dash_script = os.path.join(REPO_ROOT, "scripts", "along_dash.py")
