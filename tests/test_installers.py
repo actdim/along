@@ -134,6 +134,12 @@ class InstallerCase(unittest.TestCase):
         found = shutil.which("bash")
         if not found:
             self.skipTest("bash is unavailable")
+        if sys.platform == "win32":
+            # On Windows, bash.exe is usually WSL, which might be installed
+            # but lack a default distro or have a non-standard one like docker-desktop.
+            probe = proc.run_capture([found, "-c", "echo 1"])
+            if not probe.ok:
+                self.skipTest(f"bash is present but broken or WSL distro is unsupported: {probe.stderr.strip()}")
         return found
 
     def powershell(self):
