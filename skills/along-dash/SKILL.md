@@ -3,7 +3,7 @@ name: along-dash
 description: Launch the Along dynamic executive dashboard, inspect entity DAG dependency graph, search Knowledge Base, or view OpenAPI Swagger docs. Use when the user requests a dashboard, status overview, repository metrics, or invokes /along-dash.
 ---
 
-# Along Dashboard & Knowledge Base Engine (`/along-dash`) [v2.2.12]
+# Along Dashboard & Knowledge Base Engine (`/along-dash`) [v2.2.13]
 
 Inspect, visualize, and analyze repository status across all `.along/` entities (`ISSUES`, `MILESTONES`, `RISKS`, `SPIKES`, `CHECKLISTS`, `SESSIONS`, `KB`, and ADR decisions) with live FastAPI backend, Swagger contracts, Knowledge Base search engine, and React 19 UI.
 

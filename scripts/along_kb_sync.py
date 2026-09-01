@@ -463,6 +463,16 @@ def validate_repo_link_integrity(repo_root):
 
     return broken_links, total_checked
 
+
+def has_real_body(body: str) -> bool:
+    """Return True only if the body contains real content beyond a bare H1 or empty stub."""
+    stripped = body.strip()
+    if not stripped:
+        return False
+    lines = [l.strip() for l in stripped.splitlines() if l.strip()]
+    return len(lines) > 1
+
+
 def sync_kb(repo_root, check_only=False, strict=False):
     repo_root = os.path.abspath(repo_root)
     docs_dir = os.path.join(repo_root, "docs")
@@ -492,8 +502,18 @@ def sync_kb(repo_root, check_only=False, strict=False):
                 raw_content = fp.read()
             fm, body = parse_frontmatter(raw_content)
 
+            if not has_real_body(body):
+                print(f"   [WARN] Skipping stub (empty body): {f}")
+                continue
+
             updates = {}
             slug = fm.get('slug') or f.replace('.md', '')
+            # A4: normalize slug - strip accidental topic-- prefix written into front-matter
+            if slug.startswith('topic--'):
+                clean_slug = slug[len('topic--'):]
+                if fm.get('slug') == slug:
+                    updates['slug'] = clean_slug
+                slug = clean_slug
             title = fm.get('title')
             if not title:
                 h1_m = re.search(r'^#\s+(.*)$', body, re.MULTILINE)
@@ -572,6 +592,8 @@ def sync_kb(repo_root, check_only=False, strict=False):
         mermaid_lines.append(f'    {clean_nid}["{safe_title}"]')
         mermaid_lines.append(f'    INDEX --> {clean_nid}')
 
+    # A2: deduplicate graph edges - a file may reference another multiple times
+    seen_edges: set[tuple[str, str]] = set()
     for f_name, cross_targets in doc_cross_links.items():
         src_id = node_ids.get(f_name)
         if not src_id:
@@ -579,7 +601,10 @@ def sync_kb(repo_root, check_only=False, strict=False):
         for tgt in cross_targets:
             tgt_id = node_ids.get(tgt)
             if tgt_id and tgt_id != src_id:
-                mermaid_lines.append(f'    {src_id} -.->|references| {tgt_id}')
+                edge = (src_id, tgt_id)
+                if edge not in seen_edges:
+                    seen_edges.add(edge)
+                    mermaid_lines.append(f'    {src_id} -.->{"|references|"} {tgt_id}')
 
     mermaid_lines.append("```\n")
     mermaid_lines.append("---\n")
@@ -596,10 +621,10 @@ def sync_kb(repo_root, check_only=False, strict=False):
         index_body_lines.append(f"- **[{art['title']}](./{art['filename']})** ({art['type']}) {tags_str}")
 
     index_body_lines.append("\n---\n\n## Related Context\n")
-    index_body_lines.append("- [AGENTS.md](file://AGENTS.md): Active protocol conventions and rules.")
-    index_body_lines.append("- [.along/DECISIONS.md](file://.along/DECISIONS.md): Architectural Decision Records.")
-    index_body_lines.append("- [.along/ISSUES.md](file://.along/ISSUES.md): Active issue tracking board.")
-    index_body_lines.append("- [.along/HISTORY.md](file://.along/HISTORY.md): Append-only project history log.")
+    index_body_lines.append("- [AGENTS.md](../AGENTS.md): Active protocol conventions and rules.")
+    index_body_lines.append("- [.along/DECISIONS.md](../.along/DECISIONS.md): Architectural Decision Records.")
+    index_body_lines.append("- [.along/ISSUES.md](../.along/ISSUES.md): Active issue tracking board.")
+    index_body_lines.append("- [.along/HISTORY.md](../.along/HISTORY.md): Append-only project history log.")
 
     if not check_only:
         full_index = dump_frontmatter(index_fm, "\n".join(index_body_lines))

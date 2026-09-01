@@ -2,6 +2,10 @@
 
 All notable changes to this project, newest first.
 
+## v2.2.13 - 2026-09-02
+
+- No commits recorded since the previous release tag.
+
 ## v2.2.12 - 2026-09-01
 
 - test: properly skip bash installer tests if WSL is broken on Windows

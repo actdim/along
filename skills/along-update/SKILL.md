@@ -3,7 +3,7 @@ name: along-update
 description: Check and update Along protocol and skills to the latest version across local repository, global installation, and GitHub. Cleans up legacy un-namespaced skills and optionally runs post-update sync engines. Use when the user asks to update agents/along, upgrade the repository protocol, or invokes /along-update.
 ---
 
-# Along Update (`/along-update`) [v2.2.12]
+# Along Update (`/along-update`) [v2.2.13]
 
 Discovers all existing agent contexts across the repository tree and updates them to the latest protocol standard, synchronizing global skill installations, executing versioned migrations, rewriting legacy inbound links, and validating repository-wide link integrity.
 
