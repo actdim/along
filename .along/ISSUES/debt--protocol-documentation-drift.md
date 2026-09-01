@@ -88,9 +88,37 @@ skills that were deleted, which is the exact waste the protocol exists to elimin
 - REQ-6: Record an ADR on the generated-documentation boundary: which files are authored and
   which are compiled.
 
+## Partially Addressed (2026-09-01)
+
+Found while verifying an unrelated protocol edit, not by looking for drift: the `AGENTS.md`
+managed block had diverged from its source, `skills/along-init/protocol.md`. The
+link-rewriting engine had replaced `.agents/KB/` with `.along/KB/` inside ordinary prose in
+the projection only, leaving a sentence that named the same directory twice and no longer
+mentioned the legacy one. This is the "unanchored regex over whole files" mechanism from the
+epic's root-cause analysis, caught in the projection it damaged.
+
+Repaired and gated:
+
+- the block is rebuilt from its source verbatim;
+- two `protocol_version: "2.2.4"` examples, in a protocol that shipped 2.2.9, are now
+  described rather than pinned (nothing kept them in step: the release engine rewrites only
+  `ALONG-PROTOCOL vX.Y.Z` and `CURRENT_PROTOCOL_VERSION`);
+- `test_03b_managed_block_matches_its_source` fails on any divergence and prints the diff;
+- `test_03c_protocol_pins_no_stale_version_examples` fails on any quoted version literal in
+  the protocol text;
+- REQ-5 is done: the "zero external dependencies" claim was corrected in
+  `skills/along-kb-sync/SKILL.md` and `docs/topic--skills-reference.md` when the toolchain
+  gained `ruamel.yaml` (see `[ADR-2026-09-01--frontmatter-on-ruamel-yaml]`).
+
+Still open here: the nine drift items catalogued above, the `docs/` front-matter versions
+(several articles still declare `protocol_version: "2.2.6"`), phantom skills and wrong paths
+in `AGENTS.md`, generating the duplicated documentation instead of hand-maintaining it, and
+the ADR on the authored-versus-compiled boundary.
+
 ## Acceptance Criteria
 
-- [ ] Consistency gate implemented and green.
+- [x] Consistency gate implemented and green (managed block and version examples; the
+      remaining documented-path and skill-existence checks are still to be written).
 - [ ] Every documented path resolves; every documented skill exists.
 - [ ] `docs/` front-matter versions consistent with the protocol.
 - [ ] `AGENTS.md` free of phantom skills and wrong paths.
