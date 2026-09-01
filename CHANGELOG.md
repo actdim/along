@@ -2,6 +2,10 @@
 
 All notable changes to this project, newest first.
 
+## v2.2.11 - 2026-09-01
+
+- fix(migration): merge instead of overwriting, back up first, dry run by default
+
 ## v2.2.10 - 2026-09-01
 
 - fix(release): gate before mutating, roll back on failure, stop reinstalling globals

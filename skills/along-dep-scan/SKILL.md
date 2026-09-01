@@ -3,7 +3,7 @@ name: along-dep-scan
 description: Hierarchical multi-project & submodule dependency discovery engine. Scans Node, Python, .NET NuGet, Rust, Go, and custom stacks, discovers AI instructions, and registers them into docs/topic--dependencies.md. Use when invoking /along-dep-scan.
 ---
 
-# Along Dependency Scan  [v2.2.10]
+# Along Dependency Scan  [v2.2.11]
 
 Discovers AI documentation and guidelines shipped inside internal subprojects, Git submodules, symlinked packages, and declared project dependencies, registering them into the Knowledge Base (`docs/topic--dependencies.md`).
 

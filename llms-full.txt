@@ -3,7 +3,7 @@
 > Comprehensive architectural, protocol, skill, and API reference for AI coding agents operating on or using Along.
 
 ## 1. Project Purpose & Architecture
-Along is a provider-agnostic agent-context and memory protocol (`ALONG-PROTOCOL v2.2.10`) that gives repositories a durable, versioned context directory (`.along/`), compiled Knowledge Base (`docs/`), and an executive dashboard suite.
+Along is a provider-agnostic agent-context and memory protocol (`ALONG-PROTOCOL v2.2.11`) that gives repositories a durable, versioned context directory (`.along/`), compiled Knowledge Base (`docs/`), and an executive dashboard suite.
 
 ### Host Provider Compatibility
 - **Claude Code**: Reads `CLAUDE.md`, which imports root `AGENTS.md`. Skills located in `~/.claude/skills/`.

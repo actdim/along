@@ -3,7 +3,7 @@ name: along-test
 description: Run repository automated tests with quiet flags using .along/scripts/test.py or auto-detected test runner (pytest -q, npm test, cargo test -q, dotnet test -v q).
 ---
 
-# Along Test (`/along-test`) [v2.2.10]
+# Along Test (`/along-test`) [v2.2.11]
 
 Execute project automated tests with quiet flags via `.along/scripts/test.py` or auto-detected test runner.
 
