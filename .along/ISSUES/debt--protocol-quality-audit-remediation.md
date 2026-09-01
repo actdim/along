@@ -51,7 +51,7 @@ Three recurring mechanisms produce most defects:
 - [x] `[bug--migration-deletes-destination-without-backup]` - collision policy, backup, dry-run default, migration state (fixed 2026-09-01)
 - [x] `[bug--release-engine-mutates-before-tests-and-reinstalls-globals]` - gates before mutations, transactional rollback, no global install, tag and CHANGELOG (fixed 2026-09-01)
 - [x] `[bug--handrolled-yaml-loses-block-lists]` - front-matter on ruamel.yaml; 6 invalid files repaired (fixed 2026-09-01)
-- [ ] `[bug--installer-parity-and-destructive-rules-overwrite]`
+- [x] `[bug--installer-parity-and-destructive-rules-overwrite]` - manifest instead of directory deletion, one layout both installers are measured against, MCP written only where verified (fixed 2026-09-01)
 - [ ] `[bug--team-skill-uses-provider-specific-subagent-api]`
 - [ ] `[debt--team-skill-state-not-persisted]`
 
@@ -97,7 +97,7 @@ rather than only documented:
   (a child process emitting non-ASCII output decodes; an engine runs from a flat file
   copy; a block sequence survives an edit) rather than the presence of documentation.
 
-**Step 2 (stop the bleeding) nearly complete.** Three of the four destructive engines are
+**Step 2 (stop the bleeding) complete.** All four destructive engines are
 done: the typography sanitizer, the release engine
 (`[bug--release-engine-mutates-before-tests-and-reinstalls-globals]`), and now the
 migration engine (`[bug--migration-deletes-destination-without-backup]`). The release
@@ -112,8 +112,14 @@ The third mechanism in the root-cause analysis is now blocked as well: the migra
 the last engine invoked implicitly, by the installer and by the test suite, against
 whatever repository they happened to sit in. Nothing writes unasked any more.
 
-Remaining in step 2: `[bug--installer-parity-and-destructive-rules-overwrite]`, which
-shares the same defect in PowerShell (`Remove-Item -Recurse -Force ~/.claude/rules`).
+The fourth, `[bug--installer-parity-and-destructive-rules-overwrite]`, shared the same
+defect in PowerShell (`Remove-Item -Recurse -Force ~/.claude/rules`) and is closed. Its
+answer is a third shape of the same primitive: where the release engine needs an undo and
+the migration needs an inspectable plan, an install needs a record of what it wrote, so
+the next run can remove a superseded file by name instead of clearing the directory that
+holds it. It also closes part of step 3 early: the installed layout is now described once
+and both installers are run against it end to end, so `install.sh` cannot again ship
+without an artifact `install.ps1` has.
 
 Found and fixed while converting, none of which had an issue: `migrate_protocol.py` was
 reverting front-matter repairs on every test run, the npm test gate was a silent no-op

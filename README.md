@@ -40,6 +40,11 @@ cd along
 bash install.sh --target=all
 ```
 
+An install records what it wrote in `~/.along/install-manifest.json`: it never deletes a
+directory it does not own, so rules you wrote yourself survive every re-install, and
+`install.ps1 -Uninstall` / `./install.sh --uninstall` removes exactly that record and
+nothing else. See [Setup, Installation & Workflows](./docs/topic--setup-and-workflow.md).
+
 ---
 
 ## Knowledge Base & Architecture Index

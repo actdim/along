@@ -74,6 +74,8 @@ packages = ["scripts/alongkit"]
 "scripts/along_kb_sync.py" = "alongkit/engines/along_kb_sync.py"
 "scripts/along_update.py" = "alongkit/engines/along_update.py"
 "scripts/along_version_bump.py" = "alongkit/engines/along_version_bump.py"
+"scripts/configure_mcp.py" = "alongkit/engines/configure_mcp.py"
+"scripts/install_manifest.py" = "alongkit/engines/install_manifest.py"
 "scripts/migrate_protocol.py" = "alongkit/engines/migrate_protocol.py"
 "scripts/sanitize_typography.py" = "alongkit/engines/sanitize_typography.py"
 

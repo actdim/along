@@ -424,7 +424,11 @@ class TestAlongSkillsAndScripts(unittest.TestCase):
         ("remove the un-namespaced OpenCode command aliases",
          r"shortAliases", r"SHORT_ALIASES"),
         ("register the code-review-graph MCP server",
-         r"Set-McpConfigJson", r"configure_mcp_server"),
+         r"configure_mcp\.py", r"configure_mcp\.py"),
+        ("record what was installed in the install manifest",
+         r"install_manifest\.py", r"install_manifest\.py"),
+        ("offer an uninstall that reads the manifest",
+         r"\$Uninstall", r"UNINSTALL"),
         ("migrate the current repository at the end",
          r"migrate_protocol\.py", r"migrate_protocol\.py"),
     )

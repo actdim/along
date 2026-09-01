@@ -202,8 +202,25 @@ records what each of them cost:
    rollback would destroy committed work instead of repairing anything.
 
 The release also stages only the paths it wrote, rather than `git add -A`, and touches no
-machine-global state: it used to finish by running `install.ps1 -Target all`, which deletes
-and recreates `~/.claude/rules`.
+machine-global state: it used to finish by running `install.ps1 -Target all`, which then
+deleted and recreated `~/.claude/rules`. Installing no longer deletes that directory
+either; see the next section.
+
+### An installer never deletes what it did not write
+
+Both installers copied their artifacts over a destination they had just removed
+(`Remove-Item -Recurse -Force ~/.claude/rules`), which took the user's own rule files with
+it on every run. The delete existed to stop superseded files accumulating, so it is
+replaced by knowledge rather than by force: `install_manifest.py` records every path an
+install wrote into `~/.along/install-manifest.json`, and the next run removes, by name,
+only the files the previous install wrote and this one no longer ships. The same record is
+what `-Uninstall` / `--uninstall` reads.
+
+The layout itself is described once, in `alongkit.install.planned_files`, and both
+installers are measured against it end to end, so `install.sh` cannot again ship without
+the rule packs the way it did for months. MCP registration moved to `configure_mcp.py`
+with a per-provider contract: the previous installers wrote five configuration files, four
+of which no provider reads, and printed a success line for each.
 
 ### A migration merges; it does not choose a winner
 

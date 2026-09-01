@@ -12,6 +12,7 @@
 #   ./install.sh --target=claude        # claude | codex | opencode | antigravity | both (claude+codex) | all
 #   ./install.sh --symlink              # symlink skill folders (claude/codex/antigravity); opencode commands are always generated
 #   ./install.sh --migrate              # also migrate this repository's .along/ structure
+#   ./install.sh --uninstall            # remove exactly what the install manifest records
 #   ./install.sh --claude-home=DIR --codex-home=DIR --opencode-home=DIR --antigravity-home=DIR
 set -euo pipefail
 
@@ -19,6 +20,9 @@ TARGET=all
 SYMLINK=0
 INSTALL_DEPS=0
 MIGRATE=0
+UNINSTALL=0
+INCLUDE_UNVERIFIED_MCP=0
+ALONG_HOME="${ALONG_HOME:-$HOME/.along}"
 CLAUDE_HOME="${CLAUDE_HOME:-$HOME/.claude}"
 CODEX_HOME="${CODEX_HOME:-$HOME/.codex}"
 OPENCODE_HOME="${OPENCODE_HOME:-$HOME/.config/opencode}"
@@ -49,6 +53,9 @@ for arg in "$@"; do
     --symlink)            SYMLINK=1 ;;
     --install-deps)       INSTALL_DEPS=1 ;;
     --migrate)            MIGRATE=1 ;;
+    --uninstall)          UNINSTALL=1 ;;
+    --include-unverified-mcp) INCLUDE_UNVERIFIED_MCP=1 ;;
+    --along-home=*)       ALONG_HOME="${arg#*=}" ;;
     --claude-home=*)      CLAUDE_HOME="${arg#*=}" ;;
     --codex-home=*)       CODEX_HOME="${arg#*=}" ;;
     --opencode-home=*)    OPENCODE_HOME="${arg#*=}" ;;
@@ -56,6 +63,46 @@ for arg in "$@"; do
     *) echo "unknown arg: $arg" >&2; exit 1 ;;
   esac
 done
+
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+
+# The engines this installer delegates to. Everything that has to decide something -
+# which MCP configuration file a provider really reads, what a previous install put on
+# disk - lives in scripts/, not in a string passed to `python3 -c`. See
+# [bug--installer-parity-and-destructive-rules-overwrite].
+# `command -v` is not enough on Windows: Git Bash finds the Microsoft Store stub
+# `python3.exe`, which is on PATH, is not Python, and exits 49 with an advertisement.
+# The candidate has to answer `-V` before it counts as an interpreter.
+PYTHON=""
+for candidate in python3 python; do
+  if command -v "$candidate" >/dev/null 2>&1 && "$candidate" -V >/dev/null 2>&1; then
+    PYTHON="$candidate"
+    break
+  fi
+done
+
+# Passed to both engines so a run never has to guess where a provider was installed,
+# and so a test can point the whole installer at a throwaway directory. A plain array,
+# not `mapfile`: macOS still ships bash 3.2, which has no `mapfile`.
+HOME_ARGS=(
+  --user-home "$(dirname "$CLAUDE_HOME")"
+  --along-home "$ALONG_HOME"
+  --claude-home "$CLAUDE_HOME"
+  --codex-home "$CODEX_HOME"
+  --opencode-home "$OPENCODE_HOME"
+  --antigravity-home "$ANTIGRAVITY_HOME"
+)
+
+if [ "$UNINSTALL" -eq 1 ]; then
+  echo "-> Uninstalling Along: removing exactly the files the install manifest records."
+  if [ -z "$PYTHON" ]; then
+    echo "-> [Error] python3 not found; cannot read the install manifest." >&2
+    exit 1
+  fi
+  "$PYTHON" "$SCRIPT_DIR/scripts/install_manifest.py" uninstall "${HOME_ARGS[@]}"
+  echo "Done. Your own files in the provider homes were left untouched."
+  exit 0
+fi
 
 if ! command -v uv >/dev/null 2>&1; then
   if [ "$INSTALL_DEPS" -eq 1 ]; then
@@ -71,7 +118,6 @@ else
   echo "-> 'uv' detected: $(command -v uv)"
 fi
 
-SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 src="$SCRIPT_DIR/skills"
 [ -d "$src" ] || { echo "Source skills folder not found: $src" >&2; exit 1; }
 
@@ -124,7 +170,7 @@ install_rulefolders() {  # $1 = tool home dir; installs the language & platform 
 }
 
 install_along_scripts() {
-  local along_home="$HOME/.along"
+  local along_home="$ALONG_HOME"
   local along_bin="$along_home/bin"
   mkdir -p "$along_bin"
   local scripts_src="$SCRIPT_DIR/scripts"
@@ -194,63 +240,59 @@ install_opencode() {  # generate flat commands + place along-init helper
   done
 }
 
-configure_mcp_server() {  # $1 = target file path
-  local file="$1"
-  local dir="$(dirname "$file")"
-  mkdir -p "$dir"
-  if command -v python3 >/dev/null 2>&1; then
-    python3 -c "
-import json, os, sys
-path = sys.argv[1]
-data = {}
-if os.path.exists(path) and os.path.getsize(path) > 0:
-    try:
-        with open(path, 'r', encoding='utf-8') as f:
-            data = json.load(f)
-    except Exception:
-        data = {}
-if not isinstance(data, dict):
-    data = {}
-if 'mcpServers' not in data or not isinstance(data['mcpServers'], dict):
-    data['mcpServers'] = {}
-if 'code-review-graph' not in data['mcpServers']:
-    data['mcpServers']['code-review-graph'] = {
-        'command': 'uvx',
-        'args': ['code-review-graph']
-    }
-    try:
-        with open(path, 'w', encoding='utf-8') as f:
-            json.dump(data, f, indent=2, ensure_ascii=False)
-        print(f'   registered code-review-graph MCP in {path}')
-    except Exception as e:
-        print(f'   (note: could not write {path}: {e})')
-else:
-    print(f'   code-review-graph MCP already configured in {path}')
-" "$file" 2>/dev/null || true
-  fi
-}
-
 install_along_scripts
 
+PROVIDER_ARGS=()
 if [ "$do_claude" -eq 1 ]; then
   install_skillfolders "$CLAUDE_HOME"
   install_rulefolders "$CLAUDE_HOME"
-  configure_mcp_server "$(dirname "$CLAUDE_HOME")/.claude.json"
-  configure_mcp_server "$CLAUDE_HOME/mcp_config.json"
+  PROVIDER_ARGS+=(claude)
 fi
 if [ "$do_codex" -eq 1 ]; then
   install_skillfolders "$CODEX_HOME"
   install_rulefolders "$CODEX_HOME"
-  configure_mcp_server "$CODEX_HOME/mcp_config.json"
+  PROVIDER_ARGS+=(codex)
 fi
 if [ "$do_opencode" -eq 1 ]; then
   install_opencode
-  configure_mcp_server "$OPENCODE_HOME/mcp_config.json"
+  PROVIDER_ARGS+=(opencode)
 fi
 if [ "$do_antigravity" -eq 1 ]; then
   install_skillfolders "$ANTIGRAVITY_HOME"
   install_rulefolders "$ANTIGRAVITY_HOME"
-  configure_mcp_server "$ANTIGRAVITY_HOME/mcp_config.json"
+  PROVIDER_ARGS+=(antigravity)
+fi
+
+# --- MCP registration, once, for the providers actually installed ---
+# The installer used to write `code-review-graph` into five files and print a success
+# line for each: only ~/.claude.json is read by anything. scripts/configure_mcp.py holds
+# the per-provider contract, writes where it is verified, and reports the rest with the
+# snippet to add by hand.
+echo "-> code-review-graph MCP:"
+if [ -n "$PYTHON" ]; then
+  mcp_args=()
+  for provider in "${PROVIDER_ARGS[@]}"; do mcp_args+=(--provider "$provider"); done
+  if [ "$INCLUDE_UNVERIFIED_MCP" -eq 1 ]; then mcp_args+=(--include-unverified); fi
+  "$PYTHON" "$SCRIPT_DIR/scripts/configure_mcp.py" "${mcp_args[@]}" \
+    --user-home "$(dirname "$CLAUDE_HOME")" --claude-home "$CLAUDE_HOME" \
+    --codex-home "$CODEX_HOME" --opencode-home "$OPENCODE_HOME" \
+    --antigravity-home "$ANTIGRAVITY_HOME" || true
+else
+  echo "   (skipped: python3 not found, so no provider configuration was touched)"
+fi
+
+# --- Install manifest: what was written, and what a previous install left behind ---
+# Nothing here deletes a directory. The manifest names the files Along itself wrote, so
+# a superseded one can be removed by name and a file the user wrote is never a candidate.
+# It is also what `--uninstall` reads.
+if [ -n "$PYTHON" ]; then
+  manifest_args=(sync --source "$SCRIPT_DIR")
+  for provider in "${PROVIDER_ARGS[@]}"; do manifest_args+=(--target "$provider"); done
+  "$PYTHON" "$SCRIPT_DIR/scripts/install_manifest.py" "${manifest_args[@]}" \
+    "${HOME_ARGS[@]}" || true
+else
+  echo "-> [Note] python3 not found; no install manifest was written."
+  echo "   Run later:  python3 scripts/install_manifest.py sync --source ."
 fi
 
 # Migrate this repository's protocol structure, only when asked (--migrate). Installing
@@ -258,11 +300,11 @@ fi
 # engine rewrites front-matter, moves entities and deletes legacy directories. See
 # [bug--migration-deletes-destination-without-backup].
 if [ -d "$SCRIPT_DIR/.along" ] || [ -d "$SCRIPT_DIR/.agents" ]; then
-  if ! command -v python3 >/dev/null 2>&1; then
+  if [ -z "$PYTHON" ]; then
     echo "-> [Note] python3 not found; skipping the protocol migration."
   elif [ "$MIGRATE" -eq 1 ]; then
     echo "-> Running the Along protocol migration for this repository..."
-    python3 "$SCRIPT_DIR/scripts/migrate_protocol.py" "$SCRIPT_DIR" --apply
+    "$PYTHON" "$SCRIPT_DIR/scripts/migrate_protocol.py" "$SCRIPT_DIR" --apply
   else
     echo "-> [Note] This repository carries Along state. Installing does not migrate it."
     echo "   Preview:  python3 scripts/migrate_protocol.py . --dry-run"
@@ -270,4 +312,6 @@ if [ -d "$SCRIPT_DIR/.along" ] || [ -d "$SCRIPT_DIR/.agents" ]; then
   fi
 fi
 
-echo "Done. Claude/Codex/Antigravity skills register next session as /along-* (/along-init, /along-update, /along-dash, etc.); OpenCode picks up /commands, code-review-graph MCP is configured, and all read AGENTS.md natively."
+echo "Done. Claude/Codex/Antigravity skills register next session as /along-* (/along-init, /along-update, /along-dash, etc.); OpenCode picks up /commands, and all read AGENTS.md natively."
+echo "     MCP registration is reported per provider above: only a verified configuration contract is written to."
+echo "     To remove Along again: ./install.sh --uninstall  (removes only what the manifest records)."

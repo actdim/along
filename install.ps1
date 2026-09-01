@@ -10,12 +10,16 @@
 #   powershell ... -File install.ps1 -Target claude    # claude | codex | opencode | antigravity | both | all
 #   powershell ... -File install.ps1 -Symlink          # symlink skill folders (claude/codex/antigravity)
 #   powershell ... -File install.ps1 -Migrate          # also migrate this repository's .along/ structure
+#   powershell ... -File install.ps1 -Uninstall        # remove exactly what the install manifest records
 
 param(
     [ValidateSet('claude', 'codex', 'opencode', 'antigravity', 'both', 'all')][string]$Target = 'all',
     [switch]$Symlink,
     [switch]$InstallDeps,
     [switch]$Migrate,
+    [switch]$Uninstall,
+    [switch]$IncludeUnverifiedMcp,
+    [string]$AlongHome       = (Join-Path $env:USERPROFILE '.along'),
     [string]$ClaudeHome      = (Join-Path $env:USERPROFILE '.claude'),
     [string]$CodexHome       = (Join-Path $env:USERPROFILE '.codex'),
     [string]$OpencodeHome    = (Join-Path $env:USERPROFILE '.config\opencode'),
@@ -23,6 +27,60 @@ param(
 )
 
 $ErrorActionPreference = 'Stop'
+
+# The engines this installer delegates to. Everything that has to decide something -
+# which MCP configuration file a provider really reads, what a previous install put on
+# disk - lives in scripts/, not in a here-string passed to `python -c`. See
+# [bug--installer-parity-and-destructive-rules-overwrite].
+function Get-PythonExe {
+    # Presence on PATH is not enough: Windows ships a Microsoft Store stub named
+    # python3.exe that is not Python and exits with an advertisement. A candidate has
+    # to answer `-V` before it counts as an interpreter.
+    foreach ($name in @('python', 'python3', 'py')) {
+        $found = Get-Command $name -ErrorAction SilentlyContinue
+        if (-not $found) { continue }
+        try {
+            $null = & $found.Source -V 2>&1
+            if ($LASTEXITCODE -eq 0) { return $found.Source }
+        }
+        catch { }
+    }
+    return $null
+}
+
+function Get-AlongTool([string]$scriptName) {
+    # Returns the engine path only when it can actually be run, so every call site is
+    # `if ($tool) { & $python $tool ... }` and the child's output reaches the console
+    # instead of being swallowed by a function return value.
+    if (-not (Get-PythonExe)) { return $null }
+    $toolPath = Join-Path $PSScriptRoot (Join-Path 'scripts' $scriptName)
+    if (-not (Test-Path $toolPath)) { return $null }
+    return $toolPath
+}
+
+# Passed to both engines so a run never has to guess where a provider was installed,
+# and so a test can point the whole installer at a throwaway directory.
+$HomeArgs = @(
+    '--user-home', (Split-Path -Parent $ClaudeHome),
+    '--along-home', $AlongHome,
+    '--claude-home', $ClaudeHome,
+    '--codex-home', $CodexHome,
+    '--opencode-home', $OpencodeHome,
+    '--antigravity-home', $AntigravityHome
+)
+
+if ($Uninstall) {
+    Write-Host "-> Uninstalling Along: removing exactly the files the install manifest records."
+    $tool = Get-AlongTool 'install_manifest.py'
+    if (-not $tool) {
+        Write-Host "-> [Error] python not found; cannot read the install manifest."
+        exit 1
+    }
+    & (Get-PythonExe) $tool @(@('uninstall') + $HomeArgs)
+    if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+    Write-Host "Done. Your own files in the provider homes were left untouched."
+    exit 0
+}
 
 $LegacySkills = @(
     'init-agents', 'update-agents', 'dashboard', 'repo-dashboard',
@@ -90,7 +148,12 @@ function Install-SkillFolders([string]$homeDir) {
                 Write-Host "   linked  $($d.Name)"
             }
             catch {
-                $null = cmd /c mklink /J "`"$target`"" "`"$($d.FullName)`"" 2>&1
+                # One level of quoting, not two. `cmd /c mklink /J "`"$target`""` expands
+                # to ""C:\path"" , which cmd reads as an empty argument followed by a bare
+                # path: it happens to work while no path contains a space, and fails on
+                # exactly the paths this fallback exists for. PowerShell already quotes an
+                # argument that contains spaces when it builds the child command line.
+                $null = cmd /c mklink /J $target $d.FullName 2>&1
                 if (Test-Path $target) {
                     Write-Host "   linked (junction)  $($d.Name)"
                 }
@@ -111,7 +174,12 @@ function Install-RuleFolders([string]$homeDir) {
     $rulesSrc = Join-Path $PSScriptRoot 'rules'
     if (Test-Path $rulesSrc) {
         $dst = Join-Path $homeDir 'rules'
-        if (Test-Path $dst) { Remove-Item -Recurse -Force $dst }
+        # Copied over, never replaced. This used to be `Remove-Item -Recurse -Force $dst`
+        # followed by a fresh copy, so every install - including the ones the release
+        # engine triggered unasked - destroyed whatever the user had written under
+        # ~/.claude/rules/. Files Along shipped and no longer ships are removed by name
+        # afterwards, from the install manifest. See
+        # [bug--installer-parity-and-destructive-rules-overwrite].
         New-Item -ItemType Directory -Force -Path $dst | Out-Null
         Copy-Item -Path "$rulesSrc\*" -Destination $dst -Recurse -Force
         Write-Host "   rules copied -> $dst"
@@ -119,7 +187,7 @@ function Install-RuleFolders([string]$homeDir) {
 }
 
 function Install-AlongScripts {
-    $alongHome = Join-Path $env:USERPROFILE '.along'
+    $alongHome = $AlongHome
     $alongBin = Join-Path $alongHome 'bin'
     New-Item -ItemType Directory -Force -Path $alongBin | Out-Null
     $scriptsSrc = Join-Path $PSScriptRoot 'scripts'
@@ -198,75 +266,6 @@ function Install-OpenCode {
     }
 }
 
-function Set-McpConfigJson([string]$filePath) {
-    try {
-        $parent = Split-Path -Parent $filePath
-        if ($parent -and -not (Test-Path $parent)) {
-            New-Item -ItemType Directory -Force -Path $parent | Out-Null
-        }
-        
-        $py = Get-Command 'python' -ErrorAction SilentlyContinue
-        if ($py) {
-            $script = @"
-import json, os, sys
-path = sys.argv[1]
-data = {}
-if os.path.exists(path) and os.path.getsize(path) > 0:
-    try:
-        with open(path, 'r', encoding='utf-8') as f:
-            data = json.load(f)
-    except Exception:
-        data = {}
-if not isinstance(data, dict):
-    data = {}
-if 'mcpServers' not in data or not isinstance(data['mcpServers'], dict):
-    data['mcpServers'] = {}
-if 'code-review-graph' not in data['mcpServers']:
-    data['mcpServers']['code-review-graph'] = {
-        'command': 'uvx',
-        'args': ['code-review-graph']
-    }
-    with open(path, 'w', encoding='utf-8') as f:
-        json.dump(data, f, indent=2, ensure_ascii=False)
-    print(f'   registered code-review-graph MCP in {path}')
-else:
-    print(f'   code-review-graph MCP already configured in {path}')
-"@
-            & python -c $script $filePath
-            return
-        }
-
-        $json = $null
-        if (Test-Path $filePath) {
-            $raw = Get-Content -Raw -Encoding UTF8 $filePath
-            if ($raw -and $raw.Trim()) {
-                $json = $raw | ConvertFrom-Json
-            }
-        }
-        if (-not $json) {
-            $json = [PSCustomObject]@{}
-        }
-        if (-not $json.PSObject.Properties['mcpServers']) {
-            $json | Add-Member -MemberType NoteProperty -Name 'mcpServers' -Value ([PSCustomObject]@{}) -Force
-        }
-        if (-not $json.mcpServers.PSObject.Properties['code-review-graph']) {
-            $crg = [PSCustomObject]@{
-                command = 'uvx'
-                args = @('code-review-graph')
-            }
-            $json.mcpServers | Add-Member -MemberType NoteProperty -Name 'code-review-graph' -Value $crg -Force
-            $out = $json | ConvertTo-Json -Depth 10
-            Write-Utf8NoBom $filePath $out
-            Write-Host "   registered code-review-graph MCP in $filePath"
-        }
-        else {
-            Write-Host "   code-review-graph MCP already configured in $filePath"
-        }
-    }
-    catch {
-        Write-Host "   (note: could not update $filePath - $_)"
-    }
-}
 
 $targets = switch ($Target) {
     'claude'      { @('claude') }
@@ -284,24 +283,54 @@ foreach ($t in $targets) {
         'claude' {
             Install-SkillFolders $ClaudeHome
             Install-RuleFolders $ClaudeHome
-            Set-McpConfigJson (Join-Path $env:USERPROFILE '.claude.json')
-            Set-McpConfigJson (Join-Path $ClaudeHome 'mcp_config.json')
         }
         'codex' {
             Install-SkillFolders $CodexHome
             Install-RuleFolders $CodexHome
-            Set-McpConfigJson (Join-Path $CodexHome 'mcp_config.json')
         }
         'opencode' {
             Install-OpenCode
-            Set-McpConfigJson (Join-Path $OpencodeHome 'mcp_config.json')
         }
         'antigravity' {
             Install-SkillFolders $AntigravityHome
             Install-RuleFolders $AntigravityHome
-            Set-McpConfigJson (Join-Path $AntigravityHome 'mcp_config.json')
         }
     }
+}
+
+# --- MCP registration, once, for the providers actually installed ---
+# The installer used to write `code-review-graph` into five files and print a success
+# line for each: only ~/.claude.json is read by anything. scripts/configure_mcp.py holds
+# the per-provider contract, writes where it is verified, and reports the rest with the
+# snippet to add by hand.
+$mcpArgs = @()
+foreach ($t in $targets) { $mcpArgs += @('--provider', $t) }
+if ($IncludeUnverifiedMcp) { $mcpArgs += '--include-unverified' }
+$mcpArgs += @('--user-home', (Split-Path -Parent $ClaudeHome),
+              '--claude-home', $ClaudeHome, '--codex-home', $CodexHome,
+              '--opencode-home', $OpencodeHome, '--antigravity-home', $AntigravityHome)
+Write-Host "-> code-review-graph MCP:"
+$mcpTool = Get-AlongTool 'configure_mcp.py'
+if ($mcpTool) {
+    & (Get-PythonExe) $mcpTool @mcpArgs
+}
+else {
+    Write-Host "   (skipped: python not found, so no provider configuration was touched)"
+}
+
+# --- Install manifest: what was written, and what a previous install left behind ---
+# Nothing here deletes a directory. The manifest names the files Along itself wrote, so
+# a superseded one can be removed by name and a file the user wrote is never a candidate.
+# It is also what `-Uninstall` reads.
+$manifestArgs = @('sync', '--source', $PSScriptRoot) + $HomeArgs
+foreach ($t in $targets) { $manifestArgs += @('--target', $t) }
+$manifestTool = Get-AlongTool 'install_manifest.py'
+if ($manifestTool) {
+    & (Get-PythonExe) $manifestTool @manifestArgs
+}
+else {
+    Write-Host "-> [Note] python not found; no install manifest was written."
+    Write-Host "   Run later:  python scripts\install_manifest.py sync --source ."
 }
 
 # --- Migrate this repository's protocol structure, only when asked (-Migrate) ---
@@ -311,12 +340,12 @@ foreach ($t in $targets) {
 # [bug--migration-deletes-destination-without-backup].
 $hasState = (Test-Path (Join-Path $PSScriptRoot '.along')) -or (Test-Path (Join-Path $PSScriptRoot '.agents'))
 if ($hasState) {
-    $py = Get-Command 'python' -ErrorAction SilentlyContinue
+    $py = Get-PythonExe
     if (-not $py) {
         Write-Host "-> [Note] python not found; skipping the protocol migration."
     } elseif ($Migrate) {
         Write-Host "-> Running the Along protocol migration for this repository..."
-        & python (Join-Path $PSScriptRoot 'scripts\migrate_protocol.py') $PSScriptRoot --apply
+        & $py (Join-Path $PSScriptRoot 'scripts\migrate_protocol.py') $PSScriptRoot --apply
     } else {
         Write-Host "-> [Note] This repository carries Along state. Installing does not migrate it."
         Write-Host "   Preview:  python scripts\migrate_protocol.py . --dry-run"
@@ -324,4 +353,6 @@ if ($hasState) {
     }
 }
 
-Write-Host "Done. Claude/Codex/Antigravity skills register next session as /along-* (/along-init, /along-update, /along-dash, etc.); OpenCode picks up /commands, code-review-graph MCP is configured, and all read AGENTS.md natively."
+Write-Host "Done. Claude/Codex/Antigravity skills register next session as /along-* (/along-init, /along-update, /along-dash, etc.); OpenCode picks up /commands, and all read AGENTS.md natively."
+Write-Host "     MCP registration is reported per provider above: only a verified configuration contract is written to."
+Write-Host "     To remove Along again: install.ps1 -Uninstall  (removes only what the manifest records)."

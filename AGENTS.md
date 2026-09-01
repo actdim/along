@@ -233,6 +233,17 @@ This repository is `Along` (`actdim-along`) - the provider-agnostic agent-contex
 - **Install Commands**:
   - Windows: `powershell -NoProfile -ExecutionPolicy Bypass -File install.ps1 -Target all` (or `install.bat`).
   - Linux / macOS: `bash install.sh`.
+  - Uninstall: `install.ps1 -Uninstall` / `./install.sh --uninstall`.
+- **Install Path (`install.ps1`, `install.sh`)**: the installers copy; every decision is
+  an engine. The layout is described once in `alongkit.install.planned_files` and both
+  installers are run against it end to end by `tests/test_installers.py`, so they cannot
+  drift. No install deletes a destination directory: `scripts/install_manifest.py` records
+  what was written to `~/.along/install-manifest.json`, removes by name only the files a
+  previous install wrote and this one no longer ships, and is what an uninstall reads.
+  `scripts/configure_mcp.py` registers `code-review-graph` only where the provider's
+  configuration contract is verified (Claude Code's `~/.claude.json`), reports the rest
+  with their snippet, and never overwrites a file it could not parse. See
+  ADR-2026-09-01--installers-never-delete-what-they-did-not-write in `.along/DECISIONS.md`.
 - **Lifecycle Commands**:
   - Run Tests: `python .along/scripts/test.py` (resolves dependencies via `uv` if needed),
     or `uv run python -m unittest discover tests -q`.

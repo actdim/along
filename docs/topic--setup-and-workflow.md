@@ -25,15 +25,15 @@ Run PowerShell as Administrator or with standard permissions:
 # Install for all supported agent runtimes (Claude, Codex, Antigravity, OpenCode)
 powershell -NoProfile -ExecutionPolicy Bypass -File install.ps1 -Target all
 
-# Or run the batch installer
-install.bat all
+# Or run the batch installer, which forwards its arguments to install.ps1
+install.bat -Target all
 ```
 
 ### Linux / macOS Installation
 ```bash
 # Make installer executable and run
 chmod +x install.sh
-./install.sh all
+./install.sh --target=all
 ```
 
 ### Supported Installation Targets
@@ -42,6 +42,51 @@ chmod +x install.sh
 - `-Target codex`: Deploys only to OpenAI Codex.
 - `-Target antigravity`: Deploys only to Google Antigravity.
 - `-Target opencode`: Deploys only to OpenCode.
+
+### What an Install Writes
+
+| Artifact | Destination | Notes |
+| :--- | :--- | :--- |
+| Skill folders (`skills/along-*`) | `<provider home>/skills/` | Copied, or linked with `-Symlink` / `--symlink`. |
+| Language & platform rule packs (`rules/`) | `<provider home>/rules/` | Copied over the destination, never replacing the directory. |
+| Engines and `alongkit/` | `~/.along/bin/` | The shared package travels with the engines. |
+| OpenCode commands | `~/.config/opencode/commands/along-*.md` | Generated from the same `SKILL.md` bodies. |
+| Default configuration | `~/.along/config.json` | Seeded only when absent; yours afterwards. |
+| Install manifest | `~/.along/install-manifest.json` | Version, target homes, and every file the install wrote. |
+
+Both installers write exactly the same artifact set; `tests/test_installers.py` runs each
+one against a throwaway checkout and compares the result to the single layout description
+in `alongkit.install.planned_files`.
+
+Every root is overridable, which is how the tests run a real installer without touching
+your own home: `--along-home=DIR --claude-home=DIR --codex-home=DIR --opencode-home=DIR
+--antigravity-home=DIR` (`-AlongHome DIR`, `-ClaudeHome DIR`, ... in PowerShell).
+
+### Removing an Install
+
+```bash
+./install.sh --uninstall
+powershell -NoProfile -ExecutionPolicy Bypass -File install.ps1 -Uninstall
+```
+
+The uninstall removes exactly the files listed in `~/.along/install-manifest.json` and
+nothing else: rules you wrote yourself, `~/.along/config.json`, and any provider
+configuration stay. The same manifest is what lets a re-install remove a file Along used
+to ship without deleting the directory that holds it. See
+[ADR-2026-09-01--installers-never-delete-what-they-did-not-write](../.along/DECISIONS.md).
+
+### MCP Registration Honesty
+
+The installers register the `code-review-graph` MCP server only where the provider's
+configuration contract is verified. Today that is Claude Code, in the `mcpServers` map of
+`~/.claude.json`. Codex (`~/.codex/config.toml`), OpenCode (`opencode.json`) and
+Antigravity (the Gemini settings file) are reported with their path and the exact snippet
+to add by hand, and are written only when you pass `--include-unverified-mcp`
+(`-IncludeUnverifiedMcp`). Earlier versions wrote a `mcp_config.json` into four provider
+homes, which no provider reads, and printed a success line for each; if you have those
+files, they are inert and can be deleted.
+
+A configuration file that does not parse is reported and left untouched, never replaced.
 
 ---
 

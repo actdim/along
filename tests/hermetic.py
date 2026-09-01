@@ -150,3 +150,46 @@ def repo_fixture(prefix: str = "along-fixture-",
         yield root
     finally:
         shutil.rmtree(root, ignore_errors=True)
+
+
+#: What an installer needs from a checkout, and nothing else: no `.along/`, no `.git`,
+#: no tests. Keeping the migration step's trigger out of the copy is deliberate - an
+#: installer test must not exercise the migration engine as a side effect.
+CHECKOUT_CONTENTS = ("skills", "rules", "scripts", "config",
+                     "install.sh", "install.ps1", "install.bat")
+
+
+def make_installer_checkout(prefix: str = "along checkout ") -> str:
+    """Copy the parts of this checkout an installer reads into a throwaway directory.
+
+    The installers are run against this copy rather than against `REPO_ROOT`, for the
+    same reason every other engine is run against a fixture: an installer is a program
+    that writes, and a test that points one at the repository containing it cannot
+    prove anything about a clean tree.
+
+    The default prefix contains a space on purpose. `install.ps1` falls back to
+    `cmd /c mklink /J` when it cannot create a symlink, and that call used to be
+    double-quoted (`""C:\\path""`), which works only while no path contains a space -
+    the exact case the fallback exists to serve.
+    See `[bug--installer-parity-and-destructive-rules-overwrite]` REQ-5.
+    """
+    root = tempfile.mkdtemp(prefix=prefix)
+    for name in CHECKOUT_CONTENTS:
+        source = os.path.join(REPO_ROOT, name)
+        target = os.path.join(root, name)
+        if os.path.isdir(source):
+            shutil.copytree(source, target,
+                            ignore=shutil.ignore_patterns("__pycache__"))
+        elif os.path.isfile(source):
+            shutil.copy2(source, target)
+    return root
+
+
+@contextlib.contextmanager
+def installer_checkout(prefix: str = "along checkout "):
+    """`make_installer_checkout` as a context manager that always cleans up."""
+    root = make_installer_checkout(prefix=prefix)
+    try:
+        yield root
+    finally:
+        shutil.rmtree(root, ignore_errors=True)
