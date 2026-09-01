@@ -28,9 +28,12 @@ import re
 import sys
 import shutil
 import urllib.request
-import subprocess
 from datetime import datetime
 from typing import Optional
+
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+
+from alongkit import proc, repo, semver
 
 REMOTE_GIT_URL = "https://github.com/actdim/along.git"
 REMOTE_RAW_URL = "https://raw.githubusercontent.com/actdim/along/main/AGENTS.md"
@@ -47,18 +50,8 @@ LEGACY_SKILLS = [
     "along-init-kb", "along-sync-kb", "along-search-kb"
 ]
 
-def parse_semver(v_str):
-    if not v_str:
-        return (0, 0, 0)
-    cleaned = v_str.strip().lstrip("v").split("-")[0]
-    parts = cleaned.split(".")
-    try:
-        return tuple(int(p) for p in parts[:3])
-    except (ValueError, IndexError):
-        return (0, 0, 0)
-
-def semver_to_str(sem_tuple):
-    return f"{sem_tuple[0]}.{sem_tuple[1]}.{sem_tuple[2]}"
+parse_semver = semver.parse
+semver_to_str = semver.to_str
 
 def detect_repo_version(repo_root):
     agents_md = os.path.join(repo_root, "AGENTS.md")
@@ -105,21 +98,12 @@ def detect_global_version():
     return semver_to_str(highest) if highest > (0, 0, 0) else None
 
 def detect_remote_version():
-    try:
-        res = subprocess.run(
-            ["git", "ls-remote", "--tags", "--refs", REMOTE_GIT_URL],
-            stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE,
-            text=True,
-            timeout=NETWORK_TIMEOUT_SECS
-        )
-        if res.returncode == 0 and res.stdout:
-            tags = re.findall(r"refs/tags/v?(\d+\.\d+\.\d+)", res.stdout)
-            if tags:
-                sorted_tags = sorted(tags, key=parse_semver, reverse=True)
-                return sorted_tags[0]
-    except Exception:
-        pass
+    res = proc.git(["ls-remote", "--tags", "--refs", REMOTE_GIT_URL],
+                   timeout=NETWORK_TIMEOUT_SECS)
+    if res.ok and res.stdout:
+        tags = re.findall(r"refs/tags/v?(\d+\.\d+\.\d+)", res.stdout)
+        if tags:
+            return sorted(tags, key=parse_semver, reverse=True)[0]
 
     try:
         req = urllib.request.Request(
@@ -176,13 +160,13 @@ def update_global_from_git(dry_run=False):
 
     try:
         if os.path.exists(os.path.join(cache_dir, ".git")):
-            subprocess.run(["git", "-C", cache_dir, "fetch", "--all", "--tags"], check=True, timeout=15)
-            subprocess.run(["git", "-C", cache_dir, "reset", "--hard", "origin/main"], check=True, timeout=10)
+            proc.git(["-C", cache_dir, "fetch", "--all", "--tags"], check=True, timeout=15)
+            proc.git(["-C", cache_dir, "reset", "--hard", "origin/main"], check=True, timeout=10)
         else:
             os.makedirs(os.path.dirname(cache_dir), exist_ok=True)
             if os.path.exists(cache_dir):
                 shutil.rmtree(cache_dir, ignore_errors=True)
-            subprocess.run(["git", "clone", "--depth", "1", REMOTE_GIT_URL, cache_dir], check=True, timeout=20)
+            proc.git(["clone", "--depth", "1", REMOTE_GIT_URL, cache_dir], check=True, timeout=20)
 
         if sys.platform == "win32":
             ps1_script = os.path.join(cache_dir, "install.ps1")
@@ -191,9 +175,9 @@ def update_global_from_git(dry_run=False):
             sh_script = os.path.join(cache_dir, "install.sh")
             cmd = ["bash", sh_script]
 
-        res = subprocess.run(cmd, check=True)
+        code = proc.run_passthrough(cmd)
         purge_legacy_global_skills()
-        return res.returncode == 0
+        return code == 0
     except Exception as e:
         print(f"   [ERROR] Failed to update global skills from GitHub: {e}")
         return False
@@ -211,18 +195,15 @@ def install_global_from_local(repo_root, dry_run=False):
             sh_script = os.path.join(repo_root, "install.sh")
             cmd = ["bash", sh_script]
 
-        res = subprocess.run(cmd, check=True)
+        code = proc.run_passthrough(cmd)
         purge_legacy_global_skills()
-        return res.returncode == 0
+        return code == 0
     except Exception as e:
         print(f"   [ERROR] Local installer failed: {e}")
         return False
 
-def safe_relpath(path: str, start: str) -> str:
-    try:
-        return os.path.relpath(path, start)
-    except (ValueError, Exception):
-        return path
+safe_relpath = repo.safe_relpath
+
 
 def find_existing_agent_contexts(repo_root):
     contexts = []
@@ -301,9 +282,9 @@ def apply_migration_to_context(ctx_dir, protocol_text, migrate_script, is_root=T
     if os.path.isdir(along_dir) or os.path.isdir(agents_dir):
         if migrate_script:
             print(f"   Executing migration engine in {rel_display}...")
-            res = subprocess.run([sys.executable, migrate_script, ctx_dir])
-            if res.returncode != 0:
-                print(f"   [WARN] Migration engine returned code {res.returncode} for {ctx_dir}")
+            code = proc.run_passthrough([sys.executable, migrate_script, ctx_dir])
+            if code != 0:
+                print(f"   [WARN] Migration engine returned code {code} for {ctx_dir}")
         else:
             print("   [WARN] migrate_protocol.py not found; skipping entity structure migration.")
 
@@ -314,7 +295,7 @@ def apply_migration_to_context(ctx_dir, protocol_text, migrate_script, is_root=T
             import along_kb_sync
             along_kb_sync.rewrite_inbound_links(ctx_dir, dry_run=dry_run)
         except Exception:
-            subprocess.run([sys.executable, kb_script, ctx_dir, "--check"])
+            proc.run_passthrough([sys.executable, kb_script, ctx_dir, "--check"])
 
     return True
 
@@ -339,28 +320,9 @@ def find_uninitialized_subprojects(repo_root, contexts):
     return uninit
 
 def locate_skill_script(repo_root: str, skill_folder: str, script_name: str) -> Optional[str]:
-    """Locates a skill runner script either in local repo or in global environment."""
-    local_p = os.path.join(repo_root, "scripts", script_name)
-    if os.path.isfile(local_p):
-        return local_p
-    
-    exec_dir = os.path.dirname(os.path.abspath(__file__))
-    exec_p = os.path.join(exec_dir, script_name)
-    if os.path.isfile(exec_p):
-        return exec_p
-    
-    user_home = os.path.expanduser("~")
-    cand_paths = [
-        os.path.join(user_home, ".along", "bin", script_name),
-        os.path.join(user_home, ".config", "opencode", "actdim-along", script_name),
-        os.path.join(user_home, ".gemini", "config", "skills", skill_folder, script_name),
-        os.path.join(user_home, ".claude", "skills", skill_folder, script_name),
-        os.path.join(user_home, ".codex", "skills", skill_folder, script_name),
-    ]
-    for cp in cand_paths:
-        if os.path.isfile(cp):
-            return cp
-    return None
+    """Locate an engine in the repository, next to this file, or in a global install."""
+    return repo.resolve_tool_script(script_name, repo_root, skill_folder=skill_folder)
+
 
 def execute_post_update_syncs(contexts: list, repo_root: str, do_kb: bool, do_dep: bool, do_hist: bool):
     """Executes requested post-update sync engines across all discovered contexts."""
@@ -370,19 +332,19 @@ def execute_post_update_syncs(contexts: list, repo_root: str, do_kb: bool, do_de
             for ctx in contexts:
                 rel = safe_relpath(ctx, repo_root)
                 print(f"\n-> Running Knowledge Base sync (/along-kb-sync) in {rel if rel not in ('.', '') else '<root>'}...")
-                subprocess.run([sys.executable, kb_script, ctx])
+                proc.run_passthrough([sys.executable, kb_script, ctx])
 
     if do_dep:
         dep_script = locate_skill_script(repo_root, "along-dep-scan", "along_dep_scan.py")
         if dep_script:
             print(f"\n-> Running Dependencies & Submodules scan (/along-dep-scan)...")
-            subprocess.run([sys.executable, dep_script, "--root", repo_root])
+            proc.run_passthrough([sys.executable, dep_script, "--root", repo_root])
 
     if do_hist:
         hist_script = locate_skill_script(repo_root, "along-history-sync", "along_history_sync.py")
         if hist_script:
             print(f"\n-> Running Git History reconciliation (/along-history-sync)...")
-            subprocess.run([sys.executable, hist_script, repo_root, "--synthesize"])
+            proc.run_passthrough([sys.executable, hist_script, repo_root, "--synthesize"])
 
 def run_update(repo_root, check_only=False, dry_run=False, force=False, local_only=False,
                do_kb_sync=False, do_dep_scan=False, do_history_sync=False):

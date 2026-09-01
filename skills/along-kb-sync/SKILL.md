@@ -3,7 +3,7 @@ name: along-kb-sync
 description: Synchronize, compile, and reconcile the Knowledge Base in docs/ using LLM-Wiki pipeline. Ingests README facts and raw sources, rewrites inbound legacy links, validates link integrity across monorepo packages, and rebuilds docs/INDEX.md. Use when invoking /along-kb-sync.
 ---
 
-# Along KB Sync  [v2.2.8]
+# Along KB Sync  [v2.2.9]
 
 Idempotent LLM-Wiki Knowledge Base synchronization, inbound link rewriting, compilation, and repository-wide link-integrity gate for `docs/`.
 
@@ -13,7 +13,7 @@ Idempotent LLM-Wiki Knowledge Base synchronization, inbound link rewriting, comp
 3. **Inbound Link Rewriting Engine**: Automatically scans all Markdown files across the entire repository hierarchy (`packages/*`, `apps/*`, root `README.md`) and rewrites legacy paths (`.along/KB/...`, `.agents/KB/...`, old file names) to valid relative paths in `docs/`.
 4. **Global Link Integrity Gate**: Recursively verifies that every relative link in all `.md` files in the project physically resolves to an existing file on disk, reporting exact files, line numbers, and invalid targets.
 5. **Ingestion & Archival**: Compiles unmanaged notes, specs, or drafts (`wiki/`, `kb/`, `docs/`) into structured Wiki articles and safely moves raw source files into `.archive/`.
-6. **LLM-Wiki Paradigm**: Native pure-Python implementation of the Andrej Karpathy LLM-Wiki methodology with zero external dependencies.
+6. **LLM-Wiki Paradigm**: Native Python implementation of the Andrej Karpathy LLM-Wiki methodology. One runtime dependency (`ruamel.yaml`, for front-matter), resolved automatically by `uv`; everything else is standard library.
 
 ## Universal Rendering & Stable Entry Points
 
@@ -32,7 +32,7 @@ When executing `/along-kb-sync`:
 - **Parallel Research Ingestion (Large-Scale / Multi-Package)**:
   - When processing extensive documentation dumps, large monorepos, or multiple subprojects:
     1. **Decompose Topics**: Split the knowledge extraction into 2-4 discrete domain vectors (e.g. `architecture`, `data-models`, `api-integrations`, `workflows`).
-    2. **Spawn Parallel Subagents**: Concurrently invoke research subagents to synthesize independent `docs/topic--<slug>.md` articles in parallel with standard YAML front-matter (`protocol: along`, `protocol_version: "2.2.8"`).
+    2. **Spawn Parallel Subagents**: Concurrently invoke research subagents to synthesize independent `docs/topic--<slug>.md` articles in parallel with standard YAML front-matter (`protocol: along`, `protocol_version: "2.2.9"`).
     3. **Reconcile & Link**: Run `python scripts/along_kb_sync.py` to rewrite inbound links, validate relative links across the repository, move processed raw sources into `.archive/`, and rebuild `docs/INDEX.md`.
 
 ## Usage

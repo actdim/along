@@ -1,16 +1,20 @@
 """Collector and parser for Along Protocol entities and Knowledge Base."""
 
 import os
+import sys
 import re
 from datetime import datetime
 from pathlib import Path
 from typing import Dict, List, Optional, Tuple, Any
 
-try:
-    import yaml
-    HAS_YAML = True
-except ImportError:
-    HAS_YAML = False
+# The dashboard reads the same entities as the engines, through the same reader.
+# It used to carry a fourth copy of the front-matter parser, with a PyYAML fast path
+# and a hand-rolled fallback, so the dashboard could disagree with search and sync
+# about what a file contains.
+sys.path.insert(0, os.path.join(
+    os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))), "scripts"))
+
+from alongkit import frontmatter as _frontmatter
 
 from ..schemas.entities import (
     IssueSchema,
@@ -30,43 +34,9 @@ from ..schemas.metrics import (
 )
 
 
-def parse_frontmatter(content: str) -> Tuple[Dict[str, Any], str]:
-    """Extract YAML front-matter and markdown body from markdown content."""
-    match = re.match(r"^---\r?\n(.*?)\r?\n---\r?\n(.*)$", content, re.DOTALL)
-    if not match:
-        return {}, content
-    fm_str, body = match.group(1), match.group(2)
-
-    if HAS_YAML:
-        try:
-            data = yaml.safe_load(fm_str)
-            if isinstance(data, dict):
-                return data, body
-        except Exception:
-            pass
-
-    # Fallback parser for YAML
-    fm: Dict[str, Any] = {}
-    for line in fm_str.splitlines():
-        line = line.strip()
-        if not line or line.startswith("#"):
-            continue
-        if ":" in line:
-            key, val = line.split(":", 1)
-            key = key.strip()
-            val = val.strip()
-            if val.startswith("[") and val.endswith("]"):
-                items = [x.strip().strip("'").strip('"') for x in val[1:-1].split(",") if x.strip()]
-                fm[key] = items
-            elif val.lower() == "true":
-                fm[key] = True
-            elif val.lower() == "false":
-                fm[key] = False
-            elif val.lower() in ("null", "none", "~"):
-                fm[key] = None
-            else:
-                fm[key] = val.strip("'").strip('"')
-    return fm, body
+# The dashboard renders whatever it can read and must not fail to start because one
+# entity file is malformed; the engines that write use the strict reader.
+parse_frontmatter = _frontmatter.parse_tolerant
 
 
 def find_agents_dir(start_dir: str = ".") -> Path:

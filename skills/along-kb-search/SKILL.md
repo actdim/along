@@ -3,7 +3,7 @@ name: along-kb-search
 description: Fast unified retrieval engine across Knowledge Base (docs/) and living project memory (.along/ISSUES, DECISIONS.md, MILESTONES, RISKS, SESSIONS). Minimizes agent context tokens during research, blast radius analysis, and decision-making. Use when invoking /along-kb-search.
 ---
 
-# Along KB Search  [v2.2.8]
+# Along KB Search  [v2.2.9]
 
 Unified Multi-Scope Knowledge & Memory Retrieval Engine for AI coding agents and developers.
 

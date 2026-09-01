@@ -22,10 +22,14 @@ import sys
 import json
 import re
 import argparse
-import subprocess
 import xml.etree.ElementTree as ET
 from datetime import date
 from typing import Dict, List, Any, Optional, Set, Tuple
+
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+
+from alongkit import entities, proc, repo
+from alongkit.version import CURRENT_PROTOCOL_VERSION
 
 TARGET_AI_FILES = [
     "AGENTS.md",
@@ -40,64 +44,14 @@ TARGET_AI_FILES = [
 
 TARGET_AI_LOWER = {f.lower() for f in TARGET_AI_FILES}
 
-IGNORE_TRAVERSAL_DIRS = {
-    ".git",
-    ".hg",
-    ".svn",
-    "node_modules",
-    ".venv",
-    "venv",
-    "env",
-    "target",
-    "bin",
-    "obj",
-    "dist",
-    "build",
-    "out",
-    ".archive",
-    "archive",
-    ".cache",
-    ".gemini",
-    ".vscode",
-    ".idea",
-    ".mypy_cache",
-    ".pytest_cache",
-    ".next",
-    ".nuxt",
-    ".output",
-    "__pycache__",
-}
+# One definition, shared with every other engine and gate.
+IGNORE_TRAVERSAL_DIRS = set(repo.IGNORED_DIRS) | {'.gemini'}
 
 
-def find_repo_root(start_dir: Optional[str] = None) -> str:
-    cur = os.path.abspath(start_dir or os.getcwd())
-    while True:
-        if (
-            os.path.exists(os.path.join(cur, ".along"))
-            or os.path.exists(os.path.join(cur, ".git"))
-            or os.path.exists(os.path.join(cur, "AGENTS.md"))
-        ):
-            return cur
-        parent = os.path.dirname(cur)
-        if parent == cur:
-            return os.path.abspath(start_dir or os.getcwd())
-        cur = parent
-
-
-def get_today_iso() -> str:
-    return date.today().strftime("%Y-%m-%d")
-
-
-def normalize_posix(path_str: str) -> str:
-    return path_str.replace("\\", "/")
-
-
-def safe_relpath(path: str, start: str) -> str:
-    """Safely calculate relative path, handling cross-drive paths on Windows gracefully."""
-    try:
-        return os.path.relpath(path, start)
-    except (ValueError, Exception):
-        return path
+find_repo_root = repo.find_repo_root
+normalize_posix = repo.normalize_posix
+safe_relpath = repo.safe_relpath
+get_today_iso = entities.today_iso
 
 
 def find_ai_files_in_dir(dir_path: str, repo_root: str) -> List[Dict[str, str]]:
@@ -705,14 +659,16 @@ def run_custom_dep_scan_hook(project_dir: str, repo_root: str) -> List[Dict[str,
     ]
     for script_path in custom_scripts:
         if os.path.isfile(script_path):
-            try:
-                res = subprocess.run([sys.executable, script_path, "--json"], cwd=project_dir, capture_output=True, text=True, timeout=30)
-                if res.returncode == 0 and res.stdout.strip():
-                    data = json.loads(res.stdout.strip())
-                    if isinstance(data, list):
-                        return data
-            except Exception:
-                pass
+            res = proc.run_python([script_path, "--json"], cwd=project_dir, timeout=30)
+            if res.ok and res.out:
+                try:
+                    data = json.loads(res.out)
+                except ValueError as exc:
+                    print(f"[Warning] {script_path} did not emit valid JSON: {exc}",
+                          file=sys.stderr)
+                    continue
+                if isinstance(data, list):
+                    return data
     return []
 
 
@@ -748,6 +704,7 @@ def generate_dependencies_kb_content(projects: List[ProjectScope], external_deps
     lines = [
         "---",
         "protocol: along",
+        f'protocol_version: "{CURRENT_PROTOCOL_VERSION}"',
         "slug: topic--dependencies",
         "title: Dependencies & Submodules AI Documentation and Rules",
         "type: topic",

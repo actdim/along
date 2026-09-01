@@ -3,7 +3,8 @@ protocol: along
 protocol_version: 2.2.8
 slug: extract-shared-python-library
 type: debt
-status: open
+status: done
+completed: 2026-09-01
 priority: high
 created: 2026-09-01
 updated: 2026-09-01
@@ -102,3 +103,28 @@ one file at a time multiplies the work and guarantees future divergence.
 - [ ] Unit tests per module.
 - [ ] Duplicate-definition guard test in place.
 - [ ] ADR recorded.
+
+## Resolution (2026-09-01)
+
+- REQ-1: `scripts/alongkit/` created with `repo`, `frontmatter`, `entities`, `proc`,
+  `textio`, `markdown`, `typography`, `gates`, `semver`, `version`, `bootstrap`, `cli`.
+- REQ-2: `pyproject.toml` (hatchling) with `[project.scripts] along = "alongkit.cli:main"`,
+  the `ruamel.yaml` dependency, the `dash` extra, and an engine manifest asserted complete
+  by `test_engine_manifest_matches_scripts_dir`.
+- REQ-3: all twelve engines and `dashboard/core/collector.py` converted; every duplicate
+  helper definition deleted (`find_repo_root` x5, front-matter parsing x4, `parse_semver`
+  x2, `safe_relpath` x2, `run_precommit_tests` x2, `sanitize_typography` x2, the typography
+  table x2, the protocol version constant x4).
+- REQ-4: both installers copy `alongkit/` next to the engines; covered by
+  `TestFlatInstallInvocation` (an engine runs from a temporary flat copy against a
+  consumer repository) and `TestInstallersCarryThePackage`.
+- REQ-5: `tests/test_alongkit.py`, 68 unit tests across the modules. Suite grew 57 -> 125.
+- REQ-6: `[ADR-2026-09-01--shared-engine-package]` and
+  `[ADR-2026-09-01--frontmatter-on-ruamel-yaml]`.
+- REQ-7: `TestNoDuplicateHelpers` - two AST scans, one for a name defined in two engines
+  and one for an engine shadowing a package helper.
+
+Fixed in passing, each a real defect found while converting: a missing `json` import that
+made the npm test gate silently no-op, `along_feedback` reporting version 2.1.6 in every
+bug report, the dashboard graph builder crashing on an unparseable entity file, and the
+`httpx2` typo in the dashboard test fallback.

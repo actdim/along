@@ -5,7 +5,7 @@ slug: protocol-v220-concurrency-and-context-deprecation
 agent: antigravity
 branch: main
 commit: pending
-summary: Along Protocol v2.2.0: Multi-branch concurrency, derived projections, decentralized ADR slug format, and removal of degenerate CONTEXT.md.
+summary: 'Along Protocol v2.2.0: Multi-branch concurrency, derived projections, decentralized ADR slug format, and removal of degenerate CONTEXT.md.'
 milestone: v2.2.0-along
 issues_advanced: []
 issues_completed: [feat--concurrency-projections-and-context-deprecation]

@@ -25,9 +25,21 @@ import os
 import re
 import json
 import shutil
-import subprocess
 from pathlib import Path
 from typing import Optional, List, Dict, Tuple
+
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+
+from alongkit import bootstrap
+
+# This engine reads entity front-matter, so it needs ruamel.yaml. Resolve it before
+# anything imports it: an engine invoked as `python <path>/<engine>.py` may start
+# under an interpreter that has no dependencies prepared, which is exactly how the
+# installers and the documented skill commands invoke it.
+bootstrap.ensure_deps()
+
+from alongkit import entities, frontmatter, proc, repo
+from alongkit.version import CURRENT_PROTOCOL_VERSION
 
 TOOL_MAPPINGS = {
     "kb-sync": "along_kb_sync.py",
@@ -56,97 +68,12 @@ TOOL_MAPPINGS = {
 LIFECYCLE_ACTIONS = {"build", "test", "dev", "debug"}
 
 
-def find_repo_root(start_dir: Optional[str] = None) -> str:
-    cur = os.path.abspath(start_dir or os.getcwd())
-    while True:
-        if (
-            os.path.exists(os.path.join(cur, ".along"))
-            or os.path.exists(os.path.join(cur, ".git"))
-            or os.path.exists(os.path.join(cur, "AGENTS.md"))
-        ):
-            return cur
-        parent = os.path.dirname(cur)
-        if parent == cur:
-            return os.path.abspath(start_dir or os.getcwd())
-        cur = parent
-
-
-def resolve_tool_script(script_name: str, repo_root: str) -> Optional[str]:
-    """Resolves an Along tool script using hierarchical search."""
-    exec_dir = os.path.dirname(os.path.abspath(__file__))
-    candidates = [
-        os.path.join(exec_dir, script_name),
-        os.path.join(repo_root, "scripts", script_name),
-        os.path.expanduser(f"~/.along/bin/{script_name}"),
-        os.path.expanduser(f"~/.config/opencode/actdim-along/{script_name}"),
-        os.path.expanduser(f"~/.gemini/config/scripts/{script_name}"),
-        os.path.expanduser(f"~/.claude/scripts/{script_name}"),
-        os.path.expanduser(f"~/.codex/scripts/{script_name}"),
-    ]
-    for p in candidates:
-        if os.path.isfile(p):
-            return os.path.abspath(p)
-    return None
-
-
-FRONTMATTER_RE = re.compile(r"^\ufeff?(---\r?\n)(.*?)(\r?\n---[ \t]*\r?\n?)", re.DOTALL)
-
-
-def has_frontmatter(content: str) -> bool:
-    """True when the content opens with a parseable YAML front-matter block."""
-    return FRONTMATTER_RE.match(content) is not None
-
-
-def update_frontmatter_fields(content: str, updates: Dict[str, str],
-                              place_after: Optional[Dict[str, str]] = None) -> str:
-    """
-    Update or insert keys in the LEADING YAML front-matter block only.
-
-    The markdown body is never touched, so prose or code samples mentioning
-    'status:' cannot be corrupted. Existing line endings are preserved.
-    Keys absent from the front-matter are inserted after their `place_after`
-    anchor key when given, otherwise appended to the end of the block.
-
-    A leading UTF-8 BOM is tolerated and removed, because Windows PowerShell 5.1 emits one
-    from `Set-Content -Encoding utf8`, `Out-File -Encoding utf8`, and `>` redirection, while
-    the protocol requires BOM-free UTF-8. Removal is a byte-level change the caller did not
-    ask for, so callers MUST report it: check `content.startswith("\\ufeff")` before calling
-    and print a notice. Detecting and rejecting BOMs in committed text is the quality gate's
-    responsibility, not this function's.
-    """
-    m = FRONTMATTER_RE.match(content)
-    if not m:
-        return content
-
-    head, fm_block, tail = m.group(1), m.group(2), m.group(3)
-    rest = content[m.end():]
-    newline = "\r\n" if "\r\n" in m.group(0) else "\n"
-    place_after = place_after or {}
-
-    remaining = dict(updates)
-    lines = re.split(r"\r?\n", fm_block)
-    out: List[str] = []
-    for line in lines:
-        key_m = re.match(r"^([A-Za-z0-9_-]+)[ \t]*:", line)
-        key = key_m.group(1) if key_m else None
-        if key and key in remaining:
-            out.append(f"{key}: {remaining.pop(key)}")
-        else:
-            out.append(line)
-
-    for key, value in remaining.items():
-        anchor = place_after.get(key)
-        inserted = False
-        if anchor:
-            for idx, line in enumerate(out):
-                if re.match(rf"^{re.escape(anchor)}[ \t]*:", line):
-                    out.insert(idx + 1, f"{key}: {value}")
-                    inserted = True
-                    break
-        if not inserted:
-            out.append(f"{key}: {value}")
-
-    return head + newline.join(out) + tail + rest
+# Root discovery, engine resolution, and front-matter editing live in the shared
+# package: alongkit.repo and alongkit.frontmatter.
+find_repo_root = repo.find_repo_root
+resolve_tool_script = repo.resolve_tool_script
+has_frontmatter = frontmatter.has_frontmatter
+update_frontmatter_fields = frontmatter.update
 
 
 def try_record_incident(component: str, error_message: str, stack_trace: str = "", command: str = "", repo_root: str = ""):
@@ -782,8 +709,8 @@ def main():
         mapped = "along_kb_sync.py" if sub == "sync" else "along_kb_search.py"
         script_path = resolve_tool_script(mapped, repo_root)
         if script_path:
-            res = subprocess.run([sys.executable, script_path] + extra_args[1:], cwd=repo_root)
-            sys.exit(res.returncode)
+            code = proc.run_passthrough([sys.executable, script_path] + extra_args[1:], cwd=repo_root)
+            sys.exit(code)
 
     # 2. Check if command is an Along Protocol Tool
     if cmd in TOOL_MAPPINGS:
@@ -799,12 +726,12 @@ def main():
             uv_bin = shutil.which("uv")
             if uv_bin:
                 full_cmd = [uv_bin, "run", script_path] + extra_args
-                res = subprocess.run(full_cmd, cwd=repo_root)
-                sys.exit(res.returncode)
+                code = proc.run_passthrough(full_cmd, cwd=repo_root)
+                sys.exit(code)
 
         full_cmd = [sys.executable, script_path] + extra_args
-        res = subprocess.run(full_cmd, cwd=repo_root)
-        sys.exit(res.returncode)
+        code = proc.run_passthrough(full_cmd, cwd=repo_root)
+        sys.exit(code)
 
     # 3. Check if command is a Lifecycle Hook (build / test / dev / debug)
     if cmd in LIFECYCLE_ACTIONS:
@@ -818,10 +745,10 @@ def main():
 
             print(f"-> Executing .along/scripts/{os.path.basename(script_file)}...")
             if script_file.endswith(".py"):
-                res = subprocess.run([sys.executable, script_file] + extra_args, cwd=repo_root)
+                code = proc.run_passthrough([sys.executable, script_file] + extra_args, cwd=repo_root)
             else:
-                res = subprocess.run([script_file] + extra_args, cwd=repo_root, shell=True)
-            sys.exit(res.returncode)
+                code = proc.run_passthrough([script_file] + extra_args, cwd=repo_root, shell=True)
+            sys.exit(code)
 
         # Auto-Detection and Non-Destructive Synthesis
         detected_cmd, verified = detect_lifecycle_action(repo_root, cmd)
@@ -847,8 +774,8 @@ if __name__ == "__main__":
 '''
             synthesize_lifecycle_script(script_file, py_content)
             print(f"-> Running: {detected_cmd}")
-            res = subprocess.run(f"{detected_cmd} {' '.join(extra_args)}".strip(), shell=True, cwd=repo_root)
-            sys.exit(res.returncode)
+            code = proc.run_passthrough(f"{detected_cmd} {' '.join(extra_args)}".strip(), shell=True, cwd=repo_root)
+            sys.exit(code)
         else:
             status_tag = "unconfigured"
             py_content = f'''#!/usr/bin/env python3

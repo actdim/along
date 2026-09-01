@@ -45,7 +45,36 @@ chmod +x install.sh
 
 ---
 
-## 2. Bootstrapping a New or Existing Repository
+## 2. Python Runtime & Dependencies
+
+The engines behind the skills need one third-party package, `ruamel.yaml`, to read and
+write entity front-matter. Everything else is standard library.
+
+```bash
+# Recommended: install the toolchain with uv (creates an isolated environment)
+uv tool install actdim-along
+
+# Working inside this repository: uv resolves the environment from pyproject.toml
+uv run python -m unittest discover tests -q
+
+# No uv, no install: add the dependency to the active interpreter
+python -m pip install "ruamel.yaml>=0.18"
+```
+
+An engine invoked directly as `python scripts/along_exec.py ...` or
+`python ~/.along/bin/along_exec.py ...` checks for the dependency itself: if it is missing
+and `uv` is on `PATH`, the engine re-executes once under `uv run` and continues. If `uv` is
+absent it exits with code 2 and the two commands above, rather than a traceback.
+
+Why a dependency at all: front-matter is YAML because tools that are not Along read it, and
+a hand-rolled parser silently dropped block sequences and emitted blocks that no strict YAML
+reader accepts. See [ADR-2026-09-01--frontmatter-on-ruamel-yaml](../.along/DECISIONS.md).
+
+The dashboard (`/along-dash`) additionally needs FastAPI, Uvicorn, Pydantic, and Rich,
+declared as the `dash` extra and resolved automatically by `uv run scripts/along_dash.py`.
+
+---
+## 3. Bootstrapping a New or Existing Repository
 
 To initialize Along in any repository:
 ```bash
@@ -62,7 +91,7 @@ along-init
 
 ---
 
-## 3. Repository Lifecycle Runners (`.along/scripts/`)
+## 4. Repository Lifecycle Runners (`.along/scripts/`)
 
 Along establishes a unified interface for project lifecycle operations via `.along/scripts/`. This allows AI agents to build, test, run, and bump versions across any technology stack without requiring custom prompt tuning.
 
@@ -87,7 +116,7 @@ flowchart LR
 
 ---
 
-## 4. Day-in-the-Life Developer & Agent Workflow
+## 5. Day-in-the-Life Developer & Agent Workflow
 
 The standard developer workflow in an Along-enabled repository flows through 6 phases:
 

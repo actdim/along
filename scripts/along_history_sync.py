@@ -20,42 +20,22 @@ import sys
 import json
 import re
 import argparse
-import subprocess
 import glob
 from datetime import datetime
 from typing import Dict, List, Any, Optional, Set, Tuple
 
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
-def find_repo_root(start_dir: Optional[str] = None) -> str:
-    cur = os.path.abspath(start_dir or os.getcwd())
-    while True:
-        if (
-            os.path.exists(os.path.join(cur, ".along"))
-            or os.path.exists(os.path.join(cur, ".git"))
-            or os.path.exists(os.path.join(cur, "AGENTS.md"))
-        ):
-            return cur
-        parent = os.path.dirname(cur)
-        if parent == cur:
-            return os.path.abspath(start_dir or os.getcwd())
-        cur = parent
+from alongkit import proc, repo
 
 
 def run_git_cmd(args: List[str], cwd: Optional[str] = None) -> str:
-    try:
-        res = subprocess.run(
-            ["git"] + args,
-            cwd=cwd or os.getcwd(),
-            capture_output=True,
-            text=True,
-            encoding="utf-8",
-            errors="replace"
-        )
-        if res.returncode == 0:
-            return res.stdout.strip()
-    except Exception as e:
-        print(f"Git error: {e}", file=sys.stderr)
-    return ""
+    """Stdout of a git command, or an empty string when it fails."""
+    res = proc.git(args, cwd=cwd or os.getcwd())
+    if not res.ok:
+        print(f"Git error: {res.stderr.strip()}", file=sys.stderr)
+        return ""
+    return res.out
 
 
 def get_mapped_commits(agents_dir: str) -> Set[str]:
@@ -285,7 +265,7 @@ def main():
     parser.add_argument("--quiet", "-q", action="store_true", help="Minimal console output")
 
     args = parser.parse_args()
-    repo_root = find_repo_root(args.repo_root)
+    repo_root = repo.find_repo_root(args.repo_root)
 
     do_synthesize = args.synthesize and not args.check
     results = run_history_sync(repo_root, synthesize=do_synthesize, limit=args.limit)

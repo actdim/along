@@ -231,7 +231,7 @@ flowchart TD
 ### `along-kb-sync`
 - **What it is**: Idempotent LLM-Wiki compiler, inbound link rewriter, and link integrity gate for `docs/`.
 - **Architectural Rationale**:
-  - *LLM-Wiki Paradigm*: Implements Andrej Karpathy's LLM-Wiki architecture in pure Python standard library with zero external dependencies.
+  - *LLM-Wiki Paradigm*: Implements Andrej Karpathy's LLM-Wiki architecture in Python with a single runtime dependency (`ruamel.yaml`, for front-matter), resolved automatically by `uv`.
   - *Inbound Link Rewriter*: Recursively scans all Markdown files in the monorepo and rewrites legacy internal paths (`.along/KB/...`) to standard relative `docs/` paths.
   - *Link Integrity Gate*: In `--strict` mode, validates that every relative Markdown link physically resolves to an existing file on disk.
   - *Raw Source Archival*: Automatically relocates ingested raw notes, chat dumps, and scratch files to `.archive/`, excluding them from active search indices.

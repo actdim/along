@@ -9,6 +9,14 @@ import sys
 import os
 import unittest
 
+# The engines depend on ruamel.yaml. Resolve it before the suite imports them, so
+# `python .along/scripts/test.py` works from a bare interpreter as documented.
+sys.path.insert(0, os.path.join(
+    os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))), "scripts"))
+from alongkit import bootstrap
+
+bootstrap.ensure_deps()
+
 def main():
     repo_root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
     if repo_root not in sys.path:

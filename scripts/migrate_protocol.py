@@ -24,78 +24,43 @@ import re
 import sys
 import glob
 import shutil
-import subprocess
 from datetime import datetime
 
-CURRENT_PROTOCOL_VERSION = "2.2.8"
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
-def parse_yaml_frontmatter(content):
-    match = re.match(r"^---\r?\n(.*?)\r?\n---\r?\n(.*)$", content, re.DOTALL)
-    if not match:
-        return {}, content
-    fm_str, body = match.group(1), match.group(2)
-    fm = {}
-    current_list_key = None
+from alongkit import bootstrap
 
-    for raw_line in fm_str.splitlines():
-        line = raw_line.strip()
-        if not line or line.startswith("#"):
-            continue
+# This engine reads entity front-matter, so it needs ruamel.yaml. Resolve it before
+# anything imports it: an engine invoked as `python <path>/<engine>.py` may start
+# under an interpreter that has no dependencies prepared, which is exactly how the
+# installers and the documented skill commands invoke it.
+bootstrap.ensure_deps()
 
-        if line.startswith("- ") and current_list_key:
-            item_val = line[2:].strip().strip('"').strip("'")
-            if fm.get(current_list_key) is None or not isinstance(fm.get(current_list_key), list):
-                fm[current_list_key] = []
-            fm[current_list_key].append(item_val)
-            continue
+from alongkit import frontmatter, proc, repo, textio
+from alongkit.version import CURRENT_PROTOCOL_VERSION
 
-        if ":" in line:
-            key, val = line.split(":", 1)
-            key = key.strip()
-            val = val.strip().strip('"').strip("'")
-            if not val:
-                current_list_key = key
-                fm[key] = []
-            elif val.startswith("[") and val.endswith("]"):
-                current_list_key = None
-                inner = val[1:-1].strip()
-                fm[key] = [x.strip().strip('"').strip("'") for x in inner.split(",") if x.strip()] if inner else []
-            elif val.lower() == "true":
-                current_list_key = None
-                fm[key] = True
-            elif val.lower() == "false":
-                current_list_key = None
-                fm[key] = False
-            elif val.lower() == "null":
-                current_list_key = None
-                fm[key] = None
-            else:
-                current_list_key = None
-                fm[key] = val
-        else:
-            current_list_key = None
 
-    return fm, body
+def parse_yaml_frontmatter(content, path=None):
+    """Front-matter of a file this engine is about to rewrite.
+
+    Tolerant on purpose: a migration must not abort a whole repository because one
+    file is malformed. The caller must skip any file this reports on, never rewrite
+    it from a partial parse, which is how the earlier hand-rolled parser destroyed
+    block sequences.
+    """
+    fields, body, error = frontmatter.try_parse(content, path=path)
+    if error:
+        print(f"   [WARN] {error}", file=sys.stderr)
+        return None, body
+    return fields, body
+
 
 def dump_yaml_frontmatter(fm, body):
-    lines = ["---"]
-    # Ensure protocol: along is at the top if present
-    if "protocol" in fm:
-        lines.append(f"protocol: {fm['protocol']}")
-    for k, v in fm.items():
-        if k == "protocol":
-            continue
-        if isinstance(v, list):
-            items_str = ", ".join(f'"{x}"' if " " in str(x) or "#" in str(x) else str(x) for x in v)
-            lines.append(f"{k}: [{items_str}]")
-        elif v is None:
-            lines.append(f"{k}: null")
-        elif isinstance(v, bool):
-            lines.append(f"{k}: {'true' if v else 'false'}")
-        else:
-            lines.append(f"{k}: {v}")
-    lines.append("---")
-    return "\n".join(lines) + "\n\n" + body.lstrip()
+    """Render a NEW entity file. Never use on a file that already exists: use
+    frontmatter.update, which preserves comments, key order, and line endings.
+    """
+    return frontmatter.render(fm, body)
+
 
 def detect_protocol_version(repo_root):
     agents_md = os.path.join(repo_root, "AGENTS.md")
@@ -257,75 +222,100 @@ def step_migrate_v1_5_entity_ecosystem(repo_root, working_dir):
         clean_slug = raw_slug.split("--", 1)[1] if "--" in raw_slug else raw_slug
         issue_type = filename.split("--", 1)[0] if "--" in filename else "feat"
 
-        with open(filepath, "r", encoding="utf-8") as f:
-            content = f.read()
+        content = textio.read_text(filepath)
+        fields, _ = parse_yaml_frontmatter(content, path=filepath)
+        if fields is None:
+            continue
 
-        fm, body = parse_yaml_frontmatter(content)
-        fm["protocol"] = "along"
-        fm["slug"] = fm.get("slug", clean_slug)
-        fm["type"] = fm.get("type", issue_type)
-        fm["status"] = "done" if is_done else fm.get("status", "open")
-        fm["priority"] = fm.get("priority", "medium")
-        fm["created"] = fm.get("created", today_str)
-        fm["updated"] = fm.get("updated", fm["created"])
+        # Only the keys that are missing or wrong are written, so a file that is
+        # already correct is left byte-identical. The previous implementation
+        # re-serialized every entity on every run, which is how block sequences
+        # and quoting were lost.
+        updates = {}
+        removals = []
+        slug = fields.get('slug') or clean_slug
+        if fields.get('protocol') != 'along':
+            updates['protocol'] = 'along'
+        for key, value in (('slug', slug),
+                           ('type', fields.get('type') or issue_type),
+                           ('priority', fields.get('priority') or 'medium'),
+                           ('created', fields.get('created') or today_str),
+                           ('agent', fields.get('agent') or 'antigravity')):
+            if not fields.get(key):
+                updates[key] = value
+        created = fields.get('created') or updates.get('created') or today_str
+        if not fields.get('updated'):
+            updates['updated'] = created
+        updated = fields.get('updated') or updates.get('updated') or created
+
         if is_done:
-            fm["completed"] = fm.get("completed", fm["updated"])
+            if fields.get('status') != 'done':
+                updates['status'] = 'done'
+            if not fields.get('completed'):
+                updates['completed'] = updated
         else:
-            if "completed" in fm:
-                del fm["completed"]
-        fm["agent"] = fm.get("agent", "antigravity")
-        
-        # Tags auto-tagging
-        if "tags" not in fm or not fm["tags"]:
+            if not fields.get('status'):
+                updates['status'] = 'open'
+            if 'completed' in fields:
+                removals.append('completed')
+
+        if not fields.get('tags'):
             tags = []
-            if "mcp" in fm["slug"]: tags.append("mcp")
-            if "kb" in fm["slug"] or "knowledge" in fm["slug"]: tags.append("kb")
-            if "dashboard" in fm["slug"] or "analytics" in fm["slug"] or "dash" in fm["slug"]: tags.append("dashboard")
-            fm["tags"] = tags
+            if 'mcp' in slug: tags.append('mcp')
+            if 'kb' in slug or 'knowledge' in slug: tags.append('kb')
+            if 'dashboard' in slug or 'analytics' in slug or 'dash' in slug: tags.append('dashboard')
+            updates['tags'] = tags
 
-        # Milestone linkage
-        if "milestone" not in fm or not fm["milestone"]:
-            if is_done:
-                fm["milestone"] = "v1.3.0-knowledge-base-and-graph"
-            else:
-                fm["milestone"] = "v2.0.0-along-transition"
+        if not fields.get('milestone'):
+            updates['milestone'] = ('v1.3.0-knowledge-base-and-graph' if is_done
+                                    else 'v2.0.0-along-transition')
 
-        # Relationship metadata preservation
-        if "blocked_by" not in fm:
-            fm["blocked_by"] = []
-        if "related" not in fm:
-            fm["related"] = []
-        if "parent" in fm and not fm["parent"]:
-            del fm["parent"]
+        if 'blocked_by' not in fields:
+            updates['blocked_by'] = []
+        if 'related' not in fields:
+            updates['related'] = []
+        if 'parent' in fields and not fields['parent']:
+            removals.append('parent')
 
-        new_content = dump_yaml_frontmatter(fm, body)
-        with open(filepath, "w", encoding="utf-8") as f:
-            f.write(new_content)
+        if updates or removals:
+            new_content = frontmatter.update(
+                content, updates, remove=removals, path=filepath,
+                place_after={'completed': 'status', 'updated': 'created'})
+            if new_content != content:
+                textio.write_text(filepath, new_content)
 
     # 5. Enrich SESSIONS front-matter
     session_files = glob.glob(os.path.join(working_dir, "SESSIONS", "**", "*.md"), recursive=True)
     for filepath in session_files:
-        with open(filepath, "r", encoding="utf-8") as f:
-            content = f.read()
+        content = textio.read_text(filepath)
+        fields, _ = parse_yaml_frontmatter(content, path=filepath)
+        if fields is None:
+            continue
 
-        fm, body = parse_yaml_frontmatter(content)
-        fm["protocol"] = "along"
-        fm["date"] = fm.get("date", today_str)
-        fm["slug"] = fm.get("slug", os.path.basename(filepath).replace(".md", ""))
-        fm["agent"] = fm.get("agent", "antigravity")
-        fm["branch"] = fm.get("branch", "main")
-        fm["commit"] = fm.get("commit", "unknown")
-        fm["summary"] = fm.get("summary", "Work session log.")
-        fm["milestone"] = fm.get("milestone", "v2.0.0-along-transition")
-        fm["issues_advanced"] = fm.get("issues_advanced", [])
-        fm["issues_completed"] = fm.get("issues_completed", [])
-        fm["decisions"] = fm.get("decisions", [])
-        fm["risks_logged"] = fm.get("risks_logged", [])
-        fm["spikes_conducted"] = fm.get("spikes_conducted", [])
+        updates = {}
+        if fields.get('protocol') != 'along':
+            updates['protocol'] = 'along'
+        defaults = (
+            ('date', today_str),
+            ('slug', os.path.basename(filepath).replace('.md', '')),
+            ('agent', 'antigravity'),
+            ('branch', 'main'),
+            ('commit', 'unknown'),
+            ('summary', 'Work session log.'),
+            ('milestone', 'v2.0.0-along-transition'),
+        )
+        for key, value in defaults:
+            if key not in fields:
+                updates[key] = value
+        for key in ('issues_advanced', 'issues_completed', 'decisions',
+                    'risks_logged', 'spikes_conducted'):
+            if key not in fields:
+                updates[key] = []
 
-        new_content = dump_yaml_frontmatter(fm, body)
-        with open(filepath, "w", encoding="utf-8") as f:
-            f.write(new_content)
+        if updates:
+            new_content = frontmatter.update(content, updates, path=filepath)
+            if new_content != content:
+                textio.write_text(filepath, new_content)
 
     return True
 
@@ -406,13 +396,17 @@ def step_migrate_v2_0_along_directory(repo_root):
             for f in files:
                 if f.endswith(".md"):
                     fpath = os.path.join(root, f)
-                    with open(fpath, "r", encoding="utf-8", errors="ignore") as file_obj:
-                        content = file_obj.read()
-                    fm, body = parse_yaml_frontmatter(content)
-                    if fm and fm.get("protocol") != "along":
-                        fm["protocol"] = "along"
-                        with open(fpath, "w", encoding="utf-8") as file_obj:
-                            file_obj.write(dump_yaml_frontmatter(fm, body))
+                    try:
+                        content = textio.read_text(fpath)
+                    except UnicodeDecodeError as exc:
+                        print(f"   [WARN] {fpath} is not valid UTF-8 ({exc.reason}); skipped.",
+                              file=sys.stderr)
+                        continue
+                    fields, _ = parse_yaml_frontmatter(content, path=fpath)
+                    if fields and fields.get('protocol') != 'along':
+                        updated = frontmatter.update(content, {'protocol': 'along'}, path=fpath)
+                        if updated != content:
+                            textio.write_text(fpath, updated)
 
     # 5. Update AGENTS.md references & markers
     agents_md_files = glob.glob(os.path.join(repo_root, "**", "AGENTS.md"), recursive=True)
@@ -514,8 +508,8 @@ def validate_and_build_entity_graph(along_dir):
                 continue
             key = fname.replace(".md", "")
             clean_slug = key.split("--", 1)[1] if "--" in key else key
-            with open(fpath, "r", encoding="utf-8", errors="ignore") as f:
-                fm, _ = parse_yaml_frontmatter(f.read())
+            fields, _ = parse_yaml_frontmatter(textio.read_text(fpath, strict=False), path=fpath)
+            fm = fields or {}
             node_data = {
                 "key": key,
                 "slug": fm.get("slug", clean_slug),
@@ -614,14 +608,11 @@ def step_migrate_v2_1_docs_wiki_and_archive(repo_root, interactive=True):
             break
 
     if kb_script:
-        try:
-            res = subprocess.run([sys.executable, kb_script, repo_root], capture_output=True, text=True)
-            if res.returncode == 0:
-                print("   [OK] Knowledge Base migrated to docs/ and .archive/.")
-            else:
-                print(f"   [WARN] along_kb_sync returned code {res.returncode}: {res.stderr.strip()}")
-        except Exception as e:
-            print(f"   [WARN] Step 7 Knowledge Base migration execution error: {e}")
+        res = proc.run_python([kb_script, repo_root])
+        if res.ok:
+            print("   [OK] Knowledge Base migrated to docs/ and .archive/.")
+        else:
+            print(f"   [WARN] along_kb_sync returned code {res.returncode}: {res.stderr.strip()}")
     else:
         # Fallback: import if in sys.path
         try:
@@ -741,8 +732,8 @@ def step_migrate_v2_2_5_link_rewriting_and_integrity(repo_root, detected_version
         ]
         for c in candidates:
             if os.path.isfile(c):
-                res = subprocess.run([sys.executable, c, repo_root], capture_output=True, text=True)
-                if res.returncode == 0:
+                res = proc.run_python([c, repo_root])
+                if res.ok:
                     print("   [OK] Inbound links repaired via along_kb_sync.py.")
                 else:
                     print(f"   [WARN] along_kb_sync returned code {res.returncode}: {res.stderr.strip()}")

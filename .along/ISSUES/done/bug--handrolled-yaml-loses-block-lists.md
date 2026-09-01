@@ -3,7 +3,8 @@ protocol: along
 protocol_version: 2.2.8
 slug: handrolled-yaml-loses-block-lists
 type: bug
-status: open
+status: done
+completed: 2026-09-01
 priority: critical
 created: 2026-09-01
 updated: 2026-09-01
@@ -119,3 +120,26 @@ failure is silent.
 - [ ] Documented `CHECKLISTS` schema is representable and round-trips.
 - [ ] Only one front-matter implementation exists in the codebase.
 - [ ] ADR recorded on the dependency decision.
+
+## Resolution (2026-09-01)
+
+- REQ-1: `ruamel.yaml` round-trip mode behind `alongkit.frontmatter`. Decision and the
+  dependency policy recorded in `[ADR-2026-09-01--frontmatter-on-ruamel-yaml]`.
+- REQ-2: block sequences, flow sequences, nested flow mappings, quoted and block scalars
+  all read and written; covered by `TestFrontmatterReading`.
+- REQ-3: key order, comments, and unknown keys are preserved because `update()` edits only
+  the named keys as text lines. Measured: a no-op read-and-write is byte-identical for
+  123 of 123 entity files in this repository.
+- REQ-4: quoting is the writer's job (`test_quoting_is_applied_where_yaml_requires_it`),
+  and both `render()` and `update()` re-parse their own output before returning it.
+- REQ-5: the four duplicate implementations are gone; `along_kb_search`, `along_kb_sync`,
+  `migrate_protocol`, and `dashboard/core/collector` alias the shared reader.
+- REQ-6: a file whose front-matter fails to parse is refused with file and line; the
+  migration and sync engines skip and report it instead of rewriting from a partial parse.
+- REQ-7: covered in `TestFrontmatterReading` / `TestFrontmatterWriting`.
+
+Six pre-existing files in this repository were unreadable by any strict YAML reader
+(unquoted `title:` / `summary:` containing a colon): four milestones and two session logs.
+Repaired, one line each. Two more had `null` normalized to a bare key. Found while measuring
+idempotency, and `migrate_protocol.py` was reverting the repair on every test run because
+the old writer re-emitted the values unquoted.

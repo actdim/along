@@ -44,13 +44,13 @@ Three recurring mechanisms produce most defects:
 
 - [x] `[bug--adr-retrieval-blind-to-slug-headers]` - ADR search returned zero results (fixed 2026-09-01)
 - [x] `[bug--issue-done-corrupts-status-and-drops-completed]` - invalid status, lost mandatory field (fixed 2026-09-01)
-- [ ] `[bug--subprocess-encoding-breaks-on-non-utf8-locale]`
+- [x] `[bug--subprocess-encoding-breaks-on-non-utf8-locale]` - encoding fixed at one shared call site (fixed 2026-09-01)
 - [ ] `[bug--skill-commands-reference-missing-script-paths]`
 - [ ] `[bug--commit-binds-arbitrary-active-issue]`
 - [ ] `[bug--typography-sanitizer-destroys-non-utf8-files]`
 - [ ] `[bug--migration-deletes-destination-without-backup]`
 - [ ] `[bug--release-engine-mutates-before-tests-and-reinstalls-globals]`
-- [ ] `[bug--handrolled-yaml-loses-block-lists]`
+- [x] `[bug--handrolled-yaml-loses-block-lists]` - front-matter on ruamel.yaml; 6 invalid files repaired (fixed 2026-09-01)
 - [ ] `[bug--installer-parity-and-destructive-rules-overwrite]`
 - [ ] `[bug--team-skill-uses-provider-specific-subagent-api]`
 - [ ] `[debt--team-skill-state-not-persisted]`
@@ -66,7 +66,7 @@ Three recurring mechanisms produce most defects:
 - [ ] `[bug--tests-mutate-working-tree]`
 - [ ] `[bug--issue-create-stamps-wrong-agent-and-milestone]`
 - [ ] `[debt--protocol-documentation-drift]`
-- [ ] `[debt--extract-shared-python-library]`
+- [x] `[debt--extract-shared-python-library]` - scripts/alongkit/ extracted; duplication guarded by tests (fixed 2026-09-01)
 - [ ] `[debt--always-on-context-budget-exceeds-claims]`
 - [ ] `[debt--unpinned-mcp-and-ghost-wiki-query-tool]`
 
@@ -78,6 +78,31 @@ Three recurring mechanisms produce most defects:
 - [ ] `[debt--exception-swallowing-hides-failures]`
 - [ ] `[debt--kb-search-ranking-and-snippet-quality]`
 - [ ] `[debt--line-ending-churn-vs-gitattributes]`
+
+## Progress
+
+**Step 1 (foundation) complete, 2026-09-01.** `[debt--extract-shared-python-library]`
+and `[bug--handrolled-yaml-loses-block-lists]` were done together because both own the
+front-matter implementation, and `[bug--subprocess-encoding-breaks-on-non-utf8-locale]`
+closed with them: its 25+ call sites collapsed into one shared helper. The sequencing
+note below predicted exactly this, and the order held.
+
+Two mechanisms named in the root-cause analysis above are now structurally blocked
+rather than only documented:
+
+- *Unanchored regex over whole files*: entity edits go through
+  `frontmatter.update`, which rewrites named keys and leaves every other line
+  byte-identical. Verified on all 123 entity files in this repository.
+- *Meta tests*: the suite grew from 57 to 125 tests, and the new ones assert behaviour
+  (a child process emitting non-ASCII output decodes; an engine runs from a flat file
+  copy; a block sequence survives an edit) rather than the presence of documentation.
+
+Found and fixed while converting, none of which had an issue: `migrate_protocol.py` was
+reverting front-matter repairs on every test run, the npm test gate was a silent no-op
+from a missing import, `along-feedback` reported a version three releases stale, and the
+dashboard graph builder crashed on an unparseable entity file.
+
+---
 
 ## Suggested Sequencing
 

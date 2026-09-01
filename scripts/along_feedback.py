@@ -29,7 +29,13 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Dict, Any, List, Optional, Tuple
 
-CURRENT_VERSION = "2.1.6"
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+
+from alongkit import version
+
+# Previously a literal that had drifted to 2.1.6 while the project shipped 2.2.8, so
+# every submitted bug report carried a version that had not existed for three releases.
+CURRENT_VERSION = version.CURRENT_VERSION
 
 GLOBAL_ALONG_DIR = os.path.expanduser("~/.along")
 DIAGNOSTICS_DIR = os.path.join(GLOBAL_ALONG_DIR, "diagnostics")

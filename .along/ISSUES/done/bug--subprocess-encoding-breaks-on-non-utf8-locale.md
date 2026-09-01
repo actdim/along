@@ -3,7 +3,8 @@ protocol: along
 protocol_version: 2.2.8
 slug: subprocess-encoding-breaks-on-non-utf8-locale
 type: bug
-status: open
+status: done
+completed: 2026-09-01
 priority: critical
 created: 2026-09-01
 updated: 2026-09-01
@@ -93,3 +94,23 @@ therefore fails if it is ever taken. It also invokes `uv` unconditionally, raisi
 - [ ] Grep shows zero `subprocess.run` with `text=True` and no `encoding=`.
 - [ ] `test_06` failure mode, if any, reports the real cause rather than a `NoneType` error.
 - [ ] Regression test covers non-ASCII child output.
+
+## Resolution (2026-09-01)
+
+- REQ-1: every capturing subprocess call goes through `alongkit.proc.run_capture`, which
+  fixes `encoding="utf-8", errors="replace"`. `grep` for `capture_output` outside
+  `alongkit/proc.py` returns zero hits.
+- REQ-2: `PYTHONIOENCODING=utf-8` and `PYTHONUTF8=1` are set in the child environment by
+  `proc.child_env()`, applied by `run_capture`, `run_passthrough`, and `run_python`.
+- REQ-3: `Result.stdout` and `Result.stderr` are always strings; a command that cannot
+  start is returncode 127 with the reason in stderr, and a timeout is 124, so no caller can
+  branch on None.
+- REQ-4: `httpx2` corrected to `httpx`, and the uv fallback now skips when
+  `shutil.which("uv")` is absent instead of raising FileNotFoundError.
+- REQ-5: `test_non_ascii_child_output_decodes_on_any_host_locale` asserts a child emitting
+  Cyrillic, accented Latin, and CJK text plus an em dash decodes intact.
+- REQ-6: the shared helper is `alongkit.proc`, from
+  `[debt--extract-shared-python-library]`.
+
+Verified on the machine that reported the defect: Windows 11, cp1251 locale. The full suite
+(125 tests) passes with no locale override.

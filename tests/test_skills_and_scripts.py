@@ -25,6 +25,23 @@ from pathlib import Path
 REPO_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 if REPO_ROOT not in sys.path:
     sys.path.insert(0, REPO_ROOT)
+SCRIPTS_DIR = os.path.join(REPO_ROOT, "scripts")
+if SCRIPTS_DIR not in sys.path:
+    sys.path.insert(0, SCRIPTS_DIR)
+
+from alongkit import proc, typography
+
+
+def run(cmd, **kwargs):
+    """Capture a child process with the encoding conventions fixed in one place.
+
+    `subprocess.run(..., text=True)` without `encoding=` decodes with the host locale.
+    On a cp1251 or cp936 Windows install a single non-ASCII byte raised
+    UnicodeDecodeError inside the reader thread, `run` returned `stdout=None`, and the
+    assertion below failed with a confusing `TypeError: argument of type 'NoneType'`
+    instead of the real cause. See [bug--subprocess-encoding-breaks-on-non-utf8-locale].
+    """
+    return proc.run_capture(cmd, **kwargs)
 
 class TestAlongSkillsAndScripts(unittest.TestCase):
 
@@ -122,27 +139,32 @@ class TestAlongSkillsAndScripts(unittest.TestCase):
             self.assertIn(f"# Along (v{version})", readme_text, "README.md header must match protocol version")
             self.assertIn(f"ALONG-PROTOCOL v{version}", readme_text, "README.md text must match protocol version")
 
-        # Check migrate_protocol.py
-        for mp in [os.path.join(REPO_ROOT, "scripts", "migrate_protocol.py"),
-                   os.path.join(REPO_ROOT, "skills", "along-init", "migrate_protocol.py")]:
-            if os.path.exists(mp):
-                with open(mp, "r", encoding="utf-8") as f:
-                    self.assertIn(f'CURRENT_PROTOCOL_VERSION = "{version}"', f.read(), f"{mp} version must match {version}")
+        # Check the single protocol version constant. It used to be declared
+        # independently in four engines; three were kept in step by regex rewrites and
+        # the fourth (along_feedback.py) had drifted to 2.1.6.
+        version_module = os.path.join(REPO_ROOT, "scripts", "alongkit", "version.py")
+        with open(version_module, "r", encoding="utf-8") as f:
+            self.assertIn(f'CURRENT_PROTOCOL_VERSION = "{version}"', f.read(),
+                          f"alongkit/version.py must match {version}")
+
+        # No engine may declare its own copy.
+        offenders = []
+        for name in sorted(os.listdir(os.path.join(REPO_ROOT, "scripts"))):
+            if not name.endswith(".py"):
+                continue
+            with open(os.path.join(REPO_ROOT, "scripts", name), "r", encoding="utf-8") as f:
+                if re.search(r'^CURRENT_(PROTOCOL_)?VERSION\s*=\s*"', f.read(), re.MULTILINE):
+                    offenders.append(name)
+        self.assertEqual(offenders, [],
+                         f"engines must import the version, not declare it: {offenders}")
 
     def test_05_clean_typography(self):
         """Verify zero non-ASCII typographic characters across repository text files."""
-        forbidden_chars = {
-            chr(0x2014): "em-dash",
-            chr(0x2013): "en-dash",
-            chr(0x201C): "curly double quote left",
-            chr(0x201D): "curly double quote right",
-            chr(0x2018): "curly single quote left",
-            chr(0x2019): "curly single quote right",
-            chr(0x2026): "ellipsis character",
-            chr(0x00A0): "non-breaking space",
-            chr(0x200B): "zero-width space",
-            chr(0xFEFF): "BOM marker"
-        }
+        # The table lives in alongkit.typography, shared with the sanitizer. Two copies
+        # meant a character could be banned by this gate and unknown to the tool that
+        # is supposed to fix it.
+        forbidden_chars = {char: typography.name_of(char)
+                           for char in typography.REPLACEMENTS}
         
         patterns = ['**/*.md', '**/*.py', '**/*.sh', '**/*.ps1', '**/*.json', '**/*.yaml', '**/*.yml']
         violations = []
@@ -171,11 +193,18 @@ class TestAlongSkillsAndScripts(unittest.TestCase):
         self.assertTrue(os.path.exists(dash_script), "scripts/along_dash.py must exist")
 
         cmd = [sys.executable, dash_script, REPO_ROOT, "--cli"]
-        res = subprocess.run(cmd, capture_output=True, text=True)
+        res = run(cmd)
         if res.returncode != 0 and "No module named 'fastapi'" in res.stderr:
-            # Fallback to uv run if fastapi is managed via uv
-            cmd = ["uv", "run", "--with", "fastapi", "--with", "uvicorn", "--with", "httpx2", "--with", "pyyaml", "--with", "rich", dash_script, REPO_ROOT, "--cli"]
-            res = subprocess.run(cmd, capture_output=True, text=True)
+            # Fallback to uv when the dashboard stack is managed there. `httpx2` was a
+            # typo for `httpx`, so this path had never worked, and `uv` was invoked
+            # unconditionally, raising FileNotFoundError instead of skipping.
+            if not shutil.which("uv"):
+                self.skipTest("dashboard dependencies are absent and uv is not installed")
+            cmd = ["uv", "run",
+                   "--with", "fastapi", "--with", "uvicorn", "--with", "httpx",
+                   "--with", "ruamel.yaml", "--with", "rich",
+                   dash_script, REPO_ROOT, "--cli"]
+            res = run(cmd)
 
         self.assertEqual(res.returncode, 0, f"along_dash.py --cli failed:\n{res.stderr}")
         self.assertIn("Along Executive Dashboard", res.stdout)
@@ -189,7 +218,7 @@ class TestAlongSkillsAndScripts(unittest.TestCase):
         mig_script = os.path.join(REPO_ROOT, "scripts", "migrate_protocol.py")
         self.assertTrue(os.path.exists(mig_script), "scripts/migrate_protocol.py must exist")
 
-        res = subprocess.run([sys.executable, mig_script, REPO_ROOT], capture_output=True, text=True)
+        res = run([sys.executable, mig_script, REPO_ROOT])
         self.assertEqual(res.returncode, 0, f"migrate_protocol.py failed:\n{res.stderr}")
         self.assertIn("migrations & validations completed successfully", res.stdout)
 
@@ -198,7 +227,7 @@ class TestAlongSkillsAndScripts(unittest.TestCase):
         update_script = os.path.join(REPO_ROOT, "scripts", "along_update.py")
         self.assertTrue(os.path.exists(update_script), "scripts/along_update.py must exist")
 
-        res = subprocess.run([sys.executable, update_script, REPO_ROOT, "--check-only", "--local-only"], capture_output=True, text=True)
+        res = run([sys.executable, update_script, REPO_ROOT, "--check-only", "--local-only"])
         self.assertEqual(res.returncode, 0, f"along_update.py --check-only failed:\n{res.stderr}")
         self.assertIn("Check-Only Mode", res.stdout)
 
@@ -234,7 +263,7 @@ class TestAlongSkillsAndScripts(unittest.TestCase):
         exec_script = os.path.join(REPO_ROOT, "scripts", "along_exec.py")
         self.assertTrue(os.path.exists(exec_script), "scripts/along_exec.py must exist")
 
-        res = subprocess.run([sys.executable, exec_script, "--help"], capture_output=True, text=True)
+        res = run([sys.executable, exec_script, "--help"])
         self.assertEqual(res.returncode, 0)
         self.assertIn("Along Command Router", res.stdout)
         self.assertIn("kb-sync", res.stdout)
@@ -245,18 +274,18 @@ class TestAlongSkillsAndScripts(unittest.TestCase):
         exec_script = os.path.join(REPO_ROOT, "scripts", "along_exec.py")
         
         # 1. Scratchpad lifecycle
-        init_res = subprocess.run([sys.executable, exec_script, "scratch", "init", "unit-test-task"], capture_output=True, text=True)
+        init_res = run([sys.executable, exec_script, "scratch", "init", "unit-test-task"])
         self.assertEqual(init_res.returncode, 0)
         scratch_dir = os.path.join(REPO_ROOT, ".along", ".session", "unit-test-task")
         self.assertTrue(os.path.exists(scratch_dir), "Scratchpad directory should exist")
         self.assertTrue(os.path.exists(os.path.join(scratch_dir, "plan.md")), "plan.md should exist")
 
-        purge_res = subprocess.run([sys.executable, exec_script, "scratch", "purge", "unit-test-task"], capture_output=True, text=True)
+        purge_res = run([sys.executable, exec_script, "scratch", "purge", "unit-test-task"])
         self.assertEqual(purge_res.returncode, 0)
         self.assertFalse(os.path.exists(scratch_dir), "Scratchpad directory should be purged")
 
         # 2. Issue list command
-        list_res = subprocess.run([sys.executable, exec_script, "issue", "list"], capture_output=True, text=True)
+        list_res = run([sys.executable, exec_script, "issue", "list"])
         self.assertEqual(list_res.returncode, 0)
         self.assertIn("Active issues in", list_res.stdout)
 
@@ -319,7 +348,7 @@ class TestAlongSkillsAndScripts(unittest.TestCase):
 
             # 2. Run migration script
             mig_script = os.path.join(REPO_ROOT, "scripts", "migrate_protocol.py")
-            res = subprocess.run([sys.executable, mig_script, temp_dir], capture_output=True, text=True)
+            res = run([sys.executable, mig_script, temp_dir])
             self.assertEqual(res.returncode, 0, f"migrate_protocol failed in test:\n{res.stderr}")
 
             # 3. Assertions
@@ -368,7 +397,7 @@ class TestAlongSkillsAndScripts(unittest.TestCase):
 
             # Run along_update.py with --all-sync
             update_script = os.path.join(REPO_ROOT, "scripts", "along_update.py")
-            res = subprocess.run([sys.executable, update_script, temp_dir, "--all-sync", "--local-only"], capture_output=True, text=True)
+            res = run([sys.executable, update_script, temp_dir, "--all-sync", "--local-only"])
             self.assertEqual(res.returncode, 0, f"along_update failed:\n{res.stderr}\nSTDOUT:\n{res.stdout}")
 
             # Assertions
@@ -420,7 +449,7 @@ class TestAlongSkillsAndScripts(unittest.TestCase):
 
             # Run along_kb_sync
             kb_script = os.path.join(REPO_ROOT, "scripts", "along_kb_sync.py")
-            res = subprocess.run([sys.executable, kb_script, temp_dir], capture_output=True, text=True)
+            res = run([sys.executable, kb_script, temp_dir])
             self.assertEqual(res.returncode, 0, f"along_kb_sync failed:\n{res.stderr}\nSTDOUT:\n{res.stdout}")
 
             # Verify root README was rewritten
@@ -482,7 +511,7 @@ class TestAlongSkillsAndScripts(unittest.TestCase):
                 )
 
             update_script = os.path.join(REPO_ROOT, "scripts", "along_update.py")
-            res = subprocess.run([sys.executable, update_script, temp_dir, "--local-only"], capture_output=True, text=True)
+            res = run([sys.executable, update_script, temp_dir, "--local-only"])
             self.assertEqual(res.returncode, 0, f"along_update failed:\n{res.stderr}\nSTDOUT:\n{res.stdout}")
 
             with open(agents_md, "r", encoding="utf-8") as f:
@@ -526,7 +555,7 @@ class TestAlongSkillsAndScripts(unittest.TestCase):
                 )
 
             update_script = os.path.join(REPO_ROOT, "scripts", "along_update.py")
-            res = subprocess.run([sys.executable, update_script, temp_dir, "--local-only"], capture_output=True, text=True)
+            res = run([sys.executable, update_script, temp_dir, "--local-only"])
             self.assertEqual(res.returncode, 0, f"along_update failed:\n{res.stderr}\nSTDOUT:\n{res.stdout}")
 
             with open(readme_path, "r", encoding="utf-8") as f:

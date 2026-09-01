@@ -6,105 +6,32 @@ import re
 import sys
 import argparse
 
-# Current format:  ## ADR-YYYY-MM-DD--<slug> - <Title>      (protocol >= v2.2.0)
-# Legacy format:   ## <NNN> - <Title> / ## <NNN>: <Title>  (protocol < v2.2.0)
-# A bare ISO date heading (## 2026-08-15 ...) is explicitly not an ADR.
-_ADR_HEADING = (
-    r"(?:ADR-\d{4}-\d{2}-\d{2}--[A-Za-z0-9._-]+|(?!\d{4}-\d{2}-\d{2})\d{1,4}\s*[-.:])"
-)
-ADR_SPLIT_RE = re.compile(r"\n(?=##\s+" + _ADR_HEADING + r")")
-ADR_HEADER_RE = re.compile(
-    r"^##\s+(?:(?P<key>ADR-\d{4}-\d{2}-\d{2}--[A-Za-z0-9._-]+)"
-    r"|(?!\d{4}-\d{2}-\d{2})(?P<num>\d{1,4})\s*[-.:])"
-    r"\s*(?:-\s*)?(?P<title>.*)$"
-)
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+
+from alongkit import bootstrap
+
+# This engine reads entity front-matter, so it needs ruamel.yaml. Resolve it before
+# anything imports it: an engine invoked as `python <path>/<engine>.py` may start
+# under an interpreter that has no dependencies prepared, which is exactly how the
+# installers and the documented skill commands invoke it.
+bootstrap.ensure_deps()
+
+from alongkit import entities, frontmatter, markdown, repo
+
+# The ADR header formats, the heading-anchor algorithm, and the front-matter reader
+# live in the shared package. This engine was the reader that missed the v2.2.0 header
+# change, which is why ADR search returned zero results in every released version:
+# see [bug--adr-retrieval-blind-to-slug-headers].
+ADR_SPLIT_RE = entities.ADR_SPLIT_RE
+ADR_HEADER_RE = entities.ADR_HEADER_RE
+github_heading_anchor = markdown.github_heading_anchor
+parse_decision_entries = entities.parse_decision_entries
 
 
-def github_heading_anchor(heading):
-    """Mirror the GitHub Markdown heading anchor algorithm for stable deep links."""
-    anchor = heading.strip().lower()
-    anchor = re.sub(r"[^\w\s-]", "", anchor)
-    return re.sub(r"\s+", "-", anchor).strip("-")
+# One tolerant reader, shared: a malformed entity is reported, never silently
+# reinterpreted. Engines that write use frontmatter.update, which refuses.
+parse_frontmatter = frontmatter.parse_tolerant
 
-
-def parse_decision_entries(dec_raw, rel_path=".along/DECISIONS.md"):
-    """
-    Split an append-only DECISIONS.md into individual searchable ADR entries.
-
-    Supports both header formats:
-    - Current decentralized slug format (protocol >= v2.2.0):
-        ## ADR-YYYY-MM-DD--<slug> - <Title>
-    - Legacy numeric format (protocol < v2.2.0):
-        ## <NNN> - <Title>
-
-    The schema template placeholder (literal `<slug>` / `YYYY-MM-DD` header) is skipped so
-    it never surfaces as a search result.
-    """
-    entries = []
-    for blk in ADR_SPLIT_RE.split(dec_raw):
-        blk = blk.strip()
-        if not blk:
-            continue
-        lines = blk.splitlines()
-        heading = lines[0].strip()
-        header_m = ADR_HEADER_RE.match(heading)
-        if not header_m:
-            continue
-
-        # An ADR block ends at the next level-2 heading of any kind, so unrelated
-        # sections appended to the log never bleed into an ADR body or snippet.
-        end = len(lines)
-        for i, ln in enumerate(lines[1:], 1):
-            if ln.startswith("## "):
-                end = i
-                break
-        blk = "\n".join(lines[:end]).strip()
-
-        key = header_m.group("key")
-        human_title = (header_m.group("title") or "").strip()
-
-        if key:
-            if "<" in key or "YYYY" in key:
-                continue
-            adr_key = key
-            slug = key.lower()
-        else:
-            adr_key = f"ADR-{header_m.group('num')}"
-            slug = adr_key.lower()
-
-        entries.append({
-            "category": "decision",
-            "category_label": "ADR",
-            "title": f"{adr_key} - {human_title}" if human_title else adr_key,
-            "slug": slug,
-            "type": "adr",
-            "tags": ["adr", "architecture", "decision"],
-            "status": "superseded" if re.search(r"superseded\s+by", blk, re.IGNORECASE) else "active",
-            "file_path": f"{rel_path}#{github_heading_anchor(heading.lstrip('#').strip())}",
-            "body": blk,
-        })
-    return entries
-
-
-def parse_frontmatter(content):
-    match = re.match(r"^---\r?\n(.*?)\r?\n---\r?\n(.*)$", content, re.DOTALL)
-    if not match:
-        return {}, content
-    fm_str, body = match.group(1), match.group(2)
-    fm = {}
-    for line in fm_str.splitlines():
-        line = line.strip()
-        if not line or line.startswith("#"):
-            continue
-        if ":" in line:
-            k, v = line.split(":", 1)
-            k, v = k.strip(), v.strip().strip('"').strip("'")
-            if v.startswith("[") and v.endswith("]"):
-                items = [x.strip().strip('"').strip("'") for x in v[1:-1].split(",") if x.strip()]
-                fm[k] = items
-            else:
-                fm[k] = v
-    return fm, body
 
 def collect_all_entries(repo_root):
     entries = []

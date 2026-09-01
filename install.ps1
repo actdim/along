@@ -123,6 +123,10 @@ function Install-AlongScripts {
     $scriptsSrc = Join-Path $PSScriptRoot 'scripts'
     if (Test-Path $scriptsSrc) {
         Copy-Item -Path "$scriptsSrc\*" -Destination $alongBin -Recurse -Force
+        # The shared `alongkit` package travels with the engines, which import it from
+        # their own directory. Compiled caches must not: they are interpreter-specific.
+        Get-ChildItem -Path $alongBin -Directory -Recurse -Filter '__pycache__' |
+            Remove-Item -Recurse -Force -ErrorAction SilentlyContinue
         Write-Host "-> Along tools installed -> $alongBin"
     }
     $cfgFile = Join-Path $alongHome 'config.json'
@@ -162,6 +166,10 @@ function Install-OpenCode {
     $scriptsSrc = Join-Path $PSScriptRoot 'scripts'
     if (Test-Path $scriptsSrc) {
         Copy-Item -Path "$scriptsSrc\*" -Destination $helper -Recurse -Force
+        # The shared `alongkit` package travels with the engines, which import it from
+        # their own directory. Compiled caches must not: they are interpreter-specific.
+        Get-ChildItem -Path $helper -Directory -Recurse -Filter '__pycache__' |
+            Remove-Item -Recurse -Force -ErrorAction SilentlyContinue
     }
     if (Test-Path (Join-Path $src 'along-init\protocol.md')) {
         Copy-Item -Force (Join-Path $src 'along-init\protocol.md') (Join-Path $helper 'protocol.md')

@@ -1,5 +1,5 @@
 <!-- BEGIN ALONG-PROTOCOL root (managed by along-init - do not edit by hand) -->
-# ALONG-PROTOCOL v2.2.8
+# ALONG-PROTOCOL v2.2.9
 
 This repo carries its own agent context, provider-agnostically. Follow it every session, whatever tool you are.
 
@@ -193,11 +193,18 @@ When a Stage or session completes, agents MUST execute this verification checkli
 This repository is `Along` (`actdim-along`) - the provider-agnostic agent-context protocol and skills suite for Claude Code, Codex, OpenCode, and Antigravity.
 
 - **Skills Source**: `skills/` (`along-init`, `along-update`, `along-dash`, `along-wrap`, `along-commit`, `along-build`, `along-test`, `along-dev`, `along-team`, `along-kb-sync`, `along-kb-search`, `along-issue-sync`, `along-context-sync`, `along-decision-sync`, `along-history-sync`, `along-graph-check`, `along-dep-scan`, `along-version-bump`, `along-feedback`).
+- **Engine Source**: `scripts/` (one engine per skill) over the shared implementation
+  package `scripts/alongkit/` (`repo`, `frontmatter`, `entities`, `proc`, `textio`,
+  `markdown`, `typography`, `gates`, `semver`, `version`, `bootstrap`, `cli`). Helpers
+  are defined there and nowhere else: two tests in `tests/test_alongkit.py` fail if an
+  engine defines a name that already exists in the package, or that another engine
+  defines. Runtime dependency: `ruamel.yaml` (see `pyproject.toml`).
 - **Install Commands**:
   - Windows: `powershell -NoProfile -ExecutionPolicy Bypass -File install.ps1 -Target all` (or `install.bat`).
   - Linux / macOS: `bash install.sh`.
 - **Lifecycle Commands**:
-  - Run Tests: `python .along/scripts/test.py` (or `python -m unittest discover tests -q`).
+  - Run Tests: `python .along/scripts/test.py` (resolves dependencies via `uv` if needed),
+    or `uv run python -m unittest discover tests -q`.
   - Run Dev Server: `npm run dev` (or `python .along/scripts/dev.py`).
   - Build Assets: `npm run build` (or `python .along/scripts/build.py`).
 - **Frontend Architecture (`packages/along-dash-ui/`)**:

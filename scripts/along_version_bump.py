@@ -16,47 +16,18 @@ import os
 import re
 import json
 import glob
-import subprocess
 from datetime import datetime
 
-def find_repo_root(start_dir=None):
-    if not start_dir:
-        start_dir = os.getcwd()
-    cur = os.path.abspath(start_dir)
-    while True:
-        if os.path.exists(os.path.join(cur, ".along")) or os.path.exists(os.path.join(cur, "AGENTS.md")) or os.path.exists(os.path.join(cur, ".git")):
-            return cur
-        parent = os.path.dirname(cur)
-        if parent == cur:
-            return os.path.abspath(start_dir)
-        cur = parent
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
-def parse_semver(v_str):
-    if not v_str:
-        return (0, 0, 0)
-    cleaned = v_str.strip().lstrip("v").split("-")[0]
-    parts = cleaned.split(".")
-    try:
-        major = int(parts[0]) if len(parts) > 0 else 0
-        minor = int(parts[1]) if len(parts) > 1 else 0
-        patch = int(parts[2]) if len(parts) > 2 else 0
-        return (major, minor, patch)
-    except ValueError:
-        return (0, 0, 0)
+from alongkit import gates, proc, repo, semver
 
 def calculate_next_version(current_v, bump_type):
-    major, minor, patch = parse_semver(current_v)
-    bump_type = bump_type.lower().strip()
-    if bump_type == "patch":
-        return f"{major}.{minor}.{patch + 1}"
-    elif bump_type == "minor":
-        return f"{major}.{minor + 1}.0"
-    elif bump_type == "major":
-        return f"{major + 1}.0.0"
-    elif re.match(r"^\d+\.\d+\.\d+", bump_type.lstrip("v")):
-        return bump_type.lstrip("v")
-    else:
-        print(f"[Error] Invalid bump type or version: '{bump_type}'. Expected patch, minor, major, or X.Y.Z", file=sys.stderr)
+    """Next version string, or a usage error the caller cannot recover from."""
+    try:
+        return semver.calculate_next(current_v, bump_type)
+    except ValueError as exc:
+        print(f"[Error] {exc}", file=sys.stderr)
         sys.exit(1)
 
 def is_along_dev_repo(repo_root):
@@ -113,27 +84,23 @@ def bump_along_dev_repo(repo_root, new_version):
             with open(readme_md, "w", encoding="utf-8") as f: f.write(u)
             modified_files.append(readme_md)
 
-    # 5. Update scripts/migrate_protocol.py and scripts/along_kb_sync.py
-    for mp_path in [os.path.join(repo_root, "scripts", "migrate_protocol.py"),
-                    os.path.join(repo_root, "skills", "along-init", "migrate_protocol.py"),
-                    os.path.join(repo_root, "scripts", "along_kb_sync.py"),
-                    os.path.join(repo_root, "skills", "along-kb-sync", "along_kb_sync.py")]:
-        if os.path.exists(mp_path):
-            with open(mp_path, "r", encoding="utf-8") as f: c = f.read()
-            u = re.sub(r'CURRENT_PROTOCOL_VERSION = "\d+\.\d+\.\d+"', f'CURRENT_PROTOCOL_VERSION = "{new_version}"', c)
+    # 5. Update the protocol version constant. It is declared once, in the shared
+    #    package; the legacy per-engine copies were removed in v3.0.0. The older
+    #    paths stay in the list so a bump run inside an older checkout still works.
+    for const_path in [os.path.join(repo_root, "scripts", "alongkit", "version.py"),
+                       os.path.join(repo_root, "scripts", "migrate_protocol.py"),
+                       os.path.join(repo_root, "skills", "along-init", "migrate_protocol.py"),
+                       os.path.join(repo_root, "scripts", "along_kb_sync.py"),
+                       os.path.join(repo_root, "skills", "along-kb-sync", "along_kb_sync.py"),
+                       os.path.join(repo_root, "scripts", "along_update.py"),
+                       os.path.join(repo_root, "skills", "along-update", "along_update.py")]:
+        if os.path.exists(const_path):
+            with open(const_path, "r", encoding="utf-8") as f: c = f.read()
+            u = re.sub(r'CURRENT_PROTOCOL_VERSION = "\d+\.\d+\.\d+"',
+                       f'CURRENT_PROTOCOL_VERSION = "{new_version}"', c)
             if u != c:
-                with open(mp_path, "w", encoding="utf-8") as f: f.write(u)
-                modified_files.append(mp_path)
-
-    # 6. Update scripts/along_update.py
-    for up_path in [os.path.join(repo_root, "scripts", "along_update.py"),
-                    os.path.join(repo_root, "skills", "along-update", "along_update.py")]:
-        if os.path.exists(up_path):
-            with open(up_path, "r", encoding="utf-8") as f: c = f.read()
-            u = re.sub(r'CURRENT_PROTOCOL_VERSION = "\d+\.\d+\.\d+"', f'CURRENT_PROTOCOL_VERSION = "{new_version}"', c)
-            if u != c:
-                with open(up_path, "w", encoding="utf-8") as f: f.write(u)
-                modified_files.append(up_path)
+                with open(const_path, "w", encoding="utf-8") as f: f.write(u)
+                modified_files.append(const_path)
 
     # 7. Update .along/CONTEXT.md
     ctx_md = os.path.join(repo_root, ".along", "CONTEXT.md")
@@ -192,7 +159,7 @@ def detect_and_bump_project(repo_root, bump_arg):
     custom_script = os.path.join(repo_root, ".along", "scripts", "bump_version.py")
     if os.path.exists(custom_script):
         print(f"-> Executing custom project script: {custom_script} {bump_arg}")
-        res = subprocess.run([sys.executable, custom_script, bump_arg], cwd=repo_root, capture_output=True, text=True)
+        res = proc.run_python([custom_script, bump_arg], cwd=repo_root)
         if res.returncode != 0:
             print(f"[Error] Custom bump script failed:\n{res.stderr}", file=sys.stderr)
             sys.exit(res.returncode)
@@ -371,34 +338,8 @@ if __name__ == "__main__":
     print("=" * 60)
     return None
 
-def run_precommit_tests(repo_root):
-    """Executes repository tests before allowing a release commit."""
-    test_hook = os.path.join(repo_root, ".along", "scripts", "test.py")
-    tests_dir = os.path.join(repo_root, "tests")
+sanitize_typography = gates.run_sanitizer
 
-    cmd = None
-    if os.path.exists(test_hook):
-        cmd = [sys.executable, test_hook]
-    elif os.path.exists(tests_dir):
-        cmd = [sys.executable, "-m", "unittest", "discover", "-s", "tests", "-p", "test_*.py"]
-
-    if cmd:
-        print(f"-> [Release Quality Gate] Running automated tests: {' '.join(cmd)}")
-        res = subprocess.run(cmd, cwd=repo_root, capture_output=True, text=True)
-        if res.returncode != 0:
-            print(f"[Error] Release automated tests failed!\n", file=sys.stderr)
-            if res.stdout:
-                print(res.stdout, file=sys.stderr)
-            if res.stderr:
-                print(res.stderr, file=sys.stderr)
-            print("Release aborted. Fix failing tests before releasing.", file=sys.stderr)
-            sys.exit(1)
-        print("-> [Release Quality Gate] All tests passed successfully.")
-
-def sanitize_typography(repo_root):
-    sanitizer = os.path.join(repo_root, "scripts", "sanitize_typography.py")
-    if os.path.exists(sanitizer):
-        subprocess.run([sys.executable, sanitizer], cwd=repo_root, capture_output=True)
 
 def update_along_milestones(repo_root, new_version):
     if not new_version:
@@ -414,7 +355,7 @@ def update_along_milestones(repo_root, new_version):
                 print(f"-> Reconciled milestone {os.path.basename(mf)} to completed (100%).")
 
 def main():
-    repo_root = find_repo_root()
+    repo_root = repo.find_repo_root()
     bump_arg = sys.argv[1] if len(sys.argv) > 1 else "patch"
     
     if bump_arg in ["-h", "--help"]:
@@ -446,27 +387,33 @@ def main():
 
     # Mandatory tests before release commit
     if do_commit:
-        run_precommit_tests(repo_root)
+        if not gates.run_repository_tests(repo_root, "Release Quality Gate"):
+            print("Release aborted. Fix failing tests before releasing.", file=sys.stderr)
+            sys.exit(1)
 
     # Regenerate dashboard if available
-    dash_script = os.path.join(repo_root, "scripts", "along_dash.py")
-    if os.path.exists(dash_script):
-        subprocess.run([sys.executable, dash_script, "--markdown"], cwd=repo_root, capture_output=True)
+    dash_script = repo.resolve_tool_script("along_dash.py", repo_root)
+    if dash_script:
+        proc.run_python([dash_script, "--markdown"], cwd=repo_root)
 
     if do_commit:
         git_dir = os.path.join(repo_root, ".git")
         if os.path.exists(git_dir):
-            try:
-                subprocess.run(["git", "add", "-A"], cwd=repo_root, check=True)
-                commit_msg = f"release: v{new_version} - bump version and release reconciliation"
-                subprocess.run(["git", "commit", "-m", commit_msg], cwd=repo_root, check=True)
+            staged = proc.git(["add", "-A"], cwd=repo_root)
+            commit_msg = f"release: v{new_version} - bump version and release reconciliation"
+            committed = proc.git(["commit", "-m", commit_msg], cwd=repo_root) if staged.ok else staged
+            if committed.ok:
                 print(f"-> Git commit created: {commit_msg}")
                 if do_push:
                     print("-> Pushing release commit to remote...")
-                    subprocess.run(["git", "push"], cwd=repo_root, check=True)
-                    print("-> Pushed successfully.")
-            except subprocess.CalledProcessError as e:
-                print(f"[Note] Git commit skipped or working tree already clean: {e}")
+                    pushed = proc.git(["push"], cwd=repo_root)
+                    if pushed.ok:
+                        print("-> Pushed successfully.")
+                    else:
+                        print(f"[Warning] Git push failed: {pushed.stderr.strip()}", file=sys.stderr)
+            else:
+                detail = (committed.stderr or committed.stdout).strip()
+                print(f"[Note] Git commit skipped or working tree already clean: {detail}")
     else:
         print("-> [Notice] Version updated on disk. Use --commit (-c) to create release commit automatically.")
 
@@ -477,7 +424,8 @@ def main():
 
 def sync_local_global_install(repo_root):
     """If running inside the along core repository, re-run install script to keep local machine synced."""
-    is_along = os.path.exists(os.path.join(repo_root, "skills", "along-init", "protocol.md")) and os.path.exists(os.path.join(repo_root, "scripts", "along_exec.py"))
+    is_along = (os.path.exists(os.path.join(repo_root, "skills", "along-init", "protocol.md"))
+                and os.path.exists(os.path.join(repo_root, "scripts", "along_exec.py")))
     if not is_along:
         return
 
@@ -485,11 +433,11 @@ def sync_local_global_install(repo_root):
     if sys.platform == "win32":
         ps1 = os.path.join(repo_root, "install.ps1")
         if os.path.exists(ps1):
-            subprocess.run(["powershell", "-NoProfile", "-ExecutionPolicy", "Bypass", "-File", ps1, "-Target", "all"], cwd=repo_root, capture_output=True)
+            proc.run_capture(["powershell", "-NoProfile", "-ExecutionPolicy", "Bypass", "-File", ps1, "-Target", "all"], cwd=repo_root)
     else:
         sh = os.path.join(repo_root, "install.sh")
         if os.path.exists(sh):
-            subprocess.run(["bash", sh, "--target=all"], cwd=repo_root, capture_output=True)
+            proc.run_capture(["bash", sh, "--target=all"], cwd=repo_root)
     print("-> [Along Core] Global skills & scripts synchronized on local machine.")
 
 if __name__ == "__main__":

@@ -3,7 +3,7 @@ name: along-team
 description: Execute software development tasks via sequential multi-agent protocol (Supervisor -> Research -> Architect -> Living Plan -> Step Loops [Implement -> Review/Test -> Reassess]). Supports autonomous execution, /goal integration, and adaptive complexity routing.
 ---
 
-# Along Team (`/along-team`) [v2.2.8]
+# Along Team (`/along-team`) [v2.2.9]
 
 Universal sequential multi-agent development protocol and state machine for complex engineering tasks.
 

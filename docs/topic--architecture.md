@@ -118,7 +118,80 @@ flowchart LR
 
 ---
 
-## 5. End-to-End Human & Developer Workflow
+## 5. Engine Implementation Layer (`scripts/` and `scripts/alongkit/`)
+
+The eighteen skills are thin: every one of them dispatches to a Python engine in `scripts/`.
+Those engines share one implementation package, `scripts/alongkit/`, introduced in v3.0.0.
+
+Before it existed, the engines were twelve standalone programs with no shared module.
+`find_repo_root` had five divergent copies that disagreed on what a repository root is,
+front-matter parsing had four, and `subprocess.run` was called at 25+ sites with no shared
+convention, which is how one encoding defect reached every engine at once. The demonstrated
+cost is recorded in `[bug--adr-retrieval-blind-to-slug-headers]`: the ADR header format
+changed in v2.2.0, was updated where ADRs are written and validated, and was missed in the
+reader, so ADR search returned zero results in every released version.
+
+| Module | Owns |
+| :--- | :--- |
+| `alongkit/repo.py` | Repository root markers, nearest `.along/` discovery, engine resolution, directory walking and the shared ignore set. |
+| `alongkit/frontmatter.py` | The single YAML front-matter reader and writer (`ruamel.yaml`, round-trip). |
+| `alongkit/entities.py` | Entity vocabulary, canonical keys, slugs, dates, ADR record parsing and formatting. |
+| `alongkit/proc.py` | Subprocess execution with UTF-8 fixed on both sides of the pipe. |
+| `alongkit/textio.py` | Strict reads, line-ending preservation, atomic writes. |
+| `alongkit/markdown.py` | Link parsing, fenced-code tracking, GitHub heading anchors, `file://` resolution. |
+| `alongkit/typography.py` | The forbidden-character table, shared with the quality gate. |
+| `alongkit/gates.py` | Pre-commit and pre-release test and sanitizer gates. |
+| `alongkit/semver.py` | Version parsing, increments, comparison. |
+| `alongkit/version.py` | The protocol version constant, declared exactly once. |
+| `alongkit/bootstrap.py` | Dependency resolution for a directly invoked engine. |
+| `alongkit/cli.py` | The `along` console entry point, which delegates to the `along_exec.py` router. |
+
+### Front-matter and the runtime dependency
+
+Front-matter is YAML because tools that are not Along read it: GitHub, static site
+generators, `gray-matter`. The engines therefore use a real YAML implementation rather than
+a bespoke parser. `ruamel.yaml` is chosen over `pyyaml` because round-trip mode preserves
+comments, key order, and quoting style, which is what makes editing a file the user owns
+safe. Reads are strict and refuse a block they cannot understand; edits name individual
+keys and leave every other line byte-identical.
+
+See [ADR-2026-09-01--frontmatter-on-ruamel-yaml](../.along/DECISIONS.md) and
+[ADR-2026-09-01--shared-engine-package](../.along/DECISIONS.md).
+
+### Three invocation paths, one package
+
+```mermaid
+flowchart TD
+    A["along <subcommand> (console script)"] --> R["along_exec.py (router)"]
+    B["python scripts/along_exec.py (source checkout)"] --> R
+    C["python ~/.along/bin/along_exec.py (global file copy)"] --> R
+    R --> K["alongkit (shared implementation)"]
+    K --> D{"ruamel.yaml importable?"}
+    D -->|Yes| E["Run"]
+    D -->|No| F["alongkit.bootstrap re-executes under `uv run`"]
+    F --> E
+```
+
+Python places the running script's own directory on `sys.path`, and the installers copy
+`alongkit/` next to the engines, so `from alongkit import ...` resolves in a flat
+`~/.along/bin/` install with no path manipulation and no package install. When the
+interpreter lacks `ruamel.yaml`, `alongkit.bootstrap` re-executes the engine under
+`uv run` once; if `uv` is absent it exits with an actionable message rather than a
+traceback.
+
+### Structural guards
+
+Two tests keep the duplication from growing back
+([tests/test_alongkit.py](../tests/test_alongkit.py)):
+
+- no name may be defined at module level in two different engines;
+- no engine may redefine a name the shared package already owns.
+
+A third asserts that an engine still runs from a flat directory copy, and a fourth that
+both installers carry the package.
+
+---
+## 6. End-to-End Human & Developer Workflow
 
 The lifecycle of a task in Along follows a structured, low-friction flow designed to eliminate administrative burden for the developer:
 
@@ -156,7 +229,7 @@ sequenceDiagram
 
 ---
 
-## 6. Deep Architectural Rationale: Multi-Agent State Machine vs Single-Agent Linear Execution
+## 7. Deep Architectural Rationale: Multi-Agent State Machine vs Single-Agent Linear Execution
 
 A core architectural decision in Along is the deployment of a **Sequential Multi-Agent State Machine** (`/along-team`) instead of unconstrained single-agent linear execution.
 
@@ -236,7 +309,7 @@ Along establishes 5 clearly separated functional roles:
 
 ---
 
-## 7. Ephemeral Session Blackboard Memory
+## 8. Ephemeral Session Blackboard Memory
 
 To prevent multi-agent coordination data from leaking across sessions or cluttering the git history, Along establishes an **Ephemeral Session Blackboard**:
 
@@ -254,7 +327,7 @@ To prevent multi-agent coordination data from leaking across sessions or clutter
 
 ---
 
-## 8. Historical Analysis: Documentation Truncation Incident & Prevention
+## 9. Historical Analysis: Documentation Truncation Incident & Prevention
 
 During the transition to the LLM-Wiki architecture in commit `5bab25dc5b3e57c0e83b23f47b7ce221773a6e90` (2026-08-30), an automated file renaming routine accidentally replaced populated documentation files (`01-architecture.md`, `02-domain-model.md`, `03-setup-and-workflow.md`) with 13-line placeholder templates. Subsequent feature PRs updated internal skill instructions while failing to backfill the public `docs/` Knowledge Base.
 

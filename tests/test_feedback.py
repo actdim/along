@@ -9,13 +9,13 @@ import json
 import unittest
 import tempfile
 import shutil
-import subprocess
 from unittest.mock import patch, MagicMock
 
 REPO_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, os.path.join(REPO_ROOT, "scripts"))
 
 import along_feedback
+from alongkit import proc
 
 
 class TestAlongFeedbackEngine(unittest.TestCase):
@@ -164,27 +164,27 @@ class TestAlongFeedbackEngine(unittest.TestCase):
         exec_script = os.path.join(REPO_ROOT, "scripts", "along_exec.py")
 
         # 1. Record via CLI
-        rec_res = subprocess.run([
+        rec_res = proc.run_capture([
             sys.executable, fb_script, "record",
             "--component", "cli_test",
             "--error", "Mock CLI error",
             "--note", "Test note"
-        ], capture_output=True, text=True)
+        ])
         self.assertEqual(rec_res.returncode, 0)
         self.assertIn("Diagnostic incident recorded", rec_res.stdout)
 
         # 2. List via CLI
-        list_res = subprocess.run([sys.executable, fb_script, "list"], capture_output=True, text=True)
+        list_res = proc.run_capture([sys.executable, fb_script, "list"])
         self.assertEqual(list_res.returncode, 0)
         self.assertIn("cli_test", list_res.stdout)
 
         # 3. Dry-run send via CLI
-        send_res = subprocess.run([sys.executable, fb_script, "send", "--dry-run"], capture_output=True, text=True)
+        send_res = proc.run_capture([sys.executable, fb_script, "send", "--dry-run"])
         self.assertEqual(send_res.returncode, 0)
         self.assertIn("Simulated dispatch", send_res.stdout)
 
         # 4. Dispatch via along_exec.py router
-        exec_res = subprocess.run([sys.executable, exec_script, "feedback", "list"], capture_output=True, text=True)
+        exec_res = proc.run_capture([sys.executable, exec_script, "feedback", "list"])
         self.assertEqual(exec_res.returncode, 0)
 
 

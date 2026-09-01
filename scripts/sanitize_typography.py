@@ -8,68 +8,20 @@ import os
 import sys
 import glob
 
-# Comprehensive replacement map for non-ASCII typography & invisible characters
-REPLACEMENTS = {
-    # Dashes, hyphens & minuses
-    '\u2014': '-',      # em-dash (-)
-    '\u2013': '-',      # en-dash (-)
-    '\u2212': '-',      # math minus (-)
-    '\u2011': '-',      # non-breaking hyphen (-)
-    '\u2012': '-',      # figure dash (-)
-    '\u2015': '-',      # horizontal bar (-)
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
-    # Quotes & apostrophes
-    '\u201c': '"',      # left double quotation mark (")
-    '\u201d': '"',      # right double quotation mark (")
-    '\u2018': "'",      # left single quotation mark (')
-    '\u2019': "'",      # right single quotation mark / apostrophe (')
-    '\u201a': "'",      # single low-9 quotation mark (")
-    '\u201e': '"',      # double low-9 quotation mark (")
-    '\u00ab': '"',      # left-pointing double angle quotation mark (")
-    '\u00bb': '"',      # right-pointing double angle quotation mark (")
-    '\u2032': "'",      # prime (')
-    '\u2033': '"',      # double prime (")
-    '\u2035': "'",      # reversed prime (')
+from alongkit import typography
 
-    # Ellipsis
-    '\u2026': '...',    # horizontal ellipsis (...)
+# The forbidden-character table lives in alongkit.typography, shared with the quality
+# gate in tests/. Two copies of the rule meant a character could be banned by the gate
+# and unknown to this sanitizer, or the reverse.
+REPLACEMENTS = typography.REPLACEMENTS
 
-    # Bullets
-    '\u2022': '-',      # bullet (-)
-    '\u2023': '-',      # triangular bullet (-)
-    '\u2043': '-',      # hyphen bullet (-)
-
-    # Invisible & special whitespace
-    '\u00a0': ' ',      # non-breaking space (NBSP)
-    '\u2007': ' ',      # figure space
-    '\u202f': ' ',      # narrow non-breaking space
-    '\u3000': ' ',      # ideographic space
-    '\u2002': ' ',      # en space
-    '\u2003': ' ',      # em space
-    '\u2009': ' ',      # thin space
-    '\u200a': ' ',      # hair space
-    '\u200b': '',       # zero-width space (ZWSP)
-    '\u200c': '',       # zero-width non-joiner (ZWNJ)
-    '\u200d': '',       # zero-width joiner (ZWJ)
-    '\ufeff': '',       # zero-width no-break space / byte order mark (BOM)
-}
 
 def sanitize_content(content):
-    modified = False
-    cleaned = content
+    """Replace every banned character; returns (cleaned, changed)."""
+    return typography.clean(content)
 
-    # Contextual replacement for em-dash with surrounding spaces: " - " instead of " - "
-    em_dash = '\u2014'
-    if f' {em_dash} ' in cleaned:
-        cleaned = cleaned.replace(f' {em_dash} ', ' - ')
-        modified = True
-
-    for char, replacement in REPLACEMENTS.items():
-        if char in cleaned:
-            cleaned = cleaned.replace(char, replacement)
-            modified = True
-
-    return cleaned, modified
 
 def sanitize_file(filepath):
     try:

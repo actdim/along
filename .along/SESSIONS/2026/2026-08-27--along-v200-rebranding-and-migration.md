@@ -5,7 +5,7 @@ slug: along-v200-rebranding-and-migration
 agent: antigravity
 branch: main
 commit: unknown
-summary: Major architectural milestone: transition to Along (actdim-along), ALONG-PROTOCOL v2.0.0, .along/ directory, along-* skill prefixes, and automated migration engine.
+summary: 'Major architectural milestone: transition to Along (actdim-along), ALONG-PROTOCOL v2.0.0, .along/ directory, along-* skill prefixes, and automated migration engine.'
 milestone: v2.0.0-along-transition
 issues_advanced: []
 issues_completed: []

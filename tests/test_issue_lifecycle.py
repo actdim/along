@@ -28,7 +28,6 @@ gate's job, not each engine's; see `[bug--quality-gates-skip-hidden-directories]
 """
 
 import os
-import subprocess
 import sys
 import tempfile
 import unittest
@@ -39,6 +38,7 @@ if SCRIPTS_DIR not in sys.path:
     sys.path.insert(0, SCRIPTS_DIR)
 
 import along_exec as ax
+from alongkit import frontmatter as fm, proc
 
 VALID_STATUSES = {"open", "in-progress", "blocked", "done"}
 
@@ -179,10 +179,23 @@ class TestFrontmatterFieldUpdate(unittest.TestCase):
         plain = "# Just a heading\n\nstatus: open\n"
         self.assertEqual(ax.update_frontmatter_fields(plain, {"status": "done"}), plain)
 
-    def test_08_unquoted_and_quoted_values_both_update(self):
+    def test_08_quoting_is_the_writers_job_not_the_callers(self):
+        """
+        Callers pass plain values; the writer decides quoting.
+
+        Before the shared front-matter module, the writer emitted `f"{key}: {value}"`
+        verbatim, so a caller had to pre-quote anything ambiguous and a title containing
+        a colon produced a block no strict YAML reader accepts. Six such files existed in
+        this repository. The value now round-trips as the string it was passed.
+        """
         src = IN_PROGRESS_ISSUE.replace('protocol_version: "2.2.8"', "protocol_version: 2.2.8")
-        out = ax.update_frontmatter_fields(src, {"protocol_version": '"2.2.9"'})
-        self.assertEqual(self._fm(out)["protocol_version"], '"2.2.9"')
+        out = ax.update_frontmatter_fields(src, {"protocol_version": "2.2.9"})
+        self.assertEqual(fm.parse(out)[0]["protocol_version"], "2.2.9")
+
+        # A value that would break the block unquoted is quoted automatically.
+        titled = ax.update_frontmatter_fields(src, {"title": "v3.0.0: Global Quality Revision"})
+        self.assertEqual(fm.parse(titled)[0]["title"], "v3.0.0: Global Quality Revision")
+        self.assertEqual(fm.lint(titled), [], "the emitted block must be valid YAML")
 
 
 class TestRepositoryEntityIntegrity(unittest.TestCase):
@@ -265,11 +278,8 @@ class TestIssueDoneCommand(unittest.TestCase):
         return path
 
     def _run_done(self, slug):
-        return subprocess.run(
-            [sys.executable, self.EXEC, "issue", "done", slug],
-            cwd=self.repo, capture_output=True, text=True, check=False,
-            encoding="utf-8", errors="replace",
-        )
+        return proc.run_capture(
+            [sys.executable, self.EXEC, "issue", "done", slug], cwd=self.repo)
 
     def test_11_unparseable_frontmatter_fails_loudly_and_moves_nothing(self):
         src = self._write("task--broken-header.md", "# No front-matter here\n\nstatus: open\n")

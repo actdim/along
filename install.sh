@@ -108,6 +108,12 @@ install_along_scripts() {
   local scripts_src="$SCRIPT_DIR/scripts"
   if [ -d "$scripts_src" ]; then
     cp -r "$scripts_src"/*.py "$along_bin/" 2>/dev/null || true
+    # The shared package must travel with the engines: they import `alongkit`, and
+    # Python resolves it from the running script's own directory. A copy of *.py alone
+    # produces a global install where every engine fails on ModuleNotFoundError.
+    rm -rf "$along_bin/alongkit"
+    cp -r "$scripts_src/alongkit" "$along_bin/alongkit" 2>/dev/null || true
+    find "$along_bin/alongkit" -name "__pycache__" -type d -prune -exec rm -rf {} + 2>/dev/null || true
     echo "-> Along tools installed -> $along_bin"
   fi
   local cfg_file="$along_home/config.json"
@@ -133,6 +139,12 @@ install_opencode() {  # generate flat commands + place along-init helper
   local scripts_src="$SCRIPT_DIR/scripts"
   if [ -d "$scripts_src" ]; then
     cp -r "$scripts_src"/*.py "$helper/" 2>/dev/null || true
+    # The shared package must travel with the engines: they import `alongkit`, and
+    # Python resolves it from the running script's own directory. A copy of *.py alone
+    # produces a global install where every engine fails on ModuleNotFoundError.
+    rm -rf "$helper/alongkit"
+    cp -r "$scripts_src/alongkit" "$helper/alongkit" 2>/dev/null || true
+    find "$helper/alongkit" -name "__pycache__" -type d -prune -exec rm -rf {} + 2>/dev/null || true
   fi
   [ -f "$src/along-init/protocol.md" ] && cp -f "$src/along-init/protocol.md" "$helper/protocol.md"
 

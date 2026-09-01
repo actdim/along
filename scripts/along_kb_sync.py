@@ -8,7 +8,19 @@ import shutil
 import argparse
 from datetime import datetime
 
-CURRENT_PROTOCOL_VERSION = "2.2.8"
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+
+from alongkit import bootstrap
+
+# This engine reads entity front-matter, so it needs ruamel.yaml. Resolve it before
+# anything imports it: an engine invoked as `python <path>/<engine>.py` may start
+# under an interpreter that has no dependencies prepared, which is exactly how the
+# installers and the documented skill commands invoke it.
+bootstrap.ensure_deps()
+
+from alongkit import frontmatter, markdown, repo, textio
+from alongkit.version import CURRENT_PROTOCOL_VERSION
+
 
 STANDARD_ARTICLES = [
     ("topic--architecture.md", "System Architecture & Flow", "architecture", ["architecture", "boundaries", "providers", "mcp", "dashboard"]),
@@ -25,51 +37,29 @@ LEGACY_FILE_MAPPING = {
     "MIGRATIONS.md": "topic--migrations.md",
 }
 
-IGNORED_DIRS = {
-    '.git', 'node_modules', 'dist', 'build', '.venv', 'venv',
-    'bin', 'obj', '.cache', 'target', 'vendor', '.gemini', '.claude', '.codex', '.archive'
-}
+# One definition, shared with every other engine and gate.
+IGNORED_DIRS = set(repo.IGNORED_DIRS) | set(repo.PROVIDER_DIRS)
 
 ILLUSTRATIVE_PLACEHOLDERS = {
     './target.md', 'target.md', './topic--<slug>.md', './topic--<name>.md',
     './topic--architecture.md', './topic--setup-and-workflow.md'
 }
 
-def parse_frontmatter(content):
-    match = re.match(r"^---\r?\n(.*?)\r?\n---\r?\n(.*)$", content, re.DOTALL)
-    if not match:
-        return {}, content
-    fm_str, body = match.group(1), match.group(2)
-    fm = {}
-    for line in fm_str.splitlines():
-        line = line.strip()
-        if not line or line.startswith("#"):
-            continue
-        if ":" in line:
-            k, v = line.split(":", 1)
-            k, v = k.strip(), v.strip().strip('"').strip("'")
-            if v.startswith("[") and v.endswith("]"):
-                items = [x.strip().strip('"').strip("'") for x in v[1:-1].split(",") if x.strip()]
-                fm[k] = items
-            else:
-                fm[k] = v
-    return fm, body
+# One tolerant reader, shared: a malformed entity is reported, never silently
+# reinterpreted. Engines that write use frontmatter.update, which refuses.
+parse_frontmatter = frontmatter.parse_tolerant
+
 
 def dump_frontmatter(fm, body):
-    lines = ["---"]
-    lines.append("protocol: along")
-    proto_ver = fm.get("protocol_version", CURRENT_PROTOCOL_VERSION)
-    lines.append(f'protocol_version: "{proto_ver}"')
-    for k, v in fm.items():
-        if k in ("protocol", "protocol_version"):
-            continue
-        if isinstance(v, list):
-            items_str = ", ".join(f'"{x}"' if " " in str(x) else str(x) for x in v)
-            lines.append(f"{k}: [{items_str}]")
-        else:
-            lines.append(f"{k}: {v}")
-    lines.append("---")
-    return "\n".join(lines) + "\n\n" + body.strip() + "\n"
+    """Render a NEW article. On an existing file use frontmatter.update instead, which
+    preserves comments, key order, and line endings.
+    """
+    fields = {'protocol': 'along',
+              'protocol_version': fm.get('protocol_version', frontmatter.quoted(CURRENT_PROTOCOL_VERSION))}
+    fields.update({k: v for k, v in fm.items()
+                   if k not in ('protocol', 'protocol_version')})
+    return frontmatter.render(fields, body)
+
 
 def is_along_wiki_article(content):
     """Checks if a file is already a compiled Along Wiki article (has protocol: along)."""
@@ -130,12 +120,14 @@ def ingest_and_archive_sources(repo_root, docs_dir, archive_dir, dry_run=False):
             if is_along_wiki_article(raw):
                 # Already a compiled wiki article -> move directly to docs/
                 if not dry_run:
-                    fm, body = parse_frontmatter(raw)
-                    slug = target_name.replace(".md", "")
-                    fm["slug"] = slug
-                    fm["protocol_version"] = fm.get("protocol_version", CURRENT_PROTOCOL_VERSION)
-                    with open(d_path, "w", encoding="utf-8") as fp:
-                        fp.write(dump_frontmatter(fm, body))
+                    fields, _ = parse_frontmatter(raw, path=s_path)
+                    slug = target_name.replace('.md', '')
+                    updates = {'slug': slug}
+                    if not fields.get('protocol_version'):
+                        updates['protocol_version'] = frontmatter.quoted(CURRENT_PROTOCOL_VERSION)
+                    textio.write_text(d_path, frontmatter.update(
+                        raw, updates, path=s_path,
+                        place_after={'protocol_version': 'protocol'}))
                 print(f"   Migrated article: {src_dir}/{item} -> docs/{target_name}")
                 normalized += 1
             else:
@@ -146,7 +138,7 @@ def ingest_and_archive_sources(repo_root, docs_dir, archive_dir, dry_run=False):
                     slug = target_name.replace(".md", "")
                     fm = {
                         "protocol": "along",
-                        "protocol_version": CURRENT_PROTOCOL_VERSION,
+                        "protocol_version": frontmatter.quoted(CURRENT_PROTOCOL_VERSION),
                         "slug": slug,
                         "title": title,
                         "type": "topic",
@@ -181,11 +173,13 @@ def ingest_and_archive_sources(repo_root, docs_dir, archive_dir, dry_run=False):
                 # It's an Along Wiki article: ensure standardized topic-- filename
                 if target_name != item and not dry_run:
                     dst_path = os.path.join(docs_dir, target_name)
-                    fm, body = parse_frontmatter(raw)
-                    fm["slug"] = target_name.replace(".md", "")
-                    fm["protocol_version"] = fm.get("protocol_version", CURRENT_PROTOCOL_VERSION)
-                    with open(dst_path, "w", encoding="utf-8") as fp:
-                        fp.write(dump_frontmatter(fm, body))
+                    fields, _ = parse_frontmatter(raw, path=f_path)
+                    updates = {'slug': target_name.replace('.md', '')}
+                    if not fields.get('protocol_version'):
+                        updates['protocol_version'] = frontmatter.quoted(CURRENT_PROTOCOL_VERSION)
+                    textio.write_text(dst_path, frontmatter.update(
+                        raw, updates, path=f_path,
+                        place_after={'protocol_version': 'protocol'}))
                     os.remove(f_path)
                     print(f"   Normalized wiki article name: docs/{item} -> docs/{target_name}")
                     normalized += 1
@@ -197,7 +191,7 @@ def ingest_and_archive_sources(repo_root, docs_dir, archive_dir, dry_run=False):
                     slug = target_name.replace(".md", "")
                     fm = {
                         "protocol": "along",
-                        "protocol_version": CURRENT_PROTOCOL_VERSION,
+                        "protocol_version": frontmatter.quoted(CURRENT_PROTOCOL_VERSION),
                         "slug": slug,
                         "title": title,
                         "type": "topic",
@@ -228,7 +222,7 @@ def bootstrap_docs_if_empty(docs_dir, repo_root, dry_run=False):
             slug = filename.replace(".md", "")
             fm = {
                 "protocol": "along",
-                "protocol_version": CURRENT_PROTOCOL_VERSION,
+                "protocol_version": frontmatter.quoted(CURRENT_PROTOCOL_VERSION),
                 "slug": slug,
                 "title": title,
                 "type": art_type,
@@ -498,39 +492,34 @@ def sync_kb(repo_root, check_only=False, strict=False):
                 raw_content = fp.read()
             fm, body = parse_frontmatter(raw_content)
 
-            needs_update = False
-            slug = fm.get("slug", f.replace(".md", ""))
-            title = fm.get("title")
+            updates = {}
+            slug = fm.get('slug') or f.replace('.md', '')
+            title = fm.get('title')
             if not title:
-                h1_m = re.search(r"^#\s+(.*)$", body, re.MULTILINE)
-                title = h1_m.group(1).strip() if h1_m else slug.replace("topic--", "").replace("-", " ").title()
-                fm["title"] = title
-                needs_update = True
+                h1_m = re.search(r'^#\s+(.*)$', body, re.MULTILINE)
+                title = (h1_m.group(1).strip() if h1_m
+                         else slug.replace('topic--', '').replace('-', ' ').title())
+                updates['title'] = title
+            if fm.get('protocol') != 'along':
+                updates['protocol'] = 'along'
+            if not fm.get('protocol_version'):
+                updates['protocol_version'] = frontmatter.quoted(CURRENT_PROTOCOL_VERSION)
+            if not fm.get('slug'):
+                updates['slug'] = slug
+            if not fm.get('type'):
+                updates['type'] = 'topic'
+            if not fm.get('created'):
+                updates['created'] = today
+            if not fm.get('tags'):
+                updates['tags'] = [slug.replace('topic--', '')]
 
-            if fm.get("protocol") != "along":
-                fm["protocol"] = "along"
-                needs_update = True
-            if not fm.get("protocol_version"):
-                fm["protocol_version"] = CURRENT_PROTOCOL_VERSION
-                needs_update = True
-            if not fm.get("slug"):
-                fm["slug"] = slug
-                needs_update = True
-            if not fm.get("type"):
-                fm["type"] = "topic"
-                needs_update = True
-            if not fm.get("created"):
-                fm["created"] = today
-                needs_update = True
-            if not fm.get("tags"):
-                fm["tags"] = [slug.replace("topic--", "")]
-                needs_update = True
-
-            if needs_update and not check_only:
-                fm["updated"] = today
-                new_content = dump_frontmatter(fm, body)
-                with open(file_path, "w", encoding="utf-8") as fp:
-                    fp.write(new_content)
+            if updates and not check_only:
+                updates['updated'] = today
+                new_content = frontmatter.update(
+                    raw_content, updates, path=file_path,
+                    place_after={'protocol_version': 'protocol', 'updated': 'created'})
+                if new_content != raw_content:
+                    textio.write_text(file_path, new_content)
 
             rel_links = re.findall(r"\[([^\]]+)\]\(([^\)]+)\)", body)
             doc_cross_links[f] = []
@@ -558,7 +547,7 @@ def sync_kb(repo_root, check_only=False, strict=False):
     index_path = os.path.join(docs_dir, "INDEX.md")
     index_fm = {
         "protocol": "along",
-        "protocol_version": CURRENT_PROTOCOL_VERSION,
+        "protocol_version": frontmatter.quoted(CURRENT_PROTOCOL_VERSION),
         "slug": "INDEX",
         "title": "Knowledge Base Topic Index",
         "type": "index",

@@ -6,7 +6,7 @@ agent: antigravity
 branch: main
 commit: pending
 summary: Hierarchical multi-project & submodule dependency discovery engine with adaptive hooks and Wiki integration
-milestone: null
+milestone: []
 issues_advanced: []
 issues_completed: [hierarchical-dep-scan-and-wiki-integration]
 decisions: []

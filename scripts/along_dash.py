@@ -4,7 +4,7 @@
 #     "fastapi>=0.110.0",
 #     "uvicorn>=0.28.0",
 #     "pydantic>=2.0.0",
-#     "pyyaml>=6.0.0",
+#     "ruamel.yaml>=0.18",
 #     "rich>=13.0.0",
 # ]
 # ///
