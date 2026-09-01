@@ -3,7 +3,8 @@ protocol: along
 protocol_version: 2.2.8
 slug: migration-deletes-destination-without-backup
 type: bug
-status: open
+status: done
+completed: 2026-09-01
 priority: critical
 created: 2026-09-01
 updated: 2026-09-01
@@ -100,8 +101,44 @@ tests).
 
 ## Acceptance Criteria
 
-- [ ] Collision fixture test proves zero content loss.
-- [ ] `--dry-run` implemented and used by tool-to-tool invocations.
-- [ ] Backup directory created before destructive steps.
-- [ ] Migration state file honored; second run is a no-op.
-- [ ] Installer no longer migrates implicitly.
+- [x] Collision fixture test proves zero content loss.
+- [x] `--dry-run` implemented and used by tool-to-tool invocations.
+- [x] Backup directory created before destructive steps.
+- [x] Migration state file honored; second run is a no-op.
+- [x] Installer no longer migrates implicitly.
+
+## Resolution
+
+Every file operation in the engine now goes through `alongkit/migration.py`, a new shared
+module holding the collision policy, the on-disk backup, and the plan. `migrate_protocol.py`
+contains no `shutil.move`, `shutil.rmtree`, `os.remove` or `os.rename` of its own, and
+`TestNoRawFileOperations` fails if one reappears - the point being that each of the
+deletions this issue is about was a single call that no test had been written to catch.
+
+| REQ | Where |
+| :--- | :--- |
+| REQ-1 dry run | `--dry-run` / `--apply` on the engine, and dry run is the default whenever stdin and stdout are not both a TTY. Every step honours it: `sanitizer.Mode.DRY_RUN` in step 5, `--check` into `along_kb_sync` in step 7, `rewrite_inbound_links(dry_run=True)` in step 8. Both modes end with the same report; a dry run also prints the full operation list. |
+| REQ-2 never delete a destination | `Migration.adopt` dispatches on `migration.classify`: `union_merge` for `DECISIONS.md` and `HISTORY.md` (section-wise for `## ` files, line-wise otherwise, deduplicated, destination order first), keep-destination for the projections, and `sidecar_path` preservation as `<name>.legacy.md` for everything else. Every collision is reported. |
+| REQ-3 backup | `Migration.ensure_backup` copies `.along/` and `.agents/` to `.along/.migration-backup/<timestamp>/` before the first modification of an existing file, and prints the path. It is called from the mutating primitives rather than from each call site, so the guarantee does not depend on remembering it. The directory ignores itself with its own `.gitignore` instead of editing the user's. |
+| REQ-4 state | `.along/.protocol-version`, written last so a half-finished run is not recorded as complete. A second run prints `already at v<version>; nothing to do`; `--force` overrides. |
+| REQ-5 strict reads | `errors="ignore"` is gone from the engine. `detect_protocol_version`, the entity and session loops, the AGENTS.md rewrite and `.code-review-graph-ignore` all read strictly; an undecodable file is recorded by `note_skipped` and listed in the report. |
+| REQ-6 no implicit migration | `install.ps1 -Migrate` and `install.sh --migrate`. Without the flag both print the dry-run and apply commands and touch nothing. `along_update.py` passes `--apply` or `--dry-run` explicitly, matching its own flag. |
+| REQ-7 fixtures only | The three tests that invoked the engine now pass `--apply` against temporary trees, and the non-interactive default means a forgotten flag inspects rather than writes. |
+| REQ-8 collision regression | `tests/test_migration.py`, 22 cases. The central one builds a repository with a populated `.agents/` beside a populated `.along/` and asserts that both ADRs, both history lines, the destination entity body and the legacy body all survive. |
+
+Found while converting, neither of which had an issue:
+
+- The protocol-injection walk in step 4 would have descended into the backup it had just
+  written, rewriting front-matter inside the copy meant to preserve it. `os.walk` now
+  prunes `.migration-backup`.
+- The two marker-dedup substitutions on `AGENTS.md` used `+` and a hardcoded `\n`, and
+  `\s*` swallows the marker's own line ending, so every run over an already-current CRLF
+  `AGENTS.md` rewrote two line endings as LF and reported a migration. Now `{2,}`, so they
+  fire only on genuine duplication, and the replacement uses the file's own newline. Same
+  family as the legacy renames guarded in `eb9fea7`; reading the dry-run plan of a
+  repository with nothing to migrate is what exposed it, which is the plan earning its
+  keep on its first use.
+
+Deliberately unchanged: graph validation errors still exit 0. Making a cycle fail the run
+is a behaviour change for `/along-update` callers and belongs with the honesty pass, not
+with the data-loss fix.

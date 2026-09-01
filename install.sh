@@ -11,12 +11,14 @@
 #   ./install.sh                        # all (default), copy
 #   ./install.sh --target=claude        # claude | codex | opencode | antigravity | both (claude+codex) | all
 #   ./install.sh --symlink              # symlink skill folders (claude/codex/antigravity); opencode commands are always generated
+#   ./install.sh --migrate              # also migrate this repository's .along/ structure
 #   ./install.sh --claude-home=DIR --codex-home=DIR --opencode-home=DIR --antigravity-home=DIR
 set -euo pipefail
 
 TARGET=all
 SYMLINK=0
 INSTALL_DEPS=0
+MIGRATE=0
 CLAUDE_HOME="${CLAUDE_HOME:-$HOME/.claude}"
 CODEX_HOME="${CODEX_HOME:-$HOME/.codex}"
 OPENCODE_HOME="${OPENCODE_HOME:-$HOME/.config/opencode}"
@@ -46,6 +48,7 @@ for arg in "$@"; do
     --target=*)           TARGET="${arg#*=}" ;;
     --symlink)            SYMLINK=1 ;;
     --install-deps)       INSTALL_DEPS=1 ;;
+    --migrate)            MIGRATE=1 ;;
     --claude-home=*)      CLAUDE_HOME="${arg#*=}" ;;
     --codex-home=*)       CODEX_HOME="${arg#*=}" ;;
     --opencode-home=*)    OPENCODE_HOME="${arg#*=}" ;;
@@ -250,9 +253,21 @@ if [ "$do_antigravity" -eq 1 ]; then
   configure_mcp_server "$ANTIGRAVITY_HOME/mcp_config.json"
 fi
 
-if command -v python3 >/dev/null 2>&1 && { [ -d "$SCRIPT_DIR/.along" ] || [ -d "$SCRIPT_DIR/.agents" ]; }; then
-  echo "-> Running Along versioned protocol migration for v2.0.0 compatibility..."
-  python3 "$SCRIPT_DIR/scripts/migrate_protocol.py" "$SCRIPT_DIR"
+# Migrate this repository's protocol structure, only when asked (--migrate). Installing
+# used to migrate whatever repository the installer happened to sit in, and the migration
+# engine rewrites front-matter, moves entities and deletes legacy directories. See
+# [bug--migration-deletes-destination-without-backup].
+if [ -d "$SCRIPT_DIR/.along" ] || [ -d "$SCRIPT_DIR/.agents" ]; then
+  if ! command -v python3 >/dev/null 2>&1; then
+    echo "-> [Note] python3 not found; skipping the protocol migration."
+  elif [ "$MIGRATE" -eq 1 ]; then
+    echo "-> Running the Along protocol migration for this repository..."
+    python3 "$SCRIPT_DIR/scripts/migrate_protocol.py" "$SCRIPT_DIR" --apply
+  else
+    echo "-> [Note] This repository carries Along state. Installing does not migrate it."
+    echo "   Preview:  python3 scripts/migrate_protocol.py . --dry-run"
+    echo "   Apply:    python3 scripts/migrate_protocol.py . --apply   (or re-run the installer with --migrate)"
+  fi
 fi
 
 echo "Done. Claude/Codex/Antigravity skills register next session as /along-* (/along-init, /along-update, /along-dash, etc.); OpenCode picks up /commands, code-review-graph MCP is configured, and all read AGENTS.md natively."

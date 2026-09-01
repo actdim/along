@@ -9,11 +9,13 @@
 #   powershell -NoProfile -ExecutionPolicy Bypass -File install.ps1                  # all (default), copy
 #   powershell ... -File install.ps1 -Target claude    # claude | codex | opencode | antigravity | both | all
 #   powershell ... -File install.ps1 -Symlink          # symlink skill folders (claude/codex/antigravity)
+#   powershell ... -File install.ps1 -Migrate          # also migrate this repository's .along/ structure
 
 param(
     [ValidateSet('claude', 'codex', 'opencode', 'antigravity', 'both', 'all')][string]$Target = 'all',
     [switch]$Symlink,
     [switch]$InstallDeps,
+    [switch]$Migrate,
     [string]$ClaudeHome      = (Join-Path $env:USERPROFILE '.claude'),
     [string]$CodexHome       = (Join-Path $env:USERPROFILE '.codex'),
     [string]$OpencodeHome    = (Join-Path $env:USERPROFILE '.config\opencode'),
@@ -302,11 +304,24 @@ foreach ($t in $targets) {
     }
 }
 
-# --- Auto-migrate current repository .along/ or .agents/ metadata if present ---
-$py = Get-Command 'python' -ErrorAction SilentlyContinue
-if ($py -and ((Test-Path (Join-Path $PSScriptRoot '.along')) -or (Test-Path (Join-Path $PSScriptRoot '.agents')))) {
-    Write-Host "-> Running Along versioned protocol migration for v2.0.0 compatibility..."
-    & python (Join-Path $PSScriptRoot 'scripts\migrate_protocol.py') $PSScriptRoot
+# --- Migrate this repository's protocol structure, only when asked (-Migrate) ---
+# Installing used to migrate whatever repository the installer happened to sit in. The
+# migration engine rewrites front-matter, moves entities and deletes legacy directories,
+# so an install could silently change a working tree nobody had pointed it at. See
+# [bug--migration-deletes-destination-without-backup].
+$hasState = (Test-Path (Join-Path $PSScriptRoot '.along')) -or (Test-Path (Join-Path $PSScriptRoot '.agents'))
+if ($hasState) {
+    $py = Get-Command 'python' -ErrorAction SilentlyContinue
+    if (-not $py) {
+        Write-Host "-> [Note] python not found; skipping the protocol migration."
+    } elseif ($Migrate) {
+        Write-Host "-> Running the Along protocol migration for this repository..."
+        & python (Join-Path $PSScriptRoot 'scripts\migrate_protocol.py') $PSScriptRoot --apply
+    } else {
+        Write-Host "-> [Note] This repository carries Along state. Installing does not migrate it."
+        Write-Host "   Preview:  python scripts\migrate_protocol.py . --dry-run"
+        Write-Host "   Apply:    python scripts\migrate_protocol.py . --apply   (or re-run the installer with -Migrate)"
+    }
 }
 
 Write-Host "Done. Claude/Codex/Antigravity skills register next session as /along-* (/along-init, /along-update, /along-dash, etc.); OpenCode picks up /commands, code-review-graph MCP is configured, and all read AGENTS.md natively."

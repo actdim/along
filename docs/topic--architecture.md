@@ -143,6 +143,7 @@ reader, so ADR search returned zero results in every released version.
 | `alongkit/sanitizer.py` | Which files that table governs, strict reads, the modes, and the JSON report. |
 | `alongkit/gates.py` | Pre-commit and pre-release test, typography, and Markdown link gates. |
 | `alongkit/transaction.py` | Snapshot and byte-exact rollback around a multi-file mutation. |
+| `alongkit/migration.py` | Collision policy, on-disk backup, and the dry-run plan behind the migration engine. |
 | `alongkit/semver.py` | Version parsing, increments, comparison. |
 | `alongkit/version.py` | The protocol version constant, declared exactly once. |
 | `alongkit/bootstrap.py` | Dependency resolution for a directly invoked engine. |
@@ -203,6 +204,29 @@ records what each of them cost:
 The release also stages only the paths it wrote, rather than `git add -A`, and touches no
 machine-global state: it used to finish by running `install.ps1 -Target all`, which deletes
 and recreates `~/.claude/rules`.
+
+### A migration merges; it does not choose a winner
+
+The same failure in a different shape. The migration engine moved legacy `.agents/`
+content onto `.along/` by deleting the destination first, so a repository that held both -
+a partial migration, or two branches migrating separately - lost the newer `DECISIONS.md`
+and `HISTORY.md`. Both are append-only by protocol, so nothing could bring them back.
+
+`alongkit/migration.py` makes the destination untouchable. On a collision the file class
+decides: append-only files are union-merged the way `.gitattributes` already merges them
+across branches, derived projections keep the destination and drop the legacy copy for
+recompilation, and anything else keeps the destination with the legacy copy preserved
+beside it as `<name>.legacy.md`. Before the first change the state directories are copied
+to `.along/.migration-backup/<timestamp>/`, and the copy ignores itself so it never enters
+history.
+
+Where the release engine needs an in-memory transaction - undo everything, the tests
+failed - a migration needs the opposite: a durable copy that outlives the process, because
+it is meant to be run, inspected, and re-run. What the two share is the rule that produced
+both defects: an operation that writes before it is sure, and cannot be undone, has no
+business being unattended. Which is why the migration is a dry run for every caller that
+is not a human at a terminal, and why installing no longer migrates at all. See
+[ADR-2026-09-01--migration-never-deletes-a-destination](../.along/DECISIONS.md).
 
 ### Three invocation paths, one package
 

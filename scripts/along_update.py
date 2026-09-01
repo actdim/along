@@ -281,8 +281,13 @@ def apply_migration_to_context(ctx_dir, protocol_text, migrate_script, is_root=T
     agents_dir = os.path.join(ctx_dir, ".agents")
     if os.path.isdir(along_dir) or os.path.isdir(agents_dir):
         if migrate_script:
-            print(f"   Executing migration engine in {rel_display}...")
-            code = proc.run_passthrough([sys.executable, migrate_script, ctx_dir])
+            # The mode is stated explicitly. The migration engine defaults to a dry run
+            # for any caller that is not a human at a terminal, precisely so that an
+            # engine invoking it has to say which one it means
+            # (`[bug--migration-deletes-destination-without-backup]`).
+            mode_flag = "--dry-run" if dry_run else "--apply"
+            print(f"   Executing migration engine in {rel_display} ({mode_flag})...")
+            code = proc.run_passthrough([sys.executable, migrate_script, ctx_dir, mode_flag])
             if code != 0:
                 print(f"   [WARN] Migration engine returned code {code} for {ctx_dir}")
         else:

@@ -201,7 +201,7 @@ This repository is `Along` (`actdim-along`) - the provider-agnostic agent-contex
 - **Skills Source**: `skills/` (`along-init`, `along-update`, `along-dash`, `along-wrap`, `along-commit`, `along-build`, `along-test`, `along-dev`, `along-team`, `along-kb-sync`, `along-kb-search`, `along-issue-sync`, `along-context-sync`, `along-decision-sync`, `along-history-sync`, `along-graph-check`, `along-dep-scan`, `along-version-bump`, `along-feedback`).
 - **Engine Source**: `scripts/` (one engine per skill) over the shared implementation
   package `scripts/alongkit/` (`repo`, `frontmatter`, `entities`, `proc`, `textio`,
-  `markdown`, `typography`, `sanitizer`, `transaction`, `gates`, `semver`, `version`,
+  `markdown`, `typography`, `sanitizer`, `transaction`, `migration`, `gates`, `semver`, `version`,
   `bootstrap`, `cli`). Helpers are defined there and nowhere else: two tests in
   `tests/test_alongkit.py` fail if an engine defines a name that already exists in the
   package, or that another engine defines. Runtime dependency: `ruamel.yaml` (see
@@ -219,6 +219,17 @@ This repository is `Along` (`actdim-along`) - the provider-agnostic agent-contex
   is recorded by `alongkit.transaction.FileTransaction` and restored byte for byte if a
   later step fails. A release never invokes an installer or touches machine-global
   state. See ADR-2026-09-01--release-gates-before-mutations in `.along/DECISIONS.md`.
+- **Migration Path (`migrate_protocol.py`)**: never deletes a destination file. On a
+  collision, append-only files (`DECISIONS.md`, `HISTORY.md`) are union-merged, derived
+  projections keep the destination, and any other legacy copy is preserved as
+  `<name>.legacy.md` and reported. `.along/` and `.agents/` are copied to
+  `.along/.migration-backup/<timestamp>/` before the first change; reads are strict and
+  undecodable files are skipped and reported; `.along/.protocol-version` makes a second
+  run a no-op (`--force` overrides). Dry run is the default for every caller that is not
+  a human at a terminal, so `--apply` is mandatory from a script, and installing no
+  longer migrates unless given `-Migrate` / `--migrate`. The primitives live in
+  `alongkit.migration`. See ADR-2026-09-01--migration-never-deletes-a-destination in
+  `.along/DECISIONS.md`.
 - **Install Commands**:
   - Windows: `powershell -NoProfile -ExecutionPolicy Bypass -File install.ps1 -Target all` (or `install.bat`).
   - Linux / macOS: `bash install.sh`.

@@ -285,7 +285,11 @@ class TestAlongSkillsAndScripts(unittest.TestCase):
             target = os.path.join(tmp, "AGENTS.md")
             with open(target, "w", encoding="utf-8", newline="") as f:
                 f.write(agents_md)
-            run_engine([sys.executable, mig_script, tmp])
+            # `--apply` is explicit because the engine dry-runs for any caller that is
+            # not a human at a terminal, which is what stopped installs and test runs
+            # from migrating repositories nobody pointed them at
+            # (`[bug--migration-deletes-destination-without-backup]`).
+            run_engine([sys.executable, mig_script, tmp, "--apply"])
             with open(target, "r", encoding="utf-8") as f:
                 return f.read()
 
@@ -373,7 +377,7 @@ class TestAlongSkillsAndScripts(unittest.TestCase):
         self.assertTrue(os.path.exists(mig_script), "scripts/migrate_protocol.py must exist")
 
         with hermetic.repo_fixture(prefix="along-migrate-") as fixture:
-            res = run_engine([sys.executable, mig_script, fixture])
+            res = run_engine([sys.executable, mig_script, fixture, "--apply"])
             self.assertEqual(res.returncode, 0, f"migrate_protocol.py failed:\n{res.stderr}")
             self.assertIn("migrations & validations completed successfully", res.stdout)
             self.assertNotIn("[ERROR]", res.stdout,
@@ -597,7 +601,7 @@ class TestAlongSkillsAndScripts(unittest.TestCase):
 
             # 2. Run migration script
             mig_script = os.path.join(REPO_ROOT, "scripts", "migrate_protocol.py")
-            res = run_engine([sys.executable, mig_script, temp_dir])
+            res = run_engine([sys.executable, mig_script, temp_dir, "--apply"])
             self.assertEqual(res.returncode, 0, f"migrate_protocol failed in test:\n{res.stderr}")
 
             # 3. Assertions

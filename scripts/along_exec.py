@@ -206,7 +206,8 @@ Along Protocol Tools:
   version-bump   Increment project version and create release commit
   update         Update Along protocol and skills across workspaces
   dash           Launch executive dashboard and OpenAPI service
-  migrate        Run protocol migration and YAML front-matter fixes
+  migrate        Run protocol migration and YAML front-matter fixes; prints the plan by
+                 default from a script, --apply performs it
   sanitize       Check (default) or repair non-ASCII typography; --write to apply
   feedback       Global diagnostics, error capture, and feedback dispatch (Telegram/Webhook/File)
 """)

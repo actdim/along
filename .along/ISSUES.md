@@ -12,7 +12,6 @@
 - [ ] `(bug)` [kb-sync-ingestion-not-idempotent](file://.along/ISSUES/bug--kb-sync-ingestion-not-idempotent.md)
 - [ ] `(bug)` [kb-sync-rewrites-unrelated-numbered-links](file://.along/ISSUES/bug--kb-sync-rewrites-unrelated-numbered-links.md)
 - [ ] `(bug)` [link-gates-skip-along-directory](file://.along/ISSUES/bug--link-gates-skip-along-directory.md)
-- [ ] `(bug)` [migration-deletes-destination-without-backup](file://.along/ISSUES/bug--migration-deletes-destination-without-backup.md)
 - [ ] `(bug)` [quality-gates-skip-hidden-directories](file://.along/ISSUES/bug--quality-gates-skip-hidden-directories.md)
 - [ ] `(bug)` [skill-commands-reference-missing-script-paths](file://.along/ISSUES/bug--skill-commands-reference-missing-script-paths.md)
 - [ ] `(bug)` [team-skill-uses-provider-specific-subagent-api](file://.along/ISSUES/bug--team-skill-uses-provider-specific-subagent-api.md)
@@ -37,6 +36,7 @@
 <!-- Planned or deferred issues -->
 
 ## Done (recent)
+- [x] `(bug)` [migration-deletes-destination-without-backup](file://.along/ISSUES/done/bug--migration-deletes-destination-without-backup.md)
 - [x] `(bug)` [release-engine-mutates-before-tests-and-reinstalls-globals](file://.along/ISSUES/done/bug--release-engine-mutates-before-tests-and-reinstalls-globals.md)
 - [x] `(bug)` [typography-sanitizer-destroys-non-utf8-files](file://.along/ISSUES/done/bug--typography-sanitizer-destroys-non-utf8-files.md)
 - [x] `(bug)` [tests-mutate-working-tree](file://.along/ISSUES/done/bug--tests-mutate-working-tree.md)

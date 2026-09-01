@@ -48,7 +48,7 @@ Three recurring mechanisms produce most defects:
 - [ ] `[bug--skill-commands-reference-missing-script-paths]`
 - [ ] `[bug--commit-binds-arbitrary-active-issue]`
 - [x] `[bug--typography-sanitizer-destroys-non-utf8-files]` - strict reads, check-by-default gates, scope ADR (fixed 2026-09-01)
-- [ ] `[bug--migration-deletes-destination-without-backup]`
+- [x] `[bug--migration-deletes-destination-without-backup]` - collision policy, backup, dry-run default, migration state (fixed 2026-09-01)
 - [x] `[bug--release-engine-mutates-before-tests-and-reinstalls-globals]` - gates before mutations, transactional rollback, no global install, tag and CHANGELOG (fixed 2026-09-01)
 - [x] `[bug--handrolled-yaml-loses-block-lists]` - front-matter on ruamel.yaml; 6 invalid files repaired (fixed 2026-09-01)
 - [ ] `[bug--installer-parity-and-destructive-rules-overwrite]`
@@ -97,15 +97,23 @@ rather than only documented:
   (a child process emitting non-ASCII output decodes; an engine runs from a flat file
   copy; a block sequence survives an edit) rather than the presence of documentation.
 
-**Step 2 (stop the bleeding) in progress.** Two of the four destructive engines are done:
-the typography sanitizer, and now
-`[bug--release-engine-mutates-before-tests-and-reinstalls-globals]`. The release engine
-adds the third structural block against the mechanisms above: a mutation that is not
-preceded by its gate, and a gate whose failure cannot undo what already ran.
-`alongkit/transaction.py` makes rollback a primitive rather than a per-engine decision, so
-the remaining destructive engines (`migration`, `installer`) have something to build on.
-Remaining in step 2: `[bug--migration-deletes-destination-without-backup]` and
-`[bug--installer-parity-and-destructive-rules-overwrite]`.
+**Step 2 (stop the bleeding) nearly complete.** Three of the four destructive engines are
+done: the typography sanitizer, the release engine
+(`[bug--release-engine-mutates-before-tests-and-reinstalls-globals]`), and now the
+migration engine (`[bug--migration-deletes-destination-without-backup]`). The release
+engine added the structural block against a mutation that is not preceded by its gate; the
+migration engine adds the one against a mutation nobody asked for. Two primitives now
+cover the two shapes of that problem: `alongkit/transaction.py` for an operation that must
+be undone in full when a later step fails, and `alongkit/migration.py` for one that is
+inspected before it runs and leaves a durable copy behind. Both engines are now unable to
+reach the filesystem except through them, which a test enforces.
+
+The third mechanism in the root-cause analysis is now blocked as well: the migration was
+the last engine invoked implicitly, by the installer and by the test suite, against
+whatever repository they happened to sit in. Nothing writes unasked any more.
+
+Remaining in step 2: `[bug--installer-parity-and-destructive-rules-overwrite]`, which
+shares the same defect in PowerShell (`Remove-Item -Recurse -Force ~/.claude/rules`).
 
 Found and fixed while converting, none of which had an issue: `migrate_protocol.py` was
 reverting front-matter repairs on every test run, the npm test gate was a silent no-op

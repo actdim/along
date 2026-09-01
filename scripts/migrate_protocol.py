@@ -16,14 +16,26 @@ Executes sequential, version-specific migration steps on target repository's str
                      - Migrates ~/.config/opencode/actdim-agents to actdim-along and ~/.cache
 
 Usage:
-    python scripts/migrate_protocol.py [TARGET_REPO_ROOT]
+    python scripts/migrate_protocol.py [TARGET_REPO_ROOT] [--dry-run|--apply] [--force]
+                                       [--no-backup]
+
+The engine never deletes a destination file. On a collision it merges (append-only
+files), keeps the destination (projections, recompiled later), or preserves the legacy
+copy beside it, and it copies the whole state directory into
+`.along/.migration-backup/<timestamp>/` before the first modification. All of that is
+implemented once in `alongkit.migration`; see
+`[bug--migration-deletes-destination-without-backup]`.
+
+Dry-run is the default whenever the engine is not talking to a human terminal, so a
+tool that invokes it (an installer, a test, another engine) gets a plan and has to ask
+for the mutation explicitly with `--apply`.
 """
 
+import argparse
 import os
 import re
 import sys
 import glob
-import shutil
 from datetime import datetime
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
@@ -36,7 +48,7 @@ from alongkit import bootstrap
 # installers and the documented skill commands invoke it.
 bootstrap.ensure_deps()
 
-from alongkit import frontmatter, proc, repo, sanitizer, textio
+from alongkit import frontmatter, migration, proc, repo, sanitizer, textio
 from alongkit.version import CURRENT_PROTOCOL_VERSION
 
 
@@ -63,10 +75,19 @@ def dump_yaml_frontmatter(fm, body):
 
 
 def detect_protocol_version(repo_root):
+    """The protocol version the repository declares, from its AGENTS.md marker.
+
+    Read strictly. The previous `errors="ignore"` silently dropped undecodable bytes,
+    and a version detected from a mangled read decides which migration steps run.
+    """
     agents_md = os.path.join(repo_root, "AGENTS.md")
     if os.path.exists(agents_md):
-        with open(agents_md, "r", encoding="utf-8", errors="ignore") as f:
-            content = f.read()
+        try:
+            content = textio.read_text(agents_md)
+        except UnicodeDecodeError as exc:
+            print(f"   [WARN] AGENTS.md is not valid UTF-8 ({exc.reason}); "
+                  "assuming the oldest protocol version.", file=sys.stderr)
+            return "1.0.0"
         m = re.search(r"(?:ALONG-PROTOCOL|ACTDIM-AGENTS-PROTOCOL) v(\d+\.\d+\.\d+)", content)
         if m:
             return m.group(1)
@@ -75,44 +96,50 @@ def detect_protocol_version(repo_root):
 # ----------------------------------------------------------------------
 # Step 1: v1.0.0 -> v1.1.0 (Tasks -> Issues)
 # ----------------------------------------------------------------------
-def step_migrate_v1_1_tasks_to_issues(working_dir):
+def step_migrate_v1_1_tasks_to_issues(mig, working_dir):
     updated = False
     tasks_md = os.path.join(working_dir, "TASKS.md")
     issues_md = os.path.join(working_dir, "ISSUES.md")
     if os.path.exists(tasks_md) and not os.path.exists(issues_md):
-        with open(tasks_md, "r", encoding="utf-8") as f:
-            c = f.read()
-        c = re.sub(r"# Tasks", "# Issues", c)
-        c = re.sub(r"TASKS", "ISSUES", c)
-        with open(issues_md, "w", encoding="utf-8") as f:
-            f.write(c)
-        os.remove(tasks_md)
-        updated = True
+        try:
+            c = textio.read_text(tasks_md)
+        except UnicodeDecodeError as exc:
+            mig.note_skipped(tasks_md, f"not valid UTF-8 ({exc.reason})")
+            c = None
+        if c is not None:
+            c = re.sub(r"# Tasks", "# Issues", c)
+            c = re.sub(r"TASKS", "ISSUES", c)
+            mig.write(issues_md, c, announce=True)
+            mig.discard(tasks_md, "renamed to ISSUES.md")
+            updated = True
 
     tasks_dir = os.path.join(working_dir, "TASKS")
     issues_dir = os.path.join(working_dir, "ISSUES")
     if os.path.exists(tasks_dir) and not os.path.exists(issues_dir):
-        os.rename(tasks_dir, issues_dir)
+        mig.move(tasks_dir, issues_dir, "TASKS/ renamed to ISSUES/")
         updated = True
     return updated
 
 # ----------------------------------------------------------------------
 # Step 2: v1.1.0 -> v1.3.0 (KB & Code Review Graph Scaffolding)
 # ----------------------------------------------------------------------
-def step_migrate_v1_3_kb_scaffolding(repo_root, working_dir):
+def step_migrate_v1_3_kb_scaffolding(mig, repo_root, working_dir):
     # .code-review-graph-ignore
     crg_ignore = os.path.join(repo_root, ".code-review-graph-ignore")
     created = 0
     if not os.path.exists(crg_ignore):
-        with open(crg_ignore, "w", encoding="utf-8") as f:
-            f.write("# Code Review Graph Exclusions\nnode_modules/\ndist/\nbuild/\nout/\n.git/\n.along/SESSIONS/\n.agents/SESSIONS/\n*.min.js\n*.bundle.js\n*.pyc\n__pycache__/\n")
+        mig.write(crg_ignore,
+                  "# Code Review Graph Exclusions\nnode_modules/\ndist/\nbuild/\nout/\n"
+                  ".git/\n.along/SESSIONS/\n.agents/SESSIONS/\n*.min.js\n*.bundle.js\n"
+                  "*.pyc\n__pycache__/\n",
+                  announce=True)
         created += 1
     return created
 
 # ----------------------------------------------------------------------
 # Step 3: v1.3.3 -> v1.5.0 (Entity Ecosystem, Retro-Synthesis & Checklists)
 # ----------------------------------------------------------------------
-def step_migrate_v1_5_entity_ecosystem(repo_root, working_dir):
+def step_migrate_v1_5_entity_ecosystem(mig, repo_root, working_dir):
     today_str = datetime.now().strftime("%Y-%m-%d")
     today_year = datetime.now().strftime("%Y")
 
@@ -126,10 +153,10 @@ def step_migrate_v1_5_entity_ecosystem(repo_root, working_dir):
         os.path.join(working_dir, "CHECKLISTS"),
     ]
     for d in dirs:
-        os.makedirs(d, exist_ok=True)
+        mig.makedirs(d)
         gitkeep = os.path.join(d, ".gitkeep")
-        if not os.path.exists(gitkeep) and len(os.listdir(d)) == 0:
-            open(gitkeep, "a").close()
+        if not os.path.isdir(d) or len(os.listdir(d)) == 0:
+            mig.touch(gitkeep)
 
     # 2. Synthesize standard Checklists if missing
     checklists_dir = os.path.join(working_dir, "CHECKLISTS")
@@ -169,8 +196,7 @@ def step_migrate_v1_5_entity_ecosystem(repo_root, working_dir):
                 "created": today_str,
                 "updated": today_str
             }
-            with open(cpath, "w", encoding="utf-8") as f:
-                f.write(dump_yaml_frontmatter(fm, data["body"]))
+            mig.write(cpath, dump_yaml_frontmatter(fm, data["body"]))
 
     # 3. Analyze past work to retroactively synthesize Milestones
     milestones_dir = os.path.join(working_dir, "MILESTONES")
@@ -195,8 +221,7 @@ def step_migrate_v1_5_entity_ecosystem(repo_root, working_dir):
                 "progress_pct": 100
             }
             body_past = "# Milestone: v1.3.0 Knowledge Base & Code Graph\n\nDelivered structured documentation architecture, /along-init-kb, /along-search-kb, /along-sync-kb, /along-check-graph, and code-review-graph MCP integration.\n"
-            with open(past_m, "w", encoding="utf-8") as f:
-                f.write(dump_yaml_frontmatter(fm_past, body_past))
+            mig.write(past_m, dump_yaml_frontmatter(fm_past, body_past))
 
         current_m = os.path.join(milestones_dir, "v2.0.0-along-transition.md")
         fm_curr = {
@@ -210,8 +235,7 @@ def step_migrate_v1_5_entity_ecosystem(repo_root, working_dir):
             "progress_pct": 50
         }
         body_curr = "# Milestone: v2.0.0 Along Transition\n\nDelivers isolated `.along/` directory, protocol: along metadata validation, /along-dash visual analytics, and full namespaced along-* command suite.\n"
-        with open(current_m, "w", encoding="utf-8") as f:
-            f.write(dump_yaml_frontmatter(fm_curr, body_curr))
+        mig.write(current_m, dump_yaml_frontmatter(fm_curr, body_curr))
 
     # 4. Enrich all ISSUES front-matter (with milestone linkage and protocol: along)
     all_issue_files = done_issues + active_issues
@@ -222,7 +246,11 @@ def step_migrate_v1_5_entity_ecosystem(repo_root, working_dir):
         clean_slug = raw_slug.split("--", 1)[1] if "--" in raw_slug else raw_slug
         issue_type = filename.split("--", 1)[0] if "--" in filename else "feat"
 
-        content = textio.read_text(filepath)
+        try:
+            content = textio.read_text(filepath)
+        except UnicodeDecodeError as exc:
+            mig.note_skipped(filepath, f"not valid UTF-8 ({exc.reason})")
+            continue
         fields, _ = parse_yaml_frontmatter(content, path=filepath)
         if fields is None:
             continue
@@ -281,13 +309,16 @@ def step_migrate_v1_5_entity_ecosystem(repo_root, working_dir):
             new_content = frontmatter.update(
                 content, updates, remove=removals, path=filepath,
                 place_after={'completed': 'status', 'updated': 'created'})
-            if new_content != content:
-                textio.write_text(filepath, new_content)
+            mig.write(filepath, new_content, detail="front-matter normalized")
 
     # 5. Enrich SESSIONS front-matter
     session_files = glob.glob(os.path.join(working_dir, "SESSIONS", "**", "*.md"), recursive=True)
     for filepath in session_files:
-        content = textio.read_text(filepath)
+        try:
+            content = textio.read_text(filepath)
+        except UnicodeDecodeError as exc:
+            mig.note_skipped(filepath, f"not valid UTF-8 ({exc.reason})")
+            continue
         fields, _ = parse_yaml_frontmatter(content, path=filepath)
         if fields is None:
             continue
@@ -314,26 +345,30 @@ def step_migrate_v1_5_entity_ecosystem(repo_root, working_dir):
 
         if updates:
             new_content = frontmatter.update(content, updates, path=filepath)
-            if new_content != content:
-                textio.write_text(filepath, new_content)
+            mig.write(filepath, new_content, detail="front-matter normalized")
 
     return True
 
 # ----------------------------------------------------------------------
 # Step 4: v1.5.7 -> v2.0.0 (Transition to Along & .along/ Directory)
 # ----------------------------------------------------------------------
-def step_migrate_v2_0_along_directory(repo_root):
+def step_migrate_v2_0_along_directory(mig, repo_root):
+    """Bring legacy `.agents/` content into `.along/` without losing either side.
+
+    The destination is never deleted. `mig.adopt` decides per file class: append-only
+    files (`DECISIONS.md`, `HISTORY.md`) are union-merged the way `.gitattributes`
+    already merges them across branches, derived projections keep the destination and
+    drop the legacy copy for recompilation, and anything else keeps the destination
+    with the legacy copy preserved as `<name>.legacy.md` and reported as a conflict.
+    """
     agents_dir = os.path.join(repo_root, ".agents")
     along_dir = os.path.join(repo_root, ".along")
 
-    # Purge deprecated CONTEXT.md files
+    # Purge deprecated CONTEXT.md files. Backed up first, like every other deletion:
+    # the file is obsolete by protocol, which is not the same as worthless to its author.
     for c_file in [os.path.join(along_dir, "CONTEXT.md"), os.path.join(agents_dir, "CONTEXT.md")]:
-        if os.path.exists(c_file):
-            try:
-                os.remove(c_file)
-            except Exception:
-                pass
-    
+        mig.discard(c_file, "CONTEXT.md is deprecated; context is issue-scoped")
+
     recognized_files = [
         "ISSUES.md", "DECISIONS.md", "HISTORY.md",
         "GLOSSARY.md", "VISION.md", "DASHBOARD.md", "dashboard.html", "TASKS.md"
@@ -344,69 +379,47 @@ def step_migrate_v2_0_along_directory(repo_root):
 
     moved_count = 0
     if os.path.exists(agents_dir):
-        os.makedirs(along_dir, exist_ok=True)
-        
-        # 1. Move recognised top-level files
+        mig.makedirs(along_dir)
+
+        # 1. Adopt recognised top-level files
         for fname in recognized_files:
             src = os.path.join(agents_dir, fname)
             dst = os.path.join(along_dir, fname)
             if os.path.exists(src):
-                if os.path.exists(dst):
-                    os.remove(dst)
-                shutil.move(src, dst)
-                moved_count += 1
+                if mig.adopt(src, dst) != "absent":
+                    moved_count += 1
 
-        # 2. Move recognised subdirectories
+        # 2. Adopt recognised subdirectories, file by file on a collision
         for dname in recognized_dirs:
             src = os.path.join(agents_dir, dname)
             dst = os.path.join(along_dir, dname)
             if os.path.exists(src):
-                if not os.path.exists(dst):
-                    shutil.move(src, dst)
-                else:
-                    # Merge files if destination already exists
-                    for root, _, files in os.walk(src):
-                        rel = os.path.relpath(root, src)
-                        target_dir = os.path.join(dst, rel) if rel != "." else dst
-                        os.makedirs(target_dir, exist_ok=True)
-                        for f in files:
-                            s_file = os.path.join(root, f)
-                            d_file = os.path.join(target_dir, f)
-                            if os.path.exists(d_file):
-                                os.remove(d_file)
-                            shutil.move(s_file, d_file)
-                    shutil.rmtree(src, ignore_errors=True)
+                mig.adopt_tree(src, dst)
                 moved_count += 1
 
-        # 3. Clean up .agents/ if only empty directories or no files left
-        remaining_files = []
-        for root, _, files in os.walk(agents_dir):
-            for f in files:
-                remaining_files.append(os.path.join(root, f))
-
-        if not remaining_files:
-            shutil.rmtree(agents_dir, ignore_errors=True)
-            print("   Removed empty legacy .agents/ directory.")
-        else:
-            print(f"   Preserved non-Along files in .agents/ ({len(remaining_files)} files remaining).")
+        # 3. Clean up .agents/ only when nothing of the user's is left in it
+        mig.rmdir_if_empty(agents_dir)
 
     # 4. Inject protocol: along across all markdown files in .along/
     if os.path.exists(along_dir):
-        for root, _, files in os.walk(along_dir):
+        for root, dirs, files in os.walk(along_dir):
+            # Never walk into the backup this run just wrote: a backup that the engine
+            # keeps editing is not a copy of the state it was taken from.
+            dirs[:] = [d for d in dirs if d != migration.BACKUP_DIRNAME]
             for f in files:
                 if f.endswith(".md"):
                     fpath = os.path.join(root, f)
                     try:
                         content = textio.read_text(fpath)
                     except UnicodeDecodeError as exc:
+                        mig.note_skipped(fpath, f"not valid UTF-8 ({exc.reason})")
                         print(f"   [WARN] {fpath} is not valid UTF-8 ({exc.reason}); skipped.",
                               file=sys.stderr)
                         continue
                     fields, _ = parse_yaml_frontmatter(content, path=fpath)
                     if fields and fields.get('protocol') != 'along':
                         updated = frontmatter.update(content, {'protocol': 'along'}, path=fpath)
-                        if updated != content:
-                            textio.write_text(fpath, updated)
+                        mig.write(fpath, updated, detail="protocol: along injected")
 
     # 5. Update AGENTS.md references & markers
     agents_md_files = glob.glob(os.path.join(repo_root, "**", "AGENTS.md"), recursive=True)
@@ -414,6 +427,7 @@ def step_migrate_v2_0_along_directory(repo_root):
         try:
             content = textio.read_text(amd)
         except UnicodeDecodeError as exc:
+            mig.note_skipped(amd, f"not valid UTF-8 ({exc.reason})")
             print(f"   [WARN] {amd} is not valid UTF-8 ({exc.reason}); skipped.", file=sys.stderr)
             continue
         original = content
@@ -425,8 +439,17 @@ def step_migrate_v2_0_along_directory(repo_root):
             content
         )
         content = re.sub(r"<!-- END ACTDIM-AGENTS-PROTOCOL -->", r"<!-- END ALONG-PROTOCOL -->", content)
-        content = re.sub(r"(?:<!-- BEGIN ALONG-PROTOCOL (.*?) -->\s*)+", r"<!-- BEGIN ALONG-PROTOCOL \1 -->\n", content)
-        content = re.sub(r"(?:<!-- END ALONG-PROTOCOL -->\s*)+", r"<!-- END ALONG-PROTOCOL -->\n", content)
+        # Collapse REPEATED markers. `{2,}` rather than `+`, and the file's own newline
+        # rather than a hardcoded one: `\s*` swallows the marker's own line ending, so
+        # over a file with a single pair - every already-current AGENTS.md - the `+`
+        # version rewrote two CRLF line endings as LF and called it a migration. Same
+        # family as the legacy renames guarded below, found by reading the dry-run plan
+        # of a repository that had nothing to migrate.
+        newline = textio.detect_newline(content)
+        content = re.sub(r"(?:<!-- BEGIN ALONG-PROTOCOL (.*?) -->\s*){2,}",
+                         f"<!-- BEGIN ALONG-PROTOCOL \\1 -->{newline}", content)
+        content = re.sub(r"(?:<!-- END ALONG-PROTOCOL -->\s*){2,}",
+                         f"<!-- END ALONG-PROTOCOL -->{newline}", content)
         content = re.sub(r"# ACTDIM-AGENTS-PROTOCOL v\d+\.\d+\.\d+", f"# ALONG-PROTOCOL v{CURRENT_PROTOCOL_VERSION}", content)
         content = re.sub(r"# ALONG-PROTOCOL v\d+\.\d+\.\d+", f"# ALONG-PROTOCOL v{CURRENT_PROTOCOL_VERSION}", content)
 
@@ -461,41 +484,43 @@ def step_migrate_v2_0_along_directory(repo_root):
                 content = re.sub(rf"(?<![\w/-])/{legacy}(?![\w-])", f"/{current}", content)
 
         if content != original:
-            textio.write_text(amd, content)
+            mig.write(amd, content, detail="protocol markers and legacy names updated",
+                      announce=True)
 
     # 6. Update .code-review-graph-ignore
     crg_ignore = os.path.join(repo_root, ".code-review-graph-ignore")
     if os.path.exists(crg_ignore):
-        with open(crg_ignore, "r", encoding="utf-8", errors="ignore") as f:
-            c = f.read()
-        if ".agents/" in c and ".along/" not in c:
-            c = c.replace(".agents/", ".along/")
-            with open(crg_ignore, "w", encoding="utf-8") as f:
-                f.write(c)
+        try:
+            c = textio.read_text(crg_ignore)
+        except UnicodeDecodeError as exc:
+            mig.note_skipped(crg_ignore, f"not valid UTF-8 ({exc.reason})")
+            c = None
+        if c is not None and ".agents/" in c and ".along/" not in c:
+            mig.write(crg_ignore, c.replace(".agents/", ".along/"),
+                      detail=".agents/ -> .along/", announce=True)
 
     # 7. Migrate user home configuration / cache directories
+    # 7. Rename Along's own legacy directories under the user's home. Only when the
+    #    new name is free, so this can never overwrite a current installation, and only
+    #    outside dry-run, like every other mutation here.
     user_home = os.path.expanduser("~")
-    old_cfg = os.path.join(user_home, ".config", "opencode", "actdim-agents")
-    new_cfg = os.path.join(user_home, ".config", "opencode", "actdim-along")
-    if os.path.exists(old_cfg) and not os.path.exists(new_cfg):
-        try:
-            shutil.move(old_cfg, new_cfg)
-            print(f"   Migrated config: {old_cfg} -> {new_cfg}")
-        except Exception:
-            pass
-
-    old_cache = os.path.join(user_home, ".cache", "actdim-agents")
-    new_cache = os.path.join(user_home, ".cache", "actdim-along")
-    if os.path.exists(old_cache) and not os.path.exists(new_cache):
-        try:
-            shutil.move(old_cache, new_cache)
-            print(f"   Migrated cache: {old_cache} -> {new_cache}")
-        except Exception:
-            pass
+    for label, old, new in (
+            ("config", os.path.join(user_home, ".config", "opencode", "actdim-agents"),
+             os.path.join(user_home, ".config", "opencode", "actdim-along")),
+            ("cache", os.path.join(user_home, ".cache", "actdim-agents"),
+             os.path.join(user_home, ".cache", "actdim-along"))):
+        if os.path.exists(old) and not os.path.exists(new):
+            try:
+                mig.move(old, new, f"legacy {label} directory renamed")
+            except OSError as exc:
+                # Reported rather than swallowed: a half-renamed home directory is
+                # exactly what the user needs to know about.
+                print(f"   [WARN] could not rename the legacy {label} directory "
+                      f"{old}: {exc}", file=sys.stderr)
 
     return moved_count
 
-def sanitize_markdown_typography(target_dir):
+def sanitize_markdown_typography(mig, target_dir):
     """Repair banned typography under `target_dir`, returning the file count.
 
     A migration is an explicitly requested rewrite, so write mode is correct here -
@@ -507,9 +532,19 @@ def sanitize_markdown_typography(target_dir):
     whole forbidden-character table rather than only the two dashes this function
     used to know about.
     """
-    report = sanitizer.run(target_dir, mode=sanitizer.Mode.WRITE)
+    # Looked at before it is touched, so a clean tree neither takes a backup nor
+    # reports an operation it did not perform.
+    report = sanitizer.run(target_dir, mode=sanitizer.Mode.DRY_RUN)
     for skipped in report.skipped:
+        mig.note_skipped(skipped.path, f"typography: {skipped.reason}")
         print(f"   [Warning] typography: skipped {skipped.path} ({skipped.reason})")
+    if not report.files_with_findings:
+        return 0
+    if not mig.dry_run:
+        mig.ensure_backup()
+        report = sanitizer.run(target_dir, mode=sanitizer.Mode.WRITE)
+    mig.record("sanitize typography", target_dir,
+               f"{report.files_with_findings} file(s)")
     return report.files_with_findings
 
 def validate_and_build_entity_graph(along_dir):
@@ -620,7 +655,7 @@ def validate_and_build_entity_graph(along_dir):
 # ----------------------------------------------------------------------
 # Step 7: v2.0 -> v2.1 (Knowledge Base -> docs/ & .archive/)
 # ----------------------------------------------------------------------
-def step_migrate_v2_1_docs_wiki_and_archive(repo_root, interactive=True):
+def step_migrate_v2_1_docs_wiki_and_archive(mig, repo_root, interactive=True):
     # Locate along_kb_sync.py in local scripts/ or global paths
     exec_dir = os.path.dirname(os.path.abspath(__file__))
     candidates = [
@@ -635,79 +670,105 @@ def step_migrate_v2_1_docs_wiki_and_archive(repo_root, interactive=True):
             kb_script = c
             break
 
+    # The KB engine owns its own dry-run: `--check` inspects and reports without
+    # writing, so a migration plan covers the KB step too instead of stopping at it.
+    kb_args = ["--check"] if mig.dry_run else []
     if kb_script:
-        res = proc.run_python([kb_script, repo_root])
+        res = proc.run_python([kb_script, repo_root, *kb_args])
         if res.ok:
-            print("   [OK] Knowledge Base migrated to docs/ and .archive/.")
+            verb = "would be migrated" if mig.dry_run else "migrated"
+            print(f"   [OK] Knowledge Base {verb} to docs/ and .archive/.")
         else:
             print(f"   [WARN] along_kb_sync returned code {res.returncode}: {res.stderr.strip()}")
     else:
         # Fallback: import if in sys.path
         try:
             import along_kb_sync
-            along_kb_sync.sync_kb(repo_root, check_only=False)
+            along_kb_sync.sync_kb(repo_root, check_only=mig.dry_run)
             print("   [OK] Knowledge Base migrated to docs/ and .archive/ via import.")
         except Exception as e:
             print(f"   [WARN] Step 7 Knowledge Base migration fallback error: {e}")
 
-    # Final cleanup: purge legacy .along/KB, .agents/KB, and .along/CONTEXT.md
+    # Final cleanup: purge legacy .along/KB, .agents/KB, and .along/CONTEXT.md. Both
+    # are backed up first; their content has already been ingested into docs/, but a
+    # deletion the user cannot undo is not the migration's call to make.
     for old_kb in [os.path.join(repo_root, ".along", "KB"), os.path.join(repo_root, ".agents", "KB")]:
-        if os.path.exists(old_kb):
-            shutil.rmtree(old_kb, ignore_errors=True)
-    
-    ctx_md = os.path.join(repo_root, ".along", "CONTEXT.md")
-    if os.path.exists(ctx_md):
-        try:
-            os.remove(ctx_md)
-        except Exception:
-            pass
+        mig.discard(old_kb, "Knowledge Base now lives in docs/")
+
+    mig.discard(os.path.join(repo_root, ".along", "CONTEXT.md"),
+                "CONTEXT.md is deprecated; context is issue-scoped")
 
 # Main Migration Controller
 # ----------------------------------------------------------------------
-def run_migrations(repo_root):
+def run_migrations(repo_root, dry_run=True, force=False, backup=True):
+    """Run every migration step against `repo_root` and return a process exit code.
+
+    In dry-run mode no step writes anything: each one reports what it would do, and
+    the plan is printed in full at the end. This is the default for any caller that is
+    not a human at a terminal, because the two ways this engine used to run - from the
+    installer and from the test suite - were both invocations nobody asked for.
+    """
     along_dir = os.path.join(repo_root, ".along")
     agents_dir = os.path.join(repo_root, ".agents")
-    
+
     if not os.path.exists(along_dir) and not os.path.exists(agents_dir):
         print(f"No .along/ or .agents/ directory found in {repo_root}. Run /along-init first.")
-        return
+        return 0
 
     detected_version = detect_protocol_version(repo_root)
+    recorded_version = migration.read_state(along_dir)
     print("==================================================")
     print("-> ALONG Migration Engine")
     print(f"   Target: {repo_root}")
+    print(f"   Mode:   {'dry run (nothing is written)' if dry_run else 'apply'}")
     print(f"   Detected Protocol Version: v{detected_version}")
+    print(f"   Recorded Migration State:  {'v' + recorded_version if recorded_version else 'none'}")
     print(f"   Target Protocol Version:   v{CURRENT_PROTOCOL_VERSION}")
     print("==================================================")
+
+    # A completed migration is recorded, so a second run is a no-op instead of
+    # re-executing eight steps whose idempotency held only by accident of their
+    # individual guards.
+    if (recorded_version == CURRENT_PROTOCOL_VERSION
+            and not os.path.exists(agents_dir) and not force):
+        print(f"-> Already at v{CURRENT_PROTOCOL_VERSION}; nothing to do. "
+              "Use --force to re-run every step.")
+        return 0
+
+    mig = migration.Migration(repo_root, dry_run=dry_run, state_dir=along_dir,
+                              backup=backup)
 
     # Initial target directory for legacy steps
     target_working_dir = along_dir if os.path.exists(along_dir) else agents_dir
 
     # Step 1
     print("-> Step 1 [v1.0 -> v1.1]: Verifying ISSUES directory structure...")
-    step_migrate_v1_1_tasks_to_issues(target_working_dir)
+    step_migrate_v1_1_tasks_to_issues(mig, target_working_dir)
 
     # Step 2
     print("-> Step 2 [v1.1 -> v1.3]: Scaffolding Knowledge Base (KB) & Code Graph ignore...")
-    step_migrate_v1_3_kb_scaffolding(repo_root, target_working_dir)
+    step_migrate_v1_3_kb_scaffolding(mig, repo_root, target_working_dir)
 
     # Step 3
     print("-> Step 3 [v1.3 -> v1.5]: Upgrading Entity Ecosystem, Milestones & Relationships...")
-    step_migrate_v1_5_entity_ecosystem(repo_root, target_working_dir)
+    step_migrate_v1_5_entity_ecosystem(mig, repo_root, target_working_dir)
 
     # Step 4: Along v2.0.0 Migration
     print("-> Step 4 [v1.5 -> v2.0]: Migrating to .along/ directory & injecting protocol: along metadata...")
-    step_migrate_v2_0_along_directory(repo_root)
+    step_migrate_v2_0_along_directory(mig, repo_root)
 
     active_along_dir = os.path.join(repo_root, ".along")
 
     # Step 5: Typography sanitation
-    print("-> Step 5: Sanitizing Markdown typography (replacing em-dashes with ASCII hyphens)...")
-    sanitized_count = sanitize_markdown_typography(active_along_dir) if os.path.exists(active_along_dir) else 0
+    print("-> Step 5: Sanitizing Markdown typography (replacing banned characters with ASCII)...")
+    sanitized_count = (sanitize_markdown_typography(mig, active_along_dir)
+                       if os.path.exists(active_along_dir) else 0)
     if sanitized_count > 0:
-        print(f"   Sanitized typography in {sanitized_count} Markdown files.")
+        verb = "would sanitize" if dry_run else "Sanitized"
+        print(f"   {verb} typography in {sanitized_count} Markdown files.")
 
     # Step 6: Validate entity graph
+    errors = []
     if os.path.exists(active_along_dir):
         print("-> Step 6: Validating Entity Relationships & Dependency Graph...")
         nodes, edges, errors, warnings = validate_and_build_entity_graph(active_along_dir)
@@ -722,15 +783,31 @@ def run_migrations(repo_root):
 
     # Step 7: v2.1.0 Docs & LLM-Wiki migration
     print("-> Step 7 [v2.0 -> v2.1]: Migrating Knowledge Base to docs/ and .archive/...")
-    step_migrate_v2_1_docs_wiki_and_archive(repo_root)
+    step_migrate_v2_1_docs_wiki_and_archive(mig, repo_root)
 
     # Step 8: v2.2.x -> v2.2.6 Inbound Link Rewriting & Integrity Verification
     print("-> Step 8 [v2.2.x -> v2.2.6]: Retroactively repairing broken README links & verifying integrity...")
-    step_migrate_v2_2_5_link_rewriting_and_integrity(repo_root, detected_version)
+    step_migrate_v2_2_5_link_rewriting_and_integrity(mig, repo_root, detected_version)
+
+    # The state marker is written last, so a run that died halfway is not recorded as
+    # a completed migration.
+    if not dry_run and not errors:
+        mig.record_state(CURRENT_PROTOCOL_VERSION)
+
+    print("--------------------------------------------------")
+    for line in mig.summary():
+        print(line)
+    print("--------------------------------------------------")
+
+    if dry_run:
+        print(f"-> [OK] Dry run complete; no file was written. Re-run with --apply to "
+              f"perform the Along v{CURRENT_PROTOCOL_VERSION} migrations & validations.")
+        return 0
 
     print(f"-> [OK] All Along v{CURRENT_PROTOCOL_VERSION} migrations & validations completed successfully!")
+    return 0
 
-def step_migrate_v2_2_5_link_rewriting_and_integrity(repo_root, detected_version="1.0.0"):
+def step_migrate_v2_2_5_link_rewriting_and_integrity(mig, repo_root, detected_version="1.0.0"):
     """
     Step 8 [v2.2.x -> v2.2.6]:
     Retroactively repairs broken inbound links in README.md and all project Markdown files
@@ -745,10 +822,21 @@ def step_migrate_v2_2_5_link_rewriting_and_integrity(repo_root, detected_version
 
     try:
         import along_kb_sync
-        rewritten_files, total_rewrites = along_kb_sync.rewrite_inbound_links(repo_root, dry_run=False)
+        # Counted on a dry pass first, so a repository with nothing to repair is
+        # neither backed up nor rewritten.
+        rewritten_files, total_rewrites = along_kb_sync.rewrite_inbound_links(
+            repo_root, dry_run=True)
+        if total_rewrites > 0 and not mig.dry_run:
+            mig.ensure_backup()
+            rewritten_files, total_rewrites = along_kb_sync.rewrite_inbound_links(
+                repo_root, dry_run=False)
         broken_links, total_checked = along_kb_sync.validate_repo_link_integrity(repo_root)
         if total_rewrites > 0:
-            print(f"   [OK] Retroactively repaired {total_rewrites} broken link(s) across {rewritten_files} file(s).")
+            verb = "would repair" if mig.dry_run else "Retroactively repaired"
+            print(f"   [OK] {verb} {total_rewrites} broken link(s) across {rewritten_files} file(s).")
+            mig.record("rewrite inbound links", repo_root,
+                       f"{total_rewrites} link(s) in {rewritten_files} file(s)",
+                       announce=False)
         else:
             print("   [OK] Inbound links clean; verified all relative Markdown links on disk.")
     except Exception as e:
@@ -760,14 +848,44 @@ def step_migrate_v2_2_5_link_rewriting_and_integrity(repo_root, detected_version
         ]
         for c in candidates:
             if os.path.isfile(c):
-                res = proc.run_python([c, repo_root])
+                res = proc.run_python([c, repo_root, *(["--check"] if mig.dry_run else [])])
                 if res.ok:
                     print("   [OK] Inbound links repaired via along_kb_sync.py.")
                 else:
                     print(f"   [WARN] along_kb_sync returned code {res.returncode}: {res.stderr.strip()}")
                 break
 
+def main(argv=None):
+    parser = argparse.ArgumentParser(
+        prog="migrate_protocol.py",
+        description="Migrate a repository's Along protocol structure to "
+                    f"v{CURRENT_PROTOCOL_VERSION}, without ever deleting content.")
+    parser.add_argument("repo_root", nargs="?", default=os.getcwd(),
+                        help="repository to migrate (default: current directory)")
+    mode = parser.add_mutually_exclusive_group()
+    mode.add_argument("-n", "--dry-run", action="store_true",
+                      help="print the full planned operation list and write nothing")
+    mode.add_argument("-y", "--apply", action="store_true",
+                      help="perform the migration (required for a non-interactive caller)")
+    parser.add_argument("--force", action="store_true",
+                        help="re-run every step even when the recorded state is current")
+    parser.add_argument("--no-backup", action="store_true",
+                        help="skip the pre-migration copy of the state directory")
+    args = parser.parse_args(argv)
+
+    # Dry-run unless a human asked for the mutation, either by passing --apply or by
+    # running the engine at a terminal. The installer and the test suite both used to
+    # migrate repositories nobody had pointed at this engine.
+    interactive = sys.stdin.isatty() and sys.stdout.isatty()
+    dry_run = args.dry_run or not (args.apply or interactive)
+    if dry_run and not args.dry_run:
+        print("-> [Notice] Not attached to a terminal; running as a dry run. "
+              "Pass --apply to perform the migration.")
+
+    return run_migrations(os.path.abspath(args.repo_root), dry_run=dry_run,
+                          force=args.force, backup=not args.no_backup)
+
+
 if __name__ == "__main__":
-    root = sys.argv[1] if len(sys.argv) > 1 else os.getcwd()
-    run_migrations(root)
+    sys.exit(main())
 
