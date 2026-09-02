@@ -2,6 +2,11 @@
 
 All notable changes to this project, newest first.
 
+## v2.2.18 - 2026-09-02
+
+- docs: update dependency registry with actdim 1.5.13 (refs #runtime-enforcement-of-prose-rules)
+- refactor(dashboard-ui): upgrade actdim packages to 1.5.13 and refactor EntityDrawer to Dynstruct (refs #runtime-enforcement-of-prose-rules)
+
 ## v2.2.17 - 2026-09-02
 
 - feat: implement programmatic rule pack attachment and pruning (refs #runtime-enforcement-of-prose-rules)
