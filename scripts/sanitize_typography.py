@@ -23,6 +23,10 @@ import sys
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
+from alongkit import bootstrap
+bootstrap.ensure_deps()
+
+
 from alongkit import repo, sanitizer
 
 USAGE = """Usage: python sanitize_typography.py [ROOT] [options]

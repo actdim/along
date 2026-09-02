@@ -18,7 +18,14 @@ issue `[bug--typography-sanitizer-destroys-non-utf8-files]`; nothing here reads 
 writes files.
 """
 
+
 from __future__ import annotations
+if __name__ == "__main__":
+    raise SystemExit(
+        f"{__name__} is a library module, not a command.\n"
+        "Run: along kb-sync   (or: python scripts/along_exec.py kb-sync)"
+    )
+
 
 from typing import Dict, Iterable, List, Tuple
 

@@ -2,7 +2,6 @@
 
 ## Active
 - [ ] `(feat)` [kb-source-provenance-and-reconstruction](file://.along/ISSUES/feat--kb-source-provenance-and-reconstruction.md)
-- [ ] `(debt)` [library-modules-runnable-as-scripts](file://.along/ISSUES/debt--library-modules-runnable-as-scripts.md)
 - [ ] `(bug)` [commit-binds-arbitrary-active-issue](file://.along/ISSUES/bug--commit-binds-arbitrary-active-issue.md)
 - [ ] `(bug)` [commit-stages-all-and-dead-test-detection](file://.along/ISSUES/bug--commit-stages-all-and-dead-test-detection.md)
 - [ ] `(bug)` [generated-docs-emit-file-uri-links](file://.along/ISSUES/bug--generated-docs-emit-file-uri-links.md)
@@ -36,6 +35,7 @@
 <!-- Planned or deferred issues -->
 
 ## Done (recent)
+- [x] `(debt)` [library-modules-runnable-as-scripts](file://.along/ISSUES/done/debt--library-modules-runnable-as-scripts.md)
 - [x] `(bug)` [migration-deletes-destination-without-backup](file://.along/ISSUES/done/bug--migration-deletes-destination-without-backup.md)
 - [x] `(bug)` [release-engine-mutates-before-tests-and-reinstalls-globals](file://.along/ISSUES/done/bug--release-engine-mutates-before-tests-and-reinstalls-globals.md)
 - [x] `(bug)` [typography-sanitizer-destroys-non-utf8-files](file://.along/ISSUES/done/bug--typography-sanitizer-destroys-non-utf8-files.md)

@@ -30,7 +30,14 @@ Scanning deliberately descends into hidden directories. The old implementation u
 was invisible to the tool meant to remove it.
 """
 
+
 from __future__ import annotations
+if __name__ == "__main__":
+    raise SystemExit(
+        f"{__name__} is a library module, not a command.\n"
+        "Run: along kb-sync   (or: python scripts/along_exec.py kb-sync)"
+    )
+
 
 import fnmatch
 import os

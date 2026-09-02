@@ -1,11 +1,11 @@
 ---
 protocol: along
-protocol_version: "2.2.9"
+protocol_version: "2.2.13"
 slug: INDEX
 title: Knowledge Base Topic Index
 type: index
-created: 2026-09-01
-updated: 2026-09-01
+created: 2026-09-02
+updated: 2026-09-02
 tags: [index, kb, topics, map]
 ---
 
@@ -50,7 +50,7 @@ flowchart TD
 - **[Domain Model & Entity Ecosystem](./topic--domain-model.md)** (domain-model) `domain-model`, `entities`, `schemas`, `dag`, `metadata`, `issues`, `milestones`, `risks`, `spikes`, `checklists`, `sessions`
 - **[Frontend Architecture, Dynstruct, MsgMesh & NSwag Integration](./topic--frontend-frameworks.md)** (topic) `dynstruct`, `dynstruct-mui`, `msgmesh`, `utico`, `react`, `mui`, `nswag`, `openapi`, `architecture`
 - **[LLM-Wiki Knowledge Base Architecture & Paradigm](./topic--llm-wiki-architecture.md)** (topic) `llm-wiki`, `architecture`, `knowledge-base`, `token-efficiency`, `indexing`, `methodology`, `search`, `karpathy`
-- **[Protocol & Repository Migrations Guide](./topic--migrations.md)** (topic) `migrations`, `upgrade`, `protocol`, `changelog`, `versioning`
+- **[Protocol & Repository Migrations Guide](./topic--migrations.md)** (topic) `migrations`, `upgrade`, `protocol`, `changelog`, `versioning`, `data-safety`
 - **[Setup & Developer Workflow](./topic--setup-and-workflow.md)** (setup-workflow) `setup-workflow`, `installation`, `lifecycle`, `runners`, `developer-workflow`, `testing`
 - **[Skills & Slash Commands Technical Reference](./topic--skills-reference.md)** (topic) `skills`, `commands`, `reference`, `runners`, `lifecycle`, `automation`, `multi-agent`
 
@@ -58,7 +58,7 @@ flowchart TD
 
 ## Related Context
 
-- [AGENTS.md](file://AGENTS.md): Active protocol conventions and rules.
-- [.along/DECISIONS.md](file://.along/DECISIONS.md): Architectural Decision Records.
-- [.along/ISSUES.md](file://.along/ISSUES.md): Active issue tracking board.
-- [.along/HISTORY.md](file://.along/HISTORY.md): Append-only project history log.
+- [AGENTS.md](../AGENTS.md): Active protocol conventions and rules.
+- [.along/DECISIONS.md](../.along/DECISIONS.md): Architectural Decision Records.
+- [.along/ISSUES.md](../.along/ISSUES.md): Active issue tracking board.
+- [.along/HISTORY.md](../.along/HISTORY.md): Append-only project history log.

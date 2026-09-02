@@ -22,7 +22,14 @@ the fact is not a gate. See
 `alongkit.transaction`, which supplies the rollback for the mutations themselves.
 """
 
+
 from __future__ import annotations
+if __name__ == "__main__":
+    raise SystemExit(
+        f"{__name__} is a library module, not a command.\n"
+        "Run: along kb-sync   (or: python scripts/along_exec.py kb-sync)"
+    )
+
 
 import json
 import os

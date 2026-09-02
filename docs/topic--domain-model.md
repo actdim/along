@@ -1,11 +1,11 @@
 ---
 protocol: along
 protocol_version: "2.2.6"
-slug: topic--domain-model
+slug: domain-model
 title: Domain Model & Entity Ecosystem
 type: domain-model
 created: 2026-08-30
-updated: 2026-09-01
+updated: 2026-09-02
 tags: [domain-model, entities, schemas, dag, metadata, issues, milestones, risks, spikes, checklists, sessions]
 ---
 

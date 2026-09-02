@@ -1,11 +1,11 @@
 ---
 protocol: along
 protocol_version: "2.2.6"
-slug: topic--llm-wiki-architecture
+slug: llm-wiki-architecture
 title: LLM-Wiki Knowledge Base Architecture & Paradigm
 type: topic
 created: 2026-08-30
-updated: 2026-09-01
+updated: 2026-09-02
 tags: [llm-wiki, architecture, knowledge-base, token-efficiency, indexing, methodology, search, karpathy]
 ---
 

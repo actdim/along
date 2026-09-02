@@ -40,7 +40,14 @@ Contract:
 - `render()` builds a new document and re-parses its own output before returning it.
 """
 
+
 from __future__ import annotations
+if __name__ == "__main__":
+    raise SystemExit(
+        f"{__name__} is a library module, not a command.\n"
+        "Run: along kb-sync   (or: python scripts/along_exec.py kb-sync)"
+    )
+
 
 import datetime
 import io

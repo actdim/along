@@ -1,11 +1,11 @@
 ---
 protocol: along
 protocol_version: "2.2.9"
-slug: topic--setup-and-workflow
+slug: setup-and-workflow
 title: Setup & Developer Workflow
 type: setup-workflow
 created: 2026-08-30
-updated: 2026-09-01
+updated: 2026-09-02
 tags: [setup-workflow, installation, lifecycle, runners, developer-workflow, testing]
 ---
 

@@ -31,6 +31,10 @@ from typing import Dict, Any, List, Optional, Tuple
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
+from alongkit import bootstrap
+bootstrap.ensure_deps()
+
+
 from alongkit import version
 
 # Previously a literal that had drifted to 2.1.6 while the project shipped 2.2.8, so

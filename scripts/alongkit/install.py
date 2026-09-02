@@ -29,7 +29,14 @@ Three decisions, and why each is here:
    parse is never overwritten - it is reported and left alone.
 """
 
+
 from __future__ import annotations
+if __name__ == "__main__":
+    raise SystemExit(
+        f"{__name__} is a library module, not a command.\n"
+        "Run: along kb-sync   (or: python scripts/along_exec.py kb-sync)"
+    )
+
 
 import hashlib
 import json

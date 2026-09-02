@@ -1,11 +1,11 @@
 ---
 protocol: along
 protocol_version: "2.2.8"
-slug: topic--dependencies
+slug: dependencies
 title: Dependencies & Submodules AI Documentation and Rules
 type: topic
 created: 2026-09-01
-updated: 2026-09-01
+updated: 2026-09-02
 tags: [dependencies, ai-context, submodules, vendor, rules]
 ---
 

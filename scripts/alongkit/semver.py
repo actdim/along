@@ -8,7 +8,14 @@ release engine and the updater compare versions with each other. Two parsers dec
 which of two versions is newer is a defect waiting for a pre-release tag.
 """
 
+
 from __future__ import annotations
+if __name__ == "__main__":
+    raise SystemExit(
+        f"{__name__} is a library module, not a command.\n"
+        "Run: along kb-sync   (or: python scripts/along_exec.py kb-sync)"
+    )
+
 
 import re
 from typing import Sequence, Tuple

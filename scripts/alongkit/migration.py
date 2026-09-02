@@ -31,7 +31,14 @@ inspected, and re-run, so it needs a durable copy on disk rather than an in-memo
 snapshot that dies with the process.
 """
 
+
 from __future__ import annotations
+if __name__ == "__main__":
+    raise SystemExit(
+        f"{__name__} is a library module, not a command.\n"
+        "Run: along kb-sync   (or: python scripts/along_exec.py kb-sync)"
+    )
+
 
 import os
 import shutil

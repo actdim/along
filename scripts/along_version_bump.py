@@ -45,6 +45,10 @@ from datetime import datetime
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
+from alongkit import bootstrap
+bootstrap.ensure_deps()
+
+
 from alongkit import (frontmatter, gates, proc, repo, sanitizer, semver, textio,
                       transaction)
 

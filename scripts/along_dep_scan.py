@@ -28,6 +28,10 @@ from typing import Dict, List, Any, Optional, Set, Tuple
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
+from alongkit import bootstrap
+bootstrap.ensure_deps()
+
+
 from alongkit import entities, proc, repo
 from alongkit.version import CURRENT_PROTOCOL_VERSION
 

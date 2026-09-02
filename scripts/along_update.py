@@ -33,6 +33,10 @@ from typing import Optional
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
+from alongkit import bootstrap
+bootstrap.ensure_deps()
+
+
 from alongkit import proc, repo, semver
 
 REMOTE_GIT_URL = "https://github.com/actdim/along.git"

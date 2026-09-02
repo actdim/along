@@ -25,6 +25,10 @@ import sys
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
+from alongkit import bootstrap
+bootstrap.ensure_deps()
+
+
 from alongkit import install, repo, version
 
 USAGE = """Usage: python install_manifest.py <command> [options]

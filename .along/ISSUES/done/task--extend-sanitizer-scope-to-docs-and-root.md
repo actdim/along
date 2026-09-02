@@ -11,6 +11,9 @@ completed: 2026-09-01
 agent: antigravity
 tags: [migration, typography, sanitizer]
 parent: debt--protocol-quality-audit-remediation
+milestone: v1.3.0-knowledge-base-and-graph
+blocked_by: []
+related: []
 ---
 
 # Extend typography sanitizer scope to docs/ and root agent context files

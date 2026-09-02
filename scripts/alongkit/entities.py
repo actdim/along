@@ -11,7 +11,14 @@ validated (`along_exec.py` doctor), and was missed in the reader
 version. The header format is now declared exactly once, below.
 """
 
+
 from __future__ import annotations
+if __name__ == "__main__":
+    raise SystemExit(
+        f"{__name__} is a library module, not a command.\n"
+        "Run: along kb-sync   (or: python scripts/along_exec.py kb-sync)"
+    )
+
 
 import re
 from datetime import date, datetime

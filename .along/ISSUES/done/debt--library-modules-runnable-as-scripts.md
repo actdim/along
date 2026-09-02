@@ -3,10 +3,11 @@ protocol: along
 protocol_version: "2.2.9"
 slug: library-modules-runnable-as-scripts
 type: debt
-status: open
+status: done
+completed: 2026-09-02
 priority: medium
 created: 2026-09-01
-updated: 2026-09-01
+updated: 2026-09-02
 agent: claude-code
 tags: [alongkit, entrypoints, agent-ergonomics, false-green]
 milestone: v3.0.0-global-quality-revision

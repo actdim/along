@@ -45,6 +45,10 @@ repo_root = Path(__file__).resolve().parent.parent
 if str(repo_root) not in sys.path:
     sys.path.insert(0, str(repo_root))
 
+from alongkit import bootstrap
+bootstrap.ensure_deps()
+
+
 from dashboard.app import main
 
 if __name__ == "__main__":

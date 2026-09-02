@@ -13,7 +13,14 @@ present at 25+ call sites, which is why the convention is enforced here instead 
 being remembered per call.
 """
 
+
 from __future__ import annotations
+if __name__ == "__main__":
+    raise SystemExit(
+        f"{__name__} is a library module, not a command.\n"
+        "Run: along kb-sync   (or: python scripts/along_exec.py kb-sync)"
+    )
+
 
 import os
 import subprocess

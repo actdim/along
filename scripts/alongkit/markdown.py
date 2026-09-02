@@ -14,7 +14,14 @@ Fenced code is tracked here rather than at the call site, because a link inside 
 ```` ``` ```` block is documentation about a link, not a link.
 """
 
+
 from __future__ import annotations
+if __name__ == "__main__":
+    raise SystemExit(
+        f"{__name__} is a library module, not a command.\n"
+        "Run: along kb-sync   (or: python scripts/along_exec.py kb-sync)"
+    )
+
 
 import os
 import re
