@@ -1,5 +1,5 @@
 <!-- BEGIN ALONG-PROTOCOL root (managed by along-init - do not edit by hand) -->
-# ALONG-PROTOCOL v2.2.13
+# ALONG-PROTOCOL v2.2.14
 
 This repo carries its own agent context, provider-agnostically. Follow it every session, whatever tool you are.
 
@@ -167,6 +167,9 @@ When a Stage or session completes, agents MUST execute this verification checkli
 9. [ ] **Compaction Prompt**: Advise user to run `/compact` to free up token budget.
 
 ## Rules
+- **Strict Dependency & Environment Isolation**:
+  - **No Unprompted Global Installs**: Agents MUST NOT arbitrarily install system-wide or global packages (e.g. via `pip install`) when a script fails with a missing dependency.
+  - **Fix the Architecture, Not the Environment**: If an engine or script fails to locate a dependency, it is an architectural defect (such as a missing `bootstrap.ensure_deps()` call or an incorrect `uv` wrapper). The agent MUST diagnose and fix the script's entry point or discuss it with the user, rather than mutating the environment to force it to pass.
 - **Strict File Modification & Anti-Deletion**:
   - **Zero Unintended Deletions**: Never delete, truncate, or overwrite existing documentation, comments, planned features, or code unless explicitly instructed by the user.
   - **Mandatory Post-Batch & Destructive Operation Audit**: After running any batch replacement, migration script, refactor, or multi-file edit, agents MUST immediately execute `git diff --stat` to verify that net line counts align with expectations. Any unexpected net reduction in file size or line count must be inspected in detail before proceeding.
@@ -193,6 +196,7 @@ When a Stage or session completes, agents MUST execute this verification checkli
 - Windows-safe filenames: dates `YYYY-MM-DD` (no `:`), date first.
 - Keep `ISSUES.md` compact - it costs context every session.
 - Never write secrets/credentials/tokens/keys into these files; they are committed.
+<!-- END ALONG-PROTOCOL -->
 <!-- END ALONG-PROTOCOL -->
 ## Project specifics
 

@@ -2,6 +2,10 @@
 
 All notable changes to this project, newest first.
 
+## v2.2.14 - 2026-09-02
+
+- No commits recorded since the previous release tag.
+
 ## v2.2.13 - 2026-09-02
 
 - No commits recorded since the previous release tag.
