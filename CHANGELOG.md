@@ -2,6 +2,10 @@
 
 All notable changes to this project, newest first.
 
+## v2.2.17 - 2026-09-02
+
+- feat: implement programmatic rule pack attachment and pruning (refs #runtime-enforcement-of-prose-rules)
+
 ## v2.2.16 - 2026-09-02
 
 - No commits recorded since the previous release tag.

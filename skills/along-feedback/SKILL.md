@@ -3,7 +3,7 @@ name: along-feedback
 description: Inspect Along self-diagnostics, review sanitized incident logs in ~/.along/diagnostics/, and dispatch bug reports and protocol feedback via Telegram, Webhook, or File export. Use when encountering Along system/tool errors or invoking /along-feedback.
 ---
 
-# Along Self-Diagnostics & Feedback Engine [v2.2.16]
+# Along Self-Diagnostics & Feedback Engine [v2.2.17]
 
 Inspect captured system incidents, protocol anomalies, and tool exceptions, and dispatch sanitized diagnostics bundles to Telegram, Webhooks, or local export files.
 
