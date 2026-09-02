@@ -2,6 +2,10 @@
 
 All notable changes to this project, newest first.
 
+## v2.2.15 - 2026-09-02
+
+- fix(alongkit): add library execution guards and ensure_deps to engine scripts Completed debt--library-modules-runnable-as-scripts and updated AGENTS.md rules (refs #kb-source-provenance-and-reconstruction)
+
 ## v2.2.14 - 2026-09-02
 
 - No commits recorded since the previous release tag.
