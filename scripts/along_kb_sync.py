@@ -642,12 +642,7 @@ def sync_kb(repo_root, check_only=False, strict=False):
 
     # Cleanup obsolete files/dirs only after rewriting inbound links
     if not check_only:
-        ctx_file = os.path.join(repo_root, ".along", "CONTEXT.md")
-        if os.path.exists(ctx_file):
-            try:
-                os.remove(ctx_file)
-            except Exception:
-                pass
+
         for old_kb in [os.path.join(repo_root, ".along", "KB"), os.path.join(repo_root, ".agents", "KB")]:
             if os.path.exists(old_kb):
                 shutil.rmtree(old_kb, ignore_errors=True)

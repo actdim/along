@@ -45,7 +45,7 @@ def create_app(agents_dir: Path) -> FastAPI:
 
     app = FastAPI(
         title="Along Dashboard & Knowledge Base API",
-        version="2.2.15",
+        version="2.2.16",
         description="Type-safe OpenAPI REST & SSE service for Along Protocol entities, dependency DAGs, and Knowledge Base search.",
         docs_url="/docs",
         redoc_url="/redoc",

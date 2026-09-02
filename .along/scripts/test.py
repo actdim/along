@@ -23,6 +23,8 @@ def main():
         sys.path.insert(0, repo_root)
     tests_dir = os.path.join(repo_root, "tests")
     
+    os.environ["ALONG_TEST_RUNNER"] = "1"
+    
     loader = unittest.TestLoader()
     suite = loader.discover(start_dir=tests_dir, pattern="test_*.py")
     runner = unittest.TextTestRunner(verbosity=2)

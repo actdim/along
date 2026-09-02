@@ -149,8 +149,7 @@ def bump_along_dev_repo(repo_root, new_version, tx):
         apply(const_path, [(r'CURRENT_PROTOCOL_VERSION = "\d+\.\d+\.\d+"',
                             f'CURRENT_PROTOCOL_VERSION = "{new_version}"')])
 
-    # 7. Update .along/CONTEXT.md
-    apply(os.path.join(repo_root, ".along", "CONTEXT.md"), [protocol_mention])
+
 
     # 8. Update llms.txt and llms-full.txt
     for llm_file in ["llms.txt", "llms-full.txt"]:

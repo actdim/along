@@ -364,13 +364,11 @@ def step_migrate_v2_0_along_directory(mig, repo_root):
     agents_dir = os.path.join(repo_root, ".agents")
     along_dir = os.path.join(repo_root, ".along")
 
-    # Purge deprecated CONTEXT.md files. Backed up first, like every other deletion:
-    # the file is obsolete by protocol, which is not the same as worthless to its author.
-    for c_file in [os.path.join(along_dir, "CONTEXT.md"), os.path.join(agents_dir, "CONTEXT.md")]:
-        mig.discard(c_file, "CONTEXT.md is deprecated; context is issue-scoped")
+    # CONTEXT.md is no longer purged here. It is adopted so Step 7 can evaluate its
+    # content, archive it, and ingest any substantive documentation into docs/.
 
     recognized_files = [
-        "ISSUES.md", "DECISIONS.md", "HISTORY.md",
+        "ISSUES.md", "DECISIONS.md", "HISTORY.md", "CONTEXT.md",
         "GLOSSARY.md", "VISION.md", "DASHBOARD.md", "dashboard.html", "TASKS.md"
     ]
     recognized_dirs = [
@@ -689,14 +687,52 @@ def step_migrate_v2_1_docs_wiki_and_archive(mig, repo_root, interactive=True):
         except Exception as e:
             print(f"   [WARN] Step 7 Knowledge Base migration fallback error: {e}")
 
-    # Final cleanup: purge legacy .along/KB, .agents/KB, and .along/CONTEXT.md. Both
+    # Final cleanup: purge legacy .along/KB and .agents/KB. Both
     # are backed up first; their content has already been ingested into docs/, but a
     # deletion the user cannot undo is not the migration's call to make.
     for old_kb in [os.path.join(repo_root, ".along", "KB"), os.path.join(repo_root, ".agents", "KB")]:
         mig.discard(old_kb, "Knowledge Base now lives in docs/")
 
-    mig.discard(os.path.join(repo_root, ".along", "CONTEXT.md"),
-                "CONTEXT.md is deprecated; context is issue-scoped")
+    # Explicitly evaluate CONTEXT.md to salvage substantive documentation into docs/
+    context_file = os.path.join(repo_root, ".along", "CONTEXT.md")
+    if os.path.exists(context_file):
+        try:
+            content = textio.read_text(context_file, strict=False)
+        except Exception:
+            content = ""
+            
+        lines = [l.strip() for l in content.splitlines() if l.strip()]
+        is_substantive = len(lines) > 2
+        if is_substantive and len(lines) <= 4:
+            text = " ".join(lines).lower()
+            if "context" in text and ("add" in text or "project" in text or "replace" in text):
+                is_substantive = False
+                
+        if is_substantive:
+            today_str = datetime.now().strftime("%Y-%m-%d")
+            fm = {
+                "protocol": "along",
+                "slug": "legacy-context",
+                "title": "Legacy Project Context",
+                "type": "topic",
+                "created": today_str,
+                "updated": today_str,
+                "tags": ["legacy", "context"]
+            }
+            docs_dir = os.path.join(repo_root, "docs")
+            mig.makedirs(docs_dir)
+            wiki_path = os.path.join(docs_dir, "topic--legacy-context.md")
+            
+            if not os.path.exists(wiki_path):
+                mig.write(wiki_path, dump_yaml_frontmatter(fm, content), 
+                          detail="synthesized from legacy CONTEXT.md", announce=True)
+            
+            archive_dir = os.path.join(repo_root, ".archive")
+            mig.makedirs(archive_dir)
+            archive_path = os.path.join(archive_dir, "legacy-context.md")
+            mig.move(context_file, archive_path, "CONTEXT.md archived")
+        else:
+            mig.discard(context_file, "empty or boilerplate CONTEXT.md discarded")
 
 # Main Migration Controller
 # ----------------------------------------------------------------------
