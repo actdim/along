@@ -200,6 +200,13 @@ When a Stage or session completes, agents MUST execute this verification checkli
 <!-- END ALONG-PROTOCOL -->
 ## Project specifics
 
+<!-- BEGIN ALONG-RULES -->
+See the following engineering guidelines:
+- `[languages/python.md](file://.along/rules/languages/python.md)`
+- `[languages/typescript.md](file://.along/rules/languages/typescript.md)`
+- `[platforms/web.md](file://.along/rules/platforms/web.md)`
+<!-- END ALONG-RULES -->
+
 This repository is `Along` (`actdim-along`) - the provider-agnostic agent-context protocol and skills suite for Claude Code, Codex, OpenCode, and Antigravity.
 
 - **Skills Source**: `skills/` (`along-init`, `along-update`, `along-dash`, `along-wrap`, `along-commit`, `along-build`, `along-test`, `along-dev`, `along-team`, `along-kb-sync`, `along-kb-search`, `along-issue-sync`, `along-context-sync`, `along-decision-sync`, `along-history-sync`, `along-graph-check`, `along-dep-scan`, `along-version-bump`, `along-feedback`).

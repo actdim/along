@@ -20,7 +20,10 @@ Scaffold or refresh the provider-agnostic agent-context structure in a repositor
 - If `AGENTS.md` already exists: update only the managed block between `<!-- BEGIN ALONG-PROTOCOL ... -->` and `<!-- END ALONG-PROTOCOL -->`, preserving all human-written content outside the markers.
 - If legacy `<!-- BEGIN ACTDIM-AGENTS-PROTOCOL ... -->` markers are detected, replace them cleanly with the new ALONG-PROTOCOL markers.
 
-### Step 2: `CLAUDE.md` & `.gitattributes` Scaffolding
+### Step 2: Rule Pack Attachment
+- Run `python scripts/along_exec.py rules attach` to detect the project stack, copy matching rule packs from `~/.along/rules/` into `.along/rules/`, and inject references into `AGENTS.md`.
+
+### Step 3: `CLAUDE.md` & `.gitattributes` Scaffolding
 - Ensure `CLAUDE.md` contains the line:
   ```markdown
   See @AGENTS.md for project instructions and guidance.
@@ -32,7 +35,7 @@ Scaffold or refresh the provider-agnostic agent-context structure in a repositor
   .along/DECISIONS.md merge=union
   ```
 
-### Step 3: Scaffold `.along/` Directory Skeleton (Create only if missing)
+### Step 4: Scaffold `.along/` Directory Skeleton (Create only if missing)
 Create the directory structure if missing:
 - `.along/ISSUES.md` + `.along/ISSUES/` + `.along/ISSUES/done/`: Issue tracking board and typed issue files (`protocol: along`).
 - `.along/DECISIONS.md`: Append-only ADR log with slug headers (`ADR-YYYY-MM-DD--<slug>`).
@@ -44,7 +47,7 @@ Create the directory structure if missing:
 - `.along/VISION.md`, `.along/GLOSSARY.md`, `.along/HISTORY.md`, `.along/SESSIONS/<YYYY>/`.
 *(Notice: CONTEXT.md is deprecated in v2.2.0 and is not created).*
 
-### Step 4: Run Protocol Migration
+### Step 5: Run Protocol Migration
 Execute the migration engine against the target folder to validate front-matter and migrate any legacy `.agents/` content. Preview the plan first, then apply it:
 ```bash
 python scripts/migrate_protocol.py <target_root> --dry-run
@@ -52,7 +55,7 @@ python scripts/migrate_protocol.py <target_root> --apply
 ```
 `--apply` is mandatory for any non-interactive caller: without it the engine prints the plan and writes nothing. It never deletes a destination file (append-only files are merged, projections keep the destination, a colliding legacy entity is preserved as `<name>.legacy.md`), it copies the state directory into `.along/.migration-backup/<timestamp>/` before the first change, and it records `.along/.protocol-version` so a second run is a no-op. Add `--force` to re-run every step anyway.
 
-### Step 5: Propose Onboarding & Repository Synchronization Operations
+### Step 6: Propose Onboarding & Repository Synchronization Operations
 Upon completing initialization, agents and tools MUST present a clear onboarding proposal to the user with the following optional operations:
 
 | Proposed Skill / Operation | Command | Purpose & Impact |

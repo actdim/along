@@ -1,6 +1,7 @@
 # Active Issues
 
 ## Active
+- [ ] `(feat)` [runtime-enforcement-of-prose-rules](file://.along/ISSUES/feat--runtime-enforcement-of-prose-rules.md)
 - [ ] `(feat)` [kb-source-provenance-and-reconstruction](file://.along/ISSUES/feat--kb-source-provenance-and-reconstruction.md)
 - [ ] `(bug)` [commit-binds-arbitrary-active-issue](file://.along/ISSUES/bug--commit-binds-arbitrary-active-issue.md)
 - [ ] `(bug)` [commit-stages-all-and-dead-test-detection](file://.along/ISSUES/bug--commit-stages-all-and-dead-test-detection.md)

@@ -170,16 +170,11 @@ function Install-SkillFolders([string]$homeDir) {
     }
 }
 
-function Install-RuleFolders([string]$homeDir) {
+function Install-RuleFolders {
     $rulesSrc = Join-Path $PSScriptRoot 'rules'
     if (Test-Path $rulesSrc) {
-        $dst = Join-Path $homeDir 'rules'
-        # Copied over, never replaced. This used to be `Remove-Item -Recurse -Force $dst`
-        # followed by a fresh copy, so every install - including the ones the release
-        # engine triggered unasked - destroyed whatever the user had written under
-        # ~/.claude/rules/. Files Along shipped and no longer ships are removed by name
-        # afterwards, from the install manifest. See
-        # [bug--installer-parity-and-destructive-rules-overwrite].
+        $dst = Join-Path $AlongHome 'rules'
+        # Copied over, never replaced.
         New-Item -ItemType Directory -Force -Path $dst | Out-Null
         Copy-Item -Path "$rulesSrc\*" -Destination $dst -Recurse -Force
         Write-Host "   rules copied -> $dst"
@@ -278,22 +273,21 @@ $targets = switch ($Target) {
 
 Install-AlongScripts
 
+Install-RuleFolders
+
 foreach ($t in $targets) {
     switch ($t) {
         'claude' {
             Install-SkillFolders $ClaudeHome
-            Install-RuleFolders $ClaudeHome
         }
         'codex' {
             Install-SkillFolders $CodexHome
-            Install-RuleFolders $CodexHome
         }
         'opencode' {
             Install-OpenCode
         }
         'antigravity' {
             Install-SkillFolders $AntigravityHome
-            Install-RuleFolders $AntigravityHome
         }
     }
 }

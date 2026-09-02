@@ -306,6 +306,14 @@ def apply_migration_to_context(ctx_dir, protocol_text, migrate_script, is_root=T
         except Exception:
             proc.run_passthrough([sys.executable, kb_script, ctx_dir, "--check"])
 
+    # Automatically attach or prune language rule packs for the context
+    if not dry_run:
+        try:
+            from alongkit import rules
+            rules.attach_rules(ctx_dir)
+        except Exception as e:
+            print(f"   [WARN] Could not attach rule packs for {ctx_dir}: {e}")
+
     return True
 
 def find_uninitialized_subprojects(repo_root, contexts):

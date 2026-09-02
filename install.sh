@@ -158,13 +158,12 @@ install_skillfolders() {  # $1 = tool home dir; installs SKILL.md folders verbat
   done
 }
 
-install_rulefolders() {  # $1 = tool home dir; installs the language & platform rule packs
+install_rulefolders() {
   local rules_src="$SCRIPT_DIR/rules"
   [ -d "$rules_src" ] || return 0
-  local dst="$1/rules"
+  local dst="$ALONG_HOME/rules"
   mkdir -p "$dst"
-  # Copied over, not replaced: a tool home may hold rule files the user wrote, and
-  # deleting the destination first would take them with it.
+  # Copied over, not replaced
   cp -r "$rules_src"/. "$dst/"
   echo "   rules copied -> $dst"
 }
@@ -241,16 +240,15 @@ install_opencode() {  # generate flat commands + place along-init helper
 }
 
 install_along_scripts
+install_rulefolders
 
 PROVIDER_ARGS=()
 if [ "$do_claude" -eq 1 ]; then
   install_skillfolders "$CLAUDE_HOME"
-  install_rulefolders "$CLAUDE_HOME"
   PROVIDER_ARGS+=(claude)
 fi
 if [ "$do_codex" -eq 1 ]; then
   install_skillfolders "$CODEX_HOME"
-  install_rulefolders "$CODEX_HOME"
   PROVIDER_ARGS+=(codex)
 fi
 if [ "$do_opencode" -eq 1 ]; then
@@ -259,7 +257,6 @@ if [ "$do_opencode" -eq 1 ]; then
 fi
 if [ "$do_antigravity" -eq 1 ]; then
   install_skillfolders "$ANTIGRAVITY_HOME"
-  install_rulefolders "$ANTIGRAVITY_HOME"
   PROVIDER_ARGS+=(antigravity)
 fi
 

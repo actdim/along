@@ -388,6 +388,8 @@ def planned_files(source_root: str, homes: Homes,
     skills_dir = os.path.join(source_root, "skills")
     rules_dir = os.path.join(source_root, "rules")
     skills = source_skills(source_root)
+    
+    plan.update(_copy_pairs(rules_dir, os.path.join(homes.along, "rules")))
 
     for provider in providers:
         if provider in FOLDER_PROVIDERS:
@@ -395,7 +397,6 @@ def planned_files(source_root: str, homes: Homes,
             for skill in skills:
                 plan.update(_copy_pairs(os.path.join(skills_dir, skill),
                                         os.path.join(home, "skills", skill)))
-            plan.update(_copy_pairs(rules_dir, os.path.join(home, "rules")))
         elif provider == "opencode":
             commands = os.path.join(homes.opencode, "commands")
             helper = os.path.join(homes.opencode, "actdim-along")
@@ -419,12 +420,11 @@ def owned_roots(homes: Homes, providers: Sequence[str]) -> List[str]:
     Codex file is stale, and deleting them would uninstall a provider the user never
     mentioned.
     """
-    roots = [homes.bin]
+    roots = [homes.bin, os.path.join(homes.along, "rules")]
     for provider in providers:
         if provider in FOLDER_PROVIDERS:
             home = homes.provider_home(provider)
             roots.append(os.path.join(home, "skills"))
-            roots.append(os.path.join(home, "rules"))
         elif provider == "opencode":
             roots.append(os.path.join(homes.opencode, "commands"))
             roots.append(os.path.join(homes.opencode, "actdim-along"))

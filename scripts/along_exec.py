@@ -196,6 +196,7 @@ Entity Management Commands:
   decision create <slug> --title "Title" --context "Why" --decision "What" --consequences "Tradeoffs"
   scratch init   <slug>
   scratch purge  <slug>
+  rules attach   Detect project stack and attach relevant engineering rule packs
 
 Along Protocol Tools:
   kb-sync        Synchronize and compile Knowledge Base in docs/
@@ -683,6 +684,25 @@ def handle_scratch_command(repo_root: str, args: List[str]):
         sys.exit(0)
 
 
+def handle_rules_command(repo_root: str, args: List[str]):
+    if not args or args[0] in ("-h", "--help", "help"):
+        print("Usage: along_exec.py rules attach")
+        sys.exit(0)
+    
+    subcmd = args[0].lower()
+    if subcmd == "attach":
+        try:
+            from alongkit import rules
+            rules.attach_rules(repo_root)
+        except ImportError:
+            print("[Error] alongkit.rules not found. Cannot attach rules.", file=sys.stderr)
+            sys.exit(1)
+        sys.exit(0)
+    else:
+        print(f"[Error] Unknown rules subcommand: {subcmd}", file=sys.stderr)
+        sys.exit(1)
+
+
 def main():
     if len(sys.argv) < 2 or sys.argv[1] in ("-h", "--help", "help"):
         print_help()
@@ -705,6 +725,8 @@ def main():
         handle_decision_command(repo_root, extra_args)
     elif cmd == "scratch":
         handle_scratch_command(repo_root, extra_args)
+    elif cmd == "rules":
+        handle_rules_command(repo_root, extra_args)
     elif cmd == "kb":
         sub = extra_args[0].lower() if extra_args else "sync"
         mapped = "along_kb_sync.py" if sub == "sync" else "along_kb_search.py"

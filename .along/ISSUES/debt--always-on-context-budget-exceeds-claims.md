@@ -105,7 +105,7 @@ bookkeeping context can exceed the code context.
 
 - [ ] `context-budget` tool implemented with JSON output.
 - [ ] Budget tests in place and green.
-- [ ] Rule packs attached per detected stack, not loaded globally for all projects.
+- [x] Rule packs attached per detected stack, not loaded globally for all projects.
 - [ ] Mandatory session reads bounded and non-growing with history.
 - [ ] Published efficiency claims backed by measurement or removed.
 - [ ] ADR recorded for the decision-log restructuring.

@@ -95,7 +95,7 @@ class InstallerCase(unittest.TestCase):
 
     def plant_user_rule(self, home):
         """A file the user wrote into a provider home, which an install must not touch."""
-        path = os.path.join(home, ".claude", "rules", "my-own-rule.md")
+        path = os.path.join(home, ".along", "rules", "my-own-rule.md")
         os.makedirs(os.path.dirname(path), exist_ok=True)
         with io.open(path, "w", encoding="utf-8") as handle:
             handle.write("# My own rule\n\nWritten by the user, not by Along.\n")
@@ -171,14 +171,12 @@ class InstallerCase(unittest.TestCase):
 class TestInstalledLayoutPlan(InstallerCase):
     """`planned_files` is the specification both installers are measured against."""
 
-    def test_rules_are_planned_for_every_folder_provider(self):
+    def test_rules_are_planned_for_along_home(self):
         homes = self.homes_for(self.make_home())
         plan = install.planned_files(self.checkout, homes)
-        for provider in install.FOLDER_PROVIDERS:
-            rules = os.path.join(homes.provider_home(provider), "rules", "INDEX.md")
-            self.assertIn(rules, plan,
-                          f"{provider} must receive the rule packs; this is the artifact "
-                          "install.sh was missing entirely")
+        rules = os.path.join(homes.along, "rules", "INDEX.md")
+        self.assertIn(rules, plan,
+                      "along home must receive the rule packs")
 
     def test_engines_and_the_shared_package_land_in_along_bin(self):
         homes = self.homes_for(self.make_home())
@@ -229,7 +227,8 @@ class TestInstallManifestLifecycle(InstallerCase):
         install.sync_manifest(self.checkout, homes, install.PROVIDERS, "9.9.9")
 
         user_file = self.plant_user_rule(home)
-        superseded = os.path.join(homes.claude, "rules", "languages", "retired.md")
+        superseded = os.path.join(homes.along, "rules", "languages", "retired.md")
+        os.makedirs(os.path.dirname(superseded), exist_ok=True)
         with io.open(superseded, "w", encoding="utf-8") as handle:
             handle.write("# A rule pack Along used to ship\n")
         # Claim it in the manifest, exactly as a previous version of Along would have.
