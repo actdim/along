@@ -11,10 +11,10 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "@actdim/dynstruct": "^1.5.10",
-    "@actdim/dynstruct-mui": "^1.5.10",
-    "@actdim/msgmesh": "^1.5.10",
-    "@actdim/utico": "^1.5.10",
+    "@actdim/dynstruct": "^1.5.13",
+    "@actdim/dynstruct-mui": "^1.5.13",
+    "@actdim/msgmesh": "^1.5.13",
+    "@actdim/utico": "^1.5.13",
     "@emotion/react": "^11.14.0",
     "@emotion/styled": "^11.14.0",
     "@iconify/react": "^5.2.0",

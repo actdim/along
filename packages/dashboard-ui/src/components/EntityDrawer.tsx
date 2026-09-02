@@ -12,7 +12,111 @@ import { useDrawer, type DrawerStruct } from '@actdim/dynstruct-mui/Drawer';
 import { bind } from '@actdim/dynstruct/componentModel/core';
 import { Icon } from '@iconify/react';
 import { marked } from 'marked';
-import { FullDashboardData } from '../types';
+import {
+  type Issue,
+  type Milestone,
+  type Risk,
+  type Spike,
+  type Session,
+  type Decision,
+  type KBArticle,
+  type FullDashboardData,
+} from '../types';
+
+export type DrawerEntity =
+  | (Issue & { entityType: 'issue' })
+  | (Milestone & { entityType: 'milestone' })
+  | (Risk & { entityType: 'risk' })
+  | (Spike & { entityType: 'spike' })
+  | (Session & { entityType: 'session' })
+  | (KBArticle & { entityType: 'kb' })
+  | (Decision & { entityType: 'decision'; body?: string });
+
+interface WindowWithMermaid {
+  mermaid?: {
+    run: (options: { nodes: NodeListOf<Element> }) => void;
+  };
+}
+
+export type MarkdownContentStruct = ComponentStruct<
+  BaseAppMsgStruct,
+  {
+    props: {
+      html: string;
+    };
+    actions: {
+      renderMermaid: () => void;
+    };
+  }
+>;
+
+export const useMarkdownContent = (
+  params?: ComponentParams<MarkdownContentStruct>
+): Component<MarkdownContentStruct> => {
+  let c: Component<MarkdownContentStruct>;
+  let m: ComponentModel<MarkdownContentStruct>;
+
+  const def: ComponentDef<MarkdownContentStruct> = {
+    regType: 'MarkdownContent',
+    props: {
+      html: '',
+    },
+    actions: {
+      renderMermaid: () => {
+        const container = document.getElementById(c.id);
+        if (!container) return;
+
+        const w = window as unknown as WindowWithMermaid;
+        if (!w.mermaid) return;
+
+        const codeBlocks = container.querySelectorAll('pre code.language-mermaid');
+        if (codeBlocks.length === 0) return;
+
+        codeBlocks.forEach((codeEl) => {
+          const preEl = codeEl.parentElement;
+          if (!preEl) return;
+          const div = document.createElement('div');
+          div.className =
+            'mermaid my-4 p-4 bg-slate-950 rounded-xl border border-slate-800 flex justify-center overflow-x-auto text-slate-200';
+          div.textContent = codeEl.textContent;
+          preEl.replaceWith(div);
+        });
+
+        try {
+          const mermaidNodes = container.querySelectorAll('.mermaid');
+          if (mermaidNodes.length > 0) {
+            w.mermaid.run({ nodes: mermaidNodes });
+          }
+        } catch (err) {
+          console.warn('Mermaid rendering error:', err);
+        }
+      },
+    },
+    events: {
+      onLayoutReady: () => {
+        m.renderMermaid();
+      },
+      onChangeHtml: () => {
+        m.renderMermaid();
+      },
+    },
+    view: () => (
+      <div
+        id={c.id}
+        className="markdown-body prose prose-invert max-w-none text-slate-300 text-xs leading-relaxed"
+        dangerouslySetInnerHTML={{
+          __html: m.html || '<p class="italic text-slate-500">No content provided.</p>',
+        }}
+      />
+    ),
+  };
+
+  c = useComponent(def, params ?? {});
+  m = c.model;
+  return c;
+};
+
+export const MarkdownContent = toReact(useMarkdownContent);
 
 export type EntityDrawerStruct = ComponentStruct<
   BaseAppMsgStruct,
@@ -21,55 +125,15 @@ export type EntityDrawerStruct = ComponentStruct<
       data: FullDashboardData | null;
       selectedEntityId: string | null;
       onClose: () => void;
-      readonly entity: any | null;
+      readonly entity: DrawerEntity | null;
       readonly renderedBody: string;
     };
     children: {
       drawer: DrawerStruct;
+      markdownContent: MarkdownContentStruct;
     };
   }
 >;
-
-const MarkdownContent: React.FC<{ html: string }> = ({ html }) => {
-  const containerRef = React.useRef<HTMLDivElement>(null);
-
-  React.useEffect(() => {
-    if (!containerRef.current) return;
-    const w = window as any;
-    if (!w.mermaid) return;
-
-    const codeBlocks = containerRef.current.querySelectorAll('pre code.language-mermaid');
-    if (codeBlocks.length === 0) return;
-
-    codeBlocks.forEach((codeEl) => {
-      const preEl = codeEl.parentElement;
-      if (!preEl) return;
-      const div = document.createElement('div');
-      div.className = 'mermaid my-4 p-4 bg-slate-950 rounded-xl border border-slate-800 flex justify-center overflow-x-auto text-slate-200';
-      div.textContent = codeEl.textContent;
-      preEl.replaceWith(div);
-    });
-
-    try {
-      const mermaidNodes = containerRef.current.querySelectorAll('.mermaid');
-      if (mermaidNodes.length > 0) {
-        w.mermaid.run({ nodes: mermaidNodes });
-      }
-    } catch (err) {
-      console.warn('Mermaid rendering error:', err);
-    }
-  }, [html]);
-
-  return (
-    <div
-      ref={containerRef}
-      className="markdown-body prose prose-invert max-w-none text-slate-300 text-xs leading-relaxed"
-      dangerouslySetInnerHTML={{
-        __html: html || '<p class="italic text-slate-500">No content provided.</p>',
-      }}
-    />
-  );
-};
 
 export const useEntityDrawer = (
   params?: ComponentParams<EntityDrawerStruct>
@@ -83,30 +147,30 @@ export const useEntityDrawer = (
       data: null,
       selectedEntityId: null,
       onClose: () => {},
-      get entity() {
+      get entity(): DrawerEntity | null {
         if (!m.data || !m.selectedEntityId) return null;
         const id = m.selectedEntityId;
 
         const iss = m.data.issues.find((i) => i.id === id || i.slug === id);
-        if (iss) return { ...iss, entityType: 'issue' };
+        if (iss) return { ...iss, entityType: 'issue' as const };
 
         const mil = m.data.milestones.find((ml) => ml.id === id || ml.slug === id);
-        if (mil) return { ...mil, entityType: 'milestone' };
+        if (mil) return { ...mil, entityType: 'milestone' as const };
 
         const r = m.data.risks.find((rk) => rk.id === id || rk.slug === id);
-        if (r) return { ...r, entityType: 'risk' };
+        if (r) return { ...r, entityType: 'risk' as const };
 
         const sp = m.data.spikes.find((s) => s.id === id || s.slug === id);
-        if (sp) return { ...sp, entityType: 'spike' };
+        if (sp) return { ...sp, entityType: 'spike' as const };
 
         const sess = m.data.sessions.find((s) => s.id === id || s.slug === id);
-        if (sess) return { ...sess, entityType: 'session' };
+        if (sess) return { ...sess, entityType: 'session' as const };
 
         const kb = m.data.kb_articles.find((k) => k.id === id || k.slug === id);
-        if (kb) return { ...kb, entityType: 'kb' };
+        if (kb) return { ...kb, entityType: 'kb' as const };
 
         const dec = m.data.decisions.find((d) => d.id === id);
-        if (dec) return { ...dec, entityType: 'decision', body: dec.raw_markdown };
+        if (dec) return { ...dec, entityType: 'decision' as const, body: dec.raw_markdown };
 
         return null;
       },
@@ -137,6 +201,12 @@ export const useEntityDrawer = (
           const ent = m.entity;
           if (!ent) return null;
 
+          const title =
+            ('title' in ent && ent.title) ||
+            ('summary' in ent && ent.summary) ||
+            ent.slug ||
+            ent.id;
+
           return (
             <div className="w-full sm:w-[600px] bg-slate-900 text-slate-100 p-6 min-h-full flex flex-col justify-between">
               <div className="space-y-6">
@@ -147,7 +217,7 @@ export const useEntityDrawer = (
                       {ent.entityType}
                     </span>
                     <h2 className="text-xl font-bold text-slate-100 mt-2 tracking-tight">
-                      {ent.title || ent.slug || ent.id}
+                      {title}
                     </h2>
                   </div>
                   <button
@@ -160,37 +230,37 @@ export const useEntityDrawer = (
 
                 {/* Metadata */}
                 <div className="grid grid-cols-2 gap-3 text-xs text-slate-400 bg-slate-950/60 p-4 rounded-xl border border-slate-800/80">
-                  {ent.status && (
+                  {'status' in ent && ent.status && (
                     <div>
                       Status: <span className="text-slate-200 font-bold">{ent.status}</span>
                     </div>
                   )}
-                  {ent.priority && (
+                  {'priority' in ent && ent.priority && (
                     <div>
                       Priority: <span className="text-slate-200 font-bold">{ent.priority}</span>
                     </div>
                   )}
-                  {ent.type && (
+                  {'type' in ent && ent.type && (
                     <div>
                       Type: <span className="text-slate-200 font-mono">{ent.type}</span>
                     </div>
                   )}
-                  {ent.agent && (
+                  {'agent' in ent && ent.agent && (
                     <div>
                       Agent: <span className="text-slate-200">{ent.agent}</span>
                     </div>
                   )}
-                  {ent.created && (
+                  {'created' in ent && ent.created && (
                     <div>
                       Created: <span className="text-slate-200">{ent.created}</span>
                     </div>
                   )}
-                  {ent.completed && (
+                  {'completed' in ent && ent.completed && (
                     <div>
                       Completed: <span className="text-emerald-400 font-bold">{ent.completed}</span>
                     </div>
                   )}
-                  {ent.file_path && (
+                  {'file_path' in ent && ent.file_path && (
                     <div className="col-span-2">
                       File: <span className="text-sky-400">{ent.file_path}</span>
                     </div>
@@ -198,7 +268,7 @@ export const useEntityDrawer = (
                 </div>
 
                 {/* Tags */}
-                {Array.isArray(ent.tags) && ent.tags.length > 0 && (
+                {'tags' in ent && Array.isArray(ent.tags) && ent.tags.length > 0 && (
                   <div className="flex flex-wrap gap-1.5">
                     {ent.tags.map((t: string) => (
                       <span
@@ -216,7 +286,7 @@ export const useEntityDrawer = (
                   <h3 className="text-xs font-bold font-mono uppercase text-slate-400 mb-3">
                     Description & Content
                   </h3>
-                  <MarkdownContent html={m.renderedBody} />
+                  <c.children.MarkdownContent />
                 </div>
               </div>
 
@@ -231,6 +301,9 @@ export const useEntityDrawer = (
             </div>
           );
         },
+      }),
+      markdownContent: useMarkdownContent({
+        html: bind(() => m.renderedBody),
       }),
     },
     view: () => <c.children.Drawer />,

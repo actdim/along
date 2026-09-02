@@ -1,6 +1,7 @@
 # Active Issues
 
 ## Active
+- [ ] `(--slug)` [update-actdim-packages-and-refactor-entity-drawer](file://.along/ISSUES/--slug--update-actdim-packages-and-refactor-entity-drawer.md)
 - [ ] `(feat)` [runtime-enforcement-of-prose-rules](file://.along/ISSUES/feat--runtime-enforcement-of-prose-rules.md)
 - [ ] `(feat)` [kb-source-provenance-and-reconstruction](file://.along/ISSUES/feat--kb-source-provenance-and-reconstruction.md)
 - [ ] `(bug)` [commit-binds-arbitrary-active-issue](file://.along/ISSUES/bug--commit-binds-arbitrary-active-issue.md)
@@ -36,6 +37,7 @@
 <!-- Planned or deferred issues -->
 
 ## Done (recent)
+- [x] `(debt)` [update-actdim-packages-and-refactor-entity-drawer](file://.along/ISSUES/done/debt--update-actdim-packages-and-refactor-entity-drawer.md)
 - [x] `(debt)` [library-modules-runnable-as-scripts](file://.along/ISSUES/done/debt--library-modules-runnable-as-scripts.md)
 - [x] `(bug)` [migration-deletes-destination-without-backup](file://.along/ISSUES/done/bug--migration-deletes-destination-without-backup.md)
 - [x] `(bug)` [release-engine-mutates-before-tests-and-reinstalls-globals](file://.along/ISSUES/done/bug--release-engine-mutates-before-tests-and-reinstalls-globals.md)
