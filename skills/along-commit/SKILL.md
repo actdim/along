@@ -3,7 +3,7 @@ name: along-commit
 description: Smart, ASCII-safe, and issue-linked Conventional Committer for Along. Automatically checks typography cleanliness, binds commit messages to active .along/ issues, and creates clean Git commits.
 ---
 
-# Along Commit (`/along-commit`) [v2.2.18]
+# Along Commit (`/along-commit`) [v2.2.19]
 
 Routine development committer that enforces clean typography and links Git history directly to active `.along/` issues.
 

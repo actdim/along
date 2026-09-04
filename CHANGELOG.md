@@ -2,6 +2,11 @@
 
 All notable changes to this project, newest first.
 
+## v2.2.19 - 2026-09-04
+
+- fix(alongkit): clean up syntax and deduplicate rules.py logic (refs #recent-features-defects-and-guard-messages)
+- fix: resolve quality defects in rules engine and execution guards (refs #recent-features-defects-and-guard-messages, #kb-source-provenance-and-reconstruction, #well-known-llms-and-context-discovery)
+
 ## v2.2.18 - 2026-09-02
 
 - docs: update dependency registry with actdim 1.5.13 (refs #runtime-enforcement-of-prose-rules)

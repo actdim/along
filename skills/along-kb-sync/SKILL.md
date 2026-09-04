@@ -3,7 +3,7 @@ name: along-kb-sync
 description: Synchronize, compile, and reconcile the Knowledge Base in docs/ using LLM-Wiki pipeline. Ingests README facts and raw sources, rewrites inbound legacy links, validates link integrity across monorepo packages, and rebuilds docs/INDEX.md. Use when invoking /along-kb-sync.
 ---
 
-# Along KB Sync  [v2.2.18]
+# Along KB Sync  [v2.2.19]
 
 Idempotent LLM-Wiki Knowledge Base synchronization, inbound link rewriting, compilation, and repository-wide link-integrity gate for `docs/`.
 
@@ -37,7 +37,7 @@ When executing `/along-kb-sync`:
 - **Parallel Research Ingestion (Large-Scale / Multi-Package)**:
   - When processing extensive documentation dumps, large monorepos, or multiple subprojects:
     1. **Decompose Topics**: Split the knowledge extraction into 2-4 discrete domain vectors (e.g. `architecture`, `data-models`, `api-integrations`, `workflows`).
-    2. **Spawn Parallel Subagents**: Concurrently invoke research subagents to synthesize independent `docs/topic--<slug>.md` articles in parallel with standard YAML front-matter (`protocol: along`, `protocol_version: "2.2.18"`).
+    2. **Spawn Parallel Subagents**: Concurrently invoke research subagents to synthesize independent `docs/topic--<slug>.md` articles in parallel with standard YAML front-matter (`protocol: along`, `protocol_version: "2.2.19"`).
     3. **Reconcile & Link**: Run `python scripts/along_kb_sync.py` to rewrite inbound links, validate relative links across the repository, verify provenance hashes, sync `llms.txt` and `llms-full.txt`, and rebuild `docs/INDEX.md`.
 
 ## Usage
