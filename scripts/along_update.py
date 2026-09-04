@@ -288,6 +288,13 @@ def apply_migration_to_context(ctx_dir, protocol_text, migrate_script, is_root=T
         except Exception:
             proc.run_passthrough([sys.executable, kb_script, ctx_dir, "--check"])
 
+    # Recompile .along/ISSUES.md projection deterministically if entity issues exist
+    along_issues_dir = os.path.join(ctx_dir, ".along", "ISSUES")
+    if os.path.isdir(along_issues_dir) and not dry_run:
+        exec_script = locate_skill_script(ctx_dir, "along-issue-sync", "along_exec.py")
+        if exec_script:
+            proc.run_capture([sys.executable, exec_script, "issue", "sync"], cwd=ctx_dir)
+
     # Automatically attach or prune language rule packs for the context
     if not dry_run:
         try:

@@ -47,12 +47,48 @@ from alongkit import bootstrap
 # under an interpreter that has no dependencies prepared, which is exactly how the
 # installers and the documented skill commands invoke it.
 bootstrap.ensure_deps()
-
-from alongkit import frontmatter, migration, proc, repo, sanitizer, textio
+from alongkit import frontmatter, migration, proc, repo, sanitizer, semver, textio
 from alongkit.version import CURRENT_PROTOCOL_VERSION
 
 
-def parse_yaml_frontmatter(content, path=None):
+def repair_unquoted_frontmatter_scalars(content, path=None):
+    """Attempt to repair unquoted colons in scalar fields (title, summary, description).
+
+    Returns (repaired_content, fields) if repair succeeded and verified by ruamel.yaml,
+    or (None, None) if unrepairable.
+    """
+    block = frontmatter.split(content)
+    if block is None:
+        return None, None
+    lines = block.raw.splitlines(keepends=True)
+    repaired_lines = []
+    modified = False
+    scalar_re = re.compile(r'^([ \t]*(?:title|summary|description):[ \t]+)(.*?)(\r?\n?)$')
+    for line in lines:
+        m = scalar_re.match(line)
+        if m:
+            prefix, val, end = m.group(1), m.group(2).strip(), m.group(3)
+            # If value contains ': ' and is not quoted with " or '
+            if (': ' in val or val.endswith(':')) and not ((val.startswith('"') and val.endswith('"')) or (val.startswith("'") and val.endswith("'"))):
+                escaped_val = val.replace('"', '\\"')
+                repaired_lines.append(f'{prefix}"{escaped_val}"{end}')
+                modified = True
+                continue
+        repaired_lines.append(line)
+
+    if not modified:
+        return None, None
+
+    new_raw = "".join(repaired_lines)
+    candidate = block.bom + block.open_delim + new_raw + block.close_delim + block.body
+    try:
+        fields, _ = frontmatter.parse(candidate, path=path)
+        return candidate, fields
+    except frontmatter.FrontmatterError:
+        return None, None
+
+
+def parse_yaml_frontmatter(content, path=None, allow_repair=False):
     """Front-matter of a file this engine is about to rewrite.
 
     Tolerant on purpose: a migration must not abort a whole repository because one
@@ -61,10 +97,15 @@ def parse_yaml_frontmatter(content, path=None):
     block sequences.
     """
     fields, body, error = frontmatter.try_parse(content, path=path)
+    if error and allow_repair:
+        repaired_content, repaired_fields = repair_unquoted_frontmatter_scalars(content, path=path)
+        if repaired_content is not None:
+            return repaired_fields, body
     if error:
         print(f"   [WARN] {error}", file=sys.stderr)
         return None, body
     return fields, body
+
 
 
 def dump_yaml_frontmatter(fm, body):
@@ -731,10 +772,92 @@ def step_migrate_v2_1_docs_wiki_and_archive(mig, repo_root, interactive=True):
         else:
             mig.discard(context_file, "empty or boilerplate CONTEXT.md discarded")
 
+
+def step_repair_legacy_frontmatter_colons(mig, target_dir, detected_version):
+    """Safely repair unquoted colons in legacy front-matter scalar fields.
+
+    Active ONLY when detected_version < 2.2.9 (prior to ruamel.yaml integration).
+    """
+    if semver.parse(detected_version) >= (2, 2, 9) or not os.path.exists(target_dir):
+        return 0
+
+    repaired_count = 0
+    for root, dirs, files in os.walk(target_dir):
+        dirs[:] = [d for d in dirs if d != migration.BACKUP_DIRNAME]
+        for f in files:
+            if not f.endswith(".md"):
+                continue
+            fpath = os.path.join(root, f)
+            try:
+                content = textio.read_text(fpath)
+            except UnicodeDecodeError:
+                continue
+
+            fields, _, error = frontmatter.try_parse(content, path=fpath)
+            if error:
+                repaired_content, _ = repair_unquoted_frontmatter_scalars(content, path=fpath)
+                if repaired_content is not None:
+                    mig.write(fpath, repaired_content, detail="repaired unquoted front-matter colons", announce=True)
+                    repaired_count += 1
+    if repaired_count > 0:
+        verb = "would repair" if mig.dry_run else "Repaired"
+        print(f"   {verb} unquoted front-matter colons in {repaired_count} entity file(s).")
+    return repaired_count
+
+
+def scan_shell_escape_artifacts_in_docs(repo_root, detected_version):
+    """Advisory diagnostic scan for shell-escaping artifacts in docs/ when migrating from v2.0.0 <= v < v2.2.9.
+
+    Reports warnings for manual review without modifying any files on disk.
+    """
+    if not (semver.parse(detected_version) >= (2, 0, 0) and semver.parse(detected_version) < (2, 2, 9)):
+        return []
+
+    docs_dir = os.path.join(repo_root, "docs")
+    if not os.path.isdir(docs_dir):
+        return []
+
+    warnings = []
+    paired_backslash_re = re.compile(r'(?<![A-Za-z0-9_/\\])\\([A-Za-z0-9_.]+(?:\([^)]*\))?)\\(?![A-Za-z0-9_/\\])')
+    escaped_quote_re = re.compile(r'\\"')
+
+    for f in sorted(os.listdir(docs_dir)):
+        if not f.endswith(".md"):
+            continue
+        fpath = os.path.join(docs_dir, f)
+        try:
+            content = textio.read_text(fpath, strict=False)
+        except Exception:
+            continue
+
+        in_fence = False
+        for line_idx, line in enumerate(content.splitlines(), 1):
+            stripped = line.strip()
+            if stripped.startswith("```") or stripped.startswith("~~~"):
+                in_fence = not in_fence
+                continue
+            if in_fence:
+                continue
+
+            line_no_inline = re.sub(r'`[^`]+`', '', line)
+
+            for match in paired_backslash_re.finditer(line_no_inline):
+                matched_str = match.group(0)
+                rel_f = os.path.relpath(fpath, repo_root).replace('\\', '/')
+                warnings.append(f"{rel_f}:{line_idx}: Suspicious paired backslashes '{matched_str}' (possible shell-escaped backticks; manual review recommended)")
+
+            if escaped_quote_re.search(line_no_inline):
+                rel_f = os.path.relpath(fpath, repo_root).replace('\\', '/')
+                warnings.append(f"{rel_f}:{line_idx}: Suspicious escaped quote '\\\"' in prose (manual review recommended)")
+
+    return warnings
+
+
 # Main Migration Controller
 # ----------------------------------------------------------------------
 def run_migrations(repo_root, dry_run=True, force=False, backup=True):
     """Run every migration step against `repo_root` and return a process exit code.
+
 
     In dry-run mode no step writes anything: each one reports what it would do, and
     the plan is printed in full at the end. This is the default for any caller that is
@@ -782,6 +905,11 @@ def run_migrations(repo_root, dry_run=True, force=False, backup=True):
     print("-> Step 2 [v1.1 -> v1.3]: Scaffolding Knowledge Base (KB) & Code Graph ignore...")
     step_migrate_v1_3_kb_scaffolding(mig, repo_root, target_working_dir)
 
+    # Step 2b: Repair legacy front-matter colons before entity enrichment
+    if semver.parse(detected_version) < (2, 2, 9):
+        print("-> Step 2b [v1.5 -> v2.2.8]: Repairing unquoted front-matter colons...")
+        step_repair_legacy_frontmatter_colons(mig, target_working_dir, detected_version)
+
     # Step 3
     print("-> Step 3 [v1.3 -> v1.5]: Upgrading Entity Ecosystem, Milestones & Relationships...")
     step_migrate_v1_5_entity_ecosystem(mig, repo_root, target_working_dir)
@@ -791,6 +919,8 @@ def run_migrations(repo_root, dry_run=True, force=False, backup=True):
     step_migrate_v2_0_along_directory(mig, repo_root)
 
     active_along_dir = os.path.join(repo_root, ".along")
+    if semver.parse(detected_version) < (2, 2, 9) and os.path.exists(active_along_dir):
+        step_repair_legacy_frontmatter_colons(mig, active_along_dir, detected_version)
 
     # Step 5: Typography sanitation
     print("-> Step 5: Sanitizing Markdown typography (replacing banned characters with ASCII)...")
@@ -821,6 +951,18 @@ def run_migrations(repo_root, dry_run=True, force=False, backup=True):
     # Step 8: v2.2.x -> v2.2.6 Inbound Link Rewriting & Integrity Verification
     print("-> Step 8 [v2.2.x -> v2.2.6]: Retroactively repairing broken README links & verifying integrity...")
     step_migrate_v2_2_5_link_rewriting_and_integrity(mig, repo_root, detected_version)
+
+    # Step 8b: Advisory scan for shell-escaping artifacts in docs/ (gated to v2.0.0 <= v < v2.2.9)
+    if semver.parse(detected_version) >= (2, 0, 0) and semver.parse(detected_version) < (2, 2, 9):
+        print("-> Step 8b [v2.0 -> v2.2.8]: Advisory scan for potential shell-escaping artifacts in docs/...")
+        shell_warnings = scan_shell_escape_artifacts_in_docs(repo_root, detected_version)
+        if shell_warnings:
+            print(f"   [Notice] Found {len(shell_warnings)} potential shell-escaping artifact(s) in docs/:")
+            for sw in shell_warnings:
+                print(f"      [WARN] {sw}")
+            mig.record("advisory shell scan", repo_root, f"{len(shell_warnings)} warning(s)", announce=False)
+        else:
+            print("   [OK] No suspicious shell-escaping artifacts detected in docs/.")
 
     # The state marker is written last, so a run that died halfway is not recorded as
     # a completed migration.

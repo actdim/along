@@ -312,6 +312,25 @@ def rewrite_inbound_links(repo_root, dry_run=False):
                         clean_name += '.md'
                     new_filename = f"topic--{clean_name}"
 
+                # Check for subproject LICENSE references needing relative path resolution
+                if orig_filename.upper() in ("LICENSE", "LICENSE.MD", "LICENSE.TXT"):
+                    local_target = os.path.normpath(os.path.join(file_dir, target_base))
+                    if not os.path.exists(local_target):
+                        root_lic = None
+                        for lic_name in ("LICENSE", "LICENSE.md", "LICENSE.txt", "License.txt"):
+                            cand = os.path.join(repo_root, lic_name)
+                            if os.path.isfile(cand):
+                                root_lic = cand
+                                break
+                        if root_lic:
+                            new_rel = os.path.relpath(root_lic, file_dir).replace('\\', '/')
+                            if not new_rel.startswith('.'):
+                                new_rel = f"./{new_rel}"
+                            new_target = f"{new_rel}{anchor}"
+                            if new_target != target:
+                                file_rewrites += 1
+                                return f"{prefix}{new_target}{suffix}"
+
                 if not is_legacy:
                     return match.group(0)
 
@@ -359,6 +378,7 @@ def rewrite_inbound_links(repo_root, dry_run=False):
                         fp.write(new_content)
                 rel_disp = os.path.relpath(fpath, repo_root).replace('\\', '/')
                 print(f"   [REWRITE] {rel_disp}: updated {file_rewrites} legacy KB link(s).")
+                print(f"   [REWRITE] {rel_disp}: updated {file_rewrites} link(s).")
                 rewritten_files += 1
                 total_rewrites += file_rewrites
 

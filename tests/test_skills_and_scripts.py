@@ -1160,9 +1160,35 @@ class TestAlongSkillsAndScripts(unittest.TestCase):
         finally:
             shutil.rmtree(temp_dir, ignore_errors=True)
 
+    def test_27_kb_sync_rewrites_subproject_license_link(self):
+        """Verify that along_kb_sync rewrites subproject LICENSE link to root LICENSE."""
+        temp_dir = tempfile.mkdtemp(prefix="along-license-test-")
+        try:
+            # Create root LICENSE
+            with open(os.path.join(temp_dir, "LICENSE"), "w", encoding="utf-8") as f:
+                f.write("MIT License\n")
+
+            sub_dir = os.path.join(temp_dir, "packages", "subproject")
+            os.makedirs(sub_dir, exist_ok=True)
+            readme_path = os.path.join(sub_dir, "README.md")
+            with open(readme_path, "w", encoding="utf-8") as f:
+                f.write("# Subproject\n\nLicensed under [MIT License](LICENSE).\n")
+
+            import along_kb_sync
+            rewritten_files, total_rewrites = along_kb_sync.rewrite_inbound_links(temp_dir, dry_run=False)
+            self.assertGreaterEqual(total_rewrites, 1)
+
+            with open(readme_path, "r", encoding="utf-8") as f:
+                content = f.read()
+            self.assertIn("[MIT License](../../LICENSE)", content)
+            self.assertNotIn("[MIT License](LICENSE)", content)
+        finally:
+            shutil.rmtree(temp_dir, ignore_errors=True)
+
 
 if __name__ == "__main__":
     unittest.main(verbosity=2)
+
 
 
 

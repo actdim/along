@@ -286,7 +286,7 @@ Describe the feature, requirements, and background context here.
         if os.path.exists(issues_board):
             with open(issues_board, "r", encoding="utf-8") as f:
                 b_content = f.read()
-            entry = f"- [ ] `({itype})` [{islug}](file://.along/ISSUES/{itype}--{islug}.md)"
+            entry = f"- [ ] `({itype})` [{islug}](ISSUES/{itype}--{islug}.md)"
             if entry not in b_content:
                 b_content = b_content.replace("## Active\n", f"## Active\n{entry}\n")
                 with open(issues_board, "w", encoding="utf-8") as f:
@@ -339,6 +339,28 @@ Describe the feature, requirements, and background context here.
             place_after={"completed": "status"},
         )
 
+        # Adjust sibling issue links in the markdown body:
+        # [Text](feat--foo.md) or [Text](./feat--foo.md) becomes [Text](../feat--foo.md)
+        block = frontmatter.split(content)
+        if block:
+            sibling_link_re = re.compile(
+                r'(\[[^\]]+\]\()(?:\./)?(?<!\.\./)((?:feat|bug|debt|task|docs)--[a-z0-9-]+\.md\b)'
+            )
+            body_lines = block.body.splitlines(keepends=True)
+            adjusted_body_lines = []
+            in_fence = False
+            for line in body_lines:
+                stripped = line.strip()
+                if stripped.startswith("```") or stripped.startswith("~~~"):
+                    in_fence = not in_fence
+                    adjusted_body_lines.append(line)
+                    continue
+                if in_fence:
+                    adjusted_body_lines.append(line)
+                    continue
+                adjusted_body_lines.append(sibling_link_re.sub(r'\1../\2', line))
+            content = block.bom + block.open_delim + block.raw + block.close_delim + "".join(adjusted_body_lines)
+
         with open(dest_file, "w", encoding="utf-8") as f:
             f.write(content)
         os.remove(found_file)
@@ -353,7 +375,7 @@ Describe the feature, requirements, and background context here.
             b_content = re.sub(rf'- \[[ ~]\] `\(\w+\)` \[{re.escape(islug)}\]\([^\)]+\)\n?', '', b_content)
             # Add to Done
             itype = filename.split("--")[0]
-            done_entry = f"- [x] `({itype})` [{islug}](file://.along/ISSUES/done/{filename})"
+            done_entry = f"- [x] `({itype})` [{islug}](ISSUES/done/{filename})"
             if done_entry not in b_content:
                 b_content = b_content.replace("## Done (recent)\n", f"## Done (recent)\n{done_entry}\n")
             with open(issues_board, "w", encoding="utf-8") as f:
@@ -371,7 +393,7 @@ Describe the feature, requirements, and background context here.
                     parts = f[:-3].split("--", 1)
                     itype = parts[0]
                     islug = parts[1] if len(parts) > 1 else f[:-3]
-                    active_items.append(f"- [ ] `({itype})` [{islug}](file://.along/ISSUES/{f})")
+                    active_items.append(f"- [ ] `({itype})` [{islug}](ISSUES/{f})")
 
         if os.path.exists(done_dir):
             for f in sorted(os.listdir(done_dir), reverse=True):
@@ -379,7 +401,7 @@ Describe the feature, requirements, and background context here.
                     parts = f[:-3].split("--", 1)
                     itype = parts[0]
                     islug = parts[1] if len(parts) > 1 else f[:-3]
-                    done_items.append(f"- [x] `({itype})` [{islug}](file://.along/ISSUES/done/{f})")
+                    done_items.append(f"- [x] `({itype})` [{islug}](ISSUES/done/{f})")
 
         board_content = f"""# Active Issues
 

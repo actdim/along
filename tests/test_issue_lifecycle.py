@@ -314,6 +314,50 @@ class TestIssueDoneCommand(unittest.TestCase):
         self.assertIn("status: done", fm)
         self.assertIn("completed:", fm)
 
+    def test_13_issue_sync_emits_portable_relative_links(self):
+        self._write("feat--first.md", IN_PROGRESS_ISSUE)
+        self._write(os.path.join("done", "bug--second.md"), IN_PROGRESS_ISSUE.replace("status: in-progress", "status: done"))
+
+        res = proc.run_capture([sys.executable, self.EXEC, "issue", "sync"], cwd=self.repo)
+        self.assertEqual(res.returncode, 0, f"{res.stdout}{res.stderr}")
+
+        board_path = os.path.join(self.repo, ".along", "ISSUES.md")
+        self.assertTrue(os.path.isfile(board_path))
+        with open(board_path, "r", encoding="utf-8") as f:
+            board = f.read()
+
+        self.assertIn("- [ ] `(feat)` [first](ISSUES/feat--first.md)", board)
+        self.assertIn("- [x] `(bug)` [second](ISSUES/done/bug--second.md)", board)
+        self.assertNotIn("file://", board)
+
+    def test_14_issue_done_updates_sibling_relative_links(self):
+        body_with_links = (
+            "---\n"
+            "protocol: along\n"
+            "slug: sample-issue\n"
+            "type: feat\n"
+            "status: in-progress\n"
+            "---\n\n"
+            "# Sample\n\n"
+            "See [Other](feat--other.md) and [Dot](./bug--dot.md) and [Already](../task--pre.md).\n"
+        )
+        self._write("feat--sample-issue.md", body_with_links)
+
+        res = self._run_done("sample-issue")
+        self.assertEqual(res.returncode, 0, f"{res.stdout}{res.stderr}")
+
+        moved = os.path.join(self.done, "feat--sample-issue.md")
+        self.assertTrue(os.path.isfile(moved))
+        with open(moved, "r", encoding="utf-8") as f:
+            content = f.read()
+
+        self.assertIn("[Other](../feat--other.md)", content)
+        self.assertIn("[Dot](../bug--dot.md)", content)
+        self.assertIn("[Already](../task--pre.md)", content)
+        self.assertNotIn("[Other](feat--other.md)", content)
+        self.assertNotIn("[Dot](./bug--dot.md)", content)
+
 
 if __name__ == "__main__":
     unittest.main()
+

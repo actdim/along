@@ -447,5 +447,76 @@ class TestNoRawFileOperations(unittest.TestCase):
             f"backs up and honours --dry-run; found: {offenders}")
 
 
+class TestMigrationFrontmatterRepairAndShellScan(unittest.TestCase):
+
+    def setUp(self):
+        self.tmp = tempfile.mkdtemp(prefix="along-test-resilience-")
+
+    def tearDown(self):
+        shutil.rmtree(self.tmp, ignore_errors=True)
+
+    def test_unquoted_colon_repair_in_frontmatter(self):
+        # Pre-2.2.9 repo fixture
+        agents_md = os.path.join(self.tmp, "AGENTS.md")
+        with open(agents_md, "w", encoding="utf-8") as f:
+            f.write("<!-- BEGIN ALONG-PROTOCOL root -->\n# ALONG-PROTOCOL v2.2.4\n<!-- END ALONG-PROTOCOL -->\n")
+
+        along_dir = os.path.join(self.tmp, ".along")
+        milestones_dir = os.path.join(along_dir, "MILESTONES")
+        os.makedirs(milestones_dir, exist_ok=True)
+        milestone_path = os.path.join(milestones_dir, "v2.0.0-transition.md")
+        broken_content = (
+            "---\n"
+            "protocol: along\n"
+            "slug: v2.0.0-transition\n"
+            "title: v2.0.0: Transition to Along Ecosystem & .along/ Directory\n"
+            "summary: Work session: fixed \"quotes\" and colons\n"
+            "status: in-progress\n"
+            "---\n\n"
+            "# Milestone Body\n"
+        )
+        with open(milestone_path, "w", encoding="utf-8") as f:
+            f.write(broken_content)
+
+        from alongkit import frontmatter
+        _, _, err = frontmatter.try_parse(broken_content)
+        self.assertIsNotNone(err, "Broken front-matter must fail strict parsing initially")
+
+        res = migrate(self.tmp, "--apply")
+        self.assertEqual(res.returncode, 0, f"Migration failed:\n{res.stderr}")
+
+        repaired = read(milestone_path)
+        parsed_fields, _, parsed_err = frontmatter.try_parse(repaired)
+        self.assertIsNone(parsed_err, f"Repaired front-matter must parse without errors: {parsed_err}")
+        self.assertEqual(parsed_fields.get("title"), "v2.0.0: Transition to Along Ecosystem & .along/ Directory")
+        self.assertEqual(parsed_fields.get("summary"), 'Work session: fixed "quotes" and colons')
+
+    def test_shell_escape_advisory_scan_gated_by_version(self):
+        # When detected_version is 2.2.4, advisory warnings must be emitted
+        agents_md = os.path.join(self.tmp, "AGENTS.md")
+        with open(agents_md, "w", encoding="utf-8") as f:
+            f.write("<!-- BEGIN ALONG-PROTOCOL root -->\n# ALONG-PROTOCOL v2.2.4\n<!-- END ALONG-PROTOCOL -->\n")
+
+        along_dir = os.path.join(self.tmp, ".along")
+        os.makedirs(along_dir, exist_ok=True)
+        docs_dir = os.path.join(self.tmp, "docs")
+        os.makedirs(docs_dir, exist_ok=True)
+        sample_doc = os.path.join(docs_dir, "topic--architecture.md")
+        with open(sample_doc, "w", encoding="utf-8") as f:
+            f.write("# Topic Architecture\n\nRefer to \\ActDim.Emitron\\ and \\\"escaped quote\\\" in prose.\n")
+
+        res = migrate(self.tmp, "--apply")
+        self.assertEqual(res.returncode, 0, f"Migration failed:\n{res.stderr}")
+        self.assertIn("potential shell-escaping artifact", res.stdout)
+        self.assertIn("Suspicious paired backslashes", res.stdout)
+
+        # But for >= 2.2.9, advisory scan is skipped
+        with open(agents_md, "w", encoding="utf-8") as f:
+            f.write("<!-- BEGIN ALONG-PROTOCOL root -->\n# ALONG-PROTOCOL v2.2.9\n<!-- END ALONG-PROTOCOL -->\n")
+        res2 = migrate(self.tmp, "--apply", "--force")
+        self.assertNotIn("Advisory scan for potential shell-escaping artifacts", res2.stdout)
+
+
 if __name__ == "__main__":
     unittest.main()
+
