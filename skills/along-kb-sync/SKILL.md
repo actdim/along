@@ -12,8 +12,13 @@ Idempotent LLM-Wiki Knowledge Base synchronization, inbound link rewriting, comp
 2. **README Ingestion & Streamlining**: Extracts deep technical specifications from monolithic `README.md` files into modular `docs/topic--<slug>.md` articles, leaving `README.md` as an executive overview with direct navigation links.
 3. **Inbound Link Rewriting Engine**: Automatically scans all Markdown files across the entire repository hierarchy (`packages/*`, `apps/*`, root `README.md`) and rewrites legacy paths (`.along/KB/...`, `.agents/KB/...`, old file names) to valid relative paths in `docs/`.
 4. **Global Link Integrity Gate**: Recursively verifies that every relative link in all `.md` files in the project physically resolves to an existing file on disk, reporting exact files, line numbers, and invalid targets.
-5. **Ingestion & Archival**: Compiles unmanaged notes, specs, or drafts (`wiki/`, `kb/`, `docs/`) into structured Wiki articles and safely moves raw source files into `.archive/`.
-6. **LLM-Wiki Paradigm**: Native Python implementation of the Andrej Karpathy LLM-Wiki methodology. One runtime dependency (`ruamel.yaml`, for front-matter), resolved automatically by `uv`; everything else is standard library.
+5. **In-Place Provenance & Reconciliation**: Reconciles raw sources in-place without moving files to an archive folder. Tracks provenance via the `sources: [{path, hash}]` array in front-matter with SHA-256 content hashes.
+6. **Deterministic `llms.txt` & `llms-full.txt` Synchronization**: Non-destructively reconciles `llms.txt` and deterministically compiles `llms-full.txt` across `.well-known/` and context root locations for the repository and any sub-contexts.
+7. **Graduated Safety Gates**:
+   - **Hard Errors** (exit 1): Invalid YAML syntax, missing mandatory metadata (`slug`, `title`, `protocol`), or broken relative links in `--strict` mode.
+   - **Intent Gate (`--prune-intent [REASON]`)** (exit 2): Halts with a warning if any article shrinks by >25% in lines (and >= 10 lines), requiring explicit developer or agent intent to confirm deletion.
+   - **Drift Warnings**: Reports `[DRIFT]` when underlying source files change, prompting agentic smart merging.
+8. **LLM-Wiki Paradigm**: Native Python implementation of the Andrej Karpathy LLM-Wiki methodology. Zero heavy dependencies; standard library and `ruamel.yaml` resolved automatically by `uv`.
 
 ## Universal Rendering & Stable Entry Points
 
@@ -33,10 +38,11 @@ When executing `/along-kb-sync`:
   - When processing extensive documentation dumps, large monorepos, or multiple subprojects:
     1. **Decompose Topics**: Split the knowledge extraction into 2-4 discrete domain vectors (e.g. `architecture`, `data-models`, `api-integrations`, `workflows`).
     2. **Spawn Parallel Subagents**: Concurrently invoke research subagents to synthesize independent `docs/topic--<slug>.md` articles in parallel with standard YAML front-matter (`protocol: along`, `protocol_version: "2.2.18"`).
-    3. **Reconcile & Link**: Run `python scripts/along_kb_sync.py` to rewrite inbound links, validate relative links across the repository, move processed raw sources into `.archive/`, and rebuild `docs/INDEX.md`.
+    3. **Reconcile & Link**: Run `python scripts/along_kb_sync.py` to rewrite inbound links, validate relative links across the repository, verify provenance hashes, sync `llms.txt` and `llms-full.txt`, and rebuild `docs/INDEX.md`.
 
 ## Usage
 ```bash
 python scripts/along_kb_sync.py [REPO_ROOT] [--check] [--strict]
+python scripts/along_kb_sync.py [REPO_ROOT] [--check] [--strict] [--prune-intent [REASON]]
 ```
 *(Or `python scripts/along_exec.py kb-sync` / `/along-kb-sync`)*

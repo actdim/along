@@ -151,8 +151,12 @@ def bump_along_dev_repo(repo_root, new_version, tx):
 
 
 
-    # 8. Update llms.txt and llms-full.txt
-    for llm_file in ["llms.txt", "llms-full.txt"]:
+    # 8. Update llms.txt and llms-full.txt (both root and .well-known/)
+    for llm_file in [
+        "llms.txt", "llms-full.txt",
+        os.path.join(".well-known", "llms.txt"),
+        os.path.join(".well-known", "llms-full.txt"),
+    ]:
         apply(os.path.join(repo_root, llm_file), [
             protocol_mention,
             (r'Along \(v\d+\.\d+\.\d+\)', f'Along (v{new_version})'),

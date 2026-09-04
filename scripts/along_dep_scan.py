@@ -78,6 +78,22 @@ def find_ai_files_in_dir(dir_path: str, repo_root: str) -> List[Dict[str, str]]:
                     seen_real.add(r_canon)
                     rel = normalize_posix(safe_relpath(full, repo_root))
                     found.append({"filename": entry, "path": rel})
+
+    well_known_dir = os.path.join(dir_path, ".well-known")
+    if os.path.isdir(well_known_dir):
+        try:
+            for entry in sorted(os.listdir(well_known_dir)):
+                if entry.lower() in TARGET_AI_LOWER:
+                    full = os.path.join(well_known_dir, entry)
+                    if os.path.isfile(full):
+                        r_canon = os.path.realpath(full)
+                        if r_canon not in seen_real:
+                            seen_real.add(r_canon)
+                            rel = normalize_posix(safe_relpath(full, repo_root))
+                            found.append({"filename": f".well-known/{entry}", "path": rel})
+        except Exception:
+            pass
+
     return found
 
 

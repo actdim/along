@@ -7,6 +7,11 @@ type: setup-workflow
 created: 2026-08-30
 updated: 2026-09-02
 tags: [setup-workflow, installation, lifecycle, runners, developer-workflow, testing]
+sources:
+  - path: README.md
+    hash: "43dd66b243e20806c2dfb27aee41af1ba52cec257fc441e2fbcd9a079cc969fb"
+  - path: AGENTS.md
+    hash: "1bcec877848caf6f61003db77c2eb3eccd31e7298769a7b7623f0f7a38efc07e"
 ---
 
 # Setup & Developer Workflow

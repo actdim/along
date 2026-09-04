@@ -5,8 +5,15 @@ slug: skills-reference
 title: Skills & Slash Commands Technical Reference
 type: topic
 created: 2026-08-30
-updated: 2026-09-02
+updated: 2026-09-04
 tags: [skills, commands, reference, runners, lifecycle, automation, multi-agent]
+sources:
+  - path: skills/along-init/SKILL.md
+    hash: "8192c01e56a2456ed0d9f5af68575317346b5a4036f7bc4b1844c1f54e2f57da"
+  - path: skills/along-kb-sync/SKILL.md
+    hash: "df17474bd865bb88a9e18977dbafada9d4dbea718786f56d34beaff18473c7fb"
+  - path: skills/along-update/SKILL.md
+    hash: "1f6b3474dfbce56db76132fa9852bac17abc264e11f1eae271e2f166312247f6"
 ---
 
 # Skills & Slash Commands Technical Reference
@@ -236,11 +243,12 @@ flowchart TD
   - *LLM-Wiki Paradigm*: Implements Andrej Karpathy's LLM-Wiki architecture in Python with a single runtime dependency (`ruamel.yaml`, for front-matter), resolved automatically by `uv`.
   - *Inbound Link Rewriter*: Recursively scans all Markdown files in the monorepo and rewrites legacy internal paths (`.along/KB/...`) to standard relative `docs/` paths.
   - *Link Integrity Gate*: In `--strict` mode, validates that every relative Markdown link physically resolves to an existing file on disk.
-  - *Raw Source Archival*: Automatically relocates ingested raw notes, chat dumps, and scratch files to `.archive/`, excluding them from active search indices.
+  - *In-Place Source Provenance & Drift Gate*: Reconciles raw notes, code, and specs in-place with `sources: [{path, hash}]` front-matter tracking, detecting drift via SHA-256 and guarding accidental reductions via the `--prune-intent` gate.
+  - *Deterministic LLM Context Exports*: Non-destructively reconciles `llms.txt` and compiles `llms-full.txt` across `.well-known/` and context root locations for whole-project and subproject contexts.
 - **Invocation Triggers**:
-  - *Explicit*: `/along-kb-sync [--strict]`, `python scripts/along_kb_sync.py`.
+  - *Explicit*: `/along-kb-sync [--strict] [--prune-intent [REASON]]`, `python scripts/along_kb_sync.py`.
   - *Semantic / Automatic*: Triggered during `/along-wrap`, after modifying documentation in `docs/`, or during protocol migration.
-- **Entities Operated On**: `docs/*.md`, `docs/INDEX.md`, `.archive/`, all repository Markdown files.
+- **Entities Operated On**: `docs/*.md`, `docs/INDEX.md`, `llms.txt`, `llms-full.txt`, `.well-known/`, all repository Markdown files.
 - **Ecosystem Chaining**: Compiles the Knowledge Base queried by `along-kb-search` and visualized by `along-dash`.
 
 ---

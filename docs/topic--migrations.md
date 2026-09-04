@@ -7,6 +7,9 @@ type: topic
 created: 2026-08-30
 updated: 2026-09-02
 tags: [migrations, upgrade, protocol, changelog, versioning, data-safety]
+sources:
+  - path: scripts/migrate_protocol.py
+    hash: "6a67fc8c10b9eb8c691703abf099276ceadabd4d84f12931115875c0eb6266a5"
 ---
 
 # Protocol & Repository Migrations Guide
@@ -36,7 +39,7 @@ flowchart TD
     B -->|Step 2: Scaffolding KB & Graph| C["v1.3.0 (Knowledge Base & Graph)"]
     C -->|Step 3: Entity Ecosystem| D["v1.5.0 (Milestones, Risks, Checklists)"]
     D -->|Step 4: Along Directory| E["v2.0.0 (Along Ecosystem & protocol: along)"]
-    E -->|Step 7: LLM-Wiki & docs/| F["v2.1.0 (docs/ KB, .archive/, Domain-First Skills)"]
+    E -->|Step 7: LLM-Wiki & docs/| F["v2.1.0 (docs/ KB, In-Place Provenance, Domain-First Skills)"]
 ```
 
 ---
@@ -103,6 +106,6 @@ fails if the engine calls `shutil.move`, `os.remove` or their neighbours directl
 
 ### `v2.0.0` -> `v2.1.0`: LLM-Wiki Architecture & Singular Domain-First Skills
 - Migrates active Knowledge Base articles from `.along/KB/` to top-level `docs/`.
-- Isolates raw, unmanaged source notes into hidden `.archive/` directory.
+- Preserves raw, unmanaged source notes in-place with SHA-256 provenance tracking.
 - Standardizes all 3-part skills to Singular Domain-First format (`along-<entity>-<action>`).
 - Enforces mandatory `along-kb-search` agent querying rule to minimize token usage.

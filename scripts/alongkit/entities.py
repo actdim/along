@@ -14,9 +14,12 @@ version. The header format is now declared exactly once, below.
 
 from __future__ import annotations
 if __name__ == "__main__":
+    import os
     raise SystemExit(
         f"{__name__} is a library module, not a command.\n"
         "Run: along kb-sync   (or: python scripts/along_exec.py kb-sync)"
+        f"{os.path.basename(__file__)} is a library module, not a command.\n"
+        "Run: along issue list   (or: python scripts/along_exec.py issue list)"
     )
 
 

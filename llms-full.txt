@@ -1,60 +1,2134 @@
-# Along (actdim-along) - Full LLM Reference
+# Along (v2.2.18) - Full Documentation Context
 
-> Comprehensive architectural, protocol, skill, and API reference for AI coding agents operating on or using Along.
-
-## 1. Project Purpose & Architecture
-Along is a provider-agnostic agent-context and memory protocol (`ALONG-PROTOCOL v2.2.18`) that gives repositories a durable, versioned context directory (`.along/`), compiled Knowledge Base (`docs/`), and an executive dashboard suite.
-
-### Host Provider Compatibility
-- **Claude Code**: Reads `CLAUDE.md`, which imports root `AGENTS.md`. Skills located in `~/.claude/skills/`.
-- **Codex**: Reads `AGENTS.md` natively. Skills located in `~/.codex/skills/`.
-- **OpenCode**: Reads `AGENTS.md` natively. Flat command definitions in `~/.config/opencode/commands/`.
-- **Antigravity**: Reads `AGENTS.md` / `GEMINI.md` natively. Skills located in `~/.gemini/config/skills/`.
+> Knowledge Base and documentation index for along.
 
 ---
 
-## 2. Dynamic Dashboard & Knowledge Base Engine (`/along-dash`)
+## Document: README.md (Overview)
 
-### Backend Architecture (`dashboard/`)
-- **FastAPI Application (`dashboard/app.py`)**: REST endpoints and live Server-Sent Events (SSE) stream on `http://127.0.0.1:8765`.
-- **OpenAPI Schema & Swagger UI**: Auto-generated interactive API documentation available at `/docs` and `/openapi.json`.
-- **REST Endpoints**:
-  - `GET /api/data`: Full repository snapshot (metrics, issues, milestones, risks, spikes, sessions, decisions, KB articles, and graph).
-  - `GET /api/kb`: List all Knowledge Base articles with type and tag filters.
-  - `GET /api/kb/search?q={query}&type={type}`: Fast search engine across articles, issues, ADRs, and sessions.
-  - `GET /api/kb/graph`: Cross-link connectivity graph.
-  - `GET /api/metrics`: High-level progress percentages and issue distributions.
-  - `GET /api/events`: SSE stream broadcasting file modification events (`reload`).
+# Along (v2.2.18)
 
-### Frontend Architecture (`packages/dashboard-ui/`)
-- **Strict Reactive Component Model (`@actdim/dynstruct`)**: All state resides in observable `c.model` (MobX) with structure-first definitions. Zero raw React `useState` or `useEffect`.
-- **Type-Safe Messaging Bus (`@actdim/msgmesh`)**: Inter-component messaging and API queries routed through `dashboardBus` via dynamic adapters (`@actdim/msgmesh/adapters`).
-- **Interactive Visualizations**: Directed Acyclic Graph (DAG) rendered with Cytoscape, Kanban view of issues, sessions journal, and fast search modal (`SearchModal`).
+A provider-agnostic **agent-context and memory system** for software repositories - the `ALONG-PROTOCOL v2.2.18` plus the automation skills suite that scaffolds and maintains it. One unified convention, honored natively across **Claude Code**, **OpenAI Codex**, **OpenCode**, and **Google Antigravity**.
 
 ---
 
-## 3. Knowledge Base Structure (`docs/` & `.archive/`)
-- `INDEX.md`: Central topic index with relative Markdown links (`[Title](./target.md)`).
-- `topic--architecture.md`: System components, boundaries, protocol layers, and data flows.
-- `topic--domain-model.md`: Domain entity schemas (Issue, Milestone, Risk, Spike, Session, ADR) and DAG relationships.
-- `topic--setup-and-workflow.md`: Multi-provider setup, standard session workflow, and CLI reference.
-- `topic--frontend-frameworks.md`: Dynstruct, MsgMesh, Material UI adapters, and NSwag code generation.
-- `topic--dependencies.md`: Discovered AI guidelines from installed packages (`AGENTS.md`, `llms.txt`).
-- `.archive/`: Isolated raw source documents and notes excluded from active search.
+## Why Along?
+
+AI coding agents start every session blind. They lack persistent memory of past architectural decisions, work in progress, open issues, or repository conventions. Each tool maintains its own isolated configuration (`~/.claude`, `~/.codex`, `~/.config/opencode`, `~/.gemini/config`), leading to context loss and fragmented workflows.
+
+**Along fixes this by giving the repository an isolated, durable, human-readable memory directory (`.along/`) and a structured Knowledge Base (`docs/`) that all agents read and maintain collaboratively.**
 
 ---
 
-## 4. Skills & Slash Commands Reference (Singular Domain-First)
+## Core Value Proposition
 
-| Skill | Slash Command | Execution | Purpose |
+- **Persistent In-Repo Memory**: DAG issue tracking, append-only ADR log, milestones, risks, and session logs committed with the code.
+- **Provider-Agnostic Single Protocol**: Write conventions once in `AGENTS.md`; Claude Code, Codex, OpenCode, and Antigravity follow them identically.
+- **LLM-Wiki Knowledge Base (`docs/`)**: Modular, cross-linked topic articles with in-place source provenance, deterministic `llms.txt` / `llms-full.txt` sync, and 95-98% token reduction on retrieval.
+- **Nearest Context Boundary**: Strict isolation for monorepos, microservices, and Git submodules preventing root workspace pollution.
+- **Zero Bookkeeping Overhead**: 18 automation skills handle scaffolding, sync, commit checks, and stage wrap-ups in the background.
+
+---
+
+## Quickstart & Installation
+
+Install Along across all supported AI providers with a single command:
+
+### Windows (PowerShell)
+```powershell
+git clone https://github.com/actdim/along.git
+cd along
+powershell -NoProfile -ExecutionPolicy Bypass -File install.ps1 -Target all
+```
+
+### Linux / macOS (Bash)
+```bash
+git clone https://github.com/actdim/along.git
+cd along
+bash install.sh --target=all
+```
+
+An install records what it wrote in `~/.along/install-manifest.json`: it never deletes a
+directory it does not own, so rules you wrote yourself survive every re-install, and
+`install.ps1 -Uninstall` / `./install.sh --uninstall` removes exactly that record and
+nothing else. See [Setup, Installation & Workflows](./docs/topic--setup-and-workflow.md).
+
+---
+
+## Knowledge Base & Architecture Index
+
+The repository's complete technical specification is maintained as a living LLM-Wiki in [`docs/`](./docs/INDEX.md):
+
+| Topic | Description | Link |
+| :--- | :--- | :--- |
+| **System Architecture** | Provider flow, context boundaries, MCP servers, and bridge layers. | [System Architecture & Flow](./docs/topic--architecture.md) |
+| **Domain Model & Entities** | Machine-parseable schemas for Issues, ADRs, Milestones, and Risks. | [Domain Model & Entity Ecosystem](./docs/topic--domain-model.md) |
+| **Setup & Workflows** | Installation matrix, repository onboarding, and session lifecycle. | [Setup, Installation & Workflows](./docs/topic--setup-and-workflow.md) |
+| **LLM-Wiki Architecture** | Andrej Karpathy paradigm, source isolation, and token efficiency. | [LLM-Wiki Architecture & Paradigm](./docs/topic--llm-wiki-architecture.md) |
+## Automation Skills Reference (Grouped by Workflow Phase)
+
+Along provides **18 singular automation skills** structured across 6 core lifecycle phases:
+
+### 1. Bootstrap & Repository Protocol Management
+| Skill / Command | Purpose |
+| :--- | :--- |
+| **`along-init`** (`/along-init`) | Scaffold/refresh `AGENTS.md` + `CLAUDE.md` + `.along/` in a folder. |
+| **`along-update`** (`/along-update`) | One-liner update of repository context, protocol, and global skills from GitHub. |
+| **`along-version-bump`** (`/along-version-bump`) | Multi-stack version bump and release orchestrator (Node, Python, Rust, .NET). |
+
+### 2. Orchestration, Planning & Multi-Agent Teams
+| Skill / Command | Purpose |
+| :--- | :--- |
+| **`along-team`** (`/along-team`) | Sequential multi-agent autonomous development engine and living plan. |
+| **`along-issue-sync`** (`/along-issue-sync`) | Reconcile active issue board projection (`ISSUES.md`) with atomic issue files. |
+| **`along-decision-sync`** (`/along-decision-sync`) | Append structured architectural decisions (ADRs) to `.along/DECISIONS.md`. |
+
+### 3. Development & Lifecycle Execution Runners
+| Skill / Command | Purpose |
+| :--- | :--- |
+| **`along-build`** (`/along-build`) | Project build lifecycle hook via `.along/scripts/build.py` or auto-detected runner. |
+| **`along-test`** (`/along-test`) | Automated test suite with quiet flags via `.along/scripts/test.py` or runner. |
+| **`along-dev`** (`/along-dev`) | Local development/debugging server via `.along/scripts/dev.py` or runner. |
+
+### 4. Quality Gates, Code Graph & Commit Integrity
+| Skill / Command | Purpose |
+| :--- | :--- |
+| **`along-commit`** (`/along-commit`) | Smart ASCII-clean Conventional Committer linked to active `.along/` issue. |
+| **`along-graph-check`** (`/along-graph-check`) | Inspect `code-review-graph` AST impact radius (blast radius) and caller flows. |
+| **`along-dep-scan`** (`/along-dep-scan`) | Scan declared dependencies for AI instructions into `docs/topic--dependencies.md`. |
+
+### 5. Knowledge Base & LLM-Wiki Intelligence
+| Skill / Command | Purpose |
+| :--- | :--- |
+| **`along-kb-sync`** (`/along-kb-sync`) | Idempotent LLM-Wiki Knowledge Base compiler and link integrity gate in `docs/`. |
+| **`along-kb-search`** (`/along-kb-search`) | Fast targeted snippet search across `docs/` and project memory (<100 tokens). |
+
+### 6. Visual Analytics, History & Diagnostics
+| Skill / Command | Purpose |
+| :--- | :--- |
+| **`along-dash`** (`/along-dash`) | Launch executive dashboard (Web UI, CLI, Cytoscape DAG, HTML export). |
+| **`along-history-sync`** (`/along-history-sync`) | Reconstruct `.along/` milestones, issues, and sessions from Git commits. |
+| **`along-feedback`** (`/along-feedback`) | System self-diagnostics, incident logging, and feedback dispatch. |
+| **`along-wrap`** (`/along-wrap`) | Unified end-of-stage wrap: verification checklist, session log, issues, history. |
+
+---
+
+## License
+
+MIT License. See [LICENSE](./LICENSE) for details.
+
+---
+
+## Document: AGENTS.md (Agent Conventions & Protocol)
+
+<!-- BEGIN ALONG-PROTOCOL root (managed by along-init - do not edit by hand) -->
+# ALONG-PROTOCOL v2.2.18
+
+This repo carries its own agent context, provider-agnostically. Follow it every session, whatever tool you are.
+
+## Scope, Precedence & Subproject / Submodule Placement
+- **Nearest Context Boundary**: Any folder may carry its own `AGENTS.md` + `.along/`; they apply to that folder and everything under it. Use the NEAREST ones for the area you're working in; higher-level ones add broader context. On conflict, the more specific wins.
+- **Strict Subproject & Submodule Localization**:
+  - In modular repositories, monorepos, Git submodules, or symlinked folders (e.g. `packages/*`, `libs/*`, `modules/*`, `Common/*`):
+    - **Entity Anchoring**: All entity creation and lifecycle updates (`.along/ISSUES/`, `ISSUES.md`, `SESSIONS/`, `DECISIONS.md`, `HISTORY.md`, `docs/`) MUST be created in the **NEAREST `.along/`** directory corresponding to the specific component/subproject being modified.
+    - **Submodule Isolation**: When fixing a bug, refactoring, or adding a feature to a Git submodule or symlinked utility library, the issue (`ISSUES/<type>--<slug>.md`), session log (`SESSIONS/`), ADR (`DECISIONS.md`), and history line (`HISTORY.md`) MUST be recorded directly in that submodule's `.along/`.
+    - **Parent Orchestration**: The root workspace `.along/` is strictly reserved for whole-solution orchestration, top-level integration tasks, and cross-package architectural ADRs. Parent issues may reference subproject issue canonical keys (e.g. `[pkg-auth:feat--token-refresh]`), but MUST NOT absorb subproject internal entity history.
+    - **Anti-Root Pollution Rule**: Agents are STRICTLY FORBIDDEN from blindly dumping subproject or submodule changes into the workspace root `.along/`.
+    - **Uninitialized Subprojects**: If an active subproject has its own package manifest (`package.json`, `Cargo.toml`, `pyproject.toml`, `*.csproj`) or `.git` repo but lacks `.along/`, initialize it with `/along-init` in that folder before recording entities.
+- **Precedence**: Nearest `.along/` > higher-level `.along/` > global config (`~/.claude/CLAUDE.md`, `~/.codex/AGENTS.md`, `~/.gemini/config/GEMINI.md`).
+
+## At session start - read these yourself (they are NOT auto-loaded)
+Use the NEAREST `.along/` for the area you're working in (fall back to a higher-level one if the folder has none):
+1. `AGENTS.md` (nearest) - conventions to follow.
+2. `.along/ISSUES.md` - active issue board (or query `/along-kb-search`).
+3. `.along/DECISIONS.md` - architectural decisions & constraints.
+4. Active Issue file `.along/ISSUES/<type>--<slug>.md` for your task.
+Also, when relevant: `.along/VISION.md`, `.along/GLOSSARY.md`. These reflect the state WHEN WRITTEN - verify any named file/API/flag against the real code first.
+
+## Multi-Agent & Multi-Branch Concurrency Protocol
+1. **Single Source of Truth (SSOT) vs Derived Projections**:
+   - **SSOT Entities**: Atomic markdown files (`.along/ISSUES/<type>--<slug>.md`, `.along/SESSIONS/<YYYY>/<date>--<slug>.md`, `docs/topic--<slug>.md`, `.along/DECISIONS.md`).
+   - **Derived Projections (Compiled Views)**: `.along/ISSUES.md`, `docs/INDEX.md`, `.along/DASHBOARD.md`.
+   - **Zero-Manual-Merge Rule**: When git merge conflicts occur in derived projections (`ISSUES.md`, `INDEX.md`), never resolve diffs manually. Accept either incoming change and run `/along-issue-sync` or `/along-kb-sync` to recompile the projection from source files.
+2. **Append-Only Linear Merge Driver**:
+   - `.along/HISTORY.md` and `.along/DECISIONS.md` are append-only. Configure `.gitattributes` with `merge=union` to allow parallel branches to append entries without git merge conflicts.
+3. **Feature-Scoped Context & Blackboard Isolation**:
+   - The obsolete global `CONTEXT.md` file is deleted. Context is strictly localized to:
+     - The target issue file (`.along/ISSUES/<type>--<slug>.md`).
+     - Session-scoped ephemeral blackboard (`.along/.session/<slug>/` in `along-team`), automatically purged on wrap-up.
+     - Completed session logs in `.along/SESSIONS/<YYYY>/<date>--<slug>.md`.
+
+## Mandatory Issue Anchoring (Issue-Driven Execution)
+1. **No Code Edits Without an Issue**:
+   Before modifying any source code, agents MUST identify an existing issue or create a new one in `.along/ISSUES/<type>--<slug>.md`:
+   - Set `status: in-progress` and assign agent/branch metadata.
+   - For multi-issue tasks, declare the parent issue (`parent: <slug>`) or list active issues in the session log (`issues_advanced: []`).
+2. **Exemptions (Anti-Pollution & Token Conservation)**:
+   - **Read-only / Q&A**: DO NOT create issues for questions or code exploration.
+   - **Micro-edits**: 1-line typo fixes, comment adjustments, or tiny lint tweaks are recorded directly in the session log without creating an issue file.
+3. **Commit & History Binding**:
+   - Every commit created by `/along-commit` MUST bind to the active issue slug.
+
+## Entity Ecosystem & Structured Metadata
+All entities are designed for zero-friction auto-parsing by dashboards and tools via YAML front-matter:
+
+### 1. Issues (`.along/ISSUES/<type>--<slug>.md`)
+- **Placement**: Nearest `.along/ISSUES/`. Types: `feat`, `bug`, `debt`, `task`, `docs`.
+- **Front-matter**:
+  - `protocol`: `along` (mandatory protocol marker).
+  - `protocol_version`: optional quoted protocol version at creation, taken from the version in this document's title.
+  - `slug`: lowercase kebab-case slug (2-5 words).
+  - `type`: `feat` | `bug` | `debt` | `task` | `docs`.
+  - `status`: `open` | `in-progress` | `blocked` | `done`.
+  - `priority`: `critical` | `high` | `medium` | `low`.
+  - `created`: `YYYY-MM-DD`.
+  - `updated`: `YYYY-MM-DD`.
+  - `completed`: `YYYY-MM-DD` (mandatory when `status: done` / moved to `done/`).
+  - `agent`: model or tool name (e.g. `antigravity`, `claude-code`).
+  - `tags`: array of tags (e.g. `[mcp, protocol]`).
+  - `milestone`: optional milestone slug (e.g. `v2.2.0-along`).
+  - `blocked_by`: optional array of blocking entity keys/slugs (e.g. `[feat--core-parser]`).
+  - `related`: optional array of associative entity keys/slugs (e.g. `[risk--api-limit]`).
+  - `parent`: optional parent entity key/slug (e.g. `feat--epic-container`).
+- **Entity Linking & Graph Invariance**:
+  - Reference entities strictly by canonical key (`<type>--<slug>` or `<slug>`), NEVER by local file path, ensuring links survive moves into `done/`.
+  - Links are unidirectional in front-matter; inverse relationships (`blocks`, `children`) and full DAGs are resolved dynamically by graph tools and dashboards.
+- `.along/ISSUES.md` is the compact board read every session (`## Active`, `## Backlog`, `## Done (recent)`).
+- On completion: set `status: done` and `completed: YYYY-MM-DD`, MOVE to `.along/ISSUES/done/<type>--<slug>.md`, and update `.along/ISSUES.md`.
+
+### 2. Decisions (ADRs) (`.along/DECISIONS.md`)
+- Append-only Architectural Decision Records with decentralized slug headers:
+  - Header: `## ADR-YYYY-MM-DD--<slug> - <Title>`
+  - Fields: `- Date: YYYY-MM-DD`, `- Status: accepted | superseded by ADR-YYYY-MM-DD--<slug>`, `- Context: ...`, `- Decision: ...`, `- Consequences: ...`
+  - Slug-based headers prevent merge collisions when parallel branches record architectural decisions.
+
+### 3. Milestones & Releases (`.along/MILESTONES/<slug>.md`)
+- Group multiple issues into a release target, stage, or sprint.
+- **Front-matter**: `protocol: along`, `protocol_version`, `slug`, `title`, `status` (`open` | `in-progress` | `completed`), `due_date`, `created`, `target_issues: []`, `progress_pct`.
+
+### 4. Risks & Blockers (`.along/RISKS/<slug>.md`)
+- Track external dependencies, API limits, blocking ambiguities, and security flags.
+- **Front-matter**: `protocol: along`, `protocol_version`, `slug`, `title`, `severity` (`critical` | `high` | `medium` | `low`), `status` (`active` | `mitigated` | `resolved`), `owner` (`agent` | `user`), `mitigation`, `created`, `updated`.
+
+### 5. Spikes & R&D Experiments (`.along/SPIKES/<slug>.md`)
+- Exploratory spikes, benchmark experiments, and library evaluations before implementation.
+- **Front-matter**: `protocol: along`, `protocol_version`, `slug`, `title`, `status` (`hypothesis` | `evaluating` | `concluded`), `hypothesis`, `outcome`, `resulting_adr`, `created`.
+
+### 6. Checklists & Verification (`.along/CHECKLISTS/<slug>.md`)
+- Reusable verification checklists for quality gates, pre-commit, and security audits.
+- **Front-matter**: `protocol: along`, `protocol_version`, `slug`, `title`, `category` (`pre-commit` | `stage-completion` | `release` | `security`), `items: [{ id, text, verified: bool }]`.
+
+### 7. Sessions (`.along/SESSIONS/<YYYY>/<YYYY-MM-DD>--<slug>.md`)
+- Comprehensive work session log.
+- **Front-matter**: `protocol: along`, `date`, `slug`, `agent`, `branch`, `commit`, `summary`, `milestone`, `issues_advanced: []`, `issues_completed: []`, `decisions: []`, `risks_logged: []`, `spikes_conducted: []`.
+
+## Automated Intent Recognition & Entity Heuristics (Zero Human Friction)
+Agents MUST automatically detect user intent and maintain entities in the background without prompting the human to manage project tracking:
+
+| User Trigger / Natural Prompt | Auto-Inferred Entity | Automatic Agent Action (in background) |
+| :--- | :--- | :--- |
+| *"Build feature X"*, *"Fix bug Y"*, *"Refactor Z"* | **`ISSUE`** | Auto-create `.along/ISSUES/<type>--<slug>.md` & add to `ISSUES.md`. On completion, set `status: done`, `completed: YYYY-MM-DD` & move to `done/`. |
+| *"API rate limit hit"*, *"Waiting for API key"*, *"Blocked on X"* | **`RISK / BLOCKER`** | Auto-create `.along/RISKS/<slug>.md` (`status: active`), mark related issue as `status: blocked`. |
+| *"Compare library A vs B"*, *"Benchmark SQLite vs DuckDB"*, *"Test if X works"* | **`SPIKE`** | Auto-create `.along/SPIKES/<slug>.md`. After testing, document outcome & generate ADR in `DECISIONS.md` if an architectural choice was made. |
+| *"Sprint goal"*, *"Preparing Release v2.0"*, *"Target for next milestone"* | **`MILESTONE`** | Auto-create `.along/MILESTONES/<slug>.md` and link newly created issues via `milestone: <slug>`. |
+| *"I'm done for today"*, *"Wrap up"*, or Stage Completion | **`SESSION & CHECKLIST`** | Execute mandatory stage wrap-up checklist, compile `.along/SESSIONS/`, and update compact boards. |
+
+### Anti-Pollution & Entity Filtering Rules
+To keep `.along/` lean and avoid token bloat:
+1. **Simple Q&A ("How does function X work?")**: Read-only, DO NOT create issues or entity files.
+2. **Micro-edits (1-line typo fix, comment change)**: Record directly in the session log; DO NOT create an issue file.
+3. **Non-trivial code changes (new logic, bug fixes, refactoring)**: ALWAYS ensure an `ISSUE` exists and tracks progress.
+
+## Knowledge Base (KB) Management & LLM-Wiki Integration
+- **Structured Knowledge Base**: Maintain active project documentation in `docs/` with standard articles:
+  - `docs/INDEX.md`: Central cross-linked topic catalog and entry point (`[Title](./topic--architecture.md)`).
+  - `docs/topic--architecture.md`: System components, boundaries, and data flows.
+  - `docs/topic--domain-model.md`: Domain concepts, business logic, and terms.
+  - `docs/topic--setup-and-workflow.md`: Build, run, test, and workflow instructions.
+  - `docs/topic--<slug>.md`: Specific domain topics and module specifications.
+- **In-Place Source Grounding & Provenance**: Raw sources, specs, and notes remain in-place in their project locations (never moved to an archive directory). Every compiled article tracks its origin via `sources: [{path, hash}]` in YAML front-matter with SHA-256 content hashes, enabling drift detection and reproducible verification.
+- **Front-matter Schema**: Every `docs/*.md` article MUST include YAML front-matter: `protocol: along`, `protocol_version` (the current protocol version, quoted), `slug`, `title`, `type` (`topic` | `architecture` | `domain-model` | `setup-workflow` | `index`), `created`, `updated`, `tags: []`, and optional `sources: [{path, hash}]` / `curated: bool`.
+- **Stable Entry Point Rule**: Files outside the service directory (`README.md`, `docs/`, package manifests, external documentation) MUST NOT link directly into `.along/`, nor into legacy service paths from earlier protocol versions. Route every such reference through a stable canonical path in `docs/` (`docs/INDEX.md` or `docs/topic--<slug>.md`). The rule governs published links only: agents still read `.along/ISSUES.md` and `.along/DECISIONS.md` directly, as instructed at session start.
+- **Inbound Link Rewriting Engine & Migration Invariance**: Whenever documentation schemas change, migration engines (`/along-update`, `/along-kb-sync`) MUST recursively rewrite legacy path references across all repository Markdown files before deleting legacy directories.
+- **Monorepo Scope Rule**: Knowledge Base synchronization, link rewriting, and link verification operate recursively across all subprojects, packages (`packages/*`, `apps/*`), and directories.
+- **Portable Markdown Links**: All internal cross-references MUST use standard relative Markdown links (`[Title](./target.md)`) for universal rendering across GitHub, GitHub Pages, IDEs, and npm.
+- **Idempotent Synchronization & Deterministic LLM Context**: Use `/along-kb-sync` to bootstrap, compile, and validate links in `docs/`, detect drift across sources, sync `llms.txt`, and deterministically compile `llms-full.txt` supporting `.well-known/` and context root locations.
+- **Strict Fact Grounding Requirement**: Agents MUST extract facts strictly from actual `README.md`, `docs/`, `package.json`, and codebase symbols. Generating generic LLM placeholders is strictly prohibited.
+- **Targeted Fast Retrieval**: Agents MUST query `/along-kb-search` or `wiki_query` for concise snippets before reading whole documentation files into context.
+- **Documentation Blast Radius & Code-Graph-to-Wiki Synchronization**: After non-trivial code modifications, agents MUST determine the documentation blast radius by mapping affected AST symbols and dependent modules (discovered via `code-review-graph` or code search) to corresponding Knowledge Base articles (`docs/topic--<slug>.md`) using `along-kb-search` or symbol search. All impacted topic articles MUST be updated to reflect interface, architectural, or workflow changes before completing the task.
+
+## While working
+- Follow the conventions in `AGENTS.md`.
+- `DECISIONS.md` is APPEND-ONLY: add a new dated entry with slug header (`## ADR-YYYY-MM-DD--<slug>`) per non-trivial architectural decision; never edit past ones - mark a replaced one "Superseded by ADR-YYYY-MM-DD--<slug>".
+- Add any new/clarified domain term to `.along/GLOSSARY.md`.
+- **Context & Token hygiene**: Keep tool output lean to prevent context bloat. Use quiet flags for builds/tests (`pytest -q`, `dotnet test -v q`), filter command outputs, and inspect targeted line ranges.
+- **Mandatory Agentic Code Review & Blast Radius Impact**: After completing non-trivial code modifications, agents MUST critically inspect their own diffs and evaluate systemic blast radius. Use `code-review-graph` MCP tools (`build_or_update_graph_tool`, `get_impact_radius_tool`, `get_affected_flows_tool`) to verify that downstream callers, interfaces, and dependent systems remain unbroken, edge cases and nulls are handled, and active ADRs in `.along/DECISIONS.md` are respected.
+- **Targeted Knowledge Base Search**: Prioritize `along-kb-search` or `wiki_query` MCP tools for targeted searches across `docs/`, `README.md`, and `DECISIONS.md`.
+
+## Mandatory Stage & Session Completion Checklist
+When a Stage or session completes, agents MUST execute this verification checklist in exact order:
+1. [ ] **Verification & Tests**: Run automated unit tests / linting / builds with quiet flags. Verify test discovery count increased appropriately and zero tests failed.
+2. [ ] **File Integrity & Untracked Audit**: Inspect `git status -u` and verify that all newly created and modified files have non-zero size (`getsize > 0`), containing expected code/content without empty placeholders or corrupted bodies.
+3. [ ] **Code Review & Blast Radius Assessment**:
+   - Inspect git diff for unintended side effects, unhandled nulls/errors, and edge cases.
+   - Verify 100% requirement coverage against the initial user request (`REQ-N`) across both core implementation and public mirror surfaces (`README.md`, `AGENTS.md`).
+   - Evaluate systemic impact radius on callers/dependents using `code-review-graph` (`get_impact_radius_tool`, `get_affected_flows_tool`) or AST analysis.
+   - Identify all modified subsystem symbols and impacted downstream interfaces to inform documentation updates.
+   - Verify compliance with architectural decisions in `.along/DECISIONS.md`.
+4. [ ] **Entity Reconciliation**:
+   - Set `status: done` and `completed: YYYY-MM-DD` for finished issues; MOVE to `.along/ISSUES/done/`.
+   - Update related `.along/MILESTONES/` progress percentages.
+   - Resolve mitigated `.along/RISKS/` (`status: resolved` / `mitigated`).
+   - Conclude active `.along/SPIKES/` and log any resulting ADR in `.along/DECISIONS.md`.
+5. [ ] **Documentation Blast Radius Check & LLM-Wiki Gate**:
+   - Map identified code blast radius symbols/modules to Knowledge Base topics using `along-kb-search` or symbol search in `docs/`.
+   - Factually update all affected `docs/topic--*.md` articles (and `README.md` / `AGENTS.md` if public entry points or conventions changed).
+   - Run `/along-kb-sync` to recompile `docs/INDEX.md`, validate link integrity, and verify zero 404 broken relative links.
+6. [ ] **Session Log**: Write `.along/SESSIONS/<YYYY>/<YYYY-MM-DD>--<short-slug>.md` with complete front-matter (`protocol: along`, `issues_advanced`, `issues_completed`, `decisions`, `risks_logged`, `spikes_conducted`) and a concise Code Review & Impact summary.
+7. [ ] **ISSUES Board Projection**: Run `/along-issue-sync` (or update `.along/ISSUES.md`).
+8. [ ] **HISTORY**: Append one line to `.along/HISTORY.md`: `<YYYY-MM-DD> - <slug> - <agent> - <summary> - <link>`.
+9. [ ] **Compaction Prompt**: Advise user to run `/compact` to free up token budget.
+
+## Rules
+- **Strict Dependency & Environment Isolation**:
+  - **No Unprompted Global Installs**: Agents MUST NOT arbitrarily install system-wide or global packages (e.g. via `pip install`) when a script fails with a missing dependency.
+  - **Fix the Architecture, Not the Environment**: If an engine or script fails to locate a dependency, it is an architectural defect (such as a missing `bootstrap.ensure_deps()` call or an incorrect `uv` wrapper). The agent MUST diagnose and fix the script's entry point or discuss it with the user, rather than mutating the environment to force it to pass.
+- **Strict File Modification & Anti-Deletion**:
+  - **Zero Unintended Deletions**: Never delete, truncate, or overwrite existing documentation, comments, planned features, or code unless explicitly instructed by the user.
+  - **Mandatory Post-Batch & Destructive Operation Audit**: After running any batch replacement, migration script, refactor, or multi-file edit, agents MUST immediately execute `git diff --stat` to verify that net line counts align with expectations. Any unexpected net reduction in file size or line count must be inspected in detail before proceeding.
+  - **Anti-Stub & Size Regression Invariant**: It is strictly forbidden to replace populated files, documentation, or code with placeholder templates, stubs, or summary skeletons (`// ... rest of code`).
+  - **Minimal Edit Scope**: Anchor edit blocks strictly on exact single lines or minimal unique chunks.
+  - **Immediate Rollback**: If an unintended deletion or truncation is detected, restore missing lines immediately.
+- **Technical Markdown & Formatting Standards**:
+  - **Forbidden Characters (Clean ASCII & Invisible Character Ban)**:
+    - NEVER use em-dash (U+2014), en-dash (U+2013), or math minus (U+2212) in agent responses, chat messages, code, docstrings, comments, session logs, or documentation. Use standard ASCII hyphens (`-`), colons (`:`), or parentheses `()`.
+    - NEVER use typographic curly quotes or guillemets (left/right single/double quotes, low-9 quotes, angle quotation marks) in code blocks, shell commands, docstrings, chat, or YAML front-matter; use standard ASCII double (`"`) or single (`'`) quotes.
+    - NEVER use unicode ellipsis character (U+2026); use standard three ASCII dots (`...`).
+    - NEVER use non-breaking spaces (NBSP U+00A0, narrow NBSP U+202F) or zero-width invisible characters (ZWSP U+200B, ZWNJ, ZWJ, BOM U+FEFF); use standard ASCII spaces or omit.
+    - NEVER use special bullet glyphs (U+2022, U+2023, U+2043); use standard ASCII hyphen (`-`) for lists.
+  - **Explicit Code Fence Languages**: Always specify the language identifier on code fences (e.g. ```` ```bash ````, ```` ```yaml ````, ```` ```typescript ````, ```` ```python ````). Never use bare unlabelled fences.
+  - **Relative & Portable Links**: Always use relative paths (`file://...` or standard markdown links) without hardcoding local absolute paths.
+  - **UTF-8 Clean Encoding**: Keep all text files in clean UTF-8 without BOM.
+  - **File Content Never Travels Through a Command Line**: Create files with the agent's file-writing tool and change them with its edit tool. NEVER carry file content in a heredoc, a `python -c` string, or any inline shell command. Such content crosses several parsers in sequence (shell, heredoc or `-c`, the language string literal, sometimes a regex), and any one of them may consume a backslash or a quote: the file is then silently corrupted, or fails with an unterminated-literal error. Symptoms observed in practice: `"\r\n"` arriving as a real newline, an apostrophe in prose ending a quoted heredoc early, and a multi-line `python -c` losing its newlines entirely.
+  - **Deterministic Entity & Command Execution**: Use deterministic subcommands via `python scripts/along_exec.py` (`issue create`, `session create`, `scratch init`) for entity work. When a script is genuinely required, write it to a file first and execute that path; never inline it. Build backslashes in code (`chr(92)`, `os.linesep`, `re.escape`) instead of escaping them through layers, and never reuse line indices captured before a list of lines was mutated.
+  - **Verify Every Written File**: After writing or patching a file, confirm it still parses before moving on: `python -m compileall -q` for Python, `bash -n` for shell, `[System.Management.Automation.Language.Parser]::ParseFile()` for PowerShell, and the project's own reader for structured data. Parsing is not proof of correctness, but a file that does not parse must never be left on disk. (A fixed, content-free command like `bash -n <file>` is not what the rule above forbids: the ban is on carrying file CONTENT through a command line.)
+- **Hermetic Tests (No Test May Mutate Its Own Repository)**:
+  - **Fixtures, Never the Real Root**: A test MUST point every engine, script, or command it executes at a throwaway fixture (`tempfile.mkdtemp()`), never at the repository that contains the test. Engines write: they normalize front-matter, sanitize typography, rewrite links, and move entities, so a test that passes the real root can silently edit work in progress.
+  - **Read-Only Access to Live State**: Tests MAY read live repository content (project memory, `docs/`, manifests) to guard against format drift, and MUST open it read-only without invoking an engine that writes.
+  - **Prove It**: Keep a meta-test that snapshots `git status --porcelain -u` before and after the suite and fails if the suite dirtied the tree. "The suite is green" and "the tree is clean" must be simultaneously achievable; otherwise the suite cannot serve as a gate and CI cannot tell a real change from test noise.
+- Windows-safe filenames: dates `YYYY-MM-DD` (no `:`), date first.
+- Keep `ISSUES.md` compact - it costs context every session.
+- Never write secrets/credentials/tokens/keys into these files; they are committed.
+<!-- END ALONG-PROTOCOL -->
+<!-- END ALONG-PROTOCOL -->
+## Project specifics
+
+<!-- BEGIN ALONG-RULES -->
+See the following engineering guidelines:
+- `[languages/python.md](file://.along/rules/languages/python.md)`
+- `[languages/typescript.md](file://.along/rules/languages/typescript.md)`
+- `[platforms/web.md](file://.along/rules/platforms/web.md)`
+<!-- END ALONG-RULES -->
+
+This repository is `Along` (`actdim-along`) - the provider-agnostic agent-context protocol and skills suite for Claude Code, Codex, OpenCode, and Antigravity.
+
+- **Skills Source**: `skills/` (`along-init`, `along-update`, `along-dash`, `along-wrap`, `along-commit`, `along-build`, `along-test`, `along-dev`, `along-team`, `along-kb-sync`, `along-kb-search`, `along-issue-sync`, `along-context-sync`, `along-decision-sync`, `along-history-sync`, `along-graph-check`, `along-dep-scan`, `along-version-bump`, `along-feedback`).
+- **Engine Source**: `scripts/` (one engine per skill) over the shared implementation
+  package `scripts/alongkit/` (`repo`, `frontmatter`, `entities`, `proc`, `textio`,
+  `markdown`, `typography`, `sanitizer`, `transaction`, `migration`, `gates`, `semver`, `version`,
+  `bootstrap`, `cli`). Helpers are defined there and nowhere else: two tests in
+  `tests/test_alongkit.py` fail if an engine defines a name that already exists in the
+  package, or that another engine defines. Runtime dependency: `ruamel.yaml` (see
+  `pyproject.toml`).
+- **Typography Gate**: `along sanitize` checks and exits non-zero; it writes only with
+  `--write`. `/along-commit` and `/along-version-bump` verify and abort, and rewrite only
+  with `--fix-typography`. Scope is `.md`, `.py`, `.sh`, `.ps1`, `.bat` (data files
+  opt-in, localized resource directories never); non-UTF8 files are skipped and reported,
+  line endings preserved. See ADR-2026-09-01--typography-rule-scope in
+  `.along/DECISIONS.md`.
+- **Release Path (`/along-version-bump`)**: gates first, on the untouched tree (tests,
+  typography check, Markdown link check), unconditionally rather than only with
+  `--commit`; then the version, the matching milestone's front-matter, `CHANGELOG.md`,
+  the commit of exactly those paths, and the annotated tag `v<version>`. Every mutation
+  is recorded by `alongkit.transaction.FileTransaction` and restored byte for byte if a
+  later step fails. A release never invokes an installer or touches machine-global
+  state. See ADR-2026-09-01--release-gates-before-mutations in `.along/DECISIONS.md`.
+- **Migration Path (`migrate_protocol.py`)**: never deletes a destination file. On a
+  collision, append-only files (`DECISIONS.md`, `HISTORY.md`) are union-merged, derived
+  projections keep the destination, and any other legacy copy is preserved as
+  `<name>.legacy.md` and reported. `.along/` and `.agents/` are copied to
+  `.along/.migration-backup/<timestamp>/` before the first change; reads are strict and
+  undecodable files are skipped and reported; `.along/.protocol-version` makes a second
+  run a no-op (`--force` overrides). Dry run is the default for every caller that is not
+  a human at a terminal, so `--apply` is mandatory from a script, and installing no
+  longer migrates unless given `-Migrate` / `--migrate`. The primitives live in
+  `alongkit.migration`. See ADR-2026-09-01--migration-never-deletes-a-destination in
+  `.along/DECISIONS.md`.
+- **Install Commands**:
+  - Windows: `powershell -NoProfile -ExecutionPolicy Bypass -File install.ps1 -Target all` (or `install.bat`).
+  - Linux / macOS: `bash install.sh`.
+  - Uninstall: `install.ps1 -Uninstall` / `./install.sh --uninstall`.
+- **Install Path (`install.ps1`, `install.sh`)**: the installers copy; every decision is
+  an engine. The layout is described once in `alongkit.install.planned_files` and both
+  installers are run against it end to end by `tests/test_installers.py`, so they cannot
+  drift. No install deletes a destination directory: `scripts/install_manifest.py` records
+  what was written to `~/.along/install-manifest.json`, removes by name only the files a
+  previous install wrote and this one no longer ships, and is what an uninstall reads.
+  `scripts/configure_mcp.py` registers `code-review-graph` only where the provider's
+  configuration contract is verified (Claude Code's `~/.claude.json`), reports the rest
+  with their snippet, and never overwrites a file it could not parse. See
+  ADR-2026-09-01--installers-never-delete-what-they-did-not-write in `.along/DECISIONS.md`.
+- **Lifecycle Commands**:
+  - Run Tests: `python .along/scripts/test.py` (resolves dependencies via `uv` if needed),
+    or `uv run python -m unittest discover tests -q`.
+- **Test Suite (`tests/`)**: plain `unittest`. Every engine invocation targets a throwaway
+  fixture from `tests/hermetic.py` (`repo_fixture()`), never the repository root;
+  `tests/test_zz_hermetic_suite.py` runs last and fails if the suite dirtied the working
+  tree or if a test built an engine command line with `REPO_ROOT` as the target. Reading
+  live project memory is allowed and must stay read-only. See
+  `[docs/topic--setup-and-workflow.md](./docs/topic--setup-and-workflow.md)`.
+  - Run Dev Server: `npm run dev` (or `python .along/scripts/dev.py`).
+  - Build Assets: `npm run build` (or `python .along/scripts/build.py`).
+- **Frontend Architecture (`packages/dashboard-ui/`)**:
+  - Full architectural rules in `[docs/topic--frontend-frameworks.md](file://docs/topic--frontend-frameworks.md)` and `[.along/DECISIONS.md](file://.along/DECISIONS.md#011)`.
+  - Strict `@actdim/dynstruct` component architecture with MobX reactive state; zero raw `useState`/`useEffect` hooks.
+  - Zero manual API channels or manual `fetch` calls: client generated via NSwag (`pnpm run generate:api`) and wired dynamically using `@actdim/msgmesh/adapters` (`ToMsgChannelPrefix`, `ToMsgStruct`, `registerAdapters`).
+  - Strict 100% typing: zero `any`, zero `as ...`, zero global `window` state storage.
+  - MsgMesh bus injected via React `<ComponentContextProvider>` and accessed via component proxy `c.msgBus`.
+
+---
+
+## Document: docs/topic--architecture.md (System Architecture & Flow)
+
+# System Architecture & Flow
+
+Along (`actdim-along`) is a provider-agnostic agent-context, project memory, and documentation protocol designed to give software repositories a persistent, durable, token-efficient, and human-readable context layer.
+
+---
+
+## 1. System Topology & Architecture
+
+Along operates as a modular, three-layer architecture spanning host AI agent runtimes, repository-native persistent memory, and integrated execution tooling:
+
+```mermaid
+flowchart TD
+    subgraph HostAgents["Host AI Agent Runtimes"]
+        CC["Claude Code (~/.claude)"]
+        CX["Codex (~/.codex)"]
+        OC["OpenCode (~/.config/opencode)"]
+        AG["Antigravity (~/.gemini/config)"]
+    end
+
+    subgraph MemoryLayer["Repository Persistent Memory (.along/ & docs/)"]
+        AGENTS["AGENTS.md (Root Protocol & Conventions)"]
+        ALONG_DIR[".along/ (Living Project State: ISSUES, DECISIONS, SESSIONS)"]
+        DOCS["docs/ (Compiled LLM-Wiki Knowledge Base)"]
+        EXPORTS["llms.txt & llms-full.txt (.well-known/ or root)"]
+    end
+
+    subgraph MultiAgentEngine["Multi-Agent Orchestration & Execution"]
+        TEAM["Sequential State Machine (/along-team)"]
+        BLACKBOARD[".along/.session/<slug>/ (Ephemeral Blackboard)"]
+        LIFECYCLE["Lifecycle Suite (build, test, dev, commit, wrap)"]
+    end
+
+    subgraph ToolingAndMCP["Tooling & MCP Integrations"]
+        CRG["code-review-graph MCP (AST Call Graph & Blast Radius)"]
+        WIKI_SEARCH["along-kb-search (Fast Multi-Scope Retrieval)"]
+        DASH["FastAPI Dashboard + Cytoscape DAG (/along-dash)"]
+    end
+
+    CC --> AGENTS
+    CX --> AGENTS
+    OC --> AGENTS
+    AG --> AGENTS
+
+    AGENTS --> ALONG_DIR
+    AGENTS --> DOCS
+    DOCS --> EXPORTS
+    ALONG_DIR --> TEAM
+    TEAM --> BLACKBOARD
+    TEAM --> LIFECYCLE
+    LIFECYCLE --> CRG
+    DOCS --> WIKI_SEARCH
+    ALONG_DIR --> DASH
+```
+
+---
+
+## 2. Provider Compatibility & Discovery Paths
+
+Along avoids vendor lock-in by utilizing standard agent discovery paths without requiring custom binary daemons:
+
+| Host Agent | Discovery & Context Entry Point | Skills Installation Target | Execution Mechanism |
 | :--- | :--- | :--- | :--- |
-| `along-init` | `/along-init` | `along-init` | Scaffolds or refreshes `.along/` and `AGENTS.md`. |
-| `along-update` | `/along-update` | `python scripts/along_update.py` | One-liner update of repo protocol and global skills. |
-| `along-dash` | `/along-dash` | `python scripts/along_dash.py -w` | Launches dynamic FastAPI dashboard with OpenAPI docs and UI. |
-| `along-kb-sync` | `/along-kb-sync` | `python skills/along-kb-sync/along_kb_sync.py` | Idempotent LLM-Wiki Knowledge Base compiler. |
-| `along-kb-search` | `/along-kb-search` | `python skills/along-kb-search/along_kb_search.py` | Fast targeted structured retrieval across docs. |
-| `along-dep-scan` | `/along-dep-scan` | `python skills/along-dep-scan/along_dep_scan.py` | Discovers AI guidelines in declared dependencies. |
-| `along-version-bump` | `/along-version-bump` | `python scripts/along_version_bump.py patch -c` | Increments version across manifests and files. |
-| `along-commit` | `/along-commit` | `python skills/along-commit/along_commit.py` | ASCII sanitizer, pre-commit test gate, and conventional committer. |
-| `along-wrap` | `/along-wrap` | `along-wrap` | Unified session wrap: verification, session log, context, issues reconciliation. |
-| `along-graph-check` | `/along-graph-check` | `along-graph-check` | Inspects code-review-graph status, blast radius, and architecture flows. |
+| **Claude Code** | Reads `CLAUDE.md`, which references `@AGENTS.md`. | `~/.claude/skills/along-*/` | Direct slash commands (`/along-*`) and MCP tools. |
+| **Codex** | Reads `AGENTS.md` natively on session initialization. | `~/.codex/skills/along-*/` | Native skill execution and prompt injection. |
+| **OpenCode** | Reads `AGENTS.md` and `CLAUDE.md` natively. | `~/.config/opencode/commands/along-*.md` | Flat markdown command declarations. |
+| **Google Antigravity** | Reads `AGENTS.md` (or `GEMINI.md`) natively. | `~/.gemini/config/skills/along-*/` | Slash commands, `/goal` autonomy, and MCP tools. |
+
+---
+
+## 3. Nearest Context Boundary & Subproject Localization
+
+In multi-package monorepos, Git submodules, or symlinked component libraries (`packages/*`, `libs/*`, `modules/*`), Along enforces **Strict Subproject Localization** via the Anti-Root Pollution Rule:
+
+1. **Nearest `.along/` Boundary**: Any subfolder may contain its own `AGENTS.md` and `.along/`. Agents MUST evaluate and write entities (`ISSUES/`, `SESSIONS/`, `DECISIONS.md`, `HISTORY.md`) to the **NEAREST** `.along/` corresponding to the modified files.
+2. **Submodule Isolation**: When fixing a defect or adding a feature inside a Git submodule or shared library, the issue ticket, ADR, session log, and history line are recorded directly in that submodule's `.along/`.
+3. **Parent Orchestration**: The workspace root `.along/` is reserved strictly for whole-solution orchestration, top-level integration tasks, and cross-package architectural ADRs. Parent issues reference subproject issues via canonical keys (e.g. `[pkg-auth:feat--token-refresh]`), never by copying internal history.
+
+---
+
+## 4. Multi-Branch Concurrency & Git File Model
+
+Collaborative software development requires parallel feature branches without merge conflicts on tracking files. Along solves this through a formal distinction between SSOT entities and derived projections:
+
+### Single Source of Truth (SSOT) vs Derived Projections
+
+```mermaid
+flowchart LR
+    subgraph SSOT["Single Source of Truth (Atomic Files)"]
+        I["Atomic Issue Files (.along/ISSUES/<type>--<slug>.md)"]
+        S["Session Journals (.along/SESSIONS/<YYYY>/<date>--<slug>.md)"]
+        T["Knowledge Base Topics (docs/topic--<slug>.md)"]
+    end
+
+    subgraph Projections["Compiled Projections (Derived Views)"]
+        IB["Active Issue Board (.along/ISSUES.md)"]
+        KI["Knowledge Index (docs/INDEX.md)"]
+        DB["Dashboard Report (.along/DASHBOARD.md)"]
+    end
+
+    I -->|along-issue-sync| IB
+    T -->|along-kb-sync| KI
+    I & S & T -->|along-dash| DB
+```
+
+1. **Atomic SSOT Files**: Each issue (`.along/ISSUES/<type>--<slug>.md`) and session journal (`.along/SESSIONS/<YYYY>/<date>--<slug>.md`) is an isolated Markdown file with YAML front-matter. Parallel branches create distinct files, resulting in zero Git merge collisions.
+2. **Derived Projections**: `.along/ISSUES.md`, `docs/INDEX.md`, and `.along/DASHBOARD.md` are dynamically compiled views. Under the **Zero-Manual-Merge Rule**, developers and agents never resolve Git conflicts in projection files manually: accept either version and run `/along-issue-sync` or `/along-kb-sync` to recompile cleanly from source.
+3. **Append-Only Linear Merge Driver**: `.along/HISTORY.md` and `.along/DECISIONS.md` are append-only. `.gitattributes` configures `merge=union` for these files, enabling Git to automatically combine appended entries from concurrent branches without conflicts.
+
+---
+
+## 5. Engine Implementation Layer (`scripts/` and `scripts/alongkit/`)
+
+The eighteen skills are thin: every one of them dispatches to a Python engine in `scripts/`.
+Those engines share one implementation package, `scripts/alongkit/`, introduced in v3.0.0.
+
+Before it existed, the engines were twelve standalone programs with no shared module.
+`find_repo_root` had five divergent copies that disagreed on what a repository root is,
+front-matter parsing had four, and `subprocess.run` was called at 25+ sites with no shared
+convention, which is how one encoding defect reached every engine at once. The demonstrated
+cost is recorded in `[bug--adr-retrieval-blind-to-slug-headers]`: the ADR header format
+changed in v2.2.0, was updated where ADRs are written and validated, and was missed in the
+reader, so ADR search returned zero results in every released version.
+
+| Module | Owns |
+| :--- | :--- |
+| `alongkit/repo.py` | Repository root markers, nearest `.along/` discovery, engine resolution, directory walking and the shared ignore set. |
+| `alongkit/frontmatter.py` | The single YAML front-matter reader and writer (`ruamel.yaml`, round-trip). |
+| `alongkit/entities.py` | Entity vocabulary, canonical keys, slugs, dates, ADR record parsing and formatting. |
+| `alongkit/proc.py` | Subprocess execution with UTF-8 fixed on both sides of the pipe. |
+| `alongkit/textio.py` | Strict reads, line-ending preservation, atomic writes. |
+| `alongkit/markdown.py` | Link parsing, fenced-code tracking, GitHub heading anchors, `file://` resolution. |
+| `alongkit/typography.py` | The forbidden-character table, shared with the quality gate. |
+| `alongkit/sanitizer.py` | Which files that table governs, strict reads, the modes, and the JSON report. |
+| `alongkit/gates.py` | Pre-commit and pre-release test, typography, and Markdown link gates. |
+| `alongkit/transaction.py` | Snapshot and byte-exact rollback around a multi-file mutation. |
+| `alongkit/migration.py` | Collision policy, on-disk backup, and the dry-run plan behind the migration engine. |
+| `alongkit/semver.py` | Version parsing, increments, comparison. |
+| `alongkit/version.py` | The protocol version constant, declared exactly once. |
+| `alongkit/bootstrap.py` | Dependency resolution for a directly invoked engine. |
+| `alongkit/cli.py` | The `along` console entry point, which delegates to the `along_exec.py` router. |
+
+### Front-matter and the runtime dependency
+
+Front-matter is YAML because tools that are not Along read it: GitHub, static site
+generators, `gray-matter`. The engines therefore use a real YAML implementation rather than
+a bespoke parser. `ruamel.yaml` is chosen over `pyyaml` because round-trip mode preserves
+comments, key order, and quoting style, which is what makes editing a file the user owns
+safe. Reads are strict and refuse a block they cannot understand; edits name individual
+keys and leave every other line byte-identical.
+
+See [ADR-2026-09-01--frontmatter-on-ruamel-yaml](../.along/DECISIONS.md) and
+[ADR-2026-09-01--shared-engine-package](../.along/DECISIONS.md).
+
+### The typography rule: what it governs, and who may rewrite
+
+Two modules, deliberately split. `alongkit/typography.py` is the character table and a
+pure string transformation; it never opens a file. `alongkit/sanitizer.py` owns every
+decision that touches a user's disk.
+
+| Question | Answer |
+| :--- | :--- |
+| Which files? | `.md`, `.py`, `.sh`, `.ps1`, `.bat`. Data files (`.json`, `.yaml`, `.yml`, `.toml`) only with `--include-data`. Localized resource directories (`locales/`, `i18n/`, `translations/`, ...) never. |
+| Which directories? | All of them, hidden included, so a byte order mark in `.along/**` is finally visible. Excludable per repository with `.alongsanitizeignore` or `--exclude`. |
+| Who may write? | Only an explicit `--write` (standalone) or `--fix-typography` (commit, release). The gates verify and abort. |
+| What about a file that is not UTF-8? | Skipped, reported by path with the decode reason, left byte-identical. Never decoded lossily and rewritten. |
+| What about line endings? | Preserved verbatim. Nothing parses `.gitattributes`, because preserving what a file already uses cannot contradict it. |
+| What do callers consume? | `sanitizer.Report` (`--json` on stdout, human output on stderr), never printed text. |
+
+The previous implementation did the opposite of each row and ran that way unattended
+before every commit and every release. See
+[ADR-2026-09-01--typography-rule-scope](../.along/DECISIONS.md).
+
+### Gates precede mutations, and mutations roll back
+
+A gate that reports after the fact is not a gate. The release engine used to bump the
+version, rewrite the tree with the sanitizer, flip the milestone to `completed`, and
+regenerate the dashboard, and only then run the tests - and only when `--commit` was
+passed. When they failed it printed "Release aborted" and exited over a tree that was
+already half-released, with nothing to undo it.
+
+Two rules follow, and `[bug--release-engine-mutates-before-tests-and-reinstalls-globals]`
+records what each of them cost:
+
+1. **Every gate runs on the untouched tree, unconditionally.** Tests, the typography check,
+   and the Markdown link check all run before the first byte is written, whatever flags the
+   invocation carries. `--no-verify` is the single documented way past them.
+2. **Every mutation is recorded.** `alongkit/transaction.py` snapshots a file's exact bytes
+   (or its absence) before anything writes to it. On failure the transaction restores each
+   one and names it; a mutation it cannot undo - a project's own
+   `.along/scripts/bump_version.py` writing paths the engine cannot see - is reported
+   rather than assumed away. The transaction closes at the git commit, past which a
+   rollback would destroy committed work instead of repairing anything.
+
+The release also stages only the paths it wrote, rather than `git add -A`, and touches no
+machine-global state: it used to finish by running `install.ps1 -Target all`, which then
+deleted and recreated `~/.claude/rules`. Installing no longer deletes that directory
+either; see the next section.
+
+### An installer never deletes what it did not write
+
+Both installers copied their artifacts over a destination they had just removed
+(`Remove-Item -Recurse -Force ~/.claude/rules`), which took the user's own rule files with
+it on every run. The delete existed to stop superseded files accumulating, so it is
+replaced by knowledge rather than by force: `install_manifest.py` records every path an
+install wrote into `~/.along/install-manifest.json`, and the next run removes, by name,
+only the files the previous install wrote and this one no longer ships. The same record is
+what `-Uninstall` / `--uninstall` reads.
+
+The layout itself is described once, in `alongkit.install.planned_files`, and both
+installers are measured against it end to end, so `install.sh` cannot again ship without
+the rule packs the way it did for months. MCP registration moved to `configure_mcp.py`
+with a per-provider contract: the previous installers wrote five configuration files, four
+of which no provider reads, and printed a success line for each.
+
+### A migration merges; it does not choose a winner
+
+The same failure in a different shape. The migration engine moved legacy `.agents/`
+content onto `.along/` by deleting the destination first, so a repository that held both -
+a partial migration, or two branches migrating separately - lost the newer `DECISIONS.md`
+and `HISTORY.md`. Both are append-only by protocol, so nothing could bring them back.
+
+`alongkit/migration.py` makes the destination untouchable. On a collision the file class
+decides: append-only files are union-merged the way `.gitattributes` already merges them
+across branches, derived projections keep the destination and drop the legacy copy for
+recompilation, and anything else keeps the destination with the legacy copy preserved
+beside it as `<name>.legacy.md`. Before the first change the state directories are copied
+to `.along/.migration-backup/<timestamp>/`, and the copy ignores itself so it never enters
+history.
+
+Where the release engine needs an in-memory transaction - undo everything, the tests
+failed - a migration needs the opposite: a durable copy that outlives the process, because
+it is meant to be run, inspected, and re-run. What the two share is the rule that produced
+both defects: an operation that writes before it is sure, and cannot be undone, has no
+business being unattended. Which is why the migration is a dry run for every caller that
+is not a human at a terminal, and why installing no longer migrates at all. See
+[ADR-2026-09-01--migration-never-deletes-a-destination](../.along/DECISIONS.md).
+
+### Three invocation paths, one package
+
+```mermaid
+flowchart TD
+    A["along <subcommand> (console script)"] --> R["along_exec.py (router)"]
+    B["python scripts/along_exec.py (source checkout)"] --> R
+    C["python ~/.along/bin/along_exec.py (global file copy)"] --> R
+    R --> K["alongkit (shared implementation)"]
+    K --> D{"ruamel.yaml importable?"}
+    D -->|Yes| E["Run"]
+    D -->|No| F["alongkit.bootstrap re-executes under `uv run`"]
+    F --> E
+```
+
+Python places the running script's own directory on `sys.path`, and the installers copy
+`alongkit/` next to the engines, so `from alongkit import ...` resolves in a flat
+`~/.along/bin/` install with no path manipulation and no package install. When the
+interpreter lacks `ruamel.yaml`, `alongkit.bootstrap` re-executes the engine under
+`uv run` once; if `uv` is absent it exits with an actionable message rather than a
+traceback.
+
+### Structural guards
+
+Two tests keep the duplication from growing back
+([tests/test_alongkit.py](../tests/test_alongkit.py)):
+
+- no name may be defined at module level in two different engines;
+- no engine may redefine a name the shared package already owns.
+
+A third asserts that an engine still runs from a flat directory copy, and a fourth that
+both installers carry the package.
+
+Two more guard the suite itself
+([tests/test_zz_hermetic_suite.py](../tests/test_zz_hermetic_suite.py)): the working tree
+must be byte-identical before and after a run, and no test may build an engine command
+line whose target is the repository root. Engines write, so a test that passes the real
+root can rewrite project memory mid-session; fixtures come from
+[tests/hermetic.py](../tests/hermetic.py). See
+[Writing Tests: the Hermetic Rule](./topic--setup-and-workflow.md).
+
+---
+## 6. End-to-End Human & Developer Workflow
+
+The lifecycle of a task in Along follows a structured, low-friction flow designed to eliminate administrative burden for the developer:
+
+```mermaid
+sequenceDiagram
+    autonumber
+    actor Human as Developer / User
+    participant Agent as Host AI Agent
+    participant Memory as .along/ ISSUES & Blackboard
+    participant Team as Multi-Agent Engine (along-team)
+    participant Verify as Reviewer & Code Graph MCP
+    participant Commit as along-commit & along-wrap
+
+    Human->>Agent: "Implement JWT refresh token rotation"
+    Note over Agent: Intent Heuristics Auto-Detects New Feature
+    Agent->>Memory: Auto-create .along/ISSUES/feat--jwt-refresh-token.md
+    Agent->>Team: Launch /along-team (Adaptive Sizing)
+    Team->>Team: Scout (Research) -> Architect (Living Plan)
+    loop Each Step in Living Plan
+        Team->>Team: Implementer executes isolated code edits
+        Team->>Verify: Reviewer runs tests, checks diff & blast radius
+        Verify-->>Team: PASS / Feedback Loop
+    end
+    Agent->>Commit: /along-commit (ASCII Cleanliness + Conventional Commit)
+    Agent->>Commit: /along-wrap (Session log, move to done/, update ISSUES.md)
+    Agent-->>Human: Present concise executive summary
+```
+
+1. **Intent Recognition (Zero-Friction Tracking)**: Natural developer prompts ("Build feature X", "Fix bug Y", "Investigate library Z") automatically trigger the creation of typed issues (`feat`, `bug`, `spike`) in `.along/ISSUES/` without requiring manual file management.
+2. **Mandatory Issue Anchoring**: All non-trivial code modifications must bind to an active issue in `.along/ISSUES/` with `status: in-progress`.
+3. **Autonomous Execution**: The agent executes the task via `/along-team` or direct fast-path.
+4. **Verification Gate**: Automated tests, file integrity audits, and AST blast radius checks are executed before finalizing changes.
+5. **Issue-Linked Commits**: `/along-commit` checks typography (clean ASCII) and formats Conventional Commits linked directly to the issue slug.
+6. **Session Wrap-Up**: `/along-wrap` moves finished issues to `.along/ISSUES/done/`, reconciles `ISSUES.md`, records `.along/SESSIONS/`, and appends to `HISTORY.md`.
+
+---
+
+## 7. Deep Architectural Rationale: Multi-Agent State Machine vs Single-Agent Linear Execution
+
+A core architectural decision in Along is the deployment of a **Sequential Multi-Agent State Machine** (`/along-team`) instead of unconstrained single-agent linear execution.
+
+### Why Single-Agent Linear Execution Fails on Complex Tasks
+
+When a single LLM agent attempts to research, plan, write code, run tests, and review its own output in a single continuous conversation context, it inevitably succembers to three fundamental failure modes:
+
+1. **Prompt Pollution & Context Saturation**:
+   - Running terminal searches, directory listings, and build outputs dumps thousands of raw tokens into the context window.
+   - By the time the agent reaches the implementation phase, the prompt is saturated with irrelevant tool noise, degrading the model's reasoning capabilities and causing context truncation.
+2. **Author Bias & Hallucinated Test Passes**:
+   - The same agent instance that wrote the code has severe confirmation bias. When verifying its own changes, it routinely overlooks edge cases, ignores unhandled exceptions, and accepts superficial test runs.
+3. **Plan Drift on AST/Build Errors**:
+   - When encountering a compilation or runtime error, a single linear agent tends to make hasty, localized patches without reassessing the overarching system architecture, leading to architectural debt.
+
+### The Multi-Agent Sequential State Machine Solution
+
+Along replaces unstructured chat swarms and single-agent linear loops with a deterministic **5-Phase State Machine**:
+
+```mermaid
+flowchart TD
+    TASK["Developer Task / Goal"] --> ANALYZE["Phase 0: Analyze (Supervisor)"]
+    ANALYZE -->|S-Size: 1-2 files| FASTPATH["Direct Single-Agent Fast-Path"]
+    ANALYZE -->|M / L / XL-Size| SCOUT["Phase 1: Research Scout (research)"]
+    
+    SCOUT --> ARCHITECT["Phase 2: Architect (Living Plan)"]
+    
+    subgraph StepLoop["Step Execution Loop (Steps 1..N)"]
+        WORKER["Phase 3: Implementer (self)"]
+        REVIEWER["Phase 4: Gatekeeper Reviewer (self)"]
+        REASSESS["Phase 5: Reassess & Living Plan Update"]
+        
+        WORKER --> REVIEWER
+        REVIEWER -->|FAIL: Retries <= 2| WORKER
+        REVIEWER -->|PASS| REASSESS
+    end
+    
+    ARCHITECT --> StepLoop
+    REASSESS -->|More Steps| StepLoop
+    REASSESS -->|All Steps Complete| WRAP["Phase 7: Wrap-up (/along-wrap)"]
+    FASTPATH --> WRAP
+```
+
+### Adaptive Complexity Routing (T-Shirt Sizing)
+
+Multi-agent execution introduces context switching overhead. Therefore, Along enforces strict **Adaptive Complexity Routing**:
+
+- **`S-Size` Tasks (1-2 files, clear scope, minor bug/tweak)**:
+  - *Strategy*: **Fast-Path Single-Agent Execution**. Subagents are **NOT** spawned. The primary agent directly applies edits, runs tests, and completes the task, preserving token budget.
+- **`M-Size` Tasks (3-5 files, isolated module/route)**:
+  - *Strategy*: **Fast Loop** (Scout -> Worker -> Reviewer) in a single linear pass.
+- **`L / XL-Size` Tasks (Cross-module refactorings, protocol changes, new subsystems)**:
+  - *Strategy*: **Full State Machine** with dynamic Living Plan, step-by-step worker subagents, independent gatekeeper review, and reassess cycles.
+
+### The 5 Specialized Roles & Strict Contracts
+
+Along establishes 5 clearly separated functional roles:
+
+1. **Supervisor (Lead Orchestrator)**:
+   - *Responsibility*: Requirement extraction (`REQ-1`, `REQ-2`), acceptance criteria enforcement, task sizing, and gatekeeping. Runs in parent context; never writes low-level code directly in L/XL tasks.
+   - *Context Pruning Rule*: The Supervisor strictly strips raw search logs and tool output from the Scout, passing only distilled facts (target files, constraints, AST symbols) to the Implementer.
+2. **Researcher (Scout)**:
+   - *Responsibility*: Read-only discovery. Maps existing code patterns, dependencies, and potential risks without touching file contents (`TypeName: "research"`, `enable_write_tools: false`).
+3. **Architect**:
+   - *Responsibility*: Executes Public Surface Discovery (searching for all mirrors across `README.md`, `AGENTS.md`, `docs/`) and converts scout findings into a concrete **Living Plan** composed of 2 to 5 verifiable steps mapped directly to `REQ-N`.
+4. **Implementer (Worker)**:
+   - *Responsibility*: Executes the specific step in an isolated context (`TypeName: "self"`, `Workspace: "branch"` or `"inherit"`). Focuses exclusively on the assigned step without worrying about global orchestration.
+5. **Reviewer (Gatekeeper: Tester + Critic + Judge)**:
+   - *Responsibility*: Evaluates the implementer's changes in an isolated context against the mandatory **6-Point Verification Rubric**:
+     1. *Zero-Byte & File Integrity Gate*: `git status -u` check ensuring `size > 0` and zero empty placeholders.
+     2. *Automated Test Suite*: Runs `/along-test` ensuring zero failures and increased test coverage.
+     3. *Diff & Scope Audit*: Verifies that only requested files were touched without unintended edits.
+     4. *Requirement Coverage Gate*: Verifies 100% satisfaction of every `REQ-N` from the initial user prompt.
+     5. *AST Blast Radius & ADR Compliance*: Verifies downstream callers and checks conformance with `.along/DECISIONS.md`.
+     6. *Documentation & Public Surface Parity*: Ensures both internal `docs/topic--*.md` and public entry points (`README.md`, `AGENTS.md`) reflect modifications without drift.
+     7. *Clean ASCII & Typography*: Validates clean UTF-8 without forbidden typographic characters.
+
+---
+
+## 8. Ephemeral Session Blackboard Memory
+
+To prevent multi-agent coordination data from leaking across sessions or cluttering the git history, Along establishes an **Ephemeral Session Blackboard**:
+
+- **Location**: `.along/.session/<issue-slug>/` (automatically excluded in `.gitignore`).
+- **Artifacts**:
+  - `plan.md`: The active Living Plan updated across step loops.
+  - `scout_findings.json`: Distilled symbols, dependencies, and constraints.
+  - `step_reviews/`: Reviewer reports and verdicts per step.
+  - `blackboard.json`: Shared in-session state, mocks, and intermediate variables.
+- **Lifecycle & Automated Garbage Collection**:
+  1. *Allocated*: Created at the start of `/along-team` or autonomous goal execution.
+  2. *Updated*: Maintained dynamically during step execution.
+  3. *Distilled*: Key achievements, decisions, and diff summaries are extracted into `.along/SESSIONS/<YYYY>/<date>--<slug>.md`.
+  4. *Purged*: The entire `.along/.session/<slug>/` directory is automatically deleted during `/along-wrap`.
+
+---
+
+## 9. Historical Analysis: Documentation Truncation Incident & Prevention
+
+During the transition to the LLM-Wiki architecture in commit `5bab25dc5b3e57c0e83b23f47b7ce221773a6e90` (2026-08-30), an automated file renaming routine accidentally replaced populated documentation files (`01-architecture.md`, `02-domain-model.md`, `03-setup-and-workflow.md`) with 13-line placeholder templates. Subsequent feature PRs updated internal skill instructions while failing to backfill the public `docs/` Knowledge Base.
+
+### Institutionalized Quality Gates
+
+To guarantee that documentation remains synchronized with code and is never silently truncated:
+1. **Mandatory Post-Batch & Destructive Operation Audit Gate**: After executing any batch replacement, migration script, refactoring tool, or multi-file rewrite, agents MUST immediately run `git diff --stat` to verify that net line counts and file sizes align with expectations. Any unexpected net reduction in file size or line count must be inspected in detail before proceeding.
+2. **Anti-Stub & Size Regression Invariant**: Automated test suite (`test_21_docs_articles_not_empty_placeholders`) and Reviewer rubrics reject any file modification that reduces substantial documentation or code to empty placeholder stubs or skeleton templates.
+3. **Documentation Blast Radius Gate**: Mandatory in `/along-wrap` and `AGENTS.md`. Whenever public interfaces, commands, or system architectures change, the affected `docs/topic--*.md` articles MUST be updated before closing an issue.
+4. **Link Integrity Gate (`along-kb-sync --strict`)**: Verifies that all cross-references across `docs/`, `README.md`, and `.along/` resolve to valid physical files.
+
+---
+
+## Document: docs/topic--dependencies.md (Dependencies & Submodules AI Documentation and Rules)
+
+# Dependencies & Submodules AI Documentation and Rules
+
+> [!NOTE]
+> This document maintains a unified registry of internal subprojects, submodules, and external dependencies.
+> Consult linked guidelines when developing, refactoring, or integrating components across the repository.
+
+## Internal Subprojects, Modules & Submodules
+
+| Subproject / Module | Path | Ecosystems | AI Documentation & Context |
+| :--- | :--- | :--- | :--- |
+| **`@along/dashboard-ui`** | `packages/dashboard-ui` | `npm` | - |
+
+## Declared External Dependencies with AI Guidelines
+
+| Package | Scope / Project | Ecosystem | Version | AI Guidelines / Instructions |
+| :--- | :--- | :--- | :--- | :--- |
+| **`@actdim/dynstruct`** | `packages/dashboard-ui` | `npm` | `1.5.13` | [AGENTS.md](../packages/dashboard-ui/node_modules/@actdim/dynstruct/AGENTS.md) <br> [CLAUDE.md](../packages/dashboard-ui/node_modules/@actdim/dynstruct/CLAUDE.md) <br> [docs/](../packages/dashboard-ui/node_modules/@actdim/dynstruct/docs) <br> manifest metadata (`ai`) |
+| **`@actdim/dynstruct-mui`** | `packages/dashboard-ui` | `npm` | `1.5.13` | [docs/](../packages/dashboard-ui/node_modules/@actdim/dynstruct-mui/docs) |
+| **`@actdim/msgmesh`** | `packages/dashboard-ui` | `npm` | `1.5.13` | [docs/](../packages/dashboard-ui/node_modules/@actdim/msgmesh/docs) |
+| **`@actdim/utico`** | `packages/dashboard-ui` | `npm` | `1.5.13` | [AGENTS.md](../packages/dashboard-ui/node_modules/@actdim/utico/AGENTS.md) <br> [CLAUDE.md](../packages/dashboard-ui/node_modules/@actdim/utico/CLAUDE.md) <br> [docs/](../packages/dashboard-ui/node_modules/@actdim/utico/docs) <br> manifest metadata (`ai`) |
+| **`cytoscape`** | `packages/dashboard-ui` | `npm` | `3.34.2` | [AGENTS.md](../packages/dashboard-ui/node_modules/cytoscape/AGENTS.md) |
+
+## Usage in Agent Sessions
+When working on features involving any of the modules or external libraries above:
+1. **Internal Submodules**: Follow conventions in the nearest `AGENTS.md` or subproject `docs/`.
+2. **Third-Party Libraries**: Read the linked instruction files directly for framework-specific patterns and best practices.
+
+---
+
+## Document: docs/topic--domain-model.md (Domain Model & Entity Ecosystem)
+
+# Domain Model & Entity Ecosystem
+
+Along models repository memory, project tracking, and documentation as a strongly-typed, schema-validated **Directed Acyclic Graph (DAG)** of Markdown entities with YAML front-matter (`protocol: along`).
+
+---
+
+## 1. Entity Ecosystem Architecture
+
+The entity ecosystem provides a structured data layer that is simultaneously human-readable in plain Markdown, machine-parsable by local scripts and dashboards, and token-efficient for AI agents:
+
+```mermaid
+flowchart TD
+    subgraph PlanningAndEpics["Planning & Target Scope"]
+        MILESTONE["Milestones (.along/MILESTONES/)"]
+        SPIKE["Spikes & R&D (.along/SPIKES/)"]
+        RISK["Risks & Blockers (.along/RISKS/)"]
+    end
+
+    subgraph CoreUnitsOfWork["Core Units of Work"]
+        ISSUE["Issues (.along/ISSUES/<type>--<slug>.md)"]
+        DONE_ISSUE["Completed Issues (.along/ISSUES/done/)"]
+    end
+
+    subgraph GovernanceAndQuality["Governance & Architecture"]
+        ADR["Decisions / ADRs (.along/DECISIONS.md)"]
+        CHECKLIST["Checklists (.along/CHECKLISTS/)"]
+    end
+
+    subgraph LivingMemory["Living Memory & Journals"]
+        SESSION["Session Logs (.along/SESSIONS/<YYYY>/)"]
+        HISTORY["History Chronicle (.along/HISTORY.md)"]
+        KB["Knowledge Base (docs/topic--*.md)"]
+    end
+
+    MILESTONE -->|targets| ISSUE
+    SPIKE -->|evaluates & yields| ADR
+    RISK -->|blocks or relates| ISSUE
+    ISSUE -->|moves to done/| DONE_ISSUE
+    ISSUE -->|advances| SESSION
+    ADR -->|governs| ISSUE
+    CHECKLIST -->|verifies| SESSION
+    SESSION -->|appends| HISTORY
+    ISSUE -->|documents in| KB
+```
+
+---
+
+## 2. Granular Entity Taxonomy & Schemas
+
+Along defines 9 distinct entity types, each fulfilling a specific role in repository memory and lifecycle management:
+
+### 1. Issues (`.along/ISSUES/<type>--<slug>.md`)
+Atomic units of engineering work. Along categorizes issues into **5 distinct types**:
+
+| Issue Type | Purpose & Scope | Example Slug |
+| :--- | :--- | :--- |
+| **`feat`** | New functional capabilities, user-facing features, API endpoints, or skills. | `feat--jwt-token-refresh` |
+| **`bug`** | Defect repairs, regression fixes, edge-case remediation, or error recovery. | `bug--windows-path-escaping` |
+| **`debt`** | Technical debt payoff, code refactoring, performance optimization, or dead code elimination. | `debt--dynstruct-migration` |
+| **`task`** | Routine chores, infrastructure setup, CI/CD configuration, or dependency updates. | `task--setup-vitest-runner` |
+| **`docs`** | Knowledge base authoring, architectural specifications, or developer workflow guides. | `docs--skills-architecture-overhaul` |
+
+#### YAML Front-Matter Schema:
+```yaml
+---
+protocol: along
+protocol_version: "2.2.6"
+slug: jwt-token-refresh
+type: feat
+status: in-progress
+priority: high
+created: 2026-09-01
+updated: 2026-09-01
+completed: null
+agent: antigravity
+tags: [auth, security, tokens]
+milestone: v2.3.0-security
+blocked_by: [feat--db-schema-migrations]
+related: [risk--token-revocation-latency]
+parent: feat--identity-platform
+---
+
+# Issue Title
+
+Detailed problem statement, constraints, and verifiable acceptance criteria.
+
+## Acceptance Criteria
+- [ ] Implement refresh token rotation endpoint.
+- [ ] Add 100% test coverage for expired tokens.
+- [ ] Update docs/topic--architecture.md.
+```
+
+#### Lifecycle States:
+- **`open`**: Backlog item, not currently being executed.
+- **`in-progress`**: Actively being developed by an agent or human. Non-trivial code edits require an active issue.
+- **`blocked`**: Waiting on an external dependency (`blocked_by`), API key, or active risk.
+- **`done`**: Fully implemented, verified by tests and code review. Mandatory field `completed: YYYY-MM-DD` is set, and the file is moved to `.along/ISSUES/done/<type>--<slug>.md`.
+
+---
+
+### 2. Architectural Decision Records (ADRs) (`.along/DECISIONS.md`)
+Single-file append-only log of non-trivial technical and architectural decisions.
+
+#### Why Single-File Append-Only over Multi-File MADR/Nygard?
+- **Single-Shot Context Load**: Agents read all active architectural constraints in a single tool call (< 300 tokens) at session start, without scanning multiple files.
+- **Zero Lifecycle Moving Overhead**: Unlike issues, decisions are immutable; they are never renamed or moved.
+- **Merge Collision Prevention**: Each entry uses a decentralized slug header (`## ADR-YYYY-MM-DD--<slug> - <Title>`), allowing `.gitattributes` (`merge=union`) to merge parallel branches cleanly without conflicts.
+
+#### Schema & Entry Format:
+```markdown
+## ADR-2026-08-31--session-scoped-blackboard-memory - Session-Scoped Blackboard Memory
+- Date: 2026-08-31
+- Status: accepted (or: superseded by ADR-YYYY-MM-DD--<slug>)
+- Context: In-flight multi-agent coordination data cluttered conversation context.
+- Decision: Introduce .along/.session/<slug>/ with automated GC during /along-wrap.
+- Consequences: Eliminates state leakage; guarantees clean repository hygiene.
+```
+
+---
+
+### 3. Milestones & Sprints (`.along/MILESTONES/<slug>.md`)
+Group multiple issues into structured release targets, sprints, or major project stages.
+
+#### Schema:
+```yaml
+---
+protocol: along
+protocol_version: "2.2.6"
+slug: v2.3.0-security
+title: Security & Authentication Hardening
+status: in-progress
+due_date: 2026-09-15
+created: 2026-09-01
+target_issues:
+  - feat--jwt-token-refresh
+  - bug--auth-header-leak
+  - debt--crypto-upgrade
+progress_pct: 33
+---
+```
+
+---
+
+### 4. Risks & Blockers (`.along/RISKS/<slug>.md`)
+Track external dependencies, rate limits, security considerations, and potential blockers before they halt development.
+
+#### Schema:
+```yaml
+---
+protocol: along
+protocol_version: "2.2.6"
+slug: token-revocation-latency
+title: Redis Token Blacklist Synchronization Latency
+severity: high
+status: active
+owner: agent
+mitigation: Use short-lived 5-minute access tokens with asymmetric JWT signatures.
+created: 2026-09-01
+updated: 2026-09-01
+---
+```
+
+---
+
+### 5. Spikes & R&D Experiments (`.along/SPIKES/<slug>.md`)
+Timeboxed research experiments, benchmark comparisons, and library evaluations conducted prior to architectural commitment.
+
+#### Schema:
+```yaml
+---
+protocol: along
+protocol_version: "2.2.6"
+slug: duckdb-vs-sqlite-benchmarks
+title: Local Vector Indexing: DuckDB vs SQLite FTS5
+status: concluded
+hypothesis: SQLite FTS5 with BM25 ranking provides lower memory footprint and zero external C-extensions.
+outcome: SQLite FTS5 outperformed DuckDB on snippet retrieval (<5ms) with zero dependencies.
+resulting_adr: ADR-2026-08-30--llm-wiki-docs-architecture-and-singular-skills-refactoring
+created: 2026-08-30
+---
+```
+
+---
+
+### 6. Checklists & Quality Gates (`.along/CHECKLISTS/<slug>.md`)
+Reusable verification rubrics for pre-commit checks, stage completions, releases, and security audits.
+
+#### Schema:
+```yaml
+---
+protocol: along
+protocol_version: "2.2.6"
+slug: stage-completion
+title: Mandatory Stage Completion Verification Checklist
+category: stage-completion
+items:
+  - id: zero_byte_gate
+    text: Verify git status -u has non-zero size for all created files.
+    verified: true
+  - id: unit_tests
+    text: Run automated unit tests with quiet flags (zero failures).
+    verified: true
+  - id: blast_radius
+    text: Check downstream callers via code-review-graph and map to docs.
+    verified: true
+---
+```
+
+---
+
+### 7. Work Sessions (`.along/SESSIONS/<YYYY>/<YYYY-MM-DD>--<slug>.md`)
+Chronological work journal recording accomplishments, touched files, reviewer feedback, and blast radius summaries for every working session.
+
+#### Schema:
+```yaml
+---
+protocol: along
+date: 2026-09-01
+slug: skills-architecture-overhaul
+agent: antigravity
+branch: main
+commit: a1b2c3d
+summary: Complete overhaul of docs/ Knowledge Base and full 18-skill reference.
+milestone: v2.2.0-along
+issues_advanced:
+  - docs--comprehensive-knowledge-base-and-skills-architecture
+issues_completed:
+  - docs--comprehensive-knowledge-base-and-skills-architecture
+decisions: []
+risks_logged: []
+spikes_conducted: []
+---
+```
+
+---
+
+### 8. Project History Chronicle (`.along/HISTORY.md`)
+Single-line append-only chronological log of major milestones, features, and session completions:
+```markdown
+# History
+
+2026-09-01 - skills-architecture-overhaul - antigravity - Rebuild Knowledge Base and 18-skill reference - [Session](file://topic--09-01--skills-architecture-overhaul.md)
+```
+
+---
+
+### 9. Knowledge Base (`docs/topic--*.md`, `docs/INDEX.md`)
+Curated, cross-linked LLM-Wiki articles maintaining domain architecture, API contracts, dependencies, and developer guides.
+
+---
+
+## 3. Graph Invariance & Canonical Slug Linking
+
+To prevent link breakage and dependency graph drift, Along enforces **Canonical Slug Invariance**:
+
+1. **Canonical Key References**:
+   - Entities reference other entities strictly by their canonical key (`<type>--<slug>` or `<slug>`), **NEVER** by relative filesystem paths (`file://.along/ISSUES/open/...`).
+   - *Example*: `blocked_by: [feat--db-schema]` remains 100% valid when the target file moves from `.along/ISSUES/feat--db-schema.md` to `.along/ISSUES/done/feat--db-schema.md`.
+2. **Unidirectional Graph Storage**:
+   - In YAML front-matter, relationships are stored unidirectionally (`blocked_by: []`, `related: []`, `parent: <slug>`).
+   - Reciprocal relationships (`blocks`, `children`) and full DAG topologies are computed dynamically by graph parsers and the Along dashboard engine, eliminating LLM synchronization drift.
+
+---
+
+## 4. Automated Intent Recognition Heuristics
+
+To ensure zero administrative overhead for developers, Along host agents automatically infer project tracking actions from natural language prompts:
+
+| Natural User Prompt / Trigger | Inferred Entity | Automatic Background Agent Action |
+| :--- | :--- | :--- |
+| *"Build feature X"*, *"Add endpoint Y"* | **`feat ISSUE`** | Auto-creates `.along/ISSUES/feat--<slug>.md` with `status: in-progress`. Updates `ISSUES.md`. |
+| *"Fix bug X"*, *"Fix crash on Y"* | **`bug ISSUE`** | Auto-creates `.along/ISSUES/bug--<slug>.md` with `priority: high`. |
+| *"Refactor module X"*, *"Clean up Y"* | **`debt ISSUE`** | Auto-creates `.along/ISSUES/debt--<slug>.md`. |
+| *"Update documentation for X"* | **`docs ISSUE`** | Auto-creates `.along/ISSUES/docs--<slug>.md`. |
+| *"Rate limit hit"*, *"Blocked on API key"* | **`RISK / BLOCKER`** | Auto-creates `.along/RISKS/<slug>.md` (`status: active`); marks issue `status: blocked`. |
+| *"Benchmark X vs Y"*, *"Test if Z works"* | **`SPIKE`** | Auto-creates `.along/SPIKES/<slug>.md`. Documents outcome and logs resulting ADR in `DECISIONS.md`. |
+| *"Target for next sprint"*, *"Release v2.0"* | **`MILESTONE`** | Auto-creates `.along/MILESTONES/<slug>.md`; binds target issues. |
+| *"I'm done for today"*, *"Wrap up"* | **`SESSION & WRAP`** | Executes `/along-wrap`: verifies tests, records session log, moves completed issues to `done/`, updates `HISTORY.md`. |
+
+---
+
+## Document: docs/topic--frontend-frameworks.md (Frontend Architecture, Dynstruct, MsgMesh & NSwag Integration)
+
+# Frontend Architecture, Dynstruct, MsgMesh & NSwag Integration
+
+The Along Dashboard UI (`packages/dashboard-ui/`) is built strictly on the ActDim component and messaging ecosystem, following the architecture outlined below:
+
+---
+
+## 1. Core Ecosystem Components
+
+1. **`@actdim/dynstruct`**
+   - **Guide**: [dynstruct/AGENTS.md](file:///d:/Src/my/actdim/public/dynstruct/AGENTS.md) | [dynstruct/README.md](file:///d:/Src/my/actdim/public/dynstruct/README.md)
+   - **Pattern**: Structure-first component definition via `ComponentStruct<AppMsgStruct, ...>` with explicit `props`, `actions`, `children`, `events`, and `effects`.
+   - **Zero React Boilerplate**: All component state lives in observable `c.model` (MobX under the hood). No raw React `useState`, `useMemo`, `useCallback`, or hook spaghetti.
+
+2. **`@actdim/dynstruct-mui`**
+   - **Guide**: [dynstruct-mui/README.md](file:///d:/Src/my/actdim/public/dynstruct-mui/README.md)
+   - **Pattern**: Material UI components adapted as Dynstruct hook-constructors (`useButton`, `useDrawer`, `useCard`, `useTabs`, `useChip`, `useTextField`, `useDialog`, `useTable`, etc.).
+
+3. **`@actdim/msgmesh`**
+   - **Guide**: [msgmesh/AGENTS.md](file:///d:/Src/my/actdim/public/msgmesh/AGENTS.md) | [msgmesh/README.md](file:///d:/Src/my/actdim/public/msgmesh/README.md)
+   - **Pattern**: Type-safe async messaging mesh for API communication and inter-component signaling.
+
+4. **`@actdim/utico`**
+   - **Guide**: [utico/README.md](file:///d:/Src/my/actdim/public/utico/README.md)
+   - **Pattern**: Foundation type utilities (`KeysOf`, `ToMsgChannelPrefix`, `ToMsgStruct`).
+
+---
+
+## 2. Mandatory Architectural Rules & Invariants
+
+### 1. Zero Manual API Channels & No Manual `fetch` Handlers
+- **NEVER** write manual `MsgStruct` channel maps (`{ in: ..., out: ... }`) for backend REST/OpenAPI endpoints.
+- **NEVER** write manual `fetch` / `axios` handlers inside `provide()`.
+- All backend API clients are generated automatically from FastAPI OpenAPI schemas via NSwag:
+  ```bash
+  pnpm run generate:api
+  ```
+  This creates [src/api/client.ts](file:///d:/Src/my/actdim/public/along/packages/dashboard-ui/src/api/client.ts) containing `DashboardApiClient`.
+
+### 2. Dynamic Bus Struct via `@actdim/msgmesh/adapters`
+- Use `ToMsgChannelPrefix` and `ToMsgStruct` to generate typed channels at compile-time directly from `DashboardApiClient`:
+  ```typescript
+  export type ApiPrefix = 'API';
+  export type DashboardApiClientName = 'DashboardApiClient';
+
+  export type DashboardChannelPrefix = ToMsgChannelPrefix<
+    DashboardApiClientName,
+    ApiPrefix,
+    BaseServiceSuffix
+  >; // 'API.DASHBOARD.'
+
+  export type DashboardApiStruct = ToMsgStruct<
+    DashboardApiClient,
+    DashboardChannelPrefix
+  >;
+  ```
+- Resulting channels are compile-time verified:
+  - `getFullData()` -> `"API.DASHBOARD.GETFULLDATA"`
+  - `searchKb(q, tag, type)` -> `"API.DASHBOARD.SEARCHKB"`
+  - `listIssues(status, ...)` -> `"API.DASHBOARD.LISTISSUES"`
+
+### 3. Automated Runtime Registration via `registerAdapters`
+- Use `getMsgChannelSelector(services)` and `registerAdapters`:
+  ```typescript
+  const services: Record<DashboardChannelPrefix, any> = {
+    'API.DASHBOARD.': new DashboardApiClient(),
+  };
+
+  const adapters = Object.entries(services).map(([_, service]) => ({
+    service,
+    channelSelector: getMsgChannelSelector(services),
+  })) as MsgProviderAdapter[];
+
+  registerAdapters(dashboardBus, adapters);
+  ```
+
+### 4. Implicit Bus Injection via React Context & Component Proxies
+- Create the bus once in `src/bus.ts` (`dashboardBus`).
+- Inject it at the application root via `<ComponentContextProvider value={{ msgBus: dashboardBus }}>`.
+- Components **never** create local buses or accept buses via manual props. Components access the bus implicitly via `c.msgBus`.
+- `c.msgBus` inside a Dynstruct component is a specialized proxy that integrates with the component lifecycle, handles error scoping, and manages `msgScope` permissions.
+
+### 5. Clear Interaction Points & Observability
+- All published and subscribed channels of a component must be declared in its `msgScope`:
+  ```typescript
+  export type MyViewStruct = ComponentStruct<
+    DashboardAppMsgStruct,
+    {
+      msgScope: {
+        subscribe: DashboardMsgChannels<'APP.DATA.UPDATED' | 'APP.SSE.STATUS'>;
+        publish: DashboardMsgChannels<'API.DASHBOARD.GETFULLDATA' | 'APP.ENTITY.SELECT'>;
+      };
+      ...
+    }
+  >;
+  ```
+  Glancing at the `ComponentStruct` immediately shows what data the component consumes and what events it produces.
+
+### 6. 100% Strict Type Safety (Zero `any` & Zero `window` State Hacks)
+- No `any` type casting.
+- No `as ...` type assertions.
+- No storing state on `window` (`window.__ALONG_DATA__`).
+- All payloads are strictly typed through the channel definitions and NSwag DTO interfaces.
+
+---
+
+## Document: docs/topic--llm-wiki-architecture.md (LLM-Wiki Knowledge Base Architecture & Paradigm)
+
+# LLM-Wiki Knowledge Base Architecture & Paradigm
+
+Along implements the **LLM-Wiki architectural paradigm** (originated by Andrej Karpathy) as a native, provider-agnostic knowledge management system for software repositories.
+
+---
+
+## 1. Why LLM-Wiki? (The Core Problem)
+
+AI coding agents face two common failure modes when navigating repository documentation:
+
+1. **Context Bloat & Prompt Saturation (Prompt Stuffing)**:
+   - Reading whole multi-kilobyte documentation files into agent prompts consumes 10,000 to 30,000+ tokens per interaction.
+   - This exhausts the context window, degrades model reasoning, and drives up inference costs.
+2. **Opaque & Fragile External Vector DBs**:
+   - Heavy external vector databases introduce opaque embeddings, complex C-extension dependencies, and lack human-editable Markdown transparency.
+
+### The Solution: The Living LLM-Wiki
+A structured, human-readable directory of interconnected Markdown files (`docs/topic--*.md`) with YAML front-matter, an auto-compiled catalog (`docs/INDEX.md`), in-place source provenance tracking, deterministic `llms.txt` and `llms-full.txt` context compilers, and an ultra-fast, local snippet search engine (`along-kb-search`).
+
+---
+
+## 2. LLM-Wiki Architecture & Data Flow
+
+```mermaid
+flowchart TD
+    subgraph RawSources["In-Place Sources Layer"]
+        RAW["Raw Notes, External Specs, Code Files (wiki/, kb/, scripts/)"]
+    end
+
+    subgraph Compiler["Along Native Compiler (along-kb-sync)"]
+        INGEST["In-Place Ingestion & Provenance Hasher"]
+        LINTER["Link Linting & Graph Validation"]
+        INDEXER["INDEX.md Catalog Compiler"]
+        LLMS_COMPILER["Deterministic llms.txt & llms-full.txt Generator"]
+    end
+
+    subgraph ActiveWiki["Active Curated Knowledge Base (docs/)"]
+        TOPICS["docs/topic--*.md (Structured YAML Front-matter & Provenance)"]
+        CATALOG["docs/INDEX.md (Dynamic Topic Catalog & Graph)"]
+    end
+
+    subgraph Exports["Deterministic LLM Context Exports"]
+        LLMS["llms.txt (.well-known/ or root)"]
+        LLMS_FULL["llms-full.txt (.well-known/ or root)"]
+    end
+
+    subgraph Retrieval["Agent Fast Retrieval (along-kb-search)"]
+        SEARCH["Multi-Tier Weighted Search Engine"]
+        SNIPPET["230-Char Snippet Window (< 100 Tokens Context)"]
+        AGENT["Host AI Agent (Antigravity / Claude / Codex)"]
+    end
+
+    RAW --> INGEST
+    INGEST --> TOPICS
+    TOPICS --> LINTER
+    LINTER --> CATALOG
+    CATALOG --> LLMS_COMPILER
+    TOPICS --> LLMS_COMPILER
+    LLMS_COMPILER --> LLMS
+    LLMS_COMPILER --> LLMS_FULL
+    CATALOG --> SEARCH
+    TOPICS --> SEARCH
+    SEARCH --> SNIPPET
+    SNIPPET --> AGENT
+```
+
+---
+
+## 3. Fast Retrieval Mechanics & Multi-Tier Scoring
+
+Instead of loading whole articles, AI agents query `along-kb-search "<query>"` to retrieve concise context snippets in milliseconds.
+
+### Multi-Tier Weighted Scoring Algorithm
+The search engine ranks results using a 3-tier relevance model:
+
+| Match Scope | Weight | Rationale |
+| :--- | :--- | :--- |
+| **Title Match** | **+10 points** | Direct topic match indicating the exact domain article. |
+| **Tags Match** | **+5 points** | Curated metadata keywords matching the conceptual domain. |
+| **Body Content** | **+1 point** | Text occurrences within the Markdown body. |
+
+### Snippet Window Extraction (95-98% Token Reduction)
+When a match is identified, `along-kb-search` extracts a targeted **230-character snippet window** centered around the matching query term.
+- *Prompt Impact*: Delivers the precise architectural constraint or API contract in **under 100 tokens**, compared to 3,000-8,000 tokens for loading the full file.
+- *Performance*: Sub-millisecond execution using pure Python standard library without vector embeddings latency.
+
+---
+
+## 4. In-Place Source Grounding, Provenance & Drift Gate
+
+Along enforces in-place provenance for all synthesized Knowledge Base articles:
+
+1. **In-Place Source Preservation**:
+   - Raw sources, specifications, and reference notes remain in their original project locations (e.g. `wiki/`, `kb/`, `scripts/`). Files are NEVER moved into a hidden `.archive/` directory.
+   - Every compiled article in `docs/topic--*.md` explicitly tracks its originating source files via the `sources: [{path, hash}]` YAML front-matter list.
+2. **SHA-256 Drift Detection**:
+   - The compiler computes normalized SHA-256 hashes of tracked sources during sync.
+   - Running `python scripts/along_kb_sync.py --check` detects if underlying code or raw specifications have evolved, emitting `[DRIFT]` warnings that alert agents to review and reconcile documentation.
+3. **Intent Gate for Content Reduction (`--prune-intent`)**:
+   - To guard against accidental LLM deletions, `along-kb-sync` calculates net line-count reductions against Git `HEAD`.
+   - If an article shrinks by >25% in lines (and at least 10 lines), compilation halts with exit code 2 unless `--prune-intent [REASON]` is explicitly supplied.
+
+---
+
+## 5. Deterministic LLM Context Compilation: llms.txt & llms-full.txt
+
+To provide external LLMs and IDE assistants with immediate context, `along-kb-sync` deterministically manages both index and full-context exports:
+
+1. **Path Resolution & `.well-known/` Support**:
+   - Resolves target files using `alongkit.repo.resolve_llm_targets(...)`.
+   - Follows web standard precedence:
+     - If `.well-known/llms.txt` exists, updates in `.well-known/`.
+     - If root `llms.txt` exists, updates in root.
+     - If both exist, synchronizes both to prevent drift.
+     - If neither exists, creates in `.well-known/` if that directory exists, else defaults to repository root.
+2. **Smart Non-Destructive `llms.txt`**:
+   - Updates the `## Documentation Links` section to match active `docs/topic--*.md` articles.
+   - Non-destructively preserves user-defined custom sections, descriptions, and external HTTP(S) references.
+3. **Pure Script Deterministic `llms-full.txt` Compilation**:
+   - Zero LLM generation: compiled 100% deterministically by script.
+   - Assembles `README.md`, `AGENTS.md`, and all `docs/topic--*.md` articles in sorted order.
+   - Strips YAML front-matter and structures documents with clean Markdown section headers.
+4. **Cascading Subproject Synchronization**:
+   - Automatically walks downward to discover all subproject Along contexts and synchronizes their local `llms.txt` and `llms-full.txt` files whenever nested documentation exists.
+
+---
+
+## 6. Documentation Blast Radius & Code-Graph-to-Wiki Synchronization
+
+In the LLM-Wiki paradigm, documentation is a living asset that evolves alongside code. Along enforces a **Deterministic 2-Phase Blast Radius Gate**:
+
+```mermaid
+flowchart LR
+    DIFF["Code Modifications (git diff)"] --> CRG["code-review-graph (get_impact_radius_tool)"]
+    CRG --> IMPACT["Impacted Symbols & Downstream Callers"]
+    IMPACT --> SEARCH["along-kb-search (Topic Query)"]
+    SEARCH --> TOPICS["Targeted docs/topic--*.md Files"]
+    TOPICS --> EDIT["Factual Article Updates"]
+    EDIT --> KBSYNC["along-kb-sync --strict (Integrity Gate)"]
+    KBSYNC --> INDEX["docs/INDEX.md & Verified Links"]
+```
+
+1. **AST Blast Radius Discovery**: During task review, agents invoke `code-review-graph` MCP tools (`get_impact_radius_tool`, `get_affected_flows_tool`) to identify modified symbols and dependent modules.
+2. **Topic Mapping**: Agents query `along-kb-search` with the modified symbol names to pinpoint the exact `docs/topic--*.md` files documenting those interfaces.
+3. **Factual Updating**: Agents update the affected topic articles with concrete code facts (zero placeholders).
+4. **Compilation & Link Gate**: Running `python scripts/along_kb_sync.py --strict` validates relative links across the repository and recompiles `docs/INDEX.md`.
+
+---
+
+## 7. References & Useful Links
+
+- **Andrej Karpathy's LLM-Wiki Concept**: Conceptual foundation for repository-native, human-readable structured LLM documentation.
+- **[System Architecture & Flow](./topic--architecture.md)**: System topology, multi-branch concurrency, and multi-agent state machine.
+- **[Domain Model & Entity Ecosystem](./topic--domain-model.md)**: Taxonomy of issues, milestones, ADRs, and living memory.
+- **[Skills & Slash Commands Reference](./topic--skills-reference.md)**: Technical breakdown of all 18 automation skills.
+- **[Setup & Developer Workflow](./topic--setup-and-workflow.md)**: Installation, runner hooks, and day-in-the-life development flow.
+
+---
+
+## Document: docs/topic--migrations.md (Protocol & Repository Migrations Guide)
+
+# Protocol & Repository Migrations Guide
+
+This guide documents the versioned migration pipeline for the `ALONG-PROTOCOL` (`.along/`).
+
+---
+
+## 1. Overview & Execution Engine
+
+The migration engine (`scripts/migrate_protocol.py`) inspects the target repository's
+current structure and executes sequential migration steps to bring it up to the latest
+standard. It is invoked by `/along-init` and `/along-update`, and by hand:
+
+```bash
+python scripts/migrate_protocol.py <target_root> --dry-run   # print the plan, write nothing
+python scripts/migrate_protocol.py <target_root> --apply     # perform it
+python scripts/migrate_protocol.py <target_root> --apply --force   # ignore the recorded state
+```
+
+Installing does not migrate. `install.ps1` / `install.sh` print how to run the engine and
+do nothing to the repository unless given `-Migrate` / `--migrate`.
+
+```mermaid
+flowchart TD
+    A["Legacy Repo (v1.0)"] -->|Step 1: Tasks to Issues| B["v1.1.0 (ISSUES structure)"]
+    B -->|Step 2: Scaffolding KB & Graph| C["v1.3.0 (Knowledge Base & Graph)"]
+    C -->|Step 3: Entity Ecosystem| D["v1.5.0 (Milestones, Risks, Checklists)"]
+    D -->|Step 4: Along Directory| E["v2.0.0 (Along Ecosystem & protocol: along)"]
+    E -->|Step 7: LLM-Wiki & docs/| F["v2.1.0 (docs/ KB, In-Place Provenance, Domain-First Skills)"]
+```
+
+---
+
+## 2. What the Engine Is Allowed To Do
+
+The engine used to move legacy content by deleting whatever occupied the destination
+(`os.remove(dst)` followed by `shutil.move`). A repository holding both a legacy
+`.agents/` and an already-started `.along/` - a partial migration, or two branches
+migrating separately - therefore lost the newer `DECISIONS.md` and `HISTORY.md`, which
+are append-only by protocol and so irrecoverable. Four rules now hold, each with a
+behavioral test in `tests/test_migration.py`:
+
+1. **A destination file is never deleted.** What happens on a collision depends on the
+   file class, and every outcome keeps both bodies:
+
+   | Destination | Policy | Result |
+   | :--- | :--- | :--- |
+   | `DECISIONS.md`, `HISTORY.md` | Union merge | Entries the legacy copy has and the destination lacks are appended, deduplicated. This is what `.gitattributes` already does across branches (`merge=union`). |
+   | `ISSUES.md`, `INDEX.md`, `DASHBOARD.md`, `dashboard.html` | Keep destination | Derived projections carry nothing their sources do not. The legacy copy is dropped; recompile with `/along-issue-sync` or `/along-kb-sync`. |
+   | Entity files, anything else | Keep destination | The legacy copy is preserved as `<name>.legacy.md` beside it and reported as a resolved collision. |
+
+2. **Dry run is the default for anything but a human at a terminal.** A caller that is
+   not attached to a TTY gets the plan and a notice; mutation requires `--apply`. The two
+   ways this engine used to run - from the installer and from the test suite - were both
+   invocations nobody had asked for.
+3. **A backup precedes the first change.** `.along/` and `.agents/` are copied to
+   `.along/.migration-backup/<timestamp>/` before anything is modified, and the path is
+   printed. The backup directory ignores itself via its own `.gitignore`, so it never
+   reaches history and never edits the user's.
+4. **Undecodable files are skipped and reported.** Markdown was read with
+   `errors="ignore"` and written back, which deleted every byte that was not valid UTF-8.
+   Reads are strict; a file that fails to decode is listed in the report and left alone.
+
+`.along/.protocol-version` records the version the repository was last migrated to, so a
+second run reports `already at v<version>; nothing to do` instead of re-executing eight
+steps whose idempotency held only by accident. `--force` overrides it.
+
+Every operation is recorded, so both modes end with the same report: the operations
+grouped by kind, the collisions and how each was resolved, the skipped files, and the
+backup path. All of it is implemented once, in `scripts/alongkit/migration.py`; a test
+fails if the engine calls `shutil.move`, `os.remove` or their neighbours directly.
+
+---
+
+## 3. Version Migration Steps
+
+### `v1.0.0` -> `v1.1.0`: Tasks to Issues
+- Renames `TASKS.md` -> `ISSUES.md` and `TASKS/` -> `ISSUES/`.
+- Enforces kebab-case `<type>--<slug>.md` naming for all issue files.
+
+### `v1.1.0` -> `v1.3.0`: Knowledge Base & Code Graph
+- Scaffolds initial Knowledge Base (`INDEX.md`, `topic--architecture.md`, `topic--domain-model.md`, `topic--setup-and-workflow.md`).
+- Creates `.code-review-graph-ignore` with standard excludes (`node_modules/`, `dist/`, `build/`, `SESSIONS/`).
+
+### `v1.3.0` -> `v1.5.0`: Entity Ecosystem & Retro-Synthesis
+- Scaffolds `.along/MILESTONES/`, `.along/RISKS/`, `.along/SPIKES/`, `.along/CHECKLISTS/`, and `.along/ISSUES/done/`.
+- Retroactively synthesizes completed milestones from Git history and session logs.
+- Sanitizes non-ASCII typography (replacing em-dashes with standard ASCII hyphens).
+
+### `v1.5.0` -> `v2.0.0`: Along Rebranding & Isolated `.along/`
+- Migrates `.agents/` to `.along/` and updates `protocol: along` YAML front-matter across all entities.
+- Validates entity relationships (`blocked_by`, `related`, `parent`) and verifies zero DAG cycles.
+
+### `v2.0.0` -> `v2.1.0`: LLM-Wiki Architecture & Singular Domain-First Skills
+- Migrates active Knowledge Base articles from `.along/KB/` to top-level `docs/`.
+- Preserves raw, unmanaged source notes in-place with SHA-256 provenance tracking.
+- Standardizes all 3-part skills to Singular Domain-First format (`along-<entity>-<action>`).
+- Enforces mandatory `along-kb-search` agent querying rule to minimize token usage.
+
+---
+
+## Document: docs/topic--setup-and-workflow.md (Setup & Developer Workflow)
+
+# Setup & Developer Workflow
+
+Complete guide for installing Along, configuring repository lifecycle runners, and executing day-to-day development workflows across host AI agent runtimes.
+
+---
+
+## 1. Installation & Multi-Platform Setup
+
+Along installs globally and configures provider-agnostic agent discoverability across Claude Code, OpenAI Codex, OpenCode, and Google Antigravity.
+
+### Windows Installation
+Run PowerShell as Administrator or with standard permissions:
+```powershell
+# Install for all supported agent runtimes (Claude, Codex, Antigravity, OpenCode)
+powershell -NoProfile -ExecutionPolicy Bypass -File install.ps1 -Target all
+
+# Or run the batch installer, which forwards its arguments to install.ps1
+install.bat -Target all
+```
+
+### Linux / macOS Installation
+```bash
+# Make installer executable and run
+chmod +x install.sh
+./install.sh --target=all
+```
+
+### Supported Installation Targets
+- `-Target all`: Deploys skills to `~/.claude/skills/`, `~/.codex/skills/`, `~/.gemini/config/skills/`, and `~/.config/opencode/commands/`.
+- `-Target claude`: Deploys only to Claude Code.
+- `-Target codex`: Deploys only to OpenAI Codex.
+- `-Target antigravity`: Deploys only to Google Antigravity.
+- `-Target opencode`: Deploys only to OpenCode.
+
+### What an Install Writes
+
+| Artifact | Destination | Notes |
+| :--- | :--- | :--- |
+| Skill folders (`skills/along-*`) | `<provider home>/skills/` | Copied, or linked with `-Symlink` / `--symlink`. |
+| Language & platform rule packs (`rules/`) | `<provider home>/rules/` | Copied over the destination, never replacing the directory. |
+| Engines and `alongkit/` | `~/.along/bin/` | The shared package travels with the engines. |
+| OpenCode commands | `~/.config/opencode/commands/along-*.md` | Generated from the same `SKILL.md` bodies. |
+| Default configuration | `~/.along/config.json` | Seeded only when absent; yours afterwards. |
+| Install manifest | `~/.along/install-manifest.json` | Version, target homes, and every file the install wrote. |
+
+Both installers write exactly the same artifact set; `tests/test_installers.py` runs each
+one against a throwaway checkout and compares the result to the single layout description
+in `alongkit.install.planned_files`.
+
+Every root is overridable, which is how the tests run a real installer without touching
+your own home: `--along-home=DIR --claude-home=DIR --codex-home=DIR --opencode-home=DIR
+--antigravity-home=DIR` (`-AlongHome DIR`, `-ClaudeHome DIR`, ... in PowerShell).
+
+### Removing an Install
+
+```bash
+./install.sh --uninstall
+powershell -NoProfile -ExecutionPolicy Bypass -File install.ps1 -Uninstall
+```
+
+The uninstall removes exactly the files listed in `~/.along/install-manifest.json` and
+nothing else: rules you wrote yourself, `~/.along/config.json`, and any provider
+configuration stay. The same manifest is what lets a re-install remove a file Along used
+to ship without deleting the directory that holds it. See
+[ADR-2026-09-01--installers-never-delete-what-they-did-not-write](../.along/DECISIONS.md).
+
+### MCP Registration Honesty
+
+The installers register the `code-review-graph` MCP server only where the provider's
+configuration contract is verified. Today that is Claude Code, in the `mcpServers` map of
+`~/.claude.json`. Codex (`~/.codex/config.toml`), OpenCode (`opencode.json`) and
+Antigravity (the Gemini settings file) are reported with their path and the exact snippet
+to add by hand, and are written only when you pass `--include-unverified-mcp`
+(`-IncludeUnverifiedMcp`). Earlier versions wrote a `mcp_config.json` into four provider
+homes, which no provider reads, and printed a success line for each; if you have those
+files, they are inert and can be deleted.
+
+A configuration file that does not parse is reported and left untouched, never replaced.
+
+---
+
+## 2. Python Runtime & Dependencies
+
+The engines behind the skills need one third-party package, `ruamel.yaml`, to read and
+write entity front-matter. Everything else is standard library.
+
+```bash
+# Recommended: install the toolchain with uv (creates an isolated environment)
+uv tool install actdim-along
+
+# Working inside this repository: uv resolves the environment from pyproject.toml
+uv run python -m unittest discover tests -q
+
+# No uv, no install: add the dependency to the active interpreter
+python -m pip install "ruamel.yaml>=0.18"
+```
+
+An engine invoked directly as `python scripts/along_exec.py ...` or
+`python ~/.along/bin/along_exec.py ...` checks for the dependency itself: if it is missing
+and `uv` is on `PATH`, the engine re-executes once under `uv run` and continues. If `uv` is
+absent it exits with code 2 and the two commands above, rather than a traceback.
+
+Why a dependency at all: front-matter is YAML because tools that are not Along read it, and
+a hand-rolled parser silently dropped block sequences and emitted blocks that no strict YAML
+reader accepts. See [ADR-2026-09-01--frontmatter-on-ruamel-yaml](../.along/DECISIONS.md).
+
+The dashboard (`/along-dash`) additionally needs FastAPI, Uvicorn, Pydantic, and Rich,
+declared as the `dash` extra and resolved automatically by `uv run scripts/along_dash.py`.
+
+---
+## 3. Bootstrapping a New or Existing Repository
+
+To initialize Along in any repository:
+```bash
+# Inside the repository root, run:
+along-init
+```
+*(Or invoke `/along-init` directly inside your AI agent prompt).*
+
+### What `along-init` Configures:
+1. `AGENTS.md`: Generates the root protocol context with the managed `ALONG-PROTOCOL v2.2.6` block.
+2. `CLAUDE.md`: Scaffolds the standard `@AGENTS.md` import line.
+3. `.gitattributes`: Configures `merge=union` for `.along/HISTORY.md` and `.along/DECISIONS.md` to prevent merge collisions across branches.
+4. `.along/`: Creates the persistent repository memory skeleton (`ISSUES/`, `DECISIONS.md`, `MILESTONES/`, `RISKS/`, `SPIKES/`, `CHECKLISTS/`, `SESSIONS/`, `docs/`).
+
+---
+
+## 4. Repository Lifecycle Runners (`.along/scripts/`)
+
+Along establishes a unified interface for project lifecycle operations via `.along/scripts/`. This allows AI agents to build, test, run, and bump versions across any technology stack without requiring custom prompt tuning.
+
+```mermaid
+flowchart LR
+    AGENT["AI Agent Command (/along-test)"] --> ROUTER["along_exec.py Router"]
+    ROUTER --> CHECK{"Custom .along/scripts/ hook exists?"}
+    CHECK -->|Yes| CUSTOM[".along/scripts/test.py (Hook)"]
+    CHECK -->|No| DETECT["Auto-Detect Stack (npm, cargo, dotnet, pytest)"]
+    DETECT --> RUNNER["Execute with Quiet Flags (-q, -v q)"]
+    CUSTOM --> RUNNER
+```
+
+### Standard Lifecycle Commands:
+
+| Command | Canonical Script | Fallback Stack Auto-Detection | Purpose |
+| :--- | :--- | :--- | :--- |
+| `/along-build` | `.along/scripts/build.py` | `npm run build` \| `cargo build` \| `dotnet build` \| `python -m build` | Compiles source artifacts. |
+| `/along-test` | `.along/scripts/test.py` | `pytest -q` \| `npm test` \| `cargo test -q` \| `dotnet test -v q` | Executes unit tests with quiet flags. |
+| `/along-dev` | `.along/scripts/dev.py` | `npm run dev` \| `cargo run` \| `dotnet run` \| `python main.py` | Starts local development server. |
+| `/along-version-bump` | `.along/scripts/bump_version.py` | Node `package.json` \| Python `pyproject.toml` \| Rust `Cargo.toml` \| .NET `*.csproj` | Bumps version and orchestrates release. |
+
+### Typography: checking and repairing
+
+`along sanitize` (or `python scripts/sanitize_typography.py`) reports banned characters
+by file and line. It **checks by default and writes nothing**; repairing is an explicit act.
+
+| Invocation | Effect |
+| :--- | :--- |
+| `along sanitize` | Report findings, exit 1. Nothing is written. |
+| `along sanitize --dry-run` | Report findings, exit 0. Nothing is written. |
+| `along sanitize --write` | Apply the ASCII replacements. |
+| `along sanitize --json` | The same report as JSON on stdout, for tooling and CI. |
+| `along sanitize --include-data` | Also scan `.json`, `.yaml`, `.yml`, `.toml`. |
+| `along sanitize --exclude '<glob>'` | Skip matching paths; `.alongsanitizeignore` in the repository root does the same, one glob per line. |
+
+Scope is `.md`, `.py`, `.sh`, `.ps1`, `.bat`; hidden directories such as `.along/` are
+included; localized resource directories (`locales/`, `i18n/`, `translations/`, ...) are
+never scanned. A file that is not valid UTF-8 is skipped and reported, and existing line
+endings are preserved, so a CRLF `.ps1` stays CRLF. See
+[ADR-2026-09-01--typography-rule-scope](../.along/DECISIONS.md).
+
+### Releasing: gates first, then a transaction
+
+`/along-version-bump [patch|minor|major|<version>]` runs in a fixed order, and the order is
+the point: the tests, the typography check, and the Markdown link check all run **before the
+first byte is written**, on every invocation. A bump without `--commit` is verified exactly
+as strictly as one with it.
+
+| Step | What it writes |
+| :--- | :--- |
+| 1. Gates | Nothing. Tests, typography check, `along_kb_sync.py --check --strict`. |
+| 2. Version | `.along/scripts/bump_version.py` if present, else the detected manifest (`package.json`, `pyproject.toml`, `Cargo.toml`, `VERSION`, or the Along protocol files). |
+| 3. Milestone | Front-matter of the milestone in `.along/MILESTONES/` whose `slug` names the version: `status: completed`, `progress_pct: 100`. The body is never touched. |
+| 4. CHANGELOG | A `## v<version>` section listing commit subjects since the previous tag. |
+| 5. Commit and tag (`-c`) | Stages only the paths steps 2 to 4 wrote, commits `release: v<version>`, creates the annotated tag `v<version>`. `-p` pushes both. |
+
+Steps 2 to 4 are transactional. A failure in any of them, or in staging, restores every file
+byte for byte and prints what it put back; the transaction closes once the commit exists,
+because past that point a rollback would discard committed work. `--fix-typography` opts
+into repairing the findings from step 1 and is itself covered by the rollback. `-n` /
+`--no-verify` is the one documented way past the gates.
+
+A release writes nothing outside the repository. Installing skills for your providers is
+`/along-update` or `install.ps1` / `install.sh`, run deliberately.
+
+---
+
+## 5. Day-in-the-Life Developer & Agent Workflow
+
+The standard developer workflow in an Along-enabled repository flows through 6 phases:
+
+```mermaid
+sequenceDiagram
+    autonumber
+    actor Dev as Developer
+    participant Agent as AI Agent (Antigravity / Claude)
+    participant Protocol as .along/ ISSUES & Memory
+    participant Runners as Lifecycle Runners (test / build)
+    participant Wrap as along-wrap & along-commit
+
+    Dev->>Agent: "Add rate limiting middleware to auth routes"
+    Note over Agent: Phase 1: Intent Heuristics & Issue Anchoring
+    Agent->>Protocol: Auto-create .along/ISSUES/feat--rate-limiting-middleware.md
+    
+    Note over Agent: Phase 2: Autonomous Multi-Agent Execution (/along-team)
+    Agent->>Agent: Scout researches auth routes -> Architect creates Living Plan
+    loop Step Loop (1..N)
+        Agent->>Agent: Implementer applies code edits
+        Agent->>Runners: Reviewer runs /along-test & checks AST blast radius
+    end
+
+    Note over Dev,Agent: Phase 3: Validation & Committing
+    Dev->>Agent: "Commit and wrap up"
+    Agent->>Wrap: /along-commit (ASCII validation + Conventional Commit)
+    Agent->>Wrap: /along-wrap (Test gate, move issue to done/, update SESSIONS/ and HISTORY.md)
+    Agent-->>Dev: Final concise summary
+```
+
+### Step 1: Morning Sync & Task Triage
+- Launch `/along-dash` to inspect sprint KPIs, active blockers in `.along/RISKS/`, and the entity DAG.
+- Review active issues in `.along/ISSUES.md`.
+
+### Step 2: Task Claiming & Intent Recognition
+- Issue a natural language prompt to the agent (e.g. *"Fix Windows path escaping in CLI"*).
+- The agent automatically infers the issue type (`bug`), creates `.along/ISSUES/bug--windows-path-escaping.md`, and sets `status: in-progress`.
+
+### Step 3: Execution via `/along-team`
+- For S-size tasks (1-2 files): The agent fast-paths edits directly and runs tests.
+- For M/L/XL-size tasks: The agent activates the multi-agent sequential state machine, creating a dynamic Living Plan and verifying each step with an independent Reviewer subagent.
+
+### Step 4: Verification & AST Blast Radius Gate
+- Run `/along-test` to ensure zero regressions.
+- Execute `/along-graph-check` to trace caller contracts and map affected symbols to `docs/topic--*.md` Knowledge Base articles.
+
+### Step 5: Clean Conventional Commit
+- Execute `/along-commit -i <slug> -m "<summary>"`.
+- Verifies clean ASCII typography (no em-dashes, no curly quotes) and binds the commit to the active issue.
+- The typography gate **reports and aborts**; it does not rewrite the working tree. Findings
+  are printed with file and line. Add `--fix-typography` to apply the replacements in the
+  same run, or clean them by hand.
+- A file that is not valid UTF-8 is skipped and named, never decoded lossily and rewritten.
+  See [ADR-2026-09-01--typography-rule-scope](../.along/DECISIONS.md).
+
+### Step 6: Session Wrap-Up
+- Invoke `/along-wrap` to execute the mandatory completion checklist:
+  1. Automated test suite check.
+  2. Documentation blast radius sync (`/along-kb-sync`).
+  3. Move issue to `.along/ISSUES/done/`.
+  4. Reconcile `ISSUES.md` projection.
+  5. Record work session log in `.along/SESSIONS/<YYYY>/`.
+  6. Append history line to `.along/HISTORY.md`.
+  7. Purge ephemeral blackboard `.along/.session/<slug>/`.
+
+---
+
+## 6. Writing Tests: the Hermetic Rule
+
+Agents write most of the tests in this repository, so the rule that keeps the suite
+trustworthy is stated here as well as in the protocol block of `AGENTS.md`.
+
+**A test must never point an engine at the repository that contains it.** The engines
+write: `migrate_protocol.py` normalizes front-matter, sanitizes typography, and rewrites
+Markdown links across the whole tree; `along_update.py` regenerates the managed protocol
+block; `along_exec.py` creates and moves entities. Three tests used to pass `REPO_ROOT`
+straight into those engines, and one of them rewrote a newly created issue file mid-session,
+turning `protocol_version: "2.2.8"` into `protocol_version: 2.2.8`. A suite in that state
+cannot act as a gate, because "the suite is green" and "the tree is clean" are no longer
+simultaneously achievable, and CI cannot tell a real change from test noise.
+
+### How to write one
+
+```python
+import hermetic          # tests/hermetic.py
+
+def test_engine_does_the_thing(self):
+    with hermetic.repo_fixture(prefix="along-mything-") as fixture:
+        res = proc.run_capture([sys.executable, engine_script, fixture])
+        self.assertEqual(res.returncode, 0, res.stderr)
+```
+
+`hermetic.repo_fixture()` builds a throwaway repository that looks like a current Along
+project (`AGENTS.md` with the managed block, `.along/` with one valid entity, an ADR, the
+board, and a small `docs/` Knowledge Base) and removes it afterwards. It is deliberately
+not a git repository, so nothing a test runs can reach a real index or history. For an
+engine that resolves its target from the working directory, such as `along_exec.py`, pass
+the fixture as `cwd` instead of as an argument.
+
+Reading live repository content is still allowed and several guards depend on it: the ADR
+format guard in `tests/test_kb_search.py`, the entity-status guard in
+`tests/test_issue_lifecycle.py`, and the typography and link gates. Those tests open files
+read-only and never invoke an engine that writes.
+
+### What enforces it
+
+`tests/test_zz_hermetic_suite.py` runs last (alphabetically, under `unittest discover`) and
+holds two gates:
+
+| Gate | What it does |
+| :--- | :--- |
+| `test_01_working_tree_is_unchanged_by_the_suite` | Snapshots `git status --porcelain -u` at import time and again after the suite, failing on any path that appeared, vanished, or changed status. |
+| `test_02_no_test_targets_the_repository_root` | Parses every `tests/*.py` and fails on a command-shaped list literal built with `REPO_ROOT` as an argument, so a regression is caught when it is written rather than when it happens to do damage. |
+
+Run the suite with `python .along/scripts/test.py` (it resolves `ruamel.yaml` through `uv`
+when the interpreter lacks it) or `uv run python -m unittest discover tests -q`.
+
+---
+
+## Document: docs/topic--skills-reference.md (Skills & Slash Commands Technical Reference)
+
+# Skills & Slash Commands Technical Reference
+
+Along provides an integrated suite of **18 singular automation skills** operating across Claude Code, OpenAI Codex, OpenCode, and Google Antigravity.
+
+Each skill is built on a domain-first naming pattern (`along-<entity>-<action>`), guarantees clean ASCII output, operates on strongly typed repository entities, and can be invoked either explicitly via slash commands/CLI or automatically via semantic intent recognition.
+
+---
+
+## Skills Ecosystem & Workflow Phases
+
+```mermaid
+flowchart TD
+    subgraph Phase1["1. Bootstrap & Protocol"]
+        INIT["along-init"]
+        UPDATE["along-update"]
+        BUMP["along-version-bump"]
+    end
+
+    subgraph Phase2["2. Planning & Multi-Agent"]
+        TEAM["along-team"]
+        ISSUE_SYNC["along-issue-sync"]
+        DEC_SYNC["along-decision-sync"]
+    end
+
+    subgraph Phase3["3. Lifecycle Runners"]
+        BUILD["along-build"]
+        TEST["along-test"]
+        DEV["along-dev"]
+    end
+
+    subgraph Phase4["4. Quality & Code Graph"]
+        COMMIT["along-commit"]
+        GRAPH["along-graph-check"]
+        DEP["along-dep-scan"]
+    end
+
+    subgraph Phase5["5. LLM-Wiki Intelligence"]
+        KB_SYNC["along-kb-sync"]
+        KB_SEARCH["along-kb-search"]
+    end
+
+    subgraph Phase6["6. Analytics & Wrap"]
+        DASH["along-dash"]
+        HIST_SYNC["along-history-sync"]
+        FEEDBACK["along-feedback"]
+        WRAP["along-wrap"]
+    end
+
+    INIT --> TEAM
+    TEAM --> BUILD & TEST & DEV
+    TEST --> GRAPH & COMMIT
+    COMMIT --> KB_SYNC & KB_SEARCH
+    KB_SYNC --> DASH & WRAP
+```
+
+---
+
+## 1. Bootstrap & Repository Protocol Management
+
+### `along-init`
+- **What it is**: The foundation bootstrapping engine for Along in any repository. Scaffolds or refreshes root `AGENTS.md` (carrying the managed protocol block), `CLAUDE.md`, `.gitattributes` (with `merge=union`), and the `.along/` directory skeleton (`ISSUES/`, `DECISIONS.md`, `MILESTONES/`, `RISKS/`, `SPIKES/`, `CHECKLISTS/`, `SESSIONS/`, `docs/`).
+- **Architectural Rationale**:
+  - *Idempotent Managed Block*: Never overwrites custom human developer instructions in `AGENTS.md`; only refreshes the block between `<!-- BEGIN ALONG-PROTOCOL ... -->` and `<!-- END ALONG-PROTOCOL -->`.
+  - *Non-Destructive Initialization*: Creates directories and template files only if missing, preserving existing project history.
+- **Invocation Triggers**:
+  - *Explicit*: `/along-init`, `install.ps1`, `install.sh`.
+  - *Semantic / Automatic*: Triggered when an agent detects an uninitialized repository, missing `AGENTS.md`, or a user prompt like *"Set up Along in this repo"*, *"Initialize agent instructions"*.
+- **Entities Operated On**: `AGENTS.md`, `CLAUDE.md`, `.gitattributes`, `.along/ISSUES/`, `.along/DECISIONS.md`, `docs/`.
+- **Ecosystem Chaining**: Followed immediately by `/along-kb-sync` (to ingest `README.md`) and `/along-dep-scan`.
+
+---
+
+### `along-update`
+- **What it is**: Automated protocol and skill synchronizer. Checks and pulls latest Along skills, migrations, and protocol definitions across user home directories (`~/.claude`, `~/.codex`, `~/.gemini`) and local repositories.
+- **Architectural Rationale**:
+  - Eliminates skill drift across multiple developer machines.
+  - Automatically executes retroactive migration scripts (`scripts/migrate_protocol.py`) to upgrade legacy front-matter schemas and directory layouts without data loss.
+- **Invocation Triggers**:
+  - *Explicit*: `/along-update`, `python scripts/along_update.py`.
+  - *Semantic / Automatic*: Triggered on protocol version mismatch, outdated skills warnings, or prompts like *"Upgrade Along protocol"*, *"Update agents"*.
+- **Entities Operated On**: Global skill folders (`~/.gemini/config/skills/along-*`), target repository `AGENTS.md`, `scripts/`.
+- **Ecosystem Chaining**: Runs `migrate_protocol.py` and triggers `/along-kb-sync --strict` to validate repository link integrity after updates.
+
+---
+
+### `along-version-bump`
+- **What it is**: Universal multi-stack semantic version bumper and release orchestrator. Updates project versions across Node (`package.json`), Python (`pyproject.toml`), Rust (`Cargo.toml`), .NET (`*.csproj`), or Along protocol files.
+- **Architectural Rationale**:
+  - *Stack-Agnostic Hook Architecture*: Executes repository-specific hooks in `.along/scripts/bump_version.py` with automatic fallback to stack auto-detection.
+  - *Pre-Release Quality Gate*: Runs the test suite, the typography check, and the Markdown link check BEFORE the first byte is written, on every invocation rather than only when `--commit` is passed. The typography step aborts on a finding rather than rewriting the tree; `--fix-typography` opts into the repair.
+  - *Transactional Release*: Every mutation is recorded by `alongkit.transaction.FileTransaction`. A failure anywhere up to the git commit restores each file byte for byte and reports what it put back, so an aborted release leaves no half-released tree. The transaction closes once the commit exists.
+  - *No Global Side Effects*: A version bump never reinstalls the machine's agent configuration. Installing globally is `/along-update` or the installer.
+- **Invocation Triggers**:
+  - *Explicit*: `/along-version-bump [patch|minor|major|<version>] [-c|--commit] [-p|--push] [--fix-typography] [-n|--no-verify]`, `python scripts/along_version_bump.py`.
+  - *Semantic / Automatic*: Triggered when preparing a release, completing a milestone sprint, or prompted with *"Release version 2.3.0"*, *"Bump patch version"*.
+- **Entities Operated On**: `package.json`, `pyproject.toml`, `Cargo.toml`, `*.csproj`, `VERSION`, `AGENTS.md`, `CHANGELOG.md`, the milestone in `.along/MILESTONES/` whose front-matter `slug` names the released version.
+- **Ecosystem Chaining**: Chains with `/along-test` for pre-release validation, `/along-kb-sync --check --strict` for the link gate, and creates the release commit plus the annotated `v<version>` tag itself.
+
+---
+
+## 2. Orchestration, Planning & Multi-Agent Teams
+
+### `along-team`
+- **What it is**: Sequential multi-agent development engine and living plan orchestrator. Replaces chaotic chat rooms with a deterministic state machine: `Supervisor -> Scout (Research) -> Architect (Living Plan) -> Step Loop [Implementer -> Reviewer/Tester -> Reassess] -> Wrap`.
+- **Architectural Rationale**:
+  - *Context Pruning Gatekeeping*: The Supervisor strips raw tool outputs from the Scout, injecting only distilled facts into the Implementer to prevent prompt saturation.
+  - *Independent Gatekeeper Review*: Reviewer evaluates code in an isolated subagent context against the strict 5-point verification rubric (Zero-byte check, unit tests, diff scope, AST blast radius, clean ASCII).
+  - *Adaptive Complexity Routing*: Fast-paths S-size tasks (1-2 files) without subagents; uses full state machine only for M/L/XL tasks.
+- **Invocation Triggers**:
+  - *Explicit*: `/along-team <slug>`, `/goal <task>`.
+  - *Semantic / Automatic*: Triggered automatically for multi-file feature requests, complex refactorings, or prompts like *"Implement this feature with the agent team"*.
+- **Entities Operated On**: `.along/ISSUES/<type>--<slug>.md`, `.along/.session/<slug>/` (ephemeral blackboard: `plan.md`, `scout_findings.json`, `step_reviews/`), `docs/`.
+- **Ecosystem Chaining**: Uses `along-build`, `along-test`, `along-graph-check` during step loops, and finishes via `along-wrap`.
+
+---
+
+### `along-issue-sync`
+- **What it is**: Idempotent synchronization engine that reconciles atomic issue files (`.along/ISSUES/*.md`, `.along/ISSUES/done/*.md`) into the compact active issue board projection (`.along/ISSUES.md`).
+- **Architectural Rationale**:
+  - *Zero-Manual-Merge Principle*: Because `ISSUES.md` is a compiled projection, git merge conflicts are resolved automatically by running `along-issue-sync` rather than manually resolving diffs.
+- **Invocation Triggers**:
+  - *Explicit*: `/along-issue-sync`, `python scripts/along_exec.py issue sync`.
+  - *Semantic / Automatic*: Triggered during `/along-wrap`, when an issue changes status, or during post-git-merge reconciliation.
+- **Entities Operated On**: `.along/ISSUES/*.md`, `.along/ISSUES/done/*.md`, `.along/ISSUES.md`.
+- **Ecosystem Chaining**: Feeds data into `along-dash` and `along-wrap`.
+
+---
+
+### `along-decision-sync`
+- **What it is**: Architectural Decision Record (ADR) recorder. Appends structured architectural decisions with decentralized slug headers (`## ADR-YYYY-MM-DD--<slug>`) into `.along/DECISIONS.md`.
+- **Architectural Rationale**:
+  - *Decentralized Slug Headers*: Prevents merge collisions across concurrent branches compared to sequential integer numbering (`#012`).
+  - *Append-Only Invariance*: Old decisions are never deleted or rewritten; when superseded, they are marked `superseded by ADR-YYYY-MM-DD--<slug>`.
+- **Invocation Triggers**:
+  - *Explicit*: `/along-decision-sync`, `python scripts/along_exec.py decision append`.
+  - *Semantic / Automatic*: Triggered whenever a non-trivial architectural choice, library selection, or database schema design is confirmed during a session or spike.
+- **Entities Operated On**: `.along/DECISIONS.md`.
+- **Ecosystem Chaining**: Governs Reviewer checks in `along-team` and informs documentation updates in `along-kb-sync`.
+
+---
+
+## 3. Development & Lifecycle Execution Runners
+
+### `along-build`
+- **What it is**: Universal build runner. Executes repository build lifecycle via `.along/scripts/build.py` or auto-detected package runners (`npm run build`, `cargo build`, `dotnet build`, `python -m build`).
+- **Architectural Rationale**:
+  - *Non-Destructive Standardized Interface*: AI agents execute a single unified command (`along-build`) across any programming language or technology stack without needing custom per-repo prompt tuning.
+- **Invocation Triggers**:
+  - *Explicit*: `/along-build`, `python scripts/along_exec.py build`.
+  - *Semantic / Automatic*: Triggered after code edits, before pre-commit checks, or when the user prompts *"Build the project"*.
+- **Entities Operated On**: `.along/scripts/build.py`, build output targets (`dist/`, `build/`, `bin/`).
+- **Ecosystem Chaining**: Prerequisite for `along-test` and `along-dash` UI builds.
+
+---
+
+### `along-test`
+- **What it is**: Universal automated test runner with quiet flags (`pytest -q`, `npm test`, `cargo test -q`, `dotnet test -v q`).
+- **Architectural Rationale**:
+  - *Token Hygiene via Quiet Flags*: Suppresses massive verbose test logs in agent prompts, emitting clean summary counts (pass/fail) to conserve context budget.
+- **Invocation Triggers**:
+  - *Explicit*: `/along-test`, `python scripts/along_exec.py test`.
+  - *Semantic / Automatic*: Triggered during every Reviewer step in `along-team`, before pre-commit in `along-commit`, and during `/along-wrap`.
+- **Entities Operated On**: `.along/scripts/test.py`, test suites (`tests/`, `src/**/*.test.ts`).
+- **Ecosystem Chaining**: Core quality gate for `along-team`, `along-commit`, and `along-version-bump`.
+
+---
+
+### `along-dev`
+- **What it is**: Development server runner. Launches local dev servers or debug runners (`npm run dev`, `cargo run`, `dotnet run`, `python main.py`).
+- **Architectural Rationale**:
+  - Provides a single standardized hook (`.along/scripts/dev.py`) for background daemon execution.
+- **Invocation Triggers**:
+  - *Explicit*: `/along-dev`, `python scripts/along_exec.py dev`.
+  - *Semantic / Automatic*: Triggered when the user requests *"Start local dev server"*, *"Run application locally"*.
+- **Entities Operated On**: `.along/scripts/dev.py`.
+- **Ecosystem Chaining**: Pairs with `along-dash` for local interactive debugging.
+
+---
+
+## 4. Quality Gates, Code Graph & Commit Integrity
+
+### `along-commit`
+- **What it is**: Smart, ASCII-clean Conventional Committer. Validates typography, binds commit messages to active `.along/` issues, and creates clean Git commits.
+- **Architectural Rationale**:
+  - *Typography & Non-ASCII Gate*: Scans repository text to block forbidden typographic characters (em-dash, smart curly quotes, non-breaking spaces, byte order marks) that corrupt Windows shell execution or AST parsers. It reports findings by file and line and aborts; it does not rewrite the tree unless `--fix-typography` is passed, and it never rewrites a file that is not valid UTF-8. See [ADR-2026-09-01--typography-rule-scope](../.along/DECISIONS.md).
+  - *Issue Traceability*: Enforces issue slug references (`(refs #<slug>)` or `[<slug>]`) for 100% auditability.
+- **Invocation Triggers**:
+  - *Explicit*: `/along-commit -i <slug> -m "<message>" [--fix-typography]`, `python scripts/along_commit.py`.
+  - *Semantic / Automatic*: Triggered when completing a task or when prompted with *"Commit changes"*.
+- **Entities Operated On**: Git staging index, `.along/ISSUES/`, active commit logs.
+- **Ecosystem Chaining**: Precedes `/along-wrap`.
+
+---
+
+### `along-graph-check`
+- **What it is**: AST call graph and blast radius inspection engine. Uses `code-review-graph` MCP tools to map impacted functions, downstream callers, and interface breaks.
+- **Architectural Rationale**:
+  - *Deterministic Blast Radius*: Prevents silent regression bugs by identifying all dependent callers across the codebase before code is merged.
+  - *Graph-Ignore Filtering*: Enforces `.code-review-graph-ignore` to exclude `node_modules` and vendor directories, preventing graph database ballooning.
+- **Invocation Triggers**:
+  - *Explicit*: `/along-graph-check`, `python scripts/along_graph_check.py`.
+  - *Semantic / Automatic*: Triggered during Phase 4 (Reviewer) in `along-team` and before session wrap-up for non-trivial refactorings.
+- **Entities Operated On**: `.code-review-graph-ignore`, AST symbol database.
+- **Ecosystem Chaining**: Maps identified AST symbols directly into `along-kb-search` for Knowledge Base synchronization.
+
+---
+
+### `along-dep-scan`
+- **What it is**: Hierarchical multi-project and submodule dependency scanner. Scans package manifests (`package.json`, `pyproject.toml`, `Cargo.toml`, `*.csproj`), submodules, and symlinks for declared AI instructions and vendor rules.
+- **Architectural Rationale**:
+  - Extracts subproject constraints and vendor AI rules into `docs/topic--dependencies.md`, giving agents unified visibility into third-party constraints without manual file hunting.
+- **Invocation Triggers**:
+  - *Explicit*: `/along-dep-scan`, `python scripts/along_dep_scan.py`.
+  - *Semantic / Automatic*: Triggered during `/along-init`, after dependency updates, or when adding a new Git submodule.
+- **Entities Operated On**: `package.json`, `pyproject.toml`, `Cargo.toml`, `*.csproj`, `docs/topic--dependencies.md`.
+- **Ecosystem Chaining**: Feeds architectural constraints into `docs/topic--dependencies.md` and `along-kb-sync`.
+
+---
+
+## 5. Knowledge Base & LLM-Wiki Intelligence
+
+### `along-kb-sync`
+- **What it is**: Idempotent LLM-Wiki compiler, inbound link rewriter, and link integrity gate for `docs/`.
+- **Architectural Rationale**:
+  - *LLM-Wiki Paradigm*: Implements Andrej Karpathy's LLM-Wiki architecture in Python with a single runtime dependency (`ruamel.yaml`, for front-matter), resolved automatically by `uv`.
+  - *Inbound Link Rewriter*: Recursively scans all Markdown files in the monorepo and rewrites legacy internal paths (`.along/KB/...`) to standard relative `docs/` paths.
+  - *Link Integrity Gate*: In `--strict` mode, validates that every relative Markdown link physically resolves to an existing file on disk.
+  - *In-Place Source Provenance & Drift Gate*: Reconciles raw notes, code, and specs in-place with `sources: [{path, hash}]` front-matter tracking, detecting drift via SHA-256 and guarding accidental reductions via the `--prune-intent` gate.
+  - *Deterministic LLM Context Exports*: Non-destructively reconciles `llms.txt` and compiles `llms-full.txt` across `.well-known/` and context root locations for whole-project and subproject contexts.
+- **Invocation Triggers**:
+  - *Explicit*: `/along-kb-sync [--strict] [--prune-intent [REASON]]`, `python scripts/along_kb_sync.py`.
+  - *Semantic / Automatic*: Triggered during `/along-wrap`, after modifying documentation in `docs/`, or during protocol migration.
+- **Entities Operated On**: `docs/*.md`, `docs/INDEX.md`, `llms.txt`, `llms-full.txt`, `.well-known/`, all repository Markdown files.
+- **Ecosystem Chaining**: Compiles the Knowledge Base queried by `along-kb-search` and visualized by `along-dash`.
+
+---
+
+### `along-kb-search`
+- **What it is**: Ultra-fast, token-efficient multi-scope search engine across Knowledge Base (`docs/`) and living project memory (`ISSUES/`, `DECISIONS.md`, `MILESTONES/`, `RISKS/`, `SESSIONS/`).
+- **Architectural Rationale**:
+  - *95-98% Token Reduction*: Instead of reading whole multi-kilobyte documents into prompt context, retrieves concise ~200-character snippet windows in under 100 tokens.
+  - *Multi-Tier Relevance Scoring*: Ranks results using weighted heuristics (`Title: +10`, `Tags: +5`, `Body: +1`) for instant pinpoint accuracy.
+- **Invocation Triggers**:
+  - *Explicit*: `/along-kb-search "<query>" [--category <cat>]`, `python scripts/along_kb_search.py`.
+  - *Semantic / Automatic*: Mandatory first step for agents when researching domain architecture, investigating existing decisions, or mapping blast radius.
+- **Entities Operated On**: `docs/`, `.along/ISSUES/`, `.along/DECISIONS.md`, `.along/MILESTONES/`, `.along/RISKS/`, `.along/SPIKES/`, `.along/SESSIONS/`.
+- **Ecosystem Chaining**: Used by Scout and Supervisor in `along-team` during Phase 1 (Research).
+
+---
+
+## 6. Visual Analytics, History & Diagnostics
+
+### `along-dash`
+- **What it is**: Multi-mode executive dashboard and interactive Cytoscape DAG visualizer. Serves a FastAPI REST API and Server-Sent Events (SSE) stream with a modern reactive UI.
+- **Architectural Rationale**:
+  - *Autonomous Multi-Mode Architecture*: Runs in 4 decoupled modes via `scripts/along_dash.py`: CLI Mode, Interactive Web Mode (`http://127.0.0.1:8765`), Static HTML Export, and Markdown Dashboard Report (`.along/DASHBOARD.md`).
+  - *Zero Setup Overhead*: Uses PEP 723 inline script metadata (`# /// script ...`) for instant zero-config execution.
+- **Invocation Triggers**:
+  - *Explicit*: `/along-dash [-w|--web] [-c|--cli] [-e|--export]`, `python scripts/along_dash.py`.
+  - *Semantic / Automatic*: Triggered when the user asks for a project status overview, dependency visualization, or sprint progress report.
+- **Entities Operated On**: `.along/`, `docs/`, `.along/DASHBOARD.md`.
+- **Ecosystem Chaining**: Visualizes the entire entity DAG created by `along-team`, `along-issue-sync`, and `along-kb-sync`.
+
+---
+
+### `along-history-sync`
+- **What it is**: Git history reconstruction engine. Reconciles `.along/` entities, closed issues, milestones, and session journals from historical Git commits, tags, and pull requests.
+- **Architectural Rationale**:
+  - Enables legacy repositories adopting Along to immediately gain full project memory and completed issue archives without manual retrospective data entry.
+- **Invocation Triggers**:
+  - *Explicit*: `/along-history-sync`, `python scripts/along_history_sync.py`.
+  - *Semantic / Automatic*: Triggered during initial onboarding on existing git repositories or after major branch rebases.
+- **Entities Operated On**: Git commit log, `.along/ISSUES/done/`, `.along/SESSIONS/`, `.along/HISTORY.md`.
+- **Ecosystem Chaining**: Reconstructs historical data visualized in `along-dash`.
+
+---
+
+### `along-feedback`
+- **What it is**: Self-diagnostics and incident reporting subsystem. Collects sanitized diagnostic logs, redacts PII and credentials, and dispatches feedback via Telegram, Webhook, or File export.
+- **Architectural Rationale**:
+  - *Zero-Leak Redaction*: Automatic regex-based redaction of user home paths, tokens, and credentials guarantees that sensitive data is never transmitted.
+  - *Pluggable Transports*: Supports offline file export, direct Telegram bot notifications, or custom webhook endpoints.
+- **Invocation Triggers**:
+  - *Explicit*: `/along-feedback [--export|--send]`, `python scripts/along_feedback.py`.
+  - *Semantic / Automatic*: Triggered when an Along internal script encounters unhandled exceptions or when prompted with *"Report bug in Along"*.
+- **Entities Operated On**: `~/.along/diagnostics/incidents/`, `~/.along/diagnostics/REPORT.md`.
+- **Ecosystem Chaining**: Provides operational telemetry and continuous improvement for the Along protocol.
+
+---
+
+### `along-wrap`
+- **What it is**: Unified session and stage wrap-up orchestrator. Executes the mandatory completion checklist: runs tests, checks documentation blast radius, moves finished issues to `done/`, reconciles `ISSUES.md`, appends to `HISTORY.md`, and purges session blackboards.
+- **Architectural Rationale**:
+  - *Consolidated Lifecycle*: Eliminates fragmentation between session wrap-up and stage wrap-up, providing a single deterministic checklist.
+  - *Automated Garbage Collection*: Completely cleans up ephemeral blackboard directories (`.along/.session/<slug>/`), ensuring zero leftover state files.
+- **Invocation Triggers**:
+  - *Explicit*: `/along-wrap`, `along-wrap`.
+  - *Semantic / Automatic*: Triggered whenever a developer says *"I'm done for today"*, *"Wrap up session"*, or upon completing all steps in an issue.
+- **Entities Operated On**: `.along/ISSUES/`, `.along/ISSUES/done/`, `.along/ISSUES.md`, `.along/SESSIONS/`, `.along/HISTORY.md`, `.along/.session/`.
+- **Ecosystem Chaining**: Finalizes work executed by `along-team` and triggers `along-kb-sync` and `along-issue-sync`.

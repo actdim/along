@@ -33,6 +33,9 @@ from . import (bootstrap, entities, markdown, migration, proc, repo, sanitizer,
                textio, transaction, typography, version)
 from .proc import Result, run_capture, run_passthrough, run_python
 from .repo import find_repo_root, find_state_dir, resolve_tool_script, safe_relpath, state_dir
+from .repo import (find_agent_contexts, find_manifest_projects, find_repo_root,
+                    find_state_dir, resolve_llm_targets, resolve_tool_script,
+                    safe_relpath, state_dir)
 from .textio import read_text, write_text
 from .version import CURRENT_PROTOCOL_VERSION
 
@@ -50,9 +53,12 @@ __all__ = [
     "version",
     "CURRENT_PROTOCOL_VERSION",
     "Result",
+    "find_agent_contexts",
+    "find_manifest_projects",
     "find_repo_root",
     "find_state_dir",
     "read_text",
+    "resolve_llm_targets",
     "resolve_tool_script",
     "run_capture",
     "run_passthrough",

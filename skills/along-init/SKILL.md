@@ -59,8 +59,7 @@ python scripts/migrate_protocol.py <target_root> --apply
 Upon completing initialization, agents and tools MUST present a clear onboarding proposal to the user with the following optional operations:
 
 | Proposed Skill / Operation | Command | Purpose & Impact |
-| :--- | :--- | :--- |
-| **Knowledge Base Ingestion & Sync** | `/along-kb-sync` | Ingests `README.md` and raw notes into structured `docs/topic--*.md`, cross-links `docs/INDEX.md`, and archives originals into `.archive/`. *(Notice: Moves unmanaged source docs to `.archive/`)* |
+| **Knowledge Base Ingestion & Sync** | `/along-kb-sync` | Ingests `README.md` and raw notes into structured `docs/topic--*.md`, tracks in-place source provenance, compiles `llms.txt` and `llms-full.txt`, and cross-links `docs/INDEX.md`. |
 | **Dependencies & Submodules AI Scan** | `/along-dep-scan` | Recursively inspects package manifests (`package.json`, `pyproject.toml`, `*.csproj`, `Cargo.toml`), Git submodules, and symlinks for AI rules and updates `docs/topic--dependencies.md`. |
 | **Git History & Entities Reconcile** | `/along-history-sync` | Analyzes commit history, tags, and PRs to retroactively synthesize `.along/ISSUES/done/`, `.along/SESSIONS/`, and `HISTORY.md`. *(Recommended for existing repositories)* |
 | **Executive Dashboard & Health** | `/along-dash` | Launches the interactive dashboard to inspect repository KPI metrics, Knowledge Base, and Cytoscape DAG graph. |

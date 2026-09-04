@@ -17,9 +17,12 @@ Fenced code is tracked here rather than at the call site, because a link inside 
 
 from __future__ import annotations
 if __name__ == "__main__":
+    import os
     raise SystemExit(
         f"{__name__} is a library module, not a command.\n"
         "Run: along kb-sync   (or: python scripts/along_exec.py kb-sync)"
+        f"{os.path.basename(__file__)} is a library module, not a command.\n"
+        "Run: along kb-sync   (or: python scripts/along_kb_sync.py)"
     )
 
 

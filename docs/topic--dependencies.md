@@ -1,12 +1,17 @@
 ---
 protocol: along
-protocol_version: "2.2.17"
-slug: topic--dependencies
+protocol_version: "2.2.18"
+slug: dependencies
 title: Dependencies & Submodules AI Documentation and Rules
 type: topic
 created: 2026-09-02
 updated: 2026-09-02
 tags: [dependencies, ai-context, submodules, vendor, rules]
+sources:
+  - path: pyproject.toml
+    hash: "2ca12e69d7ceafb95b69040a3ffb58aba74e7757c6fba6d66406b23e1f066526"
+  - path: package.json
+    hash: "febb2e71352d6091afce25991d7e2a4d09e92564938317a307ae5bec7c2a4c50"
 ---
 
 # Dependencies & Submodules AI Documentation and Rules

@@ -5,6 +5,7 @@ import os
 import re
 import sys
 import shutil
+import hashlib
 import argparse
 from datetime import datetime
 
@@ -19,7 +20,14 @@ from alongkit import bootstrap
 bootstrap.ensure_deps()
 
 from alongkit import frontmatter, markdown, repo, textio
+from alongkit import proc, frontmatter, markdown, repo, textio
 from alongkit.version import CURRENT_PROTOCOL_VERSION
+
+
+def compute_content_hash(text: str) -> str:
+    """Computes deterministic SHA-256 hash of text normalized to LF line endings."""
+    normalized = text.replace("\r\n", "\n")
+    return hashlib.sha256(normalized.encode("utf-8")).hexdigest()
 
 
 STANDARD_ARTICLES = [
@@ -66,29 +74,15 @@ def is_along_wiki_article(content):
     fm, _ = parse_frontmatter(content)
     return fm.get("protocol") == "along"
 
-def ensure_archive_structure(repo_root, dry_run=False):
-    archive_dir = os.path.join(repo_root, ".archive")
-    if not dry_run:
-        os.makedirs(archive_dir, exist_ok=True)
-        gitkeep = os.path.join(archive_dir, ".gitkeep")
-        if not os.path.exists(gitkeep):
-            with open(gitkeep, "w", encoding="utf-8") as f:
-                f.write("")
-        readme = os.path.join(archive_dir, "README.md")
-        if not os.path.exists(readme):
-            with open(readme, "w", encoding="utf-8") as f:
-                f.write("# Archived Raw Sources (.archive/)\n\nThis directory holds processed raw notes, external documentation dumps, drafts, and unstructured source files that have been synthesized into structured Knowledge Base articles in `docs/`.\n")
-    return archive_dir
-
-def ingest_and_archive_sources(repo_root, docs_dir, archive_dir, dry_run=False):
+def reconcile_sources(repo_root, docs_dir, dry_run=False):
     """
     Inspects allowed source locations: docs/, wiki/, kb/, and legacy .along/KB/, .agents/KB/.
     - If file is already a compiled Wiki article (protocol: along): standardizes topic-- naming in docs/.
-    - If file is a raw unmanaged document (no protocol: along): synthesizes a topic article and moves original to .archive/.
+    - If file is an external raw note in wiki/ or kb/: synthesizes a topic article in docs/ with provenance sources, preserving raw note in-place.
+    - If file is a raw note in docs/: normalizes it in-place to topic--<name>.md with front-matter.
     """
     today = datetime.now().strftime("%Y-%m-%d")
     normalized = 0
-    archived = 0
 
     os.makedirs(docs_dir, exist_ok=True)
 
@@ -111,7 +105,7 @@ def ingest_and_archive_sources(repo_root, docs_dir, archive_dir, dry_run=False):
                 continue
             with open(s_path, "r", encoding="utf-8", errors="replace") as fp:
                 raw = fp.read()
-            
+
             target_name = LEGACY_FILE_MAPPING.get(item, item)
             if not target_name.startswith("topic--"):
                 target_name = f"topic--{target_name}"
@@ -121,40 +115,41 @@ def ingest_and_archive_sources(repo_root, docs_dir, archive_dir, dry_run=False):
                 # Already a compiled wiki article -> move directly to docs/
                 if not dry_run:
                     fields, _ = parse_frontmatter(raw, path=s_path)
-                    slug = target_name.replace('.md', '')
-                    updates = {'slug': slug}
-                    if not fields.get('protocol_version'):
-                        updates['protocol_version'] = frontmatter.quoted(CURRENT_PROTOCOL_VERSION)
+                    slug = target_name.replace(".md", "")
+                    updates = {"slug": slug}
+                    if not fields.get("protocol_version"):
+                        updates["protocol_version"] = frontmatter.quoted(CURRENT_PROTOCOL_VERSION)
                     textio.write_text(d_path, frontmatter.update(
                         raw, updates, path=s_path,
-                        place_after={'protocol_version': 'protocol'}))
+                        place_after={"protocol_version": "protocol"}))
                 print(f"   Migrated article: {src_dir}/{item} -> docs/{target_name}")
                 normalized += 1
             else:
-                # Raw source -> synthesize Wiki article and move original to .archive/
+                # External raw note -> synthesize topic article in docs/ with provenance sources, WITHOUT .archive/
                 if not dry_run:
                     h1_m = re.search(r"^#\s+(.*)$", raw, re.MULTILINE)
                     title = h1_m.group(1).strip() if h1_m else item.replace(".md", "").replace("-", " ").title()
                     slug = target_name.replace(".md", "")
+                    rel_src = os.path.relpath(s_path, repo_root).replace(chr(92), "/")
+                    content_hash = compute_content_hash(raw)
                     fm = {
                         "protocol": "along",
                         "protocol_version": frontmatter.quoted(CURRENT_PROTOCOL_VERSION),
                         "slug": slug,
                         "title": title,
                         "type": "topic",
+                        "curated": True,
+                        "sources": [{"path": rel_src, "hash": content_hash}],
                         "created": today,
                         "updated": today,
                         "tags": [slug.replace("topic--", "")],
                     }
                     with open(d_path, "w", encoding="utf-8") as fp:
                         fp.write(dump_frontmatter(fm, raw))
-                    # Move original raw file to .archive/
-                    arch_path = os.path.join(archive_dir, f"{os.path.basename(src_dir)}--{item}")
-                    shutil.copy2(s_path, arch_path)
-                print(f"   Compiled & Archived raw source: {src_dir}/{item} -> docs/{target_name} (original -> .archive/)")
-                archived += 1
+                print(f"   Compiled raw source with provenance: {src_dir}/{item} -> docs/{target_name} (original preserved in-place)")
+                normalized += 1
 
-    # 2. Inspect docs/ for raw sources vs compiled articles
+    # 2. Inspect docs/ for raw documents vs compiled articles
     if os.path.exists(docs_dir):
         for item in list(os.listdir(docs_dir)):
             if item == "INDEX.md" or not item.endswith(".md"):
@@ -170,21 +165,21 @@ def ingest_and_archive_sources(repo_root, docs_dir, archive_dir, dry_run=False):
                 target_name = f"topic--{target_name}"
 
             if is_along_wiki_article(raw):
-                # It's an Along Wiki article: ensure standardized topic-- filename
+                # It is an Along Wiki article: ensure standardized topic-- filename
                 if target_name != item and not dry_run:
                     dst_path = os.path.join(docs_dir, target_name)
                     fields, _ = parse_frontmatter(raw, path=f_path)
-                    updates = {'slug': target_name.replace('.md', '')}
-                    if not fields.get('protocol_version'):
-                        updates['protocol_version'] = frontmatter.quoted(CURRENT_PROTOCOL_VERSION)
+                    updates = {"slug": target_name.replace(".md", "")}
+                    if not fields.get("protocol_version"):
+                        updates["protocol_version"] = frontmatter.quoted(CURRENT_PROTOCOL_VERSION)
                     textio.write_text(dst_path, frontmatter.update(
                         raw, updates, path=f_path,
-                        place_after={'protocol_version': 'protocol'}))
+                        place_after={"protocol_version": "protocol"}))
                     os.remove(f_path)
                     print(f"   Normalized wiki article name: docs/{item} -> docs/{target_name}")
                     normalized += 1
             else:
-                # Raw document in docs/ -> synthesize topic article and archive original
+                # Raw document in docs/ -> normalize in-place with frontmatter, without .archive/
                 if not dry_run:
                     h1_m = re.search(r"^#\s+(.*)$", raw, re.MULTILINE)
                     title = h1_m.group(1).strip() if h1_m else item.replace(".md", "").replace("-", " ").title()
@@ -195,6 +190,7 @@ def ingest_and_archive_sources(repo_root, docs_dir, archive_dir, dry_run=False):
                         "slug": slug,
                         "title": title,
                         "type": "topic",
+                        "curated": True,
                         "created": today,
                         "updated": today,
                         "tags": [slug.replace("topic--", "")],
@@ -202,13 +198,12 @@ def ingest_and_archive_sources(repo_root, docs_dir, archive_dir, dry_run=False):
                     dst_path = os.path.join(docs_dir, target_name)
                     with open(dst_path, "w", encoding="utf-8") as fp:
                         fp.write(dump_frontmatter(fm, raw))
-                    # Move original raw file to .archive/
-                    arch_path = os.path.join(archive_dir, f"raw--{item}")
-                    shutil.move(f_path, arch_path)
-                print(f"   Compiled & Archived raw document: docs/{item} -> docs/{target_name} (original -> .archive/)")
-                archived += 1
+                    if target_name != item:
+                        os.remove(f_path)
+                print(f"   Normalized raw document in-place: docs/{item} -> docs/{target_name}")
+                normalized += 1
 
-    return normalized, archived
+    return normalized
 
 def bootstrap_docs_if_empty(docs_dir, repo_root, dry_run=False):
     today = datetime.now().strftime("%Y-%m-%d")
@@ -473,14 +468,171 @@ def has_real_body(body: str) -> bool:
     return len(lines) > 1
 
 
-def sync_kb(repo_root, check_only=False, strict=False):
+def _extract_project_meta(target_dir: str):
+    """Extract project title and summary from README.md or directory name."""
+    repo_name = os.path.basename(os.path.abspath(target_dir))
+    title = repo_name
+    summary = f"> Knowledge Base and documentation index for {repo_name}."
+
+    readme_path = os.path.join(target_dir, "README.md")
+    if os.path.isfile(readme_path):
+        try:
+            readme_text = textio.read_text(readme_path)
+            h1_m = re.search(r"^#\s+(.+)$", readme_text, re.MULTILINE)
+            if h1_m:
+                title = h1_m.group(1).strip()
+            quote_m = re.search(r"^>\s+(.+)$", readme_text, re.MULTILINE)
+            if quote_m:
+                summary = f"> {quote_m.group(1).strip()}"
+        except Exception:
+            pass
+
+    return title, summary
+
+
+def sync_llms_txt(target_dir, articles, dry_run=False):
+    """
+    Non-destructively synchronizes llms.txt across resolved target locations (.well-known/ and/or root).
+    Preserves all custom sections, titles, summaries, and external links.
+    Updates or inserts the ## Documentation Links section to reflect active docs/topic--*.md articles.
+    """
+    targets = repo.resolve_llm_targets(target_dir, "llms.txt")
+    title, default_summary = _extract_project_meta(target_dir)
+
+    doc_links_header = "## Documentation Links"
+    doc_links = [doc_links_header]
+    if os.path.isfile(os.path.join(target_dir, "README.md")):
+        doc_links.append("- [README.md](README.md): Overview, quick installation, and full skill list.")
+    if os.path.isfile(os.path.join(target_dir, "AGENTS.md")):
+        doc_links.append("- [AGENTS.md](AGENTS.md): Active ALONG-PROTOCOL conventions and instructions.")
+    if os.path.isfile(os.path.join(target_dir, "docs", "INDEX.md")):
+        doc_links.append("- [docs/INDEX.md](docs/INDEX.md): Central Knowledge Base topic catalog.")
+
+    for art in articles:
+        if art["filename"] == "INDEX.md":
+            continue
+        clean_title = art["title"].replace("\n", " ").strip()
+        doc_links.append(f"- [docs/{art['filename']}](docs/{art['filename']}): {clean_title}.")
+
+    doc_links_block = "\n".join(doc_links)
+
+    for target_path in targets:
+        existing = ""
+        if os.path.isfile(target_path):
+            try:
+                existing = textio.read_text(target_path)
+            except Exception:
+                existing = ""
+
+        if existing:
+            pattern = r"(## Documentation(?: Links)?\s*\n)(.*?)(?=(\n## |\Z))"
+            match = re.search(pattern, existing, re.DOTALL)
+            if match:
+                custom_external = []
+                old_section = match.group(2)
+                for line in old_section.splitlines():
+                    ls = line.strip()
+                    if ls.startswith("- [") and ("http://" in ls or "https://" in ls):
+                        custom_external.append(ls)
+
+                if custom_external:
+                    replacement_text = doc_links_block + "\n" + "\n".join(custom_external) + "\n"
+                else:
+                    replacement_text = doc_links_block + "\n"
+
+                new_content = existing[:match.start()] + replacement_text + existing[match.end():]
+            else:
+                new_content = existing.rstrip() + "\n\n" + doc_links_block + "\n"
+        else:
+            new_content = f"# {title}\n\n{default_summary}\n\n{doc_links_block}\n"
+
+        if not dry_run:
+            if not os.path.isfile(target_path) or new_content != existing:
+                os.makedirs(os.path.dirname(target_path), exist_ok=True)
+                textio.write_text(target_path, new_content)
+                rel_disp = repo.safe_relpath(target_path, target_dir)
+                print(f"   -> Synchronized {rel_disp} ({len(articles)} topic links).")
+
+
+def sync_llms_full_txt(target_dir, articles, dry_run=False):
+    """
+    Deterministically compiles llms-full.txt across resolved target locations (.well-known/ and/or root).
+    Aggregates README.md, AGENTS.md, and all docs/topic--*.md articles into a single context document.
+    """
+    targets = repo.resolve_llm_targets(target_dir, "llms-full.txt")
+    title, default_summary = _extract_project_meta(target_dir)
+
+    full_parts = [
+        f"# {title} - Full Documentation Context",
+        "",
+        default_summary,
+    ]
+
+    readme_path = os.path.join(target_dir, "README.md")
+    if os.path.isfile(readme_path):
+        try:
+            readme_body = textio.read_text(readme_path).strip()
+            if readme_body:
+                full_parts.extend(["", "---", "", "## Document: README.md (Overview)", "", readme_body])
+        except Exception:
+            pass
+
+    agents_path = os.path.join(target_dir, "AGENTS.md")
+    if os.path.isfile(agents_path):
+        try:
+            agents_body = textio.read_text(agents_path).strip()
+            if agents_body:
+                full_parts.extend(["", "---", "", "## Document: AGENTS.md (Agent Conventions & Protocol)", "", agents_body])
+        except Exception:
+            pass
+
+    docs_dir = os.path.join(target_dir, "docs")
+    for art in articles:
+        if art["filename"] == "INDEX.md":
+            continue
+        art_path = os.path.join(docs_dir, art["filename"])
+        if not os.path.isfile(art_path):
+            continue
+        try:
+            content = textio.read_text(art_path)
+            _, body = parse_frontmatter(content)
+            body_clean = body.strip()
+            if body_clean:
+                clean_title = art["title"].replace("\n", " ").strip()
+                full_parts.extend([
+                    "", "---", "",
+                    f"## Document: docs/{art['filename']} ({clean_title})",
+                    "",
+                    body_clean,
+                ])
+        except Exception:
+            pass
+
+    full_content = "\n".join(full_parts).rstrip() + "\n"
+
+    for target_path in targets:
+        existing = ""
+        if os.path.isfile(target_path):
+            try:
+                existing = textio.read_text(target_path)
+            except Exception:
+                existing = ""
+
+        if not dry_run:
+            if not os.path.isfile(target_path) or full_content != existing:
+                os.makedirs(os.path.dirname(target_path), exist_ok=True)
+                textio.write_text(target_path, full_content)
+                rel_disp = repo.safe_relpath(target_path, target_dir)
+                print(f"   -> Compiled {rel_disp} ({len(articles)} documents included).")
+
+
+def sync_kb(repo_root, check_only=False, strict=False, prune_intent=None, is_subproject=False):
     repo_root = os.path.abspath(repo_root)
     docs_dir = os.path.join(repo_root, "docs")
     today = datetime.now().strftime("%Y-%m-%d")
 
     print(f"-> Synchronizing Knowledge Base in {docs_dir}...")
-    archive_dir = ensure_archive_structure(repo_root, dry_run=check_only)
-    ingest_and_archive_sources(repo_root, docs_dir, archive_dir, dry_run=check_only)
+    reconcile_sources(repo_root, docs_dir, dry_run=check_only)
 
     if not os.path.exists(docs_dir) or not os.listdir(docs_dir):
         print("   docs/ is missing or empty. Bootstrapping standard articles...")
@@ -489,6 +641,17 @@ def sync_kb(repo_root, check_only=False, strict=False):
 
     articles = []
     doc_cross_links = {}
+    orphaned_sources = []
+    drifted_sources = []
+    shrunk_articles = []
+
+    # Check for git repository to inspect content reduction against HEAD
+    in_git = False
+    try:
+        git_check = proc.run_capture(["git", "rev-parse", "--is-inside-work-tree"], cwd=repo_root)
+        in_git = git_check.ok and git_check.stdout.strip() == "true"
+    except Exception:
+        in_git = False
 
     for f in sorted(os.listdir(docs_dir)):
         if not f.endswith(".md") or f == "INDEX.md":
@@ -505,6 +668,51 @@ def sync_kb(repo_root, check_only=False, strict=False):
             if not has_real_body(body):
                 print(f"   [WARN] Skipping stub (empty body): {f}")
                 continue
+
+            # Validate sources provenance & drift
+            sources = fm.get("sources")
+            if sources and isinstance(sources, list):
+                for src_item in sources:
+                    if isinstance(src_item, dict):
+                        src_rel = src_item.get("path")
+                        rec_hash = src_item.get("hash")
+                    elif isinstance(src_item, str):
+                        src_rel = src_item
+                        rec_hash = None
+                    else:
+                        continue
+                    if not src_rel:
+                        continue
+                    src_full = os.path.normpath(os.path.join(repo_root, src_rel))
+                    if not os.path.exists(src_full) or not os.path.isfile(src_full):
+                        orphaned_sources.append((f, src_rel))
+                        print(f"   [ORPHANED SOURCE] docs/{f}: Source '{src_rel}' does not exist on disk.")
+                    else:
+                        if rec_hash:
+                            try:
+                                with open(src_full, "r", encoding="utf-8", errors="replace") as s_fp:
+                                    src_text = s_fp.read()
+                                cur_hash = compute_content_hash(src_text)
+                                if cur_hash != rec_hash:
+                                    drifted_sources.append((f, src_rel, rec_hash, cur_hash))
+                                    print(f"   [DRIFT] docs/{f}: Source '{src_rel}' has changed (expected {rec_hash[:8]}, got {cur_hash[:8]}). Agent review required.")
+                            except Exception as e:
+                                print(f"   [WARN] Failed to read source '{src_rel}' for docs/{f}: {e}")
+
+            # Check content reduction against HEAD if in git
+            if in_git:
+                try:
+                    rel_to_repo = os.path.relpath(file_path, repo_root).replace("\\", "/")
+                    head_res = proc.run_capture(["git", "show", f"HEAD:{rel_to_repo}"], cwd=repo_root)
+                    if head_res.ok:
+                        head_lines = len(head_res.stdout.splitlines())
+                        cur_lines = len(raw_content.splitlines())
+                        delta = head_lines - cur_lines
+                        if head_lines >= 15 and delta >= 10 and (delta / head_lines) > 0.25:
+                            pct = round((delta / head_lines) * 100)
+                            shrunk_articles.append((f, delta, pct))
+                except Exception:
+                    pass
 
             updates = {}
             slug = fm.get('slug') or f.replace('.md', '')
@@ -560,9 +768,24 @@ def sync_kb(repo_root, check_only=False, strict=False):
                 "title": title,
                 "type": fm.get("type", "topic"),
                 "tags": fm.get("tags", []),
+                "curated": fm.get("curated", True),
+                "sources": sources or [],
             })
         except Exception as e:
             print(f"   [WARN] Failed to process {f}: {e}")
+
+    # Intent Gate: Check if any article shrank significantly without --prune-intent
+    if shrunk_articles:
+        if not prune_intent:
+            print("\n[WARNING] Detected significant content reduction in Knowledge Base:")
+            for s_name, s_delta, s_pct in shrunk_articles:
+                print(f"   - docs/{s_name}: -{s_delta} lines (-{s_pct}%)")
+            print("\nOperation halted to prevent accidental data loss.")
+            print("If this deletion was intentional, re-run with:")
+            print("   python scripts/along_kb_sync.py --prune-intent [REASON]\n")
+            sys.exit(2)
+        else:
+            print(f"   [PRUNE-INTENT] Acknowledged content reduction: {prune_intent}")
 
     index_path = os.path.join(docs_dir, "INDEX.md")
     index_fm = {
@@ -632,20 +855,42 @@ def sync_kb(repo_root, check_only=False, strict=False):
             fp.write(full_index)
         print(f"   -> Rebuilt docs/INDEX.md ({len(articles)} articles indexed).")
 
-    # Step: Inbound Link Rewriting across the entire repository
-    print("-> Scanning repository for inbound legacy links (Link Rewriting Engine)...")
-    rewritten_files, total_rewrites = rewrite_inbound_links(repo_root, dry_run=check_only)
-    if total_rewrites > 0:
-        print(f"   [OK] Rewrote {total_rewrites} legacy link(s) across {rewritten_files} file(s).")
-    else:
-        print("   [OK] Inbound links are clean and up to date.")
+    # Step: Smart non-destructive synchronization of llms.txt and deterministic llms-full.txt
+    sync_llms_txt(repo_root, articles, dry_run=check_only)
+    sync_llms_full_txt(repo_root, articles, dry_run=check_only)
 
-    # Cleanup obsolete files/dirs only after rewriting inbound links
-    if not check_only:
+    # Step: Cascading subproject synchronization for Along contexts
+    if not is_subproject:
+        all_contexts = repo.find_agent_contexts(repo_root)
+        abs_root = os.path.abspath(repo_root)
+        for ctx in all_contexts:
+            if os.path.abspath(ctx) == abs_root:
+                continue
+            ctx_docs = os.path.join(ctx, "docs")
+            has_docs = os.path.isdir(ctx_docs)
+            has_llms = (
+                os.path.isfile(os.path.join(ctx, "llms.txt")) or
+                os.path.isfile(os.path.join(ctx, ".well-known", "llms.txt"))
+            )
+            if has_docs or has_llms:
+                rel_ctx = repo.safe_relpath(ctx, repo_root)
+                print(f"-> Cascading Knowledge Base sync to subproject: {rel_ctx}")
+                sync_kb(ctx, check_only=check_only, strict=strict, prune_intent=prune_intent, is_subproject=True)
 
-        for old_kb in [os.path.join(repo_root, ".along", "KB"), os.path.join(repo_root, ".agents", "KB")]:
-            if os.path.exists(old_kb):
-                shutil.rmtree(old_kb, ignore_errors=True)
+    if not is_subproject:
+        # Step: Inbound Link Rewriting across the entire repository
+        print("-> Scanning repository for inbound legacy links (Link Rewriting Engine)...")
+        rewritten_files, total_rewrites = rewrite_inbound_links(repo_root, dry_run=check_only)
+        if total_rewrites > 0:
+            print(f"   [OK] Rewrote {total_rewrites} legacy link(s) across {rewritten_files} file(s).")
+        else:
+            print("   [OK] Inbound links are clean and up to date.")
+
+        # Cleanup obsolete files/dirs only after rewriting inbound links
+        if not check_only:
+            for old_kb in [os.path.join(repo_root, ".along", "KB"), os.path.join(repo_root, ".agents", "KB")]:
+                if os.path.exists(old_kb):
+                    shutil.rmtree(old_kb, ignore_errors=True)
 
     # Step: Repository-wide Link Integrity Gate
     print("-> Executing Global Link Integrity Gate across all repository Markdown files...")
@@ -659,6 +904,7 @@ def sync_kb(repo_root, check_only=False, strict=False):
             sys.exit(1)
     else:
         print(f"   [OK] All {total_checked} relative Markdown link(s) verified on disk.")
+        broken_links = []
 
     print(f"-> Knowledge Base sync complete. Total active articles: {len(articles) + (1 if os.path.exists(index_path) else 0)}\n")
     return len(articles), len(broken_links)
@@ -668,9 +914,11 @@ def main():
     parser.add_argument("repo_root", nargs="?", default=".", help="Target repository root directory")
     parser.add_argument("--check", action="store_true", help="Check links and structure without modifying files")
     parser.add_argument("--strict", action="store_true", help="Fail with non-zero exit code if broken links are found")
+    parser.add_argument("--prune-intent", dest="prune_intent", nargs="?", const="Intentional content pruning", default=None, help="Acknowledge and allow content reduction with an optional intent rationale")
+    parser.add_argument("--allow-shrink", dest="prune_intent", action="store_const", const="Allow shrink", help="Alias for --prune-intent")
     args = parser.parse_args()
 
-    sync_kb(args.repo_root, check_only=args.check, strict=args.strict)
+    sync_kb(args.repo_root, check_only=args.check, strict=args.strict, prune_intent=args.prune_intent)
 
 if __name__ == "__main__":
     main()

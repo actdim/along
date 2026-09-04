@@ -7,6 +7,9 @@ type: topic
 created: 2026-08-27
 updated: 2026-09-02
 tags: [dynstruct, dynstruct-mui, msgmesh, utico, react, mui, nswag, openapi, architecture]
+sources:
+  - path: packages/dashboard-ui/package.json
+    hash: "e7fd13b8195f6e7c08ccadc3bfa3a1a62273054bd3c1eaca8800620d0a9ae6e5"
 ---
 
 # Frontend Architecture, Dynstruct, MsgMesh & NSwag Integration

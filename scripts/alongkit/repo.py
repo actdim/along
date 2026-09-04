@@ -11,9 +11,12 @@ resolve different roots from the same working directory.
 
 from __future__ import annotations
 if __name__ == "__main__":
+    import os
     raise SystemExit(
         f"{__name__} is a library module, not a command.\n"
         "Run: along kb-sync   (or: python scripts/along_exec.py kb-sync)"
+        f"{os.path.basename(__file__)} is a library module, not a command.\n"
+        "Run: along --help   (or: python scripts/along_exec.py --help)"
     )
 
 
@@ -222,3 +225,84 @@ def iter_files(root: str, suffixes: Iterable[str] = (".md",),
 def iter_markdown_files(root: str, include_hidden: bool = False) -> Iterator[str]:
     """Walk `root` yielding absolute paths of markdown files."""
     return iter_files(root, suffixes=(".md",), include_hidden=include_hidden)
+
+
+STANDARD_MANIFESTS: tuple = (
+    "package.json", "Cargo.toml", "pyproject.toml",
+    "pom.xml", "build.gradle", "build.gradle.kts",
+    "go.mod", "setup.py", "requirements.txt",
+    "Directory.Build.props",
+)
+
+
+def find_agent_contexts(root: str) -> List[str]:
+    """Walk `root` downwards to find all Along agent contexts (directories containing
+    .along/, .agents/, or AGENTS.md), respecting IGNORED_DIRS and PROVIDER_DIRS.
+    """
+    root = os.path.abspath(root)
+    contexts = []
+    ignored = set(IGNORED_DIRS) | set(PROVIDER_DIRS)
+
+    for current, dirs, files in os.walk(root):
+        dirs[:] = [d for d in dirs if d not in ignored and not d.startswith(".")]
+
+        has_agents_md = "AGENTS.md" in files
+        has_along_dir = os.path.isdir(os.path.join(current, STATE_DIR))
+        has_legacy_dir = os.path.isdir(os.path.join(current, LEGACY_STATE_DIR))
+
+        if has_agents_md or has_along_dir or has_legacy_dir:
+            contexts.append(os.path.abspath(current))
+
+    contexts.sort(key=lambda p: (len(p.split(os.sep)), p))
+    return contexts
+
+
+def find_manifest_projects(root: str,
+                           manifests: Optional[Iterable[str]] = None) -> List[str]:
+    """Walk `root` downwards to find subproject directories carrying package or build
+    manifests, respecting IGNORED_DIRS and PROVIDER_DIRS.
+    """
+    root = os.path.abspath(root)
+    projects = []
+    ignored = set(IGNORED_DIRS) | set(PROVIDER_DIRS)
+    target_manifests = set(manifests or STANDARD_MANIFESTS)
+
+    for current, dirs, files in os.walk(root):
+        dirs[:] = [d for d in dirs if d not in ignored and not d.startswith(".")]
+        if current == root:
+            continue
+        has_manifest = any(m in files for m in target_manifests) or any(f.endswith(".csproj") for f in files)
+        if has_manifest:
+            projects.append(os.path.abspath(current))
+
+    projects.sort(key=lambda p: (len(p.split(os.sep)), p))
+    return projects
+
+
+def resolve_llm_targets(target_dir: str, filename: str) -> List[str]:
+    """Resolve target file paths for llms.txt or llms-full.txt in target_dir.
+
+    Precedence:
+    1. Candidates are target_dir/.well-known/{filename} and target_dir/{filename}.
+    2. If existing files exist in either (or both) locations, return all existing files.
+    3. If neither exists:
+       - If target_dir/.well-known exists as a directory, return [target_dir/.well-known/{filename}].
+       - Else return [target_dir/{filename}].
+    """
+    target_dir = os.path.abspath(target_dir)
+    wk_candidate = os.path.join(target_dir, ".well-known", filename)
+    root_candidate = os.path.join(target_dir, filename)
+
+    existing = []
+    if os.path.isfile(wk_candidate):
+        existing.append(wk_candidate)
+    if os.path.isfile(root_candidate):
+        existing.append(root_candidate)
+
+    if existing:
+        return existing
+
+    if os.path.isdir(os.path.join(target_dir, ".well-known")):
+        return [wk_candidate]
+    return [root_candidate]
+

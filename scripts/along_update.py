@@ -209,25 +209,7 @@ def install_global_from_local(repo_root, dry_run=False):
 safe_relpath = repo.safe_relpath
 
 
-def find_existing_agent_contexts(repo_root):
-    contexts = []
-    ignored = {
-        '.git', 'node_modules', 'dist', 'build', '.venv', 'venv',
-        'bin', 'obj', '.cache', 'target', 'vendor', '.gemini', '.claude', '.codex', '.archive'
-    }
-
-    for root, dirs, files in os.walk(repo_root):
-        dirs[:] = [d for d in dirs if d not in ignored and not d.startswith('.')]
-
-        has_agents_md = "AGENTS.md" in files
-        has_along_dir = os.path.isdir(os.path.join(root, ".along"))
-        has_agents_dir = os.path.isdir(os.path.join(root, ".agents"))
-
-        if has_agents_md or has_along_dir or has_agents_dir:
-            contexts.append(os.path.abspath(root))
-
-    contexts.sort(key=lambda p: (len(p.split(os.sep)), p))
-    return contexts
+find_existing_agent_contexts = repo.find_agent_contexts
 
 def apply_migration_to_context(ctx_dir, protocol_text, migrate_script, is_root=True, ancestor_root=None, dry_run=False):
     rel_display = safe_relpath(ctx_dir, ancestor_root or ctx_dir)
@@ -317,22 +299,10 @@ def apply_migration_to_context(ctx_dir, protocol_text, migrate_script, is_root=T
     return True
 
 def find_uninitialized_subprojects(repo_root, contexts):
-    uninit = []
-    ignored = {
-        '.git', 'node_modules', 'dist', 'build', '.venv', 'venv',
-        'bin', 'obj', '.cache', 'target', 'vendor', '.gemini', '.claude', '.codex', '.archive'
-    }
     context_set = set(os.path.abspath(c) for c in contexts)
-    manifest_files = {'package.json', 'Cargo.toml', 'pyproject.toml', 'pom.xml', 'build.gradle'}
-
-    for root, dirs, files in os.walk(repo_root):
-        dirs[:] = [d for d in dirs if d not in ignored and not d.startswith('.')]
-        abs_root = os.path.abspath(root)
-        if abs_root == os.path.abspath(repo_root) or abs_root in context_set:
-            continue
-        has_manifest = any(m in files for m in manifest_files) or any(f.endswith('.csproj') for f in files)
-        if has_manifest:
-            uninit.append(abs_root)
+    abs_repo = os.path.abspath(repo_root)
+    all_projects = repo.find_manifest_projects(repo_root)
+    uninit = [p for p in all_projects if p != abs_repo and p not in context_set]
     uninit.sort(key=lambda p: (len(p.split(os.sep)), p))
     return uninit
 
@@ -499,7 +469,7 @@ def run_update(repo_root, check_only=False, dry_run=False, force=False, local_on
     else:
         print("\n==================================================")
         print("-> Recommended Next Steps (Optional Onboarding & Sync):")
-        print("   1. /along-kb-sync      : Ingest & compile Knowledge Base in docs/ (archives raw sources to .archive/)")
+        print("   1. /along-kb-sync      : Ingest & compile Knowledge Base in docs/ with in-place provenance and llms.txt")
         print("   2. /along-dep-scan     : Discover multi-project AI guidelines into docs/topic--dependencies.md")
         print("   3. /along-history-sync : Reconcile unmapped Git commit history into .along/ entities")
         print("   4. /along-dash         : Launch executive dashboard & dependency graph")

@@ -1,14 +1,15 @@
 ---
 protocol: along
-protocol_version: "2.2.9"
+protocol_version: "2.2.18"
 slug: kb-source-provenance-and-reconstruction
 type: feat
-status: open
+status: done
 priority: high
 created: 2026-09-01
-updated: 2026-09-01
-agent: claude-code
-tags: [kb-sync, provenance, archive, llm-wiki, reconstruction]
+updated: 2026-09-04
+completed: 2026-09-04
+agent: antigravity
+tags: [kb-sync, provenance, in-place, llm-wiki, safety-gates, prune-intent]
 milestone: v3.0.0-global-quality-revision
 blocked_by: []
 related: [kb-sync-ingestion-not-idempotent, link-gates-skip-along-directory]
@@ -84,6 +85,7 @@ exactly the drift the protocol exists to prevent. The `Strict Fact Grounding Req
 an existing article against the source it claims to be grounded in.
 
 ## Requirements
+## Updated Architecture Decisions (Approved Plan)
 
 - REQ-1: Extend the `docs/*.md` front-matter schema with a provenance field recording each
   raw input the article was compiled from, by repository-relative path plus a content hash,
@@ -108,14 +110,41 @@ an existing article against the source it claims to be grounded in.
 - REQ-7: Coordinate with `[bug--kb-sync-ingestion-not-idempotent]`. That issue fixes the
   copy-versus-move divergence and the overwrite loop in the same two code paths; provenance
   must be designed on top of the corrected ingestion, not bolted onto the broken one.
+1. **Zero Relocation & Elimination of `.archive/`**:
+   Source files are never moved or copied to `.archive/`. They remain in-place in their project directories (`specs/`, `rfc/`, root, etc.).
+2. **In-Place Provenance (`sources`)**:
+   Every topic article derived from sources records:
+   ```yaml
+   sources:
+     - path: "specs/auth.md"
+       hash: "sha256:a1b2c3d4..."
+   ```
+   Existing articles without `sources` remain fully valid and are treated as standalone/curated.
+3. **Curated Protection (`curated: true | false`)**:
+   - Default is `curated: true`. The sync script NEVER overwrites or truncates the body text of curated articles.
+4. **Graduated Safety Gates**:
+   - **Hard Errors** (exit 1): Malformed YAML syntax, missing mandatory keys, broken links in `--strict`.
+   - **Intent Gate (`--prune-intent [REASON]`)** (exit 2): If an article shrinks by >25% in lines (and >= 10 lines), script halts with an informative warning unless `--prune-intent` is passed.
+   - **Drift Warnings**: If source file SHA-256 changes on disk, `[DRIFT]` is flagged for smart agent merging.
+5. **Smart `llms.txt` Sync**:
+   Non-destructively synchronizes the `## Documentation Links` section in root `llms.txt` with active `docs/topic--*.md` articles.
 
 ## Open questions
+## Requirements
 
 - Whether provenance belongs in article front-matter, in a separate manifest under
   `.archive/`, or both. Front-matter travels with the article and survives file moves; a
   manifest survives hand-edits to the article and keeps the front-matter compact.
 - Whether externally sourced material (fetched pages, vendor documentation) is archived
   verbatim or recorded by URL plus retrieval date, given that these files are committed.
+- REQ-1: Remove all `.archive/` creation, copying, moving, and references across `scripts/along_kb_sync.py`, skills, and documentation.
+- REQ-2: Extend `docs/topic--*.md` front-matter schema with `sources: [{path, hash}]` and `curated: true|false`.
+- REQ-3: Implement drift detection comparing source file SHA-256 (LF normalized) against recorded hash.
+- REQ-4: Implement content shrink protection gate in `along_kb_sync.py` with `--prune-intent [REASON]` (and alias `--allow-shrink`).
+- REQ-5: Implement smart non-destructive sync of root `llms.txt` (preserves title, summary, custom sections; updates `## Documentation Links`).
+- REQ-6: Audit all 8 existing topic articles in `docs/` and populate their `sources` front-matter with real project source files and hashes.
+- REQ-7: Update `AGENTS.md`, `skills/along-init/protocol.md`, `skills/along-kb-sync/SKILL.md`, and documentation to remove `.archive/` and document in-place provenance.
+- REQ-8: Add tests verifying drift detection, `--prune-intent` gate, and in-place provenance.
 
 ## Acceptance Criteria
 
@@ -125,3 +154,10 @@ an existing article against the source it claims to be grounded in.
 - [ ] The archive contract is documented in the protocol and in `.archive/README.md`.
 - [ ] A KB can be recompiled from `.archive/` with a documented command.
 - [ ] Tests cover: provenance round-trip, basename collision, stale-source detection.
+- [ ] Zero `.archive/` creation or usage in `along_kb_sync.py`.
+- [ ] `sources` schema supported in front-matter with SHA-256 hashes.
+- [ ] `[DRIFT]` flagged when source file changes.
+- [ ] Large article shrinkage halts with exit 2 unless `--prune-intent` is passed.
+- [ ] `llms.txt` non-destructively synced with `docs/topic--*.md`.
+- [ ] All 8 existing `docs/topic--*.md` articles audited and populated with `sources`.
+- [ ] Test suite is 100% green via `python .along/scripts/test.py -q`.

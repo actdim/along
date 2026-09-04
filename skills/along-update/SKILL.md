@@ -30,7 +30,7 @@ python scripts/along_update.py [target_root] [options]
 
 ## Post-Update Recommended Operations
 When run without automatic sync flags, `/along-update` displays a recommended next steps summary table offering:
-1. `📚 /along-kb-sync`: Ingest raw notes into `docs/` and archive processed originals into `.archive/`.
+1. `📚 /along-kb-sync`: Ingest and compile Knowledge Base in `docs/` with in-place source provenance and `llms.txt` / `llms-full.txt` sync.
 2. `🔍 /along-dep-scan`: Scan dependencies, submodules, and installed packages for AI rules into `docs/topic--dependencies.md`.
 3. `📜 /along-history-sync`: Reconcile past Git history and commit logs into `.along/` entities.
 4. `📊 /along-dash`: Launch the repository executive dashboard to inspect KPI metrics and DAG graph.

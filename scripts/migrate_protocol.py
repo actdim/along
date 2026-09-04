@@ -651,7 +651,7 @@ def validate_and_build_entity_graph(along_dir):
 # ----------------------------------------------------------------------
 # ----------------------------------------------------------------------
 # ----------------------------------------------------------------------
-# Step 7: v2.0 -> v2.1 (Knowledge Base -> docs/ & .archive/)
+# Step 7: v2.0 -> v2.1 (Knowledge Base -> docs/)
 # ----------------------------------------------------------------------
 def step_migrate_v2_1_docs_wiki_and_archive(mig, repo_root, interactive=True):
     # Locate along_kb_sync.py in local scripts/ or global paths
@@ -675,7 +675,7 @@ def step_migrate_v2_1_docs_wiki_and_archive(mig, repo_root, interactive=True):
         res = proc.run_python([kb_script, repo_root, *kb_args])
         if res.ok:
             verb = "would be migrated" if mig.dry_run else "migrated"
-            print(f"   [OK] Knowledge Base {verb} to docs/ and .archive/.")
+            print(f"   [OK] Knowledge Base {verb} to docs/.")
         else:
             print(f"   [WARN] along_kb_sync returned code {res.returncode}: {res.stderr.strip()}")
     else:
@@ -683,7 +683,7 @@ def step_migrate_v2_1_docs_wiki_and_archive(mig, repo_root, interactive=True):
         try:
             import along_kb_sync
             along_kb_sync.sync_kb(repo_root, check_only=mig.dry_run)
-            print("   [OK] Knowledge Base migrated to docs/ and .archive/ via import.")
+            print("   [OK] Knowledge Base migrated to docs/ via import.")
         except Exception as e:
             print(f"   [WARN] Step 7 Knowledge Base migration fallback error: {e}")
 
@@ -727,10 +727,7 @@ def step_migrate_v2_1_docs_wiki_and_archive(mig, repo_root, interactive=True):
                 mig.write(wiki_path, dump_yaml_frontmatter(fm, content), 
                           detail="synthesized from legacy CONTEXT.md", announce=True)
             
-            archive_dir = os.path.join(repo_root, ".archive")
-            mig.makedirs(archive_dir)
-            archive_path = os.path.join(archive_dir, "legacy-context.md")
-            mig.move(context_file, archive_path, "CONTEXT.md archived")
+            mig.discard(context_file, "CONTEXT.md synthesized into docs/")
         else:
             mig.discard(context_file, "empty or boilerplate CONTEXT.md discarded")
 
@@ -818,7 +815,7 @@ def run_migrations(repo_root, dry_run=True, force=False, backup=True):
             print("-> [FAIL] Migration completed with graph validation errors.")
 
     # Step 7: v2.1.0 Docs & LLM-Wiki migration
-    print("-> Step 7 [v2.0 -> v2.1]: Migrating Knowledge Base to docs/ and .archive/...")
+    print("-> Step 7 [v2.0 -> v2.1]: Migrating Knowledge Base to docs/...")
     step_migrate_v2_1_docs_wiki_and_archive(mig, repo_root)
 
     # Step 8: v2.2.x -> v2.2.6 Inbound Link Rewriting & Integrity Verification

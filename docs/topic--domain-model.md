@@ -7,6 +7,11 @@ type: domain-model
 created: 2026-08-30
 updated: 2026-09-02
 tags: [domain-model, entities, schemas, dag, metadata, issues, milestones, risks, spikes, checklists, sessions]
+sources:
+  - path: AGENTS.md
+    hash: "1bcec877848caf6f61003db77c2eb3eccd31e7298769a7b7623f0f7a38efc07e"
+  - path: dashboard/schemas/entities.py
+    hash: "e18ad6fdeee24d9cf90601c95ece1b9160e411a533aa3e2d8bb99adb0a6d29e8"
 ---
 
 # Domain Model & Entity Ecosystem

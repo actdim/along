@@ -16,7 +16,7 @@ AI coding agents start every session blind. They lack persistent memory of past 
 
 - **Persistent In-Repo Memory**: DAG issue tracking, append-only ADR log, milestones, risks, and session logs committed with the code.
 - **Provider-Agnostic Single Protocol**: Write conventions once in `AGENTS.md`; Claude Code, Codex, OpenCode, and Antigravity follow them identically.
-- **LLM-Wiki Knowledge Base (`docs/`)**: Modular, cross-linked topic articles with isolated raw source archival (`.archive/`) and 95-98% token reduction on retrieval.
+- **LLM-Wiki Knowledge Base (`docs/`)**: Modular, cross-linked topic articles with in-place source provenance, deterministic `llms.txt` / `llms-full.txt` sync, and 95-98% token reduction on retrieval.
 - **Nearest Context Boundary**: Strict isolation for monorepos, microservices, and Git submodules preventing root workspace pollution.
 - **Zero Bookkeeping Overhead**: 18 automation skills handle scaffolding, sync, commit checks, and stage wrap-ups in the background.
 

@@ -1,7 +1,19 @@
+from __future__ import annotations
+
+if __name__ == "__main__":
+    import os
+    raise SystemExit(
+        f"{os.path.basename(__file__)} is a library module, not a command.\n"
+        "Run: along rules attach   (or: python scripts/along_exec.py rules attach)"
+    )
+
+import json
 import os
 import re
 import shutil
 from typing import Set
+
+from . import textio
 
 RULE_SIGNATURES = {
     "Directory.Packages.props": ["platforms/monorepo.md"],
@@ -51,6 +63,7 @@ def detect_required_rules(repo_root: str) -> Set[str]:
                         if '"express"' in content or '"fastapi"' in content:
                             required.add("platforms/backend.md")
                 except:
+                except (OSError, UnicodeDecodeError, json.JSONDecodeError):
                     pass
     return required
 
@@ -87,12 +100,14 @@ def attach_rules(repo_root: str):
                 os.makedirs(os.path.dirname(dst), exist_ok=True)
                 shutil.copy2(src, dst)
                 installed_files.add(os.path.normpath(dst))
+                installed_files.add(os.path.normcase(os.path.normpath(dst)))
                 
     # 2. Prune obsolete rules
     if os.path.exists(local_rules_dir):
         for root, dirs, files in os.walk(local_rules_dir):
             for f in files:
                 p = os.path.normpath(os.path.join(root, f))
+                p = os.path.normcase(os.path.normpath(os.path.join(root, f)))
                 if p not in installed_files:
                     os.remove(p)
                     print(f"   [INFO] Pruned obsolete rule: {os.path.relpath(p, repo_root)}")
@@ -111,10 +126,16 @@ def attach_rules(repo_root: str):
 
     with open(agents_md, "r", encoding="utf-8") as f:
         content = f.read()
+    content = textio.read_text(agents_md, strict=False)
+    original_content = content
 
     ref_lines = []
+    marker_start = "<!-- BEGIN ALONG-RULES -->"
+    marker_end = "<!-- END ALONG-RULES -->"
+
     if required:
         ref_lines.append("See the following engineering guidelines:")
+        ref_lines = ["See the following engineering guidelines:"]
         for r in sorted(required):
             ref_lines.append(f"- `[{r}](file://.along/rules/{r})`")
 
@@ -122,19 +143,35 @@ def attach_rules(repo_root: str):
     marker_start = "<!-- BEGIN ALONG-RULES -->"
     marker_end = "<!-- END ALONG-RULES -->"
     block = f"{marker_start}\n{block_content}\n{marker_end}"
+        block_content = "\n".join(ref_lines)
+        block = f"{marker_start}\n{block_content}\n{marker_end}"
 
     if marker_start in content:
         pattern = re.compile(f"{re.escape(marker_start)}.*?{re.escape(marker_end)}", re.DOTALL)
         content = pattern.sub(block, content)
+        if marker_start in content and marker_end in content:
+            pattern = re.compile(f"{re.escape(marker_start)}.*?{re.escape(marker_end)}", re.DOTALL)
+            content = pattern.sub(lambda _: block, content)
+        else:
+            if "## Project specifics" in content:
+                content = content.replace("## Project specifics", f"## Project specifics\n\n{block}")
+            else:
+                content = content.rstrip() + f"\n\n## Project specifics\n\n{block}\n"
     else:
         # Inject at the end of Project specifics
         if "## Project specifics" in content:
             content = content.replace("## Project specifics", f"## Project specifics\n\n{block}")
         else:
             content += f"\n\n## Project specifics\n\n{block}\n"
+        # If no rules required, remove the marker block if present
+        if marker_start in content and marker_end in content:
+            pattern = re.compile(f"{re.escape(marker_start)}.*?{re.escape(marker_end)}\\n?", re.DOTALL)
+            content = pattern.sub("", content)
 
     with open(agents_md, "w", encoding="utf-8") as f:
         f.write(content)
+    if content != original_content:
+        textio.write_text(agents_md, content)
     
     if required:
         print(f"   [OK] Attached {len(required)} rule packs to AGENTS.md.")

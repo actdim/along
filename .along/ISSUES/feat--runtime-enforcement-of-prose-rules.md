@@ -5,12 +5,12 @@ type: feat
 status: open
 priority: high
 created: 2026-09-02
-updated: 2026-09-02
+updated: 2026-09-04
 agent: antigravity
 tags: [architecture, runtimes]
 milestone: v2.1.0-along
 blocked_by: []
-related: []
+related: [feat--systemic-anomaly-circuit-breaker, feat--programmatic-integrity-gates-and-git-guard]
 ---
 
 # Investigate and implement programmatic runtime enforcement for critical prose rules

@@ -7,6 +7,13 @@ type: architecture
 created: 2026-08-30
 updated: 2026-09-02
 tags: [architecture, boundaries, multi-agent, blackboard, concurrency, mcp, flow]
+sources:
+  - path: README.md
+    hash: "43dd66b243e20806c2dfb27aee41af1ba52cec257fc441e2fbcd9a079cc969fb"
+  - path: dashboard/app.py
+    hash: "ccf083c7f8d006fbfd12f6e7128bc91c7f3eb71992e1719424174484bc0ae4ce"
+  - path: skills/along-dash/SKILL.md
+    hash: "e89030c3325ac7557d3d856c434605aec9d886f7beaeb24335d59ee86616eff3"
 ---
 
 # System Architecture & Flow
@@ -32,7 +39,7 @@ flowchart TD
         AGENTS["AGENTS.md (Root Protocol & Conventions)"]
         ALONG_DIR[".along/ (Living Project State: ISSUES, DECISIONS, SESSIONS)"]
         DOCS["docs/ (Compiled LLM-Wiki Knowledge Base)"]
-        ARCHIVE[".archive/ (Archived Raw Ingestion Sources)"]
+        EXPORTS["llms.txt & llms-full.txt (.well-known/ or root)"]
     end
 
     subgraph MultiAgentEngine["Multi-Agent Orchestration & Execution"]
@@ -54,6 +61,7 @@ flowchart TD
 
     AGENTS --> ALONG_DIR
     AGENTS --> DOCS
+    DOCS --> EXPORTS
     ALONG_DIR --> TEAM
     TEAM --> BLACKBOARD
     TEAM --> LIFECYCLE

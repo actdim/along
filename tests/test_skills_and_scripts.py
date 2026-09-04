@@ -617,9 +617,10 @@ class TestAlongSkillsAndScripts(unittest.TestCase):
             self.assertTrue(os.path.exists(os.path.join(docs_dir, "topic--unstructured-notes.md")), "raw note must synthesize to docs/topic--unstructured-notes.md")
             self.assertTrue(os.path.exists(os.path.join(docs_dir, "INDEX.md")), "docs/INDEX.md must be compiled")
 
-            self.assertTrue(os.path.exists(archive_dir), ".archive/ directory must exist")
-            archived_files = os.listdir(archive_dir)
-            self.assertTrue(any("unstructured-notes" in f for f in archived_files), f"Raw note must be archived in .archive/, found: {archived_files}")
+            self.assertFalse(os.path.exists(archive_dir), ".archive/ directory must NOT exist after migration")
+            note_content = open(os.path.join(docs_dir, "topic--unstructured-notes.md"), encoding="utf-8").read()
+            self.assertIn("sources:", note_content)
+            self.assertIn("unstructured-notes.md", note_content)
 
             self.assertFalse(os.path.exists(kb_dir), ".along/KB/ directory must be purged")
             self.assertFalse(os.path.exists(ctx_path), ".along/CONTEXT.md must be purged")
@@ -856,6 +857,308 @@ class TestAlongSkillsAndScripts(unittest.TestCase):
             # Substantive content assertion (must be > 1000 bytes and >= 20 non-empty lines)
             self.assertGreater(size, 1000, f"{rel} is too small ({size} bytes). Documentation must not be an empty placeholder stub.")
             self.assertGreaterEqual(len(lines), 20, f"{rel} has only {len(lines)} lines. Expected rich documentation.")
+
+    def test_22_sources_provenance_and_drift_detection(self):
+        """Verify that along_kb_sync detects source drift and missing sources via front-matter hashes."""
+        with hermetic.repo_fixture(prefix="along-drift-") as temp_dir:
+            kb_script = os.path.join(REPO_ROOT, "scripts", "along_kb_sync.py")
+            src_file = os.path.join(temp_dir, "README.md")
+            with open(src_file, "r", encoding="utf-8") as f:
+                src_content = f.read()
+
+            import along_kb_sync
+            src_hash = along_kb_sync.compute_content_hash(src_content)
+
+            doc_path = os.path.join(temp_dir, "docs", "topic--architecture.md")
+            with open(doc_path, "r", encoding="utf-8") as f:
+                doc_content = f.read()
+
+            # Inject sources into front-matter
+            doc_with_sources = doc_content.replace(
+                "tags: [architecture]\n",
+                f"tags: [architecture]\nsources:\n  - path: README.md\n    hash: \"{src_hash}\"\n"
+            )
+            with open(doc_path, "w", encoding="utf-8") as f:
+                f.write(doc_with_sources)
+
+            # 1. Run sync when source is clean -> no drift
+            res = run_engine([sys.executable, kb_script, temp_dir])
+            self.assertEqual(res.returncode, 0)
+            self.assertNotIn("[DRIFT]", res.stdout)
+            self.assertNotIn("[ORPHANED SOURCE]", res.stdout)
+
+            # 2. Mutate source file -> verify [DRIFT] is reported
+            with open(src_file, "a", encoding="utf-8") as f:
+                f.write("\n## Extra Heading\nAdditional content.\n")
+
+            res_drift = run_engine([sys.executable, kb_script, temp_dir])
+            self.assertEqual(res_drift.returncode, 0)
+            self.assertIn("[DRIFT]", res_drift.stdout)
+            self.assertIn("Source 'README.md' has changed", res_drift.stdout)
+
+            # 3. Reference a non-existent source file -> verify [ORPHANED SOURCE] is reported
+            doc_with_orphan = doc_with_sources.replace("path: README.md", "path: missing-spec.md")
+            with open(doc_path, "w", encoding="utf-8") as f:
+                f.write(doc_with_orphan)
+
+            res_orphan = run_engine([sys.executable, kb_script, temp_dir])
+            self.assertEqual(res_orphan.returncode, 0)
+            self.assertIn("[ORPHANED SOURCE]", res_orphan.stdout)
+            self.assertIn("missing-spec.md", res_orphan.stdout)
+
+    def test_23_content_reduction_intent_gate(self):
+        """Verify that along_kb_sync halts with exit code 2 on content reduction unless --prune-intent is provided."""
+        temp_dir = tempfile.mkdtemp(prefix="along-shrink-")
+        try:
+            # Initialize a git repository in temp_dir
+            run_engine(["git", "init"], cwd=temp_dir)
+            run_engine(["git", "config", "user.email", "test@example.com"], cwd=temp_dir)
+            run_engine(["git", "config", "user.name", "Test Runner"], cwd=temp_dir)
+
+            docs_dir = os.path.join(temp_dir, "docs")
+            os.makedirs(docs_dir, exist_ok=True)
+            doc_path = os.path.join(docs_dir, "topic--architecture.md")
+
+            # Create an article with 35 lines
+            initial_lines = [
+                "---",
+                "protocol: along",
+                'protocol_version: "2.2.18"',
+                "slug: architecture",
+                "title: Architecture",
+                "type: architecture",
+                "created: 2026-09-01",
+                "tags: [architecture]",
+                "---",
+                "",
+                "# Architecture",
+                "",
+                "Detailed architecture content follows.",
+            ] + [f"Line {i} describing system components in detail." for i in range(1, 25)]
+            with open(doc_path, "w", encoding="utf-8") as f:
+                f.write("\n".join(initial_lines) + "\n")
+
+            # Commit to git HEAD
+            run_engine(["git", "add", "."], cwd=temp_dir)
+            run_engine(["git", "commit", "-m", "Initial commit"], cwd=temp_dir)
+
+            # Shrink the document drastically (from ~37 lines down to 14 lines, delta >= 10, >25%)
+            shrunk_lines = [
+                "---",
+                "protocol: along",
+                'protocol_version: "2.2.18"',
+                "slug: architecture",
+                "title: Architecture",
+                "type: architecture",
+                "created: 2026-09-01",
+                "tags: [architecture]",
+                "---",
+                "",
+                "# Architecture",
+                "",
+                "Only small stub left.",
+            ]
+            with open(doc_path, "w", encoding="utf-8") as f:
+                f.write("\n".join(shrunk_lines) + "\n")
+
+            kb_script = os.path.join(REPO_ROOT, "scripts", "along_kb_sync.py")
+
+            # 1. Run without --prune-intent -> MUST fail with exit code 2
+            res_blocked = run_engine([sys.executable, kb_script, temp_dir])
+            self.assertEqual(res_blocked.returncode, 2)
+            self.assertIn("Detected significant content reduction", res_blocked.stdout)
+            self.assertIn("--prune-intent", res_blocked.stdout)
+
+            # 2. Run with --prune-intent [REASON] -> MUST succeed with exit code 0
+            res_allowed = run_engine([sys.executable, kb_script, temp_dir, "--prune-intent", "Refactoring component spec"])
+            self.assertEqual(res_allowed.returncode, 0)
+            self.assertIn("[PRUNE-INTENT] Acknowledged content reduction: Refactoring component spec", res_allowed.stdout)
+
+            # 3. Run with --allow-shrink -> MUST succeed with exit code 0
+            res_alias = run_engine([sys.executable, kb_script, temp_dir, "--allow-shrink"])
+            self.assertEqual(res_alias.returncode, 0)
+            self.assertIn("[PRUNE-INTENT] Acknowledged content reduction: Allow shrink", res_alias.stdout)
+        finally:
+            shutil.rmtree(temp_dir, ignore_errors=True)
+
+    def test_24_smart_llms_txt_sync(self):
+        """Verify that along_kb_sync preserves custom sections in llms.txt while updating documentation links."""
+        with hermetic.repo_fixture(prefix="along-llmstxt-") as temp_dir:
+            llms_path = os.path.join(temp_dir, "llms.txt")
+            custom_content = (
+                "# Custom Project Title\n\n"
+                "> Custom description of the project.\n\n"
+                "## Custom Section\n"
+                "- Custom feature bullet\n\n"
+                "## Documentation Links\n"
+                "- [Legacy Doc](./docs/topic--legacy.md)\n"
+                "- [External Guide](https://example.com/guide)\n\n"
+                "## External Resources\n"
+                "- https://actdim.com\n"
+            )
+            with open(llms_path, "w", encoding="utf-8") as f:
+                f.write(custom_content)
+
+            kb_script = os.path.join(REPO_ROOT, "scripts", "along_kb_sync.py")
+            res = run_engine([sys.executable, kb_script, temp_dir])
+            self.assertEqual(res.returncode, 0)
+
+            with open(llms_path, "r", encoding="utf-8") as f:
+                updated_content = f.read()
+
+            # Custom sections preserved
+            self.assertIn("# Custom Project Title", updated_content)
+            self.assertIn("> Custom description of the project.", updated_content)
+            self.assertIn("## Custom Section", updated_content)
+            self.assertIn("- Custom feature bullet", updated_content)
+            self.assertIn("## External Resources", updated_content)
+            self.assertIn("- https://actdim.com", updated_content)
+
+            # External link inside Documentation Links preserved
+            self.assertIn("- [External Guide](https://example.com/guide)", updated_content)
+
+            # Documentation links synchronized with active docs
+            self.assertIn("- [docs/topic--architecture.md](docs/topic--architecture.md): Architecture.", updated_content)
+            self.assertNotIn("./docs/topic--legacy.md", updated_content)
+
+    def test_25_well_known_llms_txt_and_full_txt_sync(self):
+        """Verify .well-known resolution, deterministic llms-full.txt compilation, and cascading subprojects."""
+        with hermetic.repo_fixture(prefix="along-wk-llms-") as temp_dir:
+            # 1. Setup .well-known directory with an existing llms.txt
+            wk_dir = os.path.join(temp_dir, ".well-known")
+            os.makedirs(wk_dir, exist_ok=True)
+            wk_llms = os.path.join(wk_dir, "llms.txt")
+            with open(wk_llms, "w", encoding="utf-8") as f:
+                f.write("# Well-Known Title\n\n> Well-known description.\n\n## Custom\n- value\n")
+
+            # Also create a nested subproject with its own .along/ and docs/
+            sub_dir = os.path.join(temp_dir, "src", "services", "sub-service")
+            os.makedirs(os.path.join(sub_dir, ".along"), exist_ok=True)
+            os.makedirs(os.path.join(sub_dir, "docs"), exist_ok=True)
+            with open(os.path.join(sub_dir, "README.md"), "w", encoding="utf-8") as f:
+                f.write("# Sub Service\n\n> Microservice for data processing.\n")
+            with open(os.path.join(sub_dir, "docs", "topic--sub.md"), "w", encoding="utf-8") as f:
+                f.write("---\nprotocol: along\nprotocol_version: \"2.2.18\"\nslug: sub\ntitle: Sub Service Docs\ntype: topic\n---\n# Sub Service Docs\nDetailed topic body.\n")
+
+            kb_script = os.path.join(REPO_ROOT, "scripts", "along_kb_sync.py")
+            res = run_engine([sys.executable, kb_script, temp_dir])
+            self.assertEqual(res.returncode, 0, f"along_kb_sync failed:\n{res.stderr}\n{res.stdout}")
+
+            # Verify root .well-known/llms.txt was updated
+            with open(wk_llms, "r", encoding="utf-8") as f:
+                wk_updated = f.read()
+            self.assertIn("# Well-Known Title", wk_updated)
+            self.assertIn("## Custom", wk_updated)
+            self.assertIn("- [docs/topic--architecture.md](docs/topic--architecture.md): Architecture.", wk_updated)
+
+            # Verify root .well-known/llms-full.txt was deterministically compiled
+            wk_full = os.path.join(wk_dir, "llms-full.txt")
+            self.assertTrue(os.path.isfile(wk_full), ".well-known/llms-full.txt must be compiled")
+            with open(wk_full, "r", encoding="utf-8") as f:
+                full_body = f.read()
+            self.assertIn("Full Documentation Context", full_body)
+            self.assertIn("## Document: docs/topic--architecture.md (Architecture)", full_body)
+            self.assertIn("The fixture Knowledge Base article.", full_body)
+
+            # Verify cascading subproject sync created llms.txt and llms-full.txt for sub-service
+            sub_llms = os.path.join(sub_dir, "llms.txt")
+            sub_full = os.path.join(sub_dir, "llms-full.txt")
+            self.assertTrue(os.path.isfile(sub_llms), "Subproject llms.txt must be synchronized")
+            self.assertTrue(os.path.isfile(sub_full), "Subproject llms-full.txt must be compiled")
+            with open(sub_llms, "r", encoding="utf-8") as f:
+                sub_llms_content = f.read()
+            self.assertIn("Sub Service", sub_llms_content)
+            self.assertIn("docs/topic--sub.md", sub_llms_content)
+
+            # Now test dual-target synchronization: create root llms.txt alongside .well-known/llms.txt
+            root_llms = os.path.join(temp_dir, "llms.txt")
+            with open(root_llms, "w", encoding="utf-8") as f:
+                f.write("# Root Copy\n\n> Stale copy.\n")
+
+            res2 = run_engine([sys.executable, kb_script, temp_dir])
+            self.assertEqual(res2.returncode, 0)
+
+            # Both root and .well-known targets must be updated to prevent drift
+            with open(root_llms, "r", encoding="utf-8") as f:
+                root_updated = f.read()
+            with open(wk_llms, "r", encoding="utf-8") as f:
+                wk_updated2 = f.read()
+            self.assertIn("- [docs/topic--architecture.md](docs/topic--architecture.md): Architecture.", root_updated)
+            self.assertIn("- [docs/topic--architecture.md](docs/topic--architecture.md): Architecture.", wk_updated2)
+
+    def test_26_canonical_context_and_manifest_discovery(self):
+        """Verify alongkit.repo downward discovery functions and llm target resolution."""
+        from alongkit import repo
+
+        temp_dir = tempfile.mkdtemp(prefix="along-repo-discovery-")
+        try:
+            # 1. Root context
+            os.makedirs(os.path.join(temp_dir, ".along"), exist_ok=True)
+
+            # 2. Subproject 1: .NET-style nested folder with AGENTS.md and .csproj
+            net_proj = os.path.join(temp_dir, "src", "Services", "Billing")
+            os.makedirs(net_proj, exist_ok=True)
+            with open(os.path.join(net_proj, "AGENTS.md"), "w", encoding="utf-8") as f:
+                f.write("# Sub Agents\n")
+            with open(os.path.join(net_proj, "Billing.csproj"), "w", encoding="utf-8") as f:
+                f.write("<Project />")
+
+            # 3. Subproject 2: Rust package with Cargo.toml (uninitialized context)
+            rust_proj = os.path.join(temp_dir, "crates", "parser")
+            os.makedirs(rust_proj, exist_ok=True)
+            with open(os.path.join(rust_proj, "Cargo.toml"), "w", encoding="utf-8") as f:
+                f.write("[package]\nname = \"parser\"\n")
+
+            # 4. Ignored directories: node_modules and .git
+            ignored_proj = os.path.join(temp_dir, "node_modules", "some-dep")
+            os.makedirs(ignored_proj, exist_ok=True)
+            with open(os.path.join(ignored_proj, "AGENTS.md"), "w", encoding="utf-8") as f:
+                f.write("# Ignored\n")
+
+            # Test find_agent_contexts
+            contexts = repo.find_agent_contexts(temp_dir)
+            abs_root = os.path.abspath(temp_dir)
+            abs_net = os.path.abspath(net_proj)
+            abs_ignored = os.path.abspath(ignored_proj)
+
+            self.assertIn(abs_root, contexts)
+            self.assertIn(abs_net, contexts)
+            self.assertNotIn(abs_ignored, contexts, "Ignored directories must not be discovered as contexts")
+
+            # Test find_manifest_projects
+            manifest_projs = repo.find_manifest_projects(temp_dir)
+            abs_rust = os.path.abspath(rust_proj)
+            self.assertIn(abs_net, manifest_projs)
+            self.assertIn(abs_rust, manifest_projs)
+            self.assertNotIn(abs_ignored, manifest_projs)
+
+            # Test resolve_llm_targets
+            # Case 1: Neither exists and no .well-known dir -> default root
+            targets1 = repo.resolve_llm_targets(rust_proj, "llms.txt")
+            self.assertEqual(targets1, [os.path.join(abs_rust, "llms.txt")])
+
+            # Case 2: .well-known dir exists -> default .well-known
+            wk_dir = os.path.join(rust_proj, ".well-known")
+            os.makedirs(wk_dir, exist_ok=True)
+            targets2 = repo.resolve_llm_targets(rust_proj, "llms.txt")
+            self.assertEqual(targets2, [os.path.join(wk_dir, "llms.txt")])
+
+            # Case 3: File exists in .well-known -> returns .well-known
+            with open(os.path.join(wk_dir, "llms.txt"), "w", encoding="utf-8") as f:
+                f.write("content")
+            targets3 = repo.resolve_llm_targets(rust_proj, "llms.txt")
+            self.assertEqual(targets3, [os.path.join(wk_dir, "llms.txt")])
+
+            # Case 4: Both exist -> returns both
+            with open(os.path.join(rust_proj, "llms.txt"), "w", encoding="utf-8") as f:
+                f.write("root content")
+            targets4 = repo.resolve_llm_targets(rust_proj, "llms.txt")
+            self.assertEqual(len(targets4), 2)
+            self.assertIn(os.path.join(wk_dir, "llms.txt"), targets4)
+            self.assertIn(os.path.join(rust_proj, "llms.txt"), targets4)
+
+        finally:
+            shutil.rmtree(temp_dir, ignore_errors=True)
 
 
 if __name__ == "__main__":

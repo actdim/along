@@ -13,7 +13,7 @@ Along provides repositories with an isolated, durable, and human-readable memory
   - Real-time file system change detection and live UI refresh via Server-Sent Events (SSE).
 - **Knowledge Base & Fast Search Engine (`/along-kb-search`, `/along-kb-sync`)**:
   - Structured documentation articles in `docs/` (`topic--architecture.md`, `topic--domain-model.md`, `topic--setup-and-workflow.md`, `topic--frontend-frameworks.md`, `topic--dependencies.md`, `INDEX.md`).
-  - Raw unmanaged sources isolated in `.archive/`.
+  - In-place source provenance tracking and drift detection across `docs/`.
   - Fast structured search across Knowledge Base topics, issues, ADR decisions, and session journals with filtering by entity type.
 - **AI Dependencies Discovery (`/along-dep-scan`)**:
   - Automated scanner for Node (`package.json`), Python (`pyproject.toml`, `requirements.txt`), and Rust (`Cargo.toml`).
@@ -30,8 +30,11 @@ Along provides repositories with an isolated, durable, and human-readable memory
 - [README.md](README.md): Overview, quick installation, and full skill list.
 - [AGENTS.md](AGENTS.md): Active ALONG-PROTOCOL conventions and instructions.
 - [docs/INDEX.md](docs/INDEX.md): Central Knowledge Base topic catalog.
-- [docs/topic--architecture.md](docs/topic--architecture.md): System architecture, boundaries, and data flows.
-- [docs/topic--domain-model.md](docs/topic--domain-model.md): Domain entities, schema, and DAG relationships.
-- [docs/topic--setup-and-workflow.md](docs/topic--setup-and-workflow.md): Setup, installation, and agent workflow.
-- [docs/topic--frontend-frameworks.md](docs/topic--frontend-frameworks.md): Dynstruct, MsgMesh, Material UI adapters, and NSwag API integration.
-- [docs/topic--dependencies.md](docs/topic--dependencies.md): Catalog of external dependency AI guidelines.
+- [docs/topic--architecture.md](docs/topic--architecture.md): System Architecture & Flow.
+- [docs/topic--dependencies.md](docs/topic--dependencies.md): Dependencies & Submodules AI Documentation and Rules.
+- [docs/topic--domain-model.md](docs/topic--domain-model.md): Domain Model & Entity Ecosystem.
+- [docs/topic--frontend-frameworks.md](docs/topic--frontend-frameworks.md): Frontend Architecture, Dynstruct, MsgMesh & NSwag Integration.
+- [docs/topic--llm-wiki-architecture.md](docs/topic--llm-wiki-architecture.md): LLM-Wiki Knowledge Base Architecture & Paradigm.
+- [docs/topic--migrations.md](docs/topic--migrations.md): Protocol & Repository Migrations Guide.
+- [docs/topic--setup-and-workflow.md](docs/topic--setup-and-workflow.md): Setup & Developer Workflow.
+- [docs/topic--skills-reference.md](docs/topic--skills-reference.md): Skills & Slash Commands Technical Reference.

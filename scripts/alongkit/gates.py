@@ -25,9 +25,12 @@ the fact is not a gate. See
 
 from __future__ import annotations
 if __name__ == "__main__":
+    import os
     raise SystemExit(
         f"{__name__} is a library module, not a command.\n"
         "Run: along kb-sync   (or: python scripts/along_exec.py kb-sync)"
+        f"{os.path.basename(__file__)} is a library module, not a command.\n"
+        "Run: python .along/scripts/test.py"
     )
 
 
