@@ -1,4 +1,4 @@
-# Along (v2.2.19) - Full Documentation Context
+# Along (v2.2.20) - Full Documentation Context
 
 > Knowledge Base and documentation index for along.
 
@@ -6,9 +6,9 @@
 
 ## Document: README.md (Overview)
 
-# Along (v2.2.19)
+# Along (v2.2.20)
 
-A provider-agnostic **agent-context and memory system** for software repositories - the `ALONG-PROTOCOL v2.2.19` plus the automation skills suite that scaffolds and maintains it. One unified convention, honored natively across **Claude Code**, **OpenAI Codex**, **OpenCode**, and **Google Antigravity**.
+A provider-agnostic **agent-context and memory system** for software repositories - the `ALONG-PROTOCOL v2.2.20` plus the automation skills suite that scaffolds and maintains it. One unified convention, honored natively across **Claude Code**, **OpenAI Codex**, **OpenCode**, and **Google Antigravity**.
 
 ---
 
@@ -122,7 +122,7 @@ MIT License. See [LICENSE](./LICENSE) for details.
 ## Document: AGENTS.md (Agent Conventions & Protocol)
 
 <!-- BEGIN ALONG-PROTOCOL root (managed by along-init - do not edit by hand) -->
-# ALONG-PROTOCOL v2.2.19
+# ALONG-PROTOCOL v2.2.20
 
 This repo carries its own agent context, provider-agnostically. Follow it every session, whatever tool you are.
 
@@ -1634,7 +1634,7 @@ along-init
 *(Or invoke `/along-init` directly inside your AI agent prompt).*
 
 ### What `along-init` Configures:
-1. `AGENTS.md`: Generates the root protocol context with the managed `ALONG-PROTOCOL v2.2.19` block.
+1. `AGENTS.md`: Generates the root protocol context with the managed `ALONG-PROTOCOL v2.2.20` block.
 2. `CLAUDE.md`: Scaffolds the standard `@AGENTS.md` import line.
 3. `.gitattributes`: Configures `merge=union` for `.along/HISTORY.md` and `.along/DECISIONS.md` to prevent merge collisions across branches.
 4. `.along/`: Creates the persistent repository memory skeleton (`ISSUES/`, `DECISIONS.md`, `MILESTONES/`, `RISKS/`, `SPIKES/`, `CHECKLISTS/`, `SESSIONS/`, `docs/`).

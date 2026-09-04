@@ -2,6 +2,10 @@
 
 All notable changes to this project, newest first.
 
+## v2.2.20 - 2026-09-04
+
+- feat(migration): migration resilience and link reconciliation (refs #migration-resilience-and-link-reconciliation)
+
 ## v2.2.19 - 2026-09-04
 
 - fix(alongkit): clean up syntax and deduplicate rules.py logic (refs #recent-features-defects-and-guard-messages)

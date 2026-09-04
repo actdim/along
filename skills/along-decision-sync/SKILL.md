@@ -3,7 +3,7 @@ name: along-decision-sync
 description: Record architectural/design decisions into the nearest .along/DECISIONS.md as append-only ADR entries with decentralized slug headers, and mark superseded ones. Use when a non-trivial technical choice was made, or invokes /along-decision-sync.
 ---
 
-# Along Decision Sync (`/along-decision-sync`) [v2.2.19]
+# Along Decision Sync (`/along-decision-sync`) [v2.2.20]
 
 Maintains append-only Architectural Decision Records (ADRs) in the nearest `.along/DECISIONS.md` using decentralized slug headers to prevent git merge conflicts across parallel branches.
 
