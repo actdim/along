@@ -21,8 +21,17 @@ import runpy
 import sys
 from typing import List, Optional, Sequence
 
-from . import repo
-from .version import CURRENT_PROTOCOL_VERSION
+
+if __name__ == "__main__" and not __package__:
+    import os
+    _parent = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    if _parent not in sys.path:
+        sys.path.insert(0, _parent)
+    from alongkit import repo
+    from alongkit.version import CURRENT_PROTOCOL_VERSION
+else:
+    from . import repo
+    from .version import CURRENT_PROTOCOL_VERSION
 
 ROUTER = "along_exec.py"
 

@@ -3,10 +3,11 @@ protocol: along
 protocol_version: 2.2.8
 slug: commit-stages-all-and-dead-test-detection
 type: bug
-status: open
+status: done
 priority: high
 created: 2026-09-01
-updated: 2026-09-01
+updated: 2026-09-06
+completed: 2026-09-06
 agent: claude-code
 tags: [along-commit, git, dead-code, safety]
 milestone: v3.0.0-global-quality-revision
@@ -107,8 +108,8 @@ The process still exits 0, so an automation wrapper cannot detect a failed push.
 
 ## Acceptance Criteria
 
-- [ ] No `git add -A` on the default path.
-- [ ] Node test detection executes (covered by test).
-- [ ] Argument parsing via argparse; hyphen-leading messages work.
-- [ ] Push failure produces a non-zero exit code.
-- [ ] Sanitizer resolution failure is reported, not swallowed.
+- [x] No `git add -A` on the default path.
+- [x] Node test detection executes (covered by test).
+- [x] Argument parsing via argparse; hyphen-leading messages work.
+- [x] Push failure produces a non-zero exit code.
+- [x] Sanitizer resolution failure is reported, not swallowed.

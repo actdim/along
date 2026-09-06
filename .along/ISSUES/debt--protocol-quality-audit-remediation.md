@@ -57,10 +57,10 @@ Three recurring mechanisms produce most defects:
 
 ### High - wrong results, contradictions, or structural debt
 
-- [ ] `[bug--commit-stages-all-and-dead-test-detection]`
+- [x] `[bug--commit-stages-all-and-dead-test-detection]` - selective staging, --all/--paths flags, exit on push fail (fixed 2026-09-06)
 - [ ] `[bug--quality-gates-skip-hidden-directories]`
 - [ ] `[bug--kb-sync-rewrites-unrelated-numbered-links]`
-- [ ] `[bug--kb-sync-ingestion-not-idempotent]`
+- [x] `[bug--kb-sync-ingestion-not-idempotent]` - preserved hand edits, check mode writes nothing (fixed 2026-09-06)
 - [ ] `[bug--link-gates-skip-along-directory]`
 - [ ] `[bug--generated-docs-emit-file-uri-links]`
 - [x] `[bug--tests-mutate-working-tree]` - hermetic fixtures plus a meta-test on the working tree (fixed 2026-09-01)

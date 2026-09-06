@@ -120,6 +120,27 @@ class TestRulesEngine(unittest.TestCase):
         proc = subprocess.run(cmd, capture_output=True, text=True)
         self.assertNotEqual(proc.returncode, 0)
         self.assertIn("rules.py is a library module, not a command.", proc.stderr + proc.stdout)
+    def test_alongkit_modules_execution_guards(self):
+        alongkit_dir = os.path.join(REPO_ROOT, "scripts", "alongkit")
+        for fname in sorted(os.listdir(alongkit_dir)):
+            if not fname.endswith(".py") or fname.startswith("__") or fname == "cli.py":
+                continue
+            cmd = [sys.executable, os.path.join(alongkit_dir, fname)]
+            res = subprocess.run(cmd, capture_output=True, text=True)
+            output = (res.stderr or "") + (res.stdout or "")
+            self.assertNotEqual(res.returncode, 0, f"{fname} exited 0 when executed directly")
+            self.assertIn(f"{fname} is a library module, not a command.", output,
+                          f"{fname} output did not name itself: {output}")
+            self.assertNotIn("__main__", output,
+                             f"{fname} output contained corrupted '__main__' prefix: {output}")
+            self.assertEqual(output.count("is a library module"), 1,
+                             f"{fname} emitted duplicated guard messages: {output}")
+
+    def test_alongkit_cli_entry_point(self):
+        cmd = [sys.executable, os.path.join(REPO_ROOT, "scripts", "alongkit", "cli.py"), "--version"]
+        res = subprocess.run(cmd, capture_output=True, text=True)
+        self.assertEqual(res.returncode, 0)
+        self.assertIn("along ", res.stdout)
 
 
 if __name__ == "__main__":
