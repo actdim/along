@@ -21,6 +21,7 @@
 - [ ] `(debt)` [team-skill-state-not-persisted](ISSUES/debt--team-skill-state-not-persisted.md)
 - [ ] `(debt)` [unpinned-mcp-and-ghost-wiki-query-tool](ISSUES/debt--unpinned-mcp-and-ghost-wiki-query-tool.md)
 - [ ] `(feat)` [automated-ui-screenshots-and-visual-verification](ISSUES/feat--automated-ui-screenshots-and-visual-verification.md)
+- [ ] `(feat)` [deterministic-kb-pipeline-and-ast-grounding](ISSUES/feat--deterministic-kb-pipeline-and-ast-grounding.md)
 - [ ] `(feat)` [external-issue-trackers-sync-and-import](ISSUES/feat--external-issue-trackers-sync-and-import.md)
 - [ ] `(feat)` [knowledge-base-management-and-init-kb-skill](ISSUES/feat--knowledge-base-management-and-init-kb-skill.md)
 - [ ] `(feat)` [lsif-scip-lsp-mcp-integration](ISSUES/feat--lsif-scip-lsp-mcp-integration.md)
