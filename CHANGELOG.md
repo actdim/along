@@ -2,6 +2,10 @@
 
 All notable changes to this project, newest first.
 
+## v2.2.21 - 2026-09-06
+
+- feat(orchestration): provider-agnostic team, engineering provenance, and runtime worktree isolation (refs #runtime-worktree-isolation)
+
 ## v2.2.20 - 2026-09-04
 
 - feat(migration): migration resilience and link reconciliation (refs #migration-resilience-and-link-reconciliation)
