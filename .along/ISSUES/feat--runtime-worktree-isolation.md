@@ -15,97 +15,94 @@ related: [debt--team-skill-state-not-persisted]
 
 # Runtime-native Git worktree workspace isolation mode
 
-## Описание и контекст задачи
+## 1. Problem Statement & Background
 
-Пользовательский сценарий: выполнение любой инженерной задачи (не только `feat`, но и `bug`, `debt`, `task`, `docs` или автономных целей `/goal`) в полностью изолированном рабочем каталоге через механизм **Git Worktree**.
+Executing complex software development tasks or autonomous objectives (via `/along-team`, `/goal`, or CLI commands) directly inside the developer's active working directory introduces serious operational hazards:
+- Uncommitted local work-in-progress (WIP) files risk contamination or accidental deletion.
+- Background language servers, file watchers, test processes, and active IDE instances face contention and disruption.
+- Failed autonomous execution runs leave corrupted source files or half-applied patches across the active tree.
 
-### Принципиальная разница между Git Branch и Git Worktree
+### Fundamental Distinction: In-Place Git Branch vs Git Worktree
 
-- **Обычный Git Branch (`git checkout -b`)**: переключает ветку непосредственно в текущей рабочей директории пользователя. Это затирает несохраненные изменения, сбрасывает кэши Language Server, ломает запущенные dev-серверы и мешает параллельной работе человека.
-- **Git Worktree (`git worktree add <path> <branch>`)**: создает параллельный физический каталог на диске, привязанный к общему хранилищу `.git`. Основное рабочее дерево пользователя остается абсолютно нетронутым, в то время как агент выполняет работу в изолированной директории.
+- **Standard In-Place Git Branch (`git checkout -b <branch>`)**: Switches branches directly in the developer's current working directory. This mutates open editor buffers, triggers language server re-indexing, restarts dev servers, and risks colliding with uncommitted local modifications.
+- **Git Worktree (`git worktree add <path> <branch>`)**: Creates an independent, parallel directory on the filesystem linked to the shared `.git` repository object store. The developer's primary working tree remains completely untouched and pristine, while the agent executes its entire workflow in the dedicated directory.
 
-## Ключевые требования
+## 2. Core Requirements
 
-1. **Универсальность для всех типов задач**:
-   - Механизм изоляции воркспейса применим к любому типу сущностей протокола Along (`bug`, `feat`, `debt`, `task`, `docs`), а также к автономным запускам через `/goal`.
+1. **Universal Scope Across All Entity Types**:
+   - The workspace isolation mechanism must support every Along protocol entity type (`bug`, `feat`, `debt`, `task`, `docs`) as well as autonomous goal execution runs (`/goal`).
 
-2. **Явный флаг вызова**:
-   - Поддержка явного ключа запуска, например `--worktree` (в `/along-team <slug> --worktree`, `/goal --worktree` или в параметрах запуска).
-2. **Явный флаг вызова и семантическая активация**:
-   - Явный флаг: `--worktree` (в `/along-team <slug> --worktree`, `/goal --worktree` или параметрах запуска).
-   - Семантическая активация (Natural Language Intent): агент автоматически включает режим при наличии явных фраз в промпте ("в отдельном worktree", "изолированно", "не трогай текущую рабочую копию", "в параллельном воркспейсе").
-   - Защита от ложных срабатываний (False Positives Guard): строго запрещено активировать режим worktree на обычные запросы без явного намерения изоляции ("напиши фичу", "исправь баг"), чтобы исключить лишний оверхед на создание окружения.
+2. **Invocation Flags & Semantic Intent Routing**:
+   - **Explicit Flag**: `--worktree` (e.g. `/along-team <slug> --worktree`, `/goal --worktree`, or configuration `workspace: worktree`).
+   - **Semantic Activation**: The agent automatically resolves natural language intent ("in an isolated worktree", "run without touching my active workspace", "isolate this task") to the `--worktree` execution mode.
+   - **False Positives Guard**: The orchestrator must never activate worktree mode on standard requests lacking explicit isolation intent ("implement feature", "fix bug") to avoid unnecessary environment provisioning overhead.
 
-3. **Контракт готовности окружения (Environment Readiness Contract)**:
-   - Создание голого каталога через `git worktree add` недостаточно, так как файлы из `.gitignore` (`node_modules`, `.venv`, `.env`, локальные конфиги и бинарные кэши) отсутствуют в новом каталоге.
-   - Поддержка рантайма ОБЯЗАНА включать обеспечение рабочего окружения:
-     - Нативный линкинг/шаринг каталогов зависимостей (`node_modules`, `.venv`) через symlinks / junctions / CoW без повторной многогигабайтной установки.
-     - Проброс локальных конфигурационных файлов (`.env`, `.env.local`) и переменных среды.
-   - Если механизм создает лишь "пустую" ветку без доступа к зависимостям, окружение считается неработоспособным, так как фазы тестирования и сборки немедленно упадут.
+3. **Environment Readiness Contract**:
+   - Creating a bare working directory via `git worktree add` is insufficient: gitignored directories and files (`node_modules`, `.venv`, `.env`, local configuration files, build caches) do not exist in newly checked out worktrees.
+   - Runtime support MUST encompass environment readiness:
+     - Native sharing or linking of dependency directories (`node_modules`, `.venv`) via NTFS junctions, symlinks, or Copy-on-Write (CoW) storage without duplicating gigabytes of packages.
+     - Propagation of local environment variables and untracked configuration (`.env`, `.env.local`).
+   - If a mechanism only yields a bare working tree without dependency access, the environment is dysfunctional because test runners and linters will immediately crash.
 
-4. **Строгий Fail-Fast при отсутствии поддержки рантаймом**:
-   - Агент на этапе Phase 0 обязан проверить возможности текущего рантайма (как по изоляции каталога, так и по доступности окружения зависимостей).
-   - Если указан флаг `--worktree`, но активный рантайм агента не поддерживает изоляцию через worktree с сохранением окружения, агент **ОБЯЗАН НЕМЕДЛЕННО ОСТАНОВИТЬ РАБОТУ (HALT)** с диагностической ошибкой.
-   - Строго запрещено молча продолжать работу и вносить изменения в основное рабочее дерево пользователя, если был запрошен режим `--worktree`.
-   - Действует одинаково для явного флага и семантического вызова: если рантайм не поддерживает изоляцию с сохранением окружения, агент **ОБЯЗАН НЕМЕДЛЕННО ОСТАНОВИТЬ РАБОТУ (HALT)** с диагностической ошибкой.
-   - Строго запрещено молча продолжать работу и вносить изменения в основное рабочее дерево пользователя, если был запрошен режим worktree.
+4. **Strict Fail-Fast on Unsupported Runtimes**:
+   - During Phase 0 (Supervisor), the agent must evaluate the capabilities of the active host runtime (both directory isolation and environment readiness).
+   - Applied identically to explicit flags and semantic triggers: if the active runtime does not support worktree isolation with environment readiness, the agent **MUST IMMEDIATELY HALT WITH AN ERROR**.
+   - Silent degradation or unauthorized modification of the user's primary working tree while worktree mode was requested is strictly forbidden.
 
-5. **Обязательная фиксация в манифесте**:
-   - Выбранный режим воркспейса (`workspace: worktree` или `workspace: inherit`) должен явно объявляться в Phase 0 и фиксироваться в итоговом Gate Execution Manifest и логе сессии.
+5. **Mandatory Logging in Gate Execution Manifest**:
+   - The selected workspace mode (`workspace: worktree` or `workspace: inherit`) must be explicitly announced in Phase 0 and logged in both the Gate Execution Manifest and session log.
 
-## Анализ возможностей целевых рантаймов
+## 3. Host Runtime Capability Matrix
 
 1. **Google Antigravity**:
-   - Инструмент `invoke_subagent` нативно поддерживает параметр `Workspace`:
-     - `share`: создание рабочего пространства с общим репозиторием (прямой аналог git worktree / hg share), позволяющее вести независимую работу без дублирования дискового пространства.
-     - `branch`: создание изолированного клона/бранча.
-     - `inherit`: выполнение в текущей директории родителя (по умолчанию).
-   - Необходимо исследовать: как именно Antigravity пробрасывает игнорируемые зависимости (`node_modules`), где располагаются временные каталоги и как очищаются при завершении задачи.
+   - The `invoke_subagent` tool natively provides a `Workspace` parameter:
+     - `share`: creates a workspace sharing the underlying repository directory (similar to git worktree / hg share), enabling independent branching without duplicating storage.
+     - `branch`: creates an isolated branched or cloned workspace.
+     - `inherit`: executes within the parent workspace directory (default).
+   - Audit required: verify how Antigravity propagates untracked dependencies (`node_modules`), temporary directory layouts, and cleanup triggers on completion.
 
 2. **Claude Code**:
-   - Имеет нативный флаг CLI `--worktree`, разворачивающий работу в изолированном git worktree (например, под `.claude/worktrees/...`).
-   - Необходимо исследовать: как Claude Code обрабатывает неверсионируемые файлы и конфиги, и возможен ли программный вызов режима изнутри скиллов.
+   - Offers a native `--worktree` CLI flag that provisions tasks in isolated git worktrees (`.claude/worktrees/...`).
+   - Audit required: evaluate how Claude Code handles untracked files and whether programmatic activation from within skills/subtasks is supported.
 
 3. **OpenAI Codex / OpenCode**:
-   - Нативные API изолированных воркспейсов на уровне хост-платформы, как правило, отсутствуют.
-   - Необходимо выяснить: допускается ли реализация адаптера через прямые команды терминала (`git worktree add` + автоматический junction/symlink для `node_modules`), либо для этих платформ при строгом флаге `--worktree` должен происходить немедленный останов (halt).
+   - Lack proprietary host workspace isolation APIs.
+   - Audit required: determine whether an automated terminal adapter (`git worktree add` + dependency junction linking) is viable or whether strict fail-fast halt must occur on these platforms.
 
-## Критические инженерные риски и компромиссы
+## 4. Engineering Risks & Trade-offs
 
-1. **Изоляция и целостность зависимостей (`node_modules`, `.venv`)**:
-   - При использовании symlinks / junctions для `node_modules` шаги сборки и тесты работают быстро, но если агент попытается выполнить команду установки пакета (`npm install new-package`), он может мутировать общую папку `node_modules` родителя. Требуется определить правила допустимых операций над зависимостями в режиме worktree.
+1. **Dependency Integrity & Isolation**:
+   - When sharing `node_modules` via junctions, test suites run immediately, but commands that install packages (`npm install`) mutate the shared parent folder. Clear boundary rules for package manager operations inside worktrees are required.
 
-2. **Сохранение сессионного состояния протокола Along (`.along/`)**:
-   - Протокол Along хранит артефакты выполнения (`.along/ISSUES/`, `.along/SESSIONS/`, `.along/.session/<slug>/blackboard.md`) на диске.
-   - Если весь каталог изолируется внутри worktree, а затем при ошибке или отмене worktree принудительно удаляется (`git worktree remove --force`), все логи сессии, блэкборд и статус задачи будут потеряны.
-   - Решение: механизм монтирования/синхронизации каталога `.along/` между worktree и основным деревом (например, NTFS directory junction на Windows или явный flush сессионных файлов перед очисткой).
+2. **Along Protocol State Preservation (`.along/`)**:
+   - Along stores active execution state (`.along/ISSUES/`, `.along/SESSIONS/`, `.along/.session/<slug>/blackboard.md`) on disk.
+   - If `.along/` is isolated inside the worktree and the worktree is destroyed on failure (`git worktree remove --force`), all session logs and failure forensics will be lost.
+   - Solution: shared junction / symlink for `.along/` or an explicit pre-teardown flush to the primary repository.
 
-3. **Блокировки файлов на платформе Windows**:
-   - На Windows запущенные процессы (TypeScript language server, dotnet build host, node_modules watchers) удерживают дескрипторы открытых файлов.
-   - Попытка удаления worktree часто падает с `Access is denied`. Требуется безопасный алгоритм очистки с предварительным завершением дочерних процессов или отложенной очисткой (deferred cleanup).
+3. **Windows File Handle Locks**:
+   - Language servers, build daemons, and file indexers on Windows frequently hold open file handles in worktrees.
+   - Teardown via `git worktree remove --force` frequently fails with `Access is denied`. Requires robust process termination and deferred cleanup strategies.
 
-4. **Жизненный цикл Worktree (Lifecycle & Integration Gate)**:
-   - Создание: `git worktree add <worktree-path> -b along/<type>--<slug>`.
-   - Инициализация окружения: верификация доступности `node_modules`, виртуальных окружений и переменных.
-   - Выполнение шагов: запуск тестов и линтеров строго внутри `<worktree-path>`.
-   - Завершение (Success): Reviewer выдает `PASS`, формируется Gate Execution Manifest, изменения склеиваются (squash/merge) в целевую ветку, либо ветка сохраняется с выводом инструкций для пользователя по PR/слиянию.
-   - Очистка: удаление worktree (`git worktree remove`), удаление временной ветки при необходимости.
+4. **Worktree Lifecycle & Integration Gate**:
+   - Provisioning: `git worktree add <worktree-path> -b along/<type>--<slug>`.
+   - Environment initialization: verify dependencies, virtual environments, and configuration.
+   - Step execution: run tests and linters strictly scoped to `<worktree-path>`.
+   - Verification & Merge: Reviewer issues `PASS`, Gate Execution Manifest is recorded, changes are squash-merged into parent branch, or branch is retained with manual PR instructions.
+   - Teardown: prune worktree (`git worktree remove`) and delete temporary branches.
 
 ## Acceptance Criteria
 
-- [ ] Проведен детальный аудит механизмов изоляции воркспейсов и worktree в целевых рантаймах (Google Antigravity `Workspace: 'share'|'branch'`, Claude Code `--worktree`, OpenAI Codex, OpenCode).
-- [ ] Оформлен ADR в `.along/DECISIONS.md` со спецификацией флага `--worktree`, матрицы поддержки рантаймов, контракта готовности окружения (environment readiness) и политики fail-fast.
-- [ ] В скилле `along-team` (и спецификации `/goal`) обновлен протокол:
-  - Документирован флаг `--worktree`.
-  - Документирован флаг `--worktree` и правила семантической активации.
-  - Реализована защита от ложных срабатываний (false positives guard).
-  - Реализован шаг верификации возможностей рантайма в Phase 0 (Supervisor), включая проверку доступности окружения зависимостей.
-  - Реализована строгая остановка (halt) при отсутствии поддержки worktree с окружением в активном рантайме.
-  - Реализована строгая остановка (halt) при отсутствии поддержки worktree с окружением в активном рантайме (как для флага, так и для семантического вызова).
-  - Добавлено обязательное логирование режима воркспейса в Gate Execution Manifest.
-- [ ] Определены правила работы с зависимостями (`node_modules`, `.venv`) в изолированном дереве (запрет деструктивной мутации общих пакетов или адаптер безопасного линкования).
-- [ ] Разработан протокол защиты каталога `.along/`, предотвращающий потерю артефактов сессии при очистке worktree.
-- [ ] Протестирован полный жизненный цикл worktree (создание, линковка окружения, изолированный прогон тестов, слияние и удаление) с учетом особенностей файловой системы Windows.
+- [ ] Audit workspace and worktree isolation capabilities across target runtimes (Google Antigravity `Workspace: 'share'|'branch'`, Claude Code `--worktree`, OpenAI Codex, OpenCode).
+- [ ] Record an Architectural Decision Record in `.along/DECISIONS.md` defining the `--worktree` flag, runtime capability matrix, environment readiness contract, and fail-fast policy.
+- [ ] Update `along-team` (and `/goal` specification):
+  - Document `--worktree` flag and semantic intent routing rules.
+  - Implement false-positive trigger protections.
+  - Implement Phase 0 (Supervisor) runtime capability verification.
+  - Enforce strict fail-fast halt when worktree isolation with environment readiness is unsupported.
+  - Add workspace mode reporting to the Gate Execution Manifest.
+- [ ] Define dependency safety boundaries (`node_modules`, `.venv`) in isolated trees.
+- [ ] Implement `.along/` state preservation protocol to prevent loss of session logs during worktree teardown.
+- [ ] Test complete worktree lifecycle (provisioning, environment linking, isolated test execution, merge, teardown) under Windows filesystem locking constraints.
 
 
 
