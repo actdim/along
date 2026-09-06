@@ -1,30 +1,199 @@
 ---
 protocol: along
+protocol_version: "2.2.21"
 slug: runtime-enforcement-of-prose-rules
 type: feat
-status: open
-priority: high
+status: in-progress
+priority: critical
 created: 2026-09-02
-updated: 2026-09-04
+updated: 2026-09-06
 agent: antigravity
-tags: [architecture, runtimes]
-milestone: v2.1.0-along
+tags: [architecture, runtimes, hooks, gates, security, mechanical-enforcement]
+milestone: v2.2.0-along
 blocked_by: []
-related: [feat--systemic-anomaly-circuit-breaker, feat--programmatic-integrity-gates-and-git-guard]
+related: [feat--programmatic-integrity-gates-and-git-guard, feat--systemic-anomaly-circuit-breaker]
 ---
 
-# Investigate and implement programmatic runtime enforcement for critical prose rules
+# Programmatic Runtime Enforcement for Along Protocols and Skills via Lifecycle Hooks
 
-Проблема: текстовые правила в `AGENTS.md` (например, строгий запрет на использование heredoc в терминале или форматирование кавычек) часто игнорируются моделями из-за их вероятностной природы. Модели стремятся "срезать углы", что приводит к повреждению файлов или нарушению архитектурных соглашений.
+## 1. Problem Statement & Failure Analysis
 
-Задача: исследовать и реализовать механизмы жесткого системного контроля (программного перехвата) для критических правил на уровне рантаймов агентов, а не полагаться исключительно на промпты.
+Passive prose rules in `AGENTS.md`, `CLAUDE.md`, and `skills/*/SKILL.md` suffer from systemic decay during real-world agent execution:
+1. **Context Window Attention Dilution**: As agent transcripts grow past 20k-50k tokens, instruction weight diminishes exponentially. Probabilistic LLMs cut corners under token and reasoning pressure.
+2. **Path of Least Resistance**: Models bypass multi-step procedures (e.g. creating an issue before editing, running automated tests after modifying code, or performing `along-wrap` before stopping) when there is zero mechanical resistance.
+3. **Premature Termination**: Agents habitually output conversational summaries ("I have completed the changes") and terminate the execution turn without running automated tests, updating `.along/ISSUES/`, or recording session logs.
+4. **File Corruption and Banned Characters**: Models introduce non-ASCII typographic characters (em-dash U+2014, curly quotes, ellipsis U+2026, NBSP) and dangerous shell commands (heredocs `<<EOF`, inline `python -c` file writers) despite explicit rules against them.
 
-Контекст по рантаймам:
-- **Antigravity**: использовать механизм Lifecycle Hooks (PreToolUse) для перехвата и блокировки вызовов (например, парсинг `CommandLine` на наличие `<<` или `python -c`).
-- **Claude Code** и **Codex**: исследовать их возможности конфигурации, плагинов или хуков (если поддерживаются) для аналогичного перехвата. Либо разработать универсальный обвязочный слой (wrapper/proxy) для инструментов, если это возможно в рамках протокола.
+Prose instructions are suggestions; runtime hooks are deterministic mechanical barriers. To guarantee protocol compliance, Along must intercept agent actions at runtime and mechanically gate tool execution and turn termination.
 
-## Acceptance Criteria
-- [ ] Проведен аудит возможностей перехвата вызовов во всех поддерживаемых рантаймах (Claude Code, Codex, Antigravity, OpenCode).
-- [ ] Реализован эталонный хук для Antigravity (PreToolUse), блокирующий использование heredoc и inline-скриптов.
-- [ ] Задокументированы ограничения и подходы для других рантаймов (созданы ADR при необходимости).
-- [ ] Набор критических запретов переведен из текстовой формы в программные проверки там, где это позволяет инфраструктура.
+---
+
+## 2. Technical Insights from Reference Frameworks
+
+1. **Harmonist (`GammaLabTechnologies/harmonist`)**:
+   - Implements "mechanical protocol enforcement" with zero external runtime dependencies using pure Python.
+   - Enforces checkpoints (`beforeShellExecution`, `afterFileEdit`, `subagentStart`, `sessionStart`).
+   - Uses session markers and state checks to prevent an agent turn from completing if mandatory steps (QA verification, memory updates) were skipped.
+2. **Claude Code Hooks (`code.claude.com/docs/en/hooks`)**:
+   - Intercepts lifecycle events (`PreToolUse`, `PostToolUse`, `Stop`).
+   - Uses exit codes: `exit 0` permits execution, `exit 2` blocks execution and feeds `stderr` back to the model as an error message.
+   - Configured via `.claude/settings.json` or `~/.claude/settings.json`.
+3. **Antigravity Hooks (`antigravity.google/docs/hooks`)**:
+   - Supports `PreToolUse`, `PostToolUse`, `PreInvocation`, `PostInvocation`, and `Stop`.
+   - Communicates via JSON over stdin/stdout.
+   - `PreToolUse` returns `{"decision": "deny" | "allow" | "ask", "reason": "...", "overwrite": {...}}`.
+   - `Stop` returns `{"decision": "continue", "reason": "..."}` to block turn termination and force protocol completion.
+4. **OpenAI Codex Hooks (`learn.chatgpt.com/docs/hooks`)**:
+   - Configured via `.codex/hooks.json` or `config.toml`.
+   - Supports `PreToolUse`, `PostToolUse`, and `Stop` with exit code 2 blocking.
+5. **Superset (`superset.sh`)**:
+   - Employs git worktree isolation and lifecycle scripts (setup/teardown) to isolate agent modifications and prevent dirty-tree race conditions.
+6. **Akto Atlas (`ai-security-docs.akto.io`)**:
+   - Demonstrates endpoint agentic security: runtime guardrails operate at `PreToolUse` (preventive block) and `Stop` (audit and compliance verification).
+
+---
+
+## 3. Architecture: Along Unified Hook & Gate System
+
+To avoid code duplication across IDEs, Along implements a unified core engine with thin runtime adapters:
+
+```
++-------------------------------------------------------------------------+
+|                          Runtime Hook Layers                            |
+|  Antigravity (.agents/hooks.json)   | Claude Code (.claude/settings.json)|
+|  Codex (.codex/hooks.json)          | Cursor / CLI Wrappers             |
++-------------------------------------+-----------------------------------+
+                                       |
+                                       v
++-------------------------------------------------------------------------+
+|                Unified CLI Driver: scripts/along_hook.py                |
+|   --runtime [antigravity|claude|codex] --event [PreToolUse|PostToolUse|Stop]
+|   Parses stdin payload -> maps to canonical HookEvent                   |
+|   Executes Gate Pipeline                                                |
+|   Formats output response (JSON stdout vs exit code 2 + stderr)         |
++-------------------------------------------------------------------------+
+                                       |
+                                       v
++-------------------------------------------------------------------------+
+|                       alongkit.hooks Core Engine                        |
+|                                                                         |
+|  1. State Manager (alongkit.hooks.state):                               |
+|     Tracks .along/.hook_state.json (mutations, tests, active issue)     |
+|                                                                         |
+|  2. PreToolUse Gates (alongkit.hooks.gates):                            |
+|     - IssueAnchorGate: Blocks source file edits without active issue    |
+|     - TypographyGate: Blocks writes containing forbidden unicode chars  |
+|     - CliSafetyGate: Blocks heredocs and file content over CLI          |
+|     - CommitGuardGate: Enforces issue slug binding in git commit        |
+|                                                                         |
+|  3. PostToolUse Handlers:                                               |
+|     - SyntaxCheckHandler: Compiles modified Python/JS/TS files          |
+|     - StateUpdateHandler: Records edit timestamps and test outcomes     |
+|                                                                         |
+|  4. Stop Gates:                                                         |
+|     - TestStopGate: Blocks turn finish if code edited but tests skipped |
+|     - WrapStopGate: Blocks turn finish if along-wrap was omitted        |
++-------------------------------------------------------------------------+
+```
+
+---
+
+## 4. Detailed Specification of Mechanical Gates
+
+### Gate 1: Mandatory Issue Anchoring (`IssueAnchorGate`)
+- **Trigger**: `PreToolUse` on `write_to_file`, `replace_file_content`.
+- **Target Filter**: Non-exempt files (project source code, scripts, configuration).
+- **Whitelist**: Files inside `.along/ISSUES/`, `.along/SESSIONS/`, `.along/DECISIONS.md`, `.git/`, and scratchpad directories.
+- **Rule**: At least one issue file in `.along/ISSUES/` must have `status: in-progress`.
+- **Action on Violation**: Block execution (`deny` / `exit 2`).
+- **Remediation Message**: "Mandatory Issue Anchoring Violation: You cannot modify project code without an active issue. Run 'python scripts/along_exec.py issue create' or set status to in-progress in an existing issue file first."
+
+### Gate 2: Clean Typography & ASCII Sanitization (`TypographyGate`)
+- **Trigger**: `PreToolUse` on `write_to_file`, `replace_file_content`.
+- **Scan**: Inspect incoming replacement chunk or file content string in tool arguments.
+- **Pattern**: Detect U+2014/U+2013 (em/en-dash), U+201C/U+201D/U+00AB/U+00BB (curly quotes/guillemets), U+2026 (ellipsis), U+00A0/U+202F/U+200B (NBSP/ZWSP), U+2022 (bullet).
+- **Action on Violation**: Block execution (`deny` / `exit 2`).
+- **Remediation Message**: "Typography Gate Violation: Detected forbidden non-ASCII characters. Replace with standard ASCII equivalents ('-', '\"', ''', '...') before writing."
+
+### Gate 3: Shell Safety & Content Invariance (`CliSafetyGate`)
+- **Trigger**: `PreToolUse` on `run_command`.
+- **Scan**: Inspect `CommandLine` for forbidden patterns:
+  - Heredocs: `<<\s*['"]?EOF['"]?`
+  - Inline code file writers: `python -c ".*open\(.*['\"][wa]['\"].*\)"`
+  - Large inline writes: `echo "..." > file` or `printf "..." > file`
+  - Destructive unstaged git wipes without prompt: `git reset --hard`, `git clean -fdx`
+- **Action on Violation**: Block execution (`deny` / `exit 2`).
+- **Remediation Message**: "CLI Safety Gate Violation: File content must never travel through a command line. Use write_to_file or replace_file_content instead."
+
+### Gate 4: Commit Message Issue Binding (`CommitGuardGate`)
+- **Trigger**: `PreToolUse` on `run_command`.
+- **Scan**: If command begins with `git commit`, inspect `-m` commit message.
+- **Rule**: Commit message must match `[type--slug]` or bind to the currently active issue slug.
+- **Action on Violation**: Block execution (`deny` / `exit 2`).
+- **Remediation Message**: "Commit Gate Violation: Commit message must include the active issue key [type--slug]."
+
+### Gate 5: Quality Gate on Stop (`TestStopGate`)
+- **Trigger**: `Stop` event (agent attempt to terminate turn).
+- **Condition**: `.along/.hook_state.json` indicates project code files were modified during the current session, but no test runner execution was recorded AFTER the latest modification timestamp.
+- **Action on Violation**: Refuse stop (`decision: continue` in Antigravity, `exit 2` in Claude/Codex).
+- **Remediation Message**: "Stop Gate Violation: Code modifications were made during this turn, but automated tests have not been executed. Run repository tests (e.g. 'python .along/scripts/test.py') before completing the turn."
+
+### Gate 6: Session Wrap Gate on Stop (`WrapStopGate`)
+- **Trigger**: `Stop` event.
+- **Condition**: Code modifications occurred, tests passed, but neither a session log (`.along/SESSIONS/<YYYY>/<date>--<slug>.md`) was created/updated nor `along-wrap` was executed.
+- **Action on Violation**: Refuse stop (`decision: continue` / `exit 2`).
+- **Remediation Message**: "Stop Gate Violation: Mandatory Session Wrap checklist incomplete. Record session log in .along/SESSIONS/, synchronize issues, and append to .along/HISTORY.md before finishing."
+
+---
+## 5. Dual-Mode Governance: Shadow Mode vs Enforce Mode
+
+To prevent breaking existing workflows and to audit false positives before introducing hard blocks, the hook engine supports per-gate and global execution modes:
+
+1. **Configuration (`.along/config.json` or environment variable `ALONG_HOOK_MODE`)**:
+   ```json
+   {
+     "hooks": {
+       "mode": "enforce",
+       "gates": {
+         "typography": "enforce",
+         "cli_safety": "enforce",
+         "issue_anchor": "enforce",
+         "commit_guard": "shadow",
+         "stop_guard": "shadow"
+       }
+     }
+   }
+   ```
+2. **Behavior in Shadow Mode**:
+   - The gate executes full evaluation logic.
+   - When a violation is detected:
+     - The violation is recorded in `.along/diagnostics/hooks_audit.jsonl` with timestamp, tool name, arguments, and violation reason.
+     - A non-blocking warning banner is emitted to stderr: `[ALONG HOOK: SHADOW] Would deny execution: <reason>`.
+     - The tool execution or stop event is permitted (`decision: allow` / `exit 0`).
+3. **Rollout Strategy**:
+   - Pure syntactic and corruption gates (`typography`, `cli_safety`) deploy directly in `enforce` mode.
+   - Workflow state gates (`commit_guard`, `stop_guard`) deploy initially in `shadow` mode to measure telemetry, then graduate to `enforce`.
+
+---
+
+## 6. Implementation Phases & Deliverables
+
+- [ ] **Phase 1: Core Hook Framework (`alongkit.hooks`)**:
+  - Implement `alongkit/hooks/models.py` (canonical event data class).
+  - Implement `alongkit/hooks/state.py` (thread-safe `.along/.hook_state.json` tracker).
+  - Implement `alongkit/hooks/config.py` (dual-mode governance: shadow vs enforce).
+  - Implement `alongkit/hooks/adapters.py` (Antigravity JSON vs Claude/Codex exit code adapters).
+- [ ] **Phase 2: Gate Implementations (`alongkit.hooks.gates`)**:
+  - Implement `issue_anchor.py`, `typography.py`, `cli_safety.py`, `commit_guard.py`, `stop_guard.py`.
+- [ ] **Phase 3: CLI Driver (`scripts/along_hook.py`)**:
+  - Entry point accepting `--runtime`, `--event`, and `--mode` flags.
+  - Comprehensive audit logging in `.along/diagnostics/hooks_audit.jsonl`.
+- [ ] **Phase 4: Installer & Config Generators**:
+  - Add `along hook install` command and integrate into `along-init` and `along-update`.
+  - Automatically generate `.agents/hooks.json`, `.claude/settings.json`, `.codex/hooks.json`.
+- [ ] **Phase 5: Automated Test Suite (`tests/test_hooks.py`)**:
+  - Unit tests verifying every gate in both `enforce` and `shadow` modes.
+  - Tests ensuring whitelist paths prevent deadlock during issue creation.
+- [ ] **Phase 6: Documentation & Knowledge Base**:
+  - Create `docs/topic--runtime-hooks-and-gates.md`.
+  - Update `docs/INDEX.md`, `README.md`, and `AGENTS.md`.
