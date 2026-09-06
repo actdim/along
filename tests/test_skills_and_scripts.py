@@ -190,6 +190,51 @@ class TestAlongSkillsAndScripts(unittest.TestCase):
                 "Describe the field instead of naming a release: nothing keeps prose "
                 "examples in step with the version.")
 
+    def test_03d_along_team_provider_abstraction_and_degradation(self):
+        """Verify along-team defines provider abstraction, single-agent fallback, and observable gates."""
+        team_skill_md = os.path.join(REPO_ROOT, "skills", "along-team", "SKILL.md")
+        self.assertTrue(os.path.exists(team_skill_md), "skills/along-team/SKILL.md must exist")
+        with open(team_skill_md, "r", encoding="utf-8") as f:
+            content = f.read()
+
+        # REQ-1: Abstract primitives and mapping table
+        for primitive in ["spawn_readonly_researcher", "spawn_worker", "spawn_reviewer"]:
+            self.assertIn(primitive, content, f"along-team must document abstract primitive '{primitive}'")
+
+        for provider in ["Google Antigravity", "Claude Code", "OpenAI Codex", "OpenCode"]:
+            self.assertIn(provider, content, f"along-team mapping table must include provider '{provider}'")
+
+        # REQ-2: Single-agent degradation path
+        self.assertIn("Single-Agent Degradation Path", content)
+        self.assertIn("VERDICT: PASS", content)
+        self.assertIn("VERDICT: FAIL", content)
+        self.assertIn(".along/.session/<slug>/", content)
+
+        # REQ-3: Observable and conditional gates
+        self.assertIn("Gate Execution Manifest", content)
+        self.assertIn("DEGRADED", content)
+
+        # REQ-4: Isolated workspace contract
+        self.assertIn("along/<issue-slug>/step-<N>", content)
+
+        # Dual-Track UI Projections
+        self.assertIn("implementation_plan.md", content)
+        self.assertIn("walkthrough.md", content)
+        self.assertIn("RequestFeedback: true", content)
+
+        # Loop Disambiguation: Fix Loop vs Re-plan Loop
+        self.assertIn("[Fix Loop]", content)
+        self.assertIn("[Re-plan Loop]", content)
+        self.assertIn("execution_trace.md", content)
+
+        # Engineering Provenance Compilation
+        self.assertIn("## Initial Implementation Plan", content)
+        self.assertIn("## Execution & Loop Trace", content)
+        self.assertIn("## Verification Walkthrough & Gate Manifest", content)
+
+        # REQ-7: Smoke procedures
+        self.assertIn("Provider Smoke Procedures", content)
+
     def test_04_protocol_version_consistency(self):
         """Verify that protocol version is identical across protocol.md, AGENTS.md, README.md, and scripts."""
         proto_file = os.path.join(REPO_ROOT, "skills", "along-init", "protocol.md")

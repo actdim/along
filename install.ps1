@@ -347,6 +347,14 @@ if ($hasState) {
     }
 }
 
+# --- Windows Git concurrency recommendation ---
+# Rapid file edits by AI agents can cause Git index lock collisions with background IDE watchers.
+$optLocks = [Environment]::GetEnvironmentVariable('GIT_OPTIONAL_LOCKS', 'User')
+if ($optLocks -ne '0') {
+    Write-Host "-> [Recommended] Set GIT_OPTIONAL_LOCKS=0 to prevent Git index locking collisions with IDEs:"
+    Write-Host "   [Environment]::SetEnvironmentVariable('GIT_OPTIONAL_LOCKS', '0', 'User')"
+}
+
 Write-Host "Done. Claude/Codex/Antigravity skills register next session as /along-* (/along-init, /along-update, /along-dash, etc.); OpenCode picks up /commands, and all read AGENTS.md natively."
 Write-Host "     MCP registration is reported per provider above: only a verified configuration contract is written to."
 Write-Host "     To remove Along again: install.ps1 -Uninstall  (removes only what the manifest records)."

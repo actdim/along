@@ -3,11 +3,12 @@ protocol: along
 protocol_version: 2.2.8
 slug: commit-binds-arbitrary-active-issue
 type: bug
-status: open
+status: done
+completed: 2026-09-06
 priority: critical
 created: 2026-09-01
-updated: 2026-09-01
-agent: claude-code
+updated: 2026-09-06
+agent: antigravity
 tags: [along-commit, traceability, issues, projection]
 milestone: v3.0.0-global-quality-revision
 blocked_by: []
@@ -85,7 +86,7 @@ with no shared contract.
 
 ## Acceptance Criteria
 
-- [ ] Commits never reference an issue chosen by alphabetical accident.
-- [ ] `--issue` supported and documented in `skills/along-commit/SKILL.md`.
-- [ ] Issue state read from entity files, not the projection.
-- [ ] Regression tests cover zero / one / many in-progress issues.
+- [x] Commits never reference an issue chosen by alphabetical accident.
+- [x] `--issue` supported and documented in `skills/along-commit/SKILL.md`.
+- [x] Issue state read from entity files, not the projection.
+- [x] Regression tests cover zero / one / many in-progress issues.

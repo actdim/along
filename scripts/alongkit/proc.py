@@ -33,12 +33,15 @@ from typing import Dict, List, Optional, Sequence, Union
 
 Command = Union[str, Sequence[str]]
 
-#: Child environment overrides that force UTF-8 on both sides of the pipe.
+#: Child environment overrides that force UTF-8 on both sides of the pipe
+#: and prevent read-only Git commands from writing to .git/index.
 UTF8_CHILD_ENV: Dict[str, str] = {
     "PYTHONIOENCODING": "utf-8",
     # PEP 540: makes a child CPython use UTF-8 for stdio and the filesystem
     # regardless of the host locale.
     "PYTHONUTF8": "1",
+    # Prevent background/read-only git status and diff from taking optional index locks.
+    "GIT_OPTIONAL_LOCKS": "0",
 }
 
 
@@ -156,7 +159,31 @@ def run_python(args: Sequence[str], **kwargs) -> Result:
 
 def git(args: Sequence[str], cwd: Optional[str] = None, check: bool = False,
         timeout: Optional[float] = None) -> Result:
-    """Run a git command and capture its output."""
+    """Run a git command and capture its output with index corruption resilience."""
+    target_cwd = cwd or os.getcwd()
+    git_entry = os.path.join(target_cwd, ".git")
+    idx_path = None
+    if os.path.isdir(git_entry):
+        idx_path = os.path.join(git_entry, "index")
+    elif os.path.isfile(git_entry):
+        try:
+            with open(git_entry, "r", encoding="utf-8", errors="ignore") as f:
+                line = f.read().strip()
+            if line.startswith("gitdir:"):
+                gdir = line.split(":", 1)[1].strip()
+                if not os.path.isabs(gdir):
+                    gdir = os.path.normpath(os.path.join(target_cwd, gdir))
+                idx_path = os.path.join(gdir, "index")
+        except Exception:
+            pass
+
+    if idx_path and os.path.isfile(idx_path) and os.path.getsize(idx_path) == 0:
+        try:
+            os.remove(idx_path)
+            run_capture(["git", "reset"], cwd=target_cwd)
+        except Exception:
+            pass
+
     return run_capture(["git", *args], cwd=cwd, check=check, timeout=timeout)
 
 

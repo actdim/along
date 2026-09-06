@@ -16,6 +16,7 @@ rewrite, explicitly and per invocation. See
 `[bug--typography-sanitizer-destroys-non-utf8-files]`.
 """
 
+import argparse
 import os
 import re
 import sys
@@ -26,7 +27,7 @@ from alongkit import bootstrap
 bootstrap.ensure_deps()
 
 
-from alongkit import gates, proc, repo
+from alongkit import entities, gates, proc, repo
 
 
 # Both gates live in alongkit.gates, shared with the release engine, which used to
@@ -34,28 +35,12 @@ from alongkit import gates, proc, repo
 typography_gate = gates.typography_gate
 
 
-def get_active_issue(repo_root):
-    issues_board = os.path.join(repo.state_dir(repo_root), "ISSUES.md")
-    if not os.path.exists(issues_board):
-        return None
-    try:
-        with open(issues_board, "r", encoding="utf-8") as f:
-            lines = f.readlines()
-        in_active = False
-        for line in lines:
-            if line.startswith("## Active"):
-                in_active = True
-                continue
-            elif line.startswith("## "):
-                in_active = False
-                continue
-            if in_active:
-                m = re.search(r'\[[ ~]\]\s*`\((\w+)\)`\s*\[([^\]]+)\]', line)
-                if m:
-                    return {"type": m.group(1), "slug": m.group(2)}
-    except OSError as exc:
-        print(f"[Warning] cannot read {issues_board}: {exc}", file=sys.stderr)
-    return None
+def get_active_issue(repo_root, explicit_slug=None, strict=False):
+    """Resolve the active issue from SSOT entity files (.along/ISSUES/*.md)."""
+    issue, _ = entities.resolve_active_issue(
+        repo_root, explicit_slug=explicit_slug, strict=strict
+    )
+    return issue
 
 
 def format_commit_message(raw_msg, active_issue):
@@ -78,22 +63,32 @@ def format_commit_message(raw_msg, active_issue):
     return msg
 
 
-def main():
+def parse_args(argv=None):
+    parser = argparse.ArgumentParser(
+        description="Along Smart Conventional Committer with quality and typography gates."
+    )
+    parser.add_argument("message", nargs="*", help="Commit message (positional)")
+    parser.add_argument("-m", "--message-flag", dest="msg_flag", help="Commit message (-m \"...\")")
+    parser.add_argument("-i", "--issue", dest="issue", help="Explicit issue slug to bind (refs #<slug>)")
+    parser.add_argument("-p", "--push", action="store_true", help="Push to remote after successful commit")
+    parser.add_argument("-n", "--no-verify", dest="skip_tests", action="store_true", help="Skip pre-commit gates")
+    parser.add_argument("--fix-typography", action="store_true", help="Fix typography automatically before committing")
+    parser.add_argument("--strict", action="store_true", help="Fail if active issue cannot be determined unambiguously")
+    return parser.parse_args(argv)
+
+
+def main(argv=None):
+    parsed = parse_args(argv)
     repo_root = repo.find_repo_root()
-    args = [a for a in sys.argv[1:] if not a.startswith("-")]
-    flags = [a for a in sys.argv[1:] if a.startswith("-")]
 
-    push = "--push" in flags or "-p" in flags
-    skip_tests = "--no-verify" in flags or "-n" in flags
-    fix_typography = "--fix-typography" in flags
+    msg_parts = parsed.message
+    raw_msg = (parsed.msg_flag or " ".join(msg_parts)).strip()
 
-    if not args:
-        print("Usage: python along_commit.py \"<commit message>\" "
-              "[--push] [--no-verify] [--fix-typography]")
-        print("Example: python along_commit.py \"add cytoscape graph view\" -p")
+    if not raw_msg:
+        print("Usage: python along_commit.py \"<commit message>\" [-i <slug>] "
+              "[--push] [--no-verify] [--fix-typography] [--strict]", file=sys.stderr)
+        print("Example: python along_commit.py \"add cytoscape graph view\" -i feat--cytoscape-graph -p", file=sys.stderr)
         sys.exit(1)
-
-    raw_msg = " ".join(args)
 
     print("==================================================")
     print("-> Along Smart Committer")
@@ -101,23 +96,34 @@ def main():
     print("==================================================")
 
     # 1. Mandatory Pre-Commit Tests
-    if not skip_tests:
+    if not parsed.skip_tests:
         if not gates.run_repository_tests(repo_root, "Pre-Commit Quality Gate"):
             print("Commit aborted. Fix failing tests before committing.", file=sys.stderr)
             sys.exit(1)
 
     # 2. Pre-commit typography check. Reports and aborts; --fix-typography rewrites.
-    if not skip_tests:
+    if not parsed.skip_tests:
         if not typography_gate(repo_root, "Pre-Commit Quality Gate",
-                               allow_fix=fix_typography):
+                               allow_fix=parsed.fix_typography):
             print("Commit aborted. Clean the typography before committing.",
                   file=sys.stderr)
             sys.exit(1)
 
-    # 3. Extract active issue context
-    active_issue = get_active_issue(repo_root)
-    final_msg = format_commit_message(raw_msg, active_issue)
+    # 3. Extract active issue context deterministically from SSOT
+    try:
+        active_issue, warnings = entities.resolve_active_issue(
+            repo_root,
+            explicit_slug=parsed.issue,
+            strict=parsed.strict,
+        )
+    except ValueError as exc:
+        print(f"[Error] {exc}", file=sys.stderr)
+        sys.exit(1)
 
+    for warn in warnings:
+        print(f"[Warning] {warn}", file=sys.stderr)
+
+    final_msg = format_commit_message(raw_msg, active_issue)
     print(f"-> Commit message: \"{final_msg}\"")
 
     # 4. Stage changes and commit
@@ -137,7 +143,7 @@ def main():
     print(res.out)
 
     # 5. Optional Push
-    if push:
+    if parsed.push:
         print("-> Pushing to remote repository...")
         res = proc.git(["push"], cwd=repo_root)
         if res.ok:
@@ -148,3 +154,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+
