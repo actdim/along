@@ -34,6 +34,11 @@ Scaffold or refresh the provider-agnostic agent-context structure in a repositor
   .along/HISTORY.md merge=union
   .along/DECISIONS.md merge=union
   ```
+- On Windows repositories, ensure Git index locks and preloading are hardened to prevent IDE index collisions:
+  ```powershell
+  git config core.preloadindex false
+  [Environment]::SetEnvironmentVariable("GIT_OPTIONAL_LOCKS", "0", "User")
+  ```
 
 ### Step 4: Scaffold `.along/` Directory Skeleton (Create only if missing)
 Create the directory structure if missing:

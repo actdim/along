@@ -31,7 +31,10 @@ Universal finalization and memory synchronization protocol for sessions, tasks, 
    - Map identified code blast radius symbols/modules to Knowledge Base topics using `along-kb-search` or symbol search in `docs/`.
    - Factually update all affected `docs/topic--*.md` articles (and `README.md` / `AGENTS.md` if public entry points or conventions changed).
    - Run `/along-kb-sync` to recompile `docs/INDEX.md`, validate link integrity, and verify zero 404 broken relative links.
-5. [ ] **Session Log**: Write `.along/SESSIONS/<YYYY>/<YYYY-MM-DD>--<short-slug>.md` in the nearest `.along/` with complete front-matter (`protocol: along`, `issues_advanced`, `issues_completed`, `decisions`, `risks_logged`, `spikes_conducted`) and a concise Code Review & Impact summary.
+5. [ ] **Session Log & Engineering Provenance**: Write `.along/SESSIONS/<YYYY>/<YYYY-MM-DD>--<short-slug>.md` in the nearest `.along/` with complete front-matter (`protocol: along`, `issues_advanced`, `issues_completed`, `decisions`, `risks_logged`, `spikes_conducted`). When finalizing work orchestrated by `along-team` or non-trivial multi-step tasks, compile the 3 Engineering Provenance sections:
+   - `## Initial Implementation Plan (Baseline)`: Original step sequence and acceptance criteria.
+   - `## Execution & Loop Trace (Fixes & Re-plans)`: Trace of all `[Fix Loop]` micro-iterations and `[Re-plan Loop]` revisions.
+   - `## Verification Walkthrough & Gate Manifest`: Verifiable test outputs and the Gate Execution Manifest.
 6. [ ] **ISSUES Board Projection**: Run `/along-issue-sync` (or update nearest `.along/ISSUES.md`).
 7. [ ] **HISTORY**: Append one line to nearest `.along/HISTORY.md`: `<YYYY-MM-DD> - <slug> - <agent> - <summary> - <link>`.
 8. [ ] **Compaction Prompt**: Advise user to run `/compact` to free up token budget.

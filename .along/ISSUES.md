@@ -1,7 +1,6 @@
 # Active Issues
 
 ## Active
-- [ ] `(bug)` [commit-binds-arbitrary-active-issue](ISSUES/bug--commit-binds-arbitrary-active-issue.md)
 - [ ] `(bug)` [commit-stages-all-and-dead-test-detection](ISSUES/bug--commit-stages-all-and-dead-test-detection.md)
 - [ ] `(bug)` [generated-docs-emit-file-uri-links](ISSUES/bug--generated-docs-emit-file-uri-links.md)
 - [ ] `(bug)` [generated-lifecycle-hooks-use-shell-string-concat](ISSUES/bug--generated-lifecycle-hooks-use-shell-string-concat.md)
@@ -11,7 +10,6 @@
 - [ ] `(bug)` [link-gates-skip-along-directory](ISSUES/bug--link-gates-skip-along-directory.md)
 - [ ] `(bug)` [quality-gates-skip-hidden-directories](ISSUES/bug--quality-gates-skip-hidden-directories.md)
 - [ ] `(bug)` [skill-commands-reference-missing-script-paths](ISSUES/bug--skill-commands-reference-missing-script-paths.md)
-- [ ] `(bug)` [team-skill-uses-provider-specific-subagent-api](ISSUES/bug--team-skill-uses-provider-specific-subagent-api.md)
 - [ ] `(debt)` [always-on-context-budget-exceeds-claims](ISSUES/debt--always-on-context-budget-exceeds-claims.md)
 - [ ] `(debt)` [entity-status-enum-and-unused-taxonomy](ISSUES/debt--entity-status-enum-and-unused-taxonomy.md)
 - [ ] `(debt)` [exception-swallowing-hides-failures](ISSUES/debt--exception-swallowing-hides-failures.md)
@@ -29,6 +27,7 @@
 - [ ] `(feat)` [openclaw-and-hermes-agent-integration](ISSUES/feat--openclaw-and-hermes-agent-integration.md)
 - [ ] `(feat)` [programmatic-integrity-gates-and-git-guard](ISSUES/feat--programmatic-integrity-gates-and-git-guard.md)
 - [ ] `(feat)` [runtime-enforcement-of-prose-rules](ISSUES/feat--runtime-enforcement-of-prose-rules.md)
+- [ ] `(feat)` [runtime-worktree-isolation](ISSUES/feat--runtime-worktree-isolation.md)
 - [ ] `(feat)` [systemic-anomaly-circuit-breaker](ISSUES/feat--systemic-anomaly-circuit-breaker.md)
 - [ ] `(feat)` [token-efficiency-and-context-optimization-skills](ISSUES/feat--token-efficiency-and-context-optimization-skills.md)
 
@@ -36,7 +35,6 @@
 <!-- Planned or deferred issues -->
 
 ## Done (recent)
-- [x] `(feat)` [migration-resilience-and-link-reconciliation](ISSUES/done/feat--migration-resilience-and-link-reconciliation.md)
 - [x] `(task)` [extend-sanitizer-scope-to-docs-and-root](ISSUES/done/task--extend-sanitizer-scope-to-docs-and-root.md)
 - [x] `(feat)` [well-known-llms-and-context-discovery](ISSUES/done/feat--well-known-llms-and-context-discovery.md)
 - [x] `(feat)` [version-bump-automation-and-release-hardening](ISSUES/done/feat--version-bump-automation-and-release-hardening.md)
@@ -48,6 +46,7 @@
 - [x] `(feat)` [project-dashboard-and-analytics-skill](ISSUES/done/feat--project-dashboard-and-analytics-skill.md)
 - [x] `(feat)` [platform-rule-packs](ISSUES/done/feat--platform-rule-packs.md)
 - [x] `(feat)` [multi-agent-blackboard-and-architectural-rationale](ISSUES/done/feat--multi-agent-blackboard-and-architectural-rationale.md)
+- [x] `(feat)` [migration-resilience-and-link-reconciliation](ISSUES/done/feat--migration-resilience-and-link-reconciliation.md)
 - [x] `(feat)` [llm-wiki-docs-architecture-and-skill-refactor](ISSUES/done/feat--llm-wiki-docs-architecture-and-skill-refactor.md)
 - [x] `(feat)` [link-rewriting-and-integrity-gate](ISSUES/done/feat--link-rewriting-and-integrity-gate.md)
 - [x] `(feat)` [language-rules-packaging-and-ai-docs](ISSUES/done/feat--language-rules-packaging-and-ai-docs.md)
@@ -59,6 +58,7 @@
 - [x] `(feat)` [hierarchical-dep-scan-and-wiki-integration](ISSUES/done/feat--hierarchical-dep-scan-and-wiki-integration.md)
 - [x] `(feat)` [graph-ignore-and-interactive-skills-refinement](ISSUES/done/feat--graph-ignore-and-interactive-skills-refinement.md)
 - [x] `(feat)` [entity-relationships-and-dependency-graph](ISSUES/done/feat--entity-relationships-and-dependency-graph.md)
+- [x] `(feat)` [engineering-provenance-and-dual-track-artifact-loop](ISSUES/done/feat--engineering-provenance-and-dual-track-artifact-loop.md)
 - [x] `(feat)` [dynamic-dashboard-and-kb-engine](ISSUES/done/feat--dynamic-dashboard-and-kb-engine.md)
 - [x] `(feat)` [documentation-blast-radius-sync](ISSUES/done/feat--documentation-blast-radius-sync.md)
 - [x] `(feat)` [deterministic-entity-cli-and-powershell-escaping-resilience](ISSUES/done/feat--deterministic-entity-cli-and-powershell-escaping-resilience.md)
@@ -79,6 +79,7 @@
 - [x] `(debt)` [extract-shared-python-library](ISSUES/done/debt--extract-shared-python-library.md)
 - [x] `(bug)` [typography-sanitizer-destroys-non-utf8-files](ISSUES/done/bug--typography-sanitizer-destroys-non-utf8-files.md)
 - [x] `(bug)` [tests-mutate-working-tree](ISSUES/done/bug--tests-mutate-working-tree.md)
+- [x] `(bug)` [team-skill-uses-provider-specific-subagent-api](ISSUES/done/bug--team-skill-uses-provider-specific-subagent-api.md)
 - [x] `(bug)` [subprocess-encoding-breaks-on-non-utf8-locale](ISSUES/done/bug--subprocess-encoding-breaks-on-non-utf8-locale.md)
 - [x] `(bug)` [release-engine-mutates-before-tests-and-reinstalls-globals](ISSUES/done/bug--release-engine-mutates-before-tests-and-reinstalls-globals.md)
 - [x] `(bug)` [recent-features-defects-and-guard-messages](ISSUES/done/bug--recent-features-defects-and-guard-messages.md)
@@ -86,4 +87,5 @@
 - [x] `(bug)` [issue-done-corrupts-status-and-drops-completed](ISSUES/done/bug--issue-done-corrupts-status-and-drops-completed.md)
 - [x] `(bug)` [installer-parity-and-destructive-rules-overwrite](ISSUES/done/bug--installer-parity-and-destructive-rules-overwrite.md)
 - [x] `(bug)` [handrolled-yaml-loses-block-lists](ISSUES/done/bug--handrolled-yaml-loses-block-lists.md)
+- [x] `(bug)` [commit-binds-arbitrary-active-issue](ISSUES/done/bug--commit-binds-arbitrary-active-issue.md)
 - [x] `(bug)` [adr-retrieval-blind-to-slug-headers](ISSUES/done/bug--adr-retrieval-blind-to-slug-headers.md)

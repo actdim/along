@@ -23,6 +23,7 @@ if __name__ == "__main__":
     )
 
 
+import os
 import re
 from datetime import date, datetime
 from typing import Any, Dict, List, Optional, Tuple
@@ -217,3 +218,174 @@ def parse_decision_entries(dec_raw: str,
 def uses_slug_adr_format(dec_raw: str) -> bool:
     """True when DECISIONS.md uses the decentralized `ADR-YYYY-MM-DD--<slug>` headers."""
     return bool(re.search(r"^##\s+ADR-\d{4}-\d{2}-\d{2}--", dec_raw, re.MULTILINE))
+
+
+# ---------------------------------------------------------------------------
+# Board Projection Helpers (REQ-5)
+# ---------------------------------------------------------------------------
+
+BOARD_ENTRY_RE = re.compile(
+    r"^-\s+\[(?P<box>[ xX~])\]\s+`\((?P<type>\w+)\)`\s+\[(?P<slug>[^\]]+)\]\((?P<link>[^\)]+)\)"
+)
+
+
+def format_board_entry(entity_type: str, slug: str, done: bool = False, link: Optional[str] = None) -> str:
+    """Render one item on the ISSUES.md projection board."""
+    box = "x" if done else " "
+    default_link = f"ISSUES/done/{entity_type}--{slug}.md" if done else f"ISSUES/{entity_type}--{slug}.md"
+    target_link = link or default_link
+    return f"- [{box}] `({entity_type})` [{slug}]({target_link})"
+
+
+def parse_board_entry(line: str) -> Optional[Dict[str, Any]]:
+    """Parse a single board entry line, returning dict with type, slug, done, link, or None."""
+    m = BOARD_ENTRY_RE.match(line.strip())
+    if not m:
+        return None
+    return {
+        "type": m.group("type"),
+        "slug": m.group("slug"),
+        "done": m.group("box").lower() == "x",
+        "link": m.group("link"),
+    }
+
+
+# ---------------------------------------------------------------------------
+# Issue Discovery and Active Issue Resolution (REQ-1..4)
+# ---------------------------------------------------------------------------
+
+def scan_issues(repo_root: str, include_done: bool = False) -> List[Dict[str, Any]]:
+    """List issues from the SSOT entity files (.along/ISSUES/*.md).
+
+    Reads front-matter via frontmatter.try_parse() so callers get typed metadata
+    (slug, type, status, priority, milestone, etc.).
+    """
+    from . import frontmatter, repo, textio
+
+    sdir = repo.state_dir(repo_root)
+    issues_dir = os.path.join(sdir, "ISSUES")
+    if not os.path.isdir(issues_dir):
+        return []
+
+    dirs_to_scan = [(issues_dir, False)]
+    if include_done:
+        done_dir = os.path.join(issues_dir, "done")
+        if os.path.isdir(done_dir):
+            dirs_to_scan.append((done_dir, True))
+
+    issues = []
+    for directory, is_done in dirs_to_scan:
+        for fname in sorted(os.listdir(directory)):
+            if not fname.endswith(".md"):
+                continue
+            fpath = os.path.join(directory, fname)
+            if not os.path.isfile(fpath):
+                continue
+            try:
+                content = textio.read_text(fpath)
+            except OSError:
+                continue
+            fm, _, _ = frontmatter.try_parse(content, path=fpath)
+            ftype, fslug = parse_key(fname[:-3])
+            itype = fm.get("type") or ftype or "task"
+            islug = fm.get("slug") or fslug
+            status = fm.get("status") or ("done" if is_done else "open")
+
+            issues.append({
+                "slug": islug,
+                "type": itype,
+                "status": status,
+                "priority": fm.get("priority", "medium"),
+                "file_path": fpath,
+                "done": is_done or status == "done",
+                "frontmatter": fm,
+            })
+    return issues
+
+
+def find_issue_by_slug(repo_root: str, slug: str) -> Optional[Dict[str, Any]]:
+    """Search .along/ISSUES/ and .along/ISSUES/done/ for an issue matching `slug`."""
+    clean_type, clean_slug = parse_key(slug)
+    all_issues = scan_issues(repo_root, include_done=True)
+    for iss in all_issues:
+        if iss["slug"] == clean_slug or iss["slug"] == slug:
+            if clean_type and iss["type"] != clean_type:
+                continue
+            return iss
+        if canonical_key(iss["type"], iss["slug"]) == slug:
+            return iss
+    return None
+
+
+def resolve_active_issue(repo_root: str,
+                         explicit_slug: Optional[str] = None,
+                         branch_name: Optional[str] = None,
+                         strict: bool = False) -> Tuple[Optional[Dict[str, Any]], List[str]]:
+    """Infer or validate the active issue for a commit deterministically.
+
+    Priority order (REQ-2):
+    1. Explicit slug (--issue / -i): validated against SSOT files; unknown slug is rejected.
+    2. Git branch matching an in-progress issue slug.
+    3. Exactly one issue with status: in-progress.
+    4. Refuse to guess: returns None with warning messages (or raises ValueError if strict).
+    """
+    from . import proc
+
+    warnings: List[str] = []
+
+    # 1. Explicit slug
+    if explicit_slug:
+        found = find_issue_by_slug(repo_root, explicit_slug)
+        if not found:
+            msg = f"Unknown issue slug: '{explicit_slug}' does not exist in .along/ISSUES/."
+            if strict:
+                raise ValueError(msg)
+            warnings.append(msg)
+            return None, warnings
+        return found, warnings
+
+    active_issues = scan_issues(repo_root, include_done=False)
+    in_progress = [iss for iss in active_issues if iss["status"] == "in-progress"]
+
+    # 2. Branch name check
+    branch = branch_name
+    if branch is None:
+        res = proc.git(["rev-parse", "--abbrev-ref", "HEAD"], cwd=repo_root)
+        if res.ok:
+            branch = res.stdout.strip()
+
+    if branch and branch not in ("HEAD", "main", "master"):
+        branch_lower = branch.lower()
+        branch_matches = []
+        for iss in in_progress:
+            islug = iss["slug"].lower()
+            if (islug == branch_lower or
+                    f"/{islug}" in branch_lower or
+                    f"--{islug}" in branch_lower or
+                    branch_lower.endswith(islug)):
+                branch_matches.append(iss)
+        if len(branch_matches) == 1:
+            return branch_matches[0], warnings
+
+    # 3. Single in-progress issue
+    if len(in_progress) == 1:
+        return in_progress[0], warnings
+
+    # 4. Refuse to guess
+    if len(in_progress) == 0:
+        msg = "No in-progress issue found in .along/ISSUES/. Commit will have no issue binding."
+        if strict:
+            raise ValueError("Strict mode: no in-progress issue found in .along/ISSUES/.")
+        warnings.append(msg)
+        return None, warnings
+    else:
+        slugs = [iss["slug"] for iss in in_progress]
+        msg = (
+            f"Multiple in-progress issues found ({', '.join(slugs)}). "
+            "Cannot determine active issue unambiguously without --issue <slug>."
+        )
+        if strict:
+            raise ValueError(f"Strict mode: multiple in-progress issues found ({', '.join(slugs)}).")
+        warnings.append(msg)
+        return None, warnings
+

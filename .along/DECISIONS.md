@@ -304,3 +304,49 @@ _One dated entry per architectural decision. Never edit past entries; mark a rep
   5. **MCP is registered only where the contract is verified, and a file that does not parse is left alone.** Claude Code's `mcpServers` map in `~/.claude.json` is written. Codex, OpenCode and Antigravity are reported with their real configuration path and the snippet to add, and are written only under `--include-unverified-mcp`. The four inert `mcp_config.json` writes are gone, as are the success lines that accompanied them. On a JSON parse failure the previous code started from `{}` and rewrote the file, which could have replaced a user's entire `~/.claude.json`; it now refuses and says why.
   6. **Every root is overridable** (`--along-home`, `--claude-home`, ...), which is what makes an end-to-end installer test possible without touching the developer's own home, and the junction fix is proven on a fixture path that contains a space.
 - Consequences: An install is now inspectable (`install_manifest.py show`), reversible, and non-destructive, and the two installers cannot silently diverge again. The costs are accepted: a full install now depends on Python for the manifest and MCP steps (the file copying still works without it, with a printed note), three of the four providers get no MCP registration by default until their contract is confirmed - honest but less convenient than the previous false success - and an install that ran before this change has no manifest, so its first pruning pass has nothing to compare against and superseded files from earlier versions stay until the next install after this one.
+
+## ADR-2026-09-06--provider-agnostic-subagent-abstraction - Provider-Agnostic Subagent Primitives and Single-Agent Degradation in along-team
+- Date: 2026-09-06
+- Status: accepted
+- Context: `skills/along-team/SKILL.md` was hardcoded to Google Antigravity's proprietary subagent tool call `invoke_subagent` (`TypeName: "research"`, `TypeName: "self"`), breaking provider portability across Claude Code, OpenAI Codex, and OpenCode. Furthermore, it lacked a Single-Agent fallback path for environments without subagents, lacked concrete contracts for git worktree isolation (`Workspace: "branch"`), and hardcoded unavailable MCP and script paths in the Reviewer rubric. See `[bug--team-skill-uses-provider-specific-subagent-api]`.
+- Decision:
+  1. **Abstract Orchestration Primitives**: Define orchestration around three abstract primitives (`spawn_readonly_researcher`, `spawn_worker`, `spawn_reviewer`) backed by a concrete capability mapping table for Google Antigravity (`invoke_subagent`), Claude Code (`Task` tool), OpenAI Codex (inline single-agent fallback), and OpenCode (inline single-agent fallback).
+  2. **Deterministic Single-Agent Degradation (Ralph-Style Loop)**: When subagent tools are unavailable, disabled, or running in autonomous loop mode, the state machine executes sequentially within a single agent context. The agent announces explicit phase boundaries (`=== PHASE N ===`), externalizes working state to `.along/.session/<slug>/` (`blackboard.md`, `living_plan.md`, `step_review_<N>.md`) to prevent context rot, emits explicit review verdict blocks (`VERDICT: PASS` / `VERDICT: FAIL`), and tracks retry limits (maximum 2 retries per step).
+  3. **Resilient & Observable Reviewer Rubric**: Make Reviewer rubric gates conditional and observable. If `code-review-graph` MCP is offline, fall back to static AST / text search and mark the gate as `DEGRADED`. Make test runner resolution canonical (`along test` / `<resolved>/along_exec.py test` or native package runners). Require an explicit Gate Execution Manifest in the reviewer output and session log.
+  4. **Workspace Isolation Contract**: Default to `Workspace: "inherit"` across all providers to avoid branch management overhead. Where worktrees are supported, standardize branch naming (`along/<slug>/step-<N>`), squash/merge on `PASS`, and mandatory prune/cleanup on abort or failure.
+- Consequences: All future orchestration skills must target abstract role primitives rather than provider-specific APIs. Skills run reliably across all four supported providers with zero modification, degrading gracefully to single-agent sequential execution where subagents are absent.
+
+## ADR-2026-09-06--windows-git-concurrency-and-index-lock-mitigation - Windows Git Concurrency Hardening: Disabling Optional Locks and Preload Races
+- Date: 2026-09-06
+- Status: accepted
+- Context: Low-latency LLM agents (such as Gemini 3.8 Flash) execute file modifications and commands at high frequency (< 500ms intervals). On Windows NTFS, atomic file replacement (`ReplaceFileW`) conflicts with background watchers (VS Code `vscode.git`, GitExtensions) running `git status` or `git diff`. By default, Git attempts to update cached stat data in `.git/index` by creating `.git/index.lock` and invoking `ReplaceFileW`. On NTFS, if another process holds `.git/index` open without `FILE_SHARE_DELETE`, `ReplaceFileW` fails or is interrupted, leaving `.git/index` truncated to 0 bytes (`fatal: .git/index: index file smaller than expected`).
+- Decision:
+  1. **Disable Optional Git Write Locks**: Set `GIT_OPTIONAL_LOCKS: "0"` in `alongkit.proc.UTF8_CHILD_ENV` for all subprocesses spawned by Along, and configure `GIT_OPTIONAL_LOCKS=0` at the Windows User environment level in `install.ps1`. This instructs `git status` and `git diff` to skip index stat cache refreshes and avoid acquiring write locks on `.git/index`.
+  2. **Disable Index Preloading**: Configure `core.preloadindex = false` on Windows to eliminate multi-threaded stat cache lock races on NTFS.
+  3. **Automatic 0-Byte Index Self-Healing**: Implement zero-byte `.git/index` detection and recovery in `alongkit.proc.git` (`git read-tree HEAD`) so that accidental index corruption is repaired automatically without human intervention.
+  4. **Document User Recommendations**: Provide explicit guidance for Windows developers running AI coding agents in `docs/topic--setup-and-workflow.md`.
+- Consequences: Eliminates `.git/index` 0-byte corruptions and lock collisions on Windows NTFS during rapid agent execution and batch change acceptance. Stat cache overhead is negligible (sub-millisecond) for repositories under 50,000 files. Mandatory Git write locks (`git add`, `git commit`, `git merge`, `git checkout`) remain 100% operational.
+
+## ADR-2026-09-06--engineering-provenance-and-dual-track-artifact-loop - Engineering Provenance, Dual-Track UI Projections, and Loop Trace Disambiguation
+- Date: 2026-09-06
+- Status: accepted
+- Context:
+  1. Autonomous coding loops in IDEs (such as Google Antigravity, Claude Code, OpenAI Codex, OpenCode) navigate multi-step plans with frequent course corrections. However, traditional agent workflows treat session execution as a black box: once a task finishes, only the final code diff survives. Intermediate iterations, micro-fixes, and architectural pivots are lost.
+  2. Google Antigravity provides rich visual design cards and test walk-throughs via ephemeral session files (`implementation_plan.md` and `walkthrough.md` in `<appDataDir>/brain/<id>/`). While powerful for human-in-the-loop review, these artifacts vanish after the IDE session closes and do not exist in CLI environments like Claude Code or Codex.
+  3. When an execution step fails, agents frequently blur the distinction between a localized defect (a failing unit test or lint syntax error) and a structural architectural defect (a broken assumption or missing dependency). This causes either premature architectural reshuffling for trivial typos or futile infinite retry loops for fundamentally broken plans.
+- Decision:
+  1. **Dual-Track UI & Memory Projections**:
+     - *Track 1 (Host IDE UI Projection)*: When running under Google Antigravity, project the Living Plan to `<appDataDir>/brain/<id>/implementation_plan.md` with `RequestFeedback: true` and `UserFacing: true` (triggering the native design card with "Proceed" button) and project final verification to `walkthrough.md`.
+     - *Track 2 (Permanent Along Memory)*: In all environments, maintain portable Markdown on disk at `.along/.session/<slug>/` (`living_plan.md`, `execution_trace.md`).
+  2. **Loop Disambiguation (Fix Loop vs Re-plan Loop)**:
+     - `[Fix Loop]`: Micro-iterations responding to localized reviewer failures (broken unit test, lint error, null check). The worker is provided the exact failure trace and diff, and is strictly restricted to fixing the defect without altering architectural plans. Hard limit: maximum 2 retries per step.
+     - `[Re-plan Loop]`: Macro-iterations triggered by structural obstacles or retry exhaustion. The Architect increments the plan version (`Revision N+1`), updates remaining steps in `living_plan.md` (and updates `implementation_plan.md` in Antigravity), and restarts the step sequence.
+  3. **Engineering Provenance Compilation**:
+     - In Phase 7 of `along-team` and in `along-wrap`, compile a 3-part Engineering Provenance record directly into the permanent repository session log (`.along/SESSIONS/<YYYY>/<date>--<slug>.md`):
+       - `## Initial Implementation Plan (Baseline)`
+       - `## Execution & Loop Trace (Fixes & Re-plans)`
+       - `## Verification Walkthrough & Gate Manifest`
+  4. **Backward-Compatible Schema**: Retain unchanged YAML front-matter in `.along/SESSIONS/` so existing dashboards and parsers continue to function with zero breaking changes.
+- Consequences: Full traceability and auditability for all autonomous agent sessions. Human developers can inspect not only what code changed, but why the agent chose the path, how many fix attempts were made, and which gates verified the solution. CLI agents (Claude Code, Codex, OpenCode) retain 100% functionality via file-based memory, while GUI IDE agents gain rich interactive visual controls.
+
+

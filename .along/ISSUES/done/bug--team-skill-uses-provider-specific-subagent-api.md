@@ -3,11 +3,12 @@ protocol: along
 protocol_version: 2.2.8
 slug: team-skill-uses-provider-specific-subagent-api
 type: bug
-status: open
+status: done
+completed: 2026-09-06
 priority: critical
 created: 2026-09-01
-updated: 2026-09-01
-agent: claude-code
+updated: 2026-09-06
+agent: antigravity
 tags: [along-team, multi-agent, provider-agnostic, subagents]
 milestone: v3.0.0-global-quality-revision
 blocked_by: []
@@ -84,9 +85,9 @@ Code or Codex cannot execute the documented protocol as written.
 
 ## Acceptance Criteria
 
-- [ ] Capability mapping table present for Claude Code, Codex, OpenCode, Antigravity.
-- [ ] Documented single-agent fallback for providers without subagents.
-- [ ] Reviewer rubric states behavior when MCP tools are unavailable, and requires
+- [x] Capability mapping table present for Claude Code, Codex, OpenCode, Antigravity.
+- [x] Documented single-agent fallback for providers without subagents.
+- [x] Reviewer rubric states behavior when MCP tools are unavailable, and requires
       recording which gates actually ran.
-- [ ] ADR recorded.
-- [ ] Smoke procedure documented per provider.
+- [x] ADR recorded.
+- [x] Smoke procedure documented per provider.

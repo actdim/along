@@ -1593,6 +1593,34 @@ files, they are inert and can be deleted.
 
 A configuration file that does not parse is reported and left untouched, never replaced.
 
+### Windows Git Concurrency & Index Lock Optimization
+
+When running rapid AI coding agents (such as Google Antigravity with Gemini Flash, Claude Code, or Codex) on Windows, tools generate multiple file modifications in quick succession (< 500ms). When these modifications are accepted simultaneously ("Accept All Changes"), file system watchers from the IDE (`vscode.git`) and external GUI clients (such as GitExtensions) trigger concurrent `git status` commands.
+
+#### The Problem on Windows NTFS
+By default, Git commands like `git status` and `git diff` attempt to refresh the index stat cache by opening `.git/index.lock`, writing the updated cache, and atomically replacing `.git/index` via Windows `ReplaceFileW`. If another process has `.git/index` open for reading, NTFS sharing constraints cause `ReplaceFileW` to fail or get interrupted, leaving `.git/index` truncated to 0 bytes and throwing:
+```text
+fatal: .git/index: index file smaller than expected
+```
+
+#### The Solution & Recommended Settings
+To eliminate this race condition, configure Git to disable optional index locking during read-only status and diff queries:
+
+1. **Disable Optional Locks (User Environment)**:
+   ```powershell
+   [Environment]::SetEnvironmentVariable("GIT_OPTIONAL_LOCKS", "0", "User")
+   ```
+   Setting `GIT_OPTIONAL_LOCKS=0` prevents `git status` and `git diff` from attempting to acquire write locks or rewrite `.git/index`. Mandatory locks for `git add`, `git commit`, `git checkout`, and `git merge` remain fully operational.
+
+2. **Disable Multi-threaded Index Preloading**:
+   ```powershell
+   git config --global core.preloadindex false
+   ```
+   Prevents background thread contention on NTFS metadata locks during index inspection.
+
+3. **Along Automatic Protection**:
+   Along automatically injects `GIT_OPTIONAL_LOCKS=0` into child process environments via `alongkit.proc` and includes automatic 0-byte index self-healing (`git read-tree HEAD`) when interacting with Git.
+
 ---
 
 ## 2. Python Runtime & Dependencies
@@ -1634,7 +1662,7 @@ along-init
 *(Or invoke `/along-init` directly inside your AI agent prompt).*
 
 ### What `along-init` Configures:
-1. `AGENTS.md`: Generates the root protocol context with the managed `ALONG-PROTOCOL v2.2.20` block.
+1. `AGENTS.md`: Generates the root protocol context with the managed `ALONG-PROTOCOL v2.2.6` block.
 2. `CLAUDE.md`: Scaffolds the standard `@AGENTS.md` import line.
 3. `.gitattributes`: Configures `merge=union` for `.along/HISTORY.md` and `.along/DECISIONS.md` to prevent merge collisions across branches.
 4. `.along/`: Creates the persistent repository memory skeleton (`ISSUES/`, `DECISIONS.md`, `MILESTONES/`, `RISKS/`, `SPIKES/`, `CHECKLISTS/`, `SESSIONS/`, `docs/`).
@@ -1938,12 +1966,15 @@ flowchart TD
 - **What it is**: Sequential multi-agent development engine and living plan orchestrator. Replaces chaotic chat rooms with a deterministic state machine: `Supervisor -> Scout (Research) -> Architect (Living Plan) -> Step Loop [Implementer -> Reviewer/Tester -> Reassess] -> Wrap`.
 - **Architectural Rationale**:
   - *Context Pruning Gatekeeping*: The Supervisor strips raw tool outputs from the Scout, injecting only distilled facts into the Implementer to prevent prompt saturation.
-  - *Independent Gatekeeper Review*: Reviewer evaluates code in an isolated subagent context against the strict 5-point verification rubric (Zero-byte check, unit tests, diff scope, AST blast radius, clean ASCII).
+  - *Dual-Track UI & Memory Projections*: Projects the Living Plan and Walkthrough into native IDE visual design cards (`implementation_plan.md` with interactive "Proceed" feedback, and `walkthrough.md`) when running under Google Antigravity, while persisting portable Markdown on disk (`.along/.session/<slug>/`) across all CLI runtimes (Claude Code, OpenAI Codex, OpenCode).
+  - *Loop Disambiguation (Fix Loop vs Re-plan Loop)*: Distinguishes local micro-iterations (`[Fix Loop]`: worker resolves test/lint errors within immediate diff, max 2 retries) from structural architectural revisions (`[Re-plan Loop]`: Architect increments living plan to `Revision N+1` on blockers or assumption changes).
+  - *Engineering Provenance Compilation*: Captures the full trajectory (initial plan baseline, execution trace of fix and re-plan loops, and final gate verification manifest) and compiles it into the permanent session log in `.along/SESSIONS/`.
+  - *Independent Gatekeeper Review*: Reviewer evaluates code in an isolated subagent context (or single-agent fallback) against the conditional 7-point verification rubric (file integrity, automated tests, diff scope, requirement traceability, AST blast radius, documentation parity, clean ASCII).
   - *Adaptive Complexity Routing*: Fast-paths S-size tasks (1-2 files) without subagents; uses full state machine only for M/L/XL tasks.
 - **Invocation Triggers**:
   - *Explicit*: `/along-team <slug>`, `/goal <task>`.
   - *Semantic / Automatic*: Triggered automatically for multi-file feature requests, complex refactorings, or prompts like *"Implement this feature with the agent team"*.
-- **Entities Operated On**: `.along/ISSUES/<type>--<slug>.md`, `.along/.session/<slug>/` (ephemeral blackboard: `plan.md`, `scout_findings.json`, `step_reviews/`), `docs/`.
+- **Entities Operated On**: `.along/ISSUES/<type>--<slug>.md`, `.along/.session/<slug>/` (ephemeral blackboard: `living_plan.md`, `execution_trace.md`, `blackboard.md`), `docs/`.
 - **Ecosystem Chaining**: Uses `along-build`, `along-test`, `along-graph-check` during step loops, and finishes via `along-wrap`.
 
 ---
@@ -2123,9 +2154,9 @@ flowchart TD
 ---
 
 ### `along-wrap`
-- **What it is**: Unified session and stage wrap-up orchestrator. Executes the mandatory completion checklist: runs tests, checks documentation blast radius, moves finished issues to `done/`, reconciles `ISSUES.md`, appends to `HISTORY.md`, and purges session blackboards.
+- **What it is**: Unified session and stage wrap-up orchestrator. Executes the mandatory completion checklist: runs tests, checks documentation blast radius, moves finished issues to `done/`, reconciles `ISSUES.md`, appends to `HISTORY.md`, compiles engineering provenance, and purges session blackboards.
 - **Architectural Rationale**:
-  - *Consolidated Lifecycle*: Eliminates fragmentation between session wrap-up and stage wrap-up, providing a single deterministic checklist.
+  - *Consolidated Lifecycle & Engineering Provenance*: Eliminates fragmentation between session wrap-up and stage wrap-up, providing a single deterministic checklist. For multi-step tasks or `along-team` runs, compiles the 3-part provenance into the session log (`## Initial Implementation Plan`, `## Execution & Loop Trace`, `## Verification Walkthrough & Gate Manifest`).
   - *Automated Garbage Collection*: Completely cleans up ephemeral blackboard directories (`.along/.session/<slug>/`), ensuring zero leftover state files.
 - **Invocation Triggers**:
   - *Explicit*: `/along-wrap`, `along-wrap`.

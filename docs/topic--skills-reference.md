@@ -122,12 +122,15 @@ flowchart TD
 - **What it is**: Sequential multi-agent development engine and living plan orchestrator. Replaces chaotic chat rooms with a deterministic state machine: `Supervisor -> Scout (Research) -> Architect (Living Plan) -> Step Loop [Implementer -> Reviewer/Tester -> Reassess] -> Wrap`.
 - **Architectural Rationale**:
   - *Context Pruning Gatekeeping*: The Supervisor strips raw tool outputs from the Scout, injecting only distilled facts into the Implementer to prevent prompt saturation.
-  - *Independent Gatekeeper Review*: Reviewer evaluates code in an isolated subagent context against the strict 5-point verification rubric (Zero-byte check, unit tests, diff scope, AST blast radius, clean ASCII).
+  - *Dual-Track UI & Memory Projections*: Projects the Living Plan and Walkthrough into native IDE visual design cards (`implementation_plan.md` with interactive "Proceed" feedback, and `walkthrough.md`) when running under Google Antigravity, while persisting portable Markdown on disk (`.along/.session/<slug>/`) across all CLI runtimes (Claude Code, OpenAI Codex, OpenCode).
+  - *Loop Disambiguation (Fix Loop vs Re-plan Loop)*: Distinguishes local micro-iterations (`[Fix Loop]`: worker resolves test/lint errors within immediate diff, max 2 retries) from structural architectural revisions (`[Re-plan Loop]`: Architect increments living plan to `Revision N+1` on blockers or assumption changes).
+  - *Engineering Provenance Compilation*: Captures the full trajectory (initial plan baseline, execution trace of fix and re-plan loops, and final gate verification manifest) and compiles it into the permanent session log in `.along/SESSIONS/`.
+  - *Independent Gatekeeper Review*: Reviewer evaluates code in an isolated subagent context (or single-agent fallback) against the conditional 7-point verification rubric (file integrity, automated tests, diff scope, requirement traceability, AST blast radius, documentation parity, clean ASCII).
   - *Adaptive Complexity Routing*: Fast-paths S-size tasks (1-2 files) without subagents; uses full state machine only for M/L/XL tasks.
 - **Invocation Triggers**:
   - *Explicit*: `/along-team <slug>`, `/goal <task>`.
   - *Semantic / Automatic*: Triggered automatically for multi-file feature requests, complex refactorings, or prompts like *"Implement this feature with the agent team"*.
-- **Entities Operated On**: `.along/ISSUES/<type>--<slug>.md`, `.along/.session/<slug>/` (ephemeral blackboard: `plan.md`, `scout_findings.json`, `step_reviews/`), `docs/`.
+- **Entities Operated On**: `.along/ISSUES/<type>--<slug>.md`, `.along/.session/<slug>/` (ephemeral blackboard: `living_plan.md`, `execution_trace.md`, `blackboard.md`), `docs/`.
 - **Ecosystem Chaining**: Uses `along-build`, `along-test`, `along-graph-check` during step loops, and finishes via `along-wrap`.
 
 ---
@@ -307,9 +310,9 @@ flowchart TD
 ---
 
 ### `along-wrap`
-- **What it is**: Unified session and stage wrap-up orchestrator. Executes the mandatory completion checklist: runs tests, checks documentation blast radius, moves finished issues to `done/`, reconciles `ISSUES.md`, appends to `HISTORY.md`, and purges session blackboards.
+- **What it is**: Unified session and stage wrap-up orchestrator. Executes the mandatory completion checklist: runs tests, checks documentation blast radius, moves finished issues to `done/`, reconciles `ISSUES.md`, appends to `HISTORY.md`, compiles engineering provenance, and purges session blackboards.
 - **Architectural Rationale**:
-  - *Consolidated Lifecycle*: Eliminates fragmentation between session wrap-up and stage wrap-up, providing a single deterministic checklist.
+  - *Consolidated Lifecycle & Engineering Provenance*: Eliminates fragmentation between session wrap-up and stage wrap-up, providing a single deterministic checklist. For multi-step tasks or `along-team` runs, compiles the 3-part provenance into the session log (`## Initial Implementation Plan`, `## Execution & Loop Trace`, `## Verification Walkthrough & Gate Manifest`).
   - *Automated Garbage Collection*: Completely cleans up ephemeral blackboard directories (`.along/.session/<slug>/`), ensuring zero leftover state files.
 - **Invocation Triggers**:
   - *Explicit*: `/along-wrap`, `along-wrap`.
