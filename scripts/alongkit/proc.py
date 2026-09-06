@@ -18,8 +18,6 @@ from __future__ import annotations
 if __name__ == "__main__":
     import os
     raise SystemExit(
-        f"{__name__} is a library module, not a command.\n"
-        "Run: along kb-sync   (or: python scripts/along_exec.py kb-sync)"
         f"{os.path.basename(__file__)} is a library module, not a command.\n"
         "Run: along --help   (or: python scripts/along_exec.py --help)"
     )
@@ -28,6 +26,7 @@ if __name__ == "__main__":
 import os
 import subprocess
 import sys
+import time
 from dataclasses import dataclass
 from typing import Dict, List, Optional, Sequence, Union
 
@@ -157,34 +156,72 @@ def run_python(args: Sequence[str], **kwargs) -> Result:
     return run_capture([sys.executable, *args], **kwargs)
 
 
+def _find_git_dir(start_dir: str) -> Optional[str]:
+    cur = os.path.abspath(start_dir)
+    while True:
+        candidate = os.path.join(cur, ".git")
+        if os.path.isdir(candidate):
+            return candidate
+        if os.path.isfile(candidate):
+            try:
+                with open(candidate, "r", encoding="utf-8", errors="ignore") as f:
+                    line = f.read().strip()
+                if line.startswith("gitdir:"):
+                    gdir = line.split(":", 1)[1].strip()
+                    if not os.path.isabs(gdir):
+                        gdir = os.path.normpath(os.path.join(cur, gdir))
+                    return gdir
+            except Exception:
+                pass
+        parent = os.path.dirname(cur)
+        if parent == cur:
+            return None
+        cur = parent
+
+
+def _heal_git_index(git_dir: str, work_tree: str) -> bool:
+    """Heal corrupted or locked .git/index (< 12 bytes or stale lock)."""
+    idx_path = os.path.join(git_dir, "index")
+    lock_path = os.path.join(git_dir, "index.lock")
+    healed = False
+
+    if os.path.isfile(lock_path):
+        try:
+            if time.time() - os.path.getmtime(lock_path) > 5.0:
+                os.remove(lock_path)
+                healed = True
+        except Exception:
+            pass
+
+    if os.path.isfile(idx_path):
+        try:
+            size = os.path.getsize(idx_path)
+            if size < 12:
+                os.remove(idx_path)
+                run_capture(["git", "reset"], cwd=work_tree)
+                healed = True
+        except Exception:
+            pass
+    return healed
+
+
 def git(args: Sequence[str], cwd: Optional[str] = None, check: bool = False,
         timeout: Optional[float] = None) -> Result:
     """Run a git command and capture its output with index corruption resilience."""
     target_cwd = cwd or os.getcwd()
-    git_entry = os.path.join(target_cwd, ".git")
-    idx_path = None
-    if os.path.isdir(git_entry):
-        idx_path = os.path.join(git_entry, "index")
-    elif os.path.isfile(git_entry):
-        try:
-            with open(git_entry, "r", encoding="utf-8", errors="ignore") as f:
-                line = f.read().strip()
-            if line.startswith("gitdir:"):
-                gdir = line.split(":", 1)[1].strip()
-                if not os.path.isabs(gdir):
-                    gdir = os.path.normpath(os.path.join(target_cwd, gdir))
-                idx_path = os.path.join(gdir, "index")
-        except Exception:
-            pass
+    git_dir = _find_git_dir(target_cwd)
+    if git_dir:
+        _heal_git_index(git_dir, target_cwd)
 
-    if idx_path and os.path.isfile(idx_path) and os.path.getsize(idx_path) == 0:
-        try:
-            os.remove(idx_path)
-            run_capture(["git", "reset"], cwd=target_cwd)
-        except Exception:
-            pass
+    result = run_capture(["git", *args], cwd=cwd, check=False, timeout=timeout)
+    combined = (result.stderr or "") + (result.stdout or "")
+    if ("index file smaller than expected" in combined or "bad signature" in combined) and git_dir:
+        _heal_git_index(git_dir, target_cwd)
+        result = run_capture(["git", *args], cwd=cwd, check=False, timeout=timeout)
 
-    return run_capture(["git", *args], cwd=cwd, check=check, timeout=timeout)
+    if check and not result.ok:
+        raise ProcessError(result)
+    return result
 
 
 def _as_text(value) -> str:

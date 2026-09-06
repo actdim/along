@@ -196,6 +196,108 @@ class TestAlongCommitResolution(unittest.TestCase):
         self.assertEqual(msg_conv_no_issue, "docs: update readme")
 
 
+class TestAlongCommitStaging(unittest.TestCase):
+    """Tests for selective staging, --all, --paths, and push failure."""
+
+    def _init_git_repo(self, root: str):
+        proc.git(["init"], cwd=root)
+        proc.git(["config", "user.name", "Test Agent"], cwd=root)
+        proc.git(["config", "user.email", "test@example.com"], cwd=root)
+        init_file = os.path.join(root, "init.txt")
+        textio.write_text(init_file, "init")
+        proc.git(["add", "init.txt"], cwd=root)
+        proc.git(["commit", "-m", "initial commit"], cwd=root)
+
+    def test_09_staged_only_commit_leaves_untracked_alone(self):
+        with repo_fixture() as root:
+            self._init_git_repo(root)
+            a_path = os.path.join(root, "file_a.txt")
+            b_path = os.path.join(root, "file_b.txt")
+            textio.write_text(a_path, "content a")
+            textio.write_text(b_path, "content b")
+            proc.git(["add", "file_a.txt"], cwd=root)
+
+            orig_cwd = os.getcwd()
+            try:
+                os.chdir(root)
+                along_commit.main(["test commit a", "-n"])
+            finally:
+                os.chdir(orig_cwd)
+
+            status = proc.git(["status", "--porcelain", "-u"], cwd=root)
+            self.assertNotIn("file_a.txt", status.stdout)
+            self.assertIn("?? file_b.txt", status.stdout)
+
+    def test_10_all_flag_stages_entire_tree(self):
+        with repo_fixture() as root:
+            self._init_git_repo(root)
+            c_path = os.path.join(root, "file_c.txt")
+            d_path = os.path.join(root, "file_d.txt")
+            textio.write_text(c_path, "content c")
+            textio.write_text(d_path, "content d")
+
+            orig_cwd = os.getcwd()
+            try:
+                os.chdir(root)
+                along_commit.main(["test commit all", "-a", "-n"])
+            finally:
+                os.chdir(orig_cwd)
+
+            status = proc.git(["status", "--porcelain", "-u"], cwd=root)
+            self.assertNotIn("file_c.txt", status.stdout)
+            self.assertNotIn("file_d.txt", status.stdout)
+
+    def test_11_paths_stages_designated_files(self):
+        with repo_fixture() as root:
+            self._init_git_repo(root)
+            e_path = os.path.join(root, "file_e.txt")
+            f_path = os.path.join(root, "file_f.txt")
+            textio.write_text(e_path, "content e")
+            textio.write_text(f_path, "content f")
+
+            orig_cwd = os.getcwd()
+            try:
+                os.chdir(root)
+                along_commit.main(["test commit e", "--paths", "file_e.txt", "-n"])
+            finally:
+                os.chdir(orig_cwd)
+
+            status = proc.git(["status", "--porcelain", "-u"], cwd=root)
+            self.assertNotIn("file_e.txt", status.stdout)
+            self.assertIn("?? file_f.txt", status.stdout)
+
+    def test_12_nothing_staged_aborts_with_error(self):
+        with repo_fixture() as root:
+            self._init_git_repo(root)
+            g_path = os.path.join(root, "file_g.txt")
+            textio.write_text(g_path, "content g")
+
+            orig_cwd = os.getcwd()
+            try:
+                os.chdir(root)
+                with self.assertRaises(SystemExit) as ctx:
+                    along_commit.main(["test commit nothing staged", "-n"])
+                self.assertEqual(ctx.exception.code, 1)
+            finally:
+                os.chdir(orig_cwd)
+
+    def test_13_push_failure_exits_nonzero(self):
+        with repo_fixture() as root:
+            self._init_git_repo(root)
+            h_path = os.path.join(root, "file_h.txt")
+            textio.write_text(h_path, "content h")
+            proc.git(["add", "file_h.txt"], cwd=root)
+
+            orig_cwd = os.getcwd()
+            try:
+                os.chdir(root)
+                with self.assertRaises(SystemExit) as ctx:
+                    along_commit.main(["test commit with push", "-p", "-n"])
+                self.assertNotEqual(ctx.exception.code, 0)
+            finally:
+                os.chdir(orig_cwd)
+
+
 if __name__ == "__main__":
     unittest.main()
 

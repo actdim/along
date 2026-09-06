@@ -20,6 +20,7 @@ import shutil
 import subprocess
 import sys
 import tempfile
+import time
 import unittest
 
 REPO_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -280,6 +281,46 @@ class TestSubprocessConventions(unittest.TestCase):
         res = proc.run_capture([sys.executable, "-c", "import time; time.sleep(5)"], timeout=0.5)
         self.assertFalse(res.ok)
         self.assertIn("timed out", res.stderr)
+
+    def test_git_self_healing_on_truncated_index(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            proc.git(["init"], cwd=tmp)
+            proc.git(["config", "user.name", "Test Agent"], cwd=tmp)
+            proc.git(["config", "user.email", "test@example.com"], cwd=tmp)
+            sample_file = os.path.join(tmp, "hello.txt")
+            textio.write_text(sample_file, "hello\n")
+            proc.git(["add", "hello.txt"], cwd=tmp)
+            proc.git(["commit", "-m", "init"], cwd=tmp)
+
+            index_path = os.path.join(tmp, ".git", "index")
+            with open(index_path, "wb") as f:
+                f.write(b"")
+
+            self.assertEqual(os.path.getsize(index_path), 0)
+
+            res = proc.git(["status", "--porcelain"], cwd=tmp)
+            self.assertTrue(res.ok, f"git status failed after healing: {res.stderr}")
+            self.assertGreaterEqual(os.path.getsize(index_path), 12)
+
+    def test_git_self_healing_on_stale_index_lock(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            proc.git(["init"], cwd=tmp)
+            proc.git(["config", "user.name", "Test Agent"], cwd=tmp)
+            proc.git(["config", "user.email", "test@example.com"], cwd=tmp)
+            sample_file = os.path.join(tmp, "hello.txt")
+            textio.write_text(sample_file, "hello\n")
+            proc.git(["add", "hello.txt"], cwd=tmp)
+            proc.git(["commit", "-m", "init"], cwd=tmp)
+
+            lock_path = os.path.join(tmp, ".git", "index.lock")
+            with open(lock_path, "wb") as f:
+                f.write(b"stale lock")
+            stale_time = time.time() - 10.0
+            os.utime(lock_path, (stale_time, stale_time))
+
+            res = proc.git(["status", "--porcelain"], cwd=tmp)
+            self.assertTrue(res.ok, f"git status failed with stale lock: {res.stderr}")
+            self.assertFalse(os.path.exists(lock_path))
 
 
 class TestTextIO(unittest.TestCase):

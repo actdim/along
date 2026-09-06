@@ -70,6 +70,8 @@ def parse_args(argv=None):
     parser.add_argument("message", nargs="*", help="Commit message (positional)")
     parser.add_argument("-m", "--message-flag", dest="msg_flag", help="Commit message (-m \"...\")")
     parser.add_argument("-i", "--issue", dest="issue", help="Explicit issue slug to bind (refs #<slug>)")
+    parser.add_argument("-a", "--all", dest="all_files", action="store_true", help="Stage all changes (git add -A) before committing")
+    parser.add_argument("--paths", nargs="+", help="Specific paths to stage before committing")
     parser.add_argument("-p", "--push", action="store_true", help="Push to remote after successful commit")
     parser.add_argument("-n", "--no-verify", dest="skip_tests", action="store_true", help="Skip pre-commit gates")
     parser.add_argument("--fix-typography", action="store_true", help="Fix typography automatically before committing")
@@ -86,8 +88,8 @@ def main(argv=None):
 
     if not raw_msg:
         print("Usage: python along_commit.py \"<commit message>\" [-i <slug>] "
-              "[--push] [--no-verify] [--fix-typography] [--strict]", file=sys.stderr)
-        print("Example: python along_commit.py \"add cytoscape graph view\" -i feat--cytoscape-graph -p", file=sys.stderr)
+              "[-a] [--paths <file>...] [--push] [--no-verify] [--fix-typography] [--strict]", file=sys.stderr)
+        print("Example: python along_commit.py \"add cytoscape graph view\" -i feat--cytoscape-graph -a -p", file=sys.stderr)
         sys.exit(1)
 
     print("==================================================")
@@ -126,11 +128,33 @@ def main(argv=None):
     final_msg = format_commit_message(raw_msg, active_issue)
     print(f"-> Commit message: \"{final_msg}\"")
 
-    # 4. Stage changes and commit
-    staged = proc.git(["add", "-A"], cwd=repo_root)
-    if not staged.ok:
-        print(f"[Error] Git staging failed: {staged.stderr.strip()}", file=sys.stderr)
+    # 4. Stage changes according to explicit flags
+    if parsed.all_files:
+        print("-> Staging all working tree changes (--all)...")
+        staged = proc.git(["add", "-A"], cwd=repo_root)
+        if not staged.ok:
+            print(f"[Error] Git staging failed: {staged.stderr.strip()}", file=sys.stderr)
+            sys.exit(1)
+    elif parsed.paths:
+        print(f"-> Staging specified paths: {' '.join(parsed.paths)}...")
+        staged = proc.git(["add", "--", *parsed.paths], cwd=repo_root)
+        if not staged.ok:
+            print(f"[Error] Git staging failed: {staged.stderr.strip()}", file=sys.stderr)
+            sys.exit(1)
+
+    # Inspect what is currently staged in the index
+    staged_status = proc.git(["diff", "--cached", "--name-only"], cwd=repo_root)
+    staged_files = [f.strip() for f in (staged_status.stdout or "").splitlines() if f.strip()]
+    if not staged_files:
+        print("[Error] No staged changes to commit.", file=sys.stderr)
+        print("Stage files with 'git add <files>', pass '--paths <file>...', or pass '--all' / '-a' to stage all changes.", file=sys.stderr)
         sys.exit(1)
+
+    print(f"-> Committing {len(staged_files)} staged file(s):")
+    for f in staged_files[:10]:
+        print(f"   - {f}")
+    if len(staged_files) > 10:
+        print(f"   ... and {len(staged_files) - 10} more.")
 
     res = proc.git(["commit", "-m", final_msg], cwd=repo_root)
     if not res.ok:
@@ -150,6 +174,8 @@ def main(argv=None):
             print("-> Successfully pushed to remote.")
         else:
             print(f"[Warning] Git push failed:\n{res.stderr}", file=sys.stderr)
+            print(f"[Error] Git push failed:\n{res.stderr}", file=sys.stderr)
+            sys.exit(res.returncode if res.returncode != 0 else 1)
 
 
 if __name__ == "__main__":

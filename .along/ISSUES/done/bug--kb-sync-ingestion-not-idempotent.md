@@ -3,10 +3,11 @@ protocol: along
 protocol_version: 2.2.8
 slug: kb-sync-ingestion-not-idempotent
 type: bug
-status: open
+status: done
 priority: high
 created: 2026-09-01
-updated: 2026-09-01
+updated: 2026-09-06
+completed: 2026-09-06
 agent: claude-code
 tags: [kb-sync, idempotency, data-loss, archive]
 milestone: v3.0.0-global-quality-revision
@@ -106,8 +107,8 @@ contract.
 
 ## Acceptance Criteria
 
-- [ ] Second consecutive `kb-sync` run produces no changes.
-- [ ] Hand edits to `docs/topic--*.md` survive subsequent runs.
-- [ ] `--check` provably writes nothing.
-- [ ] Legacy deletion requires an explicit flag and verifies the target first.
-- [ ] `protocol_version` upgrade behavior defined and tested.
+- [x] Second consecutive `kb-sync` run produces no changes.
+- [x] Hand edits to `docs/topic--*.md` survive subsequent runs.
+- [x] `--check` provably writes nothing.
+- [x] Legacy deletion requires an explicit flag and verifies the target first.
+- [x] `protocol_version` upgrade behavior defined and tested.

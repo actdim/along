@@ -84,7 +84,8 @@ def reconcile_sources(repo_root, docs_dir, dry_run=False):
     today = datetime.now().strftime("%Y-%m-%d")
     normalized = 0
 
-    os.makedirs(docs_dir, exist_ok=True)
+    if not dry_run:
+        os.makedirs(docs_dir, exist_ok=True)
 
     # 1. Ingest external source directories: wiki/, kb/, .along/KB/, .agents/KB/
     external_sources = [
@@ -126,6 +127,9 @@ def reconcile_sources(repo_root, docs_dir, dry_run=False):
                 normalized += 1
             else:
                 # External raw note -> synthesize topic article in docs/ with provenance sources, WITHOUT .archive/
+                if os.path.exists(d_path):
+                    # Existing compiled article must not be overwritten by raw note (preserves hand edits)
+                    continue
                 if not dry_run:
                     h1_m = re.search(r"^#\s+(.*)$", raw, re.MULTILINE)
                     title = h1_m.group(1).strip() if h1_m else item.replace(".md", "").replace("-", " ").title()
@@ -658,6 +662,12 @@ def sync_kb(repo_root, check_only=False, strict=False, prune_intent=None, is_sub
         print("   docs/ is missing or empty. Bootstrapping standard articles...")
         bootstrapped = bootstrap_docs_if_empty(docs_dir, repo_root, dry_run=check_only)
         print(f"   Bootstrapped {bootstrapped} core Knowledge Base articles.")
+
+    if not os.path.exists(docs_dir):
+        if check_only:
+            print("   docs/ does not exist (check-only mode; zero modifications made).")
+            return 0
+        os.makedirs(docs_dir, exist_ok=True)
 
     articles = []
     doc_cross_links = {}

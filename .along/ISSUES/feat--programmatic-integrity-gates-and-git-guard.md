@@ -92,7 +92,7 @@ To reduce human friction and eliminate these failures, Along must implement acti
 - [ ] Implementation plan template updated with mandatory `Adaptive Complexity Escalation` routing.
 - [ ] `.gemini/hooks/` pre-tool hook blocks file modifications on inquiry prompts.
 - [ ] `.along/scripts/test.py` includes a pre-flight `compileall` gate that halts on any syntax error before launching tests.
-- [ ] `alongkit.proc` / `alongkit.repo` has automated detection and recovery for 0-byte `.git/index` and stale `.git/index.lock`.
+- [x] `alongkit.proc` / `alongkit.repo` has automated detection and recovery for 0-byte `.git/index` and stale `.git/index.lock`.
 - [ ] `along-commit` executes non-bypassable pre-flight syntax, typography, and link integrity gates.
 - [ ] `along_exec.py` provides an AST-safe function replacement command.
 - [ ] Clean `.gitattributes` with `eol=lf` committed to repository root.

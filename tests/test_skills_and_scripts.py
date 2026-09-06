@@ -37,7 +37,7 @@ TESTS_DIR = os.path.dirname(os.path.abspath(__file__))
 if TESTS_DIR not in sys.path:
     sys.path.insert(0, TESTS_DIR)
 
-from alongkit import proc, typography
+from alongkit import proc, textio, typography
 import hermetic
 
 
@@ -1227,6 +1227,46 @@ class TestAlongSkillsAndScripts(unittest.TestCase):
                 content = f.read()
             self.assertIn("[MIT License](../../LICENSE)", content)
             self.assertNotIn("[MIT License](LICENSE)", content)
+        finally:
+            shutil.rmtree(temp_dir, ignore_errors=True)
+
+    def test_28_kb_sync_idempotency_and_preserves_hand_edits(self):
+        """Verify running along_kb_sync preserves curated articles from being overwritten by raw notes."""
+        temp_dir = tempfile.mkdtemp(prefix="along-kb-idempotency-")
+        try:
+            wiki_dir = os.path.join(temp_dir, "wiki")
+            os.makedirs(wiki_dir, exist_ok=True)
+            textio.write_text(os.path.join(wiki_dir, "architecture.md"),
+                              "# Architecture\n\nRaw draft notes from inception.\n")
+
+            import along_kb_sync
+            along_kb_sync.sync_kb(temp_dir, check_only=False)
+
+            target_article = os.path.join(temp_dir, "docs", "topic--architecture.md")
+            self.assertTrue(os.path.isfile(target_article))
+
+            curated_content = textio.read_text(target_article)
+            curated_content += "\n## Curated Section\n\nCritical invariant added by engineer.\n"
+            textio.write_text(target_article, curated_content)
+
+            along_kb_sync.sync_kb(temp_dir, check_only=False)
+
+            after_second_sync = textio.read_text(target_article)
+            self.assertIn("Critical invariant added by engineer.", after_second_sync)
+            self.assertEqual(curated_content, after_second_sync)
+        finally:
+            shutil.rmtree(temp_dir, ignore_errors=True)
+
+    def test_29_kb_sync_check_mode_writes_nothing(self):
+        """Verify that along_kb_sync in check_only mode performs zero filesystem writes."""
+        temp_dir = tempfile.mkdtemp(prefix="along-kb-check-")
+        try:
+            import along_kb_sync
+            along_kb_sync.sync_kb(temp_dir, check_only=True)
+
+            docs_dir = os.path.join(temp_dir, "docs")
+            self.assertFalse(os.path.exists(docs_dir), "check_only mode created docs/ directory")
+            self.assertEqual(os.listdir(temp_dir), [], "check_only mode wrote files to repository")
         finally:
             shutil.rmtree(temp_dir, ignore_errors=True)
 
