@@ -17,7 +17,7 @@ related: [feat--runtime-enforcement-of-prose-rules, feat--programmatic-integrity
 
 ## Problem Statement
 
-When deep infrastructure, operating system, or environment errors occur during an agent session, LLM agents suffer from destructive self-healing loops ("долбление"). Instead of recognizing that the environment itself is compromised, the agent attempts frantic, ad-hoc workarounds:
+When deep infrastructure, operating system, or environment errors occur during an agent session, LLM agents suffer from destructive self-healing loops (repeated blind thrashing). Instead of recognizing that the environment itself is compromised, the agent attempts frantic, ad-hoc workarounds:
 - Installing global dependencies (`pip install`, `npm install -g`) when an interpreter fails to locate a module, violating repository hermeticity.
 - Repeating failing Git commands against a locked or zero-byte `.git/index`.
 - Applying speculative edits to source code when the failure is actually an external NTFS file-sharing lock or permission denial.

@@ -23,7 +23,7 @@ Passive prose rules in `AGENTS.md` (such as "verify every file compiles before p
 2. **Git Index Corruption on Windows**: Concurrent operations between background test runners and IDE Git watchers (VS Code `vscode.git`) trigger NTFS sharing violations, leaving `.git/index` truncated to 0 bytes (`fatal: .git/index: index file smaller than expected`) or locking the repository via stale `.git/index.lock`.
 3. **Line Ending Drift**: Mismatches between CRLF on Windows and LF in patch strings cause line offsets to slide, leading to misaligned function bodies.
 4. **Opportunistic Mutation on Inquiries**: When asked informational questions ("are all docs updated?", "is feature X implemented?"), agents exhibit a bias-to-act: instead of returning a read-only audit report, they make unprompted file edits in the background to "clean up" discrepancies before answering, breaking user trust and introducing untested changes.
-5. **Monolithic Single-Agent Execution Bloat ("Колбаса")**: Complex tasks involving multi-directory traversals, library extractions, and multi-surface documentation updates are executed inside a single bloated context window. When token budget fills with test traces and diffs, reasoning degrades, resulting in chaotic patching.
+5. **Monolithic Single-Agent Execution Bloat (Unbounded Context Sprawl)**: Complex tasks involving multi-directory traversals, library extractions, and multi-surface documentation updates are executed inside a single bloated context window. When token budget fills with test traces and diffs, reasoning degrades, resulting in chaotic patching.
 
 ## Architectural Solutions: Active Programmatic Gates & Process Enforcement
 
