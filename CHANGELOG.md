@@ -2,6 +2,12 @@
 
 All notable changes to this project, newest first.
 
+## v2.2.26 - 2026-09-07
+
+- refactor: optimize context budget, cap issues board, and compile active constraints (refs #always-on-context-budget-exceeds-claims)
+- fix: record ADR for subproject Git path resolution under intent gate and ignore session blackboards (refs #kb-sync-subproject-intent-gate)
+- docs(drift): resolve protocol documentation drift and update readme [debt--protocol-documentation-drift]
+
 ## v2.2.25 - 2026-09-07
 
 - docs: clean illustrative links in session and decisions, include pyproject.toml in version bump
