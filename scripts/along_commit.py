@@ -173,7 +173,6 @@ def main(argv=None):
         if res.ok:
             print("-> Successfully pushed to remote.")
         else:
-            print(f"[Warning] Git push failed:\n{res.stderr}", file=sys.stderr)
             print(f"[Error] Git push failed:\n{res.stderr}", file=sys.stderr)
             sys.exit(res.returncode if res.returncode != 0 else 1)
 
