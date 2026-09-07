@@ -38,4 +38,5 @@ Universal finalization and memory synchronization protocol for sessions, tasks, 
 6. [ ] **ISSUES Board Projection**: Run `/along-issue-sync` (or update nearest `.along/ISSUES.md`).
 7. [ ] **HISTORY**: Append one line to nearest `.along/HISTORY.md`: `<YYYY-MM-DD> - <slug> - <agent> - <summary> - <link>`.
 8. [ ] **Compaction Prompt**: Advise user to run `/compact` to free up token budget.
+9. [ ] **Session Blackboard Cleanup**: Run `along scratch purge <slug>` (or fallback: `python ~/.along/bin/along_exec.py scratch purge <slug>`) upon successful completion. On failed runs, retain `.along/.session/<slug>/` for diagnostics.
 

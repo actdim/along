@@ -354,6 +354,11 @@ if ($optLocks -ne '0') {
     Write-Host "-> [Recommended] Set GIT_OPTIONAL_LOCKS=0 to prevent Git index locking collisions with IDEs:"
     Write-Host "   [Environment]::SetEnvironmentVariable('GIT_OPTIONAL_LOCKS', '0', 'User')"
 }
+$diffRefresh = (git config --global --get diff.autoRefreshIndex)
+if ($diffRefresh -ne 'false') {
+    Write-Host "-> [Recommended] Disable diff index auto-refresh to prevent index collisions in IDEs:"
+    Write-Host "   git config --global diff.autoRefreshIndex false"
+}
 
 Write-Host "Done. Claude/Codex/Antigravity skills register next session as /along-* (/along-init, /along-update, /along-dash, etc.); OpenCode picks up /commands, and all read AGENTS.md natively."
 Write-Host "     MCP registration is reported per provider above: only a verified configuration contract is written to."

@@ -23,16 +23,17 @@ Every step from 2 onward is transactional: if a later step fails, each file is r
 
 ## Usage
 ```bash
-python scripts/along_version_bump.py patch
-python scripts/along_version_bump.py minor
-python scripts/along_version_bump.py major
-python scripts/along_version_bump.py 1.5.0
+along bump patch
+along bump minor
+along bump major
+along bump 1.5.0
 ```
+*(Or fallback: `python ~/.along/bin/along_exec.py bump patch` or `/along-version-bump`)*
 
 ### Flags
 - `-c`, `--commit`: Automatically create release `git commit` (`release: vX.Y.Z`).
 - `-p`, `--push`: Automatically push release commit and tags to remote repository (`git push`).
-- `-cp`, `-pc`: Combine commit and push in one command (`python scripts/along_version_bump.py patch -cp`).
+- `-cp`, `-pc`: Combine commit and push in one command (`along bump patch -cp`).
 - `--fix-typography`: Apply the ASCII replacements the release gate found. Without it the gate reports findings by file and line and aborts the release; a release never rewrites the tree on its own. The repair is applied inside the transaction, so a later abort restores it too.
 - `-n`, `--no-verify`: Skip the tests, typography, and link gates. The one documented way past them; the release still rolls back on a later failure.
 - Command: `/along-version-bump`

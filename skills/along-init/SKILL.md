@@ -21,7 +21,7 @@ Scaffold or refresh the provider-agnostic agent-context structure in a repositor
 - If legacy `<!-- BEGIN ACTDIM-AGENTS-PROTOCOL ... -->` markers are detected, replace them cleanly with the new ALONG-PROTOCOL markers.
 
 ### Step 2: Rule Pack Attachment
-- Run `python scripts/along_exec.py rules attach` to detect the project stack, copy matching rule packs from `~/.along/rules/` into `.along/rules/`, and inject references into `AGENTS.md`.
+- Run `along rules attach` (or fallback: `python ~/.along/bin/along_exec.py rules attach`) to detect the project stack, copy matching rule packs from `~/.along/rules/` into `.along/rules/`, and inject references into `AGENTS.md`.
 
 ### Step 3: `CLAUDE.md` & `.gitattributes` Scaffolding
 - Ensure `CLAUDE.md` contains the line:
@@ -34,8 +34,9 @@ Scaffold or refresh the provider-agnostic agent-context structure in a repositor
   .along/HISTORY.md merge=union
   .along/DECISIONS.md merge=union
   ```
-- On Windows repositories, ensure Git index locks and preloading are hardened to prevent IDE index collisions:
+- On Windows repositories, ensure Git index locks, diff auto-refresh, and preloading are hardened to prevent IDE index collisions:
   ```powershell
+  git config diff.autoRefreshIndex false
   git config core.preloadindex false
   [Environment]::SetEnvironmentVariable("GIT_OPTIONAL_LOCKS", "0", "User")
   ```
@@ -55,9 +56,10 @@ Create the directory structure if missing:
 ### Step 5: Run Protocol Migration
 Execute the migration engine against the target folder to validate front-matter and migrate any legacy `.agents/` content. Preview the plan first, then apply it:
 ```bash
-python scripts/migrate_protocol.py <target_root> --dry-run
-python scripts/migrate_protocol.py <target_root> --apply
+along migrate <target_root> --dry-run
+along migrate <target_root> --apply
 ```
+*(Or fallback: `python ~/.along/bin/along_exec.py migrate <target_root> --apply`)*
 `--apply` is mandatory for any non-interactive caller: without it the engine prints the plan and writes nothing. It never deletes a destination file (append-only files are merged, projections keep the destination, a colliding legacy entity is preserved as `<name>.legacy.md`), it copies the state directory into `.along/.migration-backup/<timestamp>/` before the first change, and it records `.along/.protocol-version` so a second run is a no-op. Add `--force` to re-run every step anyway.
 
 ### Step 6: Propose Onboarding & Repository Synchronization Operations

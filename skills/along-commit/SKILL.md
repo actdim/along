@@ -19,9 +19,10 @@ Routine development committer that enforces clean typography and links Git histo
 ## Usage
 
 ```bash
-python scripts/along_commit.py "add cytoscape graph view" -i feat--cytoscape-graph
-python scripts/along_commit.py "fix null reference in auth handler" --push
+along commit "add cytoscape graph view" -i feat--cytoscape-graph
+along commit "fix null reference in auth handler" --push
 ```
+*(Or fallback: `python ~/.along/bin/along_exec.py commit "message"` or `/along-commit`)*
 
 ### Flags
 - `-i`, `--issue <slug>`: Explicitly bind commit to a specific issue slug.

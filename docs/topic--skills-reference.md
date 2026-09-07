@@ -94,7 +94,7 @@ flowchart TD
   - Eliminates skill drift across multiple developer machines.
   - Automatically executes retroactive migration scripts (`scripts/migrate_protocol.py`) to upgrade legacy front-matter schemas and directory layouts without data loss.
 - **Invocation Triggers**:
-  - *Explicit*: `/along-update`, `python scripts/along_update.py`.
+  - *Explicit*: `/along-update`, `along update` (fallback: `python ~/.along/bin/along_exec.py update`).
   - *Semantic / Automatic*: Triggered on protocol version mismatch, outdated skills warnings, or prompts like *"Upgrade Along protocol"*, *"Update agents"*.
 - **Entities Operated On**: Global skill folders (`~/.gemini/config/skills/along-*`), target repository `AGENTS.md`, `scripts/`.
 - **Ecosystem Chaining**: Runs `migrate_protocol.py` and triggers `/along-kb-sync --strict` to validate repository link integrity after updates.
@@ -109,7 +109,7 @@ flowchart TD
   - *Transactional Release*: Every mutation is recorded by `alongkit.transaction.FileTransaction`. A failure anywhere up to the git commit restores each file byte for byte and reports what it put back, so an aborted release leaves no half-released tree. The transaction closes once the commit exists.
   - *No Global Side Effects*: A version bump never reinstalls the machine's agent configuration. Installing globally is `/along-update` or the installer.
 - **Invocation Triggers**:
-  - *Explicit*: `/along-version-bump [patch|minor|major|<version>] [-c|--commit] [-p|--push] [--fix-typography] [-n|--no-verify]`, `python scripts/along_version_bump.py`.
+  - *Explicit*: `/along-version-bump [patch|minor|major|<version>] [-c|--commit] [-p|--push] [--fix-typography] [-n|--no-verify]`, `along bump` (fallback: `python ~/.along/bin/along_exec.py bump`).
   - *Semantic / Automatic*: Triggered when preparing a release, completing a milestone sprint, or prompted with *"Release version 2.3.0"*, *"Bump patch version"*.
 - **Entities Operated On**: `package.json`, `pyproject.toml`, `Cargo.toml`, `*.csproj`, `VERSION`, `AGENTS.md`, `CHANGELOG.md`, the milestone in `.along/MILESTONES/` whose front-matter `slug` names the released version.
 - **Ecosystem Chaining**: Chains with `/along-test` for pre-release validation, `/along-kb-sync --check --strict` for the link gate, and creates the release commit plus the annotated `v<version>` tag itself.
@@ -140,7 +140,7 @@ flowchart TD
 - **Architectural Rationale**:
   - *Zero-Manual-Merge Principle*: Because `ISSUES.md` is a compiled projection, git merge conflicts are resolved automatically by running `along-issue-sync` rather than manually resolving diffs.
 - **Invocation Triggers**:
-  - *Explicit*: `/along-issue-sync`, `python scripts/along_exec.py issue sync`.
+  - *Explicit*: `/along-issue-sync`, `along issue sync` (fallback: `python ~/.along/bin/along_exec.py issue sync`).
   - *Semantic / Automatic*: Triggered during `/along-wrap`, when an issue changes status, or during post-git-merge reconciliation.
 - **Entities Operated On**: `.along/ISSUES/*.md`, `.along/ISSUES/done/*.md`, `.along/ISSUES.md`.
 - **Ecosystem Chaining**: Feeds data into `along-dash` and `along-wrap`.
@@ -153,7 +153,7 @@ flowchart TD
   - *Decentralized Slug Headers*: Prevents merge collisions across concurrent branches compared to sequential integer numbering (`#012`).
   - *Append-Only Invariance*: Old decisions are never deleted or rewritten; when superseded, they are marked `superseded by ADR-YYYY-MM-DD--<slug>`.
 - **Invocation Triggers**:
-  - *Explicit*: `/along-decision-sync`, `python scripts/along_exec.py decision append`.
+  - *Explicit*: `/along-decision-sync`, `along decision create` (fallback: `python ~/.along/bin/along_exec.py decision create`).
   - *Semantic / Automatic*: Triggered whenever a non-trivial architectural choice, library selection, or database schema design is confirmed during a session or spike.
 - **Entities Operated On**: `.along/DECISIONS.md`.
 - **Ecosystem Chaining**: Governs Reviewer checks in `along-team` and informs documentation updates in `along-kb-sync`.
@@ -167,7 +167,7 @@ flowchart TD
 - **Architectural Rationale**:
   - *Non-Destructive Standardized Interface*: AI agents execute a single unified command (`along-build`) across any programming language or technology stack without needing custom per-repo prompt tuning.
 - **Invocation Triggers**:
-  - *Explicit*: `/along-build`, `python scripts/along_exec.py build`.
+  - *Explicit*: `/along-build`, `along build` (fallback: `python ~/.along/bin/along_exec.py build`).
   - *Semantic / Automatic*: Triggered after code edits, before pre-commit checks, or when the user prompts *"Build the project"*.
 - **Entities Operated On**: `.along/scripts/build.py`, build output targets (`dist/`, `build/`, `bin/`).
 - **Ecosystem Chaining**: Prerequisite for `along-test` and `along-dash` UI builds.
@@ -179,7 +179,7 @@ flowchart TD
 - **Architectural Rationale**:
   - *Token Hygiene via Quiet Flags*: Suppresses massive verbose test logs in agent prompts, emitting clean summary counts (pass/fail) to conserve context budget.
 - **Invocation Triggers**:
-  - *Explicit*: `/along-test`, `python scripts/along_exec.py test`.
+  - *Explicit*: `/along-test`, `along test` (fallback: `python ~/.along/bin/along_exec.py test`).
   - *Semantic / Automatic*: Triggered during every Reviewer step in `along-team`, before pre-commit in `along-commit`, and during `/along-wrap`.
 - **Entities Operated On**: `.along/scripts/test.py`, test suites (`tests/`, `src/**/*.test.ts`).
 - **Ecosystem Chaining**: Core quality gate for `along-team`, `along-commit`, and `along-version-bump`.
@@ -191,7 +191,7 @@ flowchart TD
 - **Architectural Rationale**:
   - Provides a single standardized hook (`.along/scripts/dev.py`) for background daemon execution.
 - **Invocation Triggers**:
-  - *Explicit*: `/along-dev`, `python scripts/along_exec.py dev`.
+  - *Explicit*: `/along-dev`, `along dev` (fallback: `python ~/.along/bin/along_exec.py dev`).
   - *Semantic / Automatic*: Triggered when the user requests *"Start local dev server"*, *"Run application locally"*.
 - **Entities Operated On**: `.along/scripts/dev.py`.
 - **Ecosystem Chaining**: Pairs with `along-dash` for local interactive debugging.
@@ -206,7 +206,7 @@ flowchart TD
   - *Typography & Non-ASCII Gate*: Scans repository text to block forbidden typographic characters (em-dash, smart curly quotes, non-breaking spaces, byte order marks) that corrupt Windows shell execution or AST parsers. It reports findings by file and line and aborts; it does not rewrite the tree unless `--fix-typography` is passed, and it never rewrites a file that is not valid UTF-8. See [ADR-2026-09-01--typography-rule-scope](../.along/DECISIONS.md).
   - *Issue Traceability*: Enforces issue slug references (`(refs #<slug>)` or `[<slug>]`) for 100% auditability.
 - **Invocation Triggers**:
-  - *Explicit*: `/along-commit -i <slug> -m "<message>" [--fix-typography]`, `python scripts/along_commit.py`.
+  - *Explicit*: `/along-commit -i <slug> -m "<message>" [--fix-typography]`, `along commit` (fallback: `python ~/.along/bin/along_exec.py commit`).
   - *Semantic / Automatic*: Triggered when completing a task or when prompted with *"Commit changes"*.
 - **Entities Operated On**: Git staging index, `.along/ISSUES/`, active commit logs.
 - **Ecosystem Chaining**: Precedes `/along-wrap`.
@@ -219,7 +219,7 @@ flowchart TD
   - *Deterministic Blast Radius*: Prevents silent regression bugs by identifying all dependent callers across the codebase before code is merged.
   - *Graph-Ignore Filtering*: Enforces `.code-review-graph-ignore` to exclude `node_modules` and vendor directories, preventing graph database ballooning.
 - **Invocation Triggers**:
-  - *Explicit*: `/along-graph-check`, `python scripts/along_graph_check.py`.
+  - *Explicit*: `/along-graph-check`, `along graph-check` (fallback: `python ~/.along/bin/along_exec.py graph-check`).
   - *Semantic / Automatic*: Triggered during Phase 4 (Reviewer) in `along-team` and before session wrap-up for non-trivial refactorings.
 - **Entities Operated On**: `.code-review-graph-ignore`, AST symbol database.
 - **Ecosystem Chaining**: Maps identified AST symbols directly into `along-kb-search` for Knowledge Base synchronization.
@@ -231,7 +231,7 @@ flowchart TD
 - **Architectural Rationale**:
   - Extracts subproject constraints and vendor AI rules into `docs/topic--dependencies.md`, giving agents unified visibility into third-party constraints without manual file hunting.
 - **Invocation Triggers**:
-  - *Explicit*: `/along-dep-scan`, `python scripts/along_dep_scan.py`.
+  - *Explicit*: `/along-dep-scan`, `along dep-scan` (fallback: `python ~/.along/bin/along_exec.py dep-scan`).
   - *Semantic / Automatic*: Triggered during `/along-init`, after dependency updates, or when adding a new Git submodule.
 - **Entities Operated On**: `package.json`, `pyproject.toml`, `Cargo.toml`, `*.csproj`, `docs/topic--dependencies.md`.
 - **Ecosystem Chaining**: Feeds architectural constraints into `docs/topic--dependencies.md` and `along-kb-sync`.
@@ -249,7 +249,7 @@ flowchart TD
   - *In-Place Source Provenance & Drift Gate*: Reconciles raw notes, code, and specs in-place with `sources: [{path, hash}]` front-matter tracking, detecting drift via SHA-256 and guarding accidental reductions via the `--prune-intent` gate.
   - *Deterministic LLM Context Exports*: Non-destructively reconciles `llms.txt` and compiles `llms-full.txt` across `.well-known/` and context root locations for whole-project and subproject contexts.
 - **Invocation Triggers**:
-  - *Explicit*: `/along-kb-sync [--strict] [--prune-intent [REASON]]`, `python scripts/along_kb_sync.py`.
+  - *Explicit*: `/along-kb-sync [--strict] [--prune-intent [REASON]]`, `along kb-sync` (fallback: `python ~/.along/bin/along_exec.py kb-sync`).
   - *Semantic / Automatic*: Triggered during `/along-wrap`, after modifying documentation in `docs/`, or during protocol migration.
 - **Entities Operated On**: `docs/*.md`, `docs/INDEX.md`, `llms.txt`, `llms-full.txt`, `.well-known/`, all repository Markdown files.
 - **Ecosystem Chaining**: Compiles the Knowledge Base queried by `along-kb-search` and visualized by `along-dash`.
@@ -262,7 +262,7 @@ flowchart TD
   - *95-98% Token Reduction*: Instead of reading whole multi-kilobyte documents into prompt context, retrieves concise ~200-character snippet windows in under 100 tokens.
   - *Multi-Tier Relevance Scoring*: Ranks results using weighted heuristics (`Title: +10`, `Tags: +5`, `Body: +1`) for instant pinpoint accuracy.
 - **Invocation Triggers**:
-  - *Explicit*: `/along-kb-search "<query>" [--category <cat>]`, `python scripts/along_kb_search.py`.
+  - *Explicit*: `/along-kb-search "<query>" [--category <cat>]`, `along kb-search` (fallback: `python ~/.along/bin/along_exec.py kb-search`).
   - *Semantic / Automatic*: Mandatory first step for agents when researching domain architecture, investigating existing decisions, or mapping blast radius.
 - **Entities Operated On**: `docs/`, `.along/ISSUES/`, `.along/DECISIONS.md`, `.along/MILESTONES/`, `.along/RISKS/`, `.along/SPIKES/`, `.along/SESSIONS/`.
 - **Ecosystem Chaining**: Used by Scout and Supervisor in `along-team` during Phase 1 (Research).
@@ -277,7 +277,7 @@ flowchart TD
   - *Autonomous Multi-Mode Architecture*: Runs in 4 decoupled modes via `scripts/along_dash.py`: CLI Mode, Interactive Web Mode (`http://127.0.0.1:8765`), Static HTML Export, and Markdown Dashboard Report (`.along/DASHBOARD.md`).
   - *Zero Setup Overhead*: Uses PEP 723 inline script metadata (`# /// script ...`) for instant zero-config execution.
 - **Invocation Triggers**:
-  - *Explicit*: `/along-dash [-w|--web] [-c|--cli] [-e|--export]`, `python scripts/along_dash.py`.
+  - *Explicit*: `/along-dash [-w|--web] [-c|--cli] [-e|--export]`, `along dash` (fallback: `python ~/.along/bin/along_exec.py dash`).
   - *Semantic / Automatic*: Triggered when the user asks for a project status overview, dependency visualization, or sprint progress report.
 - **Entities Operated On**: `.along/`, `docs/`, `.along/DASHBOARD.md`.
 - **Ecosystem Chaining**: Visualizes the entire entity DAG created by `along-team`, `along-issue-sync`, and `along-kb-sync`.
@@ -289,7 +289,7 @@ flowchart TD
 - **Architectural Rationale**:
   - Enables legacy repositories adopting Along to immediately gain full project memory and completed issue archives without manual retrospective data entry.
 - **Invocation Triggers**:
-  - *Explicit*: `/along-history-sync`, `python scripts/along_history_sync.py`.
+  - *Explicit*: `/along-history-sync`, `along history-sync` (fallback: `python ~/.along/bin/along_exec.py history-sync`).
   - *Semantic / Automatic*: Triggered during initial onboarding on existing git repositories or after major branch rebases.
 - **Entities Operated On**: Git commit log, `.along/ISSUES/done/`, `.along/SESSIONS/`, `.along/HISTORY.md`.
 - **Ecosystem Chaining**: Reconstructs historical data visualized in `along-dash`.
@@ -302,7 +302,7 @@ flowchart TD
   - *Zero-Leak Redaction*: Automatic regex-based redaction of user home paths, tokens, and credentials guarantees that sensitive data is never transmitted.
   - *Pluggable Transports*: Supports offline file export, direct Telegram bot notifications, or custom webhook endpoints.
 - **Invocation Triggers**:
-  - *Explicit*: `/along-feedback [--export|--send]`, `python scripts/along_feedback.py`.
+  - *Explicit*: `/along-feedback [--export|--send]`, `along feedback` (fallback: `python ~/.along/bin/along_exec.py feedback`).
   - *Semantic / Automatic*: Triggered when an Along internal script encounters unhandled exceptions or when prompted with *"Report bug in Along"*.
 - **Entities Operated On**: `~/.along/diagnostics/incidents/`, `~/.along/diagnostics/REPORT.md`.
 - **Ecosystem Chaining**: Provides operational telemetry and continuous improvement for the Along protocol.
@@ -315,7 +315,7 @@ flowchart TD
   - *Consolidated Lifecycle & Engineering Provenance*: Eliminates fragmentation between session wrap-up and stage wrap-up, providing a single deterministic checklist. For multi-step tasks or `along-team` runs, compiles the 3-part provenance into the session log (`## Initial Implementation Plan`, `## Execution & Loop Trace`, `## Verification Walkthrough & Gate Manifest`).
   - *Automated Garbage Collection*: Completely cleans up ephemeral blackboard directories (`.along/.session/<slug>/`), ensuring zero leftover state files.
 - **Invocation Triggers**:
-  - *Explicit*: `/along-wrap`, `along-wrap`.
+  - *Explicit*: `/along-wrap`, `along wrap` (fallback: `python ~/.along/bin/along_exec.py wrap`).
   - *Semantic / Automatic*: Triggered whenever a developer says *"I'm done for today"*, *"Wrap up session"*, or upon completing all steps in an issue.
 - **Entities Operated On**: `.along/ISSUES/`, `.along/ISSUES/done/`, `.along/ISSUES.md`, `.along/SESSIONS/`, `.along/HISTORY.md`, `.along/.session/`.
 - **Ecosystem Chaining**: Finalizes work executed by `along-team` and triggers `along-kb-sync` and `along-issue-sync`.

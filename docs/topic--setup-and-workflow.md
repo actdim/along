@@ -112,13 +112,29 @@ To eliminate this race condition, configure Git to disable optional index lockin
    ```
    Setting `GIT_OPTIONAL_LOCKS=0` prevents `git status` and `git diff` from attempting to acquire write locks or rewrite `.git/index`. Mandatory locks for `git add`, `git commit`, `git checkout`, and `git merge` remain fully operational.
 
-2. **Disable Multi-threaded Index Preloading**:
+2. **Disable Diff Index Auto-Refresh (Global Git Config)**:
+   ```powershell
+   git config --global diff.autoRefreshIndex false
+   ```
+   Prevents `git diff` and IDE Diff Editors from silently executing `git update-index --refresh` and rewriting `.git/index` during read-only file inspections.
+
+3. **Disable Multi-threaded Index Preloading**:
    ```powershell
    git config --global core.preloadindex false
    ```
    Prevents background thread contention on NTFS metadata locks during index inspection.
 
-3. **Along Automatic Protection**:
+4. **Disable IDE Background Auto-Refresh**:
+   In `.vscode/settings.json`:
+   ```json
+   {
+     "git.autorefresh": false,
+     "git.autofetch": false
+   }
+   ```
+   Stops VS Code from triggering bursts of `git status` commands while batch file operations are in flight.
+
+5. **Along Automatic Protection**:
    Along automatically injects `GIT_OPTIONAL_LOCKS=0` into child process environments via `alongkit.proc` and includes automatic 0-byte index self-healing (`git read-tree HEAD`) when interacting with Git.
 
 ---

@@ -423,6 +423,7 @@ def run_update(repo_root, check_only=False, dry_run=False, force=False, local_on
             if os.path.exists(c):
                 migrate_script = c
                 break
+    migrate_script = repo.resolve_tool_script("migrate_protocol.py", repo_root, skill_folder="along-init")
 
     print("-> Discovering active agent contexts in repository...")
     contexts = find_existing_agent_contexts(repo_root)

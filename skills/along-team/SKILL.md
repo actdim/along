@@ -67,7 +67,7 @@ When subagent spawning is unavailable (OpenAI Codex, OpenCode) or disabled/throt
    - `=== PHASE 3: IMPLEMENTER (STEP N EXECUTION) ===`
    - `=== PHASE 4: REVIEWER (RUBRIC AUDIT & TESTS) ===`
    - `=== PHASE 5: REASSESS (VERDICT & RETRY EVALUATION) ===`
-2. **Blackboard Persistence**: State is externalized to disk at `.along/.session/<slug>/` (`blackboard.md`, `living_plan.md`, `step_review_<N>.md`). This prevents context bloat across long sessions.
+2. **Blackboard Persistence**: State is externalized to disk at `.along/.session/<slug>/` (`state.json`, `plan.md`, `research.md`, `reviews/step-<N>.md`, `execution_trace.md`). Initialized via `along scratch init <slug>`. Inspect state at any time via `along scratch state <slug>` (`--json`). Resumption automatically reads `state.json` and resumes from `current_step` unless `--restart` is passed.
 3. **Explicit Review Verdicts**: The agent evaluates the step against the Reviewer Rubric and outputs a mandatory verdict block:
    ```text
    VERDICT: PASS
@@ -76,7 +76,7 @@ When subagent spawning is unavailable (OpenAI Codex, OpenCode) or disabled/throt
    ISSUES:
    1. [Check Name]: Concrete reason for failure...
    ```
-4. **Retry Counters**: The Supervisor increments a retry counter in memory and on disk (maximum 2 retries per step). If the retry limit is exceeded, execution pauses and escalates to the human user.
+4. **Retry Counters**: Tracked on disk in `state.json` via `along scratch update <slug> --step <N> --inc-retry` (maximum 2 retries per step, governed by `retry_limit`). If the retry limit is exceeded, execution immediately halts and escalates to the human user.
 
 ---
 
@@ -116,7 +116,7 @@ Every Reviewer report and session log MUST conclude with an explicit Gate Execut
 ```text
 Gate Execution Manifest:
 - File Integrity: EXECUTED (PASS)
-- Automated Tests: EXECUTED (PASS) [python scripts/along_exec.py test]
+- Automated Tests: EXECUTED (PASS) [along test]
 - Diff Scope Audit: EXECUTED (PASS)
 - Requirement Traceability: EXECUTED (PASS) [REQ-1, REQ-2]
 - Blast Radius: DEGRADED (PASS) [static search, code-review-graph offline]
@@ -168,14 +168,15 @@ TASK / GOAL
 ## Mandatory Execution Protocol (Step-by-Step)
 
 ### Phase 0: Analyze & Requirement Extraction (Supervisor)
-1. Read target `.along/ISSUES/<type>--<slug>.md` (or user prompt) and `.along/DECISIONS.md`.
-2. Construct an explicit **Requirement Traceability Matrix** decomposing the user request into atomic requirements (`REQ-1`, `REQ-2`, `REQ-3`).
-3. Classify task size (`S`, `M`, or `L/XL`). Announce routing decision and requirement matrix.
+1. Initialize or resume blackboard: run `along scratch init <slug> [--title <title>] [--steps <N>]`. Inspect status with `along scratch state <slug>`. If `.along/.session/<slug>/state.json` already exists and `--restart` is not passed, resume from `current_step` with recorded step status and retry counters intact.
+2. Read target `.along/ISSUES/<type>--<slug>.md` (or user prompt) and `.along/DECISIONS.md`.
+3. Construct an explicit **Requirement Traceability Matrix** decomposing the user request into atomic requirements (`REQ-1`, `REQ-2`, `REQ-3`).
+4. Classify task size (`S`, `M`, or `L/XL`). Announce routing decision and requirement matrix.
 
 ### Phase 1: Research (Scout)
 1. Launch read-only research via `spawn_readonly_researcher` (or execute inline Phase 1 in single-agent mode).
 2. Gather: 1) Relevant files and symbols, 2) Existing patterns, 3) Constraints/Risks, 4) Unknowns. Zero file modifications allowed.
-3. Ingest findings into `.along/.session/<slug>/blackboard.md`.
+3. Ingest findings into `.along/.session/<slug>/research.md` (and blackboard).
 
 ### Phase 2: Architecture & Public Surface Discovery (Architect)
 1. Execute **Public Surface Discovery**: Search (`grep`) for all occurrences of modified entities across public entry points (`README.md`, `AGENTS.md`, `docs/`, `package.json`).
@@ -183,19 +184,19 @@ TASK / GOAL
 3. Each step must define: target files/symbols, expected behavior mapped to `REQ-N`, and verifiable acceptance criteria.
 4. **Dual-Track UI & Artifact Projection**:
    - **Track 1 (Host IDE UI Projection)**: When running under Google Antigravity, project the Living Plan to `<appDataDir>/brain/<id>/implementation_plan.md` with `ArtifactMetadata` (`RequestFeedback: true`, `UserFacing: true`). This triggers Antigravity's native interactive design doc card with user checkboxes and the "Proceed" button.
-   - **Track 2 (Permanent Along Memory)**: In all environments (Antigravity, Claude Code, OpenAI Codex, OpenCode), write the plan to disk at `.along/.session/<slug>/living_plan.md` and present in chat for confirmation.
+   - **Track 2 (Permanent Along Memory)**: In all environments (Antigravity, Claude Code, OpenAI Codex, OpenCode), write the plan to disk at `.along/.session/<slug>/plan.md` (and `living_plan.md`) and present in chat for confirmation.
 
 ### Phase 3 to 5: Step Loop (Step N)
 For each step in the Living Plan:
-1. **Implement**: Invoke `spawn_worker` (or execute inline Phase 3) with step instructions and relevant context.
-2. **Review**: Invoke `spawn_reviewer` (or execute inline Phase 4) to run tests and audit diff. Output Gate Execution Manifest.
+1. **Implement**: Mark step active: `along scratch update <slug> --step <N> --step-status in-progress`. Invoke `spawn_worker` (or execute inline Phase 3) with step instructions and relevant context.
+2. **Review**: Invoke `spawn_reviewer` (or execute inline Phase 4) to run tests and audit diff. Save rubric verdict into `.along/.session/<slug>/reviews/step-<N>.md`. Output Gate Execution Manifest.
 3. **Reassess & Loop Disambiguation**: Supervisor inspects reviewer verdict:
-   - If `PASS`: advance to Step N+1.
+   - If `PASS`: mark passed (`along scratch update <slug> --step <N> --step-status passed`) and advance to Step N+1.
    - If `FAIL` on localized defects (broken tests, syntax errors, lint, null pointer):
-     - Trigger **`[Fix Loop]`**: Provide worker with exact error trace, failing test assertion, and diff. Worker scopes fix strictly to resolving the defect without restructuring the plan. Hard limit: maximum 2 fix attempts per step.
+     - Trigger **`[Fix Loop]`**: Provide worker with exact error trace, failing test assertion, and diff. Increment step retry counter on disk: `along scratch update <slug> --step <N> --inc-retry`. If retry count exceeds 2, halt immediately with an escalation alert to the human user.
      - Record attempt in `.along/.session/<slug>/execution_trace.md` (`type: fix_loop`, step, attempt, outcome).
    - If `FAIL` on structural flaws (unforeseen dependencies, missing APIs, invalid assumptions, or Fix Loop retry exhaustion):
-     - Trigger **`[Re-plan Loop]`**: Architect increments plan revision (`Revision N+1`), re-architects remaining steps, updates `.along/.session/<slug>/living_plan.md` (and projects updated `implementation_plan.md` in Antigravity), and restarts Step Loop from the revised step.
+     - Trigger **`[Re-plan Loop]`**: Architect increments plan revision (`Revision N+1`), updates `plan_revision` on disk (`along scratch update <slug> --plan-rev <N+1>`), re-architects remaining steps, updates `.along/.session/<slug>/plan.md` (and `living_plan.md`, plus updated `implementation_plan.md` in Antigravity), and restarts Step Loop from the revised step.
      - Record revision in `.along/.session/<slug>/execution_trace.md` (`type: replan_loop`, reason, revision).
 
 ### Phase 6: Autonomous Goal Completion (`/goal` Mode)
@@ -218,6 +219,7 @@ When running in autonomous `/goal` mode:
      1. `## Initial Implementation Plan (Baseline)`
      2. `## Execution & Loop Trace (Fixes & Re-plans)`
      3. `## Verification Walkthrough & Gate Manifest`
+   - Clean up session blackboard via `along scratch purge <slug>` upon successful wrap-up. (On failure, retain blackboard for diagnosis).
 4. Present a single concise completion summary.
 
 ---
