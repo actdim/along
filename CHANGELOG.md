@@ -2,6 +2,11 @@
 
 All notable changes to this project, newest first.
 
+## v2.2.25 - 2026-09-07
+
+- docs: clean illustrative links in session and decisions, include pyproject.toml in version bump
+- fix(protocol): ban file:// URI scheme, update link gates, and migrate legacy references [generated-docs-emit-file-uri-links]
+
 ## v2.2.24 - 2026-09-07
 
 - docs: record commit hash in session log (refs #remove-git-locking-workarounds)
