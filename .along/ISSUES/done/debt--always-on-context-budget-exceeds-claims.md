@@ -3,10 +3,11 @@ protocol: along
 protocol_version: 2.2.8
 slug: always-on-context-budget-exceeds-claims
 type: debt
-status: open
+status: done
+completed: 2026-09-07
 priority: high
 created: 2026-09-01
-updated: 2026-09-01
+updated: 2026-09-07
 agent: claude-code
 tags: [token-efficiency, context-budget, rules, projections, claims]
 milestone: v3.0.0-global-quality-revision

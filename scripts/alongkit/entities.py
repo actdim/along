@@ -237,6 +237,60 @@ def uses_slug_adr_format(dec_raw: str) -> bool:
     return bool(re.search(r"^##\s+ADR-\d{4}-\d{2}-\d{2}--", dec_raw, re.MULTILINE))
 
 
+def extract_decision_summary(text: str, max_chars: int = 160) -> str:
+    """Extract a concise single-line summary of an ADR decision for CONSTRAINTS.md."""
+    lines = [l.strip() for l in text.splitlines() if l.strip()]
+    if not lines:
+        return ""
+    first = re.sub(r"^(\d+\.|\-|\*)\s*", "", lines[0])
+    buf = first
+    idx = 1
+    while len(buf) < max_chars and idx < len(lines):
+        nxt = re.sub(r"^(\d+\.|\-|\*)\s*", "", lines[idx])
+        buf += " " + nxt
+        idx += 1
+    if len(buf) > max_chars:
+        cut = buf[:max_chars].rsplit(" ", 1)[0]
+        return cut.rstrip(".,:;") + "..."
+    return buf.strip()
+
+
+def sync_constraints(repo_root: str) -> str:
+    """Compile active architectural constraints from .along/DECISIONS.md into .along/CONSTRAINTS.md."""
+    dec_path = os.path.join(repo_root, ".along", "DECISIONS.md")
+    if not os.path.isfile(dec_path):
+        return ""
+
+    with open(dec_path, "r", encoding="utf-8") as f:
+        raw = f.read()
+
+    entries = parse_decision_entries(raw, rel_path="DECISIONS.md")
+    active_entries = [e for e in entries if e.get("status") == "active"]
+
+    blocks = [
+        "<!-- Generated projection from .along/DECISIONS.md. Do not edit by hand. Run: along decision sync -->",
+        "# Active Architectural Constraints",
+        "",
+        "This document compiles active architectural rules and constraints from `.along/DECISIONS.md`.",
+        "Detailed context, history, and superseded ADRs remain in the append-only `.along/DECISIONS.md` log.",
+        "",
+    ]
+
+    for e in active_entries:
+        m = re.search(r"-\s*Decision:\s*(.*?)(?=\n-\s*Consequences:|\n-\s*Context:|\Z)", e["body"], re.DOTALL)
+        decision_text = m.group(1).strip() if m else ""
+        summary = extract_decision_summary(decision_text, max_chars=160)
+        t_parts = e.get("title", "").split(" - ", 1)
+        short_title = t_parts[1] if len(t_parts) > 1 else t_parts[0]
+        blocks.append(f"- **[{short_title}]({e['file_path']})**: {summary}")
+
+    content = "\n".join(blocks).rstrip() + "\n"
+    constraints_file = os.path.join(repo_root, ".along", "CONSTRAINTS.md")
+    with open(constraints_file, "w", encoding="utf-8") as f:
+        f.write(content)
+    return content
+
+
 # ---------------------------------------------------------------------------
 # Board Projection Helpers (REQ-5)
 # ---------------------------------------------------------------------------
