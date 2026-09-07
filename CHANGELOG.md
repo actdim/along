@@ -2,6 +2,14 @@
 
 All notable changes to this project, newest first.
 
+## v2.2.22 - 2026-09-07
+
+- feat: fix git index lock resilience, kb sync atomic writes, and issue milestones (refs #programmatic-integrity-gates-and-git-guard)
+- fix: git index self-healing, committer selective staging, and kb-sync idempotency (refs #programmatic-integrity-gates-and-git-guard)
+- docs(issues): translate worktree isolation issue to English and eliminate Cyrillic across all issues (refs #runtime-worktree-isolation)
+- docs(issues): document semantic intent routing and false positive guards for worktree isolation (refs #runtime-worktree-isolation)
+- feat: add issue for deterministic kb pipeline and ast grounding (refs #deterministic-kb-pipeline-and-ast-grounding)
+
 ## v2.2.21 - 2026-09-06
 
 - feat(orchestration): provider-agnostic team, engineering provenance, and runtime worktree isolation (refs #runtime-worktree-isolation)
