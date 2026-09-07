@@ -6,7 +6,7 @@ agent: antigravity
 branch: main
 commit: 58f1c91
 summary: Fixed root-cause variable bug in along_bump_version.py (re.sub on u instead of c), verified 100% unit tests pass, and released ALONG-PROTOCOL v2.0.8.
-milestone: v2.0.0-along
+milestone: v2.0.0-along-transition
 issues_advanced: []
 issues_completed: []
 decisions: []

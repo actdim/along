@@ -207,8 +207,8 @@ spikes_conducted: []
             sessions_created += 1
 
         # 3. History entry
-        rel_sess = f".along/SESSIONS/{c_year}/{c_date}--{slug}.md"
-        history_lines.append(f"{c_date} - {slug} - git-reconstructed - {subject} - [{rel_sess}](file://{rel_sess})")
+        rel_sess = f"./SESSIONS/{c_year}/{c_date}--{slug}.md"
+        history_lines.append(f"{c_date} - {slug} - git-reconstructed - {subject} - [{rel_sess}]({rel_sess})")
 
     # Update HISTORY.md if lines created
     if history_lines and os.path.exists(history_file):

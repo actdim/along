@@ -3,11 +3,12 @@ protocol: along
 protocol_version: 2.2.8
 slug: kb-sync-rewrites-unrelated-numbered-links
 type: bug
-status: open
+status: done
 priority: high
 created: 2026-09-01
-updated: 2026-09-01
-agent: claude-code
+updated: 2026-09-07
+completed: 2026-09-07
+agent: antigravity
 tags: [kb-sync, link-rewriting, heuristics, false-positive]
 milestone: v3.0.0-global-quality-revision
 blocked_by: []
@@ -105,8 +106,8 @@ tree, including `README.md`.
 
 ## Acceptance Criteria
 
-- [ ] Zero rewrites to non-existent targets.
-- [ ] Numbered-file convention preserved unless explicitly opted in.
-- [ ] `--dry-run` implemented.
-- [ ] Fence detection handles mixed and nested fences.
-- [ ] Regression tests cover all four false-positive classes above.
+- [x] Zero rewrites to non-existent targets.
+- [x] Numbered-file convention preserved unless explicitly opted in.
+- [x] `--dry-run` implemented.
+- [x] Fence detection handles mixed and nested fences.
+- [x] Regression tests cover all four false-positive classes above.

@@ -37,7 +37,7 @@ TESTS_DIR = os.path.dirname(os.path.abspath(__file__))
 if TESTS_DIR not in sys.path:
     sys.path.insert(0, TESTS_DIR)
 
-from alongkit import proc, textio, typography
+from alongkit import proc, repo, textio, typography
 import hermetic
 
 
@@ -56,25 +56,118 @@ def run_engine(cmd, **kwargs):
     """
     return proc.run_capture(cmd, **kwargs)
 
+
+def find_zero_byte_files(root: str) -> list[str]:
+    """Find empty (0-byte) files under root, allowlisting .gitkeep.
+
+    Uses git ls-files if inside a git repository to inspect all tracked files
+    regardless of extension (REQ-3); falls back to os.walk with exact
+    path-segment filtering against ignored directories.
+    """
+    zero_byte_files = []
+
+    res = proc.run_capture(["git", "ls-files"], cwd=root)
+    if res.ok and res.lines():
+        for rel in res.lines():
+            if os.path.basename(rel) == ".gitkeep":
+                continue
+            path = os.path.join(root, rel)
+            if os.path.isfile(path) and os.path.getsize(path) == 0:
+                zero_byte_files.append(f"{rel.replace(chr(92), '/')} (0 bytes)")
+        return zero_byte_files
+
+    ignored_segments = set(repo.IGNORED_DIRS) | {".git", "__pycache__", "node_modules", "dist", ".vite", "scratch"}
+    for current, dirs, files in os.walk(root):
+        dirs[:] = [d for d in dirs if d not in ignored_segments]
+        for name in files:
+            if name == ".gitkeep":
+                continue
+            path = os.path.join(current, name)
+            rel = os.path.relpath(path, root).replace(chr(92), "/")
+            segments = set(rel.split("/"))
+            if segments & ignored_segments:
+                continue
+            if os.path.isfile(path) and os.path.getsize(path) == 0:
+                zero_byte_files.append(f"{rel} (0 bytes)")
+    return zero_byte_files
+
+
+def find_typography_violations(root: str) -> tuple[list[str], list[str]]:
+    """Inspect text files under root for byte-level UTF-8 BOM and banned typography.
+
+    Returns (violations, boms). Covers .along/, root dotfiles (.mise.toml), and tests/.
+    Uses exact path-segment filtering against ignored directories.
+    """
+    ignored_segments = set(repo.IGNORED_DIRS) | {".git", "__pycache__", "node_modules", "dist", ".vite", "scratch"}
+    target_suffixes = (".md", ".py", ".sh", ".ps1", ".bat", ".json", ".yaml", ".yml", ".toml")
+
+    violations = []
+    boms = []
+
+    for current, dirs, files in os.walk(root):
+        dirs[:] = [d for d in dirs if d not in ignored_segments]
+        for name in sorted(files):
+            if not name.endswith(target_suffixes):
+                continue
+            path = os.path.join(current, name)
+            rel = os.path.relpath(path, root).replace(chr(92), "/")
+            segments = set(rel.split("/"))
+            if segments & ignored_segments:
+                continue
+
+            if textio.has_utf8_bom(path):
+                boms.append(f"{rel}: contains byte order mark (UTF-8 BOM)")
+
+            try:
+                content = textio.read_text(path, strict=False)
+            except Exception:
+                continue
+
+            for ch in typography.FORBIDDEN_CHARACTERS:
+                if ch == typography.BOM:
+                    if ch in content and not textio.has_utf8_bom(path):
+                        violations.append(f"{rel}: contains byte order mark inside text (U+{ord(ch):04X})")
+                    continue
+                if ch in content:
+                    desc = typography.name_of(ch)
+                    violations.append(f"{rel}: contains {desc} (U+{ord(ch):04X})")
+
+    return violations, boms
+
+
 class TestAlongSkillsAndScripts(unittest.TestCase):
 
     def test_00_zero_byte_files_forbidden(self):
         """Verify zero 0-byte (empty) files across repository source, config, and skills."""
-        patterns = ['**/*.md', '**/*.py', '**/*.sh', '**/*.ps1', '**/*.json', '**/*.yaml', '**/*.yml']
-        zero_byte_files = []
+        zero_byte_files = find_zero_byte_files(REPO_ROOT)
+        self.assertEqual(len(zero_byte_files), 0,
+                         f"Found empty 0-byte files in repository:\n" + "\n".join(zero_byte_files))
 
-        for pat in patterns:
-            for filepath in glob.glob(os.path.join(REPO_ROOT, pat), recursive=True):
-                if any(x in filepath for x in [".git", "__pycache__", "node_modules", "dist", ".vite"]):
-                    continue
-                if os.path.basename(filepath) == ".gitkeep":
-                    continue
-                size = os.path.getsize(filepath)
-                if size == 0:
-                    rel = os.path.relpath(filepath, REPO_ROOT)
-                    zero_byte_files.append(f"{rel} (0 bytes)")
+    def test_00b_readme_referenced_files_exist_and_nonempty(self):
+        """Assert every file referenced from README.md exists and is non-empty (REQ-5)."""
+        readme_path = os.path.join(REPO_ROOT, "README.md")
+        self.assertTrue(os.path.isfile(readme_path), "README.md must exist")
+        with open(readme_path, "r", encoding="utf-8") as f:
+            content = f.read()
 
-        self.assertEqual(len(zero_byte_files), 0, f"Found empty 0-byte files in repository:\n" + "\n".join(zero_byte_files))
+        link_pattern = re.compile(r"\[([^\]]+)\]\(([^)]+)\)")
+        referenced_files = []
+        for match in link_pattern.finditer(content):
+            target = match.group(2).strip()
+            if target.startswith(("http://", "https://", "mailto:", "#")):
+                continue
+            clean_target = target.split("#")[0].strip()
+            if clean_target:
+                referenced_files.append(clean_target)
+
+        self.assertGreater(len(referenced_files), 0, "README.md must contain local links")
+        for rel_target in referenced_files:
+            target_path = os.path.normpath(os.path.join(REPO_ROOT, rel_target))
+            self.assertTrue(os.path.exists(target_path),
+                            f"README.md references missing file: {rel_target}")
+            size = os.path.getsize(target_path)
+            self.assertGreater(size, 0,
+                               f"README.md references empty file: {rel_target} (0 bytes)")
 
     def test_01_all_python_files_compile(self):
         """Verify that every .py file in scripts/ and skills/ compiles and has non-trivial size."""
@@ -305,33 +398,75 @@ class TestAlongSkillsAndScripts(unittest.TestCase):
                          f"engines must import the version, not declare it: {offenders}")
 
     def test_05_clean_typography(self):
-        """Verify zero non-ASCII typographic characters across repository text files."""
-        # The table lives in alongkit.typography, shared with the sanitizer. Two copies
-        # meant a character could be banned by this gate and unknown to the tool that
-        # is supposed to fix it.
-        forbidden_chars = {char: typography.name_of(char)
-                           for char in typography.REPLACEMENTS}
-        
-        patterns = ['**/*.md', '**/*.py', '**/*.sh', '**/*.ps1', '**/*.json', '**/*.yaml', '**/*.yml']
-        violations = []
+        """Verify zero non-ASCII typographic characters and byte order marks across repository text files."""
+        violations, boms = find_typography_violations(REPO_ROOT)
+        findings = violations + boms
+        self.assertEqual(len(findings), 0,
+                         "Typography violations or BOMs found in repository:\n" + "\n".join(findings[:15]))
 
-        for pat in patterns:
-            for filepath in glob.glob(os.path.join(REPO_ROOT, pat), recursive=True):
-                # Skip .git, caches, tests, node_modules, dist, and typography sanitizer itself
-                if any(x in filepath for x in [".git", "__pycache__", "scratch", "tests", "node_modules", "dist", ".vite", "sanitize_typography.py"]):
-                    continue
-                try:
-                    with open(filepath, "r", encoding="utf-8") as f:
-                        content = f.read()
-                except Exception:
-                    continue
+    def test_05b_quality_gates_catch_hidden_dist_bom_and_tests(self):
+        """Verify quality gates catch violations in hidden dirs, dist paths, BOMs, tests, and empty extensionless files (REQ-9)."""
+        with tempfile.TemporaryDirectory() as tmp:
+            # 1. Hidden directory violation (.along/ISSUES/test.md)
+            hidden_dir = os.path.join(tmp, ".along", "ISSUES")
+            os.makedirs(hidden_dir, exist_ok=True)
+            hidden_file = os.path.join(hidden_dir, "test.md")
+            with open(hidden_file, "w", encoding="utf-8") as f:
+                f.write(f"# Title {typography.EM_DASH} bad dash\n")
 
-                for ch, desc in forbidden_chars.items():
-                    if ch in content:
-                        rel = os.path.relpath(filepath, REPO_ROOT)
-                        violations.append(f"{rel}: contains {desc} (U+{ord(ch):04X})")
+            # 2. Path containing substring 'dist' in name (must not be skipped by substring matching)
+            docs_dir = os.path.join(tmp, "docs")
+            os.makedirs(docs_dir, exist_ok=True)
+            dist_file = os.path.join(docs_dir, "topic--distributed-systems.md")
+            with open(dist_file, "w", encoding="utf-8") as f:
+                f.write(f"# Distributed {typography.EM_DASH} systems\n")
 
-        self.assertEqual(len(violations), 0, f"Typography violations found:\n" + "\n".join(violations[:15]))
+            # 3. BOM-prefixed fixture
+            bom_dir = os.path.join(tmp, "scripts")
+            os.makedirs(bom_dir, exist_ok=True)
+            bom_file = os.path.join(bom_dir, "hook.ps1")
+            with open(bom_file, "wb") as f:
+                f.write(textio.UTF8_BOM + b"# PowerShell script\n")
+
+            # 4. Violation inside tests/ directory
+            test_sub_dir = os.path.join(tmp, "tests", "sub")
+            os.makedirs(test_sub_dir, exist_ok=True)
+            test_file = os.path.join(test_sub_dir, "test_example.py")
+            with open(test_file, "w", encoding="utf-8") as f:
+                f.write(f"# Test file {typography.EM_DASH} example\n")
+
+            # 5. Extensionless empty file
+            empty_file = os.path.join(tmp, "EMPTY_LICENSE")
+            with open(empty_file, "wb") as f:
+                pass
+
+            # 6. Allowlisted .gitkeep (0 bytes, must be allowed)
+            gitkeep_file = os.path.join(tmp, ".along", ".gitkeep")
+            with open(gitkeep_file, "wb") as f:
+                pass
+
+            # Test zero-byte gate
+            zero_bytes = find_zero_byte_files(tmp)
+            self.assertTrue(any("EMPTY_LICENSE" in f for f in zero_bytes),
+                            f"Zero-byte gate must catch empty extensionless file; got: {zero_bytes}")
+            self.assertFalse(any(".gitkeep" in f for f in zero_bytes),
+                             f"Zero-byte gate must allow .gitkeep; got: {zero_bytes}")
+
+            # Test typography & BOM gate
+            violations, boms = find_typography_violations(tmp)
+
+            # Hidden dir detected
+            self.assertTrue(any(".along/ISSUES/test.md" in v for v in violations),
+                            f"Gate must detect violation in hidden directory .along; got: {violations}")
+            # dist substring not skipped
+            self.assertTrue(any("topic--distributed-systems.md" in v for v in violations),
+                            f"Gate must not skip paths containing 'dist' substring; got: {violations}")
+            # tests/ dir detected
+            self.assertTrue(any("tests/sub/test_example.py" in v for v in violations),
+                            f"Gate must inspect tests/ directory; got: {violations}")
+            # BOM detected
+            self.assertTrue(any("scripts/hook.ps1" in b for b in boms),
+                            f"Gate must detect byte-level BOM; got: {boms}")
 
     LEGACY_AGENTS_MD = (
         "<!-- BEGIN ACTDIM-AGENTS-PROTOCOL root -->\n"
@@ -825,7 +960,192 @@ class TestAlongSkillsAndScripts(unittest.TestCase):
         finally:
             shutil.rmtree(temp_dir, ignore_errors=True)
 
-    def test_18_header_deduplication(self):
+    def test_17b_link_integrity_covers_along_directory(self):
+        """Verify that validate_repo_link_integrity reports broken links inside .along/ (REQ-1, REQ-6)."""
+        scripts_dir = os.path.join(REPO_ROOT, "scripts")
+        if scripts_dir not in sys.path:
+            sys.path.insert(0, scripts_dir)
+        import along_kb_sync
+
+        temp_dir = tempfile.mkdtemp(prefix="along_link_along_dir_")
+        try:
+            sessions_dir = os.path.join(temp_dir, ".along", "SESSIONS", "2026")
+            issues_dir = os.path.join(temp_dir, ".along", "ISSUES")
+            os.makedirs(sessions_dir, exist_ok=True)
+            os.makedirs(issues_dir, exist_ok=True)
+
+            existing_doc = os.path.join(temp_dir, ".along", "DECISIONS.md")
+            with open(existing_doc, "w", encoding="utf-8") as f:
+                f.write("# Decisions\n")
+
+            session_file = os.path.join(sessions_dir, "2026-09-01--test.md")
+            with open(session_file, "w", encoding="utf-8") as f:
+                f.write("# Session\n\n- Valid: [Decisions](../../DECISIONS.md)\n- Broken: [Missing](./missing-file.md)\n")
+
+            issue_file = os.path.join(issues_dir, "bug--sample.md")
+            with open(issue_file, "w", encoding="utf-8") as f:
+                f.write("# Issue\n\n- Broken: [Dangling](non-existent-issue.md)\n")
+
+            broken_links, total_checked = along_kb_sync.validate_repo_link_integrity(temp_dir)
+            self.assertEqual(total_checked, 3, "Should check 3 links in .along/ directory")
+            self.assertEqual(len(broken_links), 2, "Should find 2 broken links in .along/")
+            targets = [bl["target"] for bl in broken_links]
+            self.assertIn("./missing-file.md", targets)
+            self.assertIn("non-existent-issue.md", targets)
+
+        finally:
+            shutil.rmtree(temp_dir, ignore_errors=True)
+
+    def test_17c_link_rewriter_covers_along_directory(self):
+        """Verify that rewrite_inbound_links updates legacy links located in .along/ (REQ-1, REQ-6)."""
+        scripts_dir = os.path.join(REPO_ROOT, "scripts")
+        if scripts_dir not in sys.path:
+            sys.path.insert(0, scripts_dir)
+        import along_kb_sync
+
+        temp_dir = tempfile.mkdtemp(prefix="along_rewrite_along_dir_")
+        try:
+            along_dir = os.path.join(temp_dir, ".along")
+            docs_dir = os.path.join(temp_dir, "docs")
+            os.makedirs(along_dir, exist_ok=True)
+            os.makedirs(docs_dir, exist_ok=True)
+
+            history_file = os.path.join(along_dir, "HISTORY.md")
+            with open(os.path.join(docs_dir, "topic--architecture.md"), "w", encoding="utf-8") as f:
+                f.write("# Architecture\n")
+            with open(os.path.join(docs_dir, "topic--setup-and-workflow.md"), "w", encoding="utf-8") as f:
+                f.write("# Setup\n")
+            with open(history_file, "w", encoding="utf-8") as f:
+                f.write("# History\n\n- [Arch](.along/KB/01-architecture.md)\n- [Setup](.along/KB/03-setup-and-workflow.md)\n")
+
+            rewritten_files, total_rewrites = along_kb_sync.rewrite_inbound_links(temp_dir, dry_run=False)
+            self.assertEqual(rewritten_files, 1)
+            self.assertEqual(total_rewrites, 2)
+
+            with open(history_file, "r", encoding="utf-8") as f:
+                updated = f.read()
+            self.assertIn("../docs/topic--architecture.md", updated)
+            self.assertIn("../docs/topic--setup-and-workflow.md", updated)
+            self.assertNotIn(".along/KB/", updated)
+
+        finally:
+            shutil.rmtree(temp_dir, ignore_errors=True)
+
+    def test_17d_legacy_deletion_blocked_when_unresolved_references_remain(self):
+        """Verify that legacy directory deletion is blocked while unresolved references exist (REQ-5)."""
+        temp_dir = tempfile.mkdtemp(prefix="along_deletion_blocked_")
+        try:
+            docs_dir = os.path.join(temp_dir, "docs")
+            along_dir = os.path.join(temp_dir, ".along")
+            old_kb_dir = os.path.join(along_dir, "KB")
+            os.makedirs(docs_dir, exist_ok=True)
+            os.makedirs(old_kb_dir, exist_ok=True)
+
+            with open(os.path.join(temp_dir, "AGENTS.md"), "w", encoding="utf-8") as f:
+                f.write("<!-- BEGIN ALONG-PROTOCOL root -->\n# ALONG-PROTOCOL v2.2.4\n<!-- END ALONG-PROTOCOL -->\n")
+
+            with open(os.path.join(old_kb_dir, "unmapped-special.txt"), "w", encoding="utf-8") as f:
+                f.write("# Special Legacy Note\nContent.\n")
+
+            # Document with an unrewritten link pointing to legacy KB
+            with open(os.path.join(temp_dir, "README.md"), "w", encoding="utf-8") as f:
+                f.write("# Readme\n\n[Legacy](.along/KB/unmapped-special.txt)\n")
+
+            kb_script = os.path.join(REPO_ROOT, "scripts", "along_kb_sync.py")
+            res = run_engine([sys.executable, kb_script, temp_dir])
+            self.assertEqual(res.returncode, 0, f"sync_kb failed:\n{res.stderr}")
+
+            # Legacy KB must NOT be deleted because unresolved reference remains
+            self.assertTrue(os.path.exists(old_kb_dir), ".along/KB must NOT be deleted while unresolved references remain")
+            self.assertIn("Legacy directory deletion blocked", res.stdout)
+
+        finally:
+            shutil.rmtree(temp_dir, ignore_errors=True)
+
+    def test_17e_stable_entry_point_rule_enforced(self):
+        """Verify that links outside .along/ pointing into .along/ are reported as entry point violations (REQ-7)."""
+        scripts_dir = os.path.join(REPO_ROOT, "scripts")
+        if scripts_dir not in sys.path:
+            sys.path.insert(0, scripts_dir)
+        import along_kb_sync
+
+        temp_dir = tempfile.mkdtemp(prefix="along_entry_point_")
+        try:
+            along_dir = os.path.join(temp_dir, ".along")
+            docs_dir = os.path.join(temp_dir, "docs")
+            os.makedirs(along_dir, exist_ok=True)
+            os.makedirs(docs_dir, exist_ok=True)
+
+            with open(os.path.join(along_dir, "DECISIONS.md"), "w", encoding="utf-8") as f:
+                f.write("# Decisions\n")
+
+            # Link in root README pointing into .along/
+            with open(os.path.join(temp_dir, "README.md"), "w", encoding="utf-8") as f:
+                f.write("# Readme\n\n- [ADR](.along/DECISIONS.md)\n")
+
+            # Link in docs/ article pointing into .along/
+            with open(os.path.join(docs_dir, "topic--architecture.md"), "w", encoding="utf-8") as f:
+                f.write("# Arch\n\n- [ADR](../.along/DECISIONS.md)\n")
+
+            broken_links, total_checked, violations = along_kb_sync.validate_repo_link_integrity(temp_dir, return_violations=True)
+            self.assertEqual(len(broken_links), 0, "Target files physically exist so broken_links must be 0")
+            self.assertEqual(len(violations), 2, "Must report 2 Stable Entry Point violations")
+            self.assertEqual(violations[0]["canonical_alternative"], "docs/INDEX.md")
+            self.assertEqual(violations[1]["canonical_alternative"], "docs/INDEX.md")
+
+        finally:
+            shutil.rmtree(temp_dir, ignore_errors=True)
+
+    def test_17f_json_report_format(self):
+        """Verify that --json produces machine-readable JSON output for CI (REQ-4)."""
+        temp_dir = tempfile.mkdtemp(prefix="along_json_report_")
+        try:
+            with open(os.path.join(temp_dir, "README.md"), "w", encoding="utf-8") as f:
+                f.write("# Readme\n\n- [Broken](./missing.md)\n")
+
+            kb_script = os.path.join(REPO_ROOT, "scripts", "along_kb_sync.py")
+            res = run_engine([sys.executable, kb_script, temp_dir, "--check", "--json"])
+            self.assertEqual(res.returncode, 0)
+
+            import json
+            data = json.loads(res.stdout[res.stdout.find("{"):])
+            self.assertIn("total_checked", data)
+            self.assertIn("broken_links", data)
+            self.assertIn("entry_point_violations", data)
+            self.assertEqual(len(data["broken_links"]), 1)
+            self.assertEqual(data["broken_links"][0]["target"], "./missing.md")
+
+        finally:
+            shutil.rmtree(temp_dir, ignore_errors=True)
+
+    def test_17g_illustrative_placeholders_narrowing(self):
+        """Verify that genuine broken links to core topic articles are reported (REQ-3)."""
+        scripts_dir = os.path.join(REPO_ROOT, "scripts")
+        if scripts_dir not in sys.path:
+            sys.path.insert(0, scripts_dir)
+        import along_kb_sync
+
+        temp_dir = tempfile.mkdtemp(prefix="along_placeholder_narrow_")
+        try:
+            with open(os.path.join(temp_dir, "README.md"), "w", encoding="utf-8") as f:
+                f.write(
+                    "# Readme\n\n"
+                    "- Broken core: [Arch](./topic--architecture.md)\n"
+                    "- Broken setup: [Setup](./topic--setup-and-workflow.md)\n"
+                    "- Valid template: [Slug](./topic--<slug>.md)\n"
+                    "- Valid var: [Var]({{var}})\n"
+                )
+
+            broken_links, total_checked = along_kb_sync.validate_repo_link_integrity(temp_dir)
+            targets = [bl["target"] for bl in broken_links]
+            self.assertIn("./topic--architecture.md", targets, "Real article must not be skipped as placeholder")
+            self.assertIn("./topic--setup-and-workflow.md", targets, "Real article must not be skipped as placeholder")
+            self.assertNotIn("./topic--<slug>.md", targets, "Template placeholder must be skipped")
+            self.assertNotIn("{{var}}", targets, "Variable placeholder must be skipped")
+
+        finally:
+            shutil.rmtree(temp_dir, ignore_errors=True)
+
         """Verify that along_update.py collapses duplicate BEGIN/END protocol comment markers in AGENTS.md."""
         temp_dir = tempfile.mkdtemp(prefix="along_header_dedup_")
         try:
@@ -868,6 +1188,8 @@ class TestAlongSkillsAndScripts(unittest.TestCase):
                 f.write("---\nprotocol: along\nslug: topic--architecture\n---\n# Arch\n")
             with open(os.path.join(docs_dir, "topic--domain-model.md"), "w", encoding="utf-8") as f:
                 f.write("---\nprotocol: along\nslug: topic--domain-model\n---\n# Domain\n")
+            with open(os.path.join(docs_dir, "topic--custom-guide.md"), "w", encoding="utf-8") as f:
+                f.write("---\nprotocol: along\nslug: topic--custom-guide\n---\n# Custom Guide\n")
             with open(os.path.join(docs_dir, "INDEX.md"), "w", encoding="utf-8") as f:
                 f.write("# Index\n")
 
@@ -1298,9 +1620,182 @@ class TestAlongSkillsAndScripts(unittest.TestCase):
         finally:
             shutil.rmtree(temp_dir, ignore_errors=True)
 
+    def test_30_kb_sync_unrelated_links_and_numbered_heuristics(self):
+        """Verify that link rewriter preserves unrelated numbered links, wiki/kbd paths, fenced code, and missing targets (REQ-1 to REQ-7)."""
+        temp_dir = tempfile.mkdtemp(prefix="along-kb-heuristics-")
+        try:
+            import along_kb_sync
+
+            docs_dir = os.path.join(temp_dir, "docs")
+            along_dir = os.path.join(temp_dir, ".along")
+            os.makedirs(docs_dir, exist_ok=True)
+            os.makedirs(along_dir, exist_ok=True)
+
+            # Target that exists on disk
+            with open(os.path.join(docs_dir, "topic--architecture.md"), "w", encoding="utf-8") as f:
+                f.write("# Architecture\n")
+
+            test_file = os.path.join(temp_dir, "README.md")
+            original_content = "\n".join([
+                "# Project",
+                "",
+                "Unrelated links that must stay untouched:",
+                "- [Postgres ADR](./001-use-postgres.md)",
+                "- [Intro](./01-intro.md)",
+                "- [KBD Shortcuts](./assets/kbd-shortcuts.md)",
+                "- [SDK Client](../sdk/kb-client/README.md)",
+                "- [Wiki Contribution](wiki/CONTRIBUTING.md)",
+                "- [Missing Target](.along/KB/99-missing.md)",
+                "",
+                "Code fence with legacy link:",
+                "````carousel",
+                "```markdown",
+                "[Inside Fence](.along/KB/01-architecture.md)",
+                "```",
+                "````",
+                "",
+                "Valid legacy link whose target exists on disk:",
+                "- [Detailed Arch Spec (v2)](.along/KB/01-architecture.md#core-flow)",
+            ]) + "\n"
+
+            with open(test_file, "w", encoding="utf-8") as f:
+                f.write(original_content)
+
+            # 1. Test dry-run mode: should detect rewrite but NOT write to disk (REQ-4)
+            rewritten_files, total_rewrites = along_kb_sync.rewrite_inbound_links(temp_dir, dry_run=True)
+            self.assertEqual(total_rewrites, 1)
+            with open(test_file, "r", encoding="utf-8") as f:
+                self.assertEqual(f.read(), original_content, "dry_run must not mutate files")
+
+            # 2. Test default run: migrate_numbered=False (REQ-1, REQ-2, REQ-3, REQ-5, REQ-6, REQ-7)
+            rewritten_files, total_rewrites = along_kb_sync.rewrite_inbound_links(temp_dir, dry_run=False)
+            self.assertEqual(rewritten_files, 1)
+            self.assertEqual(total_rewrites, 1)
+
+            with open(test_file, "r", encoding="utf-8") as f:
+                updated = f.read()
+
+            # Untouched links:
+            self.assertIn("[Postgres ADR](./001-use-postgres.md)", updated)
+            self.assertIn("[Intro](./01-intro.md)", updated)
+            self.assertIn("[KBD Shortcuts](./assets/kbd-shortcuts.md)", updated)
+            self.assertIn("[SDK Client](../sdk/kb-client/README.md)", updated)
+            self.assertIn("[Wiki Contribution](wiki/CONTRIBUTING.md)", updated)
+            self.assertIn("[Missing Target](.along/KB/99-missing.md)", updated)
+            self.assertIn("[Inside Fence](.along/KB/01-architecture.md)", updated)
+
+            # Rewritten link with preserved text and anchor:
+            self.assertIn("[Detailed Arch Spec (v2)](./docs/topic--architecture.md#core-flow)", updated)
+
+            # 3. Test explicit opt-in: migrate_numbered=True when target exists (REQ-2)
+            with open(os.path.join(docs_dir, "topic--use-postgres.md"), "w", encoding="utf-8") as f:
+                f.write("# Postgres\n")
+
+            rewritten_files_num, total_rewrites_num = along_kb_sync.rewrite_inbound_links(
+                temp_dir, dry_run=False, migrate_numbered=True
+            )
+            self.assertEqual(total_rewrites_num, 1)
+
+            with open(test_file, "r", encoding="utf-8") as f:
+                updated_num = f.read()
+            self.assertIn("[Postgres ADR](./docs/topic--use-postgres.md)", updated_num)
+            # 01-intro.md target still missing on disk, so must remain untouched (REQ-3)
+            self.assertIn("[Intro](./01-intro.md)", updated_num)
+
+        finally:
+            shutil.rmtree(temp_dir, ignore_errors=True)
+
+    def test_31_banned_file_uri_scheme_and_relative_migration(self):
+        """Verify that file:// links are rejected by the integrity gate, rewritten to relative,
+
+        and stale/numbered anchors are repaired or dropped (REQ-1 to REQ-8).
+        """
+        temp_dir = tempfile.mkdtemp(prefix="along_file_uri_test_")
+        try:
+            import along_kb_sync
+
+            # 1. Setup repository structure in temp_dir
+            along_dir = os.path.join(temp_dir, ".along")
+            sessions_dir = os.path.join(along_dir, "SESSIONS", "2026")
+            issues_dir = os.path.join(along_dir, "ISSUES")
+            docs_dir = os.path.join(temp_dir, "docs")
+            os.makedirs(sessions_dir, exist_ok=True)
+            os.makedirs(issues_dir, exist_ok=True)
+            os.makedirs(docs_dir, exist_ok=True)
+
+            # Target files on disk
+            decisions_path = os.path.join(along_dir, "DECISIONS.md")
+            with open(decisions_path, "w", encoding="utf-8") as f:
+                f.write(
+                    "# Decisions\n\n"
+                    "## ADR-2026-08-15--first-decision - First Decision\n"
+                    "- Status: accepted\n\n"
+                    "## ADR-2026-08-28--frontend-dynstruct-architecture-and-msgmesh-adapters - Frontend Dynstruct Architecture\n"
+                    "- Status: accepted\n"
+                )
+
+            session_file = os.path.join(sessions_dir, "2026-09-01--test-session.md")
+            with open(session_file, "w", encoding="utf-8") as f:
+                f.write("# Session Log\n")
+
+            issue_file = os.path.join(issues_dir, "feat--sample-feature.md")
+            with open(issue_file, "w", encoding="utf-8") as f:
+                f.write("# Sample Feature\n")
+
+            # Document containing various file:// links, numbered anchors, and stale anchors
+            history_file = os.path.join(along_dir, "HISTORY.md")
+            with open(history_file, "w", encoding="utf-8") as f:
+                f.write(
+                    "# History\n\n"
+                    "- [Session](file://.along/SESSIONS/2026/2026-09-01--test-session.md)\n"
+                    "- [Decision 2](file://.along/DECISIONS.md#2)\n"
+                    "- [Decision Stale](file://.along/DECISIONS.md#nonexistent-anchor)\n"
+                )
+
+            readme_file = os.path.join(temp_dir, "README.md")
+            with open(readme_file, "w", encoding="utf-8") as f:
+                f.write(
+                    "# Project\n\n"
+                    "- [Issue](file://.along/ISSUES/feat--sample-feature.md)\n"
+                    "- [Arch Spec](./docs/topic--architecture.md#dead-anchor)\n"
+                )
+
+            # 2. Verify Integrity Gate flags file:// as a hard violation (REQ-4, REQ-5)
+            broken_links, total_checked = along_kb_sync.validate_repo_link_integrity(temp_dir)
+            file_uri_violations = [b for b in broken_links if b.get("reason") == "file:// pseudo-scheme forbidden (use standard relative links)"]
+            self.assertEqual(len(file_uri_violations), 4, f"Integrity gate must flag all 4 file:// links: {broken_links}")
+            for v in file_uri_violations:
+                self.assertIsNone(v["resolved"], "file:// links must not be resolved against filesystem")
+
+            # 3. Execute rewriter: converts file:// to relative, repairs #2 to slug, drops #nonexistent (REQ-2, REQ-3, REQ-8)
+            rewritten_files, total_rewrites = along_kb_sync.rewrite_inbound_links(temp_dir, dry_run=False)
+            self.assertGreaterEqual(total_rewrites, 4)
+
+            with open(history_file, "r", encoding="utf-8") as f:
+                updated_history = f.read()
+            self.assertNotIn("file://", updated_history)
+            self.assertIn("[Session](./SESSIONS/2026/2026-09-01--test-session.md)", updated_history)
+            self.assertIn("[Decision 2](./DECISIONS.md#adr-2026-08-28--frontend-dynstruct-architecture-and-msgmesh-adapters)", updated_history)
+            self.assertIn("[Decision Stale](./DECISIONS.md)", updated_history)
+            self.assertNotIn("#nonexistent-anchor", updated_history)
+
+            with open(readme_file, "r", encoding="utf-8") as f:
+                updated_readme = f.read()
+            self.assertNotIn("file://", updated_readme)
+            self.assertIn("[Issue](.along/ISSUES/feat--sample-feature.md)", updated_readme)
+
+            # 4. Re-run Integrity Gate: zero file:// violations remain
+            broken_links_after, _ = along_kb_sync.validate_repo_link_integrity(temp_dir)
+            file_uri_violations_after = [b for b in broken_links_after if b.get("reason") == "file:// pseudo-scheme forbidden (use standard relative links)"]
+            self.assertEqual(len(file_uri_violations_after), 0)
+
+        finally:
+            shutil.rmtree(temp_dir, ignore_errors=True)
+
 
 if __name__ == "__main__":
     unittest.main(verbosity=2)
+
 
 
 

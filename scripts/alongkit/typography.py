@@ -76,6 +76,9 @@ REPLACEMENTS: Dict[str, str] = {
     "\ufeff": "",       # zero-width no-break space / byte order mark
 }
 
+#: All forbidden characters as a canonical shared tuple.
+FORBIDDEN_CHARACTERS: Tuple[str, ...] = tuple(REPLACEMENTS.keys())
+
 #: Human-readable names, for gate messages that must say what was found and where.
 NAMES: Dict[str, str] = {
     "\u2014": "em dash",

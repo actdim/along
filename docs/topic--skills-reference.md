@@ -244,12 +244,12 @@ flowchart TD
 - **What it is**: Idempotent LLM-Wiki compiler, inbound link rewriter, and link integrity gate for `docs/`.
 - **Architectural Rationale**:
   - *LLM-Wiki Paradigm*: Implements Andrej Karpathy's LLM-Wiki architecture in Python with a single runtime dependency (`ruamel.yaml`, for front-matter), resolved automatically by `uv`.
-  - *Inbound Link Rewriter*: Recursively scans all Markdown files in the monorepo and rewrites legacy internal paths (`.along/KB/...`) to standard relative `docs/` paths.
+  - *Inbound Link Rewriter*: Recursively scans Markdown files and safely rewrites legacy internal paths (`.along/KB/...`, `.agents/KB/...`) to standard relative `docs/` paths only when target exists on disk, skipping code fences and unrelated numbered docs unless opted in.
   - *Link Integrity Gate*: In `--strict` mode, validates that every relative Markdown link physically resolves to an existing file on disk.
   - *In-Place Source Provenance & Drift Gate*: Reconciles raw notes, code, and specs in-place with `sources: [{path, hash}]` front-matter tracking, detecting drift via SHA-256 and guarding accidental reductions via the `--prune-intent` gate.
   - *Deterministic LLM Context Exports*: Non-destructively reconciles `llms.txt` and compiles `llms-full.txt` across `.well-known/` and context root locations for whole-project and subproject contexts.
 - **Invocation Triggers**:
-  - *Explicit*: `/along-kb-sync [--strict] [--prune-intent [REASON]]`, `along kb-sync` (fallback: `python ~/.along/bin/along_exec.py kb-sync`).
+  - *Explicit*: `/along-kb-sync [--strict] [--prune-intent [REASON]] [--dry-run] [--migrate-numbered]`, `along kb-sync` (fallback: `python ~/.along/bin/along_exec.py kb-sync`).
   - *Semantic / Automatic*: Triggered during `/along-wrap`, after modifying documentation in `docs/`, or during protocol migration.
 - **Entities Operated On**: `docs/*.md`, `docs/INDEX.md`, `llms.txt`, `llms-full.txt`, `.well-known/`, all repository Markdown files.
 - **Ecosystem Chaining**: Compiles the Knowledge Base queried by `along-kb-search` and visualized by `along-dash`.

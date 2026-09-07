@@ -17,7 +17,7 @@ related: []
 # Add SQLite Vector Indexing MCP Server for Fast Issue & Context Search
 
 > [!NOTE]
-> Superseded by [`feat--integrate-wiki-llm-mcp`](file://.along/ISSUES/done/feat--integrate-wiki-llm-mcp.md) (WikiLLM Hybrid Search).
+> Superseded by [`feat--integrate-wiki-llm-mcp`](./feat--integrate-wiki-llm-mcp.md) (WikiLLM Hybrid Search).
 
 ## Goal
 Implement a local vector indexing system (e.g. SQLite + `sqlite-vec` or local embeddings) exposed as an **MCP (Model Context Protocol) Server**.

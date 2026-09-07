@@ -6,7 +6,7 @@ agent: antigravity
 branch: main
 commit: 6298b29
 summary: Created comprehensive unit test suite (tests/test_skills_and_scripts.py), embedded along_dash.py inside skills/along-dash, enforced mandatory pre-commit and pre-release test gates, purged outdated caches, and released ALONG-PROTOCOL v2.0.7.
-milestone: v2.0.0-along
+milestone: v2.0.0-along-transition
 issues_advanced: []
 issues_completed: []
 decisions: []

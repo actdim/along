@@ -11,7 +11,7 @@ Inspect, visualize, and analyze repository status across all `.along/` entities 
 
 ## When to Use
 
-1. The user asks for a dashboard, status report, project analytics, or DAG dependency graph (e.g., "покажи дашборд", "запусти дашборд", "generate repo report", `/along-dash`).
+1. The user asks for a dashboard, status report, project analytics, or DAG dependency graph (e.g., "show dashboard", "launch dashboard", "generate repo report", `/along-dash`).
 2. Reviewing milestone progress, active blockers, risk mitigation status, and completed accomplishments.
 3. Searching the structured Knowledge Base (`docs/`, `DECISIONS.md`) interactively.
 
@@ -37,7 +37,7 @@ When `/along-dash` is invoked (or the user asks for the dashboard), agents MUST:
 4. **Provide Direct Clickable Links & Controls**:
    - **Live Interactive Dashboard**: [**http://127.0.0.1:8765**](http://127.0.0.1:8765) (React 19 + Cytoscape DAG + Knowledge Base Explorer).
    - **OpenAPI Swagger UI**: [**http://127.0.0.1:8765/docs**](http://127.0.0.1:8765/docs) (Interactive API explorer).
-   - **Server Control**: Note that the server runs in the background and can be stopped at any time by asking *"останови дашборд"* / *"stop dashboard"*.
+   - **Server Control**: Note that the server runs in the background and can be stopped at any time by asking *"stop dashboard"*.
 
 ---
 

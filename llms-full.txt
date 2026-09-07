@@ -241,7 +241,7 @@ To keep `.along/` lean and avoid token bloat:
 
 ## Knowledge Base (KB) Management & LLM-Wiki Integration
 - **Structured Knowledge Base**: Maintain active project documentation in `docs/` with standard articles:
-  - `docs/INDEX.md`: Central cross-linked topic catalog and entry point (`[Title](./topic--architecture.md)`).
+  - `docs/INDEX.md`: Central cross-linked topic catalog and entry point (`[Title](./topic--<slug>.md)`).
   - `docs/topic--architecture.md`: System components, boundaries, and data flows.
   - `docs/topic--domain-model.md`: Domain concepts, business logic, and terms.
   - `docs/topic--setup-and-workflow.md`: Build, run, test, and workflow instructions.
@@ -307,7 +307,7 @@ When a Stage or session completes, agents MUST execute this verification checkli
     - NEVER use non-breaking spaces (NBSP U+00A0, narrow NBSP U+202F) or zero-width invisible characters (ZWSP U+200B, ZWNJ, ZWJ, BOM U+FEFF); use standard ASCII spaces or omit.
     - NEVER use special bullet glyphs (U+2022, U+2023, U+2043); use standard ASCII hyphen (`-`) for lists.
   - **Explicit Code Fence Languages**: Always specify the language identifier on code fences (e.g. ```` ```bash ````, ```` ```yaml ````, ```` ```typescript ````, ```` ```python ````). Never use bare unlabelled fences.
-  - **Relative & Portable Links**: Always use relative paths (`file://...` or standard markdown links) without hardcoding local absolute paths.
+  - **Relative & Portable Links**: Always use standard relative Markdown links (`[Title](./target.md)`), never pseudo-schemes (`file://`) or OS-specific backslashes.
   - **UTF-8 Clean Encoding**: Keep all text files in clean UTF-8 without BOM.
   - **File Content Never Travels Through a Command Line**: Create files with the agent's file-writing tool and change them with its edit tool. NEVER carry file content in a heredoc, a `python -c` string, or any inline shell command. Such content crosses several parsers in sequence (shell, heredoc or `-c`, the language string literal, sometimes a regex), and any one of them may consume a backslash or a quote: the file is then silently corrupted, or fails with an unterminated-literal error. Symptoms observed in practice: `"\r\n"` arriving as a real newline, an apostrophe in prose ending a quoted heredoc early, and a multi-line `python -c` losing its newlines entirely.
   - **Deterministic Entity & Command Execution**: Use deterministic subcommands via `along` (or `python scripts/along_exec.py`) (`issue create`, `session create`, `scratch init`) for entity work. When a script is genuinely required, write it to a file first and execute that path; never inline it. Build backslashes in code (`chr(92)`, `os.linesep`, `re.escape`) instead of escaping them through layers, and never reuse line indices captured before a list of lines was mutated.
@@ -325,9 +325,9 @@ When a Stage or session completes, agents MUST execute this verification checkli
 
 <!-- BEGIN ALONG-RULES -->
 See the following engineering guidelines:
-- `[languages/python.md](file://.along/rules/languages/python.md)`
-- `[languages/typescript.md](file://.along/rules/languages/typescript.md)`
-- `[platforms/web.md](file://.along/rules/platforms/web.md)`
+- `[languages/python.md](.along/rules/languages/python.md)`
+- `[languages/typescript.md](.along/rules/languages/typescript.md)`
+- `[platforms/web.md](.along/rules/platforms/web.md)`
 <!-- END ALONG-RULES -->
 
 This repository is `Along` (`actdim-along`) - the provider-agnostic agent-context protocol and skills suite for Claude Code, Codex, OpenCode, and Antigravity.
@@ -390,7 +390,7 @@ This repository is `Along` (`actdim-along`) - the provider-agnostic agent-contex
   - Run Dev Server: `npm run dev` (or `python .along/scripts/dev.py`).
   - Build Assets: `npm run build` (or `python .along/scripts/build.py`).
 - **Frontend Architecture (`packages/dashboard-ui/`)**:
-  - Full architectural rules in `[docs/topic--frontend-frameworks.md](file://docs/topic--frontend-frameworks.md)` and `[.along/DECISIONS.md](file://.along/DECISIONS.md#011)`.
+  - Full architectural rules in `[docs/topic--frontend-frameworks.md](./docs/topic--frontend-frameworks.md)` and `[.along/DECISIONS.md](./.along/DECISIONS.md#adr-2026-08-28--frontend-dynstruct-architecture-and-msgmesh-adapters)`.
   - Strict `@actdim/dynstruct` component architecture with MobX reactive state; zero raw `useState`/`useEffect` hooks.
   - Zero manual API channels or manual `fetch` calls: client generated via NSwag (`pnpm run generate:api`) and wired dynamically using `@actdim/msgmesh/adapters` (`ToMsgChannelPrefix`, `ToMsgStruct`, `registerAdapters`).
   - Strict 100% typing: zero `any`, zero `as ...`, zero global `window` state storage.
@@ -530,7 +530,7 @@ reader, so ADR search returned zero results in every released version.
 | `alongkit/entities.py` | Entity vocabulary, canonical keys, slugs, dates, ADR record parsing and formatting. |
 | `alongkit/proc.py` | Subprocess execution with UTF-8 fixed on both sides of the pipe. |
 | `alongkit/textio.py` | Strict reads, line-ending preservation, atomic writes. |
-| `alongkit/markdown.py` | Link parsing, fenced-code tracking, GitHub heading anchors, `file://` resolution. |
+| `alongkit/markdown.py` | Link parsing, fenced-code tracking, GitHub heading anchors, and link resolution. |
 | `alongkit/typography.py` | The forbidden-character table, shared with the quality gate. |
 | `alongkit/sanitizer.py` | Which files that table governs, strict reads, the modes, and the JSON report. |
 | `alongkit/gates.py` | Pre-commit and pre-release test, typography, and Markdown link gates. |
@@ -1102,7 +1102,7 @@ Single-line append-only chronological log of major milestones, features, and ses
 ```markdown
 # History
 
-2026-09-01 - skills-architecture-overhaul - antigravity - Rebuild Knowledge Base and 18-skill reference - [Session](file://topic--09-01--skills-architecture-overhaul.md)
+2026-09-01 - skills-architecture-overhaul - antigravity - Rebuild Knowledge Base and 18-skill reference - [Session](./SESSIONS/2026/2026-09-01--skills-architecture-overhaul.md)
 ```
 
 ---
@@ -1117,7 +1117,7 @@ Curated, cross-linked LLM-Wiki articles maintaining domain architecture, API con
 To prevent link breakage and dependency graph drift, Along enforces **Canonical Slug Invariance**:
 
 1. **Canonical Key References**:
-   - Entities reference other entities strictly by their canonical key (`<type>--<slug>` or `<slug>`), **NEVER** by relative filesystem paths (`file://.along/ISSUES/open/...`).
+   - Entities reference other entities strictly by their canonical key (`<type>--<slug>` or `<slug>`), **NEVER** by filesystem paths (`.along/ISSUES/open/...`).
    - *Example*: `blocked_by: [feat--db-schema]` remains 100% valid when the target file moves from `.along/ISSUES/feat--db-schema.md` to `.along/ISSUES/done/feat--db-schema.md`.
 2. **Unidirectional Graph Storage**:
    - In YAML front-matter, relationships are stored unidirectionally (`blocked_by: []`, `related: []`, `parent: <slug>`).
@@ -1153,20 +1153,20 @@ The Along Dashboard UI (`packages/dashboard-ui/`) is built strictly on the ActDi
 ## 1. Core Ecosystem Components
 
 1. **`@actdim/dynstruct`**
-   - **Guide**: [dynstruct/AGENTS.md](file:///d:/Src/my/actdim/public/dynstruct/AGENTS.md) | [dynstruct/README.md](file:///d:/Src/my/actdim/public/dynstruct/README.md)
+   - **Guide**: [dynstruct/AGENTS.md](../../dynstruct/AGENTS.md) | [dynstruct/README.md](../../dynstruct/README.md)
    - **Pattern**: Structure-first component definition via `ComponentStruct<AppMsgStruct, ...>` with explicit `props`, `actions`, `children`, `events`, and `effects`.
    - **Zero React Boilerplate**: All component state lives in observable `c.model` (MobX under the hood). No raw React `useState`, `useMemo`, `useCallback`, or hook spaghetti.
 
 2. **`@actdim/dynstruct-mui`**
-   - **Guide**: [dynstruct-mui/README.md](file:///d:/Src/my/actdim/public/dynstruct-mui/README.md)
+   - **Guide**: [dynstruct-mui/README.md](../../dynstruct-mui/README.md)
    - **Pattern**: Material UI components adapted as Dynstruct hook-constructors (`useButton`, `useDrawer`, `useCard`, `useTabs`, `useChip`, `useTextField`, `useDialog`, `useTable`, etc.).
 
 3. **`@actdim/msgmesh`**
-   - **Guide**: [msgmesh/AGENTS.md](file:///d:/Src/my/actdim/public/msgmesh/AGENTS.md) | [msgmesh/README.md](file:///d:/Src/my/actdim/public/msgmesh/README.md)
+   - **Guide**: [msgmesh/AGENTS.md](../../msgmesh/AGENTS.md) | [msgmesh/README.md](../../msgmesh/README.md)
    - **Pattern**: Type-safe async messaging mesh for API communication and inter-component signaling.
 
 4. **`@actdim/utico`**
-   - **Guide**: [utico/README.md](file:///d:/Src/my/actdim/public/utico/README.md)
+   - **Guide**: [utico/README.md](../../utico/README.md)
    - **Pattern**: Foundation type utilities (`KeysOf`, `ToMsgChannelPrefix`, `ToMsgStruct`).
 
 ---
@@ -1180,7 +1180,7 @@ The Along Dashboard UI (`packages/dashboard-ui/`) is built strictly on the ActDi
   ```bash
   pnpm run generate:api
   ```
-  This creates [src/api/client.ts](file:///d:/Src/my/actdim/public/along/packages/dashboard-ui/src/api/client.ts) containing `DashboardApiClient`.
+  This creates [src/api/client.ts](../packages/dashboard-ui/src/api/client.ts) containing `DashboardApiClient`.
 
 ### 2. Dynamic Bus Struct via `@actdim/msgmesh/adapters`
 - Use `ToMsgChannelPrefix` and `ToMsgStruct` to generate typed channels at compile-time directly from `DashboardApiClient`:
@@ -1654,7 +1654,7 @@ along-init
 *(Or invoke `/along-init` directly inside your AI agent prompt).*
 
 ### What `along-init` Configures:
-1. `AGENTS.md`: Generates the root protocol context with the managed `ALONG-PROTOCOL v2.2.24` block.
+1. `AGENTS.md`: Generates the root protocol context with the managed `ALONG-PROTOCOL v2.2.6` block.
 2. `CLAUDE.md`: Scaffolds the standard `@AGENTS.md` import line.
 3. `.gitattributes`: Configures `merge=union` for `.along/HISTORY.md` and `.along/DECISIONS.md` to prevent merge collisions across branches.
 4. `.along/`: Creates the persistent repository memory skeleton (`ISSUES/`, `DECISIONS.md`, `MILESTONES/`, `RISKS/`, `SPIKES/`, `CHECKLISTS/`, `SESSIONS/`, `docs/`).
@@ -2080,12 +2080,12 @@ flowchart TD
 - **What it is**: Idempotent LLM-Wiki compiler, inbound link rewriter, and link integrity gate for `docs/`.
 - **Architectural Rationale**:
   - *LLM-Wiki Paradigm*: Implements Andrej Karpathy's LLM-Wiki architecture in Python with a single runtime dependency (`ruamel.yaml`, for front-matter), resolved automatically by `uv`.
-  - *Inbound Link Rewriter*: Recursively scans all Markdown files in the monorepo and rewrites legacy internal paths (`.along/KB/...`) to standard relative `docs/` paths.
+  - *Inbound Link Rewriter*: Recursively scans Markdown files and safely rewrites legacy internal paths (`.along/KB/...`, `.agents/KB/...`) to standard relative `docs/` paths only when target exists on disk, skipping code fences and unrelated numbered docs unless opted in.
   - *Link Integrity Gate*: In `--strict` mode, validates that every relative Markdown link physically resolves to an existing file on disk.
   - *In-Place Source Provenance & Drift Gate*: Reconciles raw notes, code, and specs in-place with `sources: [{path, hash}]` front-matter tracking, detecting drift via SHA-256 and guarding accidental reductions via the `--prune-intent` gate.
   - *Deterministic LLM Context Exports*: Non-destructively reconciles `llms.txt` and compiles `llms-full.txt` across `.well-known/` and context root locations for whole-project and subproject contexts.
 - **Invocation Triggers**:
-  - *Explicit*: `/along-kb-sync [--strict] [--prune-intent [REASON]]`, `along kb-sync` (fallback: `python ~/.along/bin/along_exec.py kb-sync`).
+  - *Explicit*: `/along-kb-sync [--strict] [--prune-intent [REASON]] [--dry-run] [--migrate-numbered]`, `along kb-sync` (fallback: `python ~/.along/bin/along_exec.py kb-sync`).
   - *Semantic / Automatic*: Triggered during `/along-wrap`, after modifying documentation in `docs/`, or during protocol migration.
 - **Entities Operated On**: `docs/*.md`, `docs/INDEX.md`, `llms.txt`, `llms-full.txt`, `.well-known/`, all repository Markdown files.
 - **Ecosystem Chaining**: Compiles the Knowledge Base queried by `along-kb-search` and visualized by `along-dash`.

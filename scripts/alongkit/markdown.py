@@ -37,7 +37,48 @@ EXTERNAL_PREFIXES: tuple = (
     "http://", "https://", "mailto:", "ftp://", "ftps://", "data:", "tel:", "//",
 )
 
-_FENCE_RE = re.compile(r"^\s*(```+|~~~+)")
+_OPEN_FENCE_RE = re.compile(r"^ {0,3}(`{3,}|~{3,})(.*)$")
+_CLOSE_FENCE_RE = re.compile(r"^ {0,3}(`{3,}|~{3,})\s*$")
+
+
+class FenceTracker:
+    """Tracks CommonMark-compliant fenced code block state across lines."""
+
+    def __init__(self) -> None:
+        self.char: Optional[str] = None
+        self.length: int = 0
+
+    @property
+    def in_fence(self) -> bool:
+        return self.char is not None
+
+    def process_line(self, line: str) -> bool:
+        """Process one line. Returns True if this line is a fence boundary (opening or closing)."""
+        stripped = line.rstrip("\r\n")
+        if self.char is None:
+            m = _OPEN_FENCE_RE.match(stripped)
+            if m:
+                marker = m.group(1)
+                char = marker[0]
+                info = m.group(2)
+                # Backtick fences cannot have backticks in the info string
+                if char == "`" and "`" in info:
+                    return False
+                self.char = char
+                self.length = len(marker)
+                return True
+            return False
+        else:
+            m = _CLOSE_FENCE_RE.match(stripped)
+            if m:
+                marker = m.group(1)
+                char = marker[0]
+                length = len(marker)
+                if char == self.char and length >= self.length:
+                    self.char = None
+                    self.length = 0
+                    return True
+            return False
 
 
 @dataclass(frozen=True)
@@ -67,30 +108,25 @@ def is_external(target: str) -> bool:
     return not stripped or stripped.startswith("#") or stripped.startswith(EXTERNAL_PREFIXES)
 
 
+_PLACEHOLDER_RE = re.compile(r"<[^>]+>|{{[^}]+}}")
+
+
 def is_placeholder(target: str) -> bool:
     """True for a template or illustrative target such as `./topic--<slug>.md` or `{{var}}`."""
     stripped = target.strip()
-    return "<" in stripped or ">" in stripped or stripped.startswith("{{")
+    return bool(_PLACEHOLDER_RE.search(stripped)) or stripped in ("./target.md", "target.md")
 
 
 def iter_lines_outside_fences(text: str) -> Iterator[Tuple[int, str]]:
     """Yield `(line_number, line)` for lines that are not inside a fenced code block.
 
     Fence lines themselves are not yielded. Tracks both ``` and ~~~ fences and requires
-    the closing fence to use the same character, so a ``` inside a ~~~ block does not
-    end it.
+    the closing fence to use the same character and at least the same length.
     """
-    fence: Optional[str] = None
+    tracker = FenceTracker()
     for number, line in enumerate(text.splitlines(), 1):
-        match = _FENCE_RE.match(line)
-        if match:
-            marker = match.group(1)[0]
-            if fence is None:
-                fence = marker
-            elif fence == marker:
-                fence = None
-            continue
-        if fence is None:
+        is_boundary = tracker.process_line(line)
+        if not is_boundary and not tracker.in_fence:
             yield number, line
 
 
@@ -116,26 +152,17 @@ def rewrite_links(text: str, transform: Callable[[Link], Optional[str]]) -> Tupl
     """
     rewrites = 0
     out: List[str] = []
-    fence: Optional[str] = None
-    for line in text.splitlines(keepends=True):
-        stripped = line.rstrip("\r\n")
-        match = _FENCE_RE.match(stripped)
-        if match:
-            marker = match.group(1)[0]
-            if fence is None:
-                fence = marker
-            elif fence == marker:
-                fence = None
-            out.append(line)
-            continue
-        if fence is not None:
+    tracker = FenceTracker()
+    for number, line in enumerate(text.splitlines(keepends=True), 1):
+        is_boundary = tracker.process_line(line)
+        if is_boundary or tracker.in_fence:
             out.append(line)
             continue
 
         def replace(m: "re.Match") -> str:
             nonlocal rewrites
             target = m.group("target").strip()
-            link = Link(text=m.group("text"), target=target, line=0,
+            link = Link(text=m.group("text"), target=target, line=number,
                         start=m.start(), end=m.end())
             replacement = transform(link)
             if replacement is None or replacement == target:
@@ -155,29 +182,16 @@ def github_heading_anchor(heading: str) -> str:
 
 
 def resolve_target(target: str, from_file: str, repo_root: str) -> Optional[str]:
-    """Filesystem path a link target points at, or None when it is not a file link.
+    """Filesystem path a link target points at, or None when it is not a valid relative file link.
 
-    Handles the `file://` forms this repository has emitted historically, including
-    `file:///d:/...` absolute Windows paths and `file://docs/x.md` repository-relative
-    ones, which are dead on every renderer and tracked as
-    `[bug--generated-docs-emit-file-uri-links]`.
+    The file:// pseudo-scheme is strictly forbidden (REQ-4, REQ-5).
     """
     stripped = target.strip()
-    if is_external(stripped) or is_placeholder(stripped):
+    if is_external(stripped) or is_placeholder(stripped) or stripped.startswith("file://"):
         return None
     base = stripped.split("#", 1)[0].strip().replace("\\", "/")
     if not base:
         return None
 
     from_dir = os.path.dirname(os.path.abspath(from_file))
-    if base.startswith("file:///"):
-        remainder = base[8:]
-        if len(remainder) > 2 and remainder[1] == ":":
-            return os.path.normpath(remainder)
-        return os.path.normpath("/" + remainder)
-    if base.startswith("file://"):
-        remainder = base[7:].lstrip("/")
-        if len(remainder) > 2 and remainder[1] == ":":
-            return os.path.normpath(remainder)
-        return os.path.normpath(os.path.join(repo_root, remainder))
     return os.path.normpath(os.path.join(from_dir, base))
