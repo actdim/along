@@ -1,6 +1,6 @@
 ---
 protocol: along
-protocol_version: "2.2.25"
+protocol_version: "2.2.26"
 slug: setup-and-workflow
 title: Setup & Developer Workflow
 type: setup-workflow

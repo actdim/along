@@ -1,6 +1,6 @@
 ---
 protocol: along
-protocol_version: "2.2.25"
+protocol_version: "2.2.26"
 slug: domain-model
 title: Domain Model & Entity Ecosystem
 type: domain-model
