@@ -1,24 +1,51 @@
 # Along (v2.2.25)
 
-A provider-agnostic **agent-context and memory system** for software repositories - the `ALONG-PROTOCOL v2.2.25` plus the automation skills suite that scaffolds and maintains it. One unified convention, honored natively across **Claude Code**, **OpenAI Codex**, **OpenCode**, and **Google Antigravity**.
+**The Provider-Agnostic Context & Memory Operating System for AI Coding Agents.**
+
+One universal convention (`ALONG-PROTOCOL v2.2.25`) and automation skills suite honored natively across **Claude Code**, **Google Antigravity**, **OpenAI Codex**, and **OpenCode**.
+
+Along eliminates **agent context amnesia**, prevents **architectural drift**, and stops **token bloat** by transforming any codebase into an AI-ready engineering workspace with durable in-repo memory, token-efficient LLM-Wiki intelligence, and autonomous multi-agent coordination.
 
 ---
 
 ## Why Along?
 
-AI coding agents start every session blind. They lack persistent memory of past architectural decisions, work in progress, open issues, or repository conventions. Each tool maintains its own isolated configuration (`~/.claude`, `~/.codex`, `~/.config/opencode`, `~/.gemini/config`), leading to context loss and fragmented workflows.
+AI coding agents are exceptionally capable, but they start every session blind:
+- **Context Amnesia**: Agents forget past architectural choices, re-invent rejected patterns, and drop active tasks across sessions.
+- **Token Combustion**: Dumping monolithic context files or full directories into prompts wastes tens of thousands of tokens per turn.
+- **Multi-Branch Chaos**: Parallel agents clobber shared docs, status boards, and lock files, causing painful git merge conflicts.
+- **Unanchored Edits & Hallucinations**: Without strict guardrails, agents make rogue modifications, bypass test gates, and produce silent regressions.
 
-**Along fixes this by giving the repository an isolated, durable, human-readable memory directory (`.along/`) and a structured Knowledge Base (`docs/`) that all agents read and maintain collaboratively.**
+**Along fixes this by embedding a durable, machine-parseable memory layer (`.along/`) and an Andrej Karpathy-style LLM-Wiki (`docs/`) directly into your repository.** Agents read past decisions, track issues in a DAG, plan autonomously, and verify their own work before committing.
 
 ---
 
 ## Core Value Proposition
 
-- **Persistent In-Repo Memory**: DAG issue tracking, append-only ADR log, milestones, risks, and session logs committed with the code.
-- **Provider-Agnostic Single Protocol**: Write conventions once in `AGENTS.md`; Claude Code, Codex, OpenCode, and Antigravity follow them identically.
-- **LLM-Wiki Knowledge Base (`docs/`)**: Modular, cross-linked topic articles with in-place source provenance, deterministic `llms.txt` / `llms-full.txt` sync, and 95-98% token reduction on retrieval.
-- **Nearest Context Boundary**: Strict isolation for monorepos, microservices, and Git submodules preventing root workspace pollution.
-- **Zero Bookkeeping Overhead**: 18 automation skills handle scaffolding, sync, commit checks, and stage wrap-ups in the background.
+| Pillar | How Along Delivers It |
+| :--- | :--- |
+| **Persistent In-Repo Memory** | Durable, git-tracked memory (`.along/`): DAG issues, append-only ADR logs, milestones, risks, and session records that travel with the codebase. |
+| **Autonomous Multi-Agent Teams** | Sequential living-plan state machine (`along-team`): Supervisor -> Scout -> Architect -> Implementer -> Reviewer with session blackboards, hard retry limits, and single-agent degradation. |
+| **Token-Efficient LLM-Wiki (`docs/`)** | Modular knowledge base with in-place source provenance, SHA-256 drift detection, deterministic `llms.txt` compilation, and **95-98% token reduction** via targeted snippet search (`along-kb-search`). |
+| **Zero-Conflict Git Concurrency** | Single Source of Truth (SSOT) atomic files vs compiled projections (`ISSUES.md`, `INDEX.md`), union merges (`merge=union`), and decentralized date-slug ADRs that never collide in parallel branches. |
+| **Engineering Provenance & Dual-Track UI** | Living plans, fix loops, and verification gates are permanently recorded in session logs while projecting interactive visual review cards in IDEs (Antigravity). |
+| **Strict Data Safety & Verification Gates** | Hermetic engines (`alongkit`) with transactional byte-exact rollbacks, strict front-matter preservation (`ruamel.yaml`), and zero-unintended-deletions invariant. |
+| **Nearest Context Boundary** | Monorepos, microservices, and Git submodules maintain isolated localized memory, preventing root workspace pollution. |
+
+---
+
+## Using Along in Your Projects? (Drop-In Blurb)
+
+Add this badge and blurb to the `README.md` of any repository powered by Along:
+
+````markdown
+### AI Development: Powered by [Along](https://github.com/actdim/along)
+
+This repository follows the **Along Protocol** for AI agent context, persistent memory, and autonomous workflows:
+- **Persistent In-Repo Memory**: Past architectural decisions (`.along/DECISIONS.md`), active issues, and session history survive across all AI sessions.
+- **Token-Efficient Knowledge Base**: Structured LLM-Wiki documentation in `docs/` minimizes context overhead and eliminates architectural drift.
+- **Provider-Agnostic**: Compatible out of the box with **Claude Code**, **Google Antigravity**, **OpenAI Codex**, and **OpenCode**.
+````
 
 ---
 

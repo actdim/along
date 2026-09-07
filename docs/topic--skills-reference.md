@@ -1,11 +1,11 @@
 ---
 protocol: along
-protocol_version: "2.2.6"
+protocol_version: "2.2.25"
 slug: skills-reference
 title: Skills & Slash Commands Technical Reference
 type: topic
 created: 2026-08-30
-updated: 2026-09-04
+updated: 2026-09-07
 tags: [skills, commands, reference, runners, lifecycle, automation, multi-agent]
 sources:
   - path: skills/along-init/SKILL.md

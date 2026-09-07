@@ -1,11 +1,11 @@
 ---
 protocol: along
-protocol_version: "2.2.18"
+protocol_version: "2.2.25"
 slug: dependencies
 title: Dependencies & Submodules AI Documentation and Rules
 type: topic
 created: 2026-09-02
-updated: 2026-09-02
+updated: 2026-09-07
 tags: [dependencies, ai-context, submodules, vendor, rules]
 sources:
   - path: pyproject.toml

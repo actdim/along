@@ -1,19 +1,17 @@
 ---
 protocol: along
-protocol_version: "2.2.6"
+protocol_version: "2.2.25"
 slug: llm-wiki-architecture
 title: LLM-Wiki Knowledge Base Architecture & Paradigm
 type: topic
 created: 2026-08-30
-updated: 2026-09-04
+updated: 2026-09-07
 tags: [llm-wiki, architecture, knowledge-base, token-efficiency, indexing, methodology, search, karpathy]
 sources:
   - path: skills/along-kb-sync/SKILL.md
     hash: "df17474bd865bb88a9e18977dbafada9d4dbea718786f56d34beaff18473c7fb"
   - path: scripts/along_kb_sync.py
-    hash: "f7dcabab989c7bb334d7c481c19b2c34510962b5f8bbc1bcf57418066ddfdb50"
-
-
+    hash: "4bc6735546f23a11dfa2244ea3eff24dfc71bd1d29a3b79f20d8f67678d31eea"
 ---
 
 # LLM-Wiki Knowledge Base Architecture & Paradigm
@@ -116,6 +114,7 @@ Along enforces in-place provenance for all synthesized Knowledge Base articles:
    - Running `python scripts/along_kb_sync.py --check` detects if underlying code or raw specifications have evolved, emitting `[DRIFT]` warnings that alert agents to review and reconcile documentation.
 3. **Intent Gate for Content Reduction (`--prune-intent`)**:
    - To guard against accidental LLM deletions, `along-kb-sync` calculates net line-count reductions against Git `HEAD`.
+   - In monorepos and nested subprojects, path queries use `HEAD:./<rel_path>` to ensure Git resolves paths relative to the subproject working directory rather than the repository root.
    - If an article shrinks by >25% in lines (and at least 10 lines), compilation halts with exit code 2 unless `--prune-intent [REASON]` is explicitly supplied.
 
 ---
