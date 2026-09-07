@@ -21,20 +21,20 @@ The Along Dashboard UI (`packages/dashboard-ui/`) is built strictly on the ActDi
 ## 1. Core Ecosystem Components
 
 1. **`@actdim/dynstruct`**
-   - **Guide**: [dynstruct/AGENTS.md](file:///d:/Src/my/actdim/public/dynstruct/AGENTS.md) | [dynstruct/README.md](file:///d:/Src/my/actdim/public/dynstruct/README.md)
+   - **Guide**: [dynstruct/AGENTS.md](../../dynstruct/AGENTS.md) | [dynstruct/README.md](../../dynstruct/README.md)
    - **Pattern**: Structure-first component definition via `ComponentStruct<AppMsgStruct, ...>` with explicit `props`, `actions`, `children`, `events`, and `effects`.
    - **Zero React Boilerplate**: All component state lives in observable `c.model` (MobX under the hood). No raw React `useState`, `useMemo`, `useCallback`, or hook spaghetti.
 
 2. **`@actdim/dynstruct-mui`**
-   - **Guide**: [dynstruct-mui/README.md](file:///d:/Src/my/actdim/public/dynstruct-mui/README.md)
+   - **Guide**: [dynstruct-mui/README.md](../../dynstruct-mui/README.md)
    - **Pattern**: Material UI components adapted as Dynstruct hook-constructors (`useButton`, `useDrawer`, `useCard`, `useTabs`, `useChip`, `useTextField`, `useDialog`, `useTable`, etc.).
 
 3. **`@actdim/msgmesh`**
-   - **Guide**: [msgmesh/AGENTS.md](file:///d:/Src/my/actdim/public/msgmesh/AGENTS.md) | [msgmesh/README.md](file:///d:/Src/my/actdim/public/msgmesh/README.md)
+   - **Guide**: [msgmesh/AGENTS.md](../../msgmesh/AGENTS.md) | [msgmesh/README.md](../../msgmesh/README.md)
    - **Pattern**: Type-safe async messaging mesh for API communication and inter-component signaling.
 
 4. **`@actdim/utico`**
-   - **Guide**: [utico/README.md](file:///d:/Src/my/actdim/public/utico/README.md)
+   - **Guide**: [utico/README.md](../../utico/README.md)
    - **Pattern**: Foundation type utilities (`KeysOf`, `ToMsgChannelPrefix`, `ToMsgStruct`).
 
 ---
@@ -48,7 +48,7 @@ The Along Dashboard UI (`packages/dashboard-ui/`) is built strictly on the ActDi
   ```bash
   pnpm run generate:api
   ```
-  This creates [src/api/client.ts](file:///d:/Src/my/actdim/public/along/packages/dashboard-ui/src/api/client.ts) containing `DashboardApiClient`.
+  This creates [src/api/client.ts](../packages/dashboard-ui/src/api/client.ts) containing `DashboardApiClient`.
 
 ### 2. Dynamic Bus Struct via `@actdim/msgmesh/adapters`
 - Use `ToMsgChannelPrefix` and `ToMsgStruct` to generate typed channels at compile-time directly from `DashboardApiClient`:

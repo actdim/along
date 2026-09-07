@@ -171,6 +171,10 @@ def bump_along_dev_repo(repo_root, new_version, tx):
     apply(os.path.join(repo_root, "dashboard", "app.py"),
           [(r'version="\d+\.\d+\.\d+"', f'version="{new_version}"')])
 
+    # 11. Update pyproject.toml
+    apply(os.path.join(repo_root, "pyproject.toml"),
+          [(r'version\s*=\s*"\d+\.\d+\.\d+"', f'version = "{new_version}"')])
+
     return modified_files
 
 def synthesize_script(script_path, content, tx=None):

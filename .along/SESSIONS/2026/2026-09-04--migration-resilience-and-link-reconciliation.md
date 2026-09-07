@@ -25,7 +25,7 @@ Hardened migration repair with version gates, added advisory scan for shell-esca
 - Replaced `file://.along/ISSUES/...` pseudo-URIs with portable relative Markdown links (`ISSUES/...` and `ISSUES/done/...`) in `scripts/along_exec.py`.
 - Added sibling link adjustment in `scripts/along_exec.py` when an issue moves to `done/`, rewriting `[Text](./feat--foo.md)` or `[Text](feat--foo.md)` to `[Text](../feat--foo.md)` using negative lookbehind to ensure idempotence.
 - Added automatic `issue sync` execution in `scripts/along_update.py` after updating each target context.
-- Added missing subproject `[License](LICENSE)` link resolution in `scripts/along_kb_sync.py` to point to repository root `LICENSE`.
+- Added missing subproject `[License](../../../LICENSE)` link resolution in `scripts/along_kb_sync.py` to point to repository root `LICENSE`.
 - Added comprehensive hermetic unit tests in `tests/test_migration.py`, `tests/test_issue_lifecycle.py`, and `tests/test_skills_and_scripts.py`.
 - Completed issue `feat--migration-resilience-and-link-reconciliation` and moved it to `done/`.
 

@@ -115,7 +115,7 @@ def run_capture(cmd: Command,
             encoding="utf-8",
             errors="replace",
             timeout=timeout,
-            env=child_env(env),
+            env=child_env(base=env) if env is not None else child_env(),
         )
         result = Result(cmd, completed.returncode,
                        completed.stdout or "", completed.stderr or "")
@@ -141,7 +141,8 @@ def run_passthrough(cmd: Command,
     capturing would hide progress. The UTF-8 child environment still applies.
     """
     try:
-        completed = subprocess.run(cmd, cwd=cwd, shell=shell, env=child_env(env))
+        completed = subprocess.run(cmd, cwd=cwd, shell=shell,
+                                   env=child_env(base=env) if env is not None else child_env())
         return completed.returncode
     except (OSError, ValueError) as exc:
         print(f"[Error] cannot execute {cmd}: {exc}", file=sys.stderr)

@@ -3,11 +3,12 @@ protocol: along
 protocol_version: 2.2.8
 slug: generated-docs-emit-file-uri-links
 type: bug
-status: open
+status: done
 priority: high
 created: 2026-09-01
-updated: 2026-09-01
-agent: claude-code
+updated: 2026-09-07
+completed: 2026-09-07
+agent: antigravity
 tags: [links, rendering, portability, contradiction, generators]
 milestone: v3.0.0-global-quality-revision
 blocked_by: []
@@ -118,9 +119,9 @@ not only paths.
 
 ## Acceptance Criteria
 
-- [ ] Zero `](file://` occurrences in the repository.
-- [ ] Generators emit relative links only, enforced by test.
-- [ ] Integrity gate flags `file://` as a violation.
-- [ ] Rule stated identically in `AGENTS.md`, `protocol.md`, and all skills.
-- [ ] ADR recorded.
-- [ ] Stale ADR anchors resolved or dropped by the migration.
+- [x] Zero `](file://` occurrences in the repository.
+- [x] Generators emit relative links only, enforced by test.
+- [x] Integrity gate flags `file://` as a violation.
+- [x] Rule stated identically in `AGENTS.md`, `protocol.md`, and all skills.
+- [x] ADR recorded.
+- [x] Stale ADR anchors resolved or dropped by the migration.

@@ -29,7 +29,7 @@ When agents build frontend features, UI components, or fix visual layout bugs, t
 
 ### 2. Issue & Session Attachment Protocol
 - Save captured screenshots into a dedicated directory: `.along/artifacts/screenshots/<slug>--<timestamp>.png`.
-- Automatically embed Markdown image references (`![Visual Proof](file://.along/artifacts/screenshots/...)`) in:
+- Automatically embed Markdown image references (`![Visual Proof](../artifacts/screenshots/<slug>--<timestamp>.png)`) in:
   - The corresponding `.along/ISSUES/<type>--<slug>.md` under `## Visual Verification`.
   - The session log in `.along/SESSIONS/`.
 

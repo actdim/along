@@ -188,12 +188,12 @@ Lifecycle Commands (project hooks):
 
 Entity Management Commands:
   status         Instant terminal summary of repository state, active issues, and recent sessions
-  doctor         Validate .along/ structure, .gitattributes, and ADR headers
-  issue create   <type> <slug> --title "Title" [--priority high|medium|low] [--tags "t1,t2"]
+  doctor         Validate .along/ structure, .gitattributes, and ADR headers (--entities for entity graph)
+  issue create   <type> <slug> --title "Title" [--priority high|medium|low] [--tags "t1,t2"] [--agent <name>] [--milestone <name>]
   issue sync     Recompile .along/ISSUES.md projection deterministically from entity files
   issue done     <slug>
   issue list     List active issues in terminal
-  session create <slug> --summary "Summary" [--issues "slug1,slug2"] [--decisions "ADR-slug"]
+  session create <slug> --summary "Summary" [--issues "slug1,slug2"] [--decisions "ADR-slug"] [--agent <name>] [--milestone <name>]
   decision add   <slug> --title "Title" --context "Why" --decision "What" --consequences "Tradeoffs"
   decision create <slug> --title "Title" --context "Why" --decision "What" --consequences "Tradeoffs"
   scratch init   <slug>
@@ -235,13 +235,29 @@ def handle_issue_command(repo_root: str, args: List[str]):
 
     if subcmd == "create":
         if len(args) < 3:
-            print("[Error] Usage: along_exec.py issue create <type> <slug> --title \"Title\" [--priority high|medium|low] [--tags \"tag1,tag2\"]", file=sys.stderr)
+            print("[Error] Usage: along_exec.py issue create <type> <slug> --title \"Title\" [--priority high|medium|low] [--tags \"tag1,tag2\"] [--agent <name>] [--milestone <name>]", file=sys.stderr)
             sys.exit(1)
         itype = args[1].lower()
+        if itype not in entities.ISSUE_TYPES:
+            print(f"[Error] Invalid issue type '{itype}'. Allowed types: {', '.join(entities.ISSUE_TYPES)}", file=sys.stderr)
+            sys.exit(1)
+
         islug = args[2].lower()
+        if not entities.is_valid_slug(islug):
+            print(f"[Error] Invalid issue slug '{islug}'. Slug must be 2-5 lowercase kebab-case words (e.g. my-feature-name).", file=sys.stderr)
+            sys.exit(1)
+
+        existing_issue = entities.find_issue_by_slug(repo_root, islug)
+        if existing_issue:
+            rel_existing = os.path.relpath(existing_issue["file_path"], repo_root)
+            print(f"[Error] An issue with slug '{islug}' already exists: {rel_existing}", file=sys.stderr)
+            sys.exit(1)
+
         title = islug.replace("-", " ").capitalize()
         priority = "medium"
         tags = []
+        explicit_agent = None
+        explicit_milestone = None
 
         i = 3
         while i < len(args):
@@ -249,28 +265,52 @@ def handle_issue_command(repo_root: str, args: List[str]):
                 title = args[i + 1]
                 i += 2
             elif args[i] in ("--priority", "-p") and i + 1 < len(args):
-                priority = args[i + 1]
+                priority = args[i + 1].lower()
                 i += 2
             elif args[i] in ("--tags",) and i + 1 < len(args):
                 tags = [t.strip() for t in args[i + 1].split(",") if t.strip()]
                 i += 2
+            elif args[i] in ("--agent", "-a") and i + 1 < len(args):
+                explicit_agent = args[i + 1]
+                i += 2
+            elif args[i] in ("--milestone", "-m") and i + 1 < len(args):
+                explicit_milestone = args[i + 1]
+                i += 2
             else:
                 i += 1
 
+        if priority not in entities.PRIORITIES:
+            print(f"[Error] Invalid priority '{priority}'. Allowed priorities: {', '.join(entities.PRIORITIES)}", file=sys.stderr)
+            sys.exit(1)
+
+        agent = entities.detect_agent(explicit_agent)
+
+        milestone = None
+        if explicit_milestone:
+            clean_m = explicit_milestone[:-3] if explicit_milestone.endswith(".md") else explicit_milestone
+            m_path = os.path.join(repo_root, ".along", "MILESTONES", f"{clean_m}.md")
+            if not os.path.exists(m_path):
+                print(f"[Error] Milestone '{explicit_milestone}' does not exist in .along/MILESTONES/.", file=sys.stderr)
+                sys.exit(1)
+            milestone = clean_m
+        else:
+            milestone = entities.resolve_in_progress_milestone(repo_root)
+
+        milestone_line = f"milestone: {milestone}\n" if milestone else ""
         target_file = os.path.join(issues_dir, f"{itype}--{islug}.md")
         tags_str = f"[{', '.join(tags)}]" if tags else "[]"
         content = f"""---
 protocol: along
+protocol_version: "{CURRENT_PROTOCOL_VERSION}"
 slug: {islug}
 type: {itype}
 status: open
 priority: {priority}
 created: {today}
 updated: {today}
-agent: antigravity
+agent: {agent}
 tags: {tags_str}
-milestone: v2.1.0-along
-blocked_by: []
+{milestone_line}blocked_by: []
 related: []
 ---
 
@@ -456,6 +496,8 @@ def handle_session_command(repo_root: str, args: List[str]):
         summary = "Work session"
         issues = []
         decisions = []
+        explicit_agent = None
+        explicit_milestone = None
 
         i = 2
         while i < len(args):
@@ -468,23 +510,43 @@ def handle_session_command(repo_root: str, args: List[str]):
             elif args[i] in ("--decisions", "-d") and i + 1 < len(args):
                 decisions = [d.strip() for d in args[i + 1].split(",") if d.strip()]
                 i += 2
+            elif args[i] in ("--agent", "-a") and i + 1 < len(args):
+                explicit_agent = args[i + 1]
+                i += 2
+            elif args[i] in ("--milestone", "-m") and i + 1 < len(args):
+                explicit_milestone = args[i + 1]
+                i += 2
             else:
                 i += 1
 
+        agent = entities.detect_agent(explicit_agent)
+
+        milestone = None
+        if explicit_milestone:
+            clean_m = explicit_milestone[:-3] if explicit_milestone.endswith(".md") else explicit_milestone
+            m_path = os.path.join(repo_root, ".along", "MILESTONES", f"{clean_m}.md")
+            if not os.path.exists(m_path):
+                print(f"[Error] Milestone '{explicit_milestone}' does not exist in .along/MILESTONES/.", file=sys.stderr)
+                sys.exit(1)
+            milestone = clean_m
+        else:
+            milestone = entities.resolve_in_progress_milestone(repo_root)
+
+        milestone_line = f"milestone: {milestone}\n" if milestone else ""
         target_file = os.path.join(sessions_dir, f"{today}--{slug}.md")
         issues_str = f"[{', '.join(issues)}]" if issues else "[]"
         decisions_str = f"[{', '.join([f'\"{d}\"' for d in decisions])}]" if decisions else "[]"
 
         content = f"""---
 protocol: along
+protocol_version: "{CURRENT_PROTOCOL_VERSION}"
 date: {today}
 slug: {slug}
-agent: antigravity
+agent: {agent}
 branch: main
 commit: pending
 summary: {summary}
-milestone: v2.2.0-along
-issues_advanced: []
+{milestone_line}issues_advanced: []
 issues_completed: {issues_str}
 decisions: {decisions_str}
 risks_logged: []
@@ -511,7 +573,7 @@ spikes_conducted: []
         if os.path.exists(history_file):
             with open(history_file, "r", encoding="utf-8") as f:
                 h_content = f.read()
-            entry = f"{today} - {slug} - antigravity - {summary} - [.along/SESSIONS/{year}/{today}--{slug}.md](file://.along/SESSIONS/{year}/{today}--{slug}.md)"
+            entry = f"{today} - {slug} - {agent} - {summary} - [.along/SESSIONS/{year}/{today}--{slug}.md](./SESSIONS/{year}/{today}--{slug}.md)"
             if entry not in h_content:
                 h_content = h_content.strip() + f"\n{entry}\n"
                 with open(history_file, "w", encoding="utf-8") as f:
@@ -628,6 +690,28 @@ def handle_status_command(repo_root: str, args: List[str]):
 
 
 def handle_doctor_command(repo_root: str, args: List[str]):
+    check_entities = "--entities" in args or (bool(args) and args[0].lower() == "entities")
+    if check_entities:
+        print("=== Along Entity Graph Validation (Doctor) ===")
+        report = entities.validate_entities(repo_root)
+        print(f"Scanned {report['scanned']} entities across .along/.")
+        errs = report["errors"]
+        warns = report["warnings"]
+        if errs:
+            print(f"\n[FAIL] Found {len(errs)} entity schema error(s):")
+            for path, msg in errs:
+                print(f"  - {path}: {msg}")
+        else:
+            print("\n[OK] All entity schemas, enums, mandatory fields, and graph references valid.")
+
+        if warns:
+            print(f"\n[WARN] Found {len(warns)} entity warning(s):")
+            for path, msg in warns:
+                print(f"  - {path}: {msg}")
+
+        print(f"\nEntity Doctor Summary: {len(errs)} errors, {len(warns)} warnings.")
+        sys.exit(1 if len(errs) > 0 else 0)
+
     print("=== Along Protocol Diagnostics (Doctor) ===")
     errors = 0
     warnings = 0

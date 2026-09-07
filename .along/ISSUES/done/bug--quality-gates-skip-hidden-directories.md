@@ -3,10 +3,11 @@ protocol: along
 protocol_version: 2.2.8
 slug: quality-gates-skip-hidden-directories
 type: bug
-status: open
+status: done
+completed: 2026-09-07
 priority: high
 created: 2026-09-01
-updated: 2026-09-01
+updated: 2026-09-07
 agent: claude-code
 tags: [gates, glob, tests, coverage, false-green]
 milestone: v3.0.0-global-quality-revision
@@ -114,10 +115,10 @@ verifies a subset it happens to reach, and the coverage hole is invisible.
 
 ## Acceptance Criteria
 
-- [ ] Gates detect violations inside `.along/` and in root dotfiles.
-- [ ] Zero-byte gate flags an empty extensionless file.
-- [ ] One shared forbidden-character constant used by sanitizer and tests.
-- [ ] `LICENSE` non-empty; README-referenced files verified by test.
-- [ ] No substring-based path exclusions remain.
-- [ ] Typography gate covers `tests/` and `.along/`.
-- [ ] BOM detection is byte-level and enforced by the gate; repository stays at zero BOMs.
+- [x] Gates detect violations inside `.along/` and in root dotfiles.
+- [x] Zero-byte gate flags an empty extensionless file.
+- [x] One shared forbidden-character constant used by sanitizer and tests.
+- [x] `LICENSE` non-empty; README-referenced files verified by test.
+- [x] No substring-based path exclusions remain.
+- [x] Typography gate covers `tests/` and `.along/`.
+- [x] BOM detection is byte-level and enforced by the gate; repository stays at zero BOMs.

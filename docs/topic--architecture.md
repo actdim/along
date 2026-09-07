@@ -146,7 +146,7 @@ reader, so ADR search returned zero results in every released version.
 | `alongkit/entities.py` | Entity vocabulary, canonical keys, slugs, dates, ADR record parsing and formatting. |
 | `alongkit/proc.py` | Subprocess execution with UTF-8 fixed on both sides of the pipe. |
 | `alongkit/textio.py` | Strict reads, line-ending preservation, atomic writes. |
-| `alongkit/markdown.py` | Link parsing, fenced-code tracking, GitHub heading anchors, `file://` resolution. |
+| `alongkit/markdown.py` | Link parsing, fenced-code tracking, GitHub heading anchors, and link resolution. |
 | `alongkit/typography.py` | The forbidden-character table, shared with the quality gate. |
 | `alongkit/sanitizer.py` | Which files that table governs, strict reads, the modes, and the JSON report. |
 | `alongkit/gates.py` | Pre-commit and pre-release test, typography, and Markdown link gates. |

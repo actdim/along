@@ -44,5 +44,6 @@ When executing `/along-kb-sync`:
 ```bash
 along kb-sync [REPO_ROOT] [--check] [--strict]
 along kb-sync [REPO_ROOT] [--check] [--strict] [--prune-intent [REASON]]
+along kb-sync [REPO_ROOT] [--dry-run] [--migrate-numbered]
 ```
 *(Or fallback: `python ~/.along/bin/along_exec.py kb-sync` or `/along-kb-sync`)*

@@ -3,11 +3,12 @@ protocol: along
 protocol_version: 2.2.8
 slug: link-gates-skip-along-directory
 type: bug
-status: open
+status: done
 priority: high
 created: 2026-09-01
-updated: 2026-09-01
-agent: claude-code
+updated: 2026-09-07
+completed: 2026-09-07
+agent: antigravity
 tags: [kb-sync, link-integrity, coverage, false-green]
 milestone: v3.0.0-global-quality-revision
 blocked_by: []
@@ -107,9 +108,9 @@ the protocol's own memory.
 
 ## Acceptance Criteria
 
-- [ ] Gate reports broken links located in `.along/**`.
-- [ ] Rewriter fixes legacy links located in `.along/**`.
-- [ ] Shared, documented exclusion set used by both passes.
-- [ ] `--json` report available.
-- [ ] Legacy deletion blocked while unresolved references exist.
-- [ ] Inbound deep links from outside into `.along/` are reported with a `docs/` alternative.
+- [x] Gate reports broken links located in `.along/**`.
+- [x] Rewriter fixes legacy links located in `.along/**`.
+- [x] Shared, documented exclusion set used by both passes.
+- [x] `--json` report available.
+- [x] Legacy deletion blocked while unresolved references exist.
+- [x] Inbound deep links from outside into `.along/` are reported with a `docs/` alternative.

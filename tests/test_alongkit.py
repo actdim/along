@@ -452,11 +452,62 @@ class TestMarkdown(unittest.TestCase):
             markdown.github_heading_anchor("## ADR-2026-09-01--x - Title, With Punctuation"),
             "adr-2026-09-01--x---title-with-punctuation")
 
+    def test_nested_and_mixed_fences_with_lengths(self):
+        doc = "\n".join([
+            "[outside-top](./top.md)",
+            "````carousel",
+            "```python",
+            "[nested-inside-3-backticks](./nested-a.md)",
+            "```",
+            "````",
+            "[outside-middle](./mid.md)",
+            "~~~text",
+            "```",
+            "[nested-inside-tilde](./nested-b.md)",
+            "```",
+            "~~~",
+            "[outside-bottom](./bot.md)",
+        ])
+        targets = [link.target for link in markdown.find_links(doc)]
+        self.assertEqual(targets, ["./top.md", "./mid.md", "./bot.md"])
+
+        rewritten, count = markdown.rewrite_links(
+            doc,
+            lambda link: link.target.replace(".md", "-new.md")
+        )
+        self.assertEqual(count, 3)
+        self.assertIn("[outside-top](./top-new.md)", rewritten)
+        self.assertIn("[outside-middle](./mid-new.md)", rewritten)
+        self.assertIn("[outside-bottom](./bot-new.md)", rewritten)
+        self.assertIn("[nested-inside-3-backticks](./nested-a.md)", rewritten)
+        self.assertIn("[nested-inside-tilde](./nested-b.md)", rewritten)
+
+    def test_rewrite_preserves_link_text_and_anchors_roundtrip(self):
+        doc = "\n".join([
+            "# Title",
+            "",
+            "See [Special Text: Architecture Overview (2026)](./01-architecture.md#system-architecture).",
+            "And [Another Complex (Nested-Style) Text](./setup.md#cli-tools).",
+        ])
+        observed_lines = []
+
+        def transform(link: markdown.Link):
+            observed_lines.append(link.line)
+            if link.path_part == "./01-architecture.md":
+                return f"./topic--architecture.md{link.anchor}"
+            return None
+
+        rewritten, count = markdown.rewrite_links(doc, transform)
+        self.assertEqual(count, 1)
+        self.assertEqual(observed_lines, [3, 4])
+        self.assertIn("[Special Text: Architecture Overview (2026)](./topic--architecture.md#system-architecture)", rewritten)
+        self.assertIn("[Another Complex (Nested-Style) Text](./setup.md#cli-tools)", rewritten)
+
     def test_file_uri_targets_resolve(self):
+        # file:// targets are forbidden by the protocol and return None (REQ-4, REQ-5)
         resolved = markdown.resolve_target("file://docs/topic--a.md",
                                            os.path.join(REPO_ROOT, "README.md"), REPO_ROOT)
-        self.assertEqual(os.path.normpath(resolved),
-                         os.path.normpath(os.path.join(REPO_ROOT, "docs", "topic--a.md")))
+        self.assertIsNone(resolved)
         self.assertIsNone(markdown.resolve_target("https://x.dev", "README.md", REPO_ROOT))
 
 

@@ -8,7 +8,7 @@ created: 2026-09-06
 updated: 2026-09-07
 agent: antigravity
 tags: [git, worktree, runtime, along-team, isolation]
-milestone: v3.0.0-global-quality-revision
+milestone: v4.0.0-runtime-gates-and-worktree-isolation
 blocked_by: []
 related: [debt--team-skill-state-not-persisted]
 ---

@@ -38,7 +38,7 @@ if SCRIPTS_DIR not in sys.path:
     sys.path.insert(0, SCRIPTS_DIR)
 
 import along_exec as ax
-from alongkit import frontmatter as fm, proc
+from alongkit import entities, frontmatter as fm, proc
 
 VALID_STATUSES = {"open", "in-progress", "blocked", "done"}
 
@@ -358,6 +358,227 @@ class TestIssueDoneCommand(unittest.TestCase):
         self.assertNotIn("[Dot](./bug--dot.md)", content)
 
 
+class TestIssueCreateCommand(unittest.TestCase):
+    """
+    End-to-end tests for `along_exec.py issue create`.
+
+    Verifies runtime agent detection, milestone validation, enum validation,
+    slug shape enforcement, duplicate rejection, and protocol_version stamping.
+    Hermetic: runs against a temporary repository.
+    """
+
+    EXEC = os.path.join(REPO_ROOT, "scripts", "along_exec.py")
+
+    def setUp(self):
+        self.repo = tempfile.mkdtemp(prefix="along-issue-create-")
+        self.along_dir = os.path.join(self.repo, ".along")
+        self.issues = os.path.join(self.along_dir, "ISSUES")
+        self.done = os.path.join(self.issues, "done")
+        self.milestones = os.path.join(self.along_dir, "MILESTONES")
+        os.makedirs(self.done, exist_ok=True)
+        os.makedirs(self.milestones, exist_ok=True)
+        with open(os.path.join(self.along_dir, "ISSUES.md"), "w", encoding="utf-8") as f:
+            f.write("# Active Issues\n\n## Active\n\n## Backlog\n\n## Done (recent)\n")
+
+    def tearDown(self):
+        import shutil
+        shutil.rmtree(self.repo, ignore_errors=True)
+
+    def _run_create(self, *args, env_override=None):
+        env = os.environ.copy()
+        if env_override:
+            for k, v in env_override.items():
+                if v is None:
+                    env.pop(k, None)
+                else:
+                    env[k] = v
+        cmd = [sys.executable, self.EXEC, "issue", "create"] + list(args)
+        return proc.run_capture(cmd, cwd=self.repo, env=env)
+
+    def _read_issue(self, filename):
+        path = os.path.join(self.issues, filename)
+        with open(path, "r", encoding="utf-8") as f:
+            content = f.read()
+        fm_parsed, _ = fm.parse(content, path=path)
+        return fm_parsed, content
+
+    def test_15_create_explicit_agent(self):
+        res = self._run_create("feat", "my-feature", "--title", "My Feature", "--agent", "claude-code")
+        self.assertEqual(res.returncode, 0, f"{res.stdout}\n{res.stderr}")
+        data, _ = self._read_issue("feat--my-feature.md")
+        self.assertEqual(data.get("agent"), "claude-code")
+
+    def test_16_create_inferred_agent_from_env(self):
+        clean_env = {
+            "ANTIGRAVITY_AGENT": None,
+            "ANTIGRAVITY_CONVERSATION_ID": None,
+            "ANTIGRAVITY_PROJECT_ID": None,
+            "CLAUDE_CODE": None,
+            "CLAUDE_PROJECT_DIR": None,
+            "CLAUDE_CONVERSATION_ID": None,
+            "ANTHROPIC_CLI": None,
+            "CODEX_CLI": None,
+            "OPENAI_CODEX": None,
+            "OPENCODE_CLI": None,
+            "OPENCODE_AGENT": None,
+            "AGENT": None,
+            "ALONG_AGENT": "test-agent",
+        }
+        res = self._run_create("bug", "fix-thing", env_override=clean_env)
+        self.assertEqual(res.returncode, 0, f"{res.stdout}\n{res.stderr}")
+        data, _ = self._read_issue("bug--fix-thing.md")
+        self.assertEqual(data.get("agent"), "test-agent")
+
+    def test_17_create_fallback_agent_unknown(self):
+        clean_env = {
+            k: None for k in os.environ if any(x in k for x in ("ANTIGRAVITY", "CLAUDE", "ANTHROPIC", "CODEX", "OPENCODE", "AGENT"))
+        }
+        res = self._run_create("task", "clean-task", env_override=clean_env)
+        self.assertEqual(res.returncode, 0, f"{res.stdout}\n{res.stderr}")
+        data, _ = self._read_issue("task--clean-task.md")
+        self.assertEqual(data.get("agent"), "unknown")
+
+    def test_18_create_stamps_protocol_version(self):
+        res = self._run_create("feat", "new-feature")
+        self.assertEqual(res.returncode, 0, f"{res.stdout}\n{res.stderr}")
+        data, content = self._read_issue("feat--new-feature.md")
+        self.assertEqual(data.get("protocol"), "along")
+        self.assertIn("protocol_version:", content)
+        self.assertTrue(bool(data.get("protocol_version")))
+
+    def test_19_create_invalid_type_rejected(self):
+        res = self._run_create("feature", "invalid-type")
+        self.assertEqual(res.returncode, 1)
+        self.assertIn("invalid issue type", res.stderr.lower())
+        self.assertIn("feat", res.stderr)
+
+    def test_20_create_invalid_priority_rejected(self):
+        res = self._run_create("feat", "bad-priority", "--priority", "hihg")
+        self.assertEqual(res.returncode, 1)
+        self.assertIn("invalid priority", res.stderr.lower())
+        self.assertIn("critical", res.stderr)
+
+    def test_21_create_invalid_slug_shape_rejected(self):
+        for bad_slug in ("single", "UpperCase", "under_score", "double--hyphen", "one-two-three-four-five-six"):
+            res = self._run_create("feat", bad_slug)
+            self.assertEqual(res.returncode, 1, f"Expected rejection for '{bad_slug}'")
+            self.assertIn("invalid issue slug", res.stderr.lower())
+
+    def test_22_create_duplicate_slug_rejected(self):
+        res1 = self._run_create("feat", "duplicate-test")
+        self.assertEqual(res1.returncode, 0)
+        res2 = self._run_create("bug", "duplicate-test")
+        self.assertEqual(res2.returncode, 1)
+        self.assertIn("already exists", res2.stderr.lower())
+
+    def test_23_create_explicit_dangling_milestone_refused(self):
+        res = self._run_create("feat", "milestone-test", "--milestone", "non-existent-milestone")
+        self.assertEqual(res.returncode, 1)
+        self.assertIn("does not exist", res.stderr.lower())
+
+    def test_24_create_auto_stamps_single_in_progress_milestone(self):
+        # 0 in-progress milestones: milestone should not be stamped
+        res = self._run_create("feat", "zero-milestones")
+        self.assertEqual(res.returncode, 0)
+        data, content = self._read_issue("feat--zero-milestones.md")
+        self.assertNotIn("milestone:", content)
+
+        # Create 1 in-progress milestone
+        m_file = os.path.join(self.milestones, "v1.0.0-release.md")
+        with open(m_file, "w", encoding="utf-8") as f:
+            f.write("---\nprotocol: along\nslug: v1.0.0-release\ntitle: v1.0.0\nstatus: in-progress\n---\n# M\n")
+
+        res2 = self._run_create("feat", "one-milestone")
+        self.assertEqual(res2.returncode, 0)
+        data2, content2 = self._read_issue("feat--one-milestone.md")
+        self.assertEqual(data2.get("milestone"), "v1.0.0-release")
+
+
+class TestDoctorEntitiesCommand(unittest.TestCase):
+    """
+    End-to-end tests for `along_exec.py doctor --entities`.
+
+    Verifies detection of dangling references, invalid enums, and clean reports.
+    """
+
+    EXEC = os.path.join(REPO_ROOT, "scripts", "along_exec.py")
+
+    def setUp(self):
+        self.repo = tempfile.mkdtemp(prefix="along-doctor-")
+        self.along_dir = os.path.join(self.repo, ".along")
+        self.issues = os.path.join(self.along_dir, "ISSUES")
+        self.milestones = os.path.join(self.along_dir, "MILESTONES")
+        os.makedirs(self.issues, exist_ok=True)
+        os.makedirs(self.milestones, exist_ok=True)
+
+    def tearDown(self):
+        import shutil
+        shutil.rmtree(self.repo, ignore_errors=True)
+
+    def _run_doctor(self):
+        cmd = [sys.executable, self.EXEC, "doctor", "--entities"]
+        return proc.run_capture(cmd, cwd=self.repo)
+
+    def test_25_doctor_detects_dangling_parent(self):
+        issue_path = os.path.join(self.issues, "bug--child-issue.md")
+        with open(issue_path, "w", encoding="utf-8") as f:
+            f.write(
+                "---\n"
+                "protocol: along\n"
+                "slug: child-issue\n"
+                "type: bug\n"
+                "status: open\n"
+                "priority: high\n"
+                "created: 2026-09-01\n"
+                "updated: 2026-09-01\n"
+                "parent: feat--non-existent-parent\n"
+                "---\n"
+                "# Child\n"
+            )
+        res = self._run_doctor()
+        self.assertEqual(res.returncode, 1)
+        self.assertIn("dangling parent", res.stdout.lower() + res.stderr.lower())
+
+    def test_26_doctor_detects_invalid_enum(self):
+        issue_path = os.path.join(self.issues, "bug--bad-enum.md")
+        with open(issue_path, "w", encoding="utf-8") as f:
+            f.write(
+                "---\n"
+                "protocol: along\n"
+                "slug: bad-enum\n"
+                "type: bug\n"
+                "status: invalid-status\n"
+                "priority: high\n"
+                "created: 2026-09-01\n"
+                "updated: 2026-09-01\n"
+                "---\n"
+                "# Bad enum\n"
+            )
+        res = self._run_doctor()
+        self.assertEqual(res.returncode, 1)
+        self.assertIn("invalid status", res.stdout.lower() + res.stderr.lower())
+
+    def test_27_doctor_clean_fixture_passes(self):
+        issue_path = os.path.join(self.issues, "feat--good-issue.md")
+        with open(issue_path, "w", encoding="utf-8") as f:
+            f.write(
+                "---\n"
+                "protocol: along\n"
+                "slug: good-issue\n"
+                "type: feat\n"
+                "status: open\n"
+                "priority: medium\n"
+                "created: 2026-09-01\n"
+                "updated: 2026-09-01\n"
+                "---\n"
+                "# Good\n"
+            )
+        res = self._run_doctor()
+        self.assertEqual(res.returncode, 0)
+        self.assertIn("0 errors, 0 warnings", res.stdout)
+
+
 if __name__ == "__main__":
     unittest.main()
+
 

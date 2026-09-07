@@ -118,7 +118,7 @@ To keep `.along/` lean and avoid token bloat:
 
 ## Knowledge Base (KB) Management & LLM-Wiki Integration
 - **Structured Knowledge Base**: Maintain active project documentation in `docs/` with standard articles:
-  - `docs/INDEX.md`: Central cross-linked topic catalog and entry point (`[Title](./topic--architecture.md)`).
+  - `docs/INDEX.md`: Central cross-linked topic catalog and entry point (`[Title](./topic--<slug>.md)`).
   - `docs/topic--architecture.md`: System components, boundaries, and data flows.
   - `docs/topic--domain-model.md`: Domain concepts, business logic, and terms.
   - `docs/topic--setup-and-workflow.md`: Build, run, test, and workflow instructions.
@@ -184,7 +184,7 @@ When a Stage or session completes, agents MUST execute this verification checkli
     - NEVER use non-breaking spaces (NBSP U+00A0, narrow NBSP U+202F) or zero-width invisible characters (ZWSP U+200B, ZWNJ, ZWJ, BOM U+FEFF); use standard ASCII spaces or omit.
     - NEVER use special bullet glyphs (U+2022, U+2023, U+2043); use standard ASCII hyphen (`-`) for lists.
   - **Explicit Code Fence Languages**: Always specify the language identifier on code fences (e.g. ```` ```bash ````, ```` ```yaml ````, ```` ```typescript ````, ```` ```python ````). Never use bare unlabelled fences.
-  - **Relative & Portable Links**: Always use relative paths (`file://...` or standard markdown links) without hardcoding local absolute paths.
+  - **Relative & Portable Links**: Always use standard relative Markdown links (`[Title](./target.md)`), never pseudo-schemes (`file://`) or OS-specific backslashes.
   - **UTF-8 Clean Encoding**: Keep all text files in clean UTF-8 without BOM.
   - **File Content Never Travels Through a Command Line**: Create files with the agent's file-writing tool and change them with its edit tool. NEVER carry file content in a heredoc, a `python -c` string, or any inline shell command. Such content crosses several parsers in sequence (shell, heredoc or `-c`, the language string literal, sometimes a regex), and any one of them may consume a backslash or a quote: the file is then silently corrupted, or fails with an unterminated-literal error. Symptoms observed in practice: `"\r\n"` arriving as a real newline, an apostrophe in prose ending a quoted heredoc early, and a multi-line `python -c` losing its newlines entirely.
   - **Deterministic Entity & Command Execution**: Use deterministic subcommands via `along` (or `python scripts/along_exec.py`) (`issue create`, `session create`, `scratch init`) for entity work. When a script is genuinely required, write it to a file first and execute that path; never inline it. Build backslashes in code (`chr(92)`, `os.linesep`, `re.escape`) instead of escaping them through layers, and never reuse line indices captured before a list of lines was mutated.

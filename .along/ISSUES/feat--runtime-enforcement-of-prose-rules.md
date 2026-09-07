@@ -6,10 +6,10 @@ type: feat
 status: in-progress
 priority: critical
 created: 2026-09-02
-updated: 2026-09-06
+updated: 2026-09-07
 agent: antigravity
-tags: [architecture, runtimes, hooks, gates, security, mechanical-enforcement]
-milestone: v2.2.0-along
+tags: [architecture, runtimes, hooks, gates, security, mechanical-enforcement, transcript]
+milestone: v4.0.0-runtime-gates-and-worktree-isolation
 blocked_by: []
 related: [feat--programmatic-integrity-gates-and-git-guard, feat--systemic-anomaly-circuit-breaker]
 ---
@@ -147,7 +147,6 @@ To avoid code duplication across IDEs, Along implements a unified core engine wi
 ---
 ## 5. Dual-Mode Governance: Shadow Mode vs Enforce Mode
 
-## 5. Implementation Phases & Deliverables
 To prevent breaking existing workflows and to audit false positives before introducing hard blocks, the hook engine supports per-gate and global execution modes:
 
 1. **Configuration (`.along/config.json` or environment variable `ALONG_HOOK_MODE`)**:
@@ -155,6 +154,7 @@ To prevent breaking existing workflows and to audit false positives before intro
    {
      "hooks": {
        "mode": "enforce",
+       "record_transcript": false,
        "gates": {
          "typography": "enforce",
          "cli_safety": "enforce",
@@ -174,6 +174,17 @@ To prevent breaking existing workflows and to audit false positives before intro
 3. **Rollout Strategy**:
    - Pure syntactic and corruption gates (`typography`, `cli_safety`) deploy directly in `enforce` mode.
    - Workflow state gates (`commit_guard`, `stop_guard`) deploy initially in `shadow` mode to measure telemetry, then graduate to `enforce`.
+
+### 5.1. Opt-In Full Call Transcription (`--transcript`)
+
+To support deep offline analysis, post-run diagnostics, and debugging without bloating Git history or adding unneeded I/O overhead on standard runs, the hook system provides an opt-in transcription mode:
+
+- **Activation**: Explicit CLI flag `--transcript` (e.g. `along --transcript <cmd>`, `along_hook.py --transcript`) or configuration `hooks.record_transcript: true`.
+- **Storage Location (Gitignored)**: Stored strictly in gitignored directories: `.along/diagnostics/transcripts/<slug>.jsonl` or `.along/.session/<slug>/transcript.jsonl`. Raw transcripts MUST NOT be checked into Git.
+- **Secret Redaction Invariant**: The transcriber applies automatic pattern-based masking for Bearer tokens, private keys (`ghp_`, `sk-`), and passwords before recording tool arguments and outputs to disk.
+- **Offline Analysis CLI**: Provide CLI analysis subcommands:
+  - `along transcript view <slug>`: Displays formatted call tree with tool names, parameters, and timings.
+  - `along transcript stats <slug>`: Summarizes tool call frequency, failure rates, and error distributions.
 
 ---
 ## 6. Testing Strategy & Verification Architecture
@@ -224,9 +235,11 @@ Testing must be split into three distinct levels to ensure speed, determinism, a
 - [ ] **Phase 3: CLI Driver (`scripts/along_hook.py`)**:
   - Entry point accepting `--runtime`, `--event`, and `--mode` flags.
   - Comprehensive audit logging in `.along/diagnostics/hooks_audit.jsonl`.
+  - Opt-in `--transcript` flag: streams sanitized tool-call JSONL to gitignored `.along/diagnostics/transcripts/<slug>.jsonl`.
 - [ ] **Phase 4: Installer & Config Generators**:
   - Add `along hook install` command and integrate into `along-init` and `along-update`.
   - Automatically generate `.agents/hooks.json`, `.claude/settings.json`, `.codex/hooks.json`.
+  - Add `along transcript view <slug>` and `along transcript stats <slug>` CLI subcommands for offline inspection.
 - [ ] **Phase 5: Automated Test Suite**:
   - Level 1 & 2: `tests/test_hooks.py` and `tests/test_hooks_install.py` (hermetic, fast, zero-dependency).
   - Level 3: `scripts/along_test_runtime_e2e.py` (isolated E2E runner supporting Ollama backends).

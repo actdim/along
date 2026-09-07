@@ -24,7 +24,7 @@ milestone: v2.0.0-along-transition
 2. **Automated NSwag Client Generation**:
    - Configured FastAPI `custom_generate_unique_id` to generate clean `camelCase` operation IDs (`getFullData`, `searchKb`, `getMetrics`, `listIssues`, etc.).
    - Configured `packages/dashboard-ui/nswag.json` and added `"generate:api": "npx nswag run nswag.json"`.
-   - Auto-generated [src/api/client.ts](file:///d:/Src/my/actdim/public/along/packages/dashboard-ui/src/api/client.ts) implementing `DashboardApiClient`.
+   - Auto-generated [src/api/client.ts](../../../packages/dashboard-ui/src/api/client.ts) implementing `DashboardApiClient`.
 
 3. **Dynamic Adapter Wiring (`@actdim/msgmesh/adapters`)**:
    - Replaced manual channel structs with dynamic `ToMsgChannelPrefix` and `ToMsgStruct` derived at compile-time directly from `DashboardApiClient`.

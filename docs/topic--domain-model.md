@@ -255,7 +255,7 @@ Single-line append-only chronological log of major milestones, features, and ses
 ```markdown
 # History
 
-2026-09-01 - skills-architecture-overhaul - antigravity - Rebuild Knowledge Base and 18-skill reference - [Session](file://topic--09-01--skills-architecture-overhaul.md)
+2026-09-01 - skills-architecture-overhaul - antigravity - Rebuild Knowledge Base and 18-skill reference - [Session](./SESSIONS/2026/2026-09-01--skills-architecture-overhaul.md)
 ```
 
 ---
@@ -270,7 +270,7 @@ Curated, cross-linked LLM-Wiki articles maintaining domain architecture, API con
 To prevent link breakage and dependency graph drift, Along enforces **Canonical Slug Invariance**:
 
 1. **Canonical Key References**:
-   - Entities reference other entities strictly by their canonical key (`<type>--<slug>` or `<slug>`), **NEVER** by relative filesystem paths (`file://.along/ISSUES/open/...`).
+   - Entities reference other entities strictly by their canonical key (`<type>--<slug>` or `<slug>`), **NEVER** by filesystem paths (`.along/ISSUES/open/...`).
    - *Example*: `blocked_by: [feat--db-schema]` remains 100% valid when the target file moves from `.along/ISSUES/feat--db-schema.md` to `.along/ISSUES/done/feat--db-schema.md`.
 2. **Unidirectional Graph Storage**:
    - In YAML front-matter, relationships are stored unidirectionally (`blocked_by: []`, `related: []`, `parent: <slug>`).

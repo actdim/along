@@ -3,11 +3,12 @@ protocol: along
 protocol_version: 2.2.8
 slug: issue-create-stamps-wrong-agent-and-milestone
 type: bug
-status: open
+status: done
 priority: high
 created: 2026-09-01
-updated: 2026-09-01
-agent: claude-code
+updated: 2026-09-07
+completed: 2026-09-07
+agent: antigravity
 tags: [along-exec, entity-generator, metadata, dangling-reference]
 milestone: v3.0.0-global-quality-revision
 blocked_by: []
@@ -121,8 +122,8 @@ hand-editing, the defects propagate into all project memory.
 
 ## Acceptance Criteria
 
-- [ ] `agent` reflects the actual tool, never a hardcoded provider.
-- [ ] No generated entity carries a dangling milestone reference.
-- [ ] Enum and slug validation enforced with non-zero exit codes.
-- [ ] `doctor --entities` reports dangling references across the entity graph.
-- [ ] All 14 dangling milestone references resolved (missing milestones created or field cleared).
+- [x] `agent` reflects the actual tool, never a hardcoded provider.
+- [x] No generated entity carries a dangling milestone reference.
+- [x] Enum and slug validation enforced with non-zero exit codes.
+- [x] `doctor --entities` reports dangling references across the entity graph.
+- [x] All 14 dangling milestone references resolved (missing milestones created or field cleared).

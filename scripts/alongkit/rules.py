@@ -130,7 +130,7 @@ def attach_rules(repo_root: str):
     if required:
         ref_lines = ["See the following engineering guidelines:"]
         for r in sorted(required):
-            ref_lines.append(f"- `[{r}](file://.along/rules/{r})`")
+            ref_lines.append(f"- `[{r}](.along/rules/{r})`")
 
         block_content = "\n".join(ref_lines)
         block = f"{marker_start}\n{block_content}\n{marker_end}"

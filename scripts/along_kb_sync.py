@@ -8,6 +8,7 @@ import shutil
 import hashlib
 import argparse
 from datetime import datetime
+from typing import Optional, List, Dict, Tuple
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
@@ -44,12 +45,30 @@ LEGACY_FILE_MAPPING = {
     "MIGRATIONS.md": "topic--migrations.md",
 }
 
+#: Configured legacy KB storage directory roots (REQ-1).
+LEGACY_KB_ROOTS = (
+    (".along", "KB"),
+    (".agents", "KB"),
+    ("along", "KB"),
+    ("agents", "KB"),
+)
+
+
+def matches_legacy_kb_root(path_str: str) -> bool:
+    """Exact path-segment matching against configured legacy KB storage roots (REQ-1)."""
+    norm = path_str.replace("\\", "/")
+    segments = [s for s in norm.split("/") if s and s != "."]
+    for i in range(len(segments)):
+        for root_tuple in LEGACY_KB_ROOTS:
+            if segments[i : i + len(root_tuple)] == list(root_tuple):
+                return True
+    return False
+
 # One definition, shared with every other engine and gate.
 IGNORED_DIRS = set(repo.IGNORED_DIRS) | set(repo.PROVIDER_DIRS)
 
 ILLUSTRATIVE_PLACEHOLDERS = {
-    './target.md', 'target.md', './topic--<slug>.md', './topic--<name>.md',
-    './topic--architecture.md', './topic--setup-and-workflow.md'
+    './target.md', 'target.md', './topic--<slug>.md', './topic--<name>.md'
 }
 
 # One tolerant reader, shared: a malformed entity is reported, never silently
@@ -236,22 +255,86 @@ def bootstrap_docs_if_empty(docs_dir, repo_root, dry_run=False):
             created += 1
     return created
 
-def rewrite_inbound_links(repo_root, dry_run=False):
+
+def _repair_or_drop_anchor(target_abs: str, anchor: str) -> str:
+    """Repair numbered ADR anchors (#011) or drop unresolvable ADR fragments (REQ-8)."""
+    if not anchor:
+        return ""
+    clean_anchor = anchor.lstrip("#").strip()
+    if not clean_anchor:
+        return ""
+    if not os.path.isfile(target_abs) or not target_abs.endswith(".md"):
+        return anchor
+
+    is_adr_target = (
+        os.path.basename(target_abs).upper() in ("DECISIONS.MD", "DECISIONS") or
+        "ADR" in os.path.basename(target_abs).upper()
+    )
+
+    try:
+        with open(target_abs, "r", encoding="utf-8", errors="replace") as tf:
+            target_text = tf.read()
+        anchors_found = set()
+        adr_headings = []
+        for line in target_text.splitlines():
+            m_h = re.match(r"^#{1,6}\s+(.*)", line.strip())
+            if m_h:
+                htext = m_h.group(1).strip()
+                anchors_found.add(markdown.github_heading_anchor(htext))
+                m_adr = re.match(r"^ADR-\d{4}-\d{2}-\d{2}--([a-z0-9-]+)", htext, re.IGNORECASE)
+                if m_adr:
+                    full_adr_id = htext.split(" - ")[0].strip().lower()
+                    anchors_found.add(full_adr_id)
+                    anchors_found.add(m_adr.group(1).lower())
+                    adr_headings.append(full_adr_id)
+
+        # Check if already valid in headings
+        if clean_anchor.lower() in anchors_found:
+            return f"#{clean_anchor}"
+
+        # Numbered ADR anchors (#011, #11, etc.)
+        if re.match(r"^\d+$", clean_anchor):
+            num = int(clean_anchor)
+            if adr_headings and 1 <= num <= len(adr_headings):
+                return f"#{adr_headings[num - 1]}"
+            return ""
+
+        # Stale ADR anchor in DECISIONS.md not found in headings (REQ-8)
+        if is_adr_target or adr_headings:
+            return ""
+
+        # For regular documents, preserve existing non-numbered anchor
+        return anchor
+    except Exception:
+        return anchor
+
+
+def rewrite_inbound_links(repo_root, dry_run=False, migrate_numbered=False, explicit_mapping=None):
     """
     Recursively scans all Markdown files across the entire repository tree (monorepo packages,
     subprojects, apps, root README.md, docs) and rewrites inbound links pointing to legacy
-    storage locations (.along/KB/, .agents/KB/, wiki/, kb/, or legacy article names)
+    storage locations (.along/KB/, .agents/KB/, or legacy article names)
     to standard canonical paths in docs/.
+    Recursively scans Markdown files across the repository and rewrites:
+    - Legacy KB paths (.along/KB/ or .agents/KB/) to docs/topic--*.md
+    - Obsolete file:// and file:/// pseudo-schemes to standard relative links (REQ-2, REQ-3)
+    - Stale or numbered ADR anchors (#011) to slug headers or drops them (REQ-8)
+    - Unrelated numbered links are preserved unless migrate_numbered is True
+    - Skips links inside fenced code blocks
+    - Preserves exact link text, punctuation, and capitalization
+    - Skips rewriting if the computed destination file does not exist on disk (REQ-3)
     """
     repo_root = os.path.abspath(repo_root)
     root_docs_dir = os.path.join(repo_root, "docs")
     rewritten_files = 0
     total_rewrites = 0
 
-    link_pattern = re.compile(r"(\[([^\]]+)\]\()([^\)]+)(\))")
+    active_mapping = dict(LEGACY_FILE_MAPPING)
+    if explicit_mapping:
+        active_mapping.update(explicit_mapping)
 
     for root, dirs, files in os.walk(repo_root):
-        dirs[:] = [d for d in dirs if d not in IGNORED_DIRS and not d.startswith('.')]
+        dirs[:] = [d for d in dirs if d not in IGNORED_DIRS]
         for f in files:
             if not f.endswith(".md"):
                 continue
@@ -266,53 +349,18 @@ def rewrite_inbound_links(repo_root, dry_run=False):
 
             file_rewrites = 0
 
-            def replace_link(match):
+            def transform(link: markdown.Link) -> Optional[str]:
                 nonlocal file_rewrites
-                prefix = match.group(1)
-                link_text = match.group(2)
-                target = match.group(3).strip()
-                suffix = match.group(4)
-
-                if (target.startswith("http://") or target.startswith("https://") or
-                    target.startswith("mailto:") or target.startswith("#") or target.startswith("data:")):
-                    return match.group(0)
+                target = link.target.strip()
+                if not target or target.startswith("#") or target.startswith(("http://", "https://", "mailto:", "ftp://", "ftps://", "data:", "tel:", "//")):
+                    return None
 
                 is_file_uri = target.startswith("file://")
                 clean_target = target[7:] if is_file_uri else target
 
                 target_base, anchor = (clean_target.split("#", 1)[0], "#" + clean_target.split("#", 1)[1]) if "#" in clean_target else (clean_target, "")
                 target_base = target_base.replace('\\', '/')
-
-                is_legacy = False
                 orig_filename = os.path.basename(target_base)
-
-                # 1. Path contains legacy Knowledge Base directories
-                has_kb_dir = any(k in target_base for k in [".along/KB", ".agents/KB", "/KB", "along/KB", "agents/KB", "/kb", "/wiki", "kb/", "wiki/"])
-                
-                if has_kb_dir:
-                    is_legacy = True
-                    if orig_filename in ("", "KB", "kb", "wiki", "INDEX.md", "INDEX"):
-                        new_filename = "INDEX.md"
-                    elif orig_filename in LEGACY_FILE_MAPPING:
-                        new_filename = LEGACY_FILE_MAPPING[orig_filename]
-                    elif re.match(r'^\d+[-_]', orig_filename):
-                        clean_name = re.sub(r'^\d+[-_]', '', orig_filename)
-                        if not clean_name.endswith('.md'):
-                            clean_name += '.md'
-                        new_filename = f"topic--{clean_name}"
-                    else:
-                        clean_name = orig_filename if orig_filename.endswith('.md') else f"{orig_filename}.md"
-                        new_filename = clean_name if clean_name.startswith("topic--") or clean_name == "INDEX.md" else f"topic--{clean_name}"
-                elif orig_filename in LEGACY_FILE_MAPPING:
-                    is_legacy = True
-                    new_filename = LEGACY_FILE_MAPPING[orig_filename]
-                elif re.match(r'^\d{1,3}[-_]', orig_filename) and not re.match(r'^\d{4}-\d{2}-\d{2}', orig_filename):
-                    # Legacy numbered filename (e.g. docs/01-architecture.md or ./01-overview.md)
-                    is_legacy = True
-                    clean_name = re.sub(r'^\d{1,3}[-_]', '', orig_filename)
-                    if not clean_name.endswith('.md'):
-                        clean_name += '.md'
-                    new_filename = f"topic--{clean_name}"
 
                 # Check for subproject LICENSE references needing relative path resolution
                 if orig_filename.upper() in ("LICENSE", "LICENSE.MD", "LICENSE.TXT"):
@@ -325,86 +373,208 @@ def rewrite_inbound_links(repo_root, dry_run=False):
                                 root_lic = cand
                                 break
                         if root_lic:
-                            new_rel = os.path.relpath(root_lic, file_dir).replace('\\', '/')
+                            new_rel = repo.safe_relpath(root_lic, file_dir).replace('\\', '/')
                             if not new_rel.startswith('.'):
                                 new_rel = f"./{new_rel}"
                             new_target = f"{new_rel}{anchor}"
                             if new_target != target:
                                 file_rewrites += 1
-                                return f"{prefix}{new_target}{suffix}"
+                                if dry_run:
+                                    rel_disp = repo.safe_relpath(fpath, repo_root).replace('\\', '/')
+                                    print(f"   [DRY-RUN] {rel_disp}:{link.line}: [{link.text}]({target}) -> ({new_target})")
+                                return new_target
+                    return None
 
-                if not is_legacy:
-                    return match.group(0)
+                is_legacy = False
+                new_filename = None
 
-                # Determine target docs directory (nearest subproject docs if present, else root docs)
-                target_docs = root_docs_dir
-                if os.path.exists(os.path.join(file_dir, "docs", new_filename)):
-                    target_docs = os.path.join(file_dir, "docs")
+                has_kb_dir = matches_legacy_kb_root(target_base)
 
-                target_abs = os.path.join(target_docs, new_filename)
-                try:
-                    new_rel = os.path.relpath(target_abs, file_dir).replace('\\', '/')
-                except Exception:
-                    new_rel = target_base
+                if has_kb_dir:
+                    if orig_filename in ("", "KB", "kb", "INDEX.md", "INDEX"):
+                        is_legacy = True
+                        new_filename = "INDEX.md"
+                    elif orig_filename in active_mapping:
+                        is_legacy = True
+                        new_filename = active_mapping[orig_filename]
+                    elif re.match(r'^\d+[-_]', orig_filename):
+                        is_legacy = True
+                        clean_name = re.sub(r'^\d+[-_]', '', orig_filename)
+                        if not clean_name.endswith('.md'):
+                            clean_name += '.md'
+                        new_filename = f"topic--{clean_name}"
+                    elif orig_filename.endswith('.md') or '.' not in orig_filename:
+                        is_legacy = True
+                        clean_name = orig_filename if orig_filename.endswith('.md') else f"{orig_filename}.md"
+                        new_filename = clean_name if clean_name.startswith("topic--") or clean_name == "INDEX.md" else f"topic--{clean_name}"
+                elif orig_filename in active_mapping:
+                    is_legacy = True
+                    new_filename = active_mapping[orig_filename]
+                elif migrate_numbered and re.match(r'^\d{1,3}[-_]', orig_filename) and not re.match(r'^\d{4}-\d{2}-\d{2}', orig_filename):
+                    is_legacy = True
+                    clean_name = re.sub(r'^\d{1,3}[-_]', '', orig_filename)
+                    if not clean_name.endswith('.md'):
+                        clean_name += '.md'
+                    new_filename = f"topic--{clean_name}"
 
-                if not new_rel.startswith('.') and not new_rel.startswith('/'):
-                    new_rel = f"./{new_rel}"
+                # Case A: Legacy KB reference that maps to docs/
+                if is_legacy and new_filename:
+                    target_docs = root_docs_dir
+                    sub_docs = os.path.join(file_dir, "docs")
+                    if os.path.exists(os.path.join(sub_docs, new_filename)):
+                        target_docs = sub_docs
+                    target_abs = os.path.join(target_docs, new_filename)
 
-                new_target = f"{new_rel}{anchor}"
-                if is_file_uri and target.startswith("file://."):
-                    new_target = f"file://{new_rel.lstrip('./')}{anchor}"
+                    # REQ-3: Never rewrite a legacy link unless the computed target exists on disk.
+                    if not os.path.isfile(target_abs):
+                        rel_f = repo.safe_relpath(fpath, repo_root).replace('\\', '/')
+                        rel_t = repo.safe_relpath(target_abs, repo_root).replace('\\', '/')
+                        print(f"   [WARN] Legacy target does not exist on disk: {rel_t} (referenced in {rel_f}:{link.line} -> '{target}'). Link left untouched.")
+                        return None
 
-                if new_target != target:
-                    file_rewrites += 1
-                    return f"{prefix}{new_target}{suffix}"
-                return match.group(0)
+                    repaired_anchor = _repair_or_drop_anchor(target_abs, anchor)
+                    try:
+                        new_rel = os.path.relpath(target_abs, file_dir).replace('\\', '/')
+                    except Exception:
+                        new_rel = target_base
 
-            lines = content.splitlines(keepends=True)
-            new_lines = []
-            in_code_fence = False
-            for line in lines:
-                stripped = line.strip()
-                if stripped.startswith("```") or stripped.startswith("~~~"):
-                    in_code_fence = not in_code_fence
-                    new_lines.append(line)
-                    continue
-                if in_code_fence:
-                    new_lines.append(line)
-                    continue
-                new_lines.append(link_pattern.sub(replace_link, line))
+                    if not new_rel.startswith('.') and not new_rel.startswith('/'):
+                        new_rel = f"./{new_rel}"
 
-            new_content = "".join(new_lines)
+                    new_target = f"{new_rel}{repaired_anchor}"
+                    if new_target != target:
+                        file_rewrites += 1
+                        if dry_run:
+                            rel_disp = repo.safe_relpath(fpath, repo_root).replace('\\', '/')
+                            print(f"   [DRY-RUN] {rel_disp}:{link.line}: [{link.text}]({target}) -> ({new_target})")
+                        return new_target
+                    return None
+
+                # Case B: file:// pseudo-scheme link (REQ-2, REQ-3)
+                if is_file_uri:
+                    raw_target = clean_target.split("#", 1)[0].strip().replace('\\', '/')
+                    p = raw_target.lstrip("/")
+                    if len(p) > 2 and p[1] == ':':
+                        cand = os.path.normpath(p)
+                    else:
+                        cand = os.path.normpath(os.path.join(repo_root, p))
+
+                    # Check if target is an issue moved between ISSUES/ and ISSUES/done/
+                    if not os.path.exists(cand):
+                        p_dir, f_name = os.path.split(cand)
+                        if os.path.basename(p_dir) == "ISSUES":
+                            done_cand = os.path.join(p_dir, "done", f_name)
+                            if os.path.exists(done_cand):
+                                cand = done_cand
+                        elif os.path.basename(p_dir) == "done" and os.path.basename(os.path.dirname(p_dir)) == "ISSUES":
+                            open_cand = os.path.join(os.path.dirname(p_dir), f_name)
+                            if os.path.exists(open_cand):
+                                cand = open_cand
+
+                    target_abs = cand
+                    repaired_anchor = _repair_or_drop_anchor(target_abs, anchor)
+                    try:
+                        new_rel = os.path.relpath(target_abs, file_dir).replace('\\', '/')
+                    except Exception:
+                        new_rel = raw_target
+
+                    if not new_rel.startswith('.') and not new_rel.startswith('/'):
+                        new_rel = f"./{new_rel}"
+
+                    new_target = f"{new_rel}{repaired_anchor}"
+                    if new_target != target:
+                        file_rewrites += 1
+                        if dry_run:
+                            rel_disp = repo.safe_relpath(fpath, repo_root).replace('\\', '/')
+                            print(f"   [DRY-RUN] {rel_disp}:{link.line}: [{link.text}]({target}) -> ({new_target})")
+                        return new_target
+                    return None
+
+                # Case C: Relative link with stale or numbered anchor repair (REQ-8)
+                if anchor:
+                    target_abs = os.path.normpath(os.path.join(file_dir, target_base))
+                    if os.path.isfile(target_abs):
+                        repaired_anchor = _repair_or_drop_anchor(target_abs, anchor)
+                        if repaired_anchor != anchor:
+                            new_target = f"{target_base}{repaired_anchor}"
+                            if new_target != target:
+                                file_rewrites += 1
+                                if dry_run:
+                                    rel_disp = repo.safe_relpath(fpath, repo_root).replace('\\', '/')
+                                    print(f"   [DRY-RUN] {rel_disp}:{link.line}: [{link.text}]({target}) -> ({new_target})")
+                                return new_target
+
+                return None
+
+            new_content, _ = markdown.rewrite_links(content, transform)
+
             if file_rewrites > 0:
                 if not dry_run:
                     with open(fpath, "w", encoding="utf-8") as fp:
                         fp.write(new_content)
-                rel_disp = os.path.relpath(fpath, repo_root).replace('\\', '/')
-                print(f"   [REWRITE] {rel_disp}: updated {file_rewrites} legacy KB link(s).")
-                print(f"   [REWRITE] {rel_disp}: updated {file_rewrites} link(s).")
+                rel_disp = repo.safe_relpath(fpath, repo_root).replace('\\', '/')
+                action_tag = "[DRY-RUN]" if dry_run else "[REWRITE]"
+                print(f"   {action_tag} {rel_disp}: updated {file_rewrites} link(s).")
                 rewritten_files += 1
                 total_rewrites += file_rewrites
 
     return rewritten_files, total_rewrites
 
-def validate_repo_link_integrity(repo_root):
+class LinkIntegrityResult(tuple):
+    """Backwards-compatible 2-tuple (broken_links, total_checked) with extra attributes."""
+    broken_links: list
+    total_checked: int
+    entry_point_violations: list
+    legacy_kb_references: list
+
+    def __new__(cls, broken_links, total_checked, entry_point_violations=None, legacy_kb_references=None):
+        inst = super().__new__(cls, (broken_links, total_checked))
+        inst.broken_links = broken_links
+        inst.total_checked = total_checked
+        inst.entry_point_violations = entry_point_violations or []
+        inst.legacy_kb_references = legacy_kb_references or []
+        return inst
+
+
+class LinkIntegrityTriple(tuple):
+    """Backwards-compatible 3-tuple (broken_links, total_checked, entry_point_violations) with legacy_kb_references."""
+    broken_links: list
+    total_checked: int
+    entry_point_violations: list
+    legacy_kb_references: list
+
+    def __new__(cls, broken_links, total_checked, entry_point_violations, legacy_kb_references=None):
+        inst = super().__new__(cls, (broken_links, total_checked, entry_point_violations))
+        inst.broken_links = broken_links
+        inst.total_checked = total_checked
+        inst.entry_point_violations = entry_point_violations
+        inst.legacy_kb_references = legacy_kb_references or []
+        return inst
+
+
+def validate_repo_link_integrity(repo_root, return_violations=False):
     """
     Recursively scans all Markdown files across the repository tree and verifies that every
     relative link [text](target) physically resolves to an existing file on disk.
+    Also validates the Stable Entry Point Rule: relative links in files outside .along/
+    must not target internal .along/ service files directly.
     """
     repo_root = os.path.abspath(repo_root)
     broken_links = []
+    entry_point_violations = []
+    legacy_kb_references = []
     total_checked = 0
 
     link_pattern = re.compile(r"\[([^\]]+)\]\(([^\)]+)\)")
 
     for root, dirs, files in os.walk(repo_root):
-        dirs[:] = [d for d in dirs if d not in IGNORED_DIRS and not d.startswith('.')]
+        dirs[:] = [d for d in dirs if d not in IGNORED_DIRS]
         for f in files:
             if not f.endswith(".md"):
                 continue
             fpath = os.path.join(root, f)
             file_dir = os.path.dirname(fpath)
-            rel_file = os.path.relpath(fpath, repo_root).replace('\\', '/')
+            rel_file = repo.safe_relpath(fpath, repo_root).replace('\\', '/')
 
             try:
                 with open(fpath, "r", encoding="utf-8", errors="replace") as fp:
@@ -431,10 +601,8 @@ def validate_repo_link_integrity(repo_root):
                         target.startswith("data:") or target.startswith("#")):
                         continue
 
-                    # Ignore template variables and illustrative placeholders
-                    if target.startswith("{{") or target.startswith("<") or "<" in target or ">" in target:
-                        continue
-                    if target in ILLUSTRATIVE_PLACEHOLDERS:
+                    # Ignore template variables and illustrative placeholders (e.g. <slug>, {{var}}, target.md)
+                    if markdown.is_placeholder(target) or target in ILLUSTRATIVE_PLACEHOLDERS:
                         continue
 
                     clean_target = target
@@ -444,24 +612,35 @@ def validate_repo_link_integrity(repo_root):
 
                     total_checked += 1
 
+                    if target_base.startswith("file://"):
+                        broken_links.append({
+                            "file": rel_file,
+                            "line": line_idx,
+                            "text": link_text,
+                            "target": target,
+                            "resolved": None,
+                            "reason": "file:// pseudo-scheme forbidden (use standard relative links)",
+                        })
+                        continue
+
                     try:
-                        if target_base.startswith("file:///"):
-                            p = target_base[8:]
-                            if len(p) > 2 and p[1] == ':': # Windows drive letter e.g. d:/...
-                                resolved_path = os.path.normpath(p)
-                            else:
-                                resolved_path = os.path.normpath("/" + p)
-                        elif target_base.startswith("file://"):
-                            rel_p = target_base[7:].lstrip("/")
-                            if len(rel_p) > 2 and rel_p[1] == ':': # Windows drive letter
-                                resolved_path = os.path.normpath(rel_p)
-                            else:
-                                resolved_path = os.path.normpath(os.path.join(repo_root, rel_p))
-                        else:
-                            resolved_path = os.path.normpath(os.path.join(file_dir, target_base))
+                        resolved_path = os.path.normpath(os.path.join(file_dir, target_base))
+
+                        is_legacy_ref = (
+                            os.path.normpath(resolved_path).startswith(os.path.normpath(os.path.join(repo_root, ".along", "KB"))) or
+                            os.path.normpath(resolved_path).startswith(os.path.normpath(os.path.join(repo_root, ".agents", "KB"))) or
+                            any(p in target for p in [".along/KB", ".agents/KB", "along/KB", "agents/KB"])
+                        )
+                        if is_legacy_ref:
+                            legacy_kb_references.append({
+                                "file": rel_file,
+                                "line": line_idx,
+                                "text": link_text,
+                                "target": target,
+                                "resolved": resolved_path,
+                            })
 
                         if not os.path.exists(resolved_path):
-                            # Check if it's an external absolute repo reference that exists outside workspace
                             broken_links.append({
                                 "file": rel_file,
                                 "line": line_idx,
@@ -469,7 +648,30 @@ def validate_repo_link_integrity(repo_root):
                                 "target": target,
                                 "resolved": resolved_path,
                             })
+                        else:
+                            # Enforce Stable Entry Point Rule (REQ-7):
+                            # Inbound links from outside .along/ into .along/ are violations
+                            is_file_outside = not rel_file.startswith(".along/") and rel_file != ".along"
+                            rel_resolved = repo.safe_relpath(resolved_path, repo_root).replace('\\', '/')
+                            is_target_inside = rel_resolved.startswith(".along/") or rel_resolved == ".along"
+                            if is_file_outside and is_target_inside:
+                                entry_point_violations.append({
+                                    "file": rel_file,
+                                    "line": line_idx,
+                                    "text": link_text,
+                                    "target": target,
+                                    "resolved": rel_resolved,
+                                    "canonical_alternative": "docs/INDEX.md",
+                                })
                     except Exception:
+                        if any(p in target for p in [".along/KB", ".agents/KB", "along/KB", "agents/KB"]):
+                            legacy_kb_references.append({
+                                "file": rel_file,
+                                "line": line_idx,
+                                "text": link_text,
+                                "target": target,
+                                "resolved": "invalid_path",
+                            })
                         broken_links.append({
                             "file": rel_file,
                             "line": line_idx,
@@ -478,7 +680,10 @@ def validate_repo_link_integrity(repo_root):
                             "resolved": "invalid_path",
                         })
 
-    return broken_links, total_checked
+    if return_violations:
+        return LinkIntegrityTriple(broken_links, total_checked, entry_point_violations, legacy_kb_references)
+    return LinkIntegrityResult(broken_links, total_checked, entry_point_violations, legacy_kb_references)
+
 
 
 def has_real_body(body: str) -> bool:
@@ -648,7 +853,7 @@ def sync_llms_full_txt(target_dir, articles, dry_run=False):
                 print(f"   -> Compiled {rel_disp} ({len(articles)} documents included).")
 
 
-def sync_kb(repo_root, check_only=False, strict=False, prune_intent=None, is_subproject=False):
+def sync_kb(repo_root, check_only=False, strict=False, prune_intent=None, is_subproject=False, output_json=False, migrate_numbered=False, explicit_mapping=None):
     repo_root = os.path.abspath(repo_root)
     docs_dir = os.path.join(repo_root, "docs")
     today = datetime.now().strftime("%Y-%m-%d")
@@ -662,10 +867,10 @@ def sync_kb(repo_root, check_only=False, strict=False, prune_intent=None, is_sub
         print(f"   Bootstrapped {bootstrapped} core Knowledge Base articles.")
 
     if not os.path.exists(docs_dir):
-        if check_only:
+        if not check_only:
+            os.makedirs(docs_dir, exist_ok=True)
+        else:
             print("   docs/ does not exist (check-only mode; zero modifications made).")
-            return 0
-        os.makedirs(docs_dir, exist_ok=True)
 
     articles = []
     doc_cross_links = {}
@@ -681,7 +886,8 @@ def sync_kb(repo_root, check_only=False, strict=False, prune_intent=None, is_sub
     except Exception:
         in_git = False
 
-    for f in sorted(os.listdir(docs_dir)):
+    file_list = sorted(os.listdir(docs_dir)) if os.path.exists(docs_dir) else []
+    for f in file_list:
         if not f.endswith(".md") or f == "INDEX.md":
             continue
         file_path = os.path.join(docs_dir, f)
@@ -872,12 +1078,27 @@ def sync_kb(repo_root, check_only=False, strict=False, prune_intent=None, is_sub
         index_body_lines.append(f"- **[{art['title']}](./{art['filename']})** ({art['type']}) {tags_str}")
 
     index_body_lines.append("\n---\n\n## Related Context\n")
-    index_body_lines.append("- [AGENTS.md](../AGENTS.md): Active protocol conventions and rules.")
-    index_body_lines.append("- [.along/DECISIONS.md](../.along/DECISIONS.md): Architectural Decision Records.")
-    index_body_lines.append("- [.along/ISSUES.md](../.along/ISSUES.md): Active issue tracking board.")
-    index_body_lines.append("- [.along/HISTORY.md](../.along/HISTORY.md): Append-only project history log.")
+    agents_cand = os.path.join(repo_root, "AGENTS.md")
+    if os.path.exists(agents_cand):
+        rel_agents = repo.safe_relpath(agents_cand, docs_dir).replace('\\', '/')
+        index_body_lines.append(f"- [AGENTS.md]({rel_agents}): Active protocol conventions and rules.")
 
-    if not check_only:
+    decisions_cand = os.path.join(repo_root, ".along", "DECISIONS.md")
+    if os.path.exists(decisions_cand):
+        rel_decisions = repo.safe_relpath(decisions_cand, docs_dir).replace('\\', '/')
+        index_body_lines.append(f"- [.along/DECISIONS.md]({rel_decisions}): Architectural Decision Records.")
+
+    issues_cand = os.path.join(repo_root, ".along", "ISSUES.md")
+    if os.path.exists(issues_cand):
+        rel_issues = repo.safe_relpath(issues_cand, docs_dir).replace('\\', '/')
+        index_body_lines.append(f"- [.along/ISSUES.md]({rel_issues}): Active issue tracking board.")
+
+    history_cand = os.path.join(repo_root, ".along", "HISTORY.md")
+    if os.path.exists(history_cand):
+        rel_history = repo.safe_relpath(history_cand, docs_dir).replace('\\', '/')
+        index_body_lines.append(f"- [.along/HISTORY.md]({rel_history}): Append-only project history log.")
+
+    if not check_only and os.path.exists(docs_dir):
         full_index = dump_frontmatter(index_fm, "\n".join(index_body_lines))
         with open(index_path, "w", encoding="utf-8") as fp:
             fp.write(full_index)
@@ -903,50 +1124,99 @@ def sync_kb(repo_root, check_only=False, strict=False, prune_intent=None, is_sub
             if has_docs or has_llms:
                 rel_ctx = repo.safe_relpath(ctx, repo_root)
                 print(f"-> Cascading Knowledge Base sync to subproject: {rel_ctx}")
-                sync_kb(ctx, check_only=check_only, strict=strict, prune_intent=prune_intent, is_subproject=True)
+                sync_kb(ctx, check_only=check_only, strict=strict, prune_intent=prune_intent,
+                        is_subproject=True, migrate_numbered=migrate_numbered,
+                        explicit_mapping=explicit_mapping)
 
+    rewritten_files = 0
+    total_rewrites = 0
     if not is_subproject:
         # Step: Inbound Link Rewriting across the entire repository
         print("-> Scanning repository for inbound legacy links (Link Rewriting Engine)...")
-        rewritten_files, total_rewrites = rewrite_inbound_links(repo_root, dry_run=check_only)
+        rewritten_files, total_rewrites = rewrite_inbound_links(
+            repo_root, dry_run=check_only, migrate_numbered=migrate_numbered,
+            explicit_mapping=explicit_mapping
+        )
         if total_rewrites > 0:
-            print(f"   [OK] Rewrote {total_rewrites} legacy link(s) across {rewritten_files} file(s).")
+            verb = "Would rewrite" if check_only else "Rewrote"
+            print(f"   [OK] {verb} {total_rewrites} legacy link(s) across {rewritten_files} file(s).")
         else:
             print("   [OK] Inbound links are clean and up to date.")
 
-        # Cleanup obsolete files/dirs only after rewriting inbound links
-        if not check_only:
-            for old_kb in [os.path.join(repo_root, ".along", "KB"), os.path.join(repo_root, ".agents", "KB")]:
-                if os.path.exists(old_kb):
+    # Step: Repository-wide Link Integrity Gate (runs BEFORE legacy directory deletion, REQ-5)
+    print("-> Executing Global Link Integrity Gate across all repository Markdown files...")
+    integrity_res = validate_repo_link_integrity(repo_root, return_violations=True)
+    broken_links, total_checked, entry_point_violations = integrity_res
+    legacy_kb_references = getattr(integrity_res, "legacy_kb_references", [])
+
+    # Step: Safe legacy directory cleanup (REQ-5)
+    # The rewrite pass must complete and be verified before any legacy directory deletion,
+    # and deletion must be skipped if unresolved references to that directory remain.
+    if not is_subproject and not check_only:
+        legacy_dirs = [os.path.join(repo_root, ".along", "KB"), os.path.join(repo_root, ".agents", "KB")]
+        for old_kb in legacy_dirs:
+            if os.path.exists(old_kb):
+                old_kb_norm = os.path.normpath(old_kb)
+                has_unresolved_refs = any(
+                    (isinstance(ref, dict) and (
+                        os.path.normpath(ref.get("resolved", "")).startswith(old_kb_norm) or
+                        any(p in ref.get("target", "") for p in [".along/KB", ".agents/KB", "along/KB", "agents/KB"])
+                    ))
+                    for ref in (legacy_kb_references + [bl for bl in broken_links if isinstance(bl, dict)])
+                )
+                if has_unresolved_refs:
+                    print(f"   [WARN] Legacy directory deletion blocked: unresolved references to {repo.safe_relpath(old_kb, repo_root)} remain.")
+                else:
                     shutil.rmtree(old_kb, ignore_errors=True)
 
-    # Step: Repository-wide Link Integrity Gate
-    print("-> Executing Global Link Integrity Gate across all repository Markdown files...")
-    broken_links, total_checked = validate_repo_link_integrity(repo_root)
     if broken_links:
         print(f"   [WARN] Link Integrity Gate detected {len(broken_links)} broken relative link(s) (checked {total_checked}):")
         for bl in broken_links:
             print(f"      - {bl['file']}:{bl['line']} -> [{bl['text']}]({bl['target']}) (target missing on disk)")
-        if strict:
-            print("   [FAIL] Link Integrity Gate failed in strict mode.")
-            sys.exit(1)
     else:
         print(f"   [OK] All {total_checked} relative Markdown link(s) verified on disk.")
-        broken_links = []
 
-    print(f"-> Knowledge Base sync complete. Total active articles: {len(articles) + (1 if os.path.exists(index_path) else 0)}\n")
-    return len(articles), len(broken_links)
+    if entry_point_violations:
+        print(f"   [WARN] Stable Entry Point Rule: {len(entry_point_violations)} inbound link(s) from outside .along/ point directly into .along/:")
+        for ep in entry_point_violations:
+            print(f"      - {ep['file']}:{ep['line']} -> [{ep['text']}]({ep['target']}) (route through canonical {ep['canonical_alternative']} instead)")
+
+    total_articles = len(articles) + (1 if os.path.exists(index_path) else 0)
+    print(f"-> Knowledge Base sync complete. Total active articles: {total_articles}\n")
+
+    if output_json:
+        import json
+        report = {
+            "total_checked": total_checked,
+            "broken_links": broken_links,
+            "entry_point_violations": entry_point_violations,
+            "rewritten_files": rewritten_files,
+            "total_rewrites": total_rewrites,
+            "articles_count": total_articles,
+        }
+        print(json.dumps(report, indent=2, ensure_ascii=False))
+
+    if strict and broken_links:
+        print("   [FAIL] Link Integrity Gate failed in strict mode.")
+        sys.exit(1)
+
+    return total_articles, len(broken_links)
 
 def main():
     parser = argparse.ArgumentParser(description="Along Knowledge Base Compiler, Link Rewriter & Integrity Gate")
     parser.add_argument("repo_root", nargs="?", default=".", help="Target repository root directory")
     parser.add_argument("--check", action="store_true", help="Check links and structure without modifying files")
+    parser.add_argument("--dry-run", action="store_true", help="List intended link rewrites without modifying files")
+    parser.add_argument("--migrate-numbered", action="store_true", help="Migrate numbered documentation links (e.g. 01-intro.md) to topic--intro.md")
     parser.add_argument("--strict", action="store_true", help="Fail with non-zero exit code if broken links are found")
+    parser.add_argument("--json", action="store_true", help="Output report in JSON format")
     parser.add_argument("--prune-intent", dest="prune_intent", nargs="?", const="Intentional content pruning", default=None, help="Acknowledge and allow content reduction with an optional intent rationale")
     parser.add_argument("--allow-shrink", dest="prune_intent", action="store_const", const="Allow shrink", help="Alias for --prune-intent")
     args = parser.parse_args()
 
-    sync_kb(args.repo_root, check_only=args.check, strict=args.strict, prune_intent=args.prune_intent)
+    check_mode = args.check or args.dry_run
+    sync_kb(args.repo_root, check_only=check_mode, strict=args.strict, prune_intent=args.prune_intent,
+            output_json=args.json, migrate_numbered=args.migrate_numbered)
 
 if __name__ == "__main__":
     main()

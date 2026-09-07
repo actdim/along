@@ -183,6 +183,8 @@ IGNORED_DIRS: frozenset = frozenset({
     ".next", ".nuxt", ".output",
     ".vscode", ".idea",
     ".archive", "archive",
+    ".migration-backup",
+    ".session",
     "vendor",
 })
 

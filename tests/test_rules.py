@@ -70,7 +70,7 @@ class TestRulesEngine(unittest.TestCase):
 
                 agents_md = textio.read_text(os.path.join(repo, "AGENTS.md"))
                 self.assertIn("<!-- BEGIN ALONG-RULES -->", agents_md)
-                self.assertIn("[languages/python.md](file://.along/rules/languages/python.md)", agents_md)
+                self.assertIn("[languages/python.md](.along/rules/languages/python.md)", agents_md)
                 self.assertIn("<!-- END ALONG-RULES -->", agents_md)
 
     def test_attach_rules_pruning_case_insensitive(self):

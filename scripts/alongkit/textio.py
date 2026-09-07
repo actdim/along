@@ -30,6 +30,16 @@ from dataclasses import dataclass
 from typing import Optional, Tuple
 
 BOM = "\ufeff"
+UTF8_BOM: bytes = b"\xef\xbb\xbf"
+
+
+def has_utf8_bom(path: str) -> bool:
+    """Return True when path begins with a UTF-8 byte order mark (EF BB BF)."""
+    try:
+        with open(path, "rb") as handle:
+            return handle.read(3) == UTF8_BOM
+    except OSError:
+        return False
 
 
 class DecodeSkipped(UnicodeDecodeError):

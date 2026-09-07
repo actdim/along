@@ -83,6 +83,25 @@ def slugify(text: str, max_words: int = 5) -> str:
     return "-".join(words[:max_words]) if max_words else "-".join(words)
 
 
+def is_valid_slug(slug: str, min_words: int = 2, max_words: int = 5) -> bool:
+    """True when slug is lowercase kebab-case within word count bounds [min_words, max_words].
+
+    The protocol specifies: lowercase kebab-case slug (2-5 words).
+    Double hyphens ('--') are forbidden as '--' separates type from slug in canonical keys.
+    """
+    if not isinstance(slug, str) or not slug:
+        return False
+    slug = slug.strip()
+    if not re.match(r"^[a-z0-9]+(-[a-z0-9]+)*$", slug):
+        return False
+    words = slug.split("-")
+    if min_words is not None and len(words) < min_words:
+        return False
+    if max_words is not None and len(words) > max_words:
+        return False
+    return True
+
+
 def canonical_key(entity_type: Optional[str], slug: str) -> str:
     """`<type>--<slug>` when a type is known, otherwise the bare slug.
 
@@ -386,4 +405,389 @@ def resolve_active_issue(repo_root: str,
             raise ValueError(f"Strict mode: multiple in-progress issues found ({', '.join(slugs)}).")
         warnings.append(msg)
         return None, warnings
+
+
+# ---------------------------------------------------------------------------
+# Agent Detection (REQ-1)
+# ---------------------------------------------------------------------------
+
+def detect_agent(explicit: Optional[str] = None) -> str:
+    """Infer the executing agent tool/model name at runtime.
+
+    Order of priority:
+    1. Explicit value passed by caller (--agent <name>).
+    2. ALONG_AGENT environment variable.
+    3. Provider-specific runtime environment markers:
+       - Claude Code: CLAUDE_CODE, CLAUDE_PROJECT_DIR, CLAUDE_CONVERSATION_ID, ANTHROPIC_CLI -> 'claude-code'
+       - Antigravity: ANTIGRAVITY_AGENT, ANTIGRAVITY_CONVERSATION_ID, ANTIGRAVITY_PROJECT_ID -> 'antigravity'
+       - Codex: CODEX_CLI, OPENAI_CODEX -> 'codex'
+       - OpenCode: OPENCODE_CLI, OPENCODE_AGENT -> 'opencode'
+    4. Fall back to 'unknown' rather than a hardcoded provider name.
+    """
+    if explicit:
+        return explicit.strip()
+
+    env = os.environ
+    if env.get("ALONG_AGENT"):
+        return env["ALONG_AGENT"].strip()
+    if env.get("AGENT"):
+        val = env["AGENT"].strip()
+        if val:
+            return val
+
+    # Claude Code
+    if any(k in env for k in ("CLAUDE_CODE", "CLAUDE_PROJECT_DIR", "CLAUDE_CONVERSATION_ID", "ANTHROPIC_CLI")):
+        return "claude-code"
+
+    # Antigravity
+    if any(k in env for k in ("ANTIGRAVITY_AGENT", "ANTIGRAVITY_CONVERSATION_ID", "ANTIGRAVITY_PROJECT_ID")):
+        return "antigravity"
+
+    # Codex
+    if any(k in env for k in ("CODEX_CLI", "OPENAI_CODEX")):
+        return "codex"
+
+    # OpenCode
+    if any(k in env for k in ("OPENCODE_CLI", "OPENCODE_AGENT")):
+        return "opencode"
+
+    return "unknown"
+
+
+# ---------------------------------------------------------------------------
+# Milestone Discovery (REQ-2)
+# ---------------------------------------------------------------------------
+
+def scan_milestones(repo_root: str) -> List[Dict[str, Any]]:
+    """List milestones from .along/MILESTONES/*.md.
+
+    Reads front-matter via frontmatter.try_parse() returning typed metadata:
+    slug, title, status, due_date, target_issues, file_path, frontmatter.
+    """
+    from . import frontmatter, repo, textio
+
+    sdir = repo.state_dir(repo_root)
+    m_dir = os.path.join(sdir, "MILESTONES")
+    if not os.path.isdir(m_dir):
+        return []
+
+    milestones = []
+    for fname in sorted(os.listdir(m_dir)):
+        if not fname.endswith(".md"):
+            continue
+        fpath = os.path.join(m_dir, fname)
+        if not os.path.isfile(fpath):
+            continue
+        try:
+            content = textio.read_text(fpath)
+        except OSError:
+            continue
+        fm, _, _ = frontmatter.try_parse(content, path=fpath)
+        fslug = fname[:-3]
+        mslug = fm.get("slug") or fslug
+        status = fm.get("status") or "open"
+        milestones.append({
+            "slug": mslug,
+            "title": fm.get("title", mslug),
+            "status": status,
+            "target_issues": fm.get("target_issues", []),
+            "file_path": fpath,
+            "frontmatter": fm,
+        })
+    return milestones
+
+
+def resolve_in_progress_milestone(repo_root: str) -> Optional[str]:
+    """Return the milestone slug if exactly one milestone has status: in-progress.
+
+    Returns None if zero or multiple milestones are in-progress.
+    """
+    milestones = scan_milestones(repo_root)
+    in_progress = [m for m in milestones if m["status"] == "in-progress"]
+    if len(in_progress) == 1:
+        return in_progress[0]["slug"]
+    return None
+
+
+# ---------------------------------------------------------------------------
+# Entity Schema & Graph Validation (REQ-6)
+# ---------------------------------------------------------------------------
+
+def _resolve_ref(ref: Any, known: set) -> bool:
+    if not ref:
+        return False
+    clean = str(ref).strip().strip("[]")
+    if ":" in clean:
+        clean = clean.split(":", 1)[1]
+    if clean in known:
+        return True
+    _, slug = parse_key(clean)
+    return slug in known
+
+
+def validate_entities(repo_root: str) -> Dict[str, Any]:
+    """Validate entity schemas, enums, mandatory fields, and graph references.
+
+    Checks:
+    1. Issues: valid type, status, priority enums; mandatory dates; completed on done;
+       dangling milestone, parent, blocked_by, related references.
+    2. Milestones: mandatory fields, status enum, dangling target_issues.
+    3. Risks, spikes, checklists: mandatory fields and enums.
+    4. Sessions: mandatory fields, milestone resolution, issue resolutions.
+    """
+    from . import frontmatter, repo, textio
+
+    sdir = repo.state_dir(repo_root)
+    errors: List[Tuple[str, str]] = []
+    warnings: List[Tuple[str, str]] = []
+    scanned = 0
+
+    all_issues = scan_issues(repo_root, include_done=True)
+    known_issue_slugs = {iss["slug"] for iss in all_issues}
+    known_issue_keys = {canonical_key(iss["type"], iss["slug"]) for iss in all_issues} | known_issue_slugs
+
+    all_milestones = scan_milestones(repo_root)
+    known_milestone_slugs = (
+        {m["slug"] for m in all_milestones} |
+        {os.path.basename(m["file_path"])[:-3] for m in all_milestones}
+    )
+
+    known_entity_keys = set(known_issue_keys)
+    for m in all_milestones:
+        known_entity_keys.add(m["slug"])
+        known_entity_keys.add(f"milestone--{m['slug']}")
+
+    # Scan auxiliary entities to build full reference registry
+    for kind, dirname in (("risk", "RISKS"), ("spike", "SPIKES"), ("checklist", "CHECKLISTS")):
+        edir = os.path.join(sdir, dirname)
+        if os.path.isdir(edir):
+            for fname in os.listdir(edir):
+                if fname.endswith(".md"):
+                    slug = fname[:-3]
+                    known_entity_keys.add(slug)
+                    known_entity_keys.add(f"{kind}--{slug}")
+
+    # 1. Validate Issues
+    for iss in all_issues:
+        scanned += 1
+        fm = iss["frontmatter"]
+        fpath = iss["file_path"]
+        rel = os.path.relpath(fpath, repo_root)
+
+        if not fm:
+            errors.append((rel, "missing or unparseable YAML front-matter"))
+            continue
+
+        if fm.get("protocol") != "along":
+            errors.append((rel, f"missing or invalid protocol: '{fm.get('protocol')}' (expected 'along')"))
+
+        islug = fm.get("slug")
+        if not islug:
+            errors.append((rel, "missing mandatory field: 'slug'"))
+        else:
+            fname = os.path.basename(fpath)
+            expected_key = canonical_key(iss["type"], islug)
+            if fname[:-3] != expected_key and fname[:-3] != islug and not fname.endswith(f"--{islug}.md"):
+                errors.append((rel, f"slug '{islug}' does not match filename '{fname}'"))
+
+        itype = fm.get("type")
+        if not itype or itype not in ISSUE_TYPES:
+            errors.append((rel, f"invalid type: '{itype}' (allowed: {', '.join(ISSUE_TYPES)})"))
+
+        istatus = fm.get("status")
+        if not istatus or istatus not in ISSUE_STATUSES:
+            errors.append((rel, f"invalid status: '{istatus}' (allowed: {', '.join(ISSUE_STATUSES)})"))
+
+        priority = fm.get("priority")
+        if not priority or priority not in PRIORITIES:
+            errors.append((rel, f"invalid priority: '{priority}' (allowed: {', '.join(PRIORITIES)})"))
+
+        created = fm.get("created")
+        if not created or not is_iso_date(created):
+            errors.append((rel, f"missing or invalid created date: '{created}' (expected YYYY-MM-DD)"))
+
+        updated = fm.get("updated")
+        if not updated or not is_iso_date(updated):
+            errors.append((rel, f"missing or invalid updated date: '{updated}' (expected YYYY-MM-DD)"))
+
+        if iss["done"] or istatus == "done":
+            completed = fm.get("completed")
+            if not completed or not is_iso_date(completed):
+                errors.append((rel, f"missing or invalid completed date on closed issue: '{completed}' (expected YYYY-MM-DD)"))
+
+        # References
+        mslug = fm.get("milestone")
+        if mslug and str(mslug).strip() and str(mslug).strip() not in known_milestone_slugs:
+            errors.append((rel, f"dangling milestone reference: '{mslug}'"))
+
+        parent = fm.get("parent")
+        if parent and str(parent).strip() and not _resolve_ref(parent, known_entity_keys):
+            errors.append((rel, f"dangling parent reference: '{parent}'"))
+
+        blocked_by = fm.get("blocked_by")
+        if isinstance(blocked_by, list):
+            for b in blocked_by:
+                if b and not _resolve_ref(b, known_entity_keys):
+                    errors.append((rel, f"dangling blocked_by reference: '{b}'"))
+
+        related = fm.get("related")
+        if isinstance(related, list):
+            for r in related:
+                if r and not _resolve_ref(r, known_entity_keys):
+                    errors.append((rel, f"dangling related reference: '{r}'"))
+
+    # 2. Validate Milestones
+    for m in all_milestones:
+        scanned += 1
+        fm = m["frontmatter"]
+        fpath = m["file_path"]
+        rel = os.path.relpath(fpath, repo_root)
+
+        if not fm:
+            errors.append((rel, "missing or unparseable YAML front-matter"))
+            continue
+
+        if fm.get("protocol") != "along":
+            errors.append((rel, f"missing or invalid protocol: '{fm.get('protocol')}' (expected 'along')"))
+
+        if not fm.get("slug"):
+            errors.append((rel, "missing mandatory field: 'slug'"))
+
+        if not fm.get("title"):
+            errors.append((rel, "missing mandatory field: 'title'"))
+
+        mstatus = fm.get("status")
+        if not mstatus or mstatus not in MILESTONE_STATUSES:
+            errors.append((rel, f"invalid status: '{mstatus}' (allowed: {', '.join(MILESTONE_STATUSES)})"))
+
+        target_issues = fm.get("target_issues")
+        if isinstance(target_issues, list):
+            for t in target_issues:
+                if t and not _resolve_ref(t, known_issue_keys):
+                    errors.append((rel, f"dangling target_issues reference: '{t}'"))
+
+    # 3. Validate Auxiliary Entities (RISKS, SPIKES, CHECKLISTS)
+    checklists_dir = os.path.join(sdir, "CHECKLISTS")
+    if os.path.isdir(checklists_dir):
+        for fname in os.listdir(checklists_dir):
+            if not fname.endswith(".md"):
+                continue
+            scanned += 1
+            fpath = os.path.join(checklists_dir, fname)
+            rel = os.path.relpath(fpath, repo_root)
+            try:
+                c = textio.read_text(fpath)
+                fm, _, _ = frontmatter.try_parse(c, path=fpath)
+            except OSError:
+                continue
+            if not fm:
+                errors.append((rel, "missing or unparseable YAML front-matter"))
+                continue
+            if fm.get("protocol") != "along":
+                errors.append((rel, f"missing or invalid protocol: '{fm.get('protocol')}' (expected 'along')"))
+            if not fm.get("slug"):
+                errors.append((rel, "missing mandatory field: 'slug'"))
+            if not fm.get("title"):
+                errors.append((rel, "missing mandatory field: 'title'"))
+            cat = fm.get("category")
+            if cat and cat not in CHECKLIST_CATEGORIES:
+                errors.append((rel, f"invalid category: '{cat}' (allowed: {', '.join(CHECKLIST_CATEGORIES)})"))
+
+    risks_dir = os.path.join(sdir, "RISKS")
+    if os.path.isdir(risks_dir):
+        for fname in os.listdir(risks_dir):
+            if not fname.endswith(".md"):
+                continue
+            scanned += 1
+            fpath = os.path.join(risks_dir, fname)
+            rel = os.path.relpath(fpath, repo_root)
+            try:
+                c = textio.read_text(fpath)
+                fm, _, _ = frontmatter.try_parse(c, path=fpath)
+            except OSError:
+                continue
+            if not fm:
+                errors.append((rel, "missing or unparseable YAML front-matter"))
+                continue
+            if fm.get("protocol") != "along":
+                errors.append((rel, f"missing or invalid protocol: '{fm.get('protocol')}' (expected 'along')"))
+            if not fm.get("slug"):
+                errors.append((rel, "missing mandatory field: 'slug'"))
+            if not fm.get("title"):
+                errors.append((rel, "missing mandatory field: 'title'"))
+            sev = fm.get("severity")
+            if sev and sev not in RISK_SEVERITIES:
+                errors.append((rel, f"invalid severity: '{sev}' (allowed: {', '.join(RISK_SEVERITIES)})"))
+            rstatus = fm.get("status")
+            if rstatus and rstatus not in RISK_STATUSES:
+                errors.append((rel, f"invalid status: '{rstatus}' (allowed: {', '.join(RISK_STATUSES)})"))
+
+    spikes_dir = os.path.join(sdir, "SPIKES")
+    if os.path.isdir(spikes_dir):
+        for fname in os.listdir(spikes_dir):
+            if not fname.endswith(".md"):
+                continue
+            scanned += 1
+            fpath = os.path.join(spikes_dir, fname)
+            rel = os.path.relpath(fpath, repo_root)
+            try:
+                c = textio.read_text(fpath)
+                fm, _, _ = frontmatter.try_parse(c, path=fpath)
+            except OSError:
+                continue
+            if not fm:
+                errors.append((rel, "missing or unparseable YAML front-matter"))
+                continue
+            if fm.get("protocol") != "along":
+                errors.append((rel, f"missing or invalid protocol: '{fm.get('protocol')}' (expected 'along')"))
+            if not fm.get("slug"):
+                errors.append((rel, "missing mandatory field: 'slug'"))
+            if not fm.get("title"):
+                errors.append((rel, "missing mandatory field: 'title'"))
+            sstatus = fm.get("status")
+            if sstatus and sstatus not in SPIKE_STATUSES:
+                errors.append((rel, f"invalid status: '{sstatus}' (allowed: {', '.join(SPIKE_STATUSES)})"))
+
+    # 4. Validate Sessions
+    sessions_dir = os.path.join(sdir, "SESSIONS")
+    if os.path.isdir(sessions_dir):
+        for root, _, files in os.walk(sessions_dir):
+            for fname in files:
+                if not fname.endswith(".md"):
+                    continue
+                scanned += 1
+                fpath = os.path.join(root, fname)
+                rel = os.path.relpath(fpath, repo_root)
+                try:
+                    c = textio.read_text(fpath)
+                    fm, _, _ = frontmatter.try_parse(c, path=fpath)
+                except OSError:
+                    continue
+                if not fm:
+                    errors.append((rel, "missing or unparseable YAML front-matter"))
+                    continue
+                if fm.get("protocol") != "along":
+                    errors.append((rel, f"missing or invalid protocol: '{fm.get('protocol')}' (expected 'along')"))
+                if not fm.get("slug"):
+                    errors.append((rel, "missing mandatory field: 'slug'"))
+                sdate = fm.get("date")
+                if sdate and not is_iso_date(sdate):
+                    errors.append((rel, f"invalid session date: '{sdate}' (expected YYYY-MM-DD)"))
+                mslug = fm.get("milestone")
+                if mslug and str(mslug).strip() and str(mslug).strip() not in known_milestone_slugs:
+                    errors.append((rel, f"dangling milestone reference: '{mslug}'"))
+                for key in ("issues_advanced", "issues_completed"):
+                    items = fm.get(key)
+                    if isinstance(items, list):
+                        for item in items:
+                            if item and not _resolve_ref(item, known_issue_keys):
+                                errors.append((rel, f"dangling {key} reference: '{item}'"))
+
+    return {
+        "clean": len(errors) == 0,
+        "errors": errors,
+        "warnings": warnings,
+        "scanned": scanned,
+    }
+
 
