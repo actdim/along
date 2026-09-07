@@ -295,6 +295,16 @@ def apply_migration_to_context(ctx_dir, protocol_text, migrate_script, is_root=T
         if exec_script:
             proc.run_capture([sys.executable, exec_script, "issue", "sync"], cwd=ctx_dir)
 
+    # Recompile .along/CONSTRAINTS.md from DECISIONS.md if it exists
+    decisions_file = os.path.join(ctx_dir, ".along", "DECISIONS.md")
+    if os.path.isfile(decisions_file) and not dry_run:
+        try:
+            from alongkit import entities
+            out_path = entities.sync_constraints(ctx_dir)
+            print(f"   Recompiled {os.path.relpath(out_path, ctx_dir)}")
+        except Exception as e:
+            print(f"   [WARN] Could not recompile CONSTRAINTS.md: {e}")
+
     # Automatically attach or prune language rule packs for the context
     if not dry_run:
         try:

@@ -1,6 +1,6 @@
 ---
 protocol: along
-protocol_version: "2.2.25"
+protocol_version: "2.2.26"
 slug: skills-reference
 title: Skills & Slash Commands Technical Reference
 type: topic

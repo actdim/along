@@ -966,6 +966,23 @@ def run_migrations(repo_root, dry_run=True, force=False, backup=True):
         else:
             print("   [OK] No suspicious shell-escaping artifacts detected in docs/.")
 
+    # Step 9: v2.2.26+ Generate .along/CONSTRAINTS.md projection from DECISIONS.md
+    decisions_file = os.path.join(repo_root, ".along", "DECISIONS.md")
+    constraints_file = os.path.join(repo_root, ".along", "CONSTRAINTS.md")
+    if (os.path.isfile(decisions_file)
+            and not os.path.isfile(constraints_file)
+            and semver.parse(detected_version) < (2, 2, 26)):
+        print("-> Step 9 [< v2.2.26]: Generating .along/CONSTRAINTS.md from DECISIONS.md...")
+        if not dry_run:
+            try:
+                from alongkit import entities
+                out_path = entities.sync_constraints(repo_root)
+                mig.record("constraints projection", out_path, "generated")
+            except Exception as e:
+                print(f"   [WARN] Could not generate CONSTRAINTS.md: {e}")
+        else:
+            print("   [DRY-RUN] Would generate .along/CONSTRAINTS.md")
+
     # The state marker is written last, so a run that died halfway is not recorded as
     # a completed migration.
     if not dry_run and not errors:

@@ -1,6 +1,6 @@
 ---
 protocol: along
-protocol_version: "2.2.25"
+protocol_version: "2.2.26"
 slug: llm-wiki-architecture
 title: LLM-Wiki Knowledge Base Architecture & Paradigm
 type: topic
