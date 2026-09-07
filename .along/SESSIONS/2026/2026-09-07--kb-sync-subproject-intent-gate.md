@@ -9,7 +9,7 @@ summary: Fix Intent Gate false positive during subproject cascading sync by pref
 milestone: v3.0.0-global-quality-revision
 issues_advanced: []
 issues_completed: [kb-sync-subproject-intent-gate]
-decisions: []
+decisions: [ADR-2026-09-07--subproject-git-path-resolution-under-intent-gate]
 risks_logged: []
 spikes_conducted: []
 ---
