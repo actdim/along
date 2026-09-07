@@ -93,49 +93,25 @@ files, they are inert and can be deleted.
 
 A configuration file that does not parse is reported and left untouched, never replaced.
 
-### Windows Git Concurrency & Index Lock Optimization
+### Windows Git Concurrency & Index Handling
 
-When running rapid AI coding agents (such as Google Antigravity with Gemini Flash, Claude Code, or Codex) on Windows, tools generate multiple file modifications in quick succession (< 500ms). When these modifications are accepted simultaneously ("Accept All Changes"), file system watchers from the IDE (`vscode.git`) and external GUI clients (such as GitExtensions) trigger concurrent `git status` commands.
+When running rapid AI coding agents (such as Google Antigravity, Claude Code, or Codex) on Windows, tools generate multiple file modifications in quick succession (< 500ms).
 
 #### The Problem on Windows NTFS
-By default, Git commands like `git status` and `git diff` attempt to refresh the index stat cache by opening `.git/index.lock`, writing the updated cache, and atomically replacing `.git/index` via Windows `ReplaceFileW`. If another process has `.git/index` open for reading, NTFS sharing constraints cause `ReplaceFileW` to fail or get interrupted, leaving `.git/index` truncated to 0 bytes and throwing:
+By default, Git commands attempt to replace `.git/index` by writing to `.git/index.lock` and atomically replacing `.git/index` via Windows `ReplaceFileW`. If another process (such as Windows Defender, Search Indexer, or an IDE file watcher) has `.git/index` open for reading, NTFS sharing constraints cause `ReplaceFileW` to fail or get interrupted, leaving `.git/index` truncated to 0 bytes:
 ```text
 fatal: .git/index: index file smaller than expected
 ```
 
-#### The Solution & Recommended Settings
-To eliminate this race condition, configure Git to disable optional index locking during read-only status and diff queries:
+#### Safe Mitigations
+1. **Exclude `.git` from Antivirus and Search Indexing**:
+   Add the repository root or `.git` directory to Windows Defender and Windows Search exclusion lists. Background file scanners are the primary source of file locking collisions during Git atomic replacements on NTFS.
 
-1. **Disable Optional Locks (User Environment)**:
-   ```powershell
-   [Environment]::SetEnvironmentVariable("GIT_OPTIONAL_LOCKS", "0", "User")
-   ```
-   Setting `GIT_OPTIONAL_LOCKS=0` prevents `git status` and `git diff` from attempting to acquire write locks or rewrite `.git/index`. Mandatory locks for `git add`, `git commit`, `git checkout`, and `git merge` remain fully operational.
+2. **Self-Healing Index Recovery**:
+   If `.git/index` becomes corrupted or truncated to 0 bytes due to an external lock collision, Along automatically executes index self-healing via `git read-tree HEAD` or `git reset` to restore the index without data loss.
 
-2. **Disable Diff Index Auto-Refresh (Global Git Config)**:
-   ```powershell
-   git config --global diff.autoRefreshIndex false
-   ```
-   Prevents `git diff` and IDE Diff Editors from silently executing `git update-index --refresh` and rewriting `.git/index` during read-only file inspections.
-
-3. **Disable Multi-threaded Index Preloading**:
-   ```powershell
-   git config --global core.preloadindex false
-   ```
-   Prevents background thread contention on NTFS metadata locks during index inspection.
-
-4. **Disable IDE Background Auto-Refresh**:
-   In `.vscode/settings.json`:
-   ```json
-   {
-     "git.autorefresh": false,
-     "git.autofetch": false
-   }
-   ```
-   Stops VS Code from triggering bursts of `git status` commands while batch file operations are in flight.
-
-5. **Along Automatic Protection**:
-   Along automatically injects `GIT_OPTIONAL_LOCKS=0` into child process environments via `alongkit.proc` and includes automatic 0-byte index self-healing (`git read-tree HEAD`) when interacting with Git.
+3. **Avoid Disabling Stat-Cache Flags**:
+   Do not set `GIT_OPTIONAL_LOCKS=0` or `diff.autoRefreshIndex false`. While intended to prevent lock contention during read operations, these flags disable Git stat-cache refresh on Windows, causing clean files to be falsely reported as modified (`" M"`) whenever file timestamps change.
 
 ---
 

@@ -1,6 +1,7 @@
 # Active Issues
 
 ## Active
+- [ ] `(bug)` [antigravity-extension-git-index-truncation](ISSUES/bug--antigravity-extension-git-index-truncation.md)
 - [ ] `(bug)` [generated-docs-emit-file-uri-links](ISSUES/bug--generated-docs-emit-file-uri-links.md)
 - [ ] `(bug)` [generated-lifecycle-hooks-use-shell-string-concat](ISSUES/bug--generated-lifecycle-hooks-use-shell-string-concat.md)
 - [ ] `(bug)` [issue-create-stamps-wrong-agent-and-milestone](ISSUES/bug--issue-create-stamps-wrong-agent-and-milestone.md)
@@ -80,6 +81,7 @@
 - [x] `(bug)` [team-skill-uses-provider-specific-subagent-api](ISSUES/done/bug--team-skill-uses-provider-specific-subagent-api.md)
 - [x] `(bug)` [subprocess-encoding-breaks-on-non-utf8-locale](ISSUES/done/bug--subprocess-encoding-breaks-on-non-utf8-locale.md)
 - [x] `(bug)` [skill-commands-reference-missing-script-paths](ISSUES/done/bug--skill-commands-reference-missing-script-paths.md)
+- [x] `(bug)` [remove-git-locking-workarounds](ISSUES/done/bug--remove-git-locking-workarounds.md)
 - [x] `(bug)` [release-engine-mutates-before-tests-and-reinstalls-globals](ISSUES/done/bug--release-engine-mutates-before-tests-and-reinstalls-globals.md)
 - [x] `(bug)` [recent-features-defects-and-guard-messages](ISSUES/done/bug--recent-features-defects-and-guard-messages.md)
 - [x] `(bug)` [migration-deletes-destination-without-backup](ISSUES/done/bug--migration-deletes-destination-without-backup.md)

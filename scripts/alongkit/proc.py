@@ -32,15 +32,12 @@ from typing import Dict, List, Optional, Sequence, Union
 
 Command = Union[str, Sequence[str]]
 
-#: Child environment overrides that force UTF-8 on both sides of the pipe
-#: and prevent read-only Git commands from writing to .git/index.
+#: Child environment overrides that force UTF-8 on both sides of the pipe.
 UTF8_CHILD_ENV: Dict[str, str] = {
     "PYTHONIOENCODING": "utf-8",
     # PEP 540: makes a child CPython use UTF-8 for stdio and the filesystem
     # regardless of the host locale.
     "PYTHONUTF8": "1",
-    # Prevent background/read-only git status and diff from taking optional index locks.
-    "GIT_OPTIONAL_LOCKS": "0",
 }
 
 
