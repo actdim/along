@@ -2,6 +2,10 @@
 
 All notable changes to this project, newest first.
 
+## v2.2.23 - 2026-09-07
+
+- feat: standardize skill commands, add durable session blackboard, and clean changelog (refs #skill-commands-reference-missing-script-paths)
+
 ## v2.2.22 - 2026-09-07
 
 - feat: fix git index lock resilience, kb sync atomic writes, and issue milestones (refs #programmatic-integrity-gates-and-git-guard)
