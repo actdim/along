@@ -2,6 +2,11 @@
 
 All notable changes to this project, newest first.
 
+## v2.2.24 - 2026-09-07
+
+- docs: record commit hash in session log (refs #remove-git-locking-workarounds)
+- fix: revert broken git locking workarounds and restore stat cache (refs #remove-git-locking-workarounds)
+
 ## v2.2.23 - 2026-09-07
 
 - feat: standardize skill commands, add durable session blackboard, and clean changelog (refs #skill-commands-reference-missing-script-paths)
