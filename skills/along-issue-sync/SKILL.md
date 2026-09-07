@@ -13,3 +13,7 @@ Maintains `.along/ISSUES.md` and `.along/ISSUES/<type>--<slug>.md` files with st
 
 ## Usage
 - Command: `/along-issue-sync`
+```bash
+along issue sync
+```
+*(Or fallback: `python ~/.along/bin/along_exec.py issue sync` or `/along-issue-sync`)*

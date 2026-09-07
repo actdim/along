@@ -3,11 +3,12 @@ protocol: along
 protocol_version: 2.2.8
 slug: skill-commands-reference-missing-script-paths
 type: bug
-status: open
+status: done
 priority: critical
 created: 2026-09-01
-updated: 2026-09-01
-agent: claude-code
+updated: 2026-09-07
+completed: 2026-09-07
+agent: antigravity
 tags: [skills, distribution, path-resolution, cli, packaging]
 milestone: v3.0.0-global-quality-revision
 blocked_by: []

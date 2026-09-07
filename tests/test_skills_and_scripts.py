@@ -235,6 +235,34 @@ class TestAlongSkillsAndScripts(unittest.TestCase):
         # REQ-7: Smoke procedures
         self.assertIn("Provider Smoke Procedures", content)
 
+    def test_03e_skills_document_canonical_along_commands(self):
+        """Verify skills document canonical along <command> invocations without broken script paths."""
+        skills_dir = os.path.join(REPO_ROOT, "skills")
+        for skill_name in os.listdir(skills_dir):
+            skill_md = os.path.join(skills_dir, skill_name, "SKILL.md")
+            if not os.path.isfile(skill_md):
+                continue
+            with open(skill_md, "r", encoding="utf-8") as f:
+                content = f.read()
+
+            # No SKILL.md may document python scripts/<engine>.py as an execution command
+            self.assertNotRegex(
+                content,
+                r"(?m)^\s*(python\s+scripts/|uv\s+run\s+scripts/)",
+                f"{skill_name}/SKILL.md documents obsolete scripts/ path rather than canonical along CLI"
+            )
+
+        # along-team must document persistent session blackboard and scratch commands
+        team_skill = os.path.join(skills_dir, "along-team", "SKILL.md")
+        with open(team_skill, "r", encoding="utf-8") as f:
+            team_content = f.read()
+        self.assertIn("along scratch init", team_content)
+        self.assertIn("along scratch state", team_content)
+        self.assertIn("along scratch update", team_content)
+        self.assertIn("along scratch purge", team_content)
+        self.assertIn("state.json", team_content)
+        self.assertIn("retry_limit", team_content)
+
     def test_04_protocol_version_consistency(self):
         """Verify that protocol version is identical across protocol.md, AGENTS.md, README.md, and scripts."""
         proto_file = os.path.join(REPO_ROOT, "skills", "along-init", "protocol.md")

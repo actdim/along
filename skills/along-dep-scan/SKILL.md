@@ -27,12 +27,12 @@ Discovers AI documentation and guidelines shipped inside internal subprojects, G
    - Reconciles links in `docs/INDEX.md`.
 
 ## Execution
-Run the dependency scanner directly via Python:
+Run the dependency scanner via the canonical Along entry point:
 
 ```bash
-python scripts/along_dep_scan.py [--root <path>] [--check] [--json]
+along dep-scan [--root <path>] [--check] [--json]
 ```
-*(Or `python scripts/along_exec.py dep-scan` / `/along-dep-scan`)*
+*(Or fallback: `python ~/.along/bin/along_exec.py dep-scan` or `/along-dep-scan`)*
 
 ### CLI Flags
 - `--check`: Perform dry-run scan without modifying `docs/`.

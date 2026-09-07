@@ -13,6 +13,8 @@ Execute project build lifecycle hook via `.along/scripts/build.py` or auto-detec
 
 ```bash
 python .along/scripts/build.py
+along build
 ```
 *(Or `/along-build`, or stack fallback: `npm run build`, `cargo build`, `dotnet build -v q`, `python -m build`)*
+*(Or fallback: `python ~/.along/bin/along_exec.py build` or `/along-build`; executes `.along/scripts/build.py` or auto-detects and synthesizes it for npm, cargo, dotnet, python)*
 

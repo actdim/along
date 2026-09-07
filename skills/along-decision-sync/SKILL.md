@@ -23,6 +23,7 @@ Maintains append-only Architectural Decision Records (ADRs) in the nearest `.alo
 
 ## CLI Helper
 ```bash
-python scripts/along_exec.py decision create <slug> --title "Title" --context "Why" --decision "What" --consequences "Tradeoffs"
+along decision create <slug> --title "Title" --context "Why" --decision "What" --consequences "Tradeoffs"
 ```
+*(Or fallback: `python ~/.along/bin/along_exec.py decision create ...` or `/along-decision-sync`)*
 

@@ -708,6 +708,8 @@ def step_migrate_v2_1_docs_wiki_and_archive(mig, repo_root, interactive=True):
         if os.path.isfile(c):
             kb_script = c
             break
+    # Locate along_kb_sync.py via shared resolver
+    kb_script = repo.resolve_tool_script("along_kb_sync.py", repo_root, skill_folder="along-kb-sync")
 
     # The KB engine owns its own dry-run: `--check` inspects and reports without
     # writing, so a migration plan covers the KB step too instead of stopping at it.
@@ -1029,6 +1031,13 @@ def step_migrate_v2_2_5_link_rewriting_and_integrity(mig, repo_root, detected_ve
                 else:
                     print(f"   [WARN] along_kb_sync returned code {res.returncode}: {res.stderr.strip()}")
                 break
+        kb_script = repo.resolve_tool_script("along_kb_sync.py", repo_root, skill_folder="along-kb-sync")
+        if kb_script:
+            res = proc.run_python([kb_script, repo_root, *(["--check"] if mig.dry_run else [])])
+            if res.ok:
+                print("   [OK] Inbound links repaired via along_kb_sync.py.")
+            else:
+                print(f"   [WARN] along_kb_sync returned code {res.returncode}: {res.stderr.strip()}")
 
 def main(argv=None):
     parser = argparse.ArgumentParser(

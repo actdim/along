@@ -15,8 +15,9 @@ Discovers all existing agent contexts across the repository tree and updates the
 ## Execution
 
 ```bash
-python scripts/along_update.py [target_root] [options]
+along update [target_root] [options]
 ```
+*(Or fallback: `python ~/.along/bin/along_exec.py update [target_root] [options]` or `/along-update`)*
 
 ### CLI Flags
 - `--check-only`: Inspect versions and print status report without modifying files.

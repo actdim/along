@@ -3,11 +3,12 @@ protocol: along
 protocol_version: 2.2.8
 slug: team-skill-state-not-persisted
 type: debt
-status: open
+status: done
 priority: critical
 created: 2026-09-01
-updated: 2026-09-01
-agent: claude-code
+updated: 2026-09-07
+completed: 2026-09-07
+agent: antigravity
 tags: [along-team, multi-agent, backtracking, blackboard, state-machine, resumability]
 milestone: v3.0.0-global-quality-revision
 blocked_by: []

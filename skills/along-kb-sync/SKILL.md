@@ -38,11 +38,11 @@ When executing `/along-kb-sync`:
   - When processing extensive documentation dumps, large monorepos, or multiple subprojects:
     1. **Decompose Topics**: Split the knowledge extraction into 2-4 discrete domain vectors (e.g. `architecture`, `data-models`, `api-integrations`, `workflows`).
     2. **Spawn Parallel Subagents**: Concurrently invoke research subagents to synthesize independent `docs/topic--<slug>.md` articles in parallel with standard YAML front-matter (`protocol: along`, `protocol_version: "2.2.22"`).
-    3. **Reconcile & Link**: Run `python scripts/along_kb_sync.py` to rewrite inbound links, validate relative links across the repository, verify provenance hashes, sync `llms.txt` and `llms-full.txt`, and rebuild `docs/INDEX.md`.
+    3. **Reconcile & Link**: Run `along kb-sync` to rewrite inbound links, validate relative links across the repository, verify provenance hashes, sync `llms.txt` and `llms-full.txt`, and rebuild `docs/INDEX.md`.
 
 ## Usage
 ```bash
-python scripts/along_kb_sync.py [REPO_ROOT] [--check] [--strict]
-python scripts/along_kb_sync.py [REPO_ROOT] [--check] [--strict] [--prune-intent [REASON]]
+along kb-sync [REPO_ROOT] [--check] [--strict]
+along kb-sync [REPO_ROOT] [--check] [--strict] [--prune-intent [REASON]]
 ```
-*(Or `python scripts/along_exec.py kb-sync` / `/along-kb-sync`)*
+*(Or fallback: `python ~/.along/bin/along_exec.py kb-sync` or `/along-kb-sync`)*

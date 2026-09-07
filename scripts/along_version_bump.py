@@ -481,7 +481,13 @@ def release_log_entries(repo_root, limit=200):
         print(f"[Warning] cannot read git log for the CHANGELOG: {log.stderr.strip()}",
               file=sys.stderr)
         return []
-    return log.lines()
+    raw = log.lines()
+    filtered = [
+        line for line in raw
+        if not re.search(r'^(?:release|bump(?:\(version\))?):', line, re.I)
+        and 'bump version and release reconciliation' not in line.lower()
+    ]
+    return filtered
 
 
 def update_changelog(repo_root, new_version, tx):

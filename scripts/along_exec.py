@@ -38,7 +38,7 @@ from alongkit import bootstrap
 # installers and the documented skill commands invoke it.
 bootstrap.ensure_deps()
 
-from alongkit import entities, frontmatter, proc, repo
+from alongkit import entities, frontmatter, proc, repo, session
 from alongkit.version import CURRENT_PROTOCOL_VERSION
 
 TOOL_MAPPINGS = {
@@ -174,10 +174,12 @@ def glob_files(root: str, pattern: str) -> bool:
 
 
 def print_help():
-    print("""Along Command Router (along_exec.py) [v2.2.0]
+    print("""Along Command Router (along_exec.py)
 
 Usage:
   python scripts/along_exec.py <command> [subcommand] [args...]
+  along <command> [subcommand] [args...]
+  (or: python scripts/along_exec.py <command> [subcommand] [args...])
 
 Lifecycle Commands (project hooks):
   build          Execute project build (.along/scripts/build.py or auto-detected)
@@ -195,6 +197,9 @@ Entity Management Commands:
   decision add   <slug> --title "Title" --context "Why" --decision "What" --consequences "Tradeoffs"
   decision create <slug> --title "Title" --context "Why" --decision "What" --consequences "Tradeoffs"
   scratch init   <slug>
+  scratch init   <slug> [--title "Title"] [--steps N] [--restart]
+  scratch state  <slug> [--json]
+  scratch update <slug> [--step N] [--step-status status] [--inc-retry] [--status status]
   scratch purge  <slug>
   rules attach   Detect project stack and attach relevant engineering rule packs
 
@@ -679,31 +684,116 @@ def handle_doctor_command(repo_root: str, args: List[str]):
 
 def handle_scratch_command(repo_root: str, args: List[str]):
     if not args or args[0] in ("-h", "--help", "help"):
-        print("Usage: along_exec.py scratch [init|purge] <slug>")
+        print("Usage: along scratch [init|state|update|purge] <slug> [options]")
+        print("  init   <slug> [--title <title>] [--steps <N>] [--restart]")
+        print("  state  <slug> [--json]")
+        print("  update <slug> [--step <N>] [--step-status <pending|in-progress|passed|failed>] [--inc-retry] [--status <in-progress|completed|failed>] [--plan-rev <N>]")
+        print("  purge  <slug>")
         sys.exit(0)
 
     subcmd = args[0].lower()
     if len(args) < 2:
-        print("[Error] Usage: along_exec.py scratch [init|purge] <slug>", file=sys.stderr)
+        print("[Error] Usage: along scratch [init|state|update|purge] <slug> [options]", file=sys.stderr)
         sys.exit(1)
     slug = args[1].lower()
-    scratch_dir = os.path.join(repo_root, ".along", ".session", slug)
 
     if subcmd == "init":
-        os.makedirs(scratch_dir, exist_ok=True)
-        plan_file = os.path.join(scratch_dir, "plan.md")
-        if not os.path.exists(plan_file):
-            with open(plan_file, "w", encoding="utf-8") as f:
-                f.write(f"# Living Plan: {slug}\n\n## Steps\n- [ ] Step 1: Initialize\n")
-        print(f"-> Initialized scratchpad: {scratch_dir}")
+        title = None
+        total_steps = None
+        force_restart = False
+        i = 2
+        while i < len(args):
+            if args[i] in ("--title", "-t") and i + 1 < len(args):
+                title = args[i + 1]
+                i += 2
+            elif args[i] in ("--steps", "-s") and i + 1 < len(args):
+                try:
+                    total_steps = int(args[i + 1])
+                except ValueError:
+                    pass
+                i += 2
+            elif args[i] in ("--restart", "--force", "-f"):
+                force_restart = True
+                i += 1
+            else:
+                i += 1
+        st = session.init_session(repo_root, slug, title=title, total_steps=total_steps, force_restart=force_restart)
+        sdir = session.get_session_dir(repo_root, slug)
+        print(f"-> Initialized session blackboard: {sdir}")
+        print(session.format_state_summary(st))
         sys.exit(0)
-    elif subcmd == "purge":
-        if os.path.exists(scratch_dir):
-            shutil.rmtree(scratch_dir)
-            print(f"-> Purged scratchpad: {scratch_dir}")
+
+    elif subcmd == "state":
+        as_json = "--json" in args
+        st = session.load_state(repo_root, slug)
+        if not st:
+            print(f"[Error] No session blackboard found for '{slug}'. Run 'along scratch init {slug}' first.", file=sys.stderr)
+            sys.exit(1)
+        if as_json:
+            import json
+            print(json.dumps(st, indent=2))
         else:
-            print(f"-> Scratchpad not found (already clean): {scratch_dir}")
+            print(session.format_state_summary(st))
         sys.exit(0)
+
+    elif subcmd == "update":
+        current_step = None
+        step_status = None
+        status = None
+        plan_rev = None
+        inc_retry = False
+        i = 2
+        while i < len(args):
+            if args[i] in ("--step",) and i + 1 < len(args):
+                try:
+                    current_step = int(args[i + 1])
+                except ValueError:
+                    pass
+                i += 2
+            elif args[i] in ("--step-status",) and i + 1 < len(args):
+                step_status = args[i + 1].lower()
+                i += 2
+            elif args[i] in ("--status",) and i + 1 < len(args):
+                status = args[i + 1].lower()
+                i += 2
+            elif args[i] in ("--plan-rev", "--revision") and i + 1 < len(args):
+                try:
+                    plan_rev = int(args[i + 1])
+                except ValueError:
+                    pass
+                i += 2
+            elif args[i] in ("--inc-retry", "--retry"):
+                inc_retry = True
+                i += 1
+            else:
+                i += 1
+        st, retry_exhausted = session.update_state(
+            repo_root, slug,
+            current_step=current_step,
+            step_status=step_status,
+            status=status,
+            plan_revision=plan_rev,
+            increment_retry=inc_retry,
+        )
+        if retry_exhausted:
+            step_num = st.get("current_step", 1)
+            limit = st.get("retry_limit", session.DEFAULT_RETRY_LIMIT)
+            print(f"[ALERT] Step {step_num} has exceeded the retry budget ({limit} retries)!", file=sys.stderr)
+            print("Execution halted. Please inspect failures or escalate to human review.", file=sys.stderr)
+            sys.exit(2)
+        print(session.format_state_summary(st))
+        sys.exit(0)
+
+    elif subcmd == "purge":
+        if session.purge_session(repo_root, slug):
+            print(f"-> Purged session blackboard: {session.get_session_dir(repo_root, slug)}")
+        else:
+            print(f"-> Session blackboard not found (already clean): {session.get_session_dir(repo_root, slug)}")
+        sys.exit(0)
+
+    else:
+        print(f"[Error] Unknown scratch subcommand: {subcmd}. Use init, state, update, or purge.", file=sys.stderr)
+        sys.exit(1)
 
 
 def handle_rules_command(repo_root: str, args: List[str]):
@@ -803,23 +893,23 @@ def main():
             py_content = f'''#!/usr/bin/env python3
 # Status: {status_tag}
 # Auto-generated by Along for {cmd}
-import sys, subprocess, os
+import os, shlex, subprocess, sys
 
 def main():
     repo_root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-    cmd = "{detected_cmd}"
-    extra = " ".join(sys.argv[1:])
-    full_cmd = f"{{cmd}} {{extra}}".strip()
-    print(f"-> Running: {{full_cmd}}")
-    res = subprocess.run(full_cmd, shell=True, cwd=repo_root)
+    base_cmd = shlex.split("{detected_cmd}")
+    full_cmd = base_cmd + sys.argv[1:]
+    print(f"-> Running: {{' '.join(full_cmd)}}")
+    res = subprocess.run(full_cmd, cwd=repo_root)
     sys.exit(res.returncode)
 
 if __name__ == "__main__":
     main()
 '''
             synthesize_lifecycle_script(script_file, py_content)
+            import shlex
             print(f"-> Running: {detected_cmd}")
-            code = proc.run_passthrough(f"{detected_cmd} {' '.join(extra_args)}".strip(), shell=True, cwd=repo_root)
+            code = proc.run_passthrough(shlex.split(detected_cmd) + extra_args, cwd=repo_root)
             sys.exit(code)
         else:
             status_tag = "unconfigured"

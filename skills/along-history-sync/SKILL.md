@@ -15,9 +15,9 @@ Analyzes Git commits, tags, and PRs to synthesize missing `.along/` entities (`I
 ## Usage
 
 ```bash
-python scripts/along_history_sync.py [repo_root] [--check] [--synthesize] [--limit <N>]
+along history-sync [repo_root] [--check] [--synthesize] [--limit <N>]
 ```
-*(Or `python scripts/along_exec.py history-sync` / `/along-history-sync`)*
+*(Or fallback: `python ~/.along/bin/along_exec.py history-sync` or `/along-history-sync`)*
 
 ### CLI Flags
 - `--check`: Inspect and report unmapped commits without modifying `.along/` files (default).

@@ -21,7 +21,7 @@ Instead of reading thousands of tokens of project files into prompt context duri
 
 ## Usage
 ```bash
-python scripts/along_kb_search.py "<query>" [--category all|kb|issue|decision|milestone|risk|spike|session] [--limit 8] [--tag <tag>]
+along kb-search "<query>" [--category all|kb|issue|decision|milestone|risk|spike|session] [--limit 8] [--tag <tag>]
 ```
-*(Or `python scripts/along_exec.py kb-search` / `/along-kb-search`)*
+*(Or fallback: `python ~/.along/bin/along_exec.py kb-search` or `/along-kb-search`)*
 

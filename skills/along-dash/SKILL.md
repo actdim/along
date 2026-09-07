@@ -22,7 +22,7 @@ Inspect, visualize, and analyze repository status across all `.along/` entities 
 When `/along-dash` is invoked (or the user asks for the dashboard), agents MUST:
 
 1. **Execute CLI Summary**:
-   Run `uv run scripts/along_dash.py . --cli` (or `python scripts/along_dash.py . --cli`).
+   Run `along dash . --cli` (or fallback: `python ~/.along/bin/along_exec.py dash . --cli`).
    This parses entities on the fly and prints clean summary tables without polluting git status.
 
 2. **Present Executive Summary & Active Issues in Chat**:
@@ -31,7 +31,7 @@ When `/along-dash` is invoked (or the user asks for the dashboard), agents MUST:
 3. **Launch the Live Web Dashboard in Background**:
    Start the interactive FastAPI web server as a background daemon task (`run_command` with `IsDaemon: true`):
    ```bash
-   uv run scripts/along_dash.py . --web --no-browser
+   along dash . --web --no-browser
    ```
 
 4. **Provide Direct Clickable Links & Controls**:
@@ -42,15 +42,16 @@ When `/along-dash` is invoked (or the user asks for the dashboard), agents MUST:
 ---
 
 ## Execution Modes
+*(All modes can be run via `along dash` or `python ~/.along/bin/along_exec.py dash`)*
 
 ### Mode 1: Terminal Summary (CLI - Instant On-the-Fly Scan)
 ```bash
-uv run scripts/along_dash.py . --cli
+along dash . --cli
 ```
 
 ### Mode 2: Interactive Local Web Dashboard (FastAPI + Swagger + React UI)
 ```bash
-uv run scripts/along_dash.py . --web
+along dash . --web
 ```
 - Serves live dashboard at `http://127.0.0.1:8765`.
 - Real-time updates via Server-Sent Events (SSE) on file changes in `.along/`.
@@ -58,13 +59,13 @@ uv run scripts/along_dash.py . --web
 
 ### Mode 3: Development Mode (Vite HMR on 5173 + FastAPI Backend on 8765)
 ```bash
-uv run scripts/along_dash.py --dev
+along dash --dev
 ```
-*(Or `uv run .along/scripts/dev.py` / `/along-dev`)*
+*(Or `along dev` / `/along-dev`)*
 - Runs Vite dev server with Hot Module Replacement on `http://localhost:5173`.
 - Proxies `/api`, `/docs`, `/openapi.json` to FastAPI on `http://127.0.0.1:8765`.
 
 ### Mode 4: Standalone Static HTML Report (Only When Requested)
 ```bash
-uv run scripts/along_dash.py . --export .along/dashboard.html
+along dash . --export .along/dashboard.html
 ```
