@@ -3,10 +3,11 @@ protocol: along
 protocol_version: 2.2.8
 slug: protocol-documentation-drift
 type: debt
-status: open
+status: done
+completed: 2026-09-07
 priority: high
 created: 2026-09-01
-updated: 2026-09-01
+updated: 2026-09-07
 agent: claude-code
 tags: [documentation, drift, single-source-of-truth, duplication]
 milestone: v3.0.0-global-quality-revision
@@ -117,10 +118,9 @@ the ADR on the authored-versus-compiled boundary.
 
 ## Acceptance Criteria
 
-- [x] Consistency gate implemented and green (managed block and version examples; the
-      remaining documented-path and skill-existence checks are still to be written).
-- [ ] Every documented path resolves; every documented skill exists.
-- [ ] `docs/` front-matter versions consistent with the protocol.
-- [ ] `AGENTS.md` free of phantom skills and wrong paths.
-- [ ] Duplicated documentation generated rather than hand-maintained.
-- [ ] ADR recorded.
+- [x] Consistency gate implemented and green (managed block, version examples, skill catalog 1:1, documented paths, and docs protocol_version consistency).
+- [x] Every documented path resolves; every documented skill exists.
+- [x] `docs/` front-matter versions consistent with the protocol.
+- [x] `AGENTS.md` free of phantom skills and wrong paths.
+- [x] Duplicated documentation generated rather than hand-maintained.
+- [x] ADR recorded (ADR-2026-09-07--authored-vs-compiled-documentation-boundaries).

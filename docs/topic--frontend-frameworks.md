@@ -1,11 +1,11 @@
 ---
 protocol: along
-protocol_version: "2.2.4"
+protocol_version: "2.2.25"
 slug: frontend-frameworks
 title: Frontend Architecture, Dynstruct, MsgMesh & NSwag Integration
 type: topic
 created: 2026-08-27
-updated: 2026-09-02
+updated: 2026-09-07
 tags: [dynstruct, dynstruct-mui, msgmesh, utico, react, mui, nswag, openapi, architecture]
 sources:
   - path: packages/dashboard-ui/package.json

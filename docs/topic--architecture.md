@@ -1,11 +1,11 @@
 ---
 protocol: along
-protocol_version: "2.2.6"
+protocol_version: "2.2.25"
 slug: architecture
 title: System Architecture & Flow
 type: architecture
 created: 2026-08-30
-updated: 2026-09-02
+updated: 2026-09-07
 tags: [architecture, boundaries, multi-agent, blackboard, concurrency, mcp, flow]
 sources:
   - path: README.md

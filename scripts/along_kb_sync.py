@@ -937,7 +937,8 @@ def sync_kb(repo_root, check_only=False, strict=False, prune_intent=None, is_sub
             if in_git:
                 try:
                     rel_to_repo = os.path.relpath(file_path, repo_root).replace("\\", "/")
-                    head_res = proc.run_capture(["git", "show", f"HEAD:{rel_to_repo}"], cwd=repo_root)
+                    git_rel = rel_to_repo if rel_to_repo.startswith("./") else f"./{rel_to_repo}"
+                    head_res = proc.run_capture(["git", "show", f"HEAD:{git_rel}"], cwd=repo_root)
                     if head_res.ok:
                         head_lines = len(head_res.stdout.splitlines())
                         cur_lines = len(raw_content.splitlines())
@@ -964,7 +965,7 @@ def sync_kb(repo_root, check_only=False, strict=False, prune_intent=None, is_sub
                 updates['title'] = title
             if fm.get('protocol') != 'along':
                 updates['protocol'] = 'along'
-            if not fm.get('protocol_version'):
+            if str(fm.get('protocol_version', '')).strip() != CURRENT_PROTOCOL_VERSION:
                 updates['protocol_version'] = frontmatter.quoted(CURRENT_PROTOCOL_VERSION)
             if not fm.get('slug'):
                 updates['slug'] = slug

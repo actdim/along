@@ -1,11 +1,11 @@
 ---
 protocol: along
-protocol_version: "2.2.10"
+protocol_version: "2.2.25"
 slug: migrations
 title: Protocol & Repository Migrations Guide
 type: topic
 created: 2026-08-30
-updated: 2026-09-02
+updated: 2026-09-07
 tags: [migrations, upgrade, protocol, changelog, versioning, data-safety]
 sources:
   - path: scripts/migrate_protocol.py

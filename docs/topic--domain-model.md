@@ -1,11 +1,11 @@
 ---
 protocol: along
-protocol_version: "2.2.6"
+protocol_version: "2.2.25"
 slug: domain-model
 title: Domain Model & Entity Ecosystem
 type: domain-model
 created: 2026-08-30
-updated: 2026-09-02
+updated: 2026-09-07
 tags: [domain-model, entities, schemas, dag, metadata, issues, milestones, risks, spikes, checklists, sessions]
 sources:
   - path: AGENTS.md

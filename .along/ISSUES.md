@@ -9,7 +9,6 @@
 - [ ] `(debt)` [generated-dashboard-artifact-committed](ISSUES/debt--generated-dashboard-artifact-committed.md)
 - [ ] `(debt)` [kb-search-ranking-and-snippet-quality](ISSUES/debt--kb-search-ranking-and-snippet-quality.md)
 - [ ] `(debt)` [line-ending-churn-vs-gitattributes](ISSUES/debt--line-ending-churn-vs-gitattributes.md)
-- [ ] `(debt)` [protocol-documentation-drift](ISSUES/debt--protocol-documentation-drift.md)
 - [ ] `(debt)` [protocol-quality-audit-remediation](ISSUES/debt--protocol-quality-audit-remediation.md)
 - [ ] `(debt)` [unpinned-mcp-and-ghost-wiki-query-tool](ISSUES/debt--unpinned-mcp-and-ghost-wiki-query-tool.md)
 - [ ] `(feat)` [automated-ui-screenshots-and-visual-verification](ISSUES/feat--automated-ui-screenshots-and-visual-verification.md)
@@ -28,6 +27,8 @@
 <!-- Planned or deferred issues -->
 
 ## Done (recent)
+- [x] `(bug)` [kb-sync-subproject-intent-gate](ISSUES/done/bug--kb-sync-subproject-intent-gate.md)
+- [x] `(docs)` [readme-header-and-project-blurb](ISSUES/done/docs--readme-header-and-project-blurb.md)
 - [x] `(task)` [extend-sanitizer-scope-to-docs-and-root](ISSUES/done/task--extend-sanitizer-scope-to-docs-and-root.md)
 - [x] `(feat)` [well-known-llms-and-context-discovery](ISSUES/done/feat--well-known-llms-and-context-discovery.md)
 - [x] `(feat)` [version-bump-automation-and-release-hardening](ISSUES/done/feat--version-bump-automation-and-release-hardening.md)
@@ -69,6 +70,7 @@
 - [x] `(docs)` [comprehensive-knowledge-base-and-skills-architecture](ISSUES/done/docs--comprehensive-knowledge-base-and-skills-architecture.md)
 - [x] `(debt)` [update-actdim-packages-and-refactor-entity-drawer](ISSUES/done/debt--update-actdim-packages-and-refactor-entity-drawer.md)
 - [x] `(debt)` [team-skill-state-not-persisted](ISSUES/done/debt--team-skill-state-not-persisted.md)
+- [x] `(debt)` [protocol-documentation-drift](ISSUES/done/debt--protocol-documentation-drift.md)
 - [x] `(debt)` [library-modules-runnable-as-scripts](ISSUES/done/debt--library-modules-runnable-as-scripts.md)
 - [x] `(debt)` [extract-shared-python-library](ISSUES/done/debt--extract-shared-python-library.md)
 - [x] `(bug)` [typography-sanitizer-destroys-non-utf8-files](ISSUES/done/bug--typography-sanitizer-destroys-non-utf8-files.md)

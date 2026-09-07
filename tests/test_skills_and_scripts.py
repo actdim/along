@@ -37,7 +37,7 @@ TESTS_DIR = os.path.dirname(os.path.abspath(__file__))
 if TESTS_DIR not in sys.path:
     sys.path.insert(0, TESTS_DIR)
 
-from alongkit import proc, repo, textio, typography
+from alongkit import frontmatter, proc, repo, textio, typography
 import hermetic
 
 
@@ -396,6 +396,120 @@ class TestAlongSkillsAndScripts(unittest.TestCase):
                     offenders.append(name)
         self.assertEqual(offenders, [],
                          f"engines must import the version, not declare it: {offenders}")
+
+    def test_04b_skill_catalog_consistency(self):
+        """
+        Verify that skills catalogs across README.md, AGENTS.md, and docs/ match skills/ 1:1 (REQ-2).
+
+        Fails if any skill documented in README, AGENTS.md, or docs does not exist in skills/,
+        or if any skill in skills/ is omitted from documentation.
+        """
+        skills_dir = os.path.join(REPO_ROOT, "skills")
+        physical_skills = {
+            name for name in os.listdir(skills_dir)
+            if os.path.isdir(os.path.join(skills_dir, name)) and name.startswith("along-")
+        }
+        self.assertGreaterEqual(len(physical_skills), 18, "Repository should have at least 18 skills")
+
+        # 1. Check AGENTS.md (Project specifics)
+        agents_path = os.path.join(REPO_ROOT, "AGENTS.md")
+        with open(agents_path, "r", encoding="utf-8") as f:
+            agents_text = f.read()
+        m = re.search(r"\*\*Skills Source\*\*:\s*`skills/`\s*\(([^)]+)\)", agents_text)
+        self.assertIsNotNone(m, "AGENTS.md must list Skills Source with parentheses")
+        agents_skills = {s.strip("` \t\r\n") for s in m.group(1).split(",") if s.strip()}
+        self.assertEqual(
+            agents_skills, physical_skills,
+            f"AGENTS.md skills mismatch. Drift: {agents_skills ^ physical_skills}"
+        )
+
+        # 2. Check README.md
+        readme_path = os.path.join(REPO_ROOT, "README.md")
+        with open(readme_path, "r", encoding="utf-8") as f:
+            readme_text = f.read()
+        readme_skills = set(re.findall(r"\*\*`(along-[a-z0-9-]+)`\*\*", readme_text))
+        self.assertEqual(
+            readme_skills, physical_skills,
+            f"README.md skills mismatch. Drift: {readme_skills ^ physical_skills}"
+        )
+
+        # 3. Check docs/topic--skills-reference.md
+        skills_ref_path = os.path.join(REPO_ROOT, "docs", "topic--skills-reference.md")
+        with open(skills_ref_path, "r", encoding="utf-8") as f:
+            ref_text = f.read()
+        ref_skills = set(re.findall(r"^### `(along-[a-z0-9-]+)`", ref_text, re.MULTILINE))
+        self.assertEqual(
+            ref_skills, physical_skills,
+            f"docs/topic--skills-reference.md skills mismatch. Drift: {ref_skills ^ physical_skills}"
+        )
+
+    def test_04c_documented_filesystem_paths_exist(self):
+        """Verify that filesystem paths documented in AGENTS.md and README.md actually exist on disk (REQ-2)."""
+        # Critical documented paths that must exist
+        critical_paths = [
+            "packages/dashboard-ui",
+            "scripts/alongkit",
+            "skills",
+            ".along/scripts",
+            ".along/rules/languages/python.md",
+            ".along/rules/languages/typescript.md",
+            ".along/rules/platforms/web.md",
+            "LICENSE",
+            "README.md",
+            "AGENTS.md",
+            "docs/INDEX.md",
+            "docs/topic--architecture.md",
+            "docs/topic--domain-model.md",
+            "docs/topic--setup-and-workflow.md",
+            "docs/topic--skills-reference.md",
+        ]
+        for rel in critical_paths:
+            full = os.path.normpath(os.path.join(REPO_ROOT, rel))
+            self.assertTrue(os.path.exists(full), f"Documented path does not exist on disk: {rel}")
+
+        # Ban known phantom paths in AGENTS.md and README.md
+        for doc_name in ["AGENTS.md", "README.md"]:
+            doc_path = os.path.join(REPO_ROOT, doc_name)
+            with open(doc_path, "r", encoding="utf-8") as f:
+                content = f.read()
+            self.assertNotIn("along-dash-ui", content, f"{doc_name} documents obsolete along-dash-ui path")
+            self.assertNotIn("along-context-sync", content, f"{doc_name} documents deleted along-context-sync skill")
+
+    def test_04d_docs_articles_protocol_version_consistency(self):
+        """
+        Verify that all docs/topic--*.md and docs/INDEX.md declare protocol_version matching
+        CURRENT_PROTOCOL_VERSION and are quoted strings (REQ-2, REQ-3).
+        """
+        version_module = os.path.join(REPO_ROOT, "scripts", "alongkit", "version.py")
+        with open(version_module, "r", encoding="utf-8") as f:
+            v_match = re.search(r'CURRENT_PROTOCOL_VERSION = "(\d+\.\d+\.\d+)"', f.read())
+        self.assertIsNotNone(v_match)
+        cur_version = v_match.group(1)
+
+        docs_dir = os.path.join(REPO_ROOT, "docs")
+        md_files = glob.glob(os.path.join(docs_dir, "*.md"))
+        self.assertGreater(len(md_files), 5, "docs/ should contain at least 5 markdown articles")
+
+        for md_path in md_files:
+            rel = os.path.relpath(md_path, REPO_ROOT).replace(chr(92), "/")
+            with open(md_path, "r", encoding="utf-8") as f:
+                content = f.read()
+            fm, _ = frontmatter.parse_tolerant(content)
+            if fm.get("protocol") != "along":
+                continue
+
+            doc_version = str(fm.get("protocol_version", "")).strip()
+            self.assertEqual(
+                doc_version, cur_version,
+                f"{rel} front-matter protocol_version '{doc_version}' does not match "
+                f"CURRENT_PROTOCOL_VERSION '{cur_version}'"
+            )
+            # Ensure protocol_version is quoted in raw frontmatter
+            self.assertRegex(
+                content,
+                rf'protocol_version:\s*"{re.escape(cur_version)}"',
+                f"{rel} must declare quoted protocol_version: \"{cur_version}\""
+            )
 
     def test_05_clean_typography(self):
         """Verify zero non-ASCII typographic characters and byte order marks across repository text files."""
@@ -1375,6 +1489,115 @@ class TestAlongSkillsAndScripts(unittest.TestCase):
             self.assertIn("[PRUNE-INTENT] Acknowledged content reduction: Allow shrink", res_alias.stdout)
         finally:
             shutil.rmtree(temp_dir, ignore_errors=True)
+
+    def test_23b_subproject_content_reduction_intent_gate(self):
+        """
+        Verify that cascading kb_sync on a subproject in a monorepo does not trigger
+        a false positive Intent Gate when root and subproject have identically named docs,
+        while still catching genuine content reduction in subproject docs.
+        """
+        temp_dir = tempfile.mkdtemp(prefix="along-shrink-sub-")
+        try:
+            # Initialize a git repository in temp_dir
+            run_engine(["git", "init"], cwd=temp_dir)
+            run_engine(["git", "config", "user.email", "test@example.com"], cwd=temp_dir)
+            run_engine(["git", "config", "user.name", "Test Runner"], cwd=temp_dir)
+
+            # 1. Root KB article with 50 lines
+            root_docs = os.path.join(temp_dir, "docs")
+            os.makedirs(root_docs, exist_ok=True)
+            root_doc = os.path.join(root_docs, "topic--architecture.md")
+            root_lines = [
+                "---",
+                "protocol: along",
+                'protocol_version: "2.2.25"',
+                "slug: architecture",
+                "title: Root Architecture",
+                "type: architecture",
+                "created: 2026-09-01",
+                "tags: [architecture]",
+                "---",
+                "",
+                "# Root Architecture",
+                "",
+            ] + [f"Line {i} describing root architecture." for i in range(1, 40)]
+            with open(root_doc, "w", encoding="utf-8") as f:
+                f.write("\n".join(root_lines) + "\n")
+
+            # 2. Subproject with AGENTS.md, .along/, and its own topic--architecture.md with 25 lines
+            sub_dir = os.path.join(temp_dir, "packages", "subproject")
+            sub_docs = os.path.join(sub_dir, "docs")
+            sub_along = os.path.join(sub_dir, ".along")
+            os.makedirs(sub_docs, exist_ok=True)
+            os.makedirs(sub_along, exist_ok=True)
+            with open(os.path.join(sub_dir, "AGENTS.md"), "w", encoding="utf-8") as f:
+                f.write("# Subproject Agents\n")
+
+            sub_doc = os.path.join(sub_docs, "topic--architecture.md")
+            sub_lines = [
+                "---",
+                "protocol: along",
+                'protocol_version: "2.2.25"',
+                "slug: architecture",
+                "title: Subproject Architecture",
+                "type: architecture",
+                "created: 2026-09-01",
+                "tags: [architecture]",
+                "---",
+                "",
+                "# Subproject Architecture",
+                "",
+            ] + [f"Line {i} describing subproject architecture." for i in range(1, 21)]
+            with open(sub_doc, "w", encoding="utf-8") as f:
+                f.write("\n".join(sub_lines) + "\n")
+
+            # Commit both root and subproject files to git HEAD
+            run_engine(["git", "add", "."], cwd=temp_dir)
+            run_engine(["git", "commit", "-m", "Initial monorepo commit"], cwd=temp_dir)
+
+            kb_script = os.path.join(REPO_ROOT, "scripts", "along_kb_sync.py")
+
+            # 1. Run cascading sync from root -> MUST succeed without false positive Intent Gate
+            res = run_engine([sys.executable, kb_script, temp_dir])
+            self.assertEqual(res.returncode, 0, f"Cascading kb_sync failed:\n{res.stderr}\nSTDOUT:\n{res.stdout}")
+            self.assertNotIn("Detected significant content reduction", res.stdout)
+            self.assertNotIn("Operation halted to prevent accidental data loss", res.stdout)
+
+            # 2. Also run directly in subproject directory -> MUST succeed with code 0
+            res_sub = run_engine([sys.executable, kb_script, sub_dir])
+            self.assertEqual(res_sub.returncode, 0, f"Direct subproject kb_sync failed:\n{res_sub.stderr}\nSTDOUT:\n{res_sub.stdout}")
+            self.assertNotIn("Detected significant content reduction", res_sub.stdout)
+
+            # 3. Now genuinely shrink the subproject file from ~32 lines down to 13 lines (delta >= 10, >25%)
+            shrunk_sub_lines = [
+                "---",
+                "protocol: along",
+                'protocol_version: "2.2.25"',
+                "slug: architecture",
+                "title: Subproject Architecture",
+                "type: architecture",
+                "created: 2026-09-01",
+                "tags: [architecture]",
+                "---",
+                "",
+                "# Subproject Architecture",
+                "",
+                "Only small stub left.",
+            ]
+            with open(sub_doc, "w", encoding="utf-8") as f:
+                f.write("\n".join(shrunk_sub_lines) + "\n")
+
+            # Direct sync on subproject without --prune-intent MUST fail with exit code 2
+            res_sub_blocked = run_engine([sys.executable, kb_script, sub_dir])
+            self.assertEqual(res_sub_blocked.returncode, 2, f"Expected exit code 2, got {res_sub_blocked.returncode}:\n{res_sub_blocked.stdout}\n{res_sub_blocked.stderr}")
+            self.assertIn("Detected significant content reduction", res_sub_blocked.stdout)
+
+            # Direct sync on subproject with --prune-intent MUST succeed with exit code 0
+            res_sub_allowed = run_engine([sys.executable, kb_script, sub_dir, "--prune-intent", "Pruning sub doc"])
+            self.assertEqual(res_sub_allowed.returncode, 0)
+        finally:
+            shutil.rmtree(temp_dir, ignore_errors=True)
+
 
     def test_24_smart_llms_txt_sync(self):
         """Verify that along_kb_sync preserves custom sections in llms.txt while updating documentation links."""

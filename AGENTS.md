@@ -209,7 +209,7 @@ See the following engineering guidelines:
 
 This repository is `Along` (`actdim-along`) - the provider-agnostic agent-context protocol and skills suite for Claude Code, Codex, OpenCode, and Antigravity.
 
-- **Skills Source**: `skills/` (`along-init`, `along-update`, `along-dash`, `along-wrap`, `along-commit`, `along-build`, `along-test`, `along-dev`, `along-team`, `along-kb-sync`, `along-kb-search`, `along-issue-sync`, `along-context-sync`, `along-decision-sync`, `along-history-sync`, `along-graph-check`, `along-dep-scan`, `along-version-bump`, `along-feedback`).
+- **Skills Source**: `skills/` (`along-init`, `along-update`, `along-dash`, `along-wrap`, `along-commit`, `along-build`, `along-test`, `along-dev`, `along-team`, `along-kb-sync`, `along-kb-search`, `along-issue-sync`, `along-decision-sync`, `along-history-sync`, `along-graph-check`, `along-dep-scan`, `along-version-bump`, `along-feedback`).
 - **Engine Source**: `scripts/` (one engine per skill) over the shared implementation
   package `scripts/alongkit/` (`repo`, `frontmatter`, `entities`, `proc`, `textio`,
   `markdown`, `typography`, `sanitizer`, `transaction`, `migration`, `gates`, `semver`, `version`,
