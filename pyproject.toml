@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "actdim-along"
-version = "2.2.25"
+version = "2.2.26"
 description = "Provider-agnostic agent-context protocol and skills suite: in-repo memory, entity lifecycle, and LLM-Wiki knowledge base for Claude Code, Codex, OpenCode, and Antigravity."
 readme = "README.md"
 requires-python = ">=3.10"
