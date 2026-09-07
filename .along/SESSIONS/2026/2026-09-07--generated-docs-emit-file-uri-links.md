@@ -23,7 +23,7 @@ Resolved the protocol contradiction between AGENTS.md and along-kb-sync by banni
 - REQ-1: Resolved rule contradiction across AGENTS.md, skills/along-init/protocol.md, and all skill definitions. Explicitly banned `file://` and `file:///` pseudo-schemes in Technical Markdown Standards. Recorded `ADR-2026-09-07--ban-file-uri-scheme-in-markdown-links` in `.along/DECISIONS.md`.
 - REQ-2: Updated all generators to emit strictly relative links:
   - `scripts/along_exec.py`: `handle_session_command` generates `./SESSIONS/{year}/{today}--{slug}.md`.
-  - `scripts/alongkit/rules.py`: `attach_rules` emits `[{r}](.along/rules/{r})`.
+  - `scripts/alongkit/rules.py`: `attach_rules` emits relative links to `.along/rules/{r}`.
   - `scripts/along_history_sync.py`: emits `./SESSIONS/{c_year}/{c_date}--{slug}.md`.
   - `scripts/along_kb_sync.py`: `sync_kb` dynamically computes relative paths for "Related Context" in `docs/INDEX.md` and only links files that exist on disk.
 - REQ-3 & REQ-8: Implemented migration logic in `rewrite_inbound_links` in `scripts/along_kb_sync.py`:
