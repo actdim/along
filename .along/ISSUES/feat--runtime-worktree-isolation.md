@@ -5,10 +5,10 @@ type: feat
 status: open
 priority: medium
 created: 2026-09-06
-updated: 2026-09-06
+updated: 2026-09-07
 agent: antigravity
 tags: [git, worktree, runtime, along-team, isolation]
-milestone: v2.1.0-along
+milestone: v3.0.0-global-quality-revision
 blocked_by: []
 related: [debt--team-skill-state-not-persisted]
 ---

@@ -179,7 +179,7 @@ def _find_git_dir(start_dir: str) -> Optional[str]:
         cur = parent
 
 
-def _heal_git_index(git_dir: str, work_tree: str) -> bool:
+def _heal_git_index(git_dir: str, work_tree: str, force_lock: bool = False) -> bool:
     """Heal corrupted or locked .git/index (< 12 bytes or stale lock)."""
     idx_path = os.path.join(git_dir, "index")
     lock_path = os.path.join(git_dir, "index.lock")
@@ -187,7 +187,8 @@ def _heal_git_index(git_dir: str, work_tree: str) -> bool:
 
     if os.path.isfile(lock_path):
         try:
-            if time.time() - os.path.getmtime(lock_path) > 5.0:
+            lock_age = time.time() - os.path.getmtime(lock_path)
+            if force_lock or lock_age > 5.0:
                 os.remove(lock_path)
                 healed = True
         except Exception:
@@ -215,8 +216,9 @@ def git(args: Sequence[str], cwd: Optional[str] = None, check: bool = False,
 
     result = run_capture(["git", *args], cwd=cwd, check=False, timeout=timeout)
     combined = (result.stderr or "") + (result.stdout or "")
-    if ("index file smaller than expected" in combined or "bad signature" in combined) and git_dir:
-        _heal_git_index(git_dir, target_cwd)
+    if ("index file smaller than expected" in combined or "bad signature" in combined or "index.lock" in combined) and git_dir:
+        time.sleep(0.2)
+        _heal_git_index(git_dir, target_cwd, force_lock=("index.lock" in combined))
         result = run_capture(["git", *args], cwd=cwd, check=False, timeout=timeout)
 
     if check and not result.ok:

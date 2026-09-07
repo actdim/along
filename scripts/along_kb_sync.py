@@ -19,8 +19,7 @@ from alongkit import bootstrap
 # installers and the documented skill commands invoke it.
 bootstrap.ensure_deps()
 
-from alongkit import frontmatter, markdown, repo, textio
-from alongkit import proc, frontmatter, markdown, repo, textio
+from alongkit import frontmatter, markdown, proc, repo, textio
 from alongkit.version import CURRENT_PROTOCOL_VERSION
 
 
@@ -148,8 +147,7 @@ def reconcile_sources(repo_root, docs_dir, dry_run=False):
                         "updated": today,
                         "tags": [slug.replace("topic--", "")],
                     }
-                    with open(d_path, "w", encoding="utf-8") as fp:
-                        fp.write(dump_frontmatter(fm, raw))
+                    textio.write_text(d_path, dump_frontmatter(fm, raw))
                 print(f"   Compiled raw source with provenance: {src_dir}/{item} -> docs/{target_name} (original preserved in-place)")
                 normalized += 1
 

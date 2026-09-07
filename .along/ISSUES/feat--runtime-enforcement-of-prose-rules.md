@@ -147,6 +147,7 @@ To avoid code duplication across IDEs, Along implements a unified core engine wi
 ---
 ## 5. Dual-Mode Governance: Shadow Mode vs Enforce Mode
 
+## 5. Implementation Phases & Deliverables
 To prevent breaking existing workflows and to audit false positives before introducing hard blocks, the hook engine supports per-gate and global execution modes:
 
 1. **Configuration (`.along/config.json` or environment variable `ALONG_HOOK_MODE`)**:
@@ -175,8 +176,43 @@ To prevent breaking existing workflows and to audit false positives before intro
    - Workflow state gates (`commit_guard`, `stop_guard`) deploy initially in `shadow` mode to measure telemetry, then graduate to `enforce`.
 
 ---
+## 6. Testing Strategy & Verification Architecture
 
-## 6. Implementation Phases & Deliverables
+Testing must be split into three distinct levels to ensure speed, determinism, and real runtime verification:
+
+```
++-------------------------------------------------------------------------+
+| Level 3: E2E Runtime Tests (Claude Code / Codex + Ollama Local Model)   |
+| - Runs real agent CLI with ANTHROPIC_BASE_URL / OPENAI_BASE_URL         |
+| - Fast CPU-friendly model (qwen2.5-coder:1.5b / qwen3:1.7b)             |
+| - Proves real runtime invokes hook, receives exit 2, and halts edit     |
++-------------------------------------------------------------------------+
+                                    ^
++-------------------------------------------------------------------------+
+| Level 2: Runtime Configuration & Discovery Tests                        |
+| - Validates generated .claude/settings.json, .agents/hooks.json         |
+| - Verifies schema compliance, executable paths, and discovery           |
++-------------------------------------------------------------------------+
+                                    ^
++-------------------------------------------------------------------------+
+| Level 1: Deterministic Contract Tests (tests/test_hooks.py)             |
+| - Fast (<10ms), hermetic, 100% deterministic (no LLM, no network)       |
+| - Feeds mock JSON payloads on stdin, verifies stdout JSON & exit codes  |
+| - Primary quality gate executed on every pre-commit and test run        |
++-------------------------------------------------------------------------+
+```
+
+### Critical Distinction: Model SDK vs Agent Runtime Harness
+- Standard API client SDKs (`anthropic-python`, `openai-python`) are purely transport clients: they send HTTP requests to `/v1/messages` and do NOT manage agent lifecycle hooks, `.claude/settings.json`, or tool execution loops.
+- The **Agent Runtime Harness** (Claude Code CLI `claude`, Codex CLI `codex`, Antigravity) is the entity that reads hook configurations, intercepts tool calls, invokes `along_hook.py`, and inspects exit codes.
+- E2E tests target the real Agent Runtime Harness by passing environment overrides:
+  - Claude Code: `ANTHROPIC_BASE_URL=http://localhost:11434` (utilizing Ollama native Anthropic API compatibility)
+  - Codex: `OPENAI_BASE_URL=http://localhost:11434/v1` and `OPENAI_API_KEY=ollama`
+  - Model: lightweight CPU model with tool-calling capabilities (`qwen2.5-coder:1.5b` or `qwen3:1.7b`).
+
+---
+
+## 7. Implementation Phases & Deliverables
 
 - [ ] **Phase 1: Core Hook Framework (`alongkit.hooks`)**:
   - Implement `alongkit/hooks/models.py` (canonical event data class).
@@ -191,9 +227,9 @@ To prevent breaking existing workflows and to audit false positives before intro
 - [ ] **Phase 4: Installer & Config Generators**:
   - Add `along hook install` command and integrate into `along-init` and `along-update`.
   - Automatically generate `.agents/hooks.json`, `.claude/settings.json`, `.codex/hooks.json`.
-- [ ] **Phase 5: Automated Test Suite (`tests/test_hooks.py`)**:
-  - Unit tests verifying every gate in both `enforce` and `shadow` modes.
-  - Tests ensuring whitelist paths prevent deadlock during issue creation.
+- [ ] **Phase 5: Automated Test Suite**:
+  - Level 1 & 2: `tests/test_hooks.py` and `tests/test_hooks_install.py` (hermetic, fast, zero-dependency).
+  - Level 3: `scripts/along_test_runtime_e2e.py` (isolated E2E runner supporting Ollama backends).
 - [ ] **Phase 6: Documentation & Knowledge Base**:
   - Create `docs/topic--runtime-hooks-and-gates.md`.
   - Update `docs/INDEX.md`, `README.md`, and `AGENTS.md`.
