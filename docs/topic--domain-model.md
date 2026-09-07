@@ -114,12 +114,12 @@ Detailed problem statement, constraints, and verifiable acceptance criteria.
 
 ---
 
-### 2. Architectural Decision Records (ADRs) (`.along/DECISIONS.md`)
-Single-file append-only log of non-trivial technical and architectural decisions.
+### 2. Architectural Decision Records (ADRs) (`.along/DECISIONS.md` & `.along/CONSTRAINTS.md`)
+Dual-layer architecture: append-only SSOT in `.along/DECISIONS.md` paired with a compiled `.along/CONSTRAINTS.md` projection.
 
-#### Why Single-File Append-Only over Multi-File MADR/Nygard?
-- **Single-Shot Context Load**: Agents read all active architectural constraints in a single tool call (< 300 tokens) at session start, without scanning multiple files.
-- **Zero Lifecycle Moving Overhead**: Unlike issues, decisions are immutable; they are never renamed or moved.
+#### Why Single-File Append-Only with Compiled Constraints Projection?
+- **Bounded Session-Start Context**: Agents read only active architectural rules and constraints in `.along/CONSTRAINTS.md` at session start, keeping session-start reads bounded while full history remains in `.along/DECISIONS.md`.
+- **Zero Lifecycle Moving Overhead**: Unlike issues, decisions in `DECISIONS.md` are immutable; they are never renamed or moved.
 - **Merge Collision Prevention**: Each entry uses a decentralized slug header (`## ADR-YYYY-MM-DD--<slug> - <Title>`), allowing `.gitattributes` (`merge=union`) to merge parallel branches cleanly without conflicts.
 
 #### Schema & Entry Format:

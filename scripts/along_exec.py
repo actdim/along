@@ -194,14 +194,16 @@ Entity Management Commands:
   issue done     <slug>
   issue list     List active issues in terminal
   session create <slug> --summary "Summary" [--issues "slug1,slug2"] [--decisions "ADR-slug"] [--agent <name>] [--milestone <name>]
-  decision add   <slug> --title "Title" --context "Why" --decision "What" --consequences "Tradeoffs"
   decision create <slug> --title "Title" --context "Why" --decision "What" --consequences "Tradeoffs"
+  decision sync   Recompile .along/CONSTRAINTS.md projection from active ADRs
   scratch init   <slug>
   scratch init   <slug> [--title "Title"] [--steps N] [--restart]
   scratch state  <slug> [--json]
   scratch update <slug> [--step N] [--step-status status] [--inc-retry] [--status status]
   scratch purge  <slug>
   rules attach   Detect project stack and attach relevant engineering rule packs
+  budget         Measure context footprint and check token budgets (--json, --check)
+  context-budget Measure context footprint and check token budgets (--json, --check)
 
 Along Protocol Tools:
   kb-sync        Synchronize and compile Knowledge Base in docs/
@@ -217,6 +219,75 @@ Along Protocol Tools:
   sanitize       Check (default) or repair non-ASCII typography; --write to apply
   feedback       Global diagnostics, error capture, and feedback dispatch (Telegram/Webhook/File)
 """)
+
+RECENT_DONE_LIMIT = 5
+
+
+def compile_issues_board(repo_root: str, recent_done_limit: int = RECENT_DONE_LIMIT) -> str:
+    issues_dir = os.path.join(repo_root, ".along", "ISSUES")
+    done_dir = os.path.join(issues_dir, "done")
+    active_items = []
+    done_items = []
+
+    if os.path.exists(issues_dir):
+        for f in sorted(os.listdir(issues_dir)):
+            if f.endswith(".md") and os.path.isfile(os.path.join(issues_dir, f)):
+                parts = f[:-3].split("--", 1)
+                itype = parts[0]
+                islug = parts[1] if len(parts) > 1 else f[:-3]
+                active_items.append(f"- [ ] `({itype})` [{islug}](ISSUES/{f})")
+
+    if os.path.exists(done_dir):
+        done_records = []
+        for f in os.listdir(done_dir):
+            if f.endswith(".md") and os.path.isfile(os.path.join(done_dir, f)):
+                parts = f[:-3].split("--", 1)
+                itype = parts[0]
+                islug = parts[1] if len(parts) > 1 else f[:-3]
+                fpath = os.path.join(done_dir, f)
+                comp_date = ""
+                try:
+                    with open(fpath, "r", encoding="utf-8", errors="ignore") as handle:
+                        head = handle.read(500)
+                    m_comp = re.search(r"^completed:\s*[\"']?([0-9-]+)[\"']?", head, re.MULTILINE)
+                    if m_comp:
+                        comp_date = m_comp.group(1)
+                    else:
+                        m_creat = re.search(r"^created:\s*[\"']?([0-9-]+)[\"']?", head, re.MULTILINE)
+                        if m_creat:
+                            comp_date = m_creat.group(1)
+                except OSError:
+                    pass
+                if not comp_date:
+                    try:
+                        from datetime import datetime
+                        comp_date = datetime.fromtimestamp(os.path.getmtime(fpath)).strftime("%Y-%m-%d")
+                    except OSError:
+                        comp_date = "1970-01-01"
+                done_records.append((comp_date, f, itype, islug))
+
+        # Sort descending by completion date, then filename
+        done_records.sort(key=lambda x: (x[0], x[1]), reverse=True)
+        total_done = len(done_records)
+
+        for comp_date, f, itype, islug in done_records[:recent_done_limit]:
+            done_items.append(f"- [x] `({itype})` [{islug}](ISSUES/done/{f})")
+
+        if total_done > recent_done_limit:
+            archived_count = total_done - recent_done_limit
+            done_items.append(f"<!-- {archived_count} older completed issue(s) archived in .along/ISSUES/done/ -->")
+
+    return f"""# Active Issues
+
+## Active
+{chr(10).join(active_items) if active_items else "<!-- No active issues -->"}
+
+## Backlog
+<!-- Planned or deferred issues -->
+
+## Done (recent)
+{chr(10).join(done_items) if done_items else "<!-- No completed issues -->"}
+"""
 
 
 def handle_issue_command(repo_root: str, args: List[str]):
@@ -411,58 +482,21 @@ Describe the feature, requirements, and background context here.
         os.remove(found_file)
         print(f"-> Moved issue to done: {dest_file}")
 
-        # Update ISSUES.md
+        # Update ISSUES.md projection with sliding window
         issues_board = os.path.join(repo_root, ".along", "ISSUES.md")
         if os.path.exists(issues_board):
-            with open(issues_board, "r", encoding="utf-8") as f:
-                b_content = f.read()
-            # Remove from Active
-            b_content = re.sub(rf'- \[[ ~]\] `\(\w+\)` \[{re.escape(islug)}\]\([^\)]+\)\n?', '', b_content)
-            # Add to Done
-            itype = filename.split("--")[0]
-            done_entry = f"- [x] `({itype})` [{islug}](ISSUES/done/{filename})"
-            if done_entry not in b_content:
-                b_content = b_content.replace("## Done (recent)\n", f"## Done (recent)\n{done_entry}\n")
+            board_content = compile_issues_board(repo_root, recent_done_limit=RECENT_DONE_LIMIT)
             with open(issues_board, "w", encoding="utf-8") as f:
-                f.write(b_content)
+                f.write(board_content)
             print(f"-> Updated .along/ISSUES.md")
         sys.exit(0)
 
     elif subcmd == "sync":
-        active_items = []
-        done_items = []
-
-        if os.path.exists(issues_dir):
-            for f in sorted(os.listdir(issues_dir)):
-                if f.endswith(".md") and os.path.isfile(os.path.join(issues_dir, f)):
-                    parts = f[:-3].split("--", 1)
-                    itype = parts[0]
-                    islug = parts[1] if len(parts) > 1 else f[:-3]
-                    active_items.append(f"- [ ] `({itype})` [{islug}](ISSUES/{f})")
-
-        if os.path.exists(done_dir):
-            for f in sorted(os.listdir(done_dir), reverse=True):
-                if f.endswith(".md") and os.path.isfile(os.path.join(done_dir, f)):
-                    parts = f[:-3].split("--", 1)
-                    itype = parts[0]
-                    islug = parts[1] if len(parts) > 1 else f[:-3]
-                    done_items.append(f"- [x] `({itype})` [{islug}](ISSUES/done/{f})")
-
-        board_content = f"""# Active Issues
-
-## Active
-{chr(10).join(active_items) if active_items else "<!-- No active issues -->"}
-
-## Backlog
-<!-- Planned or deferred issues -->
-
-## Done (recent)
-{chr(10).join(done_items) if done_items else "<!-- No completed issues -->"}
-"""
+        board_content = compile_issues_board(repo_root, recent_done_limit=RECENT_DONE_LIMIT)
         issues_board = os.path.join(repo_root, ".along", "ISSUES.md")
         with open(issues_board, "w", encoding="utf-8") as f:
             f.write(board_content)
-        print(f"-> Recompiled .along/ISSUES.md projection ({len(active_items)} active, {len(done_items)} done).")
+        print(f"-> Recompiled .along/ISSUES.md projection (capped to {RECENT_DONE_LIMIT} recent completed issues).")
         sys.exit(0)
 
     elif subcmd == "list":
@@ -584,14 +618,22 @@ spikes_conducted: []
 
 def handle_decision_command(repo_root: str, args: List[str]):
     if not args or args[0] in ("-h", "--help", "help"):
-        print("Usage: along_exec.py decision create <slug> --title \"Title\" --context \"Context\" --decision \"Decision\" --consequences \"Tradeoffs\"")
+        print("Usage: along_exec.py decision [create|sync] [args...]")
+        print("  create <slug> --title \"Title\" --context \"Context\" --decision \"Decision\" --consequences \"Tradeoffs\"")
+        print("  sync   Recompile .along/CONSTRAINTS.md projection from active ADRs")
         sys.exit(0)
 
     subcmd = args[0].lower()
     from datetime import datetime
     today = datetime.now().strftime("%Y-%m-%d")
 
-    if subcmd in ("create", "add"):
+    if subcmd == "sync":
+        from alongkit import entities
+        entities.sync_constraints(repo_root)
+        print("-> Recompiled .along/CONSTRAINTS.md projection.")
+        sys.exit(0)
+
+    elif subcmd in ("create", "add"):
         if len(args) < 2:
             print("[Error] Usage: along_exec.py decision create <slug> --title \"Title\" --context \"Why\" --decision \"What\" --consequences \"Consequences\"", file=sys.stderr)
             sys.exit(1)
@@ -635,6 +677,11 @@ def handle_decision_command(repo_root: str, args: List[str]):
         with open(dec_file, "a", encoding="utf-8") as f:
             f.write(entry)
         print(f"-> Appended ADR-{today}--{slug} to .along/DECISIONS.md")
+
+        # Automatically recompile CONSTRAINTS.md projection
+        from alongkit import entities
+        entities.sync_constraints(repo_root)
+        print("-> Updated .along/CONSTRAINTS.md projection.")
         sys.exit(0)
 
 
@@ -899,6 +946,32 @@ def handle_rules_command(repo_root: str, args: List[str]):
         sys.exit(1)
 
 
+def handle_budget_command(repo_root: str, args: List[str]):
+    if "-h" in args or "--help" in args or "help" in args:
+        print("Usage: along_exec.py context-budget [--json] [--check]")
+        sys.exit(0)
+    try:
+        from alongkit import budget
+    except ImportError:
+        print("[Error] alongkit.budget not found.", file=sys.stderr)
+        sys.exit(1)
+
+    as_json = "--json" in args
+    check_mode = "--check" in args
+
+    report = budget.measure_context(repo_root)
+
+    if as_json:
+        import json
+        print(json.dumps(report, indent=2))
+    else:
+        print(budget.format_budget_text(report))
+
+    if check_mode and not report.get("all_passed", True):
+        sys.exit(1)
+    sys.exit(0)
+
+
 def main():
     if len(sys.argv) < 2 or sys.argv[1] in ("-h", "--help", "help"):
         print_help()
@@ -923,6 +996,8 @@ def main():
         handle_scratch_command(repo_root, extra_args)
     elif cmd == "rules":
         handle_rules_command(repo_root, extra_args)
+    elif cmd in ("budget", "context-budget"):
+        handle_budget_command(repo_root, extra_args)
     elif cmd == "kb":
         sub = extra_args[0].lower() if extra_args else "sync"
         mapped = "along_kb_sync.py" if sub == "sync" else "along_kb_search.py"

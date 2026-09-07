@@ -18,7 +18,7 @@ This repo carries its own agent context, provider-agnostically. Follow it every 
 Use the NEAREST `.along/` for the area you're working in (fall back to a higher-level one if the folder has none):
 1. `AGENTS.md` (nearest) - conventions to follow.
 2. `.along/ISSUES.md` - active issue board (or query `/along-kb-search`).
-3. `.along/DECISIONS.md` - architectural decisions & constraints.
+3. `.along/CONSTRAINTS.md` - active architectural constraints (or full log in `.along/DECISIONS.md`).
 4. Active Issue file `.along/ISSUES/<type>--<slug>.md` for your task.
 Also, when relevant: `.along/VISION.md`, `.along/GLOSSARY.md`. These reflect the state WHEN WRITTEN - verify any named file/API/flag against the real code first.
 
@@ -73,11 +73,12 @@ All entities are designed for zero-friction auto-parsing by dashboards and tools
 - `.along/ISSUES.md` is the compact board read every session (`## Active`, `## Backlog`, `## Done (recent)`).
 - On completion: set `status: done` and `completed: YYYY-MM-DD`, MOVE to `.along/ISSUES/done/<type>--<slug>.md`, and update `.along/ISSUES.md`.
 
-### 2. Decisions (ADRs) (`.along/DECISIONS.md`)
-- Append-only Architectural Decision Records with decentralized slug headers:
+### 2. Decisions & Constraints (`.along/DECISIONS.md` & `.along/CONSTRAINTS.md`)
+- Append-only Architectural Decision Records with decentralized slug headers in `.along/DECISIONS.md`:
   - Header: `## ADR-YYYY-MM-DD--<slug> - <Title>`
   - Fields: `- Date: YYYY-MM-DD`, `- Status: accepted | superseded by ADR-YYYY-MM-DD--<slug>`, `- Context: ...`, `- Decision: ...`, `- Consequences: ...`
   - Slug-based headers prevent merge collisions when parallel branches record architectural decisions.
+- `.along/CONSTRAINTS.md` is the compact derived projection of active constraints read at session start, recompiled via `/along-decision-sync` (or `along decision sync`).
 
 ### 3. Milestones & Releases (`.along/MILESTONES/<slug>.md`)
 - Group multiple issues into a release target, stage, or sprint.
@@ -125,7 +126,7 @@ To keep `.along/` lean and avoid token bloat:
   - `docs/topic--<slug>.md`: Specific domain topics and module specifications.
 - **In-Place Source Grounding & Provenance**: Raw sources, specs, and notes remain in-place in their project locations (never moved to an archive directory). Every compiled article tracks its origin via `sources: [{path, hash}]` in YAML front-matter with SHA-256 content hashes, enabling drift detection and reproducible verification.
 - **Front-matter Schema**: Every `docs/*.md` article MUST include YAML front-matter: `protocol: along`, `protocol_version` (the current protocol version, quoted), `slug`, `title`, `type` (`topic` | `architecture` | `domain-model` | `setup-workflow` | `index`), `created`, `updated`, `tags: []`, and optional `sources: [{path, hash}]` / `curated: bool`.
-- **Stable Entry Point Rule**: Files outside the service directory (`README.md`, `docs/`, package manifests, external documentation) MUST NOT link directly into `.along/`, nor into legacy service paths from earlier protocol versions. Route every such reference through a stable canonical path in `docs/` (`docs/INDEX.md` or `docs/topic--<slug>.md`). The rule governs published links only: agents still read `.along/ISSUES.md` and `.along/DECISIONS.md` directly, as instructed at session start.
+- **Stable Entry Point Rule**: Files outside the service directory (`README.md`, `docs/`, package manifests, external documentation) MUST NOT link directly into `.along/`, nor into legacy service paths from earlier protocol versions. Route every such reference through a stable canonical path in `docs/` (`docs/INDEX.md` or `docs/topic--<slug>.md`). The rule governs published links only: agents still read `.along/ISSUES.md` and `.along/CONSTRAINTS.md` directly, as instructed at session start.
 - **Inbound Link Rewriting Engine & Migration Invariance**: Whenever documentation schemas change, migration engines (`/along-update`, `/along-kb-sync`) MUST recursively rewrite legacy path references across all repository Markdown files before deleting legacy directories.
 - **Monorepo Scope Rule**: Knowledge Base synchronization, link rewriting, and link verification operate recursively across all subprojects, packages (`packages/*`, `apps/*`), and directories.
 - **Portable Markdown Links**: All internal cross-references MUST use standard relative Markdown links (`[Title](./target.md)`) for universal rendering across GitHub, GitHub Pages, IDEs, and npm.
@@ -136,7 +137,7 @@ To keep `.along/` lean and avoid token bloat:
 
 ## While working
 - Follow the conventions in `AGENTS.md`.
-- `DECISIONS.md` is APPEND-ONLY: add a new dated entry with slug header (`## ADR-YYYY-MM-DD--<slug>`) per non-trivial architectural decision; never edit past ones - mark a replaced one "Superseded by ADR-YYYY-MM-DD--<slug>".
+- `DECISIONS.md` is APPEND-ONLY: add a new dated entry with slug header (`## ADR-YYYY-MM-DD--<slug>`) per non-trivial architectural decision; never edit past ones - mark a replaced one "Superseded by ADR-YYYY-MM-DD--<slug>". Recompile `.along/CONSTRAINTS.md` via `along decision sync`.
 - Add any new/clarified domain term to `.along/GLOSSARY.md`.
 - **Context & Token hygiene**: Keep tool output lean to prevent context bloat. Use quiet flags for builds/tests (`pytest -q`, `dotnet test -v q`), filter command outputs, and inspect targeted line ranges.
 - **Mandatory Agentic Code Review & Blast Radius Impact**: After completing non-trivial code modifications, agents MUST critically inspect their own diffs and evaluate systemic blast radius. Use `code-review-graph` MCP tools (`build_or_update_graph_tool`, `get_impact_radius_tool`, `get_affected_flows_tool`) to verify that downstream callers, interfaces, and dependent systems remain unbroken, edge cases and nulls are handled, and active ADRs in `.along/DECISIONS.md` are respected.
@@ -162,7 +163,7 @@ When a Stage or session completes, agents MUST execute this verification checkli
    - Factually update all affected `docs/topic--*.md` articles (and `README.md` / `AGENTS.md` if public entry points or conventions changed).
    - Run `/along-kb-sync` to recompile `docs/INDEX.md`, validate link integrity, and verify zero 404 broken relative links.
 6. [ ] **Session Log**: Write `.along/SESSIONS/<YYYY>/<YYYY-MM-DD>--<short-slug>.md` with complete front-matter (`protocol: along`, `issues_advanced`, `issues_completed`, `decisions`, `risks_logged`, `spikes_conducted`) and a concise Code Review & Impact summary.
-7. [ ] **ISSUES Board Projection**: Run `/along-issue-sync` (or update `.along/ISSUES.md`).
+7. [ ] **ISSUES Board & Constraints Projections**: Run `/along-issue-sync` (or update `.along/ISSUES.md`) and `/along-decision-sync` (or `along decision sync`).
 8. [ ] **HISTORY**: Append one line to `.along/HISTORY.md`: `<YYYY-MM-DD> - <slug> - <agent> - <summary> - <link>`.
 9. [ ] **Compaction Prompt**: Advise user to run `/compact` to free up token budget.
 
@@ -196,7 +197,6 @@ When a Stage or session completes, agents MUST execute this verification checkli
 - Windows-safe filenames: dates `YYYY-MM-DD` (no `:`), date first.
 - Keep `ISSUES.md` compact - it costs context every session.
 - Never write secrets/credentials/tokens/keys into these files; they are committed.
-<!-- END ALONG-PROTOCOL -->
 <!-- END ALONG-PROTOCOL -->
 ## Project specifics
 

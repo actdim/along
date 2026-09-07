@@ -42,7 +42,7 @@ Add this badge and blurb to the `README.md` of any repository powered by Along:
 ### AI Development: Powered by [Along](https://github.com/actdim/along)
 
 This repository follows the **Along Protocol** for AI agent context, persistent memory, and autonomous workflows:
-- **Persistent In-Repo Memory**: Past architectural decisions (`.along/DECISIONS.md`), active issues, and session history survive across all AI sessions.
+- **Persistent In-Repo Memory**: Past architectural decisions (`.along/DECISIONS.md`), active constraints (`.along/CONSTRAINTS.md`), active issues, and session history survive across all AI sessions.
 - **Token-Efficient Knowledge Base**: Structured LLM-Wiki documentation in `docs/` minimizes context overhead and eliminates architectural drift.
 - **Provider-Agnostic**: Compatible out of the box with **Claude Code**, **Google Antigravity**, **OpenAI Codex**, and **OpenCode**.
 ````
@@ -100,7 +100,7 @@ Along provides **18 singular automation skills** structured across 6 core lifecy
 | :--- | :--- |
 | **`along-team`** (`/along-team`) | Sequential multi-agent autonomous development engine and living plan. |
 | **`along-issue-sync`** (`/along-issue-sync`) | Reconcile active issue board projection (`ISSUES.md`) with atomic issue files. |
-| **`along-decision-sync`** (`/along-decision-sync`) | Append structured architectural decisions (ADRs) to `.along/DECISIONS.md`. |
+| **`along-decision-sync`** (`/along-decision-sync`) | Record ADRs into append-only `.along/DECISIONS.md` and compile active `.along/CONSTRAINTS.md`. |
 
 ### 3. Development & Lifecycle Execution Runners
 | Skill / Command | Purpose |
@@ -115,12 +115,13 @@ Along provides **18 singular automation skills** structured across 6 core lifecy
 | **`along-commit`** (`/along-commit`) | Smart ASCII-clean Conventional Committer linked to active `.along/` issue. |
 | **`along-graph-check`** (`/along-graph-check`) | Inspect `code-review-graph` AST impact radius (blast radius) and caller flows. |
 | **`along-dep-scan`** (`/along-dep-scan`) | Scan declared dependencies for AI instructions into `docs/topic--dependencies.md`. |
+| **`along context-budget`** (`along budget`) | Context budget measurement and regression gate (`--check`, `--json`). |
 
 ### 5. Knowledge Base & LLM-Wiki Intelligence
 | Skill / Command | Purpose |
 | :--- | :--- |
 | **`along-kb-sync`** (`/along-kb-sync`) | Idempotent LLM-Wiki Knowledge Base compiler and link integrity gate in `docs/`. |
-| **`along-kb-search`** (`/along-kb-search`) | Fast targeted snippet search across `docs/` and project memory (<100 tokens). |
+| **`along-kb-search`** (`/along-kb-search`) | Fast targeted snippet search across `docs/` and project memory. |
 
 ### 6. Visual Analytics, History & Diagnostics
 | Skill / Command | Purpose |
