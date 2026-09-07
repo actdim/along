@@ -1,6 +1,6 @@
-# Along (v2.2.23)
+# Along (v2.2.24)
 
-A provider-agnostic **agent-context and memory system** for software repositories - the `ALONG-PROTOCOL v2.2.23` plus the automation skills suite that scaffolds and maintains it. One unified convention, honored natively across **Claude Code**, **OpenAI Codex**, **OpenCode**, and **Google Antigravity**.
+A provider-agnostic **agent-context and memory system** for software repositories - the `ALONG-PROTOCOL v2.2.24` plus the automation skills suite that scaffolds and maintains it. One unified convention, honored natively across **Claude Code**, **OpenAI Codex**, **OpenCode**, and **Google Antigravity**.
 
 ---
 
