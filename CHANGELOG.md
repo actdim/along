@@ -2,6 +2,10 @@
 
 All notable changes to this project, newest first.
 
+## v2.5.0 - 2026-09-10
+
+- feat: implement executable along wrap CLI engine (refs #executable-along-wrap-engine)
+
 ## v2.4.0 - 2026-09-10
 
 - refactor: prune AGENTS.md context budget and reconcile v3 DoD (refs #agents-md-context-budget-pruning)
