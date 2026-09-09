@@ -360,6 +360,92 @@ def parse_board_entry(line: str) -> Optional[Dict[str, Any]]:
     }
 
 
+RECENT_DONE_LIMIT: int = 5
+
+
+def compile_issues_board(repo_root: str, recent_done_limit: int = RECENT_DONE_LIMIT) -> str:
+    """Compile active issues and recent completed issues into ISSUES.md content."""
+    from . import repo
+    issues_dir = os.path.join(repo.state_dir(repo_root), "ISSUES")
+    done_dir = os.path.join(issues_dir, "done")
+    active_items = []
+    done_items = []
+
+    if os.path.exists(issues_dir):
+        for f in sorted(os.listdir(issues_dir)):
+            if f.endswith(".md") and os.path.isfile(os.path.join(issues_dir, f)):
+                parts = f[:-3].split("--", 1)
+                itype = parts[0]
+                islug = parts[1] if len(parts) > 1 else f[:-3]
+                active_items.append(f"- [ ] `({itype})` [{islug}](ISSUES/{f})")
+
+    if os.path.exists(done_dir):
+        done_records = []
+        for f in os.listdir(done_dir):
+            if f.endswith(".md") and os.path.isfile(os.path.join(done_dir, f)):
+                parts = f[:-3].split("--", 1)
+                itype = parts[0]
+                islug = parts[1] if len(parts) > 1 else f[:-3]
+                fpath = os.path.join(done_dir, f)
+                comp_date = ""
+                istatus = "done"
+                try:
+                    with open(fpath, "r", encoding="utf-8", errors="ignore") as handle:
+                        head = handle.read(500)
+                    m_stat = re.search(r"^status:\s*[\"']?([a-z-]+)[\"']?", head, re.MULTILINE)
+                    if m_stat:
+                        istatus = m_stat.group(1).lower()
+                    m_comp = re.search(r"^completed:\s*[\"']?([0-9-]+)[\"']?", head, re.MULTILINE)
+                    if m_comp:
+                        comp_date = m_comp.group(1)
+                    else:
+                        m_creat = re.search(r"^created:\s*[\"']?([0-9-]+)[\"']?", head, re.MULTILINE)
+                        if m_creat:
+                            comp_date = m_creat.group(1)
+                except OSError:
+                    pass
+                if not comp_date:
+                    try:
+                        from datetime import datetime
+                        comp_date = datetime.fromtimestamp(os.path.getmtime(fpath)).strftime("%Y-%m-%d")
+                    except OSError:
+                        comp_date = "1970-01-01"
+                done_records.append((comp_date, f, itype, islug, istatus))
+
+        # Sort descending by completion date, then filename
+        done_records.sort(key=lambda x: (x[0], x[1]), reverse=True)
+        total_done = len(done_records)
+
+        for comp_date, f, itype, islug, istatus in done_records[:recent_done_limit]:
+            box = "~" if istatus in ("superseded", "cancelled", "duplicate") else "x"
+            done_items.append(f"- [{box}] `({itype})` [{islug}](ISSUES/done/{f})")
+
+        if total_done > recent_done_limit:
+            archived_count = total_done - recent_done_limit
+            done_items.append(f"<!-- {archived_count} older completed issue(s) archived in .along/ISSUES/done/ -->")
+
+    return f"""# Active Issues
+
+## Active
+{chr(10).join(active_items) if active_items else "<!-- No active issues -->"}
+
+## Backlog
+<!-- Planned or deferred issues -->
+
+## Done (recent)
+{chr(10).join(done_items) if done_items else "<!-- No completed issues -->"}
+"""
+
+
+def sync_issues_board(repo_root: str, recent_done_limit: int = RECENT_DONE_LIMIT) -> str:
+    """Compile and write the .along/ISSUES.md projection board."""
+    from . import repo, textio
+    board_path = os.path.join(repo.state_dir(repo_root), "ISSUES.md")
+    content = compile_issues_board(repo_root, recent_done_limit=recent_done_limit)
+    textio.write_text(board_path, content, newline="\n")
+    return content
+
+
 # ---------------------------------------------------------------------------
 # Issue Discovery and Active Issue Resolution (REQ-1..4)
 # ---------------------------------------------------------------------------

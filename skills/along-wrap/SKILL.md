@@ -14,28 +14,52 @@ Universal finalization and memory synchronization protocol for sessions, tasks, 
 - The user or agent completes a feature, bugfix, stage, or ends a work session (triggers: "wrap up", "finish session", "close stage", `/along-wrap`, `/wrap`, `/along-wrap-session`, `/along-wrap-stage`).
 - An active issue acceptance criteria have been verified and ready to close.
 
-## Mandatory Execution Checklist (Execute in Exact Order)
-1. [ ] **Verification & Tests**: Run automated unit tests / linting / builds with quiet flags (`/along-test` or `/along-build`).
-2. [ ] **Code Review & Blast Radius Assessment**:
+## Automated Wrap Engine (`along wrap`)
+
+The mechanical synchronization steps (tests gate, moving the issue to `done/`, updating YAML front-matter, recompiling `ISSUES.md` and KB projections, purging the session blackboard, and appending to `HISTORY.md`) are executed transactionally in a single command:
+
+```bash
+along wrap <slug> [--summary "Summary of completed work"]
+along wrap <slug> --dry-run
+along wrap <slug> --status superseded
+```
+*(Or fallback: `python ~/.along/bin/along_exec.py wrap <slug>` or `along session wrap <slug>`)*
+
+### Command Flags:
+- `--status <done|superseded|cancelled|duplicate>`: Terminal status to set in the issue front-matter (default: `done`).
+- `-s`, `-m`, `--summary "<text>"`: One-line summary appended to `.along/HISTORY.md`.
+- `--dry-run`: Inspect planned actions without writing or moving files.
+- `-n`, `--no-verify`: Skip pre-flight automated tests.
+- `-a`, `--agent "<name>"`: Explicit agent name (defaults to detected agent).
+
+---
+
+## Mandatory Execution Flow
+
+### Phase A: Cognitive Review (Agent)
+1. **Code Review & Blast Radius Assessment**:
    - Inspect `git diff` for unintended side effects, unhandled nulls/errors, and edge cases.
-   - Evaluate systemic blast radius on callers/dependents using `code-review-graph` (`get_impact_radius_tool`, `get_affected_flows_tool`) when available; otherwise fall back to static AST / text search, recording the degraded state in the session log.
-   - Identify all modified subsystem symbols and impacted downstream interfaces to inform documentation updates.
-   - Verify compliance with architectural decisions in `.along/DECISIONS.md`.
-3. [ ] **Entity Reconciliation**:
-   - Set `status: done` and `completed: YYYY-MM-DD` for finished issues in the nearest `.along/ISSUES/`; MOVE to `ISSUES/done/<type>--<slug>.md`.
-   - Update related `.along/MILESTONES/` progress percentages.
-   - Resolve mitigated `.along/RISKS/` (`status: resolved` / `mitigated`).
-   - Conclude active `.along/SPIKES/` and log any resulting ADR in `.along/DECISIONS.md`.
-4. [ ] **Documentation Blast Radius Check & LLM-Wiki Gate**:
-   - Map identified code blast radius symbols/modules to Knowledge Base topics using `along-kb-search` or symbol search in `docs/`.
-   - Factually update all affected `docs/topic--*.md` articles (and `README.md` / `AGENTS.md` if public entry points or conventions changed).
-   - Run `/along-kb-sync` to recompile `docs/INDEX.md`, validate link integrity, and verify zero 404 broken relative links.
-5. [ ] **Session Log & Engineering Provenance**: Write `.along/SESSIONS/<YYYY>/<YYYY-MM-DD>--<short-slug>.md` in the nearest `.along/` with complete front-matter (`protocol: along`, `issues_advanced`, `issues_completed`, `decisions`, `risks_logged`, `spikes_conducted`). When finalizing work orchestrated by `along-team` or non-trivial multi-step tasks, compile the 3 Engineering Provenance sections:
-   - `## Initial Implementation Plan (Baseline)`: Original step sequence and acceptance criteria.
-   - `## Execution & Loop Trace (Fixes & Re-plans)`: Trace of all `[Fix Loop]` micro-iterations and `[Re-plan Loop]` revisions.
-   - `## Verification Walkthrough & Gate Manifest`: Verifiable test outputs and the Gate Execution Manifest.
-6. [ ] **ISSUES Board Projection**: Run `/along-issue-sync` (or update nearest `.along/ISSUES.md`).
-7. [ ] **HISTORY**: Append one line to nearest `.along/HISTORY.md`: `<YYYY-MM-DD> - <slug> - <agent> - <summary> - <link>`.
-8. [ ] **Compaction Prompt**: Advise user to run `/compact` to free up token budget.
-9. [ ] **Session Blackboard Cleanup**: Run `along scratch purge <slug>` (or fallback: `python ~/.along/bin/along_exec.py scratch purge <slug>`) upon successful completion. On failed runs, retain `.along/.session/<slug>/` for diagnostics.
+   - Evaluate systemic blast radius on callers/dependents using `code-review-graph` (`get_impact_radius_tool`, `get_affected_flows_tool`) when available; otherwise fall back to static AST / text search.
+   - Factually update all affected `docs/topic--*.md` articles.
+2. **Session Log & Engineering Provenance**:
+   - Write `.along/SESSIONS/<YYYY>/<YYYY-MM-DD>--<short-slug>.md` in the nearest `.along/`.
+   - When orchestrating non-trivial multi-step tasks, compile the 3 Engineering Provenance sections: Baseline Plan, Execution Trace, and Verification Walkthrough.
+
+### Phase B: Automated Finalization (CLI Engine)
+3. **Execute Transactional Wrap**:
+   - Run: `along wrap <slug> --summary "Concise summary of work"`
+   - The engine automatically:
+     - Runs pre-flight automated tests (halts if failing, leaving repo untouched).
+     - Audits working tree for zero-byte corrupt files.
+     - Sets `status: done`, `completed: YYYY-MM-DD`, `updated: YYYY-MM-DD` in issue front-matter.
+     - Adjusts sibling issue markdown links and relocates issue file to `.along/ISSUES/done/`.
+     - Recompiles `.along/ISSUES.md` projection board.
+     - Runs `along kb sync` to compile Knowledge Base links and index.
+     - Purges ephemeral session blackboard `.along/.session/<slug>/`.
+     - Appends formatted line to `.along/HISTORY.md` linking to the session log.
+     - Protects all mutations with `alongkit.transaction.FileTransaction` (clean rollback on failure).
+
+### Phase C: Clean Up
+4. **Compaction Prompt**: Advise user to run `/compact` to free up token budget.
+
 
