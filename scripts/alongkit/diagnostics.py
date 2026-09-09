@@ -120,7 +120,7 @@ class ConfigManager:
     def init_global_config(force: bool = False) -> str:
         os.makedirs(GLOBAL_ALONG_DIR, exist_ok=True)
         if not os.path.exists(GLOBAL_CONFIG_FILE) or force:
-            with open(GLOBAL_CONFIG_FILE, "w", encoding="utf-8") as f:
+            with open(GLOBAL_CONFIG_FILE, "w", encoding="utf-8", newline="\n") as f:
                 json.dump(DEFAULT_CONFIG, f, indent=2)
         return GLOBAL_CONFIG_FILE
 
@@ -225,7 +225,7 @@ class DiagnosticsStore:
         }
 
         event_path = os.path.join(EVENTS_DIR, f"{incident_id}.json")
-        with open(event_path, "w", encoding="utf-8") as f:
+        with open(event_path, "w", encoding="utf-8", newline="\n") as f:
             json.dump(payload, f, indent=2, ensure_ascii=False)
 
         cls.update_report()
@@ -271,7 +271,7 @@ class DiagnosticsStore:
                 if isinstance(data, dict):
                     data["status"] = "resolved"
                     data["resolved_at"] = datetime.now(timezone.utc).isoformat()
-                    with open(p, "w", encoding="utf-8") as f:
+                    with open(p, "w", encoding="utf-8", newline="\n") as f:
                         json.dump(data, f, indent=2, ensure_ascii=False)
                     cls.update_report()
                     return True
@@ -351,7 +351,7 @@ class DiagnosticsStore:
         try:
             cls.ensure_dirs()
             report_md = cls.generate_markdown_report(unresolved_only=True)
-            with open(REPORT_FILE, "w", encoding="utf-8") as f:
+            with open(REPORT_FILE, "w", encoding="utf-8", newline="\n") as f:
                 f.write(report_md)
         except OSError as exc:
             print(f"[Warning] Could not update diagnostic report '{REPORT_FILE}': {exc}", file=sys.stderr)

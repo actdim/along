@@ -259,7 +259,7 @@ def main():
     elif bump_arg == "major": next_v = f"{{parts[0]+1}}.0.0"
     else: next_v = bump_arg.lstrip("v")
     data["version"] = next_v
-    with open(pkg_json, "w", encoding="utf-8") as f: json.dump(data, f, indent=2); f.write("\\n")
+    with open(pkg_json, "w", encoding="utf-8", newline="\\n") as f: json.dump(data, f, indent=2); f.write("\\n")
     print(f"Bumped package.json: v{{cur_v}} -> v{{next_v}}")
 
 if __name__ == "__main__":
@@ -298,7 +298,7 @@ def main():
     elif bump_arg == "major": next_v = f"{{parts[0]+1}}.0.0"
     else: next_v = bump_arg.lstrip("v")
     u = re.sub(r'version\\s*=\\s*["\\'](\\d+\\.\\d+\\.\\d+.*?)["\\']', f'version = "{{next_v}}"', c, count=1)
-    with open(pyproject, "w", encoding="utf-8") as f: f.write(u)
+    with open(pyproject, "w", encoding="utf-8", newline="\\n") as f: f.write(u)
     print(f"Bumped pyproject.toml: v{{cur_v}} -> v{{next_v}}")
 
 if __name__ == "__main__":
@@ -336,7 +336,7 @@ def main():
     elif bump_arg == "major": next_v = f"{{parts[0]+1}}.0.0"
     else: next_v = bump_arg.lstrip("v")
     u = re.sub(r'version\\s*=\\s*["\\']' + re.escape(cur_v) + r'["\\']', f'version = "{{next_v}}"', c, count=1)
-    with open(cargo, "w", encoding="utf-8") as f: f.write(u)
+    with open(cargo, "w", encoding="utf-8", newline="\\n") as f: f.write(u)
     print(f"Bumped Cargo.toml: v{{cur_v}} -> v{{next_v}}")
 
 if __name__ == "__main__":

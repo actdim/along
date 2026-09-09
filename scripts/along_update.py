@@ -259,11 +259,11 @@ def apply_migration_to_context(ctx_dir, protocol_text, migrate_script, is_root=T
             new_content = pattern.sub(block, existing)
         else:
             new_content = block + "\n\n" + existing
-        with open(agents_md, "w", encoding="utf-8") as f:
+        with open(agents_md, "w", encoding="utf-8", newline="\n") as f:
             f.write(new_content)
         print(f"   [OK] Refreshed managed protocol block in {os.path.basename(agents_md)}.")
     elif is_root:
-        with open(agents_md, "w", encoding="utf-8") as f:
+        with open(agents_md, "w", encoding="utf-8", newline="\n") as f:
             f.write(block + "\n\n## Project specifics\n\n- Add project conventions here.\n")
         print("   [OK] Created root AGENTS.md with managed protocol block.")
 

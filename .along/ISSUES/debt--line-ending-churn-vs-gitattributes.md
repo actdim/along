@@ -3,10 +3,10 @@ protocol: along
 protocol_version: 2.2.8
 slug: line-ending-churn-vs-gitattributes
 type: debt
-status: open
+status: in-progress
 priority: low
 created: 2026-09-01
-updated: 2026-09-01
+updated: 2026-09-09
 agent: claude-code
 tags: [git, line-endings, windows, noise]
 milestone: v3.0.0-global-quality-revision

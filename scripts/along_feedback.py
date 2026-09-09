@@ -152,9 +152,9 @@ class FileTransport:
         json_file = os.path.join(out_dir, f"feedback-bundle--{now_str}.json")
 
         try:
-            with open(bundle_file, "w", encoding="utf-8") as f:
+            with open(bundle_file, "w", encoding="utf-8", newline="\n") as f:
                 f.write(report_text)
-            with open(json_file, "w", encoding="utf-8") as f:
+            with open(json_file, "w", encoding="utf-8", newline="\n") as f:
                 json.dump({"version": CURRENT_VERSION, "incidents": incidents}, f, indent=2, ensure_ascii=False)
             return True, f"Exported diagnostics bundle to:\n  - Markdown: {bundle_file}\n  - JSON: {json_file}"
         except OSError as e:
@@ -306,7 +306,7 @@ def main():
     if args.action == "report":
         md = DiagnosticsStore.generate_markdown_report(unresolved_only=not args.all)
         if args.output:
-            with open(args.output, "w", encoding="utf-8") as f:
+            with open(args.output, "w", encoding="utf-8", newline="\n") as f:
                 f.write(md)
             print(f"-> Report saved to: {args.output}")
         else:

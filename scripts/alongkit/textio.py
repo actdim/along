@@ -32,6 +32,20 @@ from typing import Optional, Tuple
 BOM = "\ufeff"
 UTF8_BOM: bytes = b"\xef\xbb\xbf"
 
+#: Extensions that .gitattributes declares `eol=crlf`.  Everything else is LF.
+#: Keep in sync with the repository's .gitattributes (which lists *.ps1 and *.bat
+#: as the only CRLF extensions).  A full .gitattributes parser is overkill here.
+_CRLF_EXTENSIONS: frozenset = frozenset({".ps1", ".bat"})
+
+
+def newline_for_path(path: str) -> str:
+    """Return the line ending declared by .gitattributes for *path*'s extension.
+
+    Returns ``"\\r\\n"`` for ``.ps1`` and ``.bat``, ``"\\n"`` for everything else.
+    """
+    _, ext = os.path.splitext(path)
+    return "\r\n" if ext.lower() in _CRLF_EXTENSIONS else "\n"
+
 
 def has_utf8_bom(path: str) -> bool:
     """Return True when path begins with a UTF-8 byte order mark (EF BB BF)."""

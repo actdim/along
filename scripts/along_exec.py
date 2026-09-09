@@ -317,7 +317,7 @@ Describe the feature, requirements, and background context here.
 - [ ] Task requirement 1
 - [ ] Automated tests passing
 """
-        with open(target_file, "w", encoding="utf-8") as f:
+        with open(target_file, "w", encoding="utf-8", newline="\n") as f:
             f.write(content)
         print(f"-> Created issue: {target_file}")
 
@@ -329,7 +329,7 @@ Describe the feature, requirements, and background context here.
             entry = f"- [ ] `({itype})` [{islug}](ISSUES/{itype}--{islug}.md)"
             if entry not in b_content:
                 b_content = b_content.replace("## Active\n", f"## Active\n{entry}\n")
-                with open(issues_board, "w", encoding="utf-8") as f:
+                with open(issues_board, "w", encoding="utf-8", newline="\n") as f:
                     f.write(b_content)
                 print(f"-> Updated .along/ISSUES.md")
         sys.exit(0)
@@ -428,7 +428,7 @@ Describe the feature, requirements, and background context here.
                 adjusted_body_lines.append(sibling_link_re.sub(r'\1../\2', line))
             content = block.bom + block.open_delim + block.raw + block.close_delim + "".join(adjusted_body_lines)
 
-        with open(dest_file, "w", encoding="utf-8") as f:
+        with open(dest_file, "w", encoding="utf-8", newline="\n") as f:
             f.write(content)
         os.remove(found_file)
         print(f"-> Moved issue to done: {dest_file}")
@@ -437,7 +437,7 @@ Describe the feature, requirements, and background context here.
         issues_board = os.path.join(repo_root, ".along", "ISSUES.md")
         if os.path.exists(issues_board):
             board_content = compile_issues_board(repo_root, recent_done_limit=RECENT_DONE_LIMIT)
-            with open(issues_board, "w", encoding="utf-8") as f:
+            with open(issues_board, "w", encoding="utf-8", newline="\n") as f:
                 f.write(board_content)
             print(f"-> Updated .along/ISSUES.md")
         sys.exit(0)
@@ -445,7 +445,7 @@ Describe the feature, requirements, and background context here.
     elif subcmd == "sync":
         board_content = compile_issues_board(repo_root, recent_done_limit=RECENT_DONE_LIMIT)
         issues_board = os.path.join(repo_root, ".along", "ISSUES.md")
-        with open(issues_board, "w", encoding="utf-8") as f:
+        with open(issues_board, "w", encoding="utf-8", newline="\n") as f:
             f.write(board_content)
         print(f"-> Recompiled .along/ISSUES.md projection (capped to {RECENT_DONE_LIMIT} recent completed issues).")
         sys.exit(0)
@@ -549,7 +549,7 @@ spikes_conducted: []
 ## Code Review & Blast Radius
 - Automated tests verified and passing.
 """
-        with open(target_file, "w", encoding="utf-8") as f:
+        with open(target_file, "w", encoding="utf-8", newline="\n") as f:
             f.write(content)
         print(f"-> Created session log: {target_file}")
 
@@ -561,7 +561,7 @@ spikes_conducted: []
             entry = f"{today} - {slug} - {agent} - {summary} - [.along/SESSIONS/{year}/{today}--{slug}.md](./SESSIONS/{year}/{today}--{slug}.md)"
             if entry not in h_content:
                 h_content = h_content.strip() + f"\n{entry}\n"
-                with open(history_file, "w", encoding="utf-8") as f:
+                with open(history_file, "w", encoding="utf-8", newline="\n") as f:
                     f.write(h_content)
                 print(f"-> Appended history entry to .along/HISTORY.md")
         sys.exit(0)

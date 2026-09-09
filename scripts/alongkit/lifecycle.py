@@ -27,6 +27,8 @@ import shutil
 import sys
 from typing import List, Optional, Sequence, Tuple, Union
 
+from . import textio
+
 LIFECYCLE_ACTIONS: tuple = ("build", "test", "dev")
 
 
@@ -72,7 +74,7 @@ def get_lifecycle_script_path(repo_root: str, action: str) -> str:
 def synthesize_lifecycle_script(script_path: str, content: str) -> None:
     """Write synthesized lifecycle hook to disk with executable permissions."""
     os.makedirs(os.path.dirname(script_path), exist_ok=True)
-    with open(script_path, "w", encoding="utf-8") as f:
+    with open(script_path, "w", encoding="utf-8", newline=textio.newline_for_path(script_path)) as f:
         f.write(content)
     try:
         os.chmod(script_path, 0o755)
