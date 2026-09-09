@@ -250,5 +250,98 @@ class TestCollectorSkipReporting(unittest.TestCase):
             self.assertTrue(any("bug--dash-broken.md" in p for p in skipped_paths))
 
 
+class TestRelevanceAndRanking(unittest.TestCase):
+    """Relevance and ranking fixture tests (REQ-1, REQ-2, REQ-3, REQ-4, REQ-5, REQ-7)."""
+
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.repo_root = self.tmp.name
+        docs_dir = os.path.join(self.repo_root, "docs")
+        issues_dir = os.path.join(self.repo_root, ".along", "ISSUES")
+        os.makedirs(docs_dir, exist_ok=True)
+        os.makedirs(issues_dir, exist_ok=True)
+
+        # Doc 1: Has 'concatenate' and 'category', but NOT standalone 'cat'
+        with open(os.path.join(docs_dir, "topic--concatenation.md"), "w", encoding="utf-8", newline="\n") as f:
+            f.write("---\nprotocol: along\nslug: concatenation\ntitle: String Concatenation\ntype: topic\n---\n"
+                    "# String Concatenation\n\nThis article explains how to concatenate strings in various category types.\n")
+
+        # Doc 2: Has standalone 'cat'
+        with open(os.path.join(docs_dir, "topic--felines.md"), "w", encoding="utf-8", newline="\n") as f:
+            f.write("---\nprotocol: along\nslug: felines\ntitle: Domestic Animals\ntype: topic\n---\n"
+                    "# Domestic Animals\n\nThe domestic cat is a small carnivorous mammal.\n")
+
+        # Doc 3: Has alpha and beta
+        with open(os.path.join(docs_dir, "topic--alpha-beta.md"), "w", encoding="utf-8", newline="\n") as f:
+            f.write("---\nprotocol: along\nslug: alpha-beta\ntitle: Alpha Beta Process\ntype: topic\n---\n"
+                    "# Alpha Beta Process\n\nDetailed walkthrough of alpha stage followed by beta verification.\n")
+
+        # Doc 4: Has alpha and gamma (no beta)
+        with open(os.path.join(docs_dir, "topic--alpha-gamma.md"), "w", encoding="utf-8", newline="\n") as f:
+            f.write("---\nprotocol: along\nslug: alpha-gamma\ntitle: Alpha Gamma Pipeline\ntype: topic\n---\n"
+                    "# Alpha Gamma Pipeline\n\nDetailed walkthrough of alpha stage followed by gamma verification.\n")
+
+        # Doc 5: Has exact phrase "single-file append-only"
+        with open(os.path.join(issues_dir, "task--phrase-match.md"), "w", encoding="utf-8", newline="\n") as f:
+            f.write("---\nprotocol: along\nslug: phrase-match\ntitle: Phrase Matching Task\ntype: task\nstatus: open\n---\n"
+                    "# Phrase Matching\n\nWe require a single-file append-only decisions ledger for safety.\n")
+
+    def tearDown(self):
+        self.tmp.cleanup()
+
+    def test_token_matching_does_not_substring_match(self):
+        """Query 'cat' must match standalone 'cat', not 'concatenate' or 'category' (REQ-1)."""
+        results = kb.search_knowledge_base("cat", repo_root=self.repo_root)
+        matched_slugs = [r["slug"] for r in results]
+        self.assertIn("felines", matched_slugs)
+        self.assertNotIn("concatenation", matched_slugs)
+
+    def test_and_semantics_by_default(self):
+        """Query 'alpha beta' must require BOTH terms by default (REQ-2)."""
+        results = kb.search_knowledge_base("alpha beta", repo_root=self.repo_root)
+        matched_slugs = [r["slug"] for r in results]
+        self.assertIn("alpha-beta", matched_slugs)
+        self.assertNotIn("alpha-gamma", matched_slugs)
+
+    def test_or_semantics_with_match_any(self):
+        """Query 'beta gamma' with match_any=True must return docs matching either term (REQ-2)."""
+        results = kb.search_knowledge_base("beta gamma", repo_root=self.repo_root, match_any=True)
+        matched_slugs = [r["slug"] for r in results]
+        self.assertIn("alpha-beta", matched_slugs)
+        self.assertIn("alpha-gamma", matched_slugs)
+
+    def test_quoted_phrase_search(self):
+        """Quoted phrase query must match exact adjacent phrase (REQ-3)."""
+        results = kb.search_knowledge_base('"single-file append-only"', repo_root=self.repo_root)
+        matched_slugs = [r["slug"] for r in results]
+        self.assertEqual(matched_slugs, ["phrase-match"])
+
+    def test_light_stemming_matches_plurals(self):
+        """Query 'processes' matches singular 'process' (REQ-1)."""
+        results = kb.search_knowledge_base("processes", repo_root=self.repo_root)
+        matched_slugs = [r["slug"] for r in results]
+        self.assertIn("alpha-beta", matched_slugs)
+
+    def test_search_stats_reporting(self):
+        """Stats mode returns corpus entries, estimated tokens, and savings percentage (REQ-5)."""
+        results, stats = kb.search_knowledge_base("alpha", repo_root=self.repo_root, return_stats=True)
+        self.assertGreater(len(results), 0)
+        self.assertEqual(stats["corpus_entries"], 5)
+        self.assertGreater(stats["corpus_tokens_est"], 0)
+        self.assertGreater(stats["returned_tokens_est"], 0)
+        self.assertGreaterEqual(stats["savings_pct"], 0.0)
+
+    def test_snippet_extraction_word_boundaries(self):
+        """Snippet extraction preserves word boundaries and does not truncate mid-word (REQ-4)."""
+        long_body = "The quick brown fox jumps over the lazy dog repeatedly in an extraordinary algorithmic demonstration."
+        snippet = kb.extract_passage_snippet(long_body, query_terms=["dog"], phrases=[], max_chars=40)
+        self.assertFalse(snippet.endswith("al..."))
+        self.assertIn("dog", snippet)
+        # Should not end with partial letters before ellipsis
+        truncated_part = snippet.rstrip(".").strip()
+        last_word = truncated_part.split()[-1]
+        self.assertTrue(last_word.isalpha(), f"Last word '{last_word}' is not clean")
+
+
 if __name__ == "__main__":
     unittest.main()
