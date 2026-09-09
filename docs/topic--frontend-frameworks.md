@@ -1,6 +1,5 @@
 ---
 protocol: along
-protocol_version: "2.2.27"
 slug: frontend-frameworks
 title: Frontend Architecture, Dynstruct, MsgMesh & NSwag Integration
 type: topic

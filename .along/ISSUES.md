@@ -9,7 +9,6 @@
 - [ ] `(feat)` [knowledge-base-management-and-init-kb-skill](ISSUES/feat--knowledge-base-management-and-init-kb-skill.md)
 - [ ] `(feat)` [lsif-scip-lsp-mcp-integration](ISSUES/feat--lsif-scip-lsp-mcp-integration.md)
 - [ ] `(feat)` [openclaw-and-hermes-agent-integration](ISSUES/feat--openclaw-and-hermes-agent-integration.md)
-- [ ] `(feat)` [programmatic-integrity-gates-and-git-guard](ISSUES/feat--programmatic-integrity-gates-and-git-guard.md)
 - [ ] `(feat)` [runtime-enforcement-of-prose-rules](ISSUES/feat--runtime-enforcement-of-prose-rules.md)
 - [ ] `(feat)` [runtime-worktree-isolation](ISSUES/feat--runtime-worktree-isolation.md)
 - [ ] `(feat)` [systemic-anomaly-circuit-breaker](ISSUES/feat--systemic-anomaly-circuit-breaker.md)
@@ -19,9 +18,9 @@
 <!-- Planned or deferred issues -->
 
 ## Done (recent)
+- [x] `(feat)` [programmatic-integrity-gates-and-git-guard](ISSUES/done/feat--programmatic-integrity-gates-and-git-guard.md)
 - [x] `(docs)` [pluggable-lifecycle-hooks-showcase](ISSUES/done/docs--pluggable-lifecycle-hooks-showcase.md)
 - [x] `(debt)` [unpinned-mcp-and-ghost-wiki-query-tool](ISSUES/done/debt--unpinned-mcp-and-ghost-wiki-query-tool.md)
 - [x] `(debt)` [protocol-quality-audit-remediation](ISSUES/done/debt--protocol-quality-audit-remediation.md)
-- [x] `(debt)` [line-ending-churn-vs-gitattributes](ISSUES/done/debt--line-ending-churn-vs-gitattributes.md)
-- [x] `(debt)` [kb-search-ranking-and-snippet-quality](ISSUES/done/debt--kb-search-ranking-and-snippet-quality.md)
-<!-- 73 older completed issue(s) archived in .along/ISSUES/done/ -->
+- [x] `(debt)` [migration-version-cleanup-and-kb-schema-decoupling](ISSUES/done/debt--migration-version-cleanup-and-kb-schema-decoupling.md)
+<!-- 76 older completed issue(s) archived in .along/ISSUES/done/ -->

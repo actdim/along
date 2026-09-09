@@ -3,8 +3,7 @@ name: along-init
 description: Scaffold or refresh the provider-agnostic agent-context structure in a repository - root AGENTS.md (with a managed block carrying the ALONG-PROTOCOL v2.2.27), a CLAUDE.md that imports it, .gitattributes for merge union, and the .along/ directory (ISSUES + ISSUES/, DECISIONS, VISION, GLOSSARY, HISTORY, SESSIONS, docs/). Use when the user wants to set up agent context/instructions for a project, initialize the agent structure, or invokes /along-init. Idempotent - re-running refreshes only the managed protocol block and never overwrites existing dynamic state files.
 ---
 
-# Along Init (`/along-init`) [v2.2.27]
-
+# Along Init (`/along-init`)
 Scaffold or refresh the provider-agnostic agent-context structure in a repository - root `AGENTS.md` (with a managed block carrying the `ALONG-PROTOCOL v2.2.27`), a `CLAUDE.md` that imports it, `.gitattributes`, and the `.along/` directory (`ISSUES.md` + `ISSUES/`, `DECISIONS.md`, `VISION.md`, `GLOSSARY.md`, `HISTORY.md`, `SESSIONS/`, `docs/`).
 
 ## When to use

@@ -13,7 +13,7 @@ import unittest
 # `python .along/scripts/test.py` works from a bare interpreter as documented.
 sys.path.insert(0, os.path.join(
     os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))), "scripts"))
-from alongkit import bootstrap
+from alongkit import bootstrap, gates
 
 bootstrap.ensure_deps()
 
@@ -21,6 +21,12 @@ def main():
     repo_root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
     if repo_root not in sys.path:
         sys.path.insert(0, repo_root)
+
+    # Pre-Flight Syntax Gate: halt before test discovery if syntax errors exist
+    if not gates.syntax_gate(repo_root, label="Pre-Flight Syntax Gate"):
+        print("[CRITICAL] Syntax validation failed before test discovery. Aborting.", file=sys.stderr)
+        sys.exit(1)
+
     tests_dir = os.path.join(repo_root, "tests")
     
     os.environ["ALONG_TEST_RUNNER"] = "1"

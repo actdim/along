@@ -29,7 +29,7 @@ always copied next to the engines.
 
 from __future__ import annotations
 
-from . import (bootstrap, budget, diagnostics, entities, lifecycle, markdown, migration, proc, repo, sanitizer,
+from . import (bootstrap, budget, diagnostics, entities, gates, lifecycle, markdown, migration, patcher, proc, repo, sanitizer,
                session, textio, transaction, typography, version)
 from .proc import Result, run_capture, run_passthrough, run_python
 from .repo import (find_agent_contexts, find_manifest_projects, find_repo_root,
@@ -43,9 +43,11 @@ __all__ = [
     "budget",
     "diagnostics",
     "entities",
+    "gates",
     "lifecycle",
     "markdown",
     "migration",
+    "patcher",
     "proc",
     "repo",
     "sanitizer",

@@ -3,8 +3,7 @@ name: along-kb-sync
 description: Synchronize, compile, and reconcile the Knowledge Base in docs/ using LLM-Wiki pipeline. Ingests README facts and raw sources, rewrites inbound legacy links, validates link integrity across monorepo packages, and rebuilds docs/INDEX.md. Use when invoking /along-kb-sync.
 ---
 
-# Along KB Sync  [v2.2.27]
-
+# Along KB Sync
 Idempotent LLM-Wiki Knowledge Base synchronization, inbound link rewriting, compilation, and repository-wide link-integrity gate for `docs/`.
 
 ## Capabilities

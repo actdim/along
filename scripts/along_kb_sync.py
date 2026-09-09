@@ -80,8 +80,9 @@ def dump_frontmatter(fm, body):
     """Render a NEW article. On an existing file use frontmatter.update instead, which
     preserves comments, key order, and line endings.
     """
-    fields = {'protocol': 'along',
-              'protocol_version': fm.get('protocol_version', frontmatter.quoted(CURRENT_PROTOCOL_VERSION))}
+    fields = {'protocol': 'along'}
+    if 'protocol_version' in fm:
+        fields['protocol_version'] = fm['protocol_version']
     fields.update({k: v for k, v in fm.items()
                    if k not in ('protocol', 'protocol_version')})
     return frontmatter.render(fields, body)
@@ -136,11 +137,8 @@ def reconcile_sources(repo_root, docs_dir, dry_run=False):
                     fields, _ = parse_frontmatter(raw, path=s_path)
                     slug = target_name.replace(".md", "")
                     updates = {"slug": slug}
-                    if not fields.get("protocol_version"):
-                        updates["protocol_version"] = frontmatter.quoted(CURRENT_PROTOCOL_VERSION)
                     textio.write_text(d_path, frontmatter.update(
-                        raw, updates, path=s_path,
-                        place_after={"protocol_version": "protocol"}))
+                        raw, updates, path=s_path))
                 print(f"   Migrated article: {src_dir}/{item} -> docs/{target_name}")
                 normalized += 1
             else:
@@ -191,11 +189,8 @@ def reconcile_sources(repo_root, docs_dir, dry_run=False):
                     dst_path = os.path.join(docs_dir, target_name)
                     fields, _ = parse_frontmatter(raw, path=f_path)
                     updates = {"slug": target_name.replace(".md", "")}
-                    if not fields.get("protocol_version"):
-                        updates["protocol_version"] = frontmatter.quoted(CURRENT_PROTOCOL_VERSION)
                     textio.write_text(dst_path, frontmatter.update(
-                        raw, updates, path=f_path,
-                        place_after={"protocol_version": "protocol"}))
+                        raw, updates, path=f_path))
                     os.remove(f_path)
                     print(f"   Normalized wiki article name: docs/{item} -> docs/{target_name}")
                     normalized += 1
@@ -1017,8 +1012,6 @@ def sync_kb(repo_root, check_only=False, strict=False, prune_intent=None, is_sub
                 updates['title'] = title
             if fm.get('protocol') != 'along':
                 updates['protocol'] = 'along'
-            if str(fm.get('protocol_version', '')).strip() != CURRENT_PROTOCOL_VERSION:
-                updates['protocol_version'] = frontmatter.quoted(CURRENT_PROTOCOL_VERSION)
             if not fm.get('slug'):
                 updates['slug'] = slug
             if not fm.get('type'):
@@ -1075,13 +1068,22 @@ def sync_kb(repo_root, check_only=False, strict=False, prune_intent=None, is_sub
             print(f"   [PRUNE-INTENT] Acknowledged content reduction: {prune_intent}")
 
     index_path = os.path.join(docs_dir, "INDEX.md")
+    index_created = today
+    if os.path.isfile(index_path):
+        try:
+            cur_content = textio.read_text(index_path)
+            cur_fm, _ = parse_frontmatter(cur_content, path=index_path)
+            if cur_fm and cur_fm.get("created"):
+                index_created = str(cur_fm.get("created"))
+        except (OSError, UnicodeDecodeError, ValueError, frontmatter.FrontmatterError):
+            pass
+
     index_fm = {
         "protocol": "along",
-        "protocol_version": frontmatter.quoted(CURRENT_PROTOCOL_VERSION),
         "slug": "INDEX",
         "title": "Knowledge Base Topic Index",
         "type": "index",
-        "created": today,
+        "created": index_created,
         "updated": today,
         "tags": ["index", "kb", "topics", "map"],
     }

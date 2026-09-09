@@ -516,6 +516,119 @@ class TestMigrationFrontmatterRepairAndShellScan(unittest.TestCase):
         res2 = migrate(self.tmp, "--apply", "--force")
         self.assertNotIn("Advisory scan for potential shell-escaping artifacts", res2.stdout)
 
+    def test_step_10_version_ssot_cleanup(self):
+        # Pre-3.0.0 repository fixture
+        agents_md = os.path.join(self.tmp, "AGENTS.md")
+        with open(agents_md, "w", encoding="utf-8") as f:
+            f.write("<!-- BEGIN ALONG-PROTOCOL root -->\n# ALONG-PROTOCOL v2.2.25\n<!-- END ALONG-PROTOCOL -->\n")
+
+        along_dir = os.path.join(self.tmp, ".along")
+        os.makedirs(along_dir, exist_ok=True)
+        docs_dir = os.path.join(self.tmp, "docs")
+        os.makedirs(docs_dir, exist_ok=True)
+        skills_dir = os.path.join(self.tmp, "skills", "along-sample")
+        os.makedirs(skills_dir, exist_ok=True)
+
+        # 1. Create legacy docs articles with protocol_version
+        doc_path = os.path.join(docs_dir, "topic--sample.md")
+        doc_content = (
+            "---\n"
+            "protocol: along\n"
+            "protocol_version: \"2.2.25\"\n"
+            "slug: sample\n"
+            "title: Sample Topic\n"
+            "type: topic\n"
+            "created: 2026-09-01\n"
+            "---\n\n"
+            "# Sample Topic\n\n"
+            "Sample documentation body.\n"
+        )
+        with open(doc_path, "w", encoding="utf-8") as f:
+            f.write(doc_content)
+
+        doc2_path = os.path.join(docs_dir, "topic--extra.md")
+        doc2_content = (
+            "---\n"
+            "protocol: along\n"
+            "protocol_version: \"2.2.25\"\n"
+            "slug: extra\n"
+            "title: Extra Topic\n"
+            "type: topic\n"
+            "created: 2026-09-01\n"
+            "---\n\n"
+            "# Extra Topic\n\n"
+            "Extra documentation body.\n"
+        )
+        with open(doc2_path, "w", encoding="utf-8") as f:
+            f.write(doc2_content)
+
+        # 2. Create legacy INDEX.md with protocol_version
+        index_path = os.path.join(docs_dir, "INDEX.md")
+        index_content = (
+            "---\n"
+            "protocol: along\n"
+            "protocol_version: \"2.2.25\"\n"
+            "slug: INDEX\n"
+            "title: Knowledge Base Topic Index\n"
+            "type: index\n"
+            "---\n\n"
+            "# Knowledge Base Topic Index\n"
+        )
+        with open(index_path, "w", encoding="utf-8") as f:
+            f.write(index_content)
+
+        # 3. Create legacy skill manifest with version suffix in title
+        skill_path = os.path.join(skills_dir, "SKILL.md")
+        skill_content = (
+            "---\n"
+            "name: along-sample\n"
+            "description: Sample skill.\n"
+            "---\n\n"
+            "# Along Sample (`/along-sample`) [v2.2.25]\n\n"
+            "Execute sample skill action.\n"
+        )
+        with open(skill_path, "w", encoding="utf-8") as f:
+            f.write(skill_content)
+
+        # Execute migration
+        res = migrate(self.tmp, "--apply")
+        self.assertEqual(res.returncode, 0, f"Migration failed:\n{res.stderr}")
+        self.assertIn("Cleaning up version declarations in docs/ and skills/", res.stdout)
+        self.assertIn("Stripped protocol_version from 2 document(s) in docs/", res.stdout)
+        self.assertIn("Stripped version suffixes from 1 skill manifest(s)", res.stdout)
+
+        # Verify docs/topic--sample.md and docs/topic--extra.md
+        from alongkit import frontmatter
+        migrated_doc = read(doc_path)
+        fm_doc, _ = frontmatter.parse(migrated_doc)
+        self.assertEqual(fm_doc.get("protocol"), "along")
+        self.assertNotIn("protocol_version", fm_doc)
+        self.assertEqual(fm_doc.get("slug"), "sample")
+        self.assertEqual(fm_doc.get("title"), "Sample Topic")
+
+        migrated_doc2 = read(doc2_path)
+        fm_doc2, _ = frontmatter.parse(migrated_doc2)
+        self.assertEqual(fm_doc2.get("protocol"), "along")
+        self.assertNotIn("protocol_version", fm_doc2)
+        self.assertEqual(fm_doc2.get("slug"), "extra")
+
+        # Verify docs/INDEX.md
+        migrated_index = read(index_path)
+        fm_index, _ = frontmatter.parse(migrated_index)
+        self.assertEqual(fm_index.get("protocol"), "along")
+        self.assertNotIn("protocol_version", fm_index)
+
+        # Verify skills/along-sample/SKILL.md
+        migrated_skill = read(skill_path)
+        self.assertIn("# Along Sample (`/along-sample`)\n", migrated_skill)
+        self.assertNotIn("[v2.2.25]", migrated_skill)
+
+        # Verify idempotency: re-running migration does not alter clean files
+        res2 = migrate(self.tmp, "--apply", "--force")
+        self.assertEqual(res2.returncode, 0)
+        self.assertIn("docs/ front-matter is clean; no protocol_version churn detected", res2.stdout)
+        self.assertIn("Skill manifests are clean; no legacy version suffixes found", res2.stdout)
+
 
 if __name__ == "__main__":
     unittest.main()

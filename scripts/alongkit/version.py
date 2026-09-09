@@ -26,6 +26,7 @@ CURRENT_PROTOCOL_VERSION = "2.2.27"
 #: Alias for readers that care about the toolchain rather than the protocol. They move
 #: together: the engines and the protocol ship as one artifact.
 CURRENT_VERSION = CURRENT_PROTOCOL_VERSION
+__version__ = CURRENT_VERSION
 
 
 def protocol_version() -> str:

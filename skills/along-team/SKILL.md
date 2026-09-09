@@ -3,8 +3,7 @@ name: along-team
 description: Execute software development tasks via sequential multi-agent protocol (Supervisor -> Research -> Architect -> Living Plan -> Step Loops [Implement -> Review/Test -> Reassess]). Supports autonomous execution, /goal integration, and adaptive complexity routing.
 ---
 
-# Along Team (`/along-team`) [v2.2.27]
-
+# Along Team (`/along-team`)
 Universal sequential development protocol and state machine for complex engineering tasks across all supported AI providers.
 
 ---
@@ -181,7 +180,7 @@ TASK / GOAL
 ### Phase 2: Architecture & Public Surface Discovery (Architect)
 1. Execute **Public Surface Discovery**: Search (`grep`) for all occurrences of modified entities across public entry points (`README.md`, `AGENTS.md`, `docs/`, `package.json`).
 2. Formulate a **Living Plan** with 2 to 5 ordered steps mapped to `REQ-N` (`Revision 1 - Baseline`).
-3. Each step must define: target files/symbols, expected behavior mapped to `REQ-N`, and verifiable acceptance criteria.
+3. Each plan MUST declare an explicit `## Execution Mode` (`Direct` | `Role-Based (along-team)`) based on the Adaptive Complexity Escalation thresholds. Each step must define: target files/symbols, expected behavior mapped to `REQ-N`, and verifiable acceptance criteria.
 4. **Dual-Track UI & Artifact Projection**:
    - **Track 1 (Host IDE UI Projection)**: When running under Google Antigravity, project the Living Plan to `<appDataDir>/brain/<id>/implementation_plan.md` with `ArtifactMetadata` (`RequestFeedback: true`, `UserFacing: true`). This triggers Antigravity's native interactive design doc card with user checkboxes and the "Proceed" button.
    - **Track 2 (Permanent Along Memory)**: In all environments (Antigravity, Claude Code, OpenAI Codex, OpenCode), write the plan to disk at `.along/.session/<slug>/plan.md` (and `living_plan.md`) and present in chat for confirmation.
