@@ -1,6 +1,6 @@
 ---
 protocol: along
-protocol_version: "2.2.26"
+protocol_version: "2.2.27"
 slug: migrations
 title: Protocol & Repository Migrations Guide
 type: topic

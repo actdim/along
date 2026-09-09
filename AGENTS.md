@@ -143,12 +143,13 @@ To keep `.along/` lean and avoid token bloat:
 - `DECISIONS.md` is APPEND-ONLY: add a new dated entry with slug header (`## ADR-YYYY-MM-DD--<slug>`) per non-trivial architectural decision; never edit past ones - mark a replaced one "Superseded by ADR-YYYY-MM-DD--<slug>". Recompile `.along/CONSTRAINTS.md` via `along decision sync`.
 - Add any new/clarified domain term to `.along/GLOSSARY.md`.
 - **Context & Token hygiene**: Keep tool output lean to prevent context bloat. Use quiet flags for builds/tests (`pytest -q`, `dotnet test -v q`), filter command outputs, and inspect targeted line ranges.
+- **Contract-First Lifecycle Execution**: When building, testing, developing, or releasing, agents MUST prioritize project lifecycle hooks (`/along-test` or `.along/scripts/test.py`, `/along-build`, `/along-dev`, `/along-version-bump`, `/along-dep-scan`) over guessing raw toolchain commands.
 - **Dual Search Architecture**: Distinguish between code and documentation retrieval: query MCP tools (`semantic_search_nodes_tool`, `query_graph_tool`) for codebase AST / call graph search, and `/along-kb-search` for Knowledge Base / living project memory (`docs/`, `README.md`, `DECISIONS.md`, `ISSUES/`).
 - **Mandatory Agentic Code Review & Blast Radius Impact**: After completing non-trivial code modifications, agents MUST critically inspect their own diffs and evaluate systemic blast radius. Agents MUST execute `code-review-graph` MCP tools (`build_or_update_graph_tool`, `get_impact_radius_tool`, `get_affected_flows_tool`) to verify that downstream callers, interfaces, and dependent systems remain unbroken, edge cases and nulls are handled, and active ADRs in `.along/DECISIONS.md` are respected. If `code-review-graph` is offline or fails, agents MUST output a loud diagnostic warning (`[CRITICAL WARNING: code-review-graph OFFLINE, degraded to static search]`) and fall back to static search (`grep_search` across callers, imports, and references). Silent skips are strictly forbidden.
 
 ## Mandatory Stage & Session Completion Checklist
 When a Stage or session completes, agents MUST execute this verification checklist in exact order:
-1. [ ] **Verification & Tests**: Run automated unit tests / linting / builds with quiet flags. Verify test discovery count increased appropriately and zero tests failed.
+1. [ ] **Verification & Tests**: Run automated unit tests / linting / builds with quiet flags via project lifecycle hooks (/along-test or python .along/scripts/test.py, /along-build or python .along/scripts/build.py). Verify test discovery count increased appropriately and zero tests failed.
 2. [ ] **File Integrity & Untracked Audit**: Inspect `git status -u` and verify that all newly created and modified files have non-zero size (`getsize > 0`), containing expected code/content without empty placeholders or corrupted bodies.
 3. [ ] **Code Review & Blast Radius Assessment**:
    - Inspect git diff for unintended side effects, unhandled nulls/errors, and edge cases.
@@ -171,6 +172,10 @@ When a Stage or session completes, agents MUST execute this verification checkli
 9. [ ] **Compaction Prompt**: Advise user to run `/compact` to free up token budget.
 
 ## Rules
+- **Contract-First Lifecycle Execution & Polyglot Hooks**:
+  - **Prioritize Nearest Lifecycle Hook**: Before running raw shell commands (`npm test`, `pytest`, `cargo build`), agents MUST execute the nearest `.along/scripts/<action>.py` (or `.sh`, `.ps1`, `.bat`) or invoke `/along-test`, `/along-build`, `/along-dev`.
+  - **Zero-Config Auto-Synthesis**: When `.along/scripts/` is missing, invoking `along test` or `along build` auto-detects the stack (Node, Python, Rust, .NET, Go), synthesizes a verified hook, and executes it with quiet flags.
+  - **Custom Subproject Hooks**: In submodules or monorepo packages, execute the hook localized in that subproject's own `.along/scripts/`.
 - **Strict Dependency & Environment Isolation**:
   - **No Unprompted Global Installs**: Agents MUST NOT arbitrarily install system-wide or global packages (e.g. via `pip install`) when a script fails with a missing dependency.
   - **Fix the Architecture, Not the Environment**: If an engine or script fails to locate a dependency, it is an architectural defect (such as a missing `bootstrap.ensure_deps()` call or an incorrect `uv` wrapper). The agent MUST diagnose and fix the script's entry point or discuss it with the user, rather than mutating the environment to force it to pass.
@@ -226,49 +231,18 @@ This repository is `Along` (`actdim-along`) - the provider-agnostic agent-contex
   opt-in, localized resource directories never); non-UTF8 files are skipped and reported,
   line endings preserved. See ADR-2026-09-01--typography-rule-scope in
   `.along/DECISIONS.md`.
-- **Release Path (`/along-version-bump`)**: gates first, on the untouched tree (tests,
-  typography check, Markdown link check), unconditionally rather than only with
-  `--commit`; then the version, the matching milestone's front-matter, `CHANGELOG.md`,
-  the commit of exactly those paths, and the annotated tag `v<version>`. Every mutation
-  is recorded by `alongkit.transaction.FileTransaction` and restored byte for byte if a
-  later step fails. A release never invokes an installer or touches machine-global
-  state. See ADR-2026-09-01--release-gates-before-mutations in `.along/DECISIONS.md`.
-- **Migration Path (`migrate_protocol.py`)**: never deletes a destination file. On a
-  collision, append-only files (`DECISIONS.md`, `HISTORY.md`) are union-merged, derived
-  projections keep the destination, and any other legacy copy is preserved as
-  `<name>.legacy.md` and reported. `.along/` and `.agents/` are copied to
-  `.along/.migration-backup/<timestamp>/` before the first change; reads are strict and
-  undecodable files are skipped and reported; `.along/.protocol-version` makes a second
-  run a no-op (`--force` overrides). Dry run is the default for every caller that is not
-  a human at a terminal, so `--apply` is mandatory from a script, and installing no
-  longer migrates unless given `-Migrate` / `--migrate`. The primitives live in
-  `alongkit.migration`. See ADR-2026-09-01--migration-never-deletes-a-destination in
-  `.along/DECISIONS.md`.
+- **Release Path (`/along-version-bump`)**: Pre-mutation gates (tests, typography, links), transactional rollback via `alongkit.transaction.FileTransaction`, and release commit/tag without touching global state. See ADR-2026-09-01--release-gates-before-mutations in `.along/DECISIONS.md`.
+- **Migration Path (`migrate_protocol.py`)**: Preserves all destination files, union-merges append-only files, snapshots state to `.along/.migration-backup/`, and skips undecodable files. See ADR-2026-09-01--migration-never-deletes-a-destination in `.along/DECISIONS.md`.
 - **Install Commands**:
   - Windows: `powershell -NoProfile -ExecutionPolicy Bypass -File install.ps1 -Target all` (or `install.bat`).
   - Linux / macOS: `bash install.sh`.
   - Uninstall: `install.ps1 -Uninstall` / `./install.sh --uninstall`.
-- **Install Path (`install.ps1`, `install.sh`)**: the installers copy; every decision is
-  an engine. The layout is described once in `alongkit.install.planned_files` and both
-  installers are run against it end to end by `tests/test_installers.py`, so they cannot
-  drift. No install deletes a destination directory: `scripts/install_manifest.py` records
-  what was written to `~/.along/install-manifest.json`, removes by name only the files a
-  previous install wrote and this one no longer ships, and is what an uninstall reads.
-  `scripts/configure_mcp.py` registers `code-review-graph` only where the provider's
-  configuration contract is verified (Claude Code's `~/.claude.json`), reports the rest
-  with their snippet, and never overwrites a file it could not parse. See
-  ADR-2026-09-01--installers-never-delete-what-they-did-not-write in `.along/DECISIONS.md`.
+- **Install Path (`install.ps1`, `install.sh`)**: Plan-driven layout in `alongkit.install.planned_files`, verified hermetically by `tests/test_installers.py`. Manifest tracking (`~/.along/install-manifest.json`) prevents directory wiping on re-install. See ADR-2026-09-01--installers-never-delete-what-they-did-not-write in `.along/DECISIONS.md`.
 - **Lifecycle Commands**:
-  - Run Tests: `python .along/scripts/test.py` (resolves dependencies via `uv` if needed),
-    or `uv run python -m unittest discover tests -q`.
-- **Test Suite (`tests/`)**: plain `unittest`. Every engine invocation targets a throwaway
-  fixture from `tests/hermetic.py` (`repo_fixture()`), never the repository root;
-  `tests/test_zz_hermetic_suite.py` runs last and fails if the suite dirtied the working
-  tree or if a test built an engine command line with `REPO_ROOT` as the target. Reading
-  live project memory is allowed and must stay read-only. See
-  `[docs/topic--setup-and-workflow.md](./docs/topic--setup-and-workflow.md)`.
+  - Run Tests: `python .along/scripts/test.py` (or `uv run python -m unittest discover tests -q`).
   - Run Dev Server: `npm run dev` (or `python .along/scripts/dev.py`).
   - Build Assets: `npm run build` (or `python .along/scripts/build.py`).
+- **Test Suite (`tests/`)**: Plain `unittest`. Invocations target throwaway fixtures from `tests/hermetic.py`, never repository root. Live memory access is strictly read-only. See `[docs/topic--setup-and-workflow.md](./docs/topic--setup-and-workflow.md)`.
 - **Frontend Architecture (`packages/dashboard-ui/`)**:
   - Full architectural rules in `[docs/topic--frontend-frameworks.md](./docs/topic--frontend-frameworks.md)` and `[.along/DECISIONS.md](./.along/DECISIONS.md#adr-2026-08-28--frontend-dynstruct-architecture-and-msgmesh-adapters)`.
   - Strict `@actdim/dynstruct` component architecture with MobX reactive state; zero raw `useState`/`useEffect` hooks.

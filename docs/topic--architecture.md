@@ -1,11 +1,11 @@
 ---
 protocol: along
-protocol_version: "2.2.26"
+protocol_version: "2.2.27"
 slug: architecture
 title: System Architecture & Flow
 type: architecture
 created: 2026-08-30
-updated: 2026-09-07
+updated: 2026-09-09
 tags: [architecture, boundaries, multi-agent, blackboard, concurrency, mcp, flow]
 sources:
   - path: README.md
@@ -445,3 +445,45 @@ To guarantee that documentation remains synchronized with code and is never sile
 2. **Anti-Stub & Size Regression Invariant**: Automated test suite (`test_21_docs_articles_not_empty_placeholders`) and Reviewer rubrics reject any file modification that reduces substantial documentation or code to empty placeholder stubs or skeleton templates.
 3. **Documentation Blast Radius Gate**: Mandatory in `/along-wrap` and `AGENTS.md`. Whenever public interfaces, commands, or system architectures change, the affected `docs/topic--*.md` articles MUST be updated before closing an issue.
 4. **Link Integrity Gate (`along-kb-sync --strict`)**: Verifies that all cross-references across `docs/`, `README.md`, and `.along/` resolve to valid physical files.
+
+---
+
+## 10. Lifecycle & Polyglot Hook Architecture (`alongkit.lifecycle`)
+
+Along decouples AI agent operational intent from underlying repository toolchains through the **Contract-First Lifecycle Hook Architecture**:
+
+```mermaid
+flowchart TD
+    AGENT["AI Coding Agent (/along-test, /along-build, /along-dev)"]
+    ROUTER["along_exec.py Dispatcher"]
+    SUB_CHECK{"Subproject Hook exists? (packages/*/.along/scripts/)"}
+    ROOT_CHECK{"Root Hook exists? (.along/scripts/)"}
+    INTERPRETER["alongkit.lifecycle.build_interpreter_cmd()"]
+    RUN_EXEC["Safe Process Execution (shell=False, argv list)"]
+    AUTODETECT["Stack Detector (Node, Rust, .NET, Python, Go)"]
+    SYNTHESIZE["Synthesize .along/scripts/<action>.py"]
+
+    AGENT --> ROUTER
+    ROUTER --> SUB_CHECK
+    SUB_CHECK -->|Yes| INTERPRETER
+    SUB_CHECK -->|No| ROOT_CHECK
+    ROOT_CHECK -->|Yes| INTERPRETER
+    ROOT_CHECK -->|No| AUTODETECT
+    AUTODETECT -->|Known Stack| SYNTHESIZE
+    SYNTHESIZE --> INTERPRETER
+    AUTODETECT -->|Unknown Stack| UNCONFIG["Generate Unconfigured Template"]
+    INTERPRETER --> RUN_EXEC
+```
+
+### Architectural Principles
+
+1. **Stack-Agnostic Interface**: AI agents interact exclusively with standardized verbs (`/along-build`, `/along-test`, `/along-dev`, `/along-version-bump`, `/along-dep-scan`). The agent never needs custom prompt tuning for different languages.
+2. **Polyglot Interpreter Selection**:
+   - `.py`: Executed via `sys.executable`.
+   - `.sh`: Executed via `bash` binary.
+   - `.ps1`: Executed via `pwsh` or `powershell` with `-NoProfile -File`.
+   - `.bat` / `.cmd`: Executed via `cmd.exe /c`.
+   - Native binaries: Executed directly.
+3. **Safe Execution without Shell Injection**: All lifecycle commands avoid `shell=True`. Arguments are pre-split or passed as discrete argv lists, preserving spaces and special characters.
+4. **Nearest-Boundary Monorepo Localization**: In modular codebases and Git submodules, the dispatcher locates the nearest `.along/scripts/` hook before falling back to workspace root.
+5. **Non-Destructive Auto-Synthesis**: When hooks are absent, Along analyzes project manifests (`package.json`, `Cargo.toml`, `*.csproj`, `pyproject.toml`, `go.mod`), injects quiet flags (`-q`, `--silent`), and synthesizes an executable `.along/scripts/<action>.py` hook marked with `# Status: verified`.

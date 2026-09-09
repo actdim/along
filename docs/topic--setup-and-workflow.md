@@ -1,11 +1,11 @@
 ---
 protocol: along
-protocol_version: "2.2.26"
+protocol_version: "2.2.27"
 slug: setup-and-workflow
 title: Setup & Developer Workflow
 type: setup-workflow
 created: 2026-08-30
-updated: 2026-09-07
+updated: 2026-09-09
 tags: [setup-workflow, installation, lifecycle, runners, developer-workflow, testing]
 sources:
   - path: README.md
@@ -183,6 +183,28 @@ flowchart LR
 | `/along-test` | `.along/scripts/test.py` | `pytest -q` \| `npm test` \| `cargo test -q` \| `dotnet test -v q` | Executes unit tests with quiet flags. |
 | `/along-dev` | `.along/scripts/dev.py` | `npm run dev` \| `cargo run` \| `dotnet run` \| `python main.py` | Starts local development server. |
 | `/along-version-bump` | `.along/scripts/bump_version.py` | Node `package.json` \| Python `pyproject.toml` \| Rust `Cargo.toml` \| .NET `*.csproj` | Bumps version and orchestrates release. |
+| `/along-dep-scan` | `.along/scripts/dep_scan.py` | Node `package.json` \| Python `pyproject.toml` \| Rust `Cargo.toml` \| .NET `*.csproj` \| Go `go.mod` | Discovers dependencies and AI instruction rules. |
+
+### Polyglot Hook Selection & Security
+
+Lifecycle hooks are not limited to Python. Along detects the file extension and selects the appropriate interpreter:
+
+| Extension | Runtime / Interpreter | Invocation Pattern |
+| :--- | :--- | :--- |
+| `.py` | Current Python runtime | `[sys.executable, script_path, *args]` |
+| `.sh` | Bash shell | `[bash, script_path, *args]` |
+| `.ps1` | PowerShell Core / Desktop | `[pwsh, -NoProfile, -File, script_path, *args]` |
+| `.bat`, `.cmd` | Windows Command Processor | `[cmd.exe, /c, script_path, *args]` |
+| (binary) | Direct executable | `[script_path, *args]` |
+
+Every invocation enforces `shell=False` and passes command arguments as pre-split lists (`argv`). This guarantees that argument spaces, quotes, and shell metacharacters arrive in the child process without shell injection vulnerabilities.
+
+### Zero-Config Auto-Synthesis & Status Tags
+
+When an AI agent runs `/along-test` or `/along-build` in a repository that lacks `.along/scripts/`:
+1. Along scans repository manifests to identify the active ecosystem (Node.js, Rust, .NET, Python, Go).
+2. If recognized, Along synthesizes a verified hook file (e.g. `.along/scripts/test.py`) with quiet flags (`-q`, `--silent`) and writes a `# Status: verified` header tag.
+3. If the ecosystem cannot be inferred, Along generates a safe template marked `# Status: unconfigured`, prompting the developer or agent to customize the command.
 
 ### Typography: checking and repairing
 

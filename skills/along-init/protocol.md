@@ -143,12 +143,13 @@ To keep `.along/` lean and avoid token bloat:
 - `DECISIONS.md` is APPEND-ONLY: add a new dated entry with slug header (`## ADR-YYYY-MM-DD--<slug>`) per non-trivial architectural decision; never edit past ones - mark a replaced one "Superseded by ADR-YYYY-MM-DD--<slug>". Recompile `.along/CONSTRAINTS.md` via `along decision sync`.
 - Add any new/clarified domain term to `.along/GLOSSARY.md`.
 - **Context & Token hygiene**: Keep tool output lean to prevent context bloat. Use quiet flags for builds/tests (`pytest -q`, `dotnet test -v q`), filter command outputs, and inspect targeted line ranges.
+- **Contract-First Lifecycle Execution**: When building, testing, developing, or releasing, agents MUST prioritize project lifecycle hooks (`/along-test` or `.along/scripts/test.py`, `/along-build`, `/along-dev`, `/along-version-bump`, `/along-dep-scan`) over guessing raw toolchain commands.
 - **Dual Search Architecture**: Distinguish between code and documentation retrieval: query MCP tools (`semantic_search_nodes_tool`, `query_graph_tool`) for codebase AST / call graph search, and `/along-kb-search` for Knowledge Base / living project memory (`docs/`, `README.md`, `DECISIONS.md`, `ISSUES/`).
 - **Mandatory Agentic Code Review & Blast Radius Impact**: After completing non-trivial code modifications, agents MUST critically inspect their own diffs and evaluate systemic blast radius. Agents MUST execute `code-review-graph` MCP tools (`build_or_update_graph_tool`, `get_impact_radius_tool`, `get_affected_flows_tool`) to verify that downstream callers, interfaces, and dependent systems remain unbroken, edge cases and nulls are handled, and active ADRs in `.along/DECISIONS.md` are respected. If `code-review-graph` is offline or fails, agents MUST output a loud diagnostic warning (`[CRITICAL WARNING: code-review-graph OFFLINE, degraded to static search]`) and fall back to static search (`grep_search` across callers, imports, and references). Silent skips are strictly forbidden.
 
 ## Mandatory Stage & Session Completion Checklist
 When a Stage or session completes, agents MUST execute this verification checklist in exact order:
-1. [ ] **Verification & Tests**: Run automated unit tests / linting / builds with quiet flags. Verify test discovery count increased appropriately and zero tests failed.
+1. [ ] **Verification & Tests**: Run automated unit tests / linting / builds with quiet flags via project lifecycle hooks (/along-test or python .along/scripts/test.py, /along-build or python .along/scripts/build.py). Verify test discovery count increased appropriately and zero tests failed.
 2. [ ] **File Integrity & Untracked Audit**: Inspect `git status -u` and verify that all newly created and modified files have non-zero size (`getsize > 0`), containing expected code/content without empty placeholders or corrupted bodies.
 3. [ ] **Code Review & Blast Radius Assessment**:
    - Inspect git diff for unintended side effects, unhandled nulls/errors, and edge cases.
@@ -171,6 +172,10 @@ When a Stage or session completes, agents MUST execute this verification checkli
 9. [ ] **Compaction Prompt**: Advise user to run `/compact` to free up token budget.
 
 ## Rules
+- **Contract-First Lifecycle Execution & Polyglot Hooks**:
+  - **Prioritize Nearest Lifecycle Hook**: Before running raw shell commands (`npm test`, `pytest`, `cargo build`), agents MUST execute the nearest `.along/scripts/<action>.py` (or `.sh`, `.ps1`, `.bat`) or invoke `/along-test`, `/along-build`, `/along-dev`.
+  - **Zero-Config Auto-Synthesis**: When `.along/scripts/` is missing, invoking `along test` or `along build` auto-detects the stack (Node, Python, Rust, .NET, Go), synthesizes a verified hook, and executes it with quiet flags.
+  - **Custom Subproject Hooks**: In submodules or monorepo packages, execute the hook localized in that subproject's own `.along/scripts/`.
 - **Strict Dependency & Environment Isolation**:
   - **No Unprompted Global Installs**: Agents MUST NOT arbitrarily install system-wide or global packages (e.g. via `pip install`) when a script fails with a missing dependency.
   - **Fix the Architecture, Not the Environment**: If an engine or script fails to locate a dependency, it is an architectural defect (such as a missing `bootstrap.ensure_deps()` call or an incorrect `uv` wrapper). The agent MUST diagnose and fix the script's entry point or discuss it with the user, rather than mutating the environment to force it to pass.
