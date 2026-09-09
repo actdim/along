@@ -57,10 +57,12 @@ MANIFEST_NAME = "install-manifest.json"
 MANIFEST_SCHEMA = 1
 
 MCP_SERVER_NAME = "code-review-graph"
+MCP_SERVER_VERSION = "2.3.8"
+MCP_SERVER_PACKAGE = f"{MCP_SERVER_NAME}=={MCP_SERVER_VERSION}"
 
 #: The stdio server entry, in the shape `mcpServers` uses. `uvx` resolves and caches
 #: the package on first use, so no separate install step is needed.
-MCP_SERVER_ENTRY = {"command": "uvx", "args": [MCP_SERVER_NAME]}
+MCP_SERVER_ENTRY = {"command": "uvx", "args": [MCP_SERVER_PACKAGE]}
 
 PROVIDERS: Tuple[str, ...] = ("claude", "codex", "opencode", "antigravity")
 
@@ -184,13 +186,14 @@ def mcp_target(provider: str, homes: Homes) -> McpTarget:
 def mcp_snippet(target: McpTarget) -> str:
     """What a user would add by hand, in the layout that target expects."""
     if target.layout == "codex_toml":
+        args_toml = ", ".join(f'"{arg}"' for arg in MCP_SERVER_ENTRY["args"])
         return (f"[mcp_servers.{MCP_SERVER_NAME}]\n"
                 f"command = \"{MCP_SERVER_ENTRY['command']}\"\n"
-                f"args = [\"{MCP_SERVER_NAME}\"]\n")
+                f"args = [{args_toml}]\n")
     if target.layout == "opencode_json":
         return json.dumps({"mcp": {MCP_SERVER_NAME: {
             "type": "local",
-            "command": [MCP_SERVER_ENTRY["command"], MCP_SERVER_NAME],
+            "command": [MCP_SERVER_ENTRY["command"]] + list(MCP_SERVER_ENTRY["args"]),
             "enabled": True,
         }}}, indent=2)
     return json.dumps({"mcpServers": {MCP_SERVER_NAME: MCP_SERVER_ENTRY}}, indent=2)
@@ -245,7 +248,7 @@ def register_mcp(target: McpTarget, *, include_unverified: bool = False,
     if target.layout == "opencode_json":
         section = data.setdefault("mcp", {})
         entry = {"type": "local",
-                 "command": [MCP_SERVER_ENTRY["command"], MCP_SERVER_NAME],
+                 "command": [MCP_SERVER_ENTRY["command"]] + list(MCP_SERVER_ENTRY["args"]),
                  "enabled": True}
     else:
         section = data.setdefault("mcpServers", {})

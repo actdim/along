@@ -3,10 +3,11 @@ protocol: along
 protocol_version: 2.2.8
 slug: entity-status-enum-and-unused-taxonomy
 type: debt
-status: open
+status: done
+completed: 2026-09-09
 priority: medium
 created: 2026-09-01
-updated: 2026-09-01
+updated: 2026-09-09
 agent: claude-code
 tags: [domain-model, taxonomy, metrics, schema]
 milestone: v3.0.0-global-quality-revision
@@ -93,8 +94,8 @@ during this audit: a `status: done-progress` written by the CLI itself
 
 ## Acceptance Criteria
 
-- [ ] Status enum extended and consistently implemented across schema, engines, docs.
-- [ ] Supersession and duplication expressible in front-matter.
-- [ ] Existing misclassified entities corrected.
-- [ ] Entity validator implemented and green.
-- [ ] Metrics exclude non-delivered outcomes.
+- [x] Status enum extended and consistently implemented across schema, engines, docs.
+- [x] Supersession and duplication expressible in front-matter.
+- [x] Existing misclassified entities corrected.
+- [x] Entity validator implemented and green.
+- [x] Metrics exclude non-delivered outcomes.

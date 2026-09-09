@@ -897,6 +897,24 @@ class TestAlongSkillsAndScripts(unittest.TestCase):
             self.assertIn("type", edge)
             self.assertIn("label", edge)
 
+    def test_13b_collector_metrics_extended_statuses_and_bug_debt_ratio(self):
+        """Verify collector correctly categorizes superseded, cancelled, duplicate and computes bug_debt_ratio."""
+        from dashboard.core.collector import EntityCollector
+
+        agents_dir = os.path.join(REPO_ROOT, ".along")
+        collector = EntityCollector(Path(agents_dir))
+        collector.collect_all()
+
+        metrics = collector.metrics
+        sb = metrics.by_status
+        self.assertGreaterEqual(sb.superseded, 1)
+        self.assertGreaterEqual(sb.cancelled, 1)
+        self.assertIsInstance(sb.duplicate, int)
+        self.assertIsInstance(metrics.bug_debt_ratio, float)
+
+        actual_done = sum(1 for i in collector.issues if i.status == "done")
+        self.assertEqual(metrics.done_issues, actual_done)
+
     def test_14_legacy_kb_and_context_migration(self):
         """Verify that legacy .along/KB/ and CONTEXT.md are automatically migrated to docs/ and .archive/."""
         temp_dir = tempfile.mkdtemp(prefix="along_mig_test_")
@@ -1704,6 +1722,80 @@ class TestAlongSkillsAndScripts(unittest.TestCase):
             self.assertIn("- [docs/topic--architecture.md](docs/topic--architecture.md): Architecture.", root_updated)
             self.assertIn("- [docs/topic--architecture.md](docs/topic--architecture.md): Architecture.", wk_updated2)
 
+    def test_25b_readme_meta_extraction_alerts_badges_and_prose(self):
+        """Verify _extract_project_meta skips alerts, badges, and HTML, extracting quotes or prose."""
+        import along_kb_sync
+
+        with hermetic.repo_fixture(prefix="along-meta-extract-") as temp_dir:
+            readme_path = os.path.join(temp_dir, "README.md")
+
+            # 1. Alert followed by regular prose
+            with open(readme_path, "w", encoding="utf-8") as f:
+                f.write(
+                    "# Alpha Project\n\n"
+                    "> [!NOTE]\n"
+                    "> This note should be ignored.\n\n"
+                    "Alpha Project is a streaming event platform.\n"
+                    "It processes millions of events per second.\n\n"
+                    "## Features\n"
+                    "- Fast\n"
+                )
+            title, summary = along_kb_sync._extract_project_meta(temp_dir)
+            self.assertEqual(title, "Alpha Project")
+            self.assertEqual(summary, "> Alpha Project is a streaming event platform. It processes millions of events per second.")
+
+            # 2. Badges and HTML before blockquote, alert with mixed case
+            with open(readme_path, "w", encoding="utf-8") as f:
+                f.write(
+                    "# Beta Engine\n\n"
+                    "[![CI](https://example.com/badge.svg)](https://example.com)\n"
+                    "<p align=\"center\"><img src=\"logo.png\" /></p>\n\n"
+                    "<!-- internal comment -->\n\n"
+                    "> [!Warning]\n"
+                    "> Deprecation notice body.\n\n"
+                    "> Modular computation engine for agents.\n"
+                    "> Built for high reliability.\n"
+                )
+            title, summary = along_kb_sync._extract_project_meta(temp_dir)
+            self.assertEqual(title, "Beta Engine")
+            self.assertEqual(summary, "> Modular computation engine for agents. Built for high reliability.")
+
+            # 3. Only alerts and headers (fallback to generic summary)
+            with open(readme_path, "w", encoding="utf-8") as f:
+                f.write(
+                    "# Gamma Service\n\n"
+                    "> [!IMPORTANT]\n"
+                    "> Active maintenance.\n\n"
+                    "## Overview\n"
+                    "- Item 1\n"
+                )
+            title, summary = along_kb_sync._extract_project_meta(temp_dir)
+            self.assertEqual(title, "Gamma Service")
+            self.assertTrue(summary.startswith("> Knowledge Base and documentation index for"))
+
+            # 4. End-to-end sync writes clean summary into llms.txt
+            with open(readme_path, "w", encoding="utf-8") as f:
+                f.write(
+                    "# Delta Agent\n\n"
+                    "[![License](https://example.com/license)](LICENSE)\n\n"
+                    "> [!CAUTION]\n"
+                    "> Security advisory.\n\n"
+                    "Delta Agent is an autonomous reasoning engine.\n"
+                )
+            kb_script = os.path.join(REPO_ROOT, "scripts", "along_kb_sync.py")
+            res = run_engine([sys.executable, kb_script, temp_dir])
+            self.assertEqual(res.returncode, 0)
+
+            llms_path = os.path.join(temp_dir, "llms.txt")
+            self.assertTrue(os.path.isfile(llms_path))
+            with open(llms_path, "r", encoding="utf-8") as f:
+                llms_content = f.read()
+
+            self.assertIn("# Delta Agent", llms_content)
+            self.assertIn("> Delta Agent is an autonomous reasoning engine.", llms_content)
+            self.assertNotIn("[!CAUTION]", llms_content)
+            self.assertNotIn("Security advisory", llms_content)
+
     def test_26_canonical_context_and_manifest_discovery(self):
         """Verify alongkit.repo downward discovery functions and llm target resolution."""
         from alongkit import repo
@@ -2014,6 +2106,59 @@ class TestAlongSkillsAndScripts(unittest.TestCase):
 
         finally:
             shutil.rmtree(temp_dir, ignore_errors=True)
+
+    def test_32_mcp_integrity_and_ghost_tool_ban(self):
+        """Verify that ghost MCP tools (wiki_query) are banned, MCP is pinned, and health check passes."""
+        from alongkit import install
+        import along_graph_check
+
+        # 1. MCP package pin verification (REQ-1)
+        self.assertEqual(install.MCP_SERVER_NAME, "code-review-graph")
+        self.assertTrue(hasattr(install, "MCP_SERVER_VERSION"))
+        self.assertTrue(install.MCP_SERVER_VERSION)
+        self.assertIn(f"=={install.MCP_SERVER_VERSION}", install.MCP_SERVER_PACKAGE)
+        self.assertEqual(install.MCP_SERVER_ENTRY["args"], [install.MCP_SERVER_PACKAGE])
+
+        # 2. Ghost tool elimination audit (REQ-5)
+        forbidden_tool = "wiki_query"
+        scanned_paths = [
+            os.path.join(REPO_ROOT, "AGENTS.md"),
+            os.path.join(REPO_ROOT, "skills", "along-init", "protocol.md"),
+            os.path.join(REPO_ROOT, "README.md"),
+        ]
+        scanned_paths.extend(glob.glob(os.path.join(REPO_ROOT, "skills", "**", "*.md"), recursive=True))
+        scanned_paths.extend(glob.glob(os.path.join(REPO_ROOT, "docs", "**", "*.md"), recursive=True))
+
+        for path in scanned_paths:
+            with open(path, "r", encoding="utf-8", errors="ignore") as f:
+                content = f.read()
+            self.assertNotIn(
+                forbidden_tool,
+                content,
+                f"Forbidden ghost tool '{forbidden_tool}' detected in {path}",
+            )
+
+        # 3. Graph check module tests (REQ-2)
+        ignore_ok, missing = along_graph_check.check_ignore_file(REPO_ROOT)
+        self.assertTrue(ignore_ok, ".code-review-graph-ignore must exist at REPO_ROOT")
+        self.assertEqual(missing, [], f".code-review-graph-ignore missing standard patterns: {missing}")
+
+        # Test graceful handling of missing uvx in probe
+        with tempfile.TemporaryDirectory() as empty_dir:
+            orig_path = os.environ.get("PATH", "")
+            try:
+                os.environ["PATH"] = empty_dir
+                succ, code, msg = along_graph_check.probe_mcp_server("dummy-pkg==1.0.0")
+                self.assertFalse(succ)
+                self.assertEqual(code, -1)
+                self.assertIn("not found in PATH", msg)
+            finally:
+                os.environ["PATH"] = orig_path
+
+        # 4. Command mapping in along_exec
+        import along_exec
+        self.assertIn("graph-check", along_exec.TOOL_MAPPINGS)
+        self.assertEqual(along_exec.TOOL_MAPPINGS["graph-check"], "along_graph_check.py")
 
 
 if __name__ == "__main__":

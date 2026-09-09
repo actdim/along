@@ -11,8 +11,10 @@ silently returned zero decisions on every v2.2.x repository. These tests pin BOT
 formats so the header schema cannot drift away from the parser again.
 """
 
+import io
 import os
 import sys
+import tempfile
 import unittest
 
 REPO_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -172,6 +174,80 @@ class TestLiveRepositoryRetrieval(unittest.TestCase):
         )
         for r in results:
             self.assertEqual(r["category"], "decision")
+
+
+class TestCollectorSkipReporting(unittest.TestCase):
+    """Verify that entity collectors report malformed/skipped files and do not swallow failures."""
+
+    def test_kb_search_reports_skips_and_continues(self):
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            along_dir = os.path.join(tmp_dir, ".along")
+            issues_dir = os.path.join(along_dir, "ISSUES")
+            os.makedirs(issues_dir, exist_ok=True)
+
+            # Valid entity
+            valid_path = os.path.join(issues_dir, "feat--sample-valid.md")
+            with open(valid_path, "w", encoding="utf-8") as f:
+                f.write("---\nprotocol: along\nslug: sample-valid\ntype: feat\ntitle: Sample Valid\nstatus: open\n---\n# Valid Body\n")
+
+            # Malformed entity (invalid YAML front-matter)
+            broken_path = os.path.join(issues_dir, "bug--broken-syntax.md")
+            with open(broken_path, "w", encoding="utf-8") as f:
+                f.write("---\ntitle: broken: unquoted: colons: [broken\n---\n# Broken\n")
+
+            # Capture stderr
+            old_stderr = sys.stderr
+            sys.stderr = io.StringIO()
+            try:
+                entries = kb.collect_all_entries(tmp_dir, verbose=True)
+                err_output = sys.stderr.getvalue()
+            finally:
+                sys.stderr = old_stderr
+
+            # Verify that malformed file was reported on stderr
+            self.assertIn("skipped", err_output)
+            self.assertIn("bug--broken-syntax.md", err_output)
+            self.assertIn("malformed or unreadable file(s) skipped", err_output)
+
+            # Verify that valid file was collected
+            valid_entries = [e for e in entries if e.get("slug") == "sample-valid"]
+            self.assertEqual(len(valid_entries), 1)
+            self.assertEqual(valid_entries[0]["category"], "issue")
+
+            # Verify search functions with the valid entry
+            results = kb.search_knowledge_base("valid", repo_root=tmp_dir)
+            self.assertEqual(len(results), 1)
+            self.assertEqual(results[0]["slug"], "sample-valid")
+
+    def test_dashboard_collector_records_skips(self):
+        from dashboard.core.collector import EntityCollector
+        from pathlib import Path
+
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            along_dir = Path(tmp_dir) / ".along"
+            issues_dir = along_dir / "ISSUES"
+            issues_dir.mkdir(parents=True, exist_ok=True)
+
+            # Valid entity
+            (issues_dir / "feat--dash-valid.md").write_text(
+                "---\nprotocol: along\nslug: dash-valid\ntype: feat\ntitle: Dash Valid\nstatus: open\n---\n# Body\n",
+                encoding="utf-8"
+            )
+
+            # Broken entity
+            (issues_dir / "bug--dash-broken.md").write_text(
+                "---\ntitle: broken: [unclosed\n---\n# Broken\n",
+                encoding="utf-8"
+            )
+
+            collector = EntityCollector(along_dir)
+            collector.collect_all()
+
+            self.assertEqual(len(collector.issues), 1)
+            self.assertEqual(collector.issues[0].slug, "dash-valid")
+            self.assertTrue(len(collector.skipped_entities) >= 1)
+            skipped_paths = [s[0] for s in collector.skipped_entities]
+            self.assertTrue(any("bug--dash-broken.md" in p for p in skipped_paths))
 
 
 if __name__ == "__main__":

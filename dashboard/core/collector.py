@@ -34,9 +34,8 @@ from ..schemas.metrics import (
 )
 
 
-# The dashboard renders whatever it can read and must not fail to start because one
-# entity file is malformed; the engines that write use the strict reader.
-parse_frontmatter = _frontmatter.parse_tolerant
+# Strict reader so malformed files raise FrontmatterError and are tracked in self.skipped_entities
+parse_frontmatter = _frontmatter.parse
 
 
 def find_agents_dir(start_dir: str = ".") -> Path:
@@ -68,6 +67,7 @@ class EntityCollector:
         self.decisions: List[DecisionSchema] = []
         self.context_text: str = ""
         self.issues_board_text: str = ""
+        self.skipped_entities: List[Tuple[str, str]] = []
         self.metrics: DashboardMetricsSchema = DashboardMetricsSchema()
 
     def collect_all(self) -> "EntityCollector":
@@ -79,6 +79,7 @@ class EntityCollector:
         self.sessions.clear()
         self.kb_articles.clear()
         self.decisions.clear()
+        self.skipped_entities.clear()
 
         self._collect_issues()
         self._collect_milestones()
@@ -131,6 +132,8 @@ class EntityCollector:
                     related = [related]
 
                 status = fm.get("status", "done" if "done" in f.parts else "open")
+                superseded_by = fm.get("superseded_by")
+                duplicate_of = fm.get("duplicate_of")
 
                 issue = IssueSchema(
                     protocol=fm.get("protocol", "along"),
@@ -149,11 +152,14 @@ class EntityCollector:
                     blocked_by=blocked_by,
                     related=related,
                     parent=fm.get("parent"),
+                    superseded_by=superseded_by,
+                    duplicate_of=duplicate_of,
                     body=body.strip(),
                     file_path=str(f.relative_to(self.repo_root)).replace("\\", "/"),
                 )
                 self.issues.append(issue)
-            except Exception:
+            except (OSError, ValueError, AttributeError, TypeError, _frontmatter.FrontmatterError) as exc:
+                self.skipped_entities.append((str(f), str(exc)))
                 continue
 
     def _collect_milestones(self):
@@ -183,7 +189,8 @@ class EntityCollector:
                     file_path=str(f.relative_to(self.repo_root)).replace("\\", "/"),
                 )
                 self.milestones.append(milestone)
-            except Exception:
+            except (OSError, ValueError, AttributeError, TypeError, _frontmatter.FrontmatterError) as exc:
+                self.skipped_entities.append((str(f), str(exc)))
                 continue
 
     def _collect_risks(self):
@@ -210,7 +217,8 @@ class EntityCollector:
                     file_path=str(f.relative_to(self.repo_root)).replace("\\", "/"),
                 )
                 self.risks.append(risk)
-            except Exception:
+            except (OSError, ValueError, AttributeError, TypeError, _frontmatter.FrontmatterError) as exc:
+                self.skipped_entities.append((str(f), str(exc)))
                 continue
 
     def _collect_spikes(self):
@@ -236,7 +244,8 @@ class EntityCollector:
                     file_path=str(f.relative_to(self.repo_root)).replace("\\", "/"),
                 )
                 self.spikes.append(spike)
-            except Exception:
+            except (OSError, ValueError, AttributeError, TypeError, _frontmatter.FrontmatterError) as exc:
+                self.skipped_entities.append((str(f), str(exc)))
                 continue
 
     def _collect_sessions(self):
@@ -269,7 +278,8 @@ class EntityCollector:
                         file_path=str(f.relative_to(self.repo_root)).replace("\\", "/"),
                     )
                     self.sessions.append(session)
-                except Exception:
+                except (OSError, ValueError, AttributeError, TypeError, _frontmatter.FrontmatterError) as exc:
+                    self.skipped_entities.append((str(f), str(exc)))
                     continue
         self.sessions.sort(key=lambda s: s.date or "", reverse=True)
 
@@ -304,8 +314,8 @@ class EntityCollector:
                 )
                 self.decisions.append(decision)
                 num += 1
-        except Exception:
-            pass
+        except (OSError, ValueError, AttributeError, TypeError) as exc:
+            self.skipped_entities.append((str(dec_file), str(exc)))
 
     def _collect_kb_articles(self):
         kb_dirs = [self.repo_root / "docs", self.agents_dir / "KB"]
@@ -361,7 +371,8 @@ class EntityCollector:
                         outgoing_links=out_links,
                     )
                     self.kb_articles.append(article)
-                except Exception:
+                except (OSError, ValueError, AttributeError, TypeError, _frontmatter.FrontmatterError) as exc:
+                    self.skipped_entities.append((str(f), str(exc)))
                     continue
 
     def _collect_context_and_board(self):
@@ -369,14 +380,14 @@ class EntityCollector:
         if ctx_file.exists():
             try:
                 self.context_text = ctx_file.read_text(encoding="utf-8", errors="replace")
-            except Exception:
+            except (OSError, UnicodeDecodeError):
                 pass
 
         board_file = self.agents_dir / "ISSUES.md"
         if board_file.exists():
             try:
                 self.issues_board_text = board_file.read_text(encoding="utf-8", errors="replace")
-            except Exception:
+            except (OSError, UnicodeDecodeError):
                 pass
 
     def _calculate_metrics(self):
@@ -393,6 +404,12 @@ class EntityCollector:
                 by_status.in_progress += 1
             elif iss.status == "blocked":
                 by_status.blocked += 1
+            elif iss.status == "superseded":
+                by_status.superseded += 1
+            elif iss.status == "cancelled":
+                by_status.cancelled += 1
+            elif iss.status == "duplicate":
+                by_status.duplicate += 1
             else:
                 by_status.open += 1
 
@@ -419,6 +436,7 @@ class EntityCollector:
                 by_priority.medium += 1
 
         completion_pct = int((by_status.done / total) * 100) if total > 0 else 0
+        bug_debt_ratio = round(by_type.bug / by_type.debt, 2) if by_type.debt > 0 else float(by_type.bug)
         active_risks = sum(1 for r in self.risks if r.status == "active")
         active_milestones = sum(1 for m in self.milestones if m.status != "completed")
 
@@ -429,6 +447,7 @@ class EntityCollector:
             blocked_issues=by_status.blocked,
             done_issues=by_status.done,
             completion_pct=completion_pct,
+            bug_debt_ratio=bug_debt_ratio,
             active_risks=active_risks,
             active_milestones=active_milestones,
             total_kb_articles=len(self.kb_articles),

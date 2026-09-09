@@ -57,7 +57,7 @@ LEGACY_SKILLS = [
 parse_semver = semver.parse
 semver_to_str = semver.to_str
 
-def detect_repo_version(repo_root):
+def detect_repo_version(repo_root, verbose=False):
     agents_md = os.path.join(repo_root, "AGENTS.md")
     if os.path.exists(agents_md):
         try:
@@ -66,8 +66,9 @@ def detect_repo_version(repo_root):
             m = re.search(r"(?:ALONG-PROTOCOL|ACTDIM-AGENTS-PROTOCOL) v(\d+\.\d+\.\d+)", content)
             if m:
                 return m.group(1)
-        except Exception:
-            pass
+        except OSError as exc:
+            if verbose:
+                print(f"[Warning] cannot read {agents_md}: {exc}", file=sys.stderr)
     return None
 
 def get_global_skill_paths():
@@ -85,7 +86,7 @@ def get_global_skill_paths():
     ]
     return paths
 
-def detect_global_version():
+def detect_global_version(verbose=False):
     highest = (0, 0, 0)
     for p in get_global_skill_paths():
         if os.path.exists(p):
@@ -97,11 +98,12 @@ def detect_global_version():
                     ver = parse_semver(m.group(1))
                     if ver > highest:
                         highest = ver
-            except Exception:
-                pass
+            except OSError as exc:
+                if verbose:
+                    print(f"[Warning] cannot read {p}: {exc}", file=sys.stderr)
     return semver_to_str(highest) if highest > (0, 0, 0) else None
 
-def detect_remote_version():
+def detect_remote_version(verbose=False):
     res = proc.git(["ls-remote", "--tags", "--refs", REMOTE_GIT_URL],
                    timeout=NETWORK_TIMEOUT_SECS)
     if res.ok and res.stdout:
@@ -119,8 +121,9 @@ def detect_remote_version():
             m = re.search(r"(?:ALONG-PROTOCOL|ACTDIM-AGENTS-PROTOCOL) v(\d+\.\d+\.\d+)", raw)
             if m:
                 return m.group(1)
-    except Exception:
-        pass
+    except (urllib.error.URLError, TimeoutError, OSError) as exc:
+        if verbose:
+            print(f"[Warning] remote version check failed: {exc}", file=sys.stderr)
 
     return None
 
@@ -182,7 +185,7 @@ def update_global_from_git(dry_run=False):
         code = proc.run_passthrough(cmd)
         purge_legacy_global_skills()
         return code == 0
-    except Exception as e:
+    except (OSError, RuntimeError) as e:
         print(f"   [ERROR] Failed to update global skills from GitHub: {e}")
         return False
 
@@ -202,7 +205,7 @@ def install_global_from_local(repo_root, dry_run=False):
         code = proc.run_passthrough(cmd)
         purge_legacy_global_skills()
         return code == 0
-    except Exception as e:
+    except (OSError, RuntimeError) as e:
         print(f"   [ERROR] Local installer failed: {e}")
         return False
 
@@ -212,6 +215,7 @@ safe_relpath = repo.safe_relpath
 find_existing_agent_contexts = repo.find_agent_contexts
 
 def apply_migration_to_context(ctx_dir, protocol_text, migrate_script, is_root=True, ancestor_root=None, dry_run=False):
+    context_ok = True
     rel_display = safe_relpath(ctx_dir, ancestor_root or ctx_dir)
     if rel_display in (".", ""):
         rel_display = "repository root"
@@ -276,6 +280,7 @@ def apply_migration_to_context(ctx_dir, protocol_text, migrate_script, is_root=T
             code = proc.run_passthrough([sys.executable, migrate_script, ctx_dir, mode_flag])
             if code != 0:
                 print(f"   [WARN] Migration engine returned code {code} for {ctx_dir}")
+                context_ok = False
         else:
             print("   [WARN] migrate_protocol.py not found; skipping entity structure migration.")
 
@@ -285,15 +290,21 @@ def apply_migration_to_context(ctx_dir, protocol_text, migrate_script, is_root=T
         try:
             import along_kb_sync
             along_kb_sync.rewrite_inbound_links(ctx_dir, dry_run=dry_run)
-        except Exception:
-            proc.run_passthrough([sys.executable, kb_script, ctx_dir, "--check"])
+        except (ImportError, AttributeError, OSError, RuntimeError):
+            res_kb = proc.run_capture([sys.executable, kb_script, ctx_dir, *(["--check"] if dry_run else [])])
+            if not res_kb.ok:
+                print(f"   [WARN] Inbound link rewriting failed for {ctx_dir}: {res_kb.stderr.strip()}")
+                context_ok = False
 
     # Recompile .along/ISSUES.md projection deterministically if entity issues exist
     along_issues_dir = os.path.join(ctx_dir, ".along", "ISSUES")
     if os.path.isdir(along_issues_dir) and not dry_run:
         exec_script = locate_skill_script(ctx_dir, "along-issue-sync", "along_exec.py")
         if exec_script:
-            proc.run_capture([sys.executable, exec_script, "issue", "sync"], cwd=ctx_dir)
+            sync_res = proc.run_capture([sys.executable, exec_script, "issue", "sync"], cwd=ctx_dir)
+            if not sync_res.ok:
+                print(f"   [WARN] Issue sync failed for {ctx_dir}: {sync_res.stderr.strip()}")
+                context_ok = False
 
     # Recompile .along/CONSTRAINTS.md from DECISIONS.md if it exists
     decisions_file = os.path.join(ctx_dir, ".along", "DECISIONS.md")
@@ -302,7 +313,7 @@ def apply_migration_to_context(ctx_dir, protocol_text, migrate_script, is_root=T
             from alongkit import entities
             out_path = entities.sync_constraints(ctx_dir)
             print(f"   Recompiled {os.path.relpath(out_path, ctx_dir)}")
-        except Exception as e:
+        except (OSError, ValueError) as e:
             print(f"   [WARN] Could not recompile CONSTRAINTS.md: {e}")
 
     # Automatically attach or prune language rule packs for the context
@@ -310,10 +321,10 @@ def apply_migration_to_context(ctx_dir, protocol_text, migrate_script, is_root=T
         try:
             from alongkit import rules
             rules.attach_rules(ctx_dir)
-        except Exception as e:
+        except (OSError, ValueError) as e:
             print(f"   [WARN] Could not attach rule packs for {ctx_dir}: {e}")
 
-    return True
+    return context_ok
 
 def find_uninitialized_subprojects(repo_root, contexts):
     context_set = set(os.path.abspath(c) for c in contexts)
@@ -328,39 +339,50 @@ def locate_skill_script(repo_root: str, skill_folder: str, script_name: str) -> 
     return repo.resolve_tool_script(script_name, repo_root, skill_folder=skill_folder)
 
 
-def execute_post_update_syncs(contexts: list, repo_root: str, do_kb: bool, do_dep: bool, do_hist: bool):
+def execute_post_update_syncs(contexts: list, repo_root: str, do_kb: bool, do_dep: bool, do_hist: bool) -> bool:
     """Executes requested post-update sync engines across all discovered contexts."""
+    all_ok = True
     if do_kb:
         kb_script = locate_skill_script(repo_root, "along-kb-sync", "along_kb_sync.py")
         if kb_script:
             for ctx in contexts:
                 rel = safe_relpath(ctx, repo_root)
                 print(f"\n-> Running Knowledge Base sync (/along-kb-sync) in {rel if rel not in ('.', '') else '<root>'}...")
-                proc.run_passthrough([sys.executable, kb_script, ctx])
+                code = proc.run_passthrough([sys.executable, kb_script, ctx])
+                if code != 0:
+                    print(f"   [WARN] KB sync returned exit code {code}", file=sys.stderr)
+                    all_ok = False
 
     if do_dep:
         dep_script = locate_skill_script(repo_root, "along-dep-scan", "along_dep_scan.py")
         if dep_script:
             print(f"\n-> Running Dependencies & Submodules scan (/along-dep-scan)...")
-            proc.run_passthrough([sys.executable, dep_script, "--root", repo_root])
+            code = proc.run_passthrough([sys.executable, dep_script, "--root", repo_root])
+            if code != 0:
+                print(f"   [WARN] Dependency scan returned exit code {code}", file=sys.stderr)
+                all_ok = False
 
     if do_hist:
         hist_script = locate_skill_script(repo_root, "along-history-sync", "along_history_sync.py")
         if hist_script:
             print(f"\n-> Running Git History reconciliation (/along-history-sync)...")
-            proc.run_passthrough([sys.executable, hist_script, repo_root, "--synthesize"])
+            code = proc.run_passthrough([sys.executable, hist_script, repo_root, "--synthesize"])
+            if code != 0:
+                print(f"   [WARN] History sync returned exit code {code}", file=sys.stderr)
+                all_ok = False
+    return all_ok
 
 def run_update(repo_root, check_only=False, dry_run=False, force=False, local_only=False,
-               do_kb_sync=False, do_dep_scan=False, do_history_sync=False):
+               do_kb_sync=False, do_dep_scan=False, do_history_sync=False, verbose=False):
     repo_root = os.path.abspath(repo_root)
     print("==================================================")
     print("-> ALONG One-Liner Updater (/along-update)")
     print(f"   Target Repository: {repo_root}")
     print("==================================================")
 
-    v_repo_str = detect_repo_version(repo_root)
-    v_global_str = detect_global_version()
-    v_remote_str = None if local_only else detect_remote_version()
+    v_repo_str = detect_repo_version(repo_root, verbose=verbose)
+    v_global_str = detect_global_version(verbose=verbose)
+    v_remote_str = None if local_only else detect_remote_version(verbose=verbose)
 
     v_repo = parse_semver(v_repo_str) if v_repo_str else (0, 0, 0)
     v_global = parse_semver(v_global_str) if v_global_str else (0, 0, 0)
@@ -373,7 +395,7 @@ def run_update(repo_root, check_only=False, dry_run=False, force=False, local_on
 
     if check_only:
         print("-> [Check-Only Mode] No modifications made.")
-        return
+        return True
 
     is_dev = is_dev_repo(repo_root)
 
@@ -394,7 +416,7 @@ def run_update(repo_root, check_only=False, dry_run=False, force=False, local_on
                 update_global_from_git(dry_run=dry_run)
             else:
                 print("   [ERROR] No global installation and remote is unreachable.")
-                return
+                return False
 
     protocol_src = None
     local_proto = os.path.join(repo_root, "skills", "along-init", "protocol.md")
@@ -410,8 +432,8 @@ def run_update(repo_root, check_only=False, dry_run=False, force=False, local_on
                 break
 
     if not protocol_src:
-        print("   [ERROR] Could not locate protocol.md in local repo or global skills.")
-        return
+        print("   [ERROR] Could not locate protocol.md in local repo or global skills.", file=sys.stderr)
+        return False
 
     with open(protocol_src, "r", encoding="utf-8") as f:
         protocol_text = f.read().strip()
@@ -441,7 +463,7 @@ def run_update(repo_root, check_only=False, dry_run=False, force=False, local_on
     if not contexts:
         print("   [Note] No existing AGENTS.md, .along/, or .agents/ found in repository.")
         print("   Run /along-init to scaffold agent context.")
-        return
+        return True
 
     print(f"   Found {len(contexts)} active agent context(s):")
     for c in contexts:
@@ -450,10 +472,11 @@ def run_update(repo_root, check_only=False, dry_run=False, force=False, local_on
 
     root_context = repo_root if repo_root in contexts else contexts[0]
 
+    all_contexts_ok = True
     for ctx in contexts:
         is_root = (ctx == root_context)
         ancestor = root_context if not is_root else None
-        apply_migration_to_context(
+        ok = apply_migration_to_context(
             ctx_dir=ctx,
             protocol_text=protocol_text,
             migrate_script=migrate_script,
@@ -461,6 +484,8 @@ def run_update(repo_root, check_only=False, dry_run=False, force=False, local_on
             ancestor_root=ancestor,
             dry_run=dry_run
         )
+        if not ok:
+            all_contexts_ok = False
 
     # Post-update sync execution: interactive prompt if in terminal, or follow CLI flags
     if not (do_kb_sync or do_dep_scan or do_history_sync) and sys.stdin.isatty() and not (check_only or dry_run):
@@ -482,8 +507,9 @@ def run_update(repo_root, check_only=False, dry_run=False, force=False, local_on
             pass
         print("==================================================")
 
+    sync_ok = True
     if do_kb_sync or do_dep_scan or do_history_sync:
-        execute_post_update_syncs(contexts, repo_root, do_kb_sync, do_dep_scan, do_history_sync)
+        sync_ok = execute_post_update_syncs(contexts, repo_root, do_kb_sync, do_dep_scan, do_history_sync)
     else:
         print("\n==================================================")
         print("-> Recommended Next Steps (Optional Onboarding & Sync):")
@@ -501,7 +527,12 @@ def run_update(repo_root, check_only=False, dry_run=False, force=False, local_on
             rel = safe_relpath(u, repo_root)
             print(f"     - {rel} (run '/along-init' in this directory to initialize context)")
 
+    if not all_contexts_ok or not sync_ok:
+        print("\n[Error] Update completed with errors.\n", file=sys.stderr)
+        return False
+
     print(f"-> [OK] Successfully updated {len(contexts)} agent context(s) across repository!\n")
+    return True
 
 if __name__ == "__main__":
     target = os.getcwd()
@@ -509,17 +540,18 @@ if __name__ == "__main__":
     dry_run_flag = "--dry-run" in sys.argv
     force_flag = "--force" in sys.argv
     local_only_flag = "--local-only" in sys.argv
+    verbose_flag = any(a in sys.argv for a in ("-v", "--verbose", "--debug"))
     
     all_sync_flag = "--all-sync" in sys.argv
     kb_sync_flag = "--kb-sync" in sys.argv or all_sync_flag
     dep_scan_flag = "--dep-scan" in sys.argv or all_sync_flag
     history_sync_flag = "--history-sync" in sys.argv or all_sync_flag
 
-    args = [a for a in sys.argv[1:] if not a.startswith("--")]
+    args = [a for a in sys.argv[1:] if not a.startswith("--") and not a.startswith("-")]
     if args:
         target = args[0]
 
-    run_update(
+    success = run_update(
         target,
         check_only=check_only_flag,
         dry_run=dry_run_flag,
@@ -527,5 +559,9 @@ if __name__ == "__main__":
         local_only=local_only_flag,
         do_kb_sync=kb_sync_flag,
         do_dep_scan=dep_scan_flag,
-        do_history_sync=history_sync_flag
+        do_history_sync=history_sync_flag,
+        verbose=verbose_flag
     )
+    if check_only_flag:
+        sys.exit(0)
+    sys.exit(0 if success else 1)

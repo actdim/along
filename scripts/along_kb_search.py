@@ -17,6 +17,7 @@ from alongkit import bootstrap
 bootstrap.ensure_deps()
 
 from alongkit import entities, frontmatter, markdown, repo
+from alongkit.diagnostics import try_record_incident
 
 # The ADR header formats, the heading-anchor algorithm, and the front-matter reader
 # live in the shared package. This engine was the reader that missed the v2.2.0 header
@@ -28,18 +29,29 @@ github_heading_anchor = markdown.github_heading_anchor
 parse_decision_entries = entities.parse_decision_entries
 
 
-# One tolerant reader, shared: a malformed entity is reported, never silently
-# reinterpreted. Engines that write use frontmatter.update, which refuses.
-parse_frontmatter = frontmatter.parse_tolerant
+# Strict reader so malformed files raise FrontmatterError and are counted in skipped
+parse_frontmatter = frontmatter.parse
 
 
-def collect_all_entries(repo_root):
+def collect_all_entries(repo_root, verbose=False):
     entries = []
+    skipped = []
     repo_root = os.path.abspath(repo_root)
     docs_dir = os.path.join(repo_root, "docs")
     along_dir = os.path.join(repo_root, ".along")
     if not os.path.exists(along_dir):
         along_dir = os.path.join(repo_root, ".agents")
+
+    def _record_skip(rel_file: str, exc: Exception) -> None:
+        skipped.append((rel_file, str(exc)))
+        try_record_incident(
+            component="along_kb_search",
+            error_message=f"collector skipped {rel_file}: {exc}",
+            event_type="collector_skip",
+            extra_metadata={"file": rel_file, "error": str(exc)},
+        )
+        if verbose:
+            print(f"   [WARN] skipped {rel_file}: {exc}", file=sys.stderr)
 
     # 1. Curated Knowledge Base (docs/*.md)
     if os.path.exists(docs_dir):
@@ -49,6 +61,7 @@ def collect_all_entries(repo_root):
             fp = os.path.join(docs_dir, f)
             if not os.path.isfile(fp):
                 continue
+            rel_path = f"docs/{f}"
             try:
                 with open(fp, "r", encoding="utf-8", errors="replace") as p:
                     raw = p.read()
@@ -61,11 +74,11 @@ def collect_all_entries(repo_root):
                     "type": fm.get("type", "topic"),
                     "tags": fm.get("tags", []) if isinstance(fm.get("tags", []), list) else ([fm.get("tags")] if fm.get("tags") else []),
                     "status": "active",
-                    "file_path": f"docs/{f}",
+                    "file_path": rel_path,
                     "body": body
                 })
-            except Exception:
-                pass
+            except (OSError, ValueError, AttributeError, TypeError, frontmatter.FrontmatterError) as exc:
+                _record_skip(rel_path, exc)
 
     # 2. Issues & Backlog (.along/ISSUES/**/*.md)
     issues_dir = os.path.join(along_dir, "ISSUES")
@@ -75,11 +88,11 @@ def collect_all_entries(repo_root):
                 if not f.endswith(".md"):
                     continue
                 fp = os.path.join(root, f)
+                rel_path = os.path.relpath(fp, repo_root).replace("\\", "/")
                 try:
                     with open(fp, "r", encoding="utf-8", errors="replace") as p:
                         raw = p.read()
                     fm, body = parse_frontmatter(raw)
-                    rel_path = os.path.relpath(fp, repo_root).replace("\\", "/")
                     slug = fm.get("slug", f.replace(".md", ""))
                     status = fm.get("status", "done" if "done" in rel_path else "open")
                     iss_type = fm.get("type", "task")
@@ -95,19 +108,19 @@ def collect_all_entries(repo_root):
                         "file_path": rel_path,
                         "body": body
                     })
-                except Exception:
-                    pass
+                except (OSError, ValueError, AttributeError, TypeError, frontmatter.FrontmatterError) as exc:
+                    _record_skip(rel_path, exc)
 
     # 3. Architectural Decision Records (.along/DECISIONS.md)
     decisions_path = os.path.join(along_dir, "DECISIONS.md")
     if os.path.exists(decisions_path):
+        dec_rel = os.path.relpath(decisions_path, repo_root).replace("\\", "/")
         try:
             with open(decisions_path, "r", encoding="utf-8", errors="replace") as p:
                 dec_raw = p.read()
-            dec_rel = os.path.relpath(decisions_path, repo_root).replace("\\", "/")
             entries.extend(parse_decision_entries(dec_raw, rel_path=dec_rel))
-        except Exception:
-            pass
+        except (OSError, ValueError, AttributeError, TypeError) as exc:
+            _record_skip(dec_rel, exc)
 
     # 4. Milestones & Sprints (.along/MILESTONES/*.md)
     ms_dir = os.path.join(along_dir, "MILESTONES")
@@ -116,11 +129,11 @@ def collect_all_entries(repo_root):
             if not f.endswith(".md"):
                 continue
             fp = os.path.join(ms_dir, f)
+            rel_path = os.path.relpath(fp, repo_root).replace("\\", "/")
             try:
                 with open(fp, "r", encoding="utf-8", errors="replace") as p:
                     raw = p.read()
                 fm, body = parse_frontmatter(raw)
-                rel_path = os.path.relpath(fp, repo_root).replace("\\", "/")
                 entries.append({
                     "category": "milestone",
                     "category_label": "Milestone",
@@ -132,8 +145,8 @@ def collect_all_entries(repo_root):
                     "file_path": rel_path,
                     "body": body
                 })
-            except Exception:
-                pass
+            except (OSError, ValueError, AttributeError, TypeError, frontmatter.FrontmatterError) as exc:
+                _record_skip(rel_path, exc)
 
     # 5. Risks & Blockers (.along/RISKS/*.md)
     risks_dir = os.path.join(along_dir, "RISKS")
@@ -142,11 +155,11 @@ def collect_all_entries(repo_root):
             if not f.endswith(".md"):
                 continue
             fp = os.path.join(risks_dir, f)
+            rel_path = os.path.relpath(fp, repo_root).replace("\\", "/")
             try:
                 with open(fp, "r", encoding="utf-8", errors="replace") as p:
                     raw = p.read()
                 fm, body = parse_frontmatter(raw)
-                rel_path = os.path.relpath(fp, repo_root).replace("\\", "/")
                 entries.append({
                     "category": "risk",
                     "category_label": f"Risk ({fm.get('severity', 'medium')})",
@@ -158,8 +171,8 @@ def collect_all_entries(repo_root):
                     "file_path": rel_path,
                     "body": body
                 })
-            except Exception:
-                pass
+            except (OSError, ValueError, AttributeError, TypeError, frontmatter.FrontmatterError) as exc:
+                _record_skip(rel_path, exc)
 
     # 6. Spikes & R&D (.along/SPIKES/*.md)
     spikes_dir = os.path.join(along_dir, "SPIKES")
@@ -168,11 +181,11 @@ def collect_all_entries(repo_root):
             if not f.endswith(".md"):
                 continue
             fp = os.path.join(spikes_dir, f)
+            rel_path = os.path.relpath(fp, repo_root).replace("\\", "/")
             try:
                 with open(fp, "r", encoding="utf-8", errors="replace") as p:
                     raw = p.read()
                 fm, body = parse_frontmatter(raw)
-                rel_path = os.path.relpath(fp, repo_root).replace("\\", "/")
                 entries.append({
                     "category": "spike",
                     "category_label": "Spike R&D",
@@ -184,8 +197,8 @@ def collect_all_entries(repo_root):
                     "file_path": rel_path,
                     "body": body
                 })
-            except Exception:
-                pass
+            except (OSError, ValueError, AttributeError, TypeError, frontmatter.FrontmatterError) as exc:
+                _record_skip(rel_path, exc)
 
     # 7. Session Logs (.along/SESSIONS/**/*.md)
     sess_dir = os.path.join(along_dir, "SESSIONS")
@@ -195,11 +208,11 @@ def collect_all_entries(repo_root):
                 if not f.endswith(".md"):
                     continue
                 fp = os.path.join(root, f)
+                rel_p = os.path.relpath(fp, repo_root).replace("\\", "/")
                 try:
                     with open(fp, "r", encoding="utf-8", errors="replace") as p:
                         raw = p.read()
                     fm, body = parse_frontmatter(raw)
-                    rel_p = os.path.relpath(fp, repo_root).replace("\\", "/")
                     slug = fm.get("slug", f.replace(".md", ""))
                     entries.append({
                         "category": "session",
@@ -212,15 +225,18 @@ def collect_all_entries(repo_root):
                         "file_path": rel_p,
                         "body": body
                     })
-                except Exception:
-                    pass
+                except (OSError, ValueError, AttributeError, TypeError, frontmatter.FrontmatterError) as exc:
+                    _record_skip(rel_p, exc)
+
+    if skipped:
+        print(f"[Warning] {len(skipped)} malformed or unreadable file(s) skipped during KB search.", file=sys.stderr)
 
     return entries
 
-def search_knowledge_base(query, repo_root=".", limit=5, category=None, filter_tag=None):
+def search_knowledge_base(query, repo_root=".", limit=5, category=None, filter_tag=None, verbose=False):
     repo_root = os.path.abspath(repo_root)
     query_terms = [t.lower().strip() for t in query.split() if t.strip()]
-    entries = collect_all_entries(repo_root)
+    entries = collect_all_entries(repo_root, verbose=verbose)
 
     results = []
     for e in entries:
@@ -288,9 +304,10 @@ def main():
     parser.add_argument("--limit", type=int, default=8, help="Maximum results to return")
     parser.add_argument("--category", choices=["all", "kb", "issue", "decision", "milestone", "risk", "spike", "session"], default="all", help="Filter by knowledge category")
     parser.add_argument("--tag", default=None, help="Filter by specific tag")
+    parser.add_argument("-v", "--verbose", "--debug", action="store_true", help="Show verbose collector details and errors")
     args = parser.parse_args()
 
-    results = search_knowledge_base(args.query, repo_root=args.repo, limit=args.limit, category=args.category, filter_tag=args.tag)
+    results = search_knowledge_base(args.query, repo_root=args.repo, limit=args.limit, category=args.category, filter_tag=args.tag, verbose=args.verbose)
     print(f"=== Along Unified Knowledge Search: '{args.query}' ({len(results)} matches) ===")
     for i, r in enumerate(results, 1):
         tags_str = ", ".join(r["tags"]) if r["tags"] else "none"

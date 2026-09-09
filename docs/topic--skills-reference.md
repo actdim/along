@@ -274,12 +274,12 @@ flowchart TD
 ### `along-dash`
 - **What it is**: Multi-mode executive dashboard and interactive Cytoscape DAG visualizer. Serves a FastAPI REST API and Server-Sent Events (SSE) stream with a modern reactive UI.
 - **Architectural Rationale**:
-  - *Autonomous Multi-Mode Architecture*: Runs in 4 decoupled modes via `scripts/along_dash.py`: CLI Mode, Interactive Web Mode (`http://127.0.0.1:8765`), Static HTML Export, and Markdown Dashboard Report (`.along/DASHBOARD.md`).
+  - *Autonomous Multi-Mode Architecture*: Runs in 3 decoupled modes via `scripts/along_dash.py`: CLI Mode, Interactive Web Mode (`http://127.0.0.1:8765`), and Static HTML Export (`--export`, untracked).
   - *Zero Setup Overhead*: Uses PEP 723 inline script metadata (`# /// script ...`) for instant zero-config execution.
 - **Invocation Triggers**:
   - *Explicit*: `/along-dash [-w|--web] [-c|--cli] [-e|--export]`, `along dash` (fallback: `python ~/.along/bin/along_exec.py dash`).
   - *Semantic / Automatic*: Triggered when the user asks for a project status overview, dependency visualization, or sprint progress report.
-- **Entities Operated On**: `.along/`, `docs/`, `.along/DASHBOARD.md`.
+- **Entities Operated On**: `.along/`, `docs/`.
 - **Ecosystem Chaining**: Visualizes the entire entity DAG created by `along-team`, `along-issue-sync`, and `along-kb-sync`.
 
 ---

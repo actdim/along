@@ -21,7 +21,15 @@ class IssueSchema(BaseEntitySchema):
     type: Literal["feat", "bug", "debt", "task", "docs"] = Field(
         default="feat", description="Issue type"
     )
-    status: Literal["open", "in-progress", "blocked", "done"] = Field(
+    status: Literal[
+        "open",
+        "in-progress",
+        "blocked",
+        "done",
+        "superseded",
+        "cancelled",
+        "duplicate",
+    ] = Field(
         default="open", description="Current lifecycle status"
     )
     priority: Literal["critical", "high", "medium", "low"] = Field(
@@ -36,6 +44,8 @@ class IssueSchema(BaseEntitySchema):
     blocked_by: List[str] = Field(default_factory=list, description="List of blocking entity keys")
     related: List[str] = Field(default_factory=list, description="List of related entity keys")
     parent: Optional[str] = Field(None, description="Parent epic/entity key")
+    superseded_by: Optional[str] = Field(None, description="Canonical entity key that supersedes this issue")
+    duplicate_of: Optional[str] = Field(None, description="Canonical entity key this issue duplicates")
 
 
 class MilestoneSchema(BaseEntitySchema):

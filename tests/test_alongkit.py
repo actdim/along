@@ -28,7 +28,7 @@ SCRIPTS_DIR = os.path.join(REPO_ROOT, "scripts")
 if SCRIPTS_DIR not in sys.path:
     sys.path.insert(0, SCRIPTS_DIR)
 
-from alongkit import bootstrap, entities, markdown, proc, repo, semver, textio, typography
+from alongkit import bootstrap, entities, gates, markdown, proc, repo, semver, textio, typography
 from alongkit import frontmatter as fm
 
 NL = "\n"
@@ -709,6 +709,57 @@ class TestFlatInstallInvocation(unittest.TestCase):
     def test_the_engine_resolver_finds_siblings_in_the_flat_copy(self):
         self.assertTrue(repo.resolve_tool_script("sanitize_typography.py", REPO_ROOT))
         self.assertIn(repo.engines_dir(), repo.tool_search_path(REPO_ROOT))
+
+
+class TestExceptionHandlingGate(unittest.TestCase):
+    """Pin the AST lint gate forbidding bare except and swallowed generic exceptions."""
+
+    def test_bare_except_clause_is_flagged(self):
+        code = "try:\n    x = 1\nexcept:\n    pass\n"
+        violations = gates.find_exception_violations_in_code(code, "test.py")
+        self.assertEqual(len(violations), 1)
+        self.assertIn("bare 'except:'", violations[0].message)
+        self.assertEqual(violations[0].line, 3)
+
+    def test_swallowed_generic_exception_with_pass_is_flagged(self):
+        code = "try:\n    x = 1\nexcept Exception:\n    pass\n"
+        violations = gates.find_exception_violations_in_code(code, "test.py")
+        self.assertEqual(len(violations), 1)
+        self.assertIn("swallowed generic exception", violations[0].message)
+        self.assertEqual(violations[0].line, 3)
+
+    def test_swallowed_generic_exception_with_continue_is_flagged(self):
+        code = "while True:\n    try:\n        x = 1\n    except Exception:\n        continue\n"
+        violations = gates.find_exception_violations_in_code(code, "test.py")
+        self.assertEqual(len(violations), 1)
+        self.assertIn("swallowed generic exception", violations[0].message)
+
+    def test_tuple_containing_exception_is_flagged(self):
+        code = "try:\n    x = 1\nexcept (ValueError, Exception):\n    pass\n"
+        violations = gates.find_exception_violations_in_code(code, "test.py")
+        self.assertEqual(len(violations), 1)
+        self.assertIn("swallowed generic exception", violations[0].message)
+
+    def test_generic_exception_with_reraise_is_allowed(self):
+        code = "try:\n    x = 1\nexcept Exception as exc:\n    rollback()\n    raise\n"
+        violations = gates.find_exception_violations_in_code(code, "test.py")
+        self.assertEqual(len(violations), 0)
+
+    def test_narrow_exceptions_are_allowed(self):
+        code = "try:\n    x = 1\nexcept (OSError, ValueError, KeyError):\n    pass\n"
+        violations = gates.find_exception_violations_in_code(code, "test.py")
+        self.assertEqual(len(violations), 0)
+
+    def test_repository_scripts_and_dashboard_have_zero_violations(self):
+        violations = gates.check_exception_handling(REPO_ROOT, ["scripts", "dashboard"])
+        self.assertEqual(
+            violations,
+            [],
+            f"Banned exception handling found in repository: {[f'{v.path}:{v.line}: {v.message}' for v in violations]}"
+        )
+
+    def test_exception_handling_gate_passes_on_repo(self):
+        self.assertTrue(gates.exception_handling_gate(REPO_ROOT))
 
 
 if __name__ == "__main__":

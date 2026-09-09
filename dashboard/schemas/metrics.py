@@ -11,6 +11,9 @@ class StatusBreakdown(BaseModel):
     in_progress: int = 0
     blocked: int = 0
     done: int = 0
+    superseded: int = 0
+    cancelled: int = 0
+    duplicate: int = 0
 
 
 class TypeBreakdown(BaseModel):
@@ -36,6 +39,7 @@ class DashboardMetricsSchema(BaseModel):
     blocked_issues: int = 0
     done_issues: int = 0
     completion_pct: int = 0
+    bug_debt_ratio: float = 0.0
     active_risks: int = 0
     active_milestones: int = 0
     total_kb_articles: int = 0

@@ -69,6 +69,7 @@ packages = ["scripts/alongkit"]
 "scripts/along_dep_scan.py" = "alongkit/engines/along_dep_scan.py"
 "scripts/along_exec.py" = "alongkit/engines/along_exec.py"
 "scripts/along_feedback.py" = "alongkit/engines/along_feedback.py"
+"scripts/along_graph_check.py" = "alongkit/engines/along_graph_check.py"
 "scripts/along_history_sync.py" = "alongkit/engines/along_history_sync.py"
 "scripts/along_kb_search.py" = "alongkit/engines/along_kb_search.py"
 "scripts/along_kb_sync.py" = "alongkit/engines/along_kb_sync.py"

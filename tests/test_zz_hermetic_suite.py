@@ -128,6 +128,45 @@ class TestSuiteLeavesTheRepositoryAlone(unittest.TestCase):
             "these tests build an engine command line with REPO_ROOT as the target. "
             "Engines write; use a tests/hermetic.py fixture:\n" + "\n".join(violations))
 
+    def test_03_no_unapproved_derived_projections_are_tracked(self):
+        """Derived projections must not be tracked in Git unless in the approved allowlist.
+
+        Generated dashboard artifacts (.along/dashboard.html, .along/DASHBOARD.md) churn
+        history and cause merge conflicts. They must remain untracked and gitignored.
+        See [debt--generated-dashboard-artifact-committed] and
+        ADR-2026-09-09--untracked-dashboard-artifacts-and-projection-policy.
+        """
+        result = proc.run_capture(["git", "ls-files"], cwd=REPO_ROOT)
+        if not result.ok:
+            self.skipTest("git ls-files unavailable")
+
+        # Banned projection artifacts that must never be tracked in Git
+        banned_patterns = {
+            ".along/dashboard.html": "Generated static HTML dashboard bundle",
+            ".along/DASHBOARD.md": "Generated markdown dashboard report",
+        }
+
+        tracked_files = [
+            line.strip().replace("\\", "/")
+            for line in (result.stdout or "").splitlines()
+            if line.strip()
+        ]
+
+        violations = []
+        for path in tracked_files:
+            if path in banned_patterns:
+                violations.append(f"  Banned projection tracked: {path} ({banned_patterns[path]})")
+            elif any(path.endswith("/" + name) or path == name for name in ("dashboard.html", "DASHBOARD.md")):
+                violations.append(f"  Unapproved projection artifact tracked: {path}")
+
+        self.assertEqual(
+            violations, [],
+            "Derived projection artifacts are tracked in Git. Generated artifacts must not be "
+            "tracked to prevent history churn and unresolvable merge conflicts. Remove them "
+            "from Git tracking (git rm --cached) and add them to .gitignore:\n"
+            + "\n".join(violations),
+        )
+
 
 if __name__ == "__main__":
     unittest.main()

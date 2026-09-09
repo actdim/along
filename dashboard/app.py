@@ -138,11 +138,15 @@ def render_cli(collector: EntityCollector):
         table.add_column("Value", justify="right")
 
         table.add_row("Total Issues", str(m.total_issues))
-        table.add_row("Done Issues", f"[green]{m.done_issues}[/green]")
+        table.add_row("Done Issues (Delivered)", f"[green]{m.done_issues}[/green]")
+        non_delivered = m.by_status.superseded + m.by_status.cancelled + m.by_status.duplicate
+        if non_delivered > 0:
+            table.add_row("Superseded / Cancelled", f"[magenta]{non_delivered}[/magenta]")
         table.add_row("In Progress Issues", f"[yellow]{m.in_progress_issues}[/yellow]")
         table.add_row("Open Issues", f"[blue]{m.open_issues}[/blue]")
         table.add_row("Blocked Issues", f"[red]{m.blocked_issues}[/red]")
         table.add_row("Completion Rate", f"[bold green]{m.completion_pct}%[/bold green]")
+        table.add_row("Bug/Debt Ratio", f"{m.bug_debt_ratio:.2f} ({m.by_type.bug} bugs, {m.by_type.debt} debt)")
         table.add_row("Active Milestones", str(m.active_milestones))
         table.add_row("Active Risks", f"[red]{m.active_risks}[/red]" if m.active_risks > 0 else "[green]0[/green]")
         table.add_row("Knowledge Base Articles", str(m.total_kb_articles))
@@ -197,14 +201,14 @@ def run_dev_mode(collector: EntityCollector, host: str = "127.0.0.1", port: int 
                 [pnpm_cmd, "run", "dev"],
                 cwd=str(ui_dir),
             )
-        except Exception as e:
+        except OSError as e:
             print(f"[Warning] Could not start Vite dev server ({e}). Make sure pnpm is installed in PATH.")
 
     # Open browser to Vite frontend
     time.sleep(1)
     try:
         webbrowser.open(vite_url)
-    except Exception:
+    except (webbrowser.Error, OSError):
         pass
 
     try:
@@ -273,7 +277,7 @@ def main():
         if not args.no_browser:
             try:
                 webbrowser.open(url)
-            except Exception:
+            except (webbrowser.Error, OSError):
                 pass
 
         uvicorn.run(app, host=args.host, port=args.port, log_level="warning")

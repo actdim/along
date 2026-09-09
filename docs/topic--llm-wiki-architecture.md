@@ -133,6 +133,7 @@ To provide external LLMs and IDE assistants with immediate context, `along-kb-sy
 2. **Smart Non-Destructive `llms.txt`**:
    - Updates the `## Documentation Links` section to match active `docs/topic--*.md` articles.
    - Non-destructively preserves user-defined custom sections, descriptions, and external HTTP(S) references.
+   - On initial creation, extracts project title and introductory summary from `README.md` (identifying the first H1 header and extracting the first valid blockquote or prose paragraph while ignoring GitHub alert callouts like `> [!NOTE]`, badges, and raw HTML).
 3. **Pure Script Deterministic `llms-full.txt` Compilation**:
    - Zero LLM generation: compiled 100% deterministically by script.
    - Assembles `README.md`, `AGENTS.md`, and all `docs/topic--*.md` articles in sorted order.

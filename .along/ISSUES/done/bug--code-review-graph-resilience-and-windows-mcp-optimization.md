@@ -1,7 +1,7 @@
 ---
 protocol: along
 slug: code-review-graph-resilience-and-windows-mcp-optimization
-type: feat
+type: bug
 status: done
 completed: 2026-08-31
 priority: high

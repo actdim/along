@@ -65,7 +65,7 @@ def find_ai_files_in_dir(dir_path: str, repo_root: str) -> List[Dict[str, str]]:
         return found
     try:
         entries = os.listdir(dir_path)
-    except Exception:
+    except OSError:
         return found
 
     seen_real = set()
@@ -91,7 +91,7 @@ def find_ai_files_in_dir(dir_path: str, repo_root: str) -> List[Dict[str, str]]:
                             seen_real.add(r_canon)
                             rel = normalize_posix(safe_relpath(full, repo_root))
                             found.append({"filename": f".well-known/{entry}", "path": rel})
-        except Exception:
+        except OSError:
             pass
 
     return found
@@ -138,7 +138,7 @@ def discover_submodules(repo_root: str) -> List[str]:
             sub_path = m.group(1).strip().strip('"').strip("'")
             if sub_path:
                 submodule_paths.append(sub_path)
-    except Exception:
+    except (OSError, UnicodeDecodeError):
         pass
     return submodule_paths
 
@@ -148,7 +148,7 @@ def is_project_directory(dir_path: str) -> Tuple[bool, List[str]]:
     ecosystems = []
     try:
         entries = set(os.listdir(dir_path))
-    except Exception:
+    except OSError:
         return False, []
 
     if "package.json" in entries:
@@ -253,7 +253,7 @@ def discover_all_projects(repo_root: str) -> List[ProjectScope]:
                         data = json.load(f)
                         if data.get("name"):
                             proj_name = data["name"]
-                except Exception:
+                except (OSError, json.JSONDecodeError, UnicodeDecodeError):
                     pass
 
             p = ProjectScope(name=proj_name, rel_path=rel_dir, full_path=root)
@@ -278,7 +278,7 @@ def scan_node_project_deps(project: ProjectScope, repo_root: str) -> List[Dict[s
     try:
         with open(pkg_json_path, "r", encoding="utf-8") as f:
             pkg_data = json.load(f)
-    except Exception:
+    except (OSError, json.JSONDecodeError, UnicodeDecodeError):
         return []
 
     deps = {}
@@ -332,7 +332,7 @@ def scan_node_project_deps(project: ProjectScope, repo_root: str) -> List[Dict[s
                         if ai_key in inner_data:
                             ai_metadata = {ai_key: inner_data[ai_key]}
                             break
-            except Exception:
+            except (OSError, json.JSONDecodeError, UnicodeDecodeError):
                 pass
 
         if found_files or ai_metadata:
@@ -375,7 +375,7 @@ def parse_pyproject_deps(pyproject_path: str) -> List[str]:
                     m = re.match(r'^([a-zA-Z0-9_\-\.]+)\s*=', line)
                     if m and m.group(1).lower() != "python":
                         deps.append(m.group(1))
-    except Exception:
+    except (OSError, UnicodeDecodeError):
         pass
     return list(set(deps))
 
@@ -394,7 +394,7 @@ def parse_requirements_deps(req_path: str) -> List[str]:
                 m = re.match(r'^([a-zA-Z0-9_\-\.]+)', line)
                 if m:
                     deps.append(m.group(1))
-    except Exception:
+    except (OSError, UnicodeDecodeError):
         pass
     return list(set(deps))
 
@@ -457,7 +457,7 @@ def scan_python_project_deps(project: ProjectScope, repo_root: str) -> List[Dict
                                         if mline.startswith("Version:"):
                                             version = mline.split(":", 1)[1].strip()
                                             break
-                            except Exception:
+                            except (OSError, UnicodeDecodeError):
                                 pass
                         break
                 break
@@ -508,7 +508,7 @@ def parse_nuget_references(xml_path: str) -> Dict[str, str]:
                 version = elem.attrib.get("version") or "*"
                 if name:
                     pkgs[name] = version
-    except Exception:
+    except (ET.ParseError, OSError, UnicodeDecodeError):
         pass
     return pkgs
 
@@ -541,7 +541,7 @@ def scan_nuget_project_deps(project: ProjectScope, repo_root: str) -> List[Dict[
     declared_pkgs = {}
     try:
         entries = os.listdir(project.full_path)
-    except Exception:
+    except OSError:
         return []
 
     for f in entries:
@@ -621,7 +621,7 @@ def scan_rust_project_deps(project: ProjectScope, repo_root: str) -> List[Dict[s
                             pkg_name = m.group(1)
                             ver = m.group(2) or m.group(3) or "*"
                             declared_deps[pkg_name] = ver
-    except Exception:
+    except (OSError, UnicodeDecodeError):
         return []
 
     discovered = []
@@ -822,7 +822,7 @@ def update_kb_index(repo_root: str):
 
             with open(index_file, "w", encoding="utf-8", newline="\n") as f:
                 f.write(content)
-    except Exception:
+    except (OSError, UnicodeDecodeError):
         pass
 
 
@@ -877,6 +877,8 @@ def main():
     parser.add_argument("--json", action="store_true", help="Output discovered dependencies and projects in JSON format")
     parser.add_argument("--check", action="store_true", help="Dry run scan without modifying KB files")
     parser.add_argument("--quiet", "-q", action="store_true", help="Quiet output")
+    parser.add_argument("--verbose", "-v", action="store_true", help="Verbose output")
+    parser.add_argument("--debug", action="store_true", help="Debug output with full tracebacks")
 
     args = parser.parse_args()
     repo_root = find_repo_root(args.root)

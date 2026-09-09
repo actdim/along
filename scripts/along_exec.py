@@ -18,12 +18,14 @@ Dispatches:
    - dash         -> runs along_dash.py
    - migrate      -> runs migrate_protocol.py
    - sanitize     -> runs sanitize_typography.py
+   - graph-check  -> runs along_graph_check.py (doctor preflight check)
 """
 
 import sys
 import os
 import re
 import json
+import shlex
 import shutil
 from pathlib import Path
 from typing import Optional, List, Dict, Tuple
@@ -38,7 +40,7 @@ from alongkit import bootstrap
 # installers and the documented skill commands invoke it.
 bootstrap.ensure_deps()
 
-from alongkit import entities, frontmatter, proc, repo, session
+from alongkit import diagnostics, entities, frontmatter, lifecycle, proc, repo, session
 from alongkit.version import CURRENT_PROTOCOL_VERSION
 
 TOOL_MAPPINGS = {
@@ -63,6 +65,8 @@ TOOL_MAPPINGS = {
     "feedback": "along_feedback.py",
     "diagnostics": "along_feedback.py",
     "telemetry": "along_feedback.py",
+    "graph-check": "along_graph_check.py",
+    "graphcheck": "along_graph_check.py",
 }
 
 LIFECYCLE_ACTIONS = {"build", "test", "dev", "debug"}
@@ -76,101 +80,12 @@ has_frontmatter = frontmatter.has_frontmatter
 update_frontmatter_fields = frontmatter.update
 
 
-def try_record_incident(component: str, error_message: str, stack_trace: str = "", command: str = "", repo_root: str = ""):
-    """Safely traps and records internal Along exceptions into ~/.along/diagnostics/ without crashing."""
-    try:
-        feedback_script = resolve_tool_script("along_feedback.py", repo_root)
-        if feedback_script and os.path.exists(feedback_script):
-            scripts_dir = os.path.dirname(feedback_script)
-            if scripts_dir not in sys.path:
-                sys.path.insert(0, scripts_dir)
-            import along_feedback
-            along_feedback.DiagnosticsStore.record_incident(
-                component=component,
-                error_message=error_message,
-                event_type="script_crash",
-                stack_trace=stack_trace,
-                command=command,
-                repo_root=repo_root
-            )
-    except Exception:
-        pass
+try_record_incident = diagnostics.try_record_incident
 
 
-def get_lifecycle_script_path(repo_root: str, action: str) -> str:
-    scripts_dir = os.path.join(repo_root, ".along", "scripts")
-    for ext in [".py", ".sh", ".ps1", ".bat"]:
-        p = os.path.join(scripts_dir, f"{action}{ext}")
-        if os.path.exists(p):
-            return p
-    return os.path.join(scripts_dir, f"{action}.py")
-
-
-def synthesize_lifecycle_script(script_path: str, content: str):
-    os.makedirs(os.path.dirname(script_path), exist_ok=True)
-    with open(script_path, "w", encoding="utf-8") as f:
-        f.write(content)
-    try:
-        os.chmod(script_path, 0o755)
-    except Exception:
-        pass
-    print(f"-> Created lifecycle hook: {script_path}")
-
-
-def detect_lifecycle_action(repo_root: str, action: str) -> Tuple[Optional[str], bool]:
-    # Node.js
-    pkg_json = os.path.join(repo_root, "package.json")
-    if os.path.exists(pkg_json):
-        try:
-            with open(pkg_json, "r", encoding="utf-8") as f:
-                data = json.load(f)
-            scripts = data.get("scripts", {})
-            if action == "build" and "build" in scripts:
-                return "npm run build", True
-            elif action == "test":
-                return "npm test -- --silent" if "test" in scripts else "npm test", True
-            elif action == "dev":
-                cmd = "npm run dev" if "dev" in scripts else ("npm start" if "start" in scripts else None)
-                if cmd:
-                    return cmd, True
-        except Exception:
-            pass
-
-    # Rust
-    if os.path.exists(os.path.join(repo_root, "Cargo.toml")):
-        if action == "build":
-            return "cargo build", True
-        elif action == "test":
-            return "cargo test -q", True
-        elif action == "dev":
-            return "cargo run", True
-
-    # .NET
-    if glob_files(repo_root, "*.csproj") or os.path.exists(os.path.join(repo_root, "Directory.Build.props")):
-        if action == "build":
-            return "dotnet build -v q", True
-        elif action == "test":
-            return "dotnet test -v q", True
-        elif action == "dev":
-            return "dotnet run", True
-
-    # Python
-    if os.path.exists(os.path.join(repo_root, "pyproject.toml")) or os.path.exists(os.path.join(repo_root, "setup.py")):
-        if action == "build":
-            return "python -m build", True
-        elif action == "test":
-            return "pytest -q" if shutil.which("pytest") else "python -m unittest discover tests -q", True
-        elif action == "dev":
-            for main_file in ["main.py", "app.py", "server.py"]:
-                if os.path.exists(os.path.join(repo_root, main_file)):
-                    return f"python {main_file}", True
-
-    return None, False
-
-
-def glob_files(root: str, pattern: str) -> bool:
-    import glob
-    return bool(glob.glob(os.path.join(root, pattern)))
+get_lifecycle_script_path = lifecycle.get_lifecycle_script_path
+synthesize_lifecycle_script = lifecycle.synthesize_lifecycle_script
+detect_lifecycle_action = lifecycle.detect_lifecycle_action
 
 
 def print_help():
@@ -246,9 +161,13 @@ def compile_issues_board(repo_root: str, recent_done_limit: int = RECENT_DONE_LI
                 islug = parts[1] if len(parts) > 1 else f[:-3]
                 fpath = os.path.join(done_dir, f)
                 comp_date = ""
+                istatus = "done"
                 try:
                     with open(fpath, "r", encoding="utf-8", errors="ignore") as handle:
                         head = handle.read(500)
+                    m_stat = re.search(r"^status:\s*[\"']?([a-z-]+)[\"']?", head, re.MULTILINE)
+                    if m_stat:
+                        istatus = m_stat.group(1).lower()
                     m_comp = re.search(r"^completed:\s*[\"']?([0-9-]+)[\"']?", head, re.MULTILINE)
                     if m_comp:
                         comp_date = m_comp.group(1)
@@ -264,14 +183,15 @@ def compile_issues_board(repo_root: str, recent_done_limit: int = RECENT_DONE_LI
                         comp_date = datetime.fromtimestamp(os.path.getmtime(fpath)).strftime("%Y-%m-%d")
                     except OSError:
                         comp_date = "1970-01-01"
-                done_records.append((comp_date, f, itype, islug))
+                done_records.append((comp_date, f, itype, islug, istatus))
 
         # Sort descending by completion date, then filename
         done_records.sort(key=lambda x: (x[0], x[1]), reverse=True)
         total_done = len(done_records)
 
-        for comp_date, f, itype, islug in done_records[:recent_done_limit]:
-            done_items.append(f"- [x] `({itype})` [{islug}](ISSUES/done/{f})")
+        for comp_date, f, itype, islug, istatus in done_records[:recent_done_limit]:
+            box = "~" if istatus in ("superseded", "cancelled", "duplicate") else "x"
+            done_items.append(f"- [{box}] `({itype})` [{islug}](ISSUES/done/{f})")
 
         if total_done > recent_done_limit:
             archived_count = total_done - recent_done_limit
@@ -367,6 +287,10 @@ def handle_issue_command(repo_root: str, args: List[str]):
         else:
             milestone = entities.resolve_in_progress_milestone(repo_root)
 
+        inferred = entities.infer_issue_type(f"{islug} {title}")
+        if itype == "feat" and inferred in ("bug", "debt"):
+            print(f"-> [Notice] Title/slug matches {inferred} keywords. Consider using type '{inferred}' instead of 'feat'.")
+
         milestone_line = f"milestone: {milestone}\n" if milestone else ""
         target_file = os.path.join(issues_dir, f"{itype}--{islug}.md")
         tags_str = f"[{', '.join(tags)}]" if tags else "[]"
@@ -410,11 +334,32 @@ Describe the feature, requirements, and background context here.
                 print(f"-> Updated .along/ISSUES.md")
         sys.exit(0)
 
-    elif subcmd == "done":
+    elif subcmd in ("done", "close"):
         if len(args) < 2:
-            print("[Error] Usage: along_exec.py issue done <slug>", file=sys.stderr)
+            print("[Error] Usage: along_exec.py issue done <slug> [--status done|superseded|cancelled|duplicate] [--superseded-by <key>] [--duplicate-of <key>]", file=sys.stderr)
             sys.exit(1)
         islug = args[1].lower()
+        target_status = "done"
+        superseded_by = None
+        duplicate_of = None
+
+        i = 2
+        while i < len(args):
+            if args[i] in ("--status", "-s") and i + 1 < len(args):
+                target_status = args[i + 1].lower()
+                i += 2
+            elif args[i] in ("--superseded-by",) and i + 1 < len(args):
+                superseded_by = args[i + 1].strip()
+                i += 2
+            elif args[i] in ("--duplicate-of",) and i + 1 < len(args):
+                duplicate_of = args[i + 1].strip()
+                i += 2
+            else:
+                i += 1
+
+        if target_status not in entities.CLOSED_ISSUE_STATUSES:
+            print(f"[Error] Invalid closing status '{target_status}'. Allowed statuses: {', '.join(entities.CLOSED_ISSUE_STATUSES)}", file=sys.stderr)
+            sys.exit(1)
         
         # Locate issue file
         found_file = None
@@ -449,9 +394,15 @@ Describe the feature, requirements, and background context here.
                 "[IO.File]::WriteAllText(path, text, (New-Object System.Text.UTF8Encoding($false)))."
             )
 
+        updates = {"status": target_status, "updated": today, "completed": today}
+        if superseded_by:
+            updates["superseded_by"] = superseded_by
+        if duplicate_of:
+            updates["duplicate_of"] = duplicate_of
+
         content = update_frontmatter_fields(
             content,
-            {"status": "done", "updated": today, "completed": today},
+            updates,
             place_after={"completed": "status"},
         )
 
@@ -809,6 +760,22 @@ def handle_doctor_command(repo_root: str, args: List[str]):
         print("[FAIL] Missing AGENTS.md at repository root.")
         errors += 1
 
+    # Check code-review-graph MCP server
+    try:
+        from along_graph_check import run_graph_check
+        gc = run_graph_check(repo_root)
+        if gc["status"] == "healthy":
+            print(f"[OK] code-review-graph MCP server ready ({gc['package']}).")
+        elif gc["status"] == "degraded":
+            print(f"[WARN] code-review-graph MCP server: {gc['summary']}")
+            warnings += 1
+        else:
+            print(f"[FAIL] code-review-graph MCP server: {gc['summary']}")
+            errors += 1
+    except (OSError, ValueError, AttributeError, RuntimeError) as exc:
+        print(f"[WARN] Could not run MCP health check: {exc}")
+        warnings += 1
+
     print(f"\nDoctor Summary: {errors} errors, {warnings} warnings.")
     sys.exit(1 if errors > 0 else 0)
 
@@ -1038,10 +1005,8 @@ def main():
                 print(f"[Notice] {script_file} is unconfigured. Please customize it for this repository.")
 
             print(f"-> Executing .along/scripts/{os.path.basename(script_file)}...")
-            if script_file.endswith(".py"):
-                code = proc.run_passthrough([sys.executable, script_file] + extra_args, cwd=repo_root)
-            else:
-                code = proc.run_passthrough([script_file] + extra_args, cwd=repo_root, shell=True)
+            full_cmd = lifecycle.build_interpreter_cmd(script_file, extra_args)
+            code = proc.run_passthrough(full_cmd, cwd=repo_root)
             sys.exit(code)
 
         # Auto-Detection and Non-Destructive Synthesis
@@ -1049,41 +1014,14 @@ def main():
 
         if detected_cmd and verified:
             status_tag = "verified"
-            py_content = f'''#!/usr/bin/env python3
-# Status: {status_tag}
-# Auto-generated by Along for {cmd}
-import os, shlex, subprocess, sys
-
-def main():
-    repo_root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-    base_cmd = shlex.split("{detected_cmd}")
-    full_cmd = base_cmd + sys.argv[1:]
-    print(f"-> Running: {{' '.join(full_cmd)}}")
-    res = subprocess.run(full_cmd, cwd=repo_root)
-    sys.exit(res.returncode)
-
-if __name__ == "__main__":
-    main()
-'''
+            py_content = lifecycle.render_lifecycle_script(cmd, base_cmd=shlex.split(detected_cmd), status_tag=status_tag)
             synthesize_lifecycle_script(script_file, py_content)
-            import shlex
             print(f"-> Running: {detected_cmd}")
             code = proc.run_passthrough(shlex.split(detected_cmd) + extra_args, cwd=repo_root)
             sys.exit(code)
         else:
             status_tag = "unconfigured"
-            py_content = f'''#!/usr/bin/env python3
-# Status: {status_tag}
-# Template for {cmd} in this repository
-import sys, subprocess, os
-
-def main():
-    repo_root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-    print("[Notice] Please configure {cmd} command in .along/scripts/{cmd}.py")
-
-if __name__ == "__main__":
-    main()
-'''
+            py_content = lifecycle.render_lifecycle_script(cmd, base_cmd=None, status_tag=status_tag)
             synthesize_lifecycle_script(script_file, py_content)
             print(f"[Notice] Created unconfigured template: {script_file}")
             print(f"Please customize .along/scripts/{cmd}.py for your repository build/test configuration.")

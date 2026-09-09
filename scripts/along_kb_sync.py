@@ -305,7 +305,7 @@ def _repair_or_drop_anchor(target_abs: str, anchor: str) -> str:
 
         # For regular documents, preserve existing non-numbered anchor
         return anchor
-    except Exception:
+    except (OSError, UnicodeDecodeError, ValueError):
         return anchor
 
 
@@ -344,7 +344,7 @@ def rewrite_inbound_links(repo_root, dry_run=False, migrate_numbered=False, expl
             try:
                 with open(fpath, "r", encoding="utf-8", errors="replace") as fp:
                     content = fp.read()
-            except Exception:
+            except (OSError, UnicodeDecodeError):
                 continue
 
             file_rewrites = 0
@@ -435,7 +435,7 @@ def rewrite_inbound_links(repo_root, dry_run=False, migrate_numbered=False, expl
                     repaired_anchor = _repair_or_drop_anchor(target_abs, anchor)
                     try:
                         new_rel = os.path.relpath(target_abs, file_dir).replace('\\', '/')
-                    except Exception:
+                    except ValueError:
                         new_rel = target_base
 
                     if not new_rel.startswith('.') and not new_rel.startswith('/'):
@@ -475,7 +475,7 @@ def rewrite_inbound_links(repo_root, dry_run=False, migrate_numbered=False, expl
                     repaired_anchor = _repair_or_drop_anchor(target_abs, anchor)
                     try:
                         new_rel = os.path.relpath(target_abs, file_dir).replace('\\', '/')
-                    except Exception:
+                    except ValueError:
                         new_rel = raw_target
 
                     if not new_rel.startswith('.') and not new_rel.startswith('/'):
@@ -579,7 +579,7 @@ def validate_repo_link_integrity(repo_root, return_violations=False):
             try:
                 with open(fpath, "r", encoding="utf-8", errors="replace") as fp:
                     lines = fp.readlines()
-            except Exception:
+            except (OSError, UnicodeDecodeError):
                 continue
 
             in_code_fence = False
@@ -662,8 +662,8 @@ def validate_repo_link_integrity(repo_root, return_violations=False):
                                     "target": target,
                                     "resolved": rel_resolved,
                                     "canonical_alternative": "docs/INDEX.md",
-                                })
-                    except Exception:
+                                    })
+                    except (OSError, ValueError):
                         if any(p in target for p in [".along/KB", ".agents/KB", "along/KB", "agents/KB"]):
                             legacy_kb_references.append({
                                 "file": rel_file,
@@ -696,7 +696,12 @@ def has_real_body(body: str) -> bool:
 
 
 def _extract_project_meta(target_dir: str):
-    """Extract project title and summary from README.md or directory name."""
+    """Extract project title and summary from README.md or directory name.
+
+    Extracts title from the first H1 header, and summary from the first valid
+    blockquote or prose paragraph following H1, ignoring HTML comments,
+    badges, and GitHub alert callouts (> [!NOTE], > [!WARNING], etc.).
+    """
     repo_name = os.path.basename(os.path.abspath(target_dir))
     title = repo_name
     summary = f"> Knowledge Base and documentation index for {repo_name}."
@@ -708,10 +713,57 @@ def _extract_project_meta(target_dir: str):
             h1_m = re.search(r"^#\s+(.+)$", readme_text, re.MULTILINE)
             if h1_m:
                 title = h1_m.group(1).strip()
-            quote_m = re.search(r"^>\s+(.+)$", readme_text, re.MULTILINE)
-            if quote_m:
-                summary = f"> {quote_m.group(1).strip()}"
-        except Exception:
+                candidate_text = readme_text[h1_m.end():]
+            else:
+                candidate_text = readme_text
+
+            blocks = re.split(r"\n\s*\n", candidate_text)
+            for block in blocks:
+                stripped = block.strip()
+                if not stripped:
+                    continue
+
+                # Strip HTML comments
+                stripped_no_comment = re.sub(r"<!--.*?-->", "", stripped, flags=re.DOTALL).strip()
+                if not stripped_no_comment:
+                    continue
+
+                # Skip GitHub alert callouts (e.g. > [!NOTE], > [!WARNING], > [!TIP], etc.)
+                if re.match(r"^>\s*\[!(NOTE|TIP|IMPORTANT|WARNING|CAUTION)\]", stripped_no_comment, re.IGNORECASE):
+                    continue
+
+                # Skip badge-only blocks and raw HTML containers without text
+                no_badges = re.sub(r"\[!\[.*?\]\(.*?\)\](\(.*?\))?", "", stripped_no_comment)
+                no_badges = re.sub(r"!\[.*?\]\(.*?\)", "", no_badges)
+                no_badges = re.sub(r"\[.*?\]\(.*?\)", "", no_badges)
+                no_badges = re.sub(r"<[^>]+>", "", no_badges)
+                if not re.search(r"\w{2,}", no_badges):
+                    continue
+
+                lines = [l.strip() for l in stripped_no_comment.splitlines() if l.strip()]
+                if not lines:
+                    continue
+
+                # Check for blockquote (> ...)
+                if lines[0].startswith(">"):
+                    quote_lines = [re.sub(r"^>\s*", "", l).strip() for l in lines]
+                    clean_quote = " ".join(l for l in quote_lines if l)
+                    clean_quote = re.sub(r"<[^>]+>", "", clean_quote).strip()
+                    clean_quote = " ".join(clean_quote.split())
+                    if clean_quote:
+                        summary = f"> {clean_quote}"
+                        break
+
+                # Check for prose paragraph (not a heading, list, table, fence, or rule)
+                first_line = lines[0]
+                if not re.match(r"^(#|[-*+]\s|\d+\.\s|\||```|~~~|---|===|\*\*\*)", first_line):
+                    para = " ".join(lines)
+                    clean_para = re.sub(r"<[^>]+>", "", para).strip()
+                    clean_para = " ".join(clean_para.split())
+                    if clean_para:
+                        summary = f"> {clean_para}"
+                        break
+        except (OSError, UnicodeDecodeError):
             pass
 
     return title, summary
@@ -748,7 +800,7 @@ def sync_llms_txt(target_dir, articles, dry_run=False):
         if os.path.isfile(target_path):
             try:
                 existing = textio.read_text(target_path)
-            except Exception:
+            except (OSError, UnicodeDecodeError):
                 existing = ""
 
         if existing:
@@ -801,7 +853,7 @@ def sync_llms_full_txt(target_dir, articles, dry_run=False):
             readme_body = textio.read_text(readme_path).strip()
             if readme_body:
                 full_parts.extend(["", "---", "", "## Document: README.md (Overview)", "", readme_body])
-        except Exception:
+        except (OSError, UnicodeDecodeError):
             pass
 
     agents_path = os.path.join(target_dir, "AGENTS.md")
@@ -810,7 +862,7 @@ def sync_llms_full_txt(target_dir, articles, dry_run=False):
             agents_body = textio.read_text(agents_path).strip()
             if agents_body:
                 full_parts.extend(["", "---", "", "## Document: AGENTS.md (Agent Conventions & Protocol)", "", agents_body])
-        except Exception:
+        except (OSError, UnicodeDecodeError):
             pass
 
     docs_dir = os.path.join(target_dir, "docs")
@@ -832,7 +884,7 @@ def sync_llms_full_txt(target_dir, articles, dry_run=False):
                     "",
                     body_clean,
                 ])
-        except Exception:
+        except (OSError, UnicodeDecodeError, ValueError, frontmatter.FrontmatterError):
             pass
 
     full_content = "\n".join(full_parts).rstrip() + "\n"
@@ -842,7 +894,7 @@ def sync_llms_full_txt(target_dir, articles, dry_run=False):
         if os.path.isfile(target_path):
             try:
                 existing = textio.read_text(target_path)
-            except Exception:
+            except (OSError, UnicodeDecodeError):
                 existing = ""
 
         if not dry_run:
@@ -883,7 +935,7 @@ def sync_kb(repo_root, check_only=False, strict=False, prune_intent=None, is_sub
     try:
         git_check = proc.run_capture(["git", "rev-parse", "--is-inside-work-tree"], cwd=repo_root)
         in_git = git_check.ok and git_check.stdout.strip() == "true"
-    except Exception:
+    except OSError:
         in_git = False
 
     file_list = sorted(os.listdir(docs_dir)) if os.path.exists(docs_dir) else []
@@ -930,7 +982,7 @@ def sync_kb(repo_root, check_only=False, strict=False, prune_intent=None, is_sub
                                 if cur_hash != rec_hash:
                                     drifted_sources.append((f, src_rel, rec_hash, cur_hash))
                                     print(f"   [DRIFT] docs/{f}: Source '{src_rel}' has changed (expected {rec_hash[:8]}, got {cur_hash[:8]}). Agent review required.")
-                            except Exception as e:
+                            except (OSError, UnicodeDecodeError) as e:
                                 print(f"   [WARN] Failed to read source '{src_rel}' for docs/{f}: {e}")
 
             # Check content reduction against HEAD if in git
@@ -946,7 +998,7 @@ def sync_kb(repo_root, check_only=False, strict=False, prune_intent=None, is_sub
                         if head_lines >= 15 and delta >= 10 and (delta / head_lines) > 0.25:
                             pct = round((delta / head_lines) * 100)
                             shrunk_articles.append((f, delta, pct))
-                except Exception:
+                except (OSError, ValueError):
                     pass
 
             updates = {}
@@ -1006,7 +1058,7 @@ def sync_kb(repo_root, check_only=False, strict=False, prune_intent=None, is_sub
                 "curated": fm.get("curated", True),
                 "sources": sources or [],
             })
-        except Exception as e:
+        except (OSError, ValueError, frontmatter.FrontmatterError) as e:
             print(f"   [WARN] Failed to process {f}: {e}")
 
     # Intent Gate: Check if any article shrank significantly without --prune-intent
@@ -1213,6 +1265,8 @@ def main():
     parser.add_argument("--json", action="store_true", help="Output report in JSON format")
     parser.add_argument("--prune-intent", dest="prune_intent", nargs="?", const="Intentional content pruning", default=None, help="Acknowledge and allow content reduction with an optional intent rationale")
     parser.add_argument("--allow-shrink", dest="prune_intent", action="store_const", const="Allow shrink", help="Alias for --prune-intent")
+    parser.add_argument("--verbose", "-v", action="store_true", help="Verbose output")
+    parser.add_argument("--debug", action="store_true", help="Debug output with full tracebacks")
     args = parser.parse_args()
 
     check_mode = args.check or args.dry_run

@@ -32,6 +32,8 @@ if __name__ == "__main__":
     )
 
 
+import ast
+from dataclasses import dataclass
 import json
 import os
 import sys
@@ -169,4 +171,124 @@ def typography_gate(repo_root: str, label: str = "Quality Gate",
           f"{sanitizer.format_report(report)}\n"
           "Re-run with --fix-typography to apply these replacements, or fix them by hand.",
           file=sys.stderr)
+    return False
+
+
+@dataclass(frozen=True)
+class ExceptionViolation:
+    """A violation of the exception-handling quality gate."""
+    path: str
+    line: int
+    message: str
+
+
+def _catches_generic_exception(node_type: Optional[ast.AST]) -> bool:
+    if node_type is None:
+        return False
+    if isinstance(node_type, ast.Name) and node_type.id in ("Exception", "BaseException"):
+        return True
+    if isinstance(node_type, ast.Tuple):
+        return any(_catches_generic_exception(elt) for elt in node_type.elts)
+    return False
+
+
+def find_exception_violations_in_code(source: str, filename: str = "<unknown>") -> List[ExceptionViolation]:
+    """Parse Python source and detect banned exception handling patterns:
+    - Bare 'except:' clauses without exception types
+    - Swallowed generic 'except Exception:' or 'except BaseException:' with pass/continue or no re-raise
+    """
+    try:
+        tree = ast.parse(source, filename=filename)
+    except SyntaxError:
+        return []
+
+    violations: List[ExceptionViolation] = []
+    str_types = (ast.Constant, getattr(ast, "Str", ()))
+    for node in ast.walk(tree):
+        if isinstance(node, ast.ExceptHandler):
+            # Check 1: bare except:
+            if node.type is None:
+                violations.append(
+                    ExceptionViolation(
+                        path=filename,
+                        line=node.lineno,
+                        message="bare 'except:' clause is forbidden; specify narrow exception types",
+                    )
+                )
+            # Check 2: catch generic Exception / BaseException
+            elif _catches_generic_exception(node.type):
+                has_raise = any(isinstance(child, ast.Raise) for child in ast.walk(node))
+                if not has_raise:
+                    is_swallowed = all(
+                        isinstance(stmt, (ast.Pass, ast.Continue)) or
+                        (isinstance(stmt, ast.Expr) and isinstance(getattr(stmt, "value", None), str_types))
+                        for stmt in node.body
+                    )
+                    reason = (
+                        "swallowed generic exception (pass/continue)"
+                        if is_swallowed
+                        else "generic Exception caught without re-raising"
+                    )
+                    violations.append(
+                        ExceptionViolation(
+                            path=filename,
+                            line=node.lineno,
+                            message=f"{reason}; narrow to specific exceptions or re-raise",
+                        )
+                    )
+    violations.sort(key=lambda v: v.line)
+    return violations
+
+
+def check_exception_handling(repo_root: str,
+                             target_dirs: Optional[List[str]] = None) -> List[ExceptionViolation]:
+    """Inspect Python files in target directories for banned exception handling.
+
+    Defaults to scanning `scripts/` and `dashboard/`.
+    """
+    if target_dirs is None:
+        target_dirs = ["scripts", "dashboard"]
+
+    violations: List[ExceptionViolation] = []
+    for target in target_dirs:
+        target_path = os.path.join(repo_root, target)
+        if not os.path.exists(target_path):
+            continue
+        if os.path.isfile(target_path) and target_path.endswith(".py"):
+            rel_path = repo.safe_relpath(target_path, repo_root).replace("\\", "/")
+            try:
+                with open(target_path, "r", encoding="utf-8", errors="replace") as f:
+                    code = f.read()
+                violations.extend(find_exception_violations_in_code(code, rel_path))
+            except (OSError, UnicodeDecodeError):
+                pass
+            continue
+
+        for root, dirs, files in os.walk(target_path):
+            dirs[:] = [d for d in dirs if d not in repo.IGNORED_DIRS and d != "__pycache__"]
+            for file in sorted(files):
+                if not file.endswith(".py"):
+                    continue
+                file_path = os.path.join(root, file)
+                rel_path = repo.safe_relpath(file_path, repo_root).replace("\\", "/")
+                try:
+                    with open(file_path, "r", encoding="utf-8", errors="replace") as f:
+                        code = f.read()
+                    violations.extend(find_exception_violations_in_code(code, rel_path))
+                except (OSError, UnicodeDecodeError):
+                    pass
+
+    return violations
+
+
+def exception_handling_gate(repo_root: str, label: str = "Quality Gate") -> bool:
+    """Quality gate enforcing clean exception handling across scripts/ and dashboard/."""
+    violations = check_exception_handling(repo_root)
+    if not violations:
+        print(f"-> [{label}] Exception handling clean (zero swallowed generic exceptions).")
+        return True
+
+    print(f"[Error] {label}: banned exception handling detected ({len(violations)} violation(s)):", file=sys.stderr)
+    for v in violations:
+        print(f"   - {v.path}:{v.line}: {v.message}", file=sys.stderr)
     return False
