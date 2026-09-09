@@ -2,6 +2,10 @@
 
 All notable changes to this project, newest first.
 
+## v2.4.0 - 2026-09-10
+
+- refactor: prune AGENTS.md context budget and reconcile v3 DoD (refs #agents-md-context-budget-pruning)
+
 ## v2.3.0 - 2026-09-09
 
 - fix(release): resolve broken relative links in session log and sync along-init skill on version bump (refs #runtime-enforcement-of-prose-rules)
