@@ -2,6 +2,19 @@
 
 All notable changes to this project, newest first.
 
+## v2.3.0 - 2026-09-09
+
+- fix(release): resolve broken relative links in session log and sync along-init skill on version bump (refs #runtime-enforcement-of-prose-rules)
+- chore(milestone): move circuit breaker to milestone 4.0 and bind dependency on runtime enforcement (refs #systemic-anomaly-circuit-breaker)
+- feat(kb): deterministic topic dictionary, auto-crosslinking, and ast grounding (refs #deterministic-kb-pipeline-and-ast-grounding)
+- feat: programmatic integrity gates, AST patcher, and git guard (refs #programmatic-integrity-gates-and-git-guard)
+- chore(audit): wrap session, record session log, and close quality audit remediation epic (refs #protocol-quality-audit-remediation)
+- feat(kb-search): token-based IDF ranking, exact phrases, snippet extraction, and close debt--kb-search-ranking-and-snippet-quality (refs #kb-search-ranking-and-snippet-quality)
+- chore(git): renormalize line endings, add regression test, and close debt--line-ending-churn-vs-gitattributes (refs #line-ending-churn-vs-gitattributes)
+- fix(line-endings): enforce declared newlines across generator writers and add newline_for_path (refs #line-ending-churn-vs-gitattributes)
+- chore: close debt--unpinned-mcp-and-ghost-wiki-query-tool (6/6 criteria met) (refs #unpinned-mcp-and-ghost-wiki-query-tool)
+- docs(lifecycle): pluggable lifecycle hooks showcase and docs sync (refs #pluggable-lifecycle-hooks-showcase)
+
 ## v2.2.27 - 2026-09-09
 
 - chore(protocol): untrack dashboard artifacts, formalize projection policy, and extend taxonomy (refs #generated-dashboard-artifact-committed)
