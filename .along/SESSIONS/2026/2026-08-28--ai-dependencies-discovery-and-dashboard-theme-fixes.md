@@ -18,10 +18,10 @@ milestone: v2.0.0-along-transition
 
 ## Key Accomplishments
 1. **AI Dependencies Discovery Engine (`skills/along-scan-deps/`)**:
-   - Implemented [along_scan_deps.py](../../../skills/along-scan-deps/along_scan_deps.py) scanning Node (`package.json`), Python (`pyproject.toml`, `requirements.txt`), and Rust (`Cargo.toml`).
+   - Implemented [along_dep_scan.py](../../../scripts/along_dep_scan.py) scanning Node (`package.json`), Python (`pyproject.toml`, `requirements.txt`), and Rust (`Cargo.toml`).
    - Automatically inspects installed packages on disk for `AGENTS.md`, `CLAUDE.md`, `llms.txt`, `.along/`, and package manifest AI metadata.
    - Synchronizes discovered references into [.along/KB/dependencies.md](../../../docs/topic--dependencies.md) and [.along/KB/INDEX.md](../../../docs/INDEX.md) idempotently.
-   - Created skill manifest [skills/along-scan-deps/SKILL.md](../../../skills/along-scan-deps/SKILL.md).
+   - Created skill manifest [skills/along-dep-scan/SKILL.md](../../../skills/along-dep-scan/SKILL.md).
    - Bundled skill in [install.ps1](../../../install.ps1) and [install.sh](../../../install.sh).
 
 2. **Dashboard UI Theme and SearchModal Fixes (`packages/dashboard-ui/`)**:
