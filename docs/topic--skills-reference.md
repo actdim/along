@@ -1,11 +1,11 @@
 ---
 protocol: along
-protocol_version: "2.2.26"
+protocol_version: "2.2.27"
 slug: skills-reference
 title: Skills & Slash Commands Technical Reference
 type: topic
 created: 2026-08-30
-updated: 2026-09-07
+updated: 2026-09-09
 tags: [skills, commands, reference, runners, lifecycle, automation, multi-agent]
 sources:
   - path: skills/along-init/SKILL.md
@@ -163,37 +163,37 @@ flowchart TD
 ## 3. Development & Lifecycle Execution Runners
 
 ### `along-build`
-- **What it is**: Universal build runner. Executes repository build lifecycle via `.along/scripts/build.py` or auto-detected package runners (`npm run build`, `cargo build`, `dotnet build`, `python -m build`).
+- **What it is**: Universal build runner. Executes repository build lifecycle via `.along/scripts/build.py` (or `.sh`, `.ps1`, `.bat`) with fallback to auto-detected package runners (`npm run build`, `cargo build`, `dotnet build`, `python -m build`). Custom project hooks in `.along/scripts/` take absolute precedence.
 - **Architectural Rationale**:
   - *Non-Destructive Standardized Interface*: AI agents execute a single unified command (`along-build`) across any programming language or technology stack without needing custom per-repo prompt tuning.
 - **Invocation Triggers**:
   - *Explicit*: `/along-build`, `along build` (fallback: `python ~/.along/bin/along_exec.py build`).
   - *Semantic / Automatic*: Triggered after code edits, before pre-commit checks, or when the user prompts *"Build the project"*.
-- **Entities Operated On**: `.along/scripts/build.py`, build output targets (`dist/`, `build/`, `bin/`).
+- **Entities Operated On**: `.along/scripts/build.py` (and `.sh`, `.ps1`, `.bat`), build output targets (`dist/`, `build/`, `bin/`).
 - **Ecosystem Chaining**: Prerequisite for `along-test` and `along-dash` UI builds.
 
 ---
 
 ### `along-test`
-- **What it is**: Universal automated test runner with quiet flags (`pytest -q`, `npm test`, `cargo test -q`, `dotnet test -v q`).
+- **What it is**: Universal automated test runner with quiet flags (`pytest -q`, `npm test`, `cargo test -q`, `dotnet test -v q`). Executes `.along/scripts/test.py` (or `.sh`, `.ps1`, `.bat`) with custom hooks taking absolute precedence over auto-detection.
 - **Architectural Rationale**:
   - *Token Hygiene via Quiet Flags*: Suppresses massive verbose test logs in agent prompts, emitting clean summary counts (pass/fail) to conserve context budget.
 - **Invocation Triggers**:
   - *Explicit*: `/along-test`, `along test` (fallback: `python ~/.along/bin/along_exec.py test`).
   - *Semantic / Automatic*: Triggered during every Reviewer step in `along-team`, before pre-commit in `along-commit`, and during `/along-wrap`.
-- **Entities Operated On**: `.along/scripts/test.py`, test suites (`tests/`, `src/**/*.test.ts`).
+- **Entities Operated On**: `.along/scripts/test.py` (and `.sh`, `.ps1`, `.bat`), test suites (`tests/`, `src/**/*.test.ts`).
 - **Ecosystem Chaining**: Core quality gate for `along-team`, `along-commit`, and `along-version-bump`.
 
 ---
 
 ### `along-dev`
-- **What it is**: Development server runner. Launches local dev servers or debug runners (`npm run dev`, `cargo run`, `dotnet run`, `python main.py`).
+- **What it is**: Development server runner. Launches local dev servers or debug runners via `.along/scripts/dev.py` (or `.sh`, `.ps1`, `.bat`) or auto-detected runners (`npm run dev`, `cargo run`, `dotnet run`, `python main.py`).
 - **Architectural Rationale**:
   - Provides a single standardized hook (`.along/scripts/dev.py`) for background daemon execution.
 - **Invocation Triggers**:
   - *Explicit*: `/along-dev`, `along dev` (fallback: `python ~/.along/bin/along_exec.py dev`).
   - *Semantic / Automatic*: Triggered when the user requests *"Start local dev server"*, *"Run application locally"*.
-- **Entities Operated On**: `.along/scripts/dev.py`.
+- **Entities Operated On**: `.along/scripts/dev.py` (and `.sh`, `.ps1`, `.bat`).
 - **Ecosystem Chaining**: Pairs with `along-dash` for local interactive debugging.
 
 ---
@@ -227,13 +227,13 @@ flowchart TD
 ---
 
 ### `along-dep-scan`
-- **What it is**: Hierarchical multi-project and submodule dependency scanner. Scans package manifests (`package.json`, `pyproject.toml`, `Cargo.toml`, `*.csproj`), submodules, and symlinks for declared AI instructions and vendor rules.
+- **What it is**: Hierarchical multi-project and submodule dependency scanner. Scans package manifests (`package.json`, `pyproject.toml`, `Cargo.toml`, `*.csproj`), custom hooks (`.along/scripts/dep_scan.py`), submodules, and symlinks for declared AI instructions and vendor rules.
 - **Architectural Rationale**:
-  - Extracts subproject constraints and vendor AI rules into `docs/topic--dependencies.md`, giving agents unified visibility into third-party constraints without manual file hunting.
+  - Extracts subproject constraints, custom ecosystem hooks, and vendor AI rules into `docs/topic--dependencies.md`, giving agents unified visibility into third-party constraints without manual file hunting.
 - **Invocation Triggers**:
   - *Explicit*: `/along-dep-scan`, `along dep-scan` (fallback: `python ~/.along/bin/along_exec.py dep-scan`).
   - *Semantic / Automatic*: Triggered during `/along-init`, after dependency updates, or when adding a new Git submodule.
-- **Entities Operated On**: `package.json`, `pyproject.toml`, `Cargo.toml`, `*.csproj`, `docs/topic--dependencies.md`.
+- **Entities Operated On**: `package.json`, `pyproject.toml`, `Cargo.toml`, `*.csproj`, `.along/scripts/dep_scan.py`, `docs/topic--dependencies.md`.
 - **Ecosystem Chaining**: Feeds architectural constraints into `docs/topic--dependencies.md` and `along-kb-sync`.
 
 ---

@@ -23,8 +23,9 @@ AI coding agents are exceptionally capable, but they start every session blind:
 - **Token Combustion**: Dumping monolithic context files or full directories into prompts wastes tens of thousands of tokens per turn.
 - **Multi-Branch Chaos**: Parallel agents clobber shared docs, status boards, and lock files, causing painful git merge conflicts.
 - **Unanchored Edits & Hallucinations**: Without strict guardrails, agents make rogue modifications, bypass test gates, and produce silent regressions.
+- **Stack Friction & Tool Blindness**: Agents stumble across differing build tools, test frameworks, and release workflows. They execute noisy commands that flood context buffers with megabytes of logs, or hallucinate project-specific build invocations.
 
-**Along fixes this by embedding a durable, machine-parseable memory layer (`.along/`) and an Andrej Karpathy-style LLM-Wiki (`docs/`) directly into your repository.** Agents read past decisions, track issues in a DAG, plan autonomously, and verify their own work before committing.
+**Along fixes this by embedding a durable, machine-parseable memory layer (`.along/`), an Andrej Karpathy-style LLM-Wiki (`docs/`), and a unified lifecycle contract (`.along/scripts/`) directly into your repository.** Agents read past decisions, track issues in a DAG, plan autonomously, and verify their own work before committing.
 
 ---
 
@@ -35,6 +36,7 @@ AI coding agents are exceptionally capable, but they start every session blind:
 | **Persistent In-Repo Memory** | Durable, git-tracked memory (`.along/`): DAG issues, append-only ADR logs, milestones, risks, and session records that travel with the codebase. |
 | **Autonomous Multi-Agent Teams** | Sequential living-plan state machine (`along-team`): Supervisor -> Scout -> Architect -> Implementer -> Reviewer with session blackboards, hard retry limits, and single-agent degradation. |
 | **Token-Efficient LLM-Wiki (`docs/`)** | Modular knowledge base with in-place source provenance, SHA-256 drift detection, deterministic `llms.txt` compilation, and targeted snippet search (`along-kb-search`) avoiding full-file context ingestion. |
+| **Stack-Agnostic Lifecycle & Polyglot Hooks** | Unified agent execution contract (`/along-build`, `/along-test`, `/along-dev`, `/along-version-bump`, `/along-dep-scan`) with zero-config stack auto-detection and polyglot repository hooks (`.along/scripts/` in Python, Bash, PowerShell, Batch). |
 | **Zero-Conflict Git Concurrency** | Single Source of Truth (SSOT) atomic files vs compiled projections (`ISSUES.md`, `INDEX.md`), union merges (`merge=union`), and decentralized date-slug ADRs that never collide in parallel branches. |
 | **Engineering Provenance & Dual-Track UI** | Living plans, fix loops, and verification gates are permanently recorded in session logs while projecting interactive visual review cards in IDEs (Antigravity). |
 | **Strict Data Safety & Verification Gates** | Hermetic engines (`alongkit`) with transactional byte-exact rollbacks, strict front-matter preservation (`ruamel.yaml`), and zero-unintended-deletions invariant. |
@@ -52,6 +54,7 @@ Add this badge and blurb to the `README.md` of any repository powered by Along:
 This repository follows the **Along Protocol** for AI agent context, persistent memory, and autonomous workflows:
 - **Persistent In-Repo Memory**: Past architectural decisions (`.along/DECISIONS.md`), active constraints (`.along/CONSTRAINTS.md`), active issues, and session history survive across all AI sessions.
 - **Token-Efficient Knowledge Base**: Structured LLM-Wiki documentation in `docs/` minimizes context overhead and eliminates architectural drift.
+- **Standardized Lifecycle Contract**: Unified commands for build, test, dev, release, and dependency discovery via pluggable `.along/scripts/` hooks.
 - **Provider-Agnostic**: Compatible out of the box with **Claude Code**, **Google Antigravity**, **OpenAI Codex**, and **OpenCode**.
 ````
 
@@ -294,12 +297,13 @@ To keep `.along/` lean and avoid token bloat:
 - `DECISIONS.md` is APPEND-ONLY: add a new dated entry with slug header (`## ADR-YYYY-MM-DD--<slug>`) per non-trivial architectural decision; never edit past ones - mark a replaced one "Superseded by ADR-YYYY-MM-DD--<slug>". Recompile `.along/CONSTRAINTS.md` via `along decision sync`.
 - Add any new/clarified domain term to `.along/GLOSSARY.md`.
 - **Context & Token hygiene**: Keep tool output lean to prevent context bloat. Use quiet flags for builds/tests (`pytest -q`, `dotnet test -v q`), filter command outputs, and inspect targeted line ranges.
+- **Contract-First Lifecycle Execution**: When building, testing, developing, or bumping versions, agents MUST prioritize project lifecycle commands (`/along-test` or `python .along/scripts/test.py`, `/along-build` or `python .along/scripts/build.py`, `/along-dev` or `python .along/scripts/dev.py`, `/along-version-bump`, `/along-dep-scan`) over guessing raw toolchain commands. These hooks encapsulate repository-specific quiet flags, compilers, and environments.
 - **Dual Search Architecture**: Distinguish between code and documentation retrieval: query MCP tools (`semantic_search_nodes_tool`, `query_graph_tool`) for codebase AST / call graph search, and `/along-kb-search` for Knowledge Base / living project memory (`docs/`, `README.md`, `DECISIONS.md`, `ISSUES/`).
 - **Mandatory Agentic Code Review & Blast Radius Impact**: After completing non-trivial code modifications, agents MUST critically inspect their own diffs and evaluate systemic blast radius. Agents MUST execute `code-review-graph` MCP tools (`build_or_update_graph_tool`, `get_impact_radius_tool`, `get_affected_flows_tool`) to verify that downstream callers, interfaces, and dependent systems remain unbroken, edge cases and nulls are handled, and active ADRs in `.along/DECISIONS.md` are respected. If `code-review-graph` is offline or fails, agents MUST output a loud diagnostic warning (`[CRITICAL WARNING: code-review-graph OFFLINE, degraded to static search]`) and fall back to static search (`grep_search` across callers, imports, and references). Silent skips are strictly forbidden.
 
 ## Mandatory Stage & Session Completion Checklist
 When a Stage or session completes, agents MUST execute this verification checklist in exact order:
-1. [ ] **Verification & Tests**: Run automated unit tests / linting / builds with quiet flags. Verify test discovery count increased appropriately and zero tests failed.
+1. [ ] **Verification & Tests**: Run automated unit tests / linting / builds with quiet flags via project lifecycle hooks (/along-test or python .along/scripts/test.py, /along-build or python .along/scripts/build.py). Verify test discovery count increased appropriately and zero tests failed.
 2. [ ] **File Integrity & Untracked Audit**: Inspect `git status -u` and verify that all newly created and modified files have non-zero size (`getsize > 0`), containing expected code/content without empty placeholders or corrupted bodies.
 3. [ ] **Code Review & Blast Radius Assessment**:
    - Inspect git diff for unintended side effects, unhandled nulls/errors, and edge cases.
@@ -322,6 +326,10 @@ When a Stage or session completes, agents MUST execute this verification checkli
 9. [ ] **Compaction Prompt**: Advise user to run `/compact` to free up token budget.
 
 ## Rules
+- **Contract-First Lifecycle Execution & Polyglot Hooks**:
+  - **Prioritize Nearest Lifecycle Hook**: Before executing raw shell commands (`npm test`, `pytest`, `cargo build`), agents MUST inspect and run the nearest `.along/scripts/<action>.py` (or `.sh`, `.ps1`, `.bat`) or invoke the corresponding Along skill (`/along-test`, `/along-build`, `/along-dev`).
+  - **Zero-Config Auto-Synthesis**: When `.along/scripts/` is not yet configured, invoking `along test` or `along build` automatically detects the stack (Node, Python, Rust, .NET, Go), synthesizes a verified hook, and executes it with quiet flags.
+  - **Custom Subproject Hooks**: In submodules or monorepo packages, agents MUST execute the hook localized in that subproject's own `.along/scripts/` directory.
 - **Strict Dependency & Environment Isolation**:
   - **No Unprompted Global Installs**: Agents MUST NOT arbitrarily install system-wide or global packages (e.g. via `pip install`) when a script fails with a missing dependency.
   - **Fix the Architecture, Not the Environment**: If an engine or script fails to locate a dependency, it is an architectural defect (such as a missing `bootstrap.ensure_deps()` call or an incorrect `uv` wrapper). The agent MUST diagnose and fix the script's entry point or discuss it with the user, rather than mutating the environment to force it to pass.
@@ -863,6 +871,48 @@ To guarantee that documentation remains synchronized with code and is never sile
 
 ---
 
+## 10. Lifecycle & Polyglot Hook Architecture (`alongkit.lifecycle`)
+
+Along decouples AI agent operational intent from underlying repository toolchains through the **Contract-First Lifecycle Hook Architecture**:
+
+```mermaid
+flowchart TD
+    AGENT["AI Coding Agent (/along-test, /along-build, /along-dev)"]
+    ROUTER["along_exec.py Dispatcher"]
+    SUB_CHECK{"Subproject Hook exists? (packages/*/.along/scripts/)"}
+    ROOT_CHECK{"Root Hook exists? (.along/scripts/)"}
+    INTERPRETER["alongkit.lifecycle.build_interpreter_cmd()"]
+    RUN_EXEC["Safe Process Execution (shell=False, argv list)"]
+    AUTODETECT["Stack Detector (Node, Rust, .NET, Python, Go)"]
+    SYNTHESIZE["Synthesize .along/scripts/<action>.py"]
+
+    AGENT --> ROUTER
+    ROUTER --> SUB_CHECK
+    SUB_CHECK -->|Yes| INTERPRETER
+    SUB_CHECK -->|No| ROOT_CHECK
+    ROOT_CHECK -->|Yes| INTERPRETER
+    ROOT_CHECK -->|No| AUTODETECT
+    AUTODETECT -->|Known Stack| SYNTHESIZE
+    SYNTHESIZE --> INTERPRETER
+    AUTODETECT -->|Unknown Stack| UNCONFIG["Generate Unconfigured Template"]
+    INTERPRETER --> RUN_EXEC
+```
+
+### Architectural Principles
+
+1. **Stack-Agnostic Interface**: AI agents interact exclusively with standardized verbs (`/along-build`, `/along-test`, `/along-dev`, `/along-version-bump`, `/along-dep-scan`). The agent never needs custom prompt tuning for different languages.
+2. **Polyglot Interpreter Selection**:
+   - `.py`: Executed via `sys.executable`.
+   - `.sh`: Executed via `bash` binary.
+   - `.ps1`: Executed via `pwsh` or `powershell` with `-NoProfile -File`.
+   - `.bat` / `.cmd`: Executed via `cmd.exe /c`.
+   - Native binaries: Executed directly.
+3. **Safe Execution without Shell Injection**: All lifecycle commands avoid `shell=True`. Arguments are pre-split or passed as discrete argv lists, preserving spaces and special characters.
+4. **Nearest-Boundary Monorepo Localization**: In modular codebases and Git submodules, the dispatcher locates the nearest `.along/scripts/` hook before falling back to workspace root.
+5. **Non-Destructive Auto-Synthesis**: When hooks are absent, Along analyzes project manifests (`package.json`, `Cargo.toml`, `*.csproj`, `pyproject.toml`, `go.mod`), injects quiet flags (`-q`, `--silent`), and synthesizes an executable `.along/scripts/<action>.py` hook marked with `# Status: verified`.
+
+---
+
 ## Document: docs/topic--dependencies.md (Dependencies & Submodules AI Documentation and Rules)
 
 # Dependencies & Submodules AI Documentation and Rules
@@ -886,6 +936,30 @@ To guarantee that documentation remains synchronized with code and is never sile
 | **`@actdim/msgmesh`** | `packages/dashboard-ui` | `npm` | `1.5.13` | [docs/](../packages/dashboard-ui/node_modules/@actdim/msgmesh/docs) |
 | **`@actdim/utico`** | `packages/dashboard-ui` | `npm` | `1.5.13` | [AGENTS.md](../packages/dashboard-ui/node_modules/@actdim/utico/AGENTS.md) <br> [CLAUDE.md](../packages/dashboard-ui/node_modules/@actdim/utico/CLAUDE.md) <br> [docs/](../packages/dashboard-ui/node_modules/@actdim/utico/docs) <br> manifest metadata (`ai`) |
 | **`cytoscape`** | `packages/dashboard-ui` | `npm` | `3.34.2` | [AGENTS.md](../packages/dashboard-ui/node_modules/cytoscape/AGENTS.md) |
+
+## Custom Project Dependency Hooks (`.along/scripts/dep_scan.py`)
+
+While Along natively auto-discovers dependencies across Node.js (`package.json`), Python (`pyproject.toml`, `requirements*.txt`), .NET NuGet (`*.csproj`), Rust (`Cargo.toml`), and Go (`go.mod`), repositories using other ecosystems or internal package managers can supply a custom discovery hook:
+
+- **Hook Path**: `.along/scripts/dep_scan.py` (or `scan_deps.py`).
+- **Invocation**: `/along-dep-scan` or `along dep-scan` executes the script passing `--json` with working directory set to the project root.
+- **Output Schema**: The script must write a JSON list to stdout:
+  ```json
+  [
+    {
+      "package": "custom-package",
+      "ecosystem": "hex",
+      "version": "1.0.0",
+      "files": [
+        {
+          "filename": "AGENTS.md",
+          "path": "deps/custom-package/AGENTS.md"
+        }
+      ]
+    }
+  ]
+  ```
+- **Monorepo Localization**: In multi-package repositories or submodules, subproject-specific hooks placed in `packages/<subproject>/.along/scripts/dep_scan.py` are executed automatically when scanning that subproject.
 
 ## Usage in Agent Sessions
 When working on features involving any of the modules or external libraries above:
@@ -1696,7 +1770,7 @@ along-init
 *(Or invoke `/along-init` directly inside your AI agent prompt).*
 
 ### What `along-init` Configures:
-1. `AGENTS.md`: Generates the root protocol context with the managed `ALONG-PROTOCOL v2.2.27` block.
+1. `AGENTS.md`: Generates the root protocol context with the managed `ALONG-PROTOCOL v2.2.6` block.
 2. `CLAUDE.md`: Scaffolds the standard `@AGENTS.md` import line.
 3. `.gitattributes`: Configures `merge=union` for `.along/HISTORY.md` and `.along/DECISIONS.md` to prevent merge collisions across branches.
 4. `.along/`: Creates the persistent repository memory skeleton (`ISSUES/`, `DECISIONS.md`, `MILESTONES/`, `RISKS/`, `SPIKES/`, `CHECKLISTS/`, `SESSIONS/`, `docs/`).
@@ -1725,6 +1799,28 @@ flowchart LR
 | `/along-test` | `.along/scripts/test.py` | `pytest -q` \| `npm test` \| `cargo test -q` \| `dotnet test -v q` | Executes unit tests with quiet flags. |
 | `/along-dev` | `.along/scripts/dev.py` | `npm run dev` \| `cargo run` \| `dotnet run` \| `python main.py` | Starts local development server. |
 | `/along-version-bump` | `.along/scripts/bump_version.py` | Node `package.json` \| Python `pyproject.toml` \| Rust `Cargo.toml` \| .NET `*.csproj` | Bumps version and orchestrates release. |
+| `/along-dep-scan` | `.along/scripts/dep_scan.py` | Node `package.json` \| Python `pyproject.toml` \| Rust `Cargo.toml` \| .NET `*.csproj` \| Go `go.mod` | Discovers dependencies and AI instruction rules. |
+
+### Polyglot Hook Selection & Security
+
+Lifecycle hooks are not limited to Python. Along detects the file extension and selects the appropriate interpreter:
+
+| Extension | Runtime / Interpreter | Invocation Pattern |
+| :--- | :--- | :--- |
+| `.py` | Current Python runtime | `[sys.executable, script_path, *args]` |
+| `.sh` | Bash shell | `[bash, script_path, *args]` |
+| `.ps1` | PowerShell Core / Desktop | `[pwsh, -NoProfile, -File, script_path, *args]` |
+| `.bat`, `.cmd` | Windows Command Processor | `[cmd.exe, /c, script_path, *args]` |
+| (binary) | Direct executable | `[script_path, *args]` |
+
+Every invocation enforces `shell=False` and passes command arguments as pre-split lists (`argv`). This guarantees that argument spaces, quotes, and shell metacharacters arrive in the child process without shell injection vulnerabilities.
+
+### Zero-Config Auto-Synthesis & Status Tags
+
+When an AI agent runs `/along-test` or `/along-build` in a repository that lacks `.along/scripts/`:
+1. Along scans repository manifests to identify the active ecosystem (Node.js, Rust, .NET, Python, Go).
+2. If recognized, Along synthesizes a verified hook file (e.g. `.along/scripts/test.py`) with quiet flags (`-q`, `--silent`) and writes a `# Status: verified` header tag.
+3. If the ecosystem cannot be inferred, Along generates a safe template marked `# Status: unconfigured`, prompting the developer or agent to customize the command.
 
 ### Typography: checking and repairing
 
@@ -2041,37 +2137,37 @@ flowchart TD
 ## 3. Development & Lifecycle Execution Runners
 
 ### `along-build`
-- **What it is**: Universal build runner. Executes repository build lifecycle via `.along/scripts/build.py` or auto-detected package runners (`npm run build`, `cargo build`, `dotnet build`, `python -m build`).
+- **What it is**: Universal build runner. Executes repository build lifecycle via `.along/scripts/build.py` (or `.sh`, `.ps1`, `.bat`) with fallback to auto-detected package runners (`npm run build`, `cargo build`, `dotnet build`, `python -m build`). Custom project hooks in `.along/scripts/` take absolute precedence.
 - **Architectural Rationale**:
   - *Non-Destructive Standardized Interface*: AI agents execute a single unified command (`along-build`) across any programming language or technology stack without needing custom per-repo prompt tuning.
 - **Invocation Triggers**:
   - *Explicit*: `/along-build`, `along build` (fallback: `python ~/.along/bin/along_exec.py build`).
   - *Semantic / Automatic*: Triggered after code edits, before pre-commit checks, or when the user prompts *"Build the project"*.
-- **Entities Operated On**: `.along/scripts/build.py`, build output targets (`dist/`, `build/`, `bin/`).
+- **Entities Operated On**: `.along/scripts/build.py` (and `.sh`, `.ps1`, `.bat`), build output targets (`dist/`, `build/`, `bin/`).
 - **Ecosystem Chaining**: Prerequisite for `along-test` and `along-dash` UI builds.
 
 ---
 
 ### `along-test`
-- **What it is**: Universal automated test runner with quiet flags (`pytest -q`, `npm test`, `cargo test -q`, `dotnet test -v q`).
+- **What it is**: Universal automated test runner with quiet flags (`pytest -q`, `npm test`, `cargo test -q`, `dotnet test -v q`). Executes `.along/scripts/test.py` (or `.sh`, `.ps1`, `.bat`) with custom hooks taking absolute precedence over auto-detection.
 - **Architectural Rationale**:
   - *Token Hygiene via Quiet Flags*: Suppresses massive verbose test logs in agent prompts, emitting clean summary counts (pass/fail) to conserve context budget.
 - **Invocation Triggers**:
   - *Explicit*: `/along-test`, `along test` (fallback: `python ~/.along/bin/along_exec.py test`).
   - *Semantic / Automatic*: Triggered during every Reviewer step in `along-team`, before pre-commit in `along-commit`, and during `/along-wrap`.
-- **Entities Operated On**: `.along/scripts/test.py`, test suites (`tests/`, `src/**/*.test.ts`).
+- **Entities Operated On**: `.along/scripts/test.py` (and `.sh`, `.ps1`, `.bat`), test suites (`tests/`, `src/**/*.test.ts`).
 - **Ecosystem Chaining**: Core quality gate for `along-team`, `along-commit`, and `along-version-bump`.
 
 ---
 
 ### `along-dev`
-- **What it is**: Development server runner. Launches local dev servers or debug runners (`npm run dev`, `cargo run`, `dotnet run`, `python main.py`).
+- **What it is**: Development server runner. Launches local dev servers or debug runners via `.along/scripts/dev.py` (or `.sh`, `.ps1`, `.bat`) or auto-detected runners (`npm run dev`, `cargo run`, `dotnet run`, `python main.py`).
 - **Architectural Rationale**:
   - Provides a single standardized hook (`.along/scripts/dev.py`) for background daemon execution.
 - **Invocation Triggers**:
   - *Explicit*: `/along-dev`, `along dev` (fallback: `python ~/.along/bin/along_exec.py dev`).
   - *Semantic / Automatic*: Triggered when the user requests *"Start local dev server"*, *"Run application locally"*.
-- **Entities Operated On**: `.along/scripts/dev.py`.
+- **Entities Operated On**: `.along/scripts/dev.py` (and `.sh`, `.ps1`, `.bat`).
 - **Ecosystem Chaining**: Pairs with `along-dash` for local interactive debugging.
 
 ---
@@ -2105,13 +2201,13 @@ flowchart TD
 ---
 
 ### `along-dep-scan`
-- **What it is**: Hierarchical multi-project and submodule dependency scanner. Scans package manifests (`package.json`, `pyproject.toml`, `Cargo.toml`, `*.csproj`), submodules, and symlinks for declared AI instructions and vendor rules.
+- **What it is**: Hierarchical multi-project and submodule dependency scanner. Scans package manifests (`package.json`, `pyproject.toml`, `Cargo.toml`, `*.csproj`), custom hooks (`.along/scripts/dep_scan.py`), submodules, and symlinks for declared AI instructions and vendor rules.
 - **Architectural Rationale**:
-  - Extracts subproject constraints and vendor AI rules into `docs/topic--dependencies.md`, giving agents unified visibility into third-party constraints without manual file hunting.
+  - Extracts subproject constraints, custom ecosystem hooks, and vendor AI rules into `docs/topic--dependencies.md`, giving agents unified visibility into third-party constraints without manual file hunting.
 - **Invocation Triggers**:
   - *Explicit*: `/along-dep-scan`, `along dep-scan` (fallback: `python ~/.along/bin/along_exec.py dep-scan`).
   - *Semantic / Automatic*: Triggered during `/along-init`, after dependency updates, or when adding a new Git submodule.
-- **Entities Operated On**: `package.json`, `pyproject.toml`, `Cargo.toml`, `*.csproj`, `docs/topic--dependencies.md`.
+- **Entities Operated On**: `package.json`, `pyproject.toml`, `Cargo.toml`, `*.csproj`, `.along/scripts/dep_scan.py`, `docs/topic--dependencies.md`.
 - **Ecosystem Chaining**: Feeds architectural constraints into `docs/topic--dependencies.md` and `along-kb-sync`.
 
 ---

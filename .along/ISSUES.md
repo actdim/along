@@ -23,9 +23,9 @@
 <!-- Planned or deferred issues -->
 
 ## Done (recent)
+- [x] `(docs)` [pluggable-lifecycle-hooks-showcase](ISSUES/done/docs--pluggable-lifecycle-hooks-showcase.md)
 - [x] `(debt)` [generated-dashboard-artifact-committed](ISSUES/done/debt--generated-dashboard-artifact-committed.md)
 - [x] `(debt)` [exception-swallowing-hides-failures](ISSUES/done/debt--exception-swallowing-hides-failures.md)
 - [x] `(debt)` [entity-status-enum-and-unused-taxonomy](ISSUES/done/debt--entity-status-enum-and-unused-taxonomy.md)
 - [x] `(bug)` [kb-sync-readme-alert-summary](ISSUES/done/bug--kb-sync-readme-alert-summary.md)
-- [x] `(bug)` [generated-lifecycle-hooks-use-shell-string-concat](ISSUES/done/bug--generated-lifecycle-hooks-use-shell-string-concat.md)
-<!-- 68 older completed issue(s) archived in .along/ISSUES/done/ -->
+<!-- 69 older completed issue(s) archived in .along/ISSUES/done/ -->
