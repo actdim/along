@@ -114,8 +114,9 @@ def bump_along_dev_repo(repo_root, new_version, tx):
     protocol_line = (r'# ALONG-PROTOCOL v\d+\.\d+\.\d+', f'# ALONG-PROTOCOL v{new_version}')
     protocol_mention = (r'ALONG-PROTOCOL v\d+\.\d+\.\d+', f'ALONG-PROTOCOL v{new_version}')
 
-    # 1. Update skills/along-init/protocol.md
+    # 1. Update skills/along-init/protocol.md and skills/along-init/SKILL.md
     apply(os.path.join(repo_root, "skills", "along-init", "protocol.md"), [protocol_line])
+    apply(os.path.join(repo_root, "skills", "along-init", "SKILL.md"), [protocol_mention])
 
     # 2. Update root AGENTS.md
     apply(os.path.join(repo_root, "AGENTS.md"), [protocol_line])
