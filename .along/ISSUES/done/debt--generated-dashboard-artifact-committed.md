@@ -3,10 +3,11 @@ protocol: along
 protocol_version: 2.2.8
 slug: generated-dashboard-artifact-committed
 type: debt
-status: open
+status: done
+completed: 2026-09-09
 priority: medium
 created: 2026-09-01
-updated: 2026-09-01
+updated: 2026-09-09
 agent: claude-code
 tags: [git, artifacts, projections, merge-strategy, churn]
 milestone: v3.0.0-global-quality-revision
@@ -74,8 +75,16 @@ strength.
 
 ## Acceptance Criteria
 
-- [ ] Generated dashboard artifacts untracked, or exported explicitly to a documented path.
-- [ ] Every derived projection named in the Zero-Manual-Merge Rule with a defined strategy.
-- [ ] Test suite no longer regenerates tracked artifacts.
-- [ ] Guard test in place.
-- [ ] ADR recorded.
+- [x] Generated dashboard artifacts untracked, or exported explicitly to a documented path.
+- [x] Every derived projection named in the Zero-Manual-Merge Rule with a defined strategy.
+- [x] Test suite no longer regenerates tracked artifacts.
+- [x] Guard test in place.
+- [x] ADR recorded.
+
+## Resolution
+
+- `.along/dashboard.html` and `.along/DASHBOARD.md` untracked and removed from Git, added to `.gitignore`.
+- Concurrency protocol updated in `AGENTS.md` and `skills/along-init/protocol.md` to split Tracked Derived Projections (`.along/ISSUES.md`, `docs/INDEX.md`) from Untracked Export Artifacts (`.along/dashboard.html`, `.along/DASHBOARD.md`).
+- `merge=ours` in `.gitattributes` critically evaluated and rejected due to absence of standard built-in git driver; Zero-Manual-Merge Rule (recompile from source) reaffirmed.
+- `tests/test_zz_hermetic_suite.py` updated with `test_03_no_unapproved_derived_projections_are_tracked`.
+- `ADR-2026-09-09--untracked-dashboard-artifacts-and-projection-policy` recorded in `.along/DECISIONS.md` and `.along/CONSTRAINTS.md` recompiled.

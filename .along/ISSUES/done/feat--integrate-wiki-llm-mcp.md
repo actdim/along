@@ -2,7 +2,7 @@
 protocol: along
 slug: integrate-wiki-llm-mcp
 type: feat
-status: done
+status: cancelled
 priority: high
 created: 2026-08-26
 updated: 2026-08-26
@@ -16,12 +16,17 @@ related: []
 
 # Integrate WikiLLM MCP Server for Hybrid MD Documentation Search
 
+> [!NOTE]
+> Cancelled / Abandoned in favor of Along's native LLM-Wiki pipeline (`along-kb-sync` + `along-kb-search` over `docs/`).
+
 ## Goal
-Integrate the [`NexusLayerEU/wiki-llm`](https://github.com/NexusLayerEU/wiki-llm) MCP server into the `Along` suite to provide agents (Antigravity, Claude Code, Codex, OpenCode) with hybrid semantic search (TF-IDF + Vector Embeddings + Cross-links) across existing `.md` documentation (`.along/`, `docs/`, `wiki/`, `README.md`) without requiring external LLM extraction overhead.
+Integrate the [`NexusLayerEU/wiki-llm`](https://github.com/NexusLayerEU/wiki-llm) MCP server into the `Along` suite to provide agents with hybrid semantic search.
+
+## Status
+Cancelled / Superseded: third-party `wiki-llm` MCP integration was evaluated and discarded. Knowledge Base search is handled natively by `along_kb_search.py` without external MCP dependencies.
 
 ## Acceptance Criteria
-- [x] Issue file and board updated in `.along/`.
-- [x] `wiki-llm` MCP registration added to `install.ps1` and `install.sh`.
-- [x] Dedicated `skills/sync-wiki/SKILL.md` and `skills/search-wiki/SKILL.md` created to trigger hybrid index updates and search queries.
-- [x] `AGENTS.md` and `init-agents` protocol updated with `wiki-llm` guidance.
+- [x] Evaluated third-party wiki-llm MCP integration.
+- [x] Decided against external MCP dependency in favor of native along-kb-search.
+- [x] Removed ghost wiki_query references from AGENTS.md and protocol.
 

@@ -10,7 +10,7 @@ agent: antigravity
 tags: [stability, gates, git, ast, runtime, inquiry-read-only, role-escalation]
 milestone: v3.0.0-global-quality-revision
 blocked_by: []
-related: []
+related: [feat--runtime-enforcement-of-prose-rules, feat--systemic-anomaly-circuit-breaker]
 ---
 
 # Programmatic Code Integrity Gates, Git Self-Healing, and Role-Based Process Guards
@@ -78,24 +78,20 @@ To reduce human friction and eliminate these failures, Along must implement acti
   - `python scripts/along_exec.py patch replace-func <target_file> <function_name> <replacement_code_file>`
   - Uses Python `ast` to parse both the target file and replacement code, locate the AST node, swap it, and verify that the resulting file compiles before writing back to disk.
 
-### 7. PostToolUse Syntax Validation Hook (Antigravity Customization)
-- Define an IDE lifecycle hook in `.gemini/hooks/` or `agy-customizations`:
-  - Hook into `PostToolUse` for `replace_file_content` and `write_to_file`.
-  - When the target file ends in `.py`, execute `python -m py_compile <target_file>`.
-  - If it fails, report an immediate error to the agent to trigger automatic rollback/correction before user interaction.
+### 7. PostToolUse Syntax Validation Hook (Delegated to feat--runtime-enforcement-of-prose-rules)
+- Integrated into unified hook engine as `SyntaxCheckHandler` under `alongkit.hooks`.
+- When modified target file ends in `.py`, executes `python -m py_compile <target_file>` in `PostToolUse`.
 
-### 8. Repository Line Ending Normalization (`.gitattributes`)
-- Explicitly enforce `* text=auto eol=lf` across all text files to eliminate byte-offset drift during string replacements on Windows.
+### 8. Repository Line Ending Normalization (`.gitattributes`) [COMPLETED]
+- Enforced `* text eol=lf` across Markdown, Python, JSON, and YAML text files in `.gitattributes`.
 
 ## Acceptance Criteria
 - [ ] Protocol updated with `Inquiry Read-Only Invariance` rule in `AGENTS.md` and `skills/along-init/protocol.md`.
 - [ ] Implementation plan template updated with mandatory `Adaptive Complexity Escalation` routing.
-- [ ] `.gemini/hooks/` pre-tool hook blocks file modifications on inquiry prompts.
+- [ ] Runtime hook interception for inquiry prompts delegated to `feat--runtime-enforcement-of-prose-rules` (`InquiryReadOnlyGate`).
 - [ ] `.along/scripts/test.py` includes a pre-flight `compileall` gate that halts on any syntax error before launching tests.
-- [x] `alongkit.proc` / `alongkit.repo` has automated detection and recovery for 0-byte `.git/index` and stale `.git/index.lock`.
-- [ ] `along-commit` executes non-bypassable pre-flight syntax, typography, and link integrity gates.
-- [ ] `along_exec.py` provides an AST-safe function replacement command.
-- [ ] Clean `.gitattributes` with `eol=lf` committed to repository root.
+- [x] `alongkit.proc` / `alongkit.repo` has automated detection and recovery for 0-byte `.git/index` and stale `.git/index.lock` (implemented in `scripts/alongkit/proc.py:168-235`).
+- [ ] `along-commit` executes non-bypassable pre-flight syntax and link integrity gates (typography gate already active).
+- [ ] `along_exec.py` provides an AST-safe function replacement command (`patch replace-func`).
+- [x] Clean `.gitattributes` with `eol=lf` committed to repository root.
 - [ ] Unit tests in `tests/test_skills_and_scripts.py` verify that every gate correctly blocks invalid changes, heals corrupted indices, and enforces read-only invariance.
-
-

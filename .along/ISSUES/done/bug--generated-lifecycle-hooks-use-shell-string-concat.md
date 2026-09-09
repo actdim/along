@@ -3,11 +3,12 @@ protocol: along
 protocol_version: 2.2.8
 slug: generated-lifecycle-hooks-use-shell-string-concat
 type: bug
-status: open
+status: done
+completed: 2026-09-08
 priority: medium
 created: 2026-09-01
-updated: 2026-09-01
-agent: claude-code
+updated: 2026-09-08
+agent: antigravity
 tags: [along-exec, codegen, shell-injection, determinism]
 milestone: v3.0.0-global-quality-revision
 blocked_by: []
@@ -86,7 +87,7 @@ Issues:
 
 ## Acceptance Criteria
 
-- [ ] No `shell=True` remains in `along_exec.py`.
-- [ ] Arguments with spaces and metacharacters pass through unmodified.
-- [ ] Hook template extracted to a file and covered by tests.
-- [ ] Generated hooks use the shared resolver.
+- [x] No `shell=True` remains in `along_exec.py`.
+- [x] Arguments with spaces and metacharacters pass through unmodified.
+- [x] Hook template extracted to a file and covered by tests.
+- [x] Generated hooks use the shared resolver.

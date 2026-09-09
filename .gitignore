@@ -36,6 +36,8 @@ htmlcov/
 
 # Local dashboard static build artifact
 dashboard/ui/dist/
+.along/dashboard.html
+.along/DASHBOARD.md
 
 # Ephemeral session blackboards
 .along/.session/

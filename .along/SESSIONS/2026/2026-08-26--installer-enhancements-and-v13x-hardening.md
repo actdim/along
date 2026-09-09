@@ -8,7 +8,7 @@ commit: 4a8f968
 summary: Windows Junction fallback, .code-review-graph-ignore scaffolding, and v1.3.x release hardening.
 milestone: v1.3.0-knowledge-base-and-graph
 issues_advanced: []
-issues_completed: [feat--installer-junction-fallback-and-dependencies, feat--graph-ignore-and-interactive-skills-refinement, feat--version-bump-automation-and-release-hardening]
+issues_completed: [bug--installer-junction-fallback-and-dependencies, feat--graph-ignore-and-interactive-skills-refinement, feat--version-bump-automation-and-release-hardening]
 decisions: []
 risks_logged: []
 spikes_conducted: []

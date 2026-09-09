@@ -97,7 +97,7 @@ Agent Action: Execution halted. Awaiting human confirmation.
 - [ ] High-visibility human escalation report formatted with prescribed remediation steps.
 - [ ] Tool execution guard blocks prohibited global install commands (`pip install`, `npm install -g`).
 - [ ] Unit tests in `tests/test_skills_and_scripts.py` verify that:
-  - 0-byte `.git/index` trips the breaker and stops execution.
+  - Unrecoverable VCS corruption (or failure of `alongkit.proc` self-healing) trips the breaker and stops execution.
   - Repeated syntax failures trigger a circuit breaker halt instead of infinite edit loops.
   - Human confirmation and clean health probe reset the breaker cleanly.
 

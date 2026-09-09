@@ -176,6 +176,30 @@ def build_entity_dag_graph(collector) -> Dict[str, Any]:
             parent_id = iss.parent if "--" in iss.parent else f"feat--{iss.parent}"
             add_edge(parent_id, iss.id, "parent_of", "child")
 
+        if iss.superseded_by:
+            target_id = None
+            if "--" in iss.superseded_by:
+                target_id = iss.superseded_by
+            else:
+                for candidate in collector.issues:
+                    if candidate.slug == iss.superseded_by:
+                        target_id = candidate.id
+                        break
+            if target_id:
+                add_edge(target_id, iss.id, "supersedes", "superseded by")
+
+        if iss.duplicate_of:
+            target_id = None
+            if "--" in iss.duplicate_of:
+                target_id = iss.duplicate_of
+            else:
+                for candidate in collector.issues:
+                    if candidate.slug == iss.duplicate_of:
+                        target_id = candidate.id
+                        break
+            if target_id:
+                add_edge(iss.id, target_id, "duplicate_of", "duplicate of")
+
     # D. Decision supersedes relationships
     for dec in collector.decisions:
         if dec.superseded_by:

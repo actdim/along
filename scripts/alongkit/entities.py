@@ -33,7 +33,17 @@ from .markdown import github_heading_anchor
 # ---------------------------------------------------------------------------
 
 ISSUE_TYPES: tuple = ("feat", "bug", "debt", "task", "docs")
-ISSUE_STATUSES: tuple = ("open", "in-progress", "blocked", "done")
+ISSUE_STATUSES: tuple = (
+    "open",
+    "in-progress",
+    "blocked",
+    "done",
+    "superseded",
+    "cancelled",
+    "duplicate",
+)
+CLOSED_ISSUE_STATUSES: tuple = ("done", "superseded", "cancelled", "duplicate")
+DELIVERED_ISSUE_STATUSES: tuple = ("done",)
 PRIORITIES: tuple = ("critical", "high", "medium", "low")
 
 MILESTONE_STATUSES: tuple = ("open", "in-progress", "completed")
@@ -133,6 +143,35 @@ def issue_filename(entity_type: str, slug: str) -> str:
 def session_filename(day: str, slug: str) -> str:
     """File name of a session log: date first, so a directory listing sorts by time."""
     return f"{day}--{slug}.md"
+
+
+# ---------------------------------------------------------------------------
+# Issue Type Inference Heuristics (REQ-5)
+# ---------------------------------------------------------------------------
+
+BUG_KEYWORDS: tuple = (
+    "fix", "bug", "issue", "leak", "crash", "error", "fail", "failure",
+    "broken", "regression", "hang", "deadlock", "race", "flaky",
+)
+DEBT_KEYWORDS: tuple = (
+    "debt", "refactor", "cleanup", "clean", "audit", "tidy", "deprecate",
+    "prune", "dedup", "unify", "reorganize", "sanitize", "migrate", "parity",
+)
+DOCS_KEYWORDS: tuple = (
+    "doc", "docs", "readme", "guide", "manual", "documentation",
+)
+
+
+def infer_issue_type(text: str) -> str:
+    """Infer the most appropriate issue type from title, slug, or description."""
+    words = set(re.findall(r"[a-z0-9]+", str(text).lower()))
+    if any(k in words for k in BUG_KEYWORDS):
+        return "bug"
+    if any(k in words for k in DEBT_KEYWORDS):
+        return "debt"
+    if any(k in words for k in DOCS_KEYWORDS):
+        return "docs"
+    return "feat"
 
 
 # ---------------------------------------------------------------------------
@@ -368,7 +407,8 @@ def scan_issues(repo_root: str, include_done: bool = False) -> List[Dict[str, An
                 "status": status,
                 "priority": fm.get("priority", "medium"),
                 "file_path": fpath,
-                "done": is_done or status == "done",
+                "done": is_done or status in CLOSED_ISSUE_STATUSES,
+                "delivered": status in DELIVERED_ISSUE_STATUSES,
                 "frontmatter": fm,
             })
     return issues
@@ -664,7 +704,7 @@ def validate_entities(repo_root: str) -> Dict[str, Any]:
         if not updated or not is_iso_date(updated):
             errors.append((rel, f"missing or invalid updated date: '{updated}' (expected YYYY-MM-DD)"))
 
-        if iss["done"] or istatus == "done":
+        if iss["done"] or istatus in CLOSED_ISSUE_STATUSES:
             completed = fm.get("completed")
             if not completed or not is_iso_date(completed):
                 errors.append((rel, f"missing or invalid completed date on closed issue: '{completed}' (expected YYYY-MM-DD)"))
@@ -689,6 +729,16 @@ def validate_entities(repo_root: str) -> Dict[str, Any]:
             for r in related:
                 if r and not _resolve_ref(r, known_entity_keys):
                     errors.append((rel, f"dangling related reference: '{r}'"))
+
+        superseded_by = fm.get("superseded_by")
+        if superseded_by and str(superseded_by).strip():
+            if not _resolve_ref(superseded_by, known_entity_keys):
+                errors.append((rel, f"dangling superseded_by reference: '{superseded_by}'"))
+
+        duplicate_of = fm.get("duplicate_of")
+        if duplicate_of and str(duplicate_of).strip():
+            if not _resolve_ref(duplicate_of, known_entity_keys):
+                errors.append((rel, f"dangling duplicate_of reference: '{duplicate_of}'"))
 
     # 2. Validate Milestones
     for m in all_milestones:

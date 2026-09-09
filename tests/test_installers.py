@@ -295,6 +295,8 @@ class TestMcpRegistrationContract(InstallerCase):
             data = json.load(handle)
         self.assertEqual(data["mcpServers"][install.MCP_SERVER_NAME],
                          install.MCP_SERVER_ENTRY)
+        self.assertEqual(install.MCP_SERVER_ENTRY["args"], [install.MCP_SERVER_PACKAGE])
+        self.assertIn("==", install.MCP_SERVER_PACKAGE)
 
     def test_an_existing_configuration_is_preserved_and_not_duplicated(self):
         home = self.make_home()
@@ -341,6 +343,7 @@ class TestMcpRegistrationContract(InstallerCase):
             body = handle.read()
         self.assertIn("model = \"o3\"", body, "the existing configuration must survive")
         self.assertIn(f"[mcp_servers.{install.MCP_SERVER_NAME}]", body)
+        self.assertIn(install.MCP_SERVER_PACKAGE, body)
 
         second = install.configure_mcp(["codex"], homes, include_unverified=True)
         self.assertEqual(second[0]["status"], "present")

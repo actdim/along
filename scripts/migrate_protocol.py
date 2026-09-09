@@ -720,15 +720,19 @@ def step_migrate_v2_1_docs_wiki_and_archive(mig, repo_root, interactive=True):
             verb = "would be migrated" if mig.dry_run else "migrated"
             print(f"   [OK] Knowledge Base {verb} to docs/.")
         else:
-            print(f"   [WARN] along_kb_sync returned code {res.returncode}: {res.stderr.strip()}")
+            err_msg = f"along_kb_sync returned code {res.returncode}: {res.stderr.strip()}"
+            print(f"   [WARN] {err_msg}")
+            mig.record_error(err_msg)
     else:
         # Fallback: import if in sys.path
         try:
             import along_kb_sync
             along_kb_sync.sync_kb(repo_root, check_only=mig.dry_run)
             print("   [OK] Knowledge Base migrated to docs/ via import.")
-        except Exception as e:
-            print(f"   [WARN] Step 7 Knowledge Base migration fallback error: {e}")
+        except (ImportError, AttributeError, OSError, ValueError) as e:
+            err_msg = f"Step 7 Knowledge Base migration fallback error: {e}"
+            print(f"   [WARN] {err_msg}")
+            mig.record_error(err_msg)
 
     # Final cleanup: purge legacy .along/KB and .agents/KB. Both
     # are backed up first; their content has already been ingested into docs/, but a
@@ -741,7 +745,7 @@ def step_migrate_v2_1_docs_wiki_and_archive(mig, repo_root, interactive=True):
     if os.path.exists(context_file):
         try:
             content = textio.read_text(context_file, strict=False)
-        except Exception:
+        except (OSError, UnicodeDecodeError):
             content = ""
             
         lines = [l.strip() for l in content.splitlines() if l.strip()]
@@ -829,7 +833,7 @@ def scan_shell_escape_artifacts_in_docs(repo_root, detected_version):
         fpath = os.path.join(docs_dir, f)
         try:
             content = textio.read_text(fpath, strict=False)
-        except Exception:
+        except (OSError, UnicodeDecodeError):
             continue
 
         in_fence = False
@@ -857,7 +861,7 @@ def scan_shell_escape_artifacts_in_docs(repo_root, detected_version):
 
 # Main Migration Controller
 # ----------------------------------------------------------------------
-def run_migrations(repo_root, dry_run=True, force=False, backup=True):
+def run_migrations(repo_root, dry_run=True, force=False, backup=True, verbose=False):
     """Run every migration step against `repo_root` and return a process exit code.
 
 
@@ -978,14 +982,14 @@ def run_migrations(repo_root, dry_run=True, force=False, backup=True):
                 from alongkit import entities
                 out_path = entities.sync_constraints(repo_root)
                 mig.record("constraints projection", out_path, "generated")
-            except Exception as e:
+            except (OSError, ValueError) as e:
                 print(f"   [WARN] Could not generate CONSTRAINTS.md: {e}")
         else:
             print("   [DRY-RUN] Would generate .along/CONSTRAINTS.md")
 
     # The state marker is written last, so a run that died halfway is not recorded as
     # a completed migration.
-    if not dry_run and not errors:
+    if not dry_run and not errors and not mig.errors:
         mig.record_state(CURRENT_PROTOCOL_VERSION)
 
     print("--------------------------------------------------")
@@ -993,10 +997,17 @@ def run_migrations(repo_root, dry_run=True, force=False, backup=True):
         print(line)
     print("--------------------------------------------------")
 
+    has_failures = bool(errors or mig.errors)
+
     if dry_run:
-        print(f"-> [OK] Dry run complete; no file was written. Re-run with --apply to "
+        status_msg = "[WARN] Dry run complete with errors." if has_failures else "[OK] Dry run complete; no file was written."
+        print(f"-> {status_msg} Re-run with --apply to "
               f"perform the Along v{CURRENT_PROTOCOL_VERSION} migrations & validations.")
-        return 0
+        return 1 if has_failures else 0
+
+    if has_failures:
+        print(f"-> [FAIL] Along v{CURRENT_PROTOCOL_VERSION} migration completed with errors.")
+        return 1
 
     print(f"-> [OK] All Along v{CURRENT_PROTOCOL_VERSION} migrations & validations completed successfully!")
     return 0
@@ -1033,28 +1044,18 @@ def step_migrate_v2_2_5_link_rewriting_and_integrity(mig, repo_root, detected_ve
                        announce=False)
         else:
             print("   [OK] Inbound links clean; verified all relative Markdown links on disk.")
-    except Exception as e:
-        candidates = [
-            os.path.join(repo_root, "scripts", "along_kb_sync.py"),
-            os.path.join(exec_dir, "along_kb_sync.py"),
-            os.path.join(user_home, ".along", "bin", "along_kb_sync.py"),
-            os.path.join(user_home, ".config", "opencode", "actdim-along", "along_kb_sync.py"),
-        ]
-        for c in candidates:
-            if os.path.isfile(c):
-                res = proc.run_python([c, repo_root, *(["--check"] if mig.dry_run else [])])
-                if res.ok:
-                    print("   [OK] Inbound links repaired via along_kb_sync.py.")
-                else:
-                    print(f"   [WARN] along_kb_sync returned code {res.returncode}: {res.stderr.strip()}")
-                break
+    except (ImportError, AttributeError, OSError, ValueError) as e:
         kb_script = repo.resolve_tool_script("along_kb_sync.py", repo_root, skill_folder="along-kb-sync")
         if kb_script:
             res = proc.run_python([kb_script, repo_root, *(["--check"] if mig.dry_run else [])])
             if res.ok:
                 print("   [OK] Inbound links repaired via along_kb_sync.py.")
             else:
-                print(f"   [WARN] along_kb_sync returned code {res.returncode}: {res.stderr.strip()}")
+                err_msg = f"along_kb_sync returned code {res.returncode}: {res.stderr.strip()}"
+                print(f"   [WARN] {err_msg}")
+                mig.record_error(err_msg)
+        else:
+            mig.record_error(f"Inbound link repair failed: {e}")
 
 def main(argv=None):
     parser = argparse.ArgumentParser(
@@ -1072,6 +1073,8 @@ def main(argv=None):
                         help="re-run every step even when the recorded state is current")
     parser.add_argument("--no-backup", action="store_true",
                         help="skip the pre-migration copy of the state directory")
+    parser.add_argument("-v", "--verbose", "--debug", action="store_true",
+                        help="enable verbose output on errors")
     args = parser.parse_args(argv)
 
     # Dry-run unless a human asked for the mutation, either by passing --apply or by
@@ -1084,7 +1087,8 @@ def main(argv=None):
               "Pass --apply to perform the migration.")
 
     return run_migrations(os.path.abspath(args.repo_root), dry_run=dry_run,
-                          force=args.force, backup=not args.no_backup)
+                          force=args.force, backup=not args.no_backup,
+                          verbose=args.verbose)
 
 
 if __name__ == "__main__":

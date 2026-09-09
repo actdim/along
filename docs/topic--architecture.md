@@ -112,16 +112,14 @@ flowchart LR
     subgraph Projections["Compiled Projections (Derived Views)"]
         IB["Active Issue Board (.along/ISSUES.md)"]
         KI["Knowledge Index (docs/INDEX.md)"]
-        DB["Dashboard Report (.along/DASHBOARD.md)"]
     end
 
     I -->|along-issue-sync| IB
     T -->|along-kb-sync| KI
-    I & S & T -->|along-dash| DB
 ```
 
 1. **Atomic SSOT Files**: Each issue (`.along/ISSUES/<type>--<slug>.md`) and session journal (`.along/SESSIONS/<YYYY>/<date>--<slug>.md`) is an isolated Markdown file with YAML front-matter. Parallel branches create distinct files, resulting in zero Git merge collisions.
-2. **Derived Projections**: `.along/ISSUES.md`, `docs/INDEX.md`, and `.along/DASHBOARD.md` are dynamically compiled views. Under the **Zero-Manual-Merge Rule**, developers and agents never resolve Git conflicts in projection files manually: accept either version and run `/along-issue-sync` or `/along-kb-sync` to recompile cleanly from source.
+2. **Derived Projections & Export Artifacts**: `.along/ISSUES.md` and `docs/INDEX.md` are dynamically compiled views tracked in Git as entry points. Under the **Zero-Manual-Merge Rule**, developers and agents never resolve Git conflicts in projection files manually: accept either version and run `/along-issue-sync` or `/along-kb-sync` to recompile cleanly from source. Generated dashboards (`.along/dashboard.html`, `.along/DASHBOARD.md`) are untracked export artifacts kept out of Git via `.gitignore`.
 3. **Append-Only Linear Merge Driver**: `.along/HISTORY.md` and `.along/DECISIONS.md` are append-only. `.gitattributes` configures `merge=union` for these files, enabling Git to automatically combine appended entries from concurrent branches without conflicts.
 
 ---
@@ -284,6 +282,12 @@ Two tests keep the duplication from growing back
 
 A third asserts that an engine still runs from a flat directory copy, and a fourth that
 both installers carry the package.
+
+A fifth structural gate enforces clean exception handling (`alongkit.gates.exception_handling_gate`),
+verifying via AST analysis that zero bare `except:` or swallowed generic `except Exception: pass`
+clauses exist across `scripts/` and `dashboard/`. Internal engine errors and skipped entity files
+are systematically reported and recorded through centralized telemetry in `alongkit.diagnostics`
+(`try_record_incident`). See [ADR-2026-09-09--error-handling-and-failure-visibility](../.along/DECISIONS.md).
 
 Two more guard the suite itself
 ([tests/test_zz_hermetic_suite.py](../tests/test_zz_hermetic_suite.py)): the working tree

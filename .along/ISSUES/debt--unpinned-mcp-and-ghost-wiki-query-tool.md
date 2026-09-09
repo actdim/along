@@ -3,11 +3,11 @@ protocol: along
 protocol_version: 2.2.8
 slug: unpinned-mcp-and-ghost-wiki-query-tool
 type: debt
-status: open
+status: in-progress
 priority: high
 created: 2026-09-01
-updated: 2026-09-01
-agent: claude-code
+updated: 2026-09-07
+agent: antigravity
 tags: [mcp, dependencies, supply-chain, ghost-capability, gates]
 milestone: v3.0.0-global-quality-revision
 blocked_by: []
@@ -90,9 +90,9 @@ own history misleads the next session.
 
 ## Acceptance Criteria
 
-- [ ] MCP dependency pinned to an exact version in one place.
-- [ ] Preflight check reports MCP availability.
-- [ ] No documentation references a tool that nothing provides.
-- [ ] Gate wording matches enforceability; skipped gates are recorded in session logs.
-- [ ] Vector-indexing / wiki-llm entity records corrected.
-- [ ] Documentation-to-capability test in place.
+- [x] MCP dependency pinned to an exact version in one place.
+- [x] Preflight check reports MCP availability.
+- [x] No documentation references a tool that nothing provides.
+- [x] Gate wording matches enforceability; skipped gates are recorded in session logs.
+- [x] Vector-indexing / wiki-llm entity records corrected.
+- [x] Documentation-to-capability test in place.

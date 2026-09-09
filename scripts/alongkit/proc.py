@@ -24,6 +24,7 @@ if __name__ == "__main__":
 
 
 import os
+import shutil
 import subprocess
 import sys
 import time
@@ -90,6 +91,14 @@ def child_env(extra: Optional[Dict[str, str]] = None,
     return env
 
 
+def _resolve_cmd(cmd: Command, shell: bool) -> Command:
+    if os.name == "nt" and not shell and isinstance(cmd, (list, tuple)) and cmd:
+        resolved = shutil.which(cmd[0])
+        if resolved:
+            return [resolved, *cmd[1:]]
+    return cmd
+
+
 def run_capture(cmd: Command,
                 cwd: Optional[str] = None,
                 timeout: Optional[float] = None,
@@ -104,9 +113,10 @@ def run_capture(cmd: Command,
     or that exceeds `timeout`, is reported as a Result with a non-zero returncode
     and the reason in `stderr`; only `check=True` turns a failure into an exception.
     """
+    target_cmd = _resolve_cmd(cmd, shell)
     try:
         completed = subprocess.run(
-            cmd,
+            target_cmd,
             cwd=cwd,
             shell=shell,
             input=stdin_text,
@@ -140,8 +150,9 @@ def run_passthrough(cmd: Command,
     For dispatching to another tool whose output belongs to the user, where
     capturing would hide progress. The UTF-8 child environment still applies.
     """
+    target_cmd = _resolve_cmd(cmd, shell)
     try:
-        completed = subprocess.run(cmd, cwd=cwd, shell=shell,
+        completed = subprocess.run(target_cmd, cwd=cwd, shell=shell,
                                    env=child_env(base=env) if env is not None else child_env())
         return completed.returncode
     except (OSError, ValueError) as exc:
@@ -169,7 +180,7 @@ def _find_git_dir(start_dir: str) -> Optional[str]:
                     if not os.path.isabs(gdir):
                         gdir = os.path.normpath(os.path.join(cur, gdir))
                     return gdir
-            except Exception:
+            except (OSError, UnicodeDecodeError):
                 pass
         parent = os.path.dirname(cur)
         if parent == cur:
@@ -189,7 +200,7 @@ def _heal_git_index(git_dir: str, work_tree: str, force_lock: bool = False) -> b
             if force_lock or lock_age > 5.0:
                 os.remove(lock_path)
                 healed = True
-        except Exception:
+        except OSError:
             pass
 
     if os.path.isfile(idx_path):
@@ -199,7 +210,7 @@ def _heal_git_index(git_dir: str, work_tree: str, force_lock: bool = False) -> b
                 os.remove(idx_path)
                 run_capture(["git", "reset"], cwd=work_tree)
                 healed = True
-        except Exception:
+        except OSError:
             pass
     return healed
 

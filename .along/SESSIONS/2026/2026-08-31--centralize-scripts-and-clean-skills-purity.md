@@ -8,7 +8,7 @@ commit: []
 summary: Consolidate standalone tools into scripts/, purge skills/ of Python files, implement unified along_exec router, fix test discovery and update installers.
 milestone: v2.1.0-along
 issues_advanced: []
-issues_completed: [feat--centralize-scripts-and-clean-skills-purity]
+issues_completed: [debt--centralize-scripts-and-clean-skills-purity]
 decisions: []
 risks_logged: []
 spikes_conducted: []

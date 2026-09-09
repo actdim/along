@@ -61,7 +61,7 @@ def get_mapped_commits(agents_dir: str) -> Set[str]:
                         mapped_commits.add(clean)
             for m in re.finditer(r"`([a-fA-F0-9]{7,40})`", content):
                 mapped_commits.add(m.group(1).strip()[:7].lower())
-        except Exception:
+        except (OSError, UnicodeDecodeError):
             pass
     return mapped_commits
 
@@ -220,7 +220,7 @@ spikes_conducted: []
                     existing_hist += "\n" + h_line
             with open(history_file, "w", encoding="utf-8", newline="\n") as f:
                 f.write(existing_hist.strip() + "\n")
-        except Exception:
+        except (OSError, UnicodeDecodeError):
             pass
 
     return issues_created, sessions_created

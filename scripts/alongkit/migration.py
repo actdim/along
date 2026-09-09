@@ -214,6 +214,7 @@ class Migration:
         self.plan: List[PlannedOp] = []
         self.conflicts: List[Conflict] = []
         self.skipped: List[Tuple[str, str]] = []
+        self.errors: List[str] = []
         self.backup_dir: Optional[str] = None
         self._backup_enabled = backup
         self._backup_done = False
@@ -232,6 +233,11 @@ class Migration:
         if announce:
             self._print(f"   [{'would' if self.dry_run else 'done'}] {op.render()}")
         return op
+
+    def record_error(self, message: str) -> None:
+        """Note an error encountered during migration."""
+        self.errors.append(message)
+        self._print(f"   [ERROR] {message}")
 
     def note_skipped(self, path: str, reason: str) -> None:
         """A file the migration deliberately did not touch, and why."""
@@ -443,6 +449,9 @@ class Migration:
         if self.skipped:
             lines.append("Files skipped:")
             lines.extend(f"   {path}: {reason}" for path, reason in self.skipped)
+        if self.errors:
+            lines.append("Errors encountered:")
+            lines.extend(f"   {err}" for err in self.errors)
         if self.backup_dir:
             verb = "would be written to" if self.dry_run else "written to"
             lines.append(f"Backup {verb} {self.rel(self.backup_dir)}")

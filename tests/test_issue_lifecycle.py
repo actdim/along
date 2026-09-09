@@ -40,7 +40,7 @@ if SCRIPTS_DIR not in sys.path:
 import along_exec as ax
 from alongkit import entities, frontmatter as fm, proc
 
-VALID_STATUSES = {"open", "in-progress", "blocked", "done"}
+VALID_STATUSES = {"open", "in-progress", "blocked", "done", "superseded", "cancelled", "duplicate"}
 
 IN_PROGRESS_ISSUE = """---
 protocol: along
@@ -224,7 +224,7 @@ class TestRepositoryEntityIntegrity(unittest.TestCase):
 
         self.assertEqual(
             violations, [],
-            "Issues carry statuses outside {open, in-progress, blocked, done}:\n" + "\n".join(violations)
+            "Issues carry statuses outside declared enum:\n" + "\n".join(violations)
         )
 
     def test_10_done_issues_declare_completed_date(self):
@@ -356,6 +356,22 @@ class TestIssueDoneCommand(unittest.TestCase):
         self.assertIn("[Already](../task--pre.md)", content)
         self.assertNotIn("[Other](feat--other.md)", content)
         self.assertNotIn("[Dot](./bug--dot.md)", content)
+
+    def test_14b_issue_done_with_status_and_references(self):
+        self._write("feat--sample-issue.md", IN_PROGRESS_ISSUE)
+        res = proc.run_capture([
+            sys.executable, self.EXEC, "issue", "done", "sample-issue",
+            "--status", "superseded",
+            "--superseded-by", "feat--new-design",
+        ], cwd=self.repo)
+        self.assertEqual(res.returncode, 0, f"failed: {res.stdout}\n{res.stderr}")
+        moved = os.path.join(self.done, "feat--sample-issue.md")
+        self.assertTrue(os.path.exists(moved))
+        with open(moved, "r", encoding="utf-8") as f:
+            data, _ = fm.parse(f.read())
+        self.assertEqual(data["status"], "superseded")
+        self.assertEqual(data["superseded_by"], "feat--new-design")
+        self.assertIsNotNone(data.get("completed"))
 
 
 class TestIssueCreateCommand(unittest.TestCase):
@@ -493,6 +509,11 @@ class TestIssueCreateCommand(unittest.TestCase):
         data2, content2 = self._read_issue("feat--one-milestone.md")
         self.assertEqual(data2.get("milestone"), "v1.0.0-release")
 
+    def test_24b_type_inference_notice(self):
+        res = self._run_create("feat", "fix-login-crash", "--title", "Fix login crash bug")
+        self.assertEqual(res.returncode, 0)
+        self.assertIn("matches bug keywords", res.stdout)
+
 
 class TestDoctorEntitiesCommand(unittest.TestCase):
     """
@@ -576,6 +597,48 @@ class TestDoctorEntitiesCommand(unittest.TestCase):
         res = self._run_doctor()
         self.assertEqual(res.returncode, 0)
         self.assertIn("0 errors, 0 warnings", res.stdout)
+
+    def test_28_doctor_detects_dangling_superseded_by(self):
+        issue_path = os.path.join(self.issues, "feat--old-one.md")
+        with open(issue_path, "w", encoding="utf-8") as f:
+            f.write(
+                "---\n"
+                "protocol: along\n"
+                "slug: old-one\n"
+                "type: feat\n"
+                "status: superseded\n"
+                "priority: low\n"
+                "created: 2026-09-01\n"
+                "updated: 2026-09-01\n"
+                "completed: 2026-09-01\n"
+                "superseded_by: feat--ghost-replacement\n"
+                "---\n"
+                "# Old One\n"
+            )
+        res = self._run_doctor()
+        self.assertEqual(res.returncode, 1)
+        self.assertIn("dangling superseded_by", res.stdout.lower() + res.stderr.lower())
+
+    def test_29_doctor_detects_dangling_duplicate_of(self):
+        issue_path = os.path.join(self.issues, "feat--dup-one.md")
+        with open(issue_path, "w", encoding="utf-8") as f:
+            f.write(
+                "---\n"
+                "protocol: along\n"
+                "slug: dup-one\n"
+                "type: feat\n"
+                "status: duplicate\n"
+                "priority: low\n"
+                "created: 2026-09-01\n"
+                "updated: 2026-09-01\n"
+                "completed: 2026-09-01\n"
+                "duplicate_of: feat--ghost-primary\n"
+                "---\n"
+                "# Duplicate One\n"
+            )
+        res = self._run_doctor()
+        self.assertEqual(res.returncode, 1)
+        self.assertIn("dangling duplicate_of", res.stdout.lower() + res.stderr.lower())
 
 
 if __name__ == "__main__":

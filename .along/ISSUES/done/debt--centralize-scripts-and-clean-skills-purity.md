@@ -1,7 +1,7 @@
 ---
 protocol: along
 slug: centralize-scripts-and-clean-skills-purity
-type: feat
+type: debt
 status: done
 priority: high
 created: 2026-08-31

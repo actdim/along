@@ -82,8 +82,9 @@ To avoid code duplication across IDEs, Along implements a unified core engine wi
 |                                                                         |
 |  2. PreToolUse Gates (alongkit.hooks.gates):                            |
 |     - IssueAnchorGate: Blocks source file edits without active issue    |
+|     - InquiryReadOnlyGate: Blocks edits on questions / inquiry prompts  |
 |     - TypographyGate: Blocks writes containing forbidden unicode chars  |
-|     - CliSafetyGate: Blocks heredocs and file content over CLI          |
+|     - CliSafetyGate: Blocks heredocs, inline writes, unvetted installs  |
 |     - CommitGuardGate: Enforces issue slug binding in git commit        |
 |                                                                         |
 |  3. PostToolUse Handlers:                                               |
@@ -122,8 +123,9 @@ To avoid code duplication across IDEs, Along implements a unified core engine wi
   - Inline code file writers: `python -c ".*open\(.*['\"][wa]['\"].*\)"`
   - Large inline writes: `echo "..." > file` or `printf "..." > file`
   - Destructive unstaged git wipes without prompt: `git reset --hard`, `git clean -fdx`
+  - Unauthorized global package managers: `pip install` (outside active venv), `npm install -g`, `choco`, `winget`
 - **Action on Violation**: Block execution (`deny` / `exit 2`).
-- **Remediation Message**: "CLI Safety Gate Violation: File content must never travel through a command line. Use write_to_file or replace_file_content instead."
+- **Remediation Message**: "CLI Safety Gate Violation: Forbidden command pattern or file content over CLI detected."
 
 ### Gate 4: Commit Message Issue Binding (`CommitGuardGate`)
 - **Trigger**: `PreToolUse` on `run_command`.
@@ -132,13 +134,20 @@ To avoid code duplication across IDEs, Along implements a unified core engine wi
 - **Action on Violation**: Block execution (`deny` / `exit 2`).
 - **Remediation Message**: "Commit Gate Violation: Commit message must include the active issue key [type--slug]."
 
-### Gate 5: Quality Gate on Stop (`TestStopGate`)
+### Gate 5: Inquiry Read-Only Gate (`InquiryReadOnlyGate`)
+- **Trigger**: `PreToolUse` on `write_to_file`, `replace_file_content`, mutating git commands.
+- **Condition**: Current turn user prompt exhibits interrogative or verification intent (e.g. status inquiries, explanations, audits).
+- **Rule**: Agents must output a structured read-only audit report first; mutations require explicit user confirmation.
+- **Action on Violation**: Block execution (`deny` / `exit 2`).
+- **Remediation Message**: "Inquiry Read-Only Gate Violation: Cannot modify files during an inquiry turn. Output an audit report and ask for user confirmation first."
+
+### Gate 6: Quality Gate on Stop (`TestStopGate`)
 - **Trigger**: `Stop` event (agent attempt to terminate turn).
 - **Condition**: `.along/.hook_state.json` indicates project code files were modified during the current session, but no test runner execution was recorded AFTER the latest modification timestamp.
 - **Action on Violation**: Refuse stop (`decision: continue` in Antigravity, `exit 2` in Claude/Codex).
 - **Remediation Message**: "Stop Gate Violation: Code modifications were made during this turn, but automated tests have not been executed. Run repository tests (e.g. 'python .along/scripts/test.py') before completing the turn."
 
-### Gate 6: Session Wrap Gate on Stop (`WrapStopGate`)
+### Gate 7: Session Wrap Gate on Stop (`WrapStopGate`)
 - **Trigger**: `Stop` event.
 - **Condition**: Code modifications occurred, tests passed, but neither a session log (`.along/SESSIONS/<YYYY>/<date>--<slug>.md`) was created/updated nor `along-wrap` was executed.
 - **Action on Violation**: Refuse stop (`decision: continue` / `exit 2`).
@@ -231,7 +240,7 @@ Testing must be split into three distinct levels to ensure speed, determinism, a
   - Implement `alongkit/hooks/config.py` (dual-mode governance: shadow vs enforce).
   - Implement `alongkit/hooks/adapters.py` (Antigravity JSON vs Claude/Codex exit code adapters).
 - [ ] **Phase 2: Gate Implementations (`alongkit.hooks.gates`)**:
-  - Implement `issue_anchor.py`, `typography.py`, `cli_safety.py`, `commit_guard.py`, `stop_guard.py`.
+  - Implement `issue_anchor.py`, `inquiry_read_only.py`, `typography.py`, `cli_safety.py`, `commit_guard.py`, `stop_guard.py`.
 - [ ] **Phase 3: CLI Driver (`scripts/along_hook.py`)**:
   - Entry point accepting `--runtime`, `--event`, and `--mode` flags.
   - Comprehensive audit logging in `.along/diagnostics/hooks_audit.jsonl`.

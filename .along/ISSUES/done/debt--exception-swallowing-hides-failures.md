@@ -1,13 +1,14 @@
 ---
 protocol: along
-protocol_version: 2.2.8
+protocol_version: "2.2.26"
 slug: exception-swallowing-hides-failures
 type: debt
-status: open
+status: done
 priority: medium
 created: 2026-09-01
-updated: 2026-09-01
-agent: claude-code
+updated: 2026-09-09
+completed: 2026-09-09
+agent: antigravity
 tags: [error-handling, diagnostics, silent-failure, observability]
 milestone: v3.0.0-global-quality-revision
 blocked_by: []
@@ -85,8 +86,8 @@ detect, because the agent trusts the tool output it is given.
 
 ## Acceptance Criteria
 
-- [ ] Zero `except Exception: pass` in `scripts/` and `dashboard/`, enforced by lint gate.
-- [ ] Skipped entities counted and reported.
-- [ ] Child-process failures always surfaced with non-zero exit codes.
-- [ ] Continued-after-error paths recorded in diagnostics.
-- [ ] ADR recorded.
+- [x] Zero `except Exception: pass` in `scripts/` and `dashboard/`, enforced by lint gate.
+- [x] Skipped entities counted and reported.
+- [x] Child-process failures always surfaced with non-zero exit codes.
+- [x] Continued-after-error paths recorded in diagnostics.
+- [x] ADR recorded.

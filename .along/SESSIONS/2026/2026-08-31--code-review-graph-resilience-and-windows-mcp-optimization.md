@@ -8,7 +8,7 @@ commit: pending
 summary: Eliminate code-review-graph MCP stdio deadlocks on Windows, optimize parser exclusions, and release v2.2.4.
 milestone: v2.2.0-along
 issues_advanced: []
-issues_completed: [feat--code-review-graph-resilience-and-windows-mcp-optimization]
+issues_completed: [bug--code-review-graph-resilience-and-windows-mcp-optimization]
 decisions: []
 risks_logged: []
 spikes_conducted: []

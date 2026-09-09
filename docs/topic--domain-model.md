@@ -94,6 +94,8 @@ milestone: v2.3.0-security
 blocked_by: [feat--db-schema-migrations]
 related: [risk--token-revocation-latency]
 parent: feat--identity-platform
+superseded_by: null
+duplicate_of: null
 ---
 
 # Issue Title
@@ -110,7 +112,10 @@ Detailed problem statement, constraints, and verifiable acceptance criteria.
 - **`open`**: Backlog item, not currently being executed.
 - **`in-progress`**: Actively being developed by an agent or human. Non-trivial code edits require an active issue.
 - **`blocked`**: Waiting on an external dependency (`blocked_by`), API key, or active risk.
-- **`done`**: Fully implemented, verified by tests and code review. Mandatory field `completed: YYYY-MM-DD` is set, and the file is moved to `.along/ISSUES/done/<type>--<slug>.md`.
+- **`done`**: Delivered terminal state. Fully implemented, verified by tests and code review. Mandatory field `completed: YYYY-MM-DD` is set, and the file is moved to `.along/ISSUES/done/<type>--<slug>.md`. Only `done` issues count towards milestone and sprint completion metrics.
+- **`superseded`**: Non-delivered terminal state. Replaced by another issue or architectural decision. Mandatory field `completed: YYYY-MM-DD` is set, `superseded_by: <target-slug>` references the replacement entity, and the file is moved to `.along/ISSUES/done/`.
+- **`cancelled`**: Non-delivered terminal state. Abandoned or intentionally dropped requirements. Mandatory field `completed: YYYY-MM-DD` is set, and the file is moved to `.along/ISSUES/done/`.
+- **`duplicate`**: Non-delivered terminal state. Redundant issue covered by another entity. Mandatory field `completed: YYYY-MM-DD` is set, `duplicate_of: <primary-slug>` references the primary entity, and the file is moved to `.along/ISSUES/done/`.
 
 ---
 

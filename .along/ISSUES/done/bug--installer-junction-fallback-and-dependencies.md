@@ -1,7 +1,7 @@
 ---
 protocol: along
-slug: feat--installer-junction-fallback-and-dependencies
-type: feat
+slug: installer-junction-fallback-and-dependencies
+type: bug
 status: done
 priority: medium
 created: 2026-08-26
