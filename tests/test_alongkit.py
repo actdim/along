@@ -359,6 +359,46 @@ class TestTextIO(unittest.TestCase):
             with io.open(path, "rb") as handle:
                 self.assertFalse(handle.read().startswith(b"\xef\xbb\xbf"))
 
+    def test_newline_for_path(self):
+        self.assertEqual(textio.newline_for_path("script.ps1"), CRLF)
+        self.assertEqual(textio.newline_for_path("build.bat"), CRLF)
+        self.assertEqual(textio.newline_for_path("FILE.BAT"), CRLF)
+        self.assertEqual(textio.newline_for_path("file.md"), NL)
+        self.assertEqual(textio.newline_for_path("module.py"), NL)
+        self.assertEqual(textio.newline_for_path("data.json"), NL)
+        self.assertEqual(textio.newline_for_path("config.yaml"), NL)
+        self.assertEqual(textio.newline_for_path("runner.sh"), NL)
+        self.assertEqual(textio.newline_for_path("notes.txt"), NL)
+
+    def test_tracked_files_match_gitattributes_newline_policy(self):
+        """Tracked files must match the newline style declared in .gitattributes (REQ-4)."""
+        result = proc.run_capture(["git", "ls-files", "--eol"], cwd=REPO_ROOT)
+        if not result.ok:
+            self.skipTest("git ls-files --eol unavailable")
+
+        mismatches = []
+        for line in (result.stdout or "").splitlines():
+            line = line.strip()
+            if not line:
+                continue
+            parts = line.split(None, 3)
+            if len(parts) < 4:
+                continue
+            w_eol = parts[1]
+            attr = parts[2]
+            path = parts[3]
+
+            if "eol=lf" in attr and w_eol == "w/crlf":
+                mismatches.append(f"{path}: working copy has CRLF, but .gitattributes declared eol=lf")
+            elif "eol=crlf" in attr and w_eol == "w/lf":
+                mismatches.append(f"{path}: working copy has LF, but .gitattributes declared eol=crlf")
+
+        self.assertEqual(
+            mismatches, [],
+            "Tracked files do not match declared .gitattributes newline policy:\n"
+            + "\n".join(mismatches),
+        )
+
 
 class TestEntities(unittest.TestCase):
     CURRENT_ADR = ("## ADR-2026-09-01--frontmatter-on-ruamel-yaml - Front-matter on ruamel.yaml\n"
