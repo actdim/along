@@ -67,6 +67,7 @@ TOOL_MAPPINGS = {
     "telemetry": "along_feedback.py",
     "graph-check": "along_graph_check.py",
     "graphcheck": "along_graph_check.py",
+    "wrap": "along_wrap.py",
 }
 
 LIFECYCLE_ACTIONS = {"build", "test", "dev", "debug"}
@@ -109,6 +110,7 @@ Entity Management Commands:
   issue done     <slug>
   issue list     List active issues in terminal
   session create <slug> --summary "Summary" [--issues "slug1,slug2"] [--decisions "ADR-slug"] [--agent <name>] [--milestone <name>]
+  session wrap   <slug> [--status done|superseded] [--summary "Summary"] [--dry-run] [-n]
   decision create <slug> --title "Title" --context "Why" --decision "What" --consequences "Tradeoffs"
   decision sync   Recompile .along/CONSTRAINTS.md projection from active ADRs
   scratch init   <slug>
@@ -121,6 +123,7 @@ Entity Management Commands:
   context-budget Measure context footprint and check token budgets (--json, --check)
 
 Along Protocol Tools:
+  wrap           Transactional session and issue wrap engine
   kb-sync        Synchronize and compile Knowledge Base in docs/
   kb-search      Search Knowledge Base and project memory
   dep-scan       Scan multi-project dependencies and AI rules
@@ -136,79 +139,8 @@ Along Protocol Tools:
   patch          Deterministic AST code patching (replace-func)
 """)
 
-RECENT_DONE_LIMIT = 5
-
-
-def compile_issues_board(repo_root: str, recent_done_limit: int = RECENT_DONE_LIMIT) -> str:
-    issues_dir = os.path.join(repo_root, ".along", "ISSUES")
-    done_dir = os.path.join(issues_dir, "done")
-    active_items = []
-    done_items = []
-
-    if os.path.exists(issues_dir):
-        for f in sorted(os.listdir(issues_dir)):
-            if f.endswith(".md") and os.path.isfile(os.path.join(issues_dir, f)):
-                parts = f[:-3].split("--", 1)
-                itype = parts[0]
-                islug = parts[1] if len(parts) > 1 else f[:-3]
-                active_items.append(f"- [ ] `({itype})` [{islug}](ISSUES/{f})")
-
-    if os.path.exists(done_dir):
-        done_records = []
-        for f in os.listdir(done_dir):
-            if f.endswith(".md") and os.path.isfile(os.path.join(done_dir, f)):
-                parts = f[:-3].split("--", 1)
-                itype = parts[0]
-                islug = parts[1] if len(parts) > 1 else f[:-3]
-                fpath = os.path.join(done_dir, f)
-                comp_date = ""
-                istatus = "done"
-                try:
-                    with open(fpath, "r", encoding="utf-8", errors="ignore") as handle:
-                        head = handle.read(500)
-                    m_stat = re.search(r"^status:\s*[\"']?([a-z-]+)[\"']?", head, re.MULTILINE)
-                    if m_stat:
-                        istatus = m_stat.group(1).lower()
-                    m_comp = re.search(r"^completed:\s*[\"']?([0-9-]+)[\"']?", head, re.MULTILINE)
-                    if m_comp:
-                        comp_date = m_comp.group(1)
-                    else:
-                        m_creat = re.search(r"^created:\s*[\"']?([0-9-]+)[\"']?", head, re.MULTILINE)
-                        if m_creat:
-                            comp_date = m_creat.group(1)
-                except OSError:
-                    pass
-                if not comp_date:
-                    try:
-                        from datetime import datetime
-                        comp_date = datetime.fromtimestamp(os.path.getmtime(fpath)).strftime("%Y-%m-%d")
-                    except OSError:
-                        comp_date = "1970-01-01"
-                done_records.append((comp_date, f, itype, islug, istatus))
-
-        # Sort descending by completion date, then filename
-        done_records.sort(key=lambda x: (x[0], x[1]), reverse=True)
-        total_done = len(done_records)
-
-        for comp_date, f, itype, islug, istatus in done_records[:recent_done_limit]:
-            box = "~" if istatus in ("superseded", "cancelled", "duplicate") else "x"
-            done_items.append(f"- [{box}] `({itype})` [{islug}](ISSUES/done/{f})")
-
-        if total_done > recent_done_limit:
-            archived_count = total_done - recent_done_limit
-            done_items.append(f"<!-- {archived_count} older completed issue(s) archived in .along/ISSUES/done/ -->")
-
-    return f"""# Active Issues
-
-## Active
-{chr(10).join(active_items) if active_items else "<!-- No active issues -->"}
-
-## Backlog
-<!-- Planned or deferred issues -->
-
-## Done (recent)
-{chr(10).join(done_items) if done_items else "<!-- No completed issues -->"}
-"""
+RECENT_DONE_LIMIT = entities.RECENT_DONE_LIMIT
+compile_issues_board = entities.compile_issues_board
 
 
 def handle_issue_command(repo_root: str, args: List[str]):
@@ -564,8 +496,49 @@ spikes_conducted: []
                 h_content = h_content.strip() + f"\n{entry}\n"
                 with open(history_file, "w", encoding="utf-8", newline="\n") as f:
                     f.write(h_content)
-                print(f"-> Appended history entry to .along/HISTORY.md")
         sys.exit(0)
+
+    elif subcmd == "wrap":
+        if len(args) < 2:
+            print("[Error] Usage: along session wrap <slug> [--status done|superseded|cancelled|duplicate] [--summary \"Summary\"] [--dry-run] [-n]", file=sys.stderr)
+            sys.exit(1)
+        islug = args[1]
+        status = "done"
+        summary = None
+        dry_run = False
+        no_verify = False
+        explicit_agent = None
+
+        i = 2
+        while i < len(args):
+            if args[i] in ("--status", "-s") and i + 1 < len(args):
+                status = args[i + 1].lower()
+                i += 2
+            elif args[i] in ("--summary", "-m") and i + 1 < len(args):
+                summary = args[i + 1]
+                i += 2
+            elif args[i] == "--dry-run":
+                dry_run = True
+                i += 1
+            elif args[i] in ("-n", "--no-verify"):
+                no_verify = True
+                i += 1
+            elif args[i] in ("--agent", "-a") and i + 1 < len(args):
+                explicit_agent = args[i + 1]
+                i += 2
+            else:
+                i += 1
+
+        code = lifecycle.execute_wrap(
+            repo_root=repo_root,
+            slug=islug,
+            status=status,
+            summary=summary,
+            dry_run=dry_run,
+            no_verify=no_verify,
+            agent=explicit_agent,
+        )
+        sys.exit(code)
 
 
 def handle_decision_command(repo_root: str, args: List[str]):

@@ -2,10 +2,11 @@
 protocol: along
 slug: executable-along-wrap-engine
 type: feat
-status: open
+status: done
+completed: 2026-09-10
 priority: high
 created: 2026-09-09
-updated: 2026-09-09
+updated: 2026-09-10
 agent: antigravity
 tags: [lifecycle, cli, along-wrap, automation, transactions]
 milestone: v3.0.0-global-quality-revision

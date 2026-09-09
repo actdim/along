@@ -3,7 +3,6 @@
 ## Active
 - [ ] `(feat)` [automated-ui-screenshots-and-visual-verification](ISSUES/feat--automated-ui-screenshots-and-visual-verification.md)
 - [ ] `(feat)` [cursor-agent-and-rules-integration](ISSUES/feat--cursor-agent-and-rules-integration.md)
-- [ ] `(feat)` [executable-along-wrap-engine](ISSUES/feat--executable-along-wrap-engine.md)
 - [ ] `(feat)` [external-issue-trackers-sync-and-import](ISSUES/feat--external-issue-trackers-sync-and-import.md)
 - [ ] `(feat)` [lsif-scip-lsp-mcp-integration](ISSUES/feat--lsif-scip-lsp-mcp-integration.md)
 - [ ] `(feat)` [native-ast-blast-radius-analyzer](ISSUES/feat--native-ast-blast-radius-analyzer.md)
@@ -17,9 +16,9 @@
 <!-- Planned or deferred issues -->
 
 ## Done (recent)
+- [x] `(feat)` [executable-along-wrap-engine](ISSUES/done/feat--executable-along-wrap-engine.md)
 - [x] `(debt)` [agents-md-context-budget-pruning](ISSUES/done/debt--agents-md-context-budget-pruning.md)
 - [x] `(feat)` [programmatic-integrity-gates-and-git-guard](ISSUES/done/feat--programmatic-integrity-gates-and-git-guard.md)
 - [~] `(feat)` [knowledge-base-management-and-init-kb-skill](ISSUES/done/feat--knowledge-base-management-and-init-kb-skill.md)
 - [x] `(feat)` [deterministic-kb-pipeline-and-ast-grounding](ISSUES/done/feat--deterministic-kb-pipeline-and-ast-grounding.md)
-- [x] `(docs)` [pluggable-lifecycle-hooks-showcase](ISSUES/done/docs--pluggable-lifecycle-hooks-showcase.md)
-<!-- 81 older completed issue(s) archived in .along/ISSUES/done/ -->
+<!-- 82 older completed issue(s) archived in .along/ISSUES/done/ -->

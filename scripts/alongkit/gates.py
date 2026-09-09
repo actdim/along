@@ -328,3 +328,47 @@ def syntax_gate(repo_root: str, label: str = "Quality Gate",
         print(output.strip(), file=sys.stderr)
     return False
 
+
+def zero_byte_working_tree_audit(repo_root: str) -> List[str]:
+    """Inspect modified and untracked files in the repository for 0-byte corrupt files.
+
+    Returns a list of relative paths with size 0, ignoring .gitkeep files.
+    """
+    cmd = ["status", "--porcelain", "-u"]
+    res = proc.git(cmd, cwd=repo_root)
+    if not res.ok:
+        corrupt = []
+        for root, _, files in os.walk(repo_root):
+            if any(part in repo.IGNORED_DIRS for part in root.split(os.sep)):
+                continue
+            for f in files:
+                if f == ".gitkeep":
+                    continue
+                p = os.path.join(root, f)
+                try:
+                    if os.path.isfile(p) and os.path.getsize(p) == 0:
+                        corrupt.append(repo.safe_relpath(p, repo_root).replace("\\", "/"))
+                except OSError:
+                    pass
+        return sorted(corrupt)
+
+    corrupt = []
+    for line in res.out.splitlines():
+        if not line.strip():
+            continue
+        payload = line[3:].strip()
+        if " -> " in payload:
+            payload = payload.split(" -> ", 1)[1].strip()
+        if payload.startswith('"') and payload.endswith('"'):
+            payload = payload[1:-1]
+        if os.path.basename(payload) == ".gitkeep":
+            continue
+        full_path = os.path.join(repo_root, payload)
+        try:
+            if os.path.isfile(full_path) and os.path.getsize(full_path) == 0:
+                corrupt.append(payload.replace("\\", "/"))
+        except OSError:
+            pass
+    return sorted(corrupt)
+
+
