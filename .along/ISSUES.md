@@ -2,7 +2,6 @@
 
 ## Active
 - [ ] `(bug)` [antigravity-extension-git-index-truncation](ISSUES/bug--antigravity-extension-git-index-truncation.md)
-- [ ] `(debt)` [kb-search-ranking-and-snippet-quality](ISSUES/debt--kb-search-ranking-and-snippet-quality.md)
 - [ ] `(debt)` [protocol-quality-audit-remediation](ISSUES/debt--protocol-quality-audit-remediation.md)
 - [ ] `(feat)` [automated-ui-screenshots-and-visual-verification](ISSUES/feat--automated-ui-screenshots-and-visual-verification.md)
 - [ ] `(feat)` [cursor-agent-and-rules-integration](ISSUES/feat--cursor-agent-and-rules-integration.md)
@@ -21,9 +20,9 @@
 <!-- Planned or deferred issues -->
 
 ## Done (recent)
+- [x] `(debt)` [kb-search-ranking-and-snippet-quality](ISSUES/done/debt--kb-search-ranking-and-snippet-quality.md)
 - [x] `(debt)` [line-ending-churn-vs-gitattributes](ISSUES/done/debt--line-ending-churn-vs-gitattributes.md)
 - [x] `(debt)` [unpinned-mcp-and-ghost-wiki-query-tool](ISSUES/done/debt--unpinned-mcp-and-ghost-wiki-query-tool.md)
 - [x] `(docs)` [pluggable-lifecycle-hooks-showcase](ISSUES/done/docs--pluggable-lifecycle-hooks-showcase.md)
 - [x] `(debt)` [generated-dashboard-artifact-committed](ISSUES/done/debt--generated-dashboard-artifact-committed.md)
-- [x] `(debt)` [exception-swallowing-hides-failures](ISSUES/done/debt--exception-swallowing-hides-failures.md)
-<!-- 71 older completed issue(s) archived in .along/ISSUES/done/ -->
+<!-- 72 older completed issue(s) archived in .along/ISSUES/done/ -->

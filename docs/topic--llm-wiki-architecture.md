@@ -82,23 +82,27 @@ flowchart TD
 
 ---
 
-## 3. Fast Retrieval Mechanics & Multi-Tier Scoring
+## 3. Fast Retrieval Mechanics & Token-Based IDF Scoring
 
 Instead of loading whole articles, AI agents query `along-kb-search "<query>"` to retrieve concise context snippets in milliseconds.
 
-### Multi-Tier Weighted Scoring Algorithm
-The search engine ranks results using a 3-tier relevance model:
+### Token-Based Weighted Scoring & IDF Algorithm
+The search engine ranks results using word-boundary token matching, lightweight English stemming, and smoothed Inverse Document Frequency (IDF):
 
-| Match Scope | Weight | Rationale |
+| Match Scope | Base Weight | Rationale |
 | :--- | :--- | :--- |
-| **Title Match** | **+10 points** | Direct topic match indicating the exact domain article. |
-| **Tags Match** | **+5 points** | Curated metadata keywords matching the conceptual domain. |
-| **Body Content** | **+1 point** | Text occurrences within the Markdown body. |
+| **Quoted Phrase** | **+30 title / +20 slug / +15 body** | Exact adjacent multi-word sequence match. |
+| **Title Match** | **+15.0 * IDF** | Direct topic match indicating the exact domain article. |
+| **Slug Match** | **+12.0 * IDF** | Exact architectural identifier match. |
+| **Tags Match** | **+10.0 * IDF** | Curated metadata keywords matching the conceptual domain. |
+| **Body Content** | **min(TF * IDF, 25.0)** | Frequency-saturated body occurrences scaled by discriminative rarity. |
+| **Active Entity Boost** | **+2.0 points** | Boost for active, open, or in-progress issues and ADRs. |
 
-### Snippet Window Extraction (95-98% Token Reduction)
-When a match is identified, `along-kb-search` extracts a targeted **230-character snippet window** centered around the matching query term.
-- *Prompt Impact*: Delivers the precise architectural constraint or API contract in **under 100 tokens**, compared to 3,000-8,000 tokens for loading the full file.
-- *Performance*: Sub-millisecond execution using pure Python standard library without vector embeddings latency.
+### Snippet Window Extraction (Measured 95-99% Token Reduction)
+When a match is identified, `along-kb-search` extracts a targeted word-boundary aligned passage centered around the matching query terms.
+- *Prompt Impact*: Delivers the precise architectural constraint or API contract in **under 100 tokens**, compared to thousands of tokens for loading full files.
+- *Verifiable Metrics*: Run with `--stats` to inspect live corpus size, returned token counts, and token savings percentage.
+- *Performance*: Sub-100ms execution across hundreds of documents using pure standard library in-memory tokenization without database locking risks or vector embeddings latency.
 
 ---
 

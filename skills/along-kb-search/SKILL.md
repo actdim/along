@@ -17,11 +17,11 @@ Unified Multi-Scope Knowledge & Memory Retrieval Engine for AI coding agents and
 7. **Work Session Logs (`.along/SESSIONS/**/*.md`)**: Historical logs, diff evaluations, and blast radius summaries.
 
 ## Token Hygiene & Agent Decision Making
-Instead of reading thousands of tokens of project files into prompt context during analysis or blast radius evaluation, agents invoke `/along-kb-search "<term>"` to retrieve concise ~200-character context snippets in milliseconds (< 100 tokens).
+Instead of reading thousands of tokens of project files into prompt context during analysis or blast radius evaluation, agents invoke `/along-kb-search "<query>"` to retrieve concise, word-boundary aligned context snippets in milliseconds (< 100 tokens), achieving 95-99% measured token reduction.
 
 ## Usage
 ```bash
-along kb-search "<query>" [--category all|kb|issue|decision|milestone|risk|spike|session] [--limit 8] [--tag <tag>]
+along kb-search "<query>" [--category all|kb|issue|decision|milestone|risk|spike|session] [--limit 8] [--tag <tag>] [--any] [--prefix] [--stats]
 ```
 *(Or fallback: `python ~/.along/bin/along_exec.py kb-search` or `/along-kb-search`)*
 

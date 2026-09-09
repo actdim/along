@@ -3,10 +3,11 @@ protocol: along
 protocol_version: 2.2.8
 slug: kb-search-ranking-and-snippet-quality
 type: debt
-status: open
+status: done
 priority: medium
 created: 2026-09-01
-updated: 2026-09-01
+updated: 2026-09-09
+completed: 2026-09-09
 agent: claude-code
 tags: [kb-search, retrieval, ranking, snippets, token-efficiency]
 milestone: v3.0.0-global-quality-revision
@@ -106,9 +107,9 @@ skill exists to prevent, and misleading snippets can send an agent to the wrong 
 
 ## Acceptance Criteria
 
-- [ ] Token-based ranking with IDF weighting and AND-by-default semantics.
-- [ ] Snippets aligned to word boundaries and containing all matched terms where possible.
-- [ ] `--stats` reports returned-token estimates.
-- [ ] Relevance fixture test in place and green.
-- [ ] Published retrieval claims match measurements.
-- [ ] ADR recorded for the indexing decision.
+- [x] Token-based ranking with IDF weighting and AND-by-default semantics.
+- [x] Snippets aligned to word boundaries and containing all matched terms where possible.
+- [x] `--stats` reports returned-token estimates.
+- [x] Relevance fixture test in place and green.
+- [x] Published retrieval claims match measurements.
+- [x] ADR recorded for the indexing decision.

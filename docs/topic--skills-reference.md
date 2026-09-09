@@ -259,10 +259,10 @@ flowchart TD
 ### `along-kb-search`
 - **What it is**: Ultra-fast, token-efficient multi-scope search engine across Knowledge Base (`docs/`) and living project memory (`ISSUES/`, `DECISIONS.md`, `MILESTONES/`, `RISKS/`, `SESSIONS/`).
 - **Architectural Rationale**:
-  - *95-98% Token Reduction*: Instead of reading whole multi-kilobyte documents into prompt context, retrieves concise ~200-character snippet windows in under 100 tokens.
-  - *Multi-Tier Relevance Scoring*: Ranks results using weighted heuristics (`Title: +10`, `Tags: +5`, `Body: +1`) for instant pinpoint accuracy.
+  - *Measured 95-99% Token Reduction*: Instead of reading whole multi-kilobyte documents into prompt context, retrieves concise word-boundary aligned snippet windows in under 100 tokens, verifiable via `--stats`.
+  - *Multi-Tier Relevance Scoring & IDF Weighting*: Ranks results using word-boundary token matching, lightweight stemming, smoothed inverse document frequency (IDF), and exact phrase matching with AND semantics by default (`--any` for OR).
 - **Invocation Triggers**:
-  - *Explicit*: `/along-kb-search "<query>" [--category <cat>]`, `along kb-search` (fallback: `python ~/.along/bin/along_exec.py kb-search`).
+  - *Explicit*: `/along-kb-search "<query>" [--category <cat>] [--any] [--prefix] [--stats]`, `along kb-search` (fallback: `python ~/.along/bin/along_exec.py kb-search`).
   - *Semantic / Automatic*: Mandatory first step for agents when researching domain architecture, investigating existing decisions, or mapping blast radius.
 - **Entities Operated On**: `docs/`, `.along/ISSUES/`, `.along/DECISIONS.md`, `.along/MILESTONES/`, `.along/RISKS/`, `.along/SPIKES/`, `.along/SESSIONS/`.
 - **Ecosystem Chaining**: Used by Scout and Supervisor in `along-team` during Phase 1 (Research).

@@ -5,6 +5,8 @@ import os
 import re
 import sys
 import argparse
+import math
+from typing import Any, Dict, List, Optional, Sequence, Set, Tuple
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
@@ -233,10 +235,210 @@ def collect_all_entries(repo_root, verbose=False):
 
     return entries
 
-def search_knowledge_base(query, repo_root=".", limit=5, category=None, filter_tag=None, verbose=False):
+def parse_query(raw_query: str) -> Tuple[List[str], List[str]]:
+    """Parse search query into quoted phrases and individual words."""
+    if not raw_query:
+        return [], []
+    phrases = []
+    for m in re.finditer(r'"([^"]+)"', raw_query):
+        p = m.group(1).strip().lower()
+        if p:
+            phrases.append(p)
+    remainder = re.sub(r'"[^"]+"', ' ', raw_query)
+    terms = [t.lower().strip() for t in re.findall(r'[\w\-]+', remainder) if t.strip()]
+    return phrases, terms
+
+
+def light_stem(word: str) -> str:
+    """Lightweight suffix stemmer for English search terms without external dependencies."""
+    w = word.lower()
+    if len(w) <= 3:
+        return w
+    if w.endswith("ies") and len(w) > 4:
+        return w[:-3] + "y"
+    if w.endswith("es") and len(w) > 4 and w[-3] in "shxz":
+        return w[:-2]
+    if w.endswith("s") and not w.endswith("ss") and len(w) > 3:
+        return w[:-1]
+    if w.endswith("ing") and len(w) > 5:
+        base = w[:-3]
+        if len(base) >= 3 and base[-1] == base[-2] and base[-1] not in "aeiouy":
+            return base[:-1]
+        return base
+    if w.endswith("ed") and len(w) > 4:
+        base = w[:-2]
+        if len(base) >= 3 and base[-1] == base[-2] and base[-1] not in "aeiouy":
+            return base[:-1]
+        return base
+    return w
+
+
+def tokenize(text: str) -> List[str]:
+    """Tokenize text into lowercase word tokens."""
+    return [t.lower() for t in re.findall(r'[\w\-]+', text) if t]
+
+
+def compute_idf(entries: List[Dict[str, Any]]) -> Dict[str, float]:
+    """Compute smoothed inverse document frequency across the corpus."""
+    n = max(1, len(entries))
+    df: Dict[str, int] = {}
+    for e in entries:
+        seen: Set[str] = set()
+        tokens = tokenize(e.get("title", "")) + tokenize(e.get("slug", ""))
+        for t in e.get("tags", []):
+            tokens.extend(tokenize(str(t)))
+        tokens.extend(tokenize(e.get("body", "")))
+        for tok in tokens:
+            if tok not in seen:
+                seen.add(tok)
+                df[tok] = df.get(tok, 0) + 1
+            st = light_stem(tok)
+            if st != tok and st not in seen:
+                seen.add(st)
+                df[st] = df.get(st, 0) + 1
+
+    idf: Dict[str, float] = {}
+    for tok, freq in df.items():
+        idf[tok] = math.log((n + 1.0) / (freq + 1.0)) + 1.0
+    return idf
+
+
+def extract_passage_snippet(
+    body: str, query_terms: Sequence[str], phrases: Sequence[str], max_chars: int = 240
+) -> str:
+    """Extract a word-boundary-aligned passage containing query terms."""
+    if not body or not body.strip():
+        return ""
+
+    clean_body = body.replace("\r\n", "\n")
+    candidates = [p.strip() for p in re.split(r'\n{2,}|\n(?=[#\-\*])|(?<=[.!?])\s+', clean_body) if p.strip()]
+    if not candidates:
+        candidates = [clean_body.strip()]
+
+    best_candidate = ""
+    best_score = -1
+
+    for cand in candidates:
+        cand_lower = cand.lower()
+        cand_tokens = set(tokenize(cand_lower))
+        cand_stems = {light_stem(t) for t in cand_tokens}
+
+        score = 0
+        for phrase in phrases:
+            if phrase in cand_lower:
+                score += 12
+        for term in query_terms:
+            if term in cand_tokens:
+                score += 5
+            elif light_stem(term) in cand_stems:
+                score += 3
+
+        if score > best_score:
+            best_score = score
+            best_candidate = cand
+
+    if not best_candidate:
+        best_candidate = candidates[0]
+
+    # Clean markdown headers and bullet prefixes
+    text = re.sub(r'^[#\-*>]+\s*', '', best_candidate).strip()
+    text = re.sub(r'\s+', ' ', text)
+
+    if len(text) <= max_chars:
+        return text
+
+    # Locate the best term position to center the snippet
+    text_lower = text.lower()
+    first_match_pos = -1
+    matched_term_len = 0
+
+    for phrase in phrases:
+        p_pos = text_lower.find(phrase.lower())
+        if p_pos != -1:
+            first_match_pos = p_pos
+            matched_term_len = len(phrase)
+            break
+
+    if first_match_pos == -1:
+        for term in query_terms:
+            t_pos = text_lower.find(term.lower())
+            if t_pos != -1:
+                first_match_pos = t_pos
+                matched_term_len = len(term)
+                break
+            st = light_stem(term)
+            st_pos = text_lower.find(st)
+            if st_pos != -1:
+                first_match_pos = st_pos
+                matched_term_len = len(st)
+                break
+
+    if first_match_pos != -1:
+        lead_budget = max(0, (max_chars - matched_term_len) // 3)
+        raw_start = max(0, first_match_pos - lead_budget)
+        raw_end = min(len(text), raw_start + max_chars)
+
+        start = raw_start
+        if raw_start > 0:
+            sp = text.find(' ', raw_start)
+            if sp != -1 and sp < first_match_pos:
+                start = sp + 1
+
+        end = raw_end
+        if raw_end < len(text):
+            sp = text.rfind(' ', start, raw_end)
+            if sp != -1 and sp > first_match_pos:
+                end = sp
+
+        snippet = text[start:end].strip()
+        prefix = "..." if start > 0 else ""
+        suffix = "..." if end < len(text) else ""
+        return f"{prefix}{snippet}{suffix}"
+
+    # Fallback: start of text with word boundary
+    truncated = text[:max_chars]
+    last_space = truncated.rfind(' ')
+    if last_space > max_chars // 2:
+        truncated = truncated[:last_space]
+    return truncated.strip() + "..."
+
+
+def calculate_search_stats(entries: List[Dict[str, Any]], results: List[Dict[str, Any]]) -> Dict[str, Any]:
+    """Compute corpus and result token estimates for search measurement."""
+    total_corpus_chars = sum(len(e.get("body", "")) + len(e.get("title", "")) for e in entries)
+    corpus_tokens_est = max(1, total_corpus_chars // 4)
+
+    returned_chars = sum(len(r.get("snippet", "")) + len(r.get("title", "")) for r in results)
+    returned_tokens_est = max(1, returned_chars // 4)
+
+    savings_pct = round((1.0 - (returned_tokens_est / corpus_tokens_est)) * 100, 1)
+
+    return {
+        "corpus_entries": len(entries),
+        "corpus_chars": total_corpus_chars,
+        "corpus_tokens_est": corpus_tokens_est,
+        "matched_count": len(results),
+        "returned_chars": returned_chars,
+        "returned_tokens_est": returned_tokens_est,
+        "savings_pct": savings_pct,
+    }
+
+
+def search_knowledge_base(
+    query: str,
+    repo_root: str = ".",
+    limit: int = 5,
+    category: Optional[str] = None,
+    filter_tag: Optional[str] = None,
+    match_any: bool = False,
+    prefix: bool = False,
+    verbose: bool = False,
+    return_stats: bool = False,
+) -> Any:
     repo_root = os.path.abspath(repo_root)
-    query_terms = [t.lower().strip() for t in query.split() if t.strip()]
+    phrases, query_terms = parse_query(query)
     entries = collect_all_entries(repo_root, verbose=verbose)
+    idf_map = compute_idf(entries) if (query_terms or phrases) else {}
 
     results = []
     for e in entries:
@@ -248,37 +450,97 @@ def search_knowledge_base(query, repo_root=".", limit=5, category=None, filter_t
         title_lower = e["title"].lower()
         slug_lower = e["slug"].lower()
         body_lower = e["body"].lower()
-        tags_lower = [t.lower() for t in e["tags"]]
 
-        term_matches = 0
-        score = 0.0
+        title_tokens = tokenize(title_lower)
+        title_stems = [light_stem(t) for t in title_tokens]
+        slug_tokens = tokenize(slug_lower)
+        slug_stems = [light_stem(t) for t in slug_tokens]
+        tags_tokens = [t.lower() for t in e["tags"]]
+        body_tokens = tokenize(body_lower)
+        body_stems = [light_stem(t) for t in body_tokens]
+
+        # Check phrase matches
+        phrase_matches: Dict[str, bool] = {}
+        for phrase in phrases:
+            matched = (phrase in title_lower) or (phrase in slug_lower) or (phrase in body_lower)
+            phrase_matches[phrase] = matched
+
+        # Check term matches
+        term_matches: Dict[str, bool] = {}
         for term in query_terms:
-            if term in title_lower or term in slug_lower:
-                score += 10.0
-                term_matches += 1
-            for t in tags_lower:
-                if term in t:
-                    score += 5.0
-                    term_matches += 1
-            matches = body_lower.count(term)
-            if matches > 0:
-                score += min(matches * 1.0, 10.0)
-                term_matches += matches
+            t_stem = light_stem(term)
+            matched = False
+            if prefix:
+                matched = (
+                    any(tok.startswith(term) for tok in title_tokens)
+                    or any(tok.startswith(term) for tok in slug_tokens)
+                    or any(tok.startswith(term) for tok in tags_tokens)
+                    or any(tok.startswith(term) for tok in body_tokens)
+                )
+            else:
+                matched = (
+                    (term in title_tokens or t_stem in title_stems)
+                    or (term in slug_tokens or t_stem in slug_stems)
+                    or (term in tags_tokens)
+                    or (term in body_tokens or t_stem in body_stems)
+                )
+            term_matches[term] = matched
 
-        if query_terms and term_matches == 0:
-            continue
+        all_query_items = len(phrases) + len(query_terms)
+        if all_query_items > 0:
+            if match_any:
+                # OR semantics: at least one phrase or term must match
+                if not any(phrase_matches.values()) and not any(term_matches.values()):
+                    continue
+            else:
+                # AND semantics: all phrases and all terms must match
+                if not all(phrase_matches.values()) or not all(term_matches.values()):
+                    continue
 
-        # Category boost for active items
+        # Compute ranking score
+        score = 0.0
+        for phrase in phrases:
+            if phrase_matches.get(phrase):
+                if phrase in title_lower:
+                    score += 30.0
+                if phrase in slug_lower:
+                    score += 20.0
+                p_count = body_lower.count(phrase)
+                if p_count > 0:
+                    score += min(p_count * 15.0, 30.0)
+
+        for term in query_terms:
+            t_stem = light_stem(term)
+            term_idf = idf_map.get(term, idf_map.get(t_stem, 1.0))
+
+            if term in title_tokens:
+                score += 15.0 * term_idf
+            elif t_stem in title_stems:
+                score += 7.5 * term_idf
+            elif prefix and any(tok.startswith(term) for tok in title_tokens):
+                score += 6.0 * term_idf
+
+            if term in slug_tokens:
+                score += 12.0 * term_idf
+            elif t_stem in slug_stems:
+                score += 6.0 * term_idf
+            elif prefix and any(tok.startswith(term) for tok in slug_tokens):
+                score += 5.0 * term_idf
+
+            if term in tags_tokens:
+                score += 10.0 * term_idf
+
+            body_tf = body_tokens.count(term) + body_stems.count(t_stem)
+            if prefix and body_tf == 0:
+                body_tf = sum(1 for tok in body_tokens if tok.startswith(term))
+            if body_tf > 0:
+                score += min(body_tf * term_idf, 25.0)
+
+        # Status boost for active / in-progress entities
         if e.get("status") in ["open", "in-progress", "active"]:
             score += 2.0
 
-        snippet = ""
-        if query_terms:
-            pos = body_lower.find(query_terms[0])
-            if pos != -1:
-                start = max(0, pos - 80)
-                end = min(len(e["body"]), pos + 150)
-                snippet = e["body"][start:end].replace("\n", " ").strip()
+        snippet = extract_passage_snippet(e["body"], query_terms, phrases)
         if not snippet:
             snippet = e["body"][:180].replace("\n", " ").strip()
 
@@ -295,24 +557,63 @@ def search_knowledge_base(query, repo_root=".", limit=5, category=None, filter_t
         })
 
     results.sort(key=lambda r: r["score"], reverse=True)
-    return results[:limit]
+    top_results = results[:limit]
+
+    if return_stats:
+        stats = calculate_search_stats(entries, top_results)
+        return top_results, stats
+    return top_results
+
 
 def main():
     parser = argparse.ArgumentParser(description="Along Unified Knowledge & Memory Retrieval Engine")
-    parser.add_argument("query", nargs="?", default="", help="Search query terms")
+    parser.add_argument("query", nargs="?", default="", help="Search query terms or \"quoted phrases\"")
     parser.add_argument("--repo", default=".", help="Target repository root")
     parser.add_argument("--limit", type=int, default=8, help="Maximum results to return")
     parser.add_argument("--category", choices=["all", "kb", "issue", "decision", "milestone", "risk", "spike", "session"], default="all", help="Filter by knowledge category")
     parser.add_argument("--tag", default=None, help="Filter by specific tag")
+    parser.add_argument("--any", action="store_true", help="Match ANY query term (OR semantics, default is AND)")
+    parser.add_argument("--prefix", action="store_true", help="Match word prefixes in addition to whole words")
+    parser.add_argument("--stats", action="store_true", help="Show retrieval token efficiency metrics and corpus stats")
     parser.add_argument("-v", "--verbose", "--debug", action="store_true", help="Show verbose collector details and errors")
     args = parser.parse_args()
 
-    results = search_knowledge_base(args.query, repo_root=args.repo, limit=args.limit, category=args.category, filter_tag=args.tag, verbose=args.verbose)
+    if args.stats:
+        results, stats = search_knowledge_base(
+            args.query,
+            repo_root=args.repo,
+            limit=args.limit,
+            category=args.category,
+            filter_tag=args.tag,
+            match_any=args.any,
+            prefix=args.prefix,
+            verbose=args.verbose,
+            return_stats=True,
+        )
+    else:
+        results = search_knowledge_base(
+            args.query,
+            repo_root=args.repo,
+            limit=args.limit,
+            category=args.category,
+            filter_tag=args.tag,
+            match_any=args.any,
+            prefix=args.prefix,
+            verbose=args.verbose,
+            return_stats=False,
+        )
+        stats = None
+
     print(f"=== Along Unified Knowledge Search: '{args.query}' ({len(results)} matches) ===")
+    if stats:
+        print(f"   [Stats] Corpus: {stats['corpus_entries']} entries (~{stats['corpus_tokens_est']} tokens). "
+              f"Returned: {len(results)} matches (~{stats['returned_tokens_est']} tokens). "
+              f"Token savings: {stats['savings_pct']}%\n")
+
     for i, r in enumerate(results, 1):
-        tags_str = ", ".join(r["tags"]) if r["tags"] else "none"
         print(f"{i}. [{r['category_label']}] {r['title']} (./{r['file_path']})")
-        print(f"   \"{r['snippet']}...\"\n")
+        print(f"   \"{r['snippet']}\"\n")
+
 
 if __name__ == "__main__":
     main()

@@ -297,7 +297,7 @@ To keep `.along/` lean and avoid token bloat:
 - `DECISIONS.md` is APPEND-ONLY: add a new dated entry with slug header (`## ADR-YYYY-MM-DD--<slug>`) per non-trivial architectural decision; never edit past ones - mark a replaced one "Superseded by ADR-YYYY-MM-DD--<slug>". Recompile `.along/CONSTRAINTS.md` via `along decision sync`.
 - Add any new/clarified domain term to `.along/GLOSSARY.md`.
 - **Context & Token hygiene**: Keep tool output lean to prevent context bloat. Use quiet flags for builds/tests (`pytest -q`, `dotnet test -v q`), filter command outputs, and inspect targeted line ranges.
-- **Contract-First Lifecycle Execution**: When building, testing, developing, or bumping versions, agents MUST prioritize project lifecycle commands (`/along-test` or `python .along/scripts/test.py`, `/along-build` or `python .along/scripts/build.py`, `/along-dev` or `python .along/scripts/dev.py`, `/along-version-bump`, `/along-dep-scan`) over guessing raw toolchain commands. These hooks encapsulate repository-specific quiet flags, compilers, and environments.
+- **Contract-First Lifecycle Execution**: When building, testing, developing, or releasing, agents MUST prioritize project lifecycle hooks (`/along-test` or `.along/scripts/test.py`, `/along-build`, `/along-dev`, `/along-version-bump`, `/along-dep-scan`) over guessing raw toolchain commands.
 - **Dual Search Architecture**: Distinguish between code and documentation retrieval: query MCP tools (`semantic_search_nodes_tool`, `query_graph_tool`) for codebase AST / call graph search, and `/along-kb-search` for Knowledge Base / living project memory (`docs/`, `README.md`, `DECISIONS.md`, `ISSUES/`).
 - **Mandatory Agentic Code Review & Blast Radius Impact**: After completing non-trivial code modifications, agents MUST critically inspect their own diffs and evaluate systemic blast radius. Agents MUST execute `code-review-graph` MCP tools (`build_or_update_graph_tool`, `get_impact_radius_tool`, `get_affected_flows_tool`) to verify that downstream callers, interfaces, and dependent systems remain unbroken, edge cases and nulls are handled, and active ADRs in `.along/DECISIONS.md` are respected. If `code-review-graph` is offline or fails, agents MUST output a loud diagnostic warning (`[CRITICAL WARNING: code-review-graph OFFLINE, degraded to static search]`) and fall back to static search (`grep_search` across callers, imports, and references). Silent skips are strictly forbidden.
 
@@ -327,9 +327,9 @@ When a Stage or session completes, agents MUST execute this verification checkli
 
 ## Rules
 - **Contract-First Lifecycle Execution & Polyglot Hooks**:
-  - **Prioritize Nearest Lifecycle Hook**: Before executing raw shell commands (`npm test`, `pytest`, `cargo build`), agents MUST inspect and run the nearest `.along/scripts/<action>.py` (or `.sh`, `.ps1`, `.bat`) or invoke the corresponding Along skill (`/along-test`, `/along-build`, `/along-dev`).
-  - **Zero-Config Auto-Synthesis**: When `.along/scripts/` is not yet configured, invoking `along test` or `along build` automatically detects the stack (Node, Python, Rust, .NET, Go), synthesizes a verified hook, and executes it with quiet flags.
-  - **Custom Subproject Hooks**: In submodules or monorepo packages, agents MUST execute the hook localized in that subproject's own `.along/scripts/` directory.
+  - **Prioritize Nearest Lifecycle Hook**: Before running raw shell commands (`npm test`, `pytest`, `cargo build`), agents MUST execute the nearest `.along/scripts/<action>.py` (or `.sh`, `.ps1`, `.bat`) or invoke `/along-test`, `/along-build`, `/along-dev`.
+  - **Zero-Config Auto-Synthesis**: When `.along/scripts/` is missing, invoking `along test` or `along build` auto-detects the stack (Node, Python, Rust, .NET, Go), synthesizes a verified hook, and executes it with quiet flags.
+  - **Custom Subproject Hooks**: In submodules or monorepo packages, execute the hook localized in that subproject's own `.along/scripts/`.
 - **Strict Dependency & Environment Isolation**:
   - **No Unprompted Global Installs**: Agents MUST NOT arbitrarily install system-wide or global packages (e.g. via `pip install`) when a script fails with a missing dependency.
   - **Fix the Architecture, Not the Environment**: If an engine or script fails to locate a dependency, it is an architectural defect (such as a missing `bootstrap.ensure_deps()` call or an incorrect `uv` wrapper). The agent MUST diagnose and fix the script's entry point or discuss it with the user, rather than mutating the environment to force it to pass.
@@ -385,49 +385,18 @@ This repository is `Along` (`actdim-along`) - the provider-agnostic agent-contex
   opt-in, localized resource directories never); non-UTF8 files are skipped and reported,
   line endings preserved. See ADR-2026-09-01--typography-rule-scope in
   `.along/DECISIONS.md`.
-- **Release Path (`/along-version-bump`)**: gates first, on the untouched tree (tests,
-  typography check, Markdown link check), unconditionally rather than only with
-  `--commit`; then the version, the matching milestone's front-matter, `CHANGELOG.md`,
-  the commit of exactly those paths, and the annotated tag `v<version>`. Every mutation
-  is recorded by `alongkit.transaction.FileTransaction` and restored byte for byte if a
-  later step fails. A release never invokes an installer or touches machine-global
-  state. See ADR-2026-09-01--release-gates-before-mutations in `.along/DECISIONS.md`.
-- **Migration Path (`migrate_protocol.py`)**: never deletes a destination file. On a
-  collision, append-only files (`DECISIONS.md`, `HISTORY.md`) are union-merged, derived
-  projections keep the destination, and any other legacy copy is preserved as
-  `<name>.legacy.md` and reported. `.along/` and `.agents/` are copied to
-  `.along/.migration-backup/<timestamp>/` before the first change; reads are strict and
-  undecodable files are skipped and reported; `.along/.protocol-version` makes a second
-  run a no-op (`--force` overrides). Dry run is the default for every caller that is not
-  a human at a terminal, so `--apply` is mandatory from a script, and installing no
-  longer migrates unless given `-Migrate` / `--migrate`. The primitives live in
-  `alongkit.migration`. See ADR-2026-09-01--migration-never-deletes-a-destination in
-  `.along/DECISIONS.md`.
+- **Release Path (`/along-version-bump`)**: Pre-mutation gates (tests, typography, links), transactional rollback via `alongkit.transaction.FileTransaction`, and release commit/tag without touching global state. See ADR-2026-09-01--release-gates-before-mutations in `.along/DECISIONS.md`.
+- **Migration Path (`migrate_protocol.py`)**: Preserves all destination files, union-merges append-only files, snapshots state to `.along/.migration-backup/`, and skips undecodable files. See ADR-2026-09-01--migration-never-deletes-a-destination in `.along/DECISIONS.md`.
 - **Install Commands**:
   - Windows: `powershell -NoProfile -ExecutionPolicy Bypass -File install.ps1 -Target all` (or `install.bat`).
   - Linux / macOS: `bash install.sh`.
   - Uninstall: `install.ps1 -Uninstall` / `./install.sh --uninstall`.
-- **Install Path (`install.ps1`, `install.sh`)**: the installers copy; every decision is
-  an engine. The layout is described once in `alongkit.install.planned_files` and both
-  installers are run against it end to end by `tests/test_installers.py`, so they cannot
-  drift. No install deletes a destination directory: `scripts/install_manifest.py` records
-  what was written to `~/.along/install-manifest.json`, removes by name only the files a
-  previous install wrote and this one no longer ships, and is what an uninstall reads.
-  `scripts/configure_mcp.py` registers `code-review-graph` only where the provider's
-  configuration contract is verified (Claude Code's `~/.claude.json`), reports the rest
-  with their snippet, and never overwrites a file it could not parse. See
-  ADR-2026-09-01--installers-never-delete-what-they-did-not-write in `.along/DECISIONS.md`.
+- **Install Path (`install.ps1`, `install.sh`)**: Plan-driven layout in `alongkit.install.planned_files`, verified hermetically by `tests/test_installers.py`. Manifest tracking (`~/.along/install-manifest.json`) prevents directory wiping on re-install. See ADR-2026-09-01--installers-never-delete-what-they-did-not-write in `.along/DECISIONS.md`.
 - **Lifecycle Commands**:
-  - Run Tests: `python .along/scripts/test.py` (resolves dependencies via `uv` if needed),
-    or `uv run python -m unittest discover tests -q`.
-- **Test Suite (`tests/`)**: plain `unittest`. Every engine invocation targets a throwaway
-  fixture from `tests/hermetic.py` (`repo_fixture()`), never the repository root;
-  `tests/test_zz_hermetic_suite.py` runs last and fails if the suite dirtied the working
-  tree or if a test built an engine command line with `REPO_ROOT` as the target. Reading
-  live project memory is allowed and must stay read-only. See
-  `[docs/topic--setup-and-workflow.md](./docs/topic--setup-and-workflow.md)`.
+  - Run Tests: `python .along/scripts/test.py` (or `uv run python -m unittest discover tests -q`).
   - Run Dev Server: `npm run dev` (or `python .along/scripts/dev.py`).
   - Build Assets: `npm run build` (or `python .along/scripts/build.py`).
+- **Test Suite (`tests/`)**: Plain `unittest`. Invocations target throwaway fixtures from `tests/hermetic.py`, never repository root. Live memory access is strictly read-only. See `[docs/topic--setup-and-workflow.md](./docs/topic--setup-and-workflow.md)`.
 - **Frontend Architecture (`packages/dashboard-ui/`)**:
   - Full architectural rules in `[docs/topic--frontend-frameworks.md](./docs/topic--frontend-frameworks.md)` and `[.along/DECISIONS.md](./.along/DECISIONS.md#adr-2026-08-28--frontend-dynstruct-architecture-and-msgmesh-adapters)`.
   - Strict `@actdim/dynstruct` component architecture with MobX reactive state; zero raw `useState`/`useEffect` hooks.
@@ -1433,23 +1402,27 @@ flowchart TD
 
 ---
 
-## 3. Fast Retrieval Mechanics & Multi-Tier Scoring
+## 3. Fast Retrieval Mechanics & Token-Based IDF Scoring
 
 Instead of loading whole articles, AI agents query `along-kb-search "<query>"` to retrieve concise context snippets in milliseconds.
 
-### Multi-Tier Weighted Scoring Algorithm
-The search engine ranks results using a 3-tier relevance model:
+### Token-Based Weighted Scoring & IDF Algorithm
+The search engine ranks results using word-boundary token matching, lightweight English stemming, and smoothed Inverse Document Frequency (IDF):
 
-| Match Scope | Weight | Rationale |
+| Match Scope | Base Weight | Rationale |
 | :--- | :--- | :--- |
-| **Title Match** | **+10 points** | Direct topic match indicating the exact domain article. |
-| **Tags Match** | **+5 points** | Curated metadata keywords matching the conceptual domain. |
-| **Body Content** | **+1 point** | Text occurrences within the Markdown body. |
+| **Quoted Phrase** | **+30 title / +20 slug / +15 body** | Exact adjacent multi-word sequence match. |
+| **Title Match** | **+15.0 * IDF** | Direct topic match indicating the exact domain article. |
+| **Slug Match** | **+12.0 * IDF** | Exact architectural identifier match. |
+| **Tags Match** | **+10.0 * IDF** | Curated metadata keywords matching the conceptual domain. |
+| **Body Content** | **min(TF * IDF, 25.0)** | Frequency-saturated body occurrences scaled by discriminative rarity. |
+| **Active Entity Boost** | **+2.0 points** | Boost for active, open, or in-progress issues and ADRs. |
 
-### Snippet Window Extraction (95-98% Token Reduction)
-When a match is identified, `along-kb-search` extracts a targeted **230-character snippet window** centered around the matching query term.
-- *Prompt Impact*: Delivers the precise architectural constraint or API contract in **under 100 tokens**, compared to 3,000-8,000 tokens for loading the full file.
-- *Performance*: Sub-millisecond execution using pure Python standard library without vector embeddings latency.
+### Snippet Window Extraction (Measured 95-99% Token Reduction)
+When a match is identified, `along-kb-search` extracts a targeted word-boundary aligned passage centered around the matching query terms.
+- *Prompt Impact*: Delivers the precise architectural constraint or API contract in **under 100 tokens**, compared to thousands of tokens for loading full files.
+- *Verifiable Metrics*: Run with `--stats` to inspect live corpus size, returned token counts, and token savings percentage.
+- *Performance*: Sub-100ms execution across hundreds of documents using pure standard library in-memory tokenization without database locking risks or vector embeddings latency.
 
 ---
 
@@ -1728,6 +1701,18 @@ fatal: .git/index: index file smaller than expected
 
 3. **Avoid Disabling Stat-Cache Flags**:
    Do not set `GIT_OPTIONAL_LOCKS=0` or `diff.autoRefreshIndex false`. While intended to prevent lock contention during read operations, these flags disable Git stat-cache refresh on Windows, causing clean files to be falsely reported as modified (`" M"`) whenever file timestamps change.
+
+#### Line Ending Normalization & `.gitattributes`
+To eliminate conversion warnings and CRLF/LF diff noise on Windows:
+1. **Repository-Managed Line Endings**:
+   `.gitattributes` defines exact line endings per file class: `eol=lf` for Markdown, Python, JSON, YAML, Shell, and text files; `eol=crlf` strictly for `.ps1` and `.bat`.
+2. **Recommended Git Configuration**:
+   Set `git config core.autocrlf false` in the repository so Git relies strictly on `.gitattributes` rather than performing unprompted system-wide CRLF conversions.
+3. **Working Tree Normalization**:
+   If cloning onto a Windows environment with pre-existing CRLF drift, renormalize via:
+   ```bash
+   git add --renormalize .
+   ```
 
 ---
 
@@ -2233,10 +2218,10 @@ flowchart TD
 ### `along-kb-search`
 - **What it is**: Ultra-fast, token-efficient multi-scope search engine across Knowledge Base (`docs/`) and living project memory (`ISSUES/`, `DECISIONS.md`, `MILESTONES/`, `RISKS/`, `SESSIONS/`).
 - **Architectural Rationale**:
-  - *95-98% Token Reduction*: Instead of reading whole multi-kilobyte documents into prompt context, retrieves concise ~200-character snippet windows in under 100 tokens.
-  - *Multi-Tier Relevance Scoring*: Ranks results using weighted heuristics (`Title: +10`, `Tags: +5`, `Body: +1`) for instant pinpoint accuracy.
+  - *Measured 95-99% Token Reduction*: Instead of reading whole multi-kilobyte documents into prompt context, retrieves concise word-boundary aligned snippet windows in under 100 tokens, verifiable via `--stats`.
+  - *Multi-Tier Relevance Scoring & IDF Weighting*: Ranks results using word-boundary token matching, lightweight stemming, smoothed inverse document frequency (IDF), and exact phrase matching with AND semantics by default (`--any` for OR).
 - **Invocation Triggers**:
-  - *Explicit*: `/along-kb-search "<query>" [--category <cat>]`, `along kb-search` (fallback: `python ~/.along/bin/along_exec.py kb-search`).
+  - *Explicit*: `/along-kb-search "<query>" [--category <cat>] [--any] [--prefix] [--stats]`, `along kb-search` (fallback: `python ~/.along/bin/along_exec.py kb-search`).
   - *Semantic / Automatic*: Mandatory first step for agents when researching domain architecture, investigating existing decisions, or mapping blast radius.
 - **Entities Operated On**: `docs/`, `.along/ISSUES/`, `.along/DECISIONS.md`, `.along/MILESTONES/`, `.along/RISKS/`, `.along/SPIKES/`, `.along/SESSIONS/`.
 - **Ecosystem Chaining**: Used by Scout and Supervisor in `along-team` during Phase 1 (Research).
