@@ -18,7 +18,7 @@ Universal finalization and memory synchronization protocol for sessions, tasks, 
 1. [ ] **Verification & Tests**: Run automated unit tests / linting / builds with quiet flags (`/along-test` or `/along-build`).
 2. [ ] **Code Review & Blast Radius Assessment**:
    - Inspect `git diff` for unintended side effects, unhandled nulls/errors, and edge cases.
-   - Evaluate systemic blast radius on callers/dependents using `code-review-graph` (`get_impact_radius_tool`, `get_affected_flows_tool`). If offline, loudly warn and fall back to static AST / text search, recording the degraded state in the session log.
+   - Evaluate systemic blast radius on callers/dependents using `code-review-graph` (`get_impact_radius_tool`, `get_affected_flows_tool`) when available; otherwise fall back to static AST / text search, recording the degraded state in the session log.
    - Identify all modified subsystem symbols and impacted downstream interfaces to inform documentation updates.
    - Verify compliance with architectural decisions in `.along/DECISIONS.md`.
 3. [ ] **Entity Reconciliation**:

@@ -18,7 +18,7 @@ spikes_conducted: []
 
 ## Summary
 Addressed three technical debt items and completed the remaining remediation scope of the 2026-09-01 quality audit epic:
-1. Closed `debt--unpinned-mcp-and-ghost-wiki-query-tool` after removing phantom tool references and pinning `code-review-graph` to v1.2.0.
+1. Closed `debt--unpinned-mcp-and-ghost-wiki-query-tool` after removing phantom tool references and pinning `code-review-graph` to 2.3.8.
 2. Resolved `debt--line-ending-churn-vs-gitattributes` by adding `newline_for_path()` in `scripts/alongkit/textio.py`, enforcing explicit newline parameters across 24 generator write sites, setting local `core.autocrlf false`, renormalizing tracked files to match `.gitattributes` (0 CRLF mismatches), and adding newline regression tests.
 3. Replaced naive substring search in `scripts/along_kb_search.py` (`debt--kb-search-ranking-and-snippet-quality`) with word-boundary token matching, lightweight English suffix stemming, smoothed IDF weighting, AND-by-default semantics (`--any` for OR), exact quoted phrases, and centered word-boundary snippet extraction. Verified 99.8% token savings via `--stats` mode, added 7 test fixture methods, and recorded ADR-2026-09-09--kb-search-in-memory-ranking-vs-sqlite-fts5.
 4. Closed parent epic `debt--protocol-quality-audit-remediation` with all 28 child findings resolved and marked milestone `v3.0.0-global-quality-revision` 100% complete.

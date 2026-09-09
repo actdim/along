@@ -299,7 +299,7 @@ To keep `.along/` lean and avoid token bloat:
 - **Context & Token hygiene**: Keep tool output lean to prevent context bloat. Use quiet flags for builds/tests (`pytest -q`, `dotnet test -v q`), filter command outputs, and inspect targeted line ranges.
 - **Contract-First Lifecycle Execution**: When building, testing, developing, or releasing, agents MUST prioritize project lifecycle hooks (`/along-test` or `.along/scripts/test.py`, `/along-build`, `/along-dev`, `/along-version-bump`, `/along-dep-scan`) over guessing raw toolchain commands.
 - **Dual Search Architecture**: Distinguish between code and documentation retrieval: query MCP tools (`semantic_search_nodes_tool`, `query_graph_tool`) for codebase AST / call graph search, and `/along-kb-search` for Knowledge Base / living project memory (`docs/`, `README.md`, `DECISIONS.md`, `ISSUES/`).
-- **Mandatory Agentic Code Review & Blast Radius Impact**: After completing non-trivial code modifications, agents MUST critically inspect their own diffs and evaluate systemic blast radius. Agents MUST execute `code-review-graph` MCP tools (`build_or_update_graph_tool`, `get_impact_radius_tool`, `get_affected_flows_tool`) to verify that downstream callers, interfaces, and dependent systems remain unbroken, edge cases and nulls are handled, and active ADRs in `.along/DECISIONS.md` are respected. If `code-review-graph` is offline or fails, agents MUST output a loud diagnostic warning (`[CRITICAL WARNING: code-review-graph OFFLINE, degraded to static search]`) and fall back to static search (`grep_search` across callers, imports, and references). Silent skips are strictly forbidden.
+- **Agentic Code Review & Blast Radius Impact**: After completing non-trivial code modifications, agents MUST critically inspect their own diffs and evaluate systemic blast radius. Agents execute `code-review-graph` MCP tools (`build_or_update_graph_tool`, `get_impact_radius_tool`, `get_affected_flows_tool`) when available to verify that downstream callers, interfaces, and dependent systems remain unbroken, edge cases and nulls are handled, and active ADRs in `.along/DECISIONS.md` are respected. If `code-review-graph` is offline or unavailable, agents fall back to static search (`grep_search` across callers, imports, and references) and record the degraded state in the session log. Silent skips are strictly forbidden.
 
 ## Mandatory Stage & Session Completion Checklist
 When a Stage or session completes, agents MUST execute this verification checklist in exact order:
@@ -308,7 +308,7 @@ When a Stage or session completes, agents MUST execute this verification checkli
 3. [ ] **Code Review & Blast Radius Assessment**:
    - Inspect git diff for unintended side effects, unhandled nulls/errors, and edge cases.
    - Verify 100% requirement coverage against the initial user request (`REQ-N`) across both core implementation and public mirror surfaces (`README.md`, `AGENTS.md`).
-   - Evaluate systemic impact radius on callers/dependents using `code-review-graph` (`get_impact_radius_tool`, `get_affected_flows_tool`). If offline, loudly warn and fall back to static AST / text search, recording the degraded state in the session log.
+   - Evaluate systemic impact radius on callers/dependents using `code-review-graph` (`get_impact_radius_tool`, `get_affected_flows_tool`) when available; otherwise fall back to static AST / text search, recording the degraded state in the session log.
    - Identify all modified subsystem symbols and impacted downstream interfaces to inform documentation updates.
    - Verify compliance with architectural decisions in `.along/DECISIONS.md`.
 4. [ ] **Entity Reconciliation**:
@@ -1430,7 +1430,7 @@ The search engine ranks results using word-boundary token matching, lightweight 
 | **Body Content** | **min(TF * IDF, 25.0)** | Frequency-saturated body occurrences scaled by discriminative rarity. |
 | **Active Entity Boost** | **+2.0 points** | Boost for active, open, or in-progress issues and ADRs. |
 
-### Snippet Window Extraction (Measured 95-99% Token Reduction)
+### Snippet Window Extraction (Targeted Context Optimization)
 When a match is identified, `along-kb-search` extracts a targeted word-boundary aligned passage centered around the matching query terms.
 - *Prompt Impact*: Delivers the precise architectural constraint or API contract in **under 100 tokens**, compared to thousands of tokens for loading full files.
 - *Verifiable Metrics*: Run with `--stats` to inspect live corpus size, returned token counts, and token savings percentage.
@@ -1812,7 +1812,7 @@ along-init
 *(Or invoke `/along-init` directly inside your AI agent prompt).*
 
 ### What `along-init` Configures:
-1. `AGENTS.md`: Generates the root protocol context with the managed `ALONG-PROTOCOL v2.3.0` block.
+1. `AGENTS.md`: Generates the root protocol context with the managed `ALONG-PROTOCOL v2.2.6` block.
 2. `CLAUDE.md`: Scaffolds the standard `@AGENTS.md` import line.
 3. `.gitattributes`: Configures `merge=union` for `.along/HISTORY.md` and `.along/DECISIONS.md` to prevent merge collisions across branches.
 4. `.along/`: Creates the persistent repository memory skeleton (`ISSUES/`, `DECISIONS.md`, `MILESTONES/`, `RISKS/`, `SPIKES/`, `CHECKLISTS/`, `SESSIONS/`, `docs/`).
@@ -2275,7 +2275,7 @@ flowchart TD
 ### `along-kb-search`
 - **What it is**: Ultra-fast, token-efficient multi-scope search engine across Knowledge Base (`docs/`) and living project memory (`ISSUES/`, `DECISIONS.md`, `MILESTONES/`, `RISKS/`, `SESSIONS/`).
 - **Architectural Rationale**:
-  - *Measured 95-99% Token Reduction*: Instead of reading whole multi-kilobyte documents into prompt context, retrieves concise word-boundary aligned snippet windows in under 100 tokens, verifiable via `--stats`.
+  - *Targeted Snippet Window Extraction*: Instead of reading whole multi-kilobyte documents into prompt context, retrieves concise word-boundary aligned snippet windows (typically under 150 tokens), verifiable via `--stats`.
   - *Multi-Tier Relevance Scoring & IDF Weighting*: Ranks results using word-boundary token matching, lightweight stemming, smoothed inverse document frequency (IDF), and exact phrase matching with AND semantics by default (`--any` for OR).
 - **Invocation Triggers**:
   - *Explicit*: `/along-kb-search "<query>" [--category <cat>] [--any] [--prefix] [--stats]`, `along kb-search` (fallback: `python ~/.along/bin/along_exec.py kb-search`).

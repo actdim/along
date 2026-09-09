@@ -69,7 +69,7 @@ Three recurring mechanisms produce most defects:
 - [x] `[debt--protocol-documentation-drift]` - canonical protocol SSOT in skills/along-init/protocol.md (fixed 2026-09-07)
 - [x] `[debt--extract-shared-python-library]` - scripts/alongkit/ extracted; duplication guarded by tests (fixed 2026-09-01)
 - [x] `[debt--always-on-context-budget-exceeds-claims]` - session-start context reduced 60%, sliding window ISSUES.md (fixed 2026-09-07)
-- [x] `[debt--unpinned-mcp-and-ghost-wiki-query-tool]` - removed ghost wiki_query tool, pinned code-review-graph to v1.2.0 (fixed 2026-09-09)
+- [x] `[debt--unpinned-mcp-and-ghost-wiki-query-tool]` - removed ghost wiki_query tool, pinned code-review-graph to 2.3.8 (fixed 2026-09-09)
 
 ### Medium / Low - quality, hygiene, honesty of metrics
 

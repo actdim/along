@@ -2,17 +2,22 @@
 protocol: along
 slug: antigravity-extension-git-index-truncation
 type: bug
-status: open
+status: superseded
 priority: high
 created: 2026-09-07
-updated: 2026-09-07
+updated: 2026-09-09
+completed: 2026-09-09
 agent: antigravity
 tags: [antigravity, git, upstream, bug]
 blocked_by: []
 related: [bug--remove-git-locking-workarounds]
+superseded_by: antigravity-git-index-truncation
 ---
 
 # Track Upstream Antigravity Extension Git Index Truncation Bug and Hotfix
+
+> [!NOTE]
+> Reclassified and superseded by `[risk--antigravity-git-index-truncation]`. Because this is an external upstream bug in Google's VS Code extension binary rather than Along source code, it is tracked as an operational risk with local mitigation.
 
 ## Upstream Bug Description
 - **Affected Component**: Google Antigravity VS Code Extension (`google.google-antigravity` v1.2.0, `extension.js`).
@@ -36,8 +41,5 @@ related: [bug--remove-git-locking-workarounds]
 2. Inserted early `return;` at the beginning of `touchGitIndexForUri()` (around line 300255), completely preventing the extension from truncating `.git/index`.
 
 ## Periodic Verification & Decommission Criteria
-- [ ] On future Antigravity extension updates, check `extension.js` in the new extension version directory.
-- [ ] Verify if Google upstream has fixed the race condition (e.g. by using `fs.utimes`, gating on active GitLens extension, or eliminating the index rewrite).
-- [ ] If upstream is fixed, verify that `.git/index` is never truncated and close this issue as `done`.
-- [ ] If upstream is not yet fixed, re-apply the hotfix to the newly installed extension version.
-
+- [x] Converted to tracked risk `antigravity-git-index-truncation` in `.along/RISKS/`.
+- [x] Local mitigation verified active.

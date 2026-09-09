@@ -3,10 +3,10 @@ protocol: along
 protocol_version: "2.2.21"
 slug: runtime-enforcement-of-prose-rules
 type: feat
-status: in-progress
+status: open
 priority: critical
 created: 2026-09-02
-updated: 2026-09-07
+updated: 2026-09-09
 agent: antigravity
 tags: [architecture, runtimes, hooks, gates, security, mechanical-enforcement, transcript]
 milestone: v4.0.0-runtime-gates-and-worktree-isolation

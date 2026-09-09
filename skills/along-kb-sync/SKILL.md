@@ -39,7 +39,7 @@ When executing `/along-kb-sync`:
 - **Parallel Research Ingestion (Large-Scale / Multi-Package)**:
   - When processing extensive documentation dumps, large monorepos, or multiple subprojects:
     1. **Decompose Topics**: Split the knowledge extraction into 2-4 discrete domain vectors (e.g. `architecture`, `data-models`, `api-integrations`, `workflows`).
-    2. **Spawn Parallel Subagents**: Concurrently invoke research subagents to synthesize independent `docs/topic--<slug>.md` articles in parallel with standard YAML front-matter (`protocol: along`, `protocol_version: "2.2.27"`).
+    2. **Spawn Parallel Subagents**: Concurrently invoke research subagents to synthesize independent `docs/topic--<slug>.md` articles in parallel with standard YAML front-matter (`protocol: along`, `slug`, `title`, `type: topic`).
     3. **Reconcile & Link**: Run `along kb-sync` to rewrite inbound links, validate relative links across the repository, verify provenance hashes, sync `llms.txt` and `llms-full.txt`, and rebuild `docs/INDEX.md`.
 
 ## Usage

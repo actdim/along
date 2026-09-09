@@ -97,7 +97,7 @@ The search engine ranks results using word-boundary token matching, lightweight 
 | **Body Content** | **min(TF * IDF, 25.0)** | Frequency-saturated body occurrences scaled by discriminative rarity. |
 | **Active Entity Boost** | **+2.0 points** | Boost for active, open, or in-progress issues and ADRs. |
 
-### Snippet Window Extraction (Measured 95-99% Token Reduction)
+### Snippet Window Extraction (Targeted Context Optimization)
 When a match is identified, `along-kb-search` extracts a targeted word-boundary aligned passage centered around the matching query terms.
 - *Prompt Impact*: Delivers the precise architectural constraint or API contract in **under 100 tokens**, compared to thousands of tokens for loading full files.
 - *Verifiable Metrics*: Run with `--stats` to inspect live corpus size, returned token counts, and token savings percentage.

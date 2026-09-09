@@ -44,9 +44,7 @@ dev = [
 ]
 
 [project.scripts]
-# Canonical entry point. Skills currently document `python scripts/<engine>.py`, which
-# does not exist in a consumer repository; rewriting them onto this command is tracked
-# as `[bug--skill-commands-reference-missing-script-paths]`.
+# Canonical entry point for the Along toolchain and engines.
 along = "alongkit.cli:main"
 
 [project.urls]
