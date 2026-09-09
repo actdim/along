@@ -3,10 +3,11 @@ protocol: along
 protocol_version: 2.2.8
 slug: line-ending-churn-vs-gitattributes
 type: debt
-status: in-progress
+status: done
 priority: low
 created: 2026-09-01
 updated: 2026-09-09
+completed: 2026-09-09
 agent: claude-code
 tags: [git, line-endings, windows, noise]
 milestone: v3.0.0-global-quality-revision
@@ -82,8 +83,8 @@ Low severity, real cost:
 
 ## Acceptance Criteria
 
-- [ ] `git status` produces no CRLF/LF conversion warnings.
-- [ ] Generators honor the declared newline style per extension.
-- [ ] In-place edits preserve existing line endings.
-- [ ] Newline-style test in place.
-- [ ] Convention documented.
+- [x] `git status` produces no CRLF/LF conversion warnings.
+- [x] Generators honor the declared newline style per extension.
+- [x] In-place edits preserve existing line endings.
+- [x] Newline-style test in place.
+- [x] Convention documented.

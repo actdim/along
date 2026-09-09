@@ -113,6 +113,18 @@ fatal: .git/index: index file smaller than expected
 3. **Avoid Disabling Stat-Cache Flags**:
    Do not set `GIT_OPTIONAL_LOCKS=0` or `diff.autoRefreshIndex false`. While intended to prevent lock contention during read operations, these flags disable Git stat-cache refresh on Windows, causing clean files to be falsely reported as modified (`" M"`) whenever file timestamps change.
 
+#### Line Ending Normalization & `.gitattributes`
+To eliminate conversion warnings and CRLF/LF diff noise on Windows:
+1. **Repository-Managed Line Endings**:
+   `.gitattributes` defines exact line endings per file class: `eol=lf` for Markdown, Python, JSON, YAML, Shell, and text files; `eol=crlf` strictly for `.ps1` and `.bat`.
+2. **Recommended Git Configuration**:
+   Set `git config core.autocrlf false` in the repository so Git relies strictly on `.gitattributes` rather than performing unprompted system-wide CRLF conversions.
+3. **Working Tree Normalization**:
+   If cloning onto a Windows environment with pre-existing CRLF drift, renormalize via:
+   ```bash
+   git add --renormalize .
+   ```
+
 ---
 
 ## 2. Python Runtime & Dependencies
