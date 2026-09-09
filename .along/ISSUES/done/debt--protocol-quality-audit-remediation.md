@@ -3,10 +3,11 @@ protocol: along
 protocol_version: 2.2.8
 slug: protocol-quality-audit-remediation
 type: debt
-status: in-progress
+status: done
+completed: 2026-09-09
 priority: critical
 created: 2026-09-01
-updated: 2026-09-01
+updated: 2026-09-09
 agent: claude-code
 tags: [audit, quality, epic, remediation]
 milestone: v3.0.0-global-quality-revision
@@ -45,39 +46,39 @@ Three recurring mechanisms produce most defects:
 - [x] `[bug--adr-retrieval-blind-to-slug-headers]` - ADR search returned zero results (fixed 2026-09-01)
 - [x] `[bug--issue-done-corrupts-status-and-drops-completed]` - invalid status, lost mandatory field (fixed 2026-09-01)
 - [x] `[bug--subprocess-encoding-breaks-on-non-utf8-locale]` - encoding fixed at one shared call site (fixed 2026-09-01)
-- [ ] `[bug--skill-commands-reference-missing-script-paths]`
-- [ ] `[bug--commit-binds-arbitrary-active-issue]`
+- [x] `[bug--skill-commands-reference-missing-script-paths]` - skills standardized on canonical CLI entry points (fixed 2026-09-07)
+- [x] `[bug--commit-binds-arbitrary-active-issue]` - commit binds explicitly to targeted issue slug (fixed 2026-09-06)
 - [x] `[bug--typography-sanitizer-destroys-non-utf8-files]` - strict reads, check-by-default gates, scope ADR (fixed 2026-09-01)
 - [x] `[bug--migration-deletes-destination-without-backup]` - collision policy, backup, dry-run default, migration state (fixed 2026-09-01)
 - [x] `[bug--release-engine-mutates-before-tests-and-reinstalls-globals]` - gates before mutations, transactional rollback, no global install, tag and CHANGELOG (fixed 2026-09-01)
 - [x] `[bug--handrolled-yaml-loses-block-lists]` - front-matter on ruamel.yaml; 6 invalid files repaired (fixed 2026-09-01)
 - [x] `[bug--installer-parity-and-destructive-rules-overwrite]` - manifest instead of directory deletion, one layout both installers are measured against, MCP written only where verified (fixed 2026-09-01)
-- [ ] `[bug--team-skill-uses-provider-specific-subagent-api]`
-- [ ] `[debt--team-skill-state-not-persisted]`
+- [x] `[bug--team-skill-uses-provider-specific-subagent-api]` - provider-agnostic subagent role abstraction (fixed 2026-09-06)
+- [x] `[debt--team-skill-state-not-persisted]` - durable session-scoped blackboard memory (fixed 2026-09-07)
 
 ### High - wrong results, contradictions, or structural debt
 
 - [x] `[bug--commit-stages-all-and-dead-test-detection]` - selective staging, --all/--paths flags, exit on push fail (fixed 2026-09-06)
-- [ ] `[bug--quality-gates-skip-hidden-directories]`
-- [ ] `[bug--kb-sync-rewrites-unrelated-numbered-links]`
+- [x] `[bug--quality-gates-skip-hidden-directories]` - quality gates include hidden directories and dotfiles (fixed 2026-09-07)
+- [x] `[bug--kb-sync-rewrites-unrelated-numbered-links]` - exact path-segment matching, link target validation (fixed 2026-09-07)
 - [x] `[bug--kb-sync-ingestion-not-idempotent]` - preserved hand edits, check mode writes nothing (fixed 2026-09-06)
-- [ ] `[bug--link-gates-skip-along-directory]`
-- [ ] `[bug--generated-docs-emit-file-uri-links]`
+- [x] `[bug--link-gates-skip-along-directory]` - link rewriter and integrity gates cover .along/ directory (fixed 2026-09-07)
+- [x] `[bug--generated-docs-emit-file-uri-links]` - banned file:// pseudo-scheme, enforced portable relative links (fixed 2026-09-07)
 - [x] `[bug--tests-mutate-working-tree]` - hermetic fixtures plus a meta-test on the working tree (fixed 2026-09-01)
-- [ ] `[bug--issue-create-stamps-wrong-agent-and-milestone]`
-- [ ] `[debt--protocol-documentation-drift]`
+- [x] `[bug--issue-create-stamps-wrong-agent-and-milestone]` - reconciled agent and milestone inference (fixed 2026-09-07)
+- [x] `[debt--protocol-documentation-drift]` - canonical protocol SSOT in skills/along-init/protocol.md (fixed 2026-09-07)
 - [x] `[debt--extract-shared-python-library]` - scripts/alongkit/ extracted; duplication guarded by tests (fixed 2026-09-01)
-- [ ] `[debt--always-on-context-budget-exceeds-claims]`
-- [ ] `[debt--unpinned-mcp-and-ghost-wiki-query-tool]`
+- [x] `[debt--always-on-context-budget-exceeds-claims]` - session-start context reduced 60%, sliding window ISSUES.md (fixed 2026-09-07)
+- [x] `[debt--unpinned-mcp-and-ghost-wiki-query-tool]` - removed ghost wiki_query tool, pinned code-review-graph to v1.2.0 (fixed 2026-09-09)
 
 ### Medium / Low - quality, hygiene, honesty of metrics
 
-- [ ] `[bug--generated-lifecycle-hooks-use-shell-string-concat]`
-- [ ] `[debt--generated-dashboard-artifact-committed]`
-- [ ] `[debt--entity-status-enum-and-unused-taxonomy]`
-- [ ] `[debt--exception-swallowing-hides-failures]`
-- [ ] `[debt--kb-search-ranking-and-snippet-quality]`
-- [ ] `[debt--line-ending-churn-vs-gitattributes]`
+- [x] `[bug--generated-lifecycle-hooks-use-shell-string-concat]` - safe argument passing in generated hooks (fixed 2026-09-07)
+- [x] `[debt--generated-dashboard-artifact-committed]` - untracked dashboard.html and DASHBOARD.md, gitignored (fixed 2026-09-09)
+- [x] `[debt--entity-status-enum-and-unused-taxonomy]` - extended status enum with non-delivered terminal states (fixed 2026-09-09)
+- [x] `[debt--exception-swallowing-hides-failures]` - eliminated broad exception swallowing, centralized diagnostics (fixed 2026-09-09)
+- [x] `[debt--kb-search-ranking-and-snippet-quality]` - token-based IDF ranking, exact phrases, snippet extraction, --stats mode (fixed 2026-09-09)
+- [x] `[debt--line-ending-churn-vs-gitattributes]` - explicit newline parameters across generators, newline_for_path helper, repository renormalized (fixed 2026-09-09)
 
 ## Progress
 
@@ -144,8 +145,8 @@ dashboard graph builder crashed on an unparseable entity file.
 
 ## Acceptance Criteria
 
-- [ ] Every child issue is closed or explicitly deferred with a recorded rationale.
-- [ ] An ADR is recorded for each architectural decision taken during remediation
+- [x] Every child issue is closed or explicitly deferred with a recorded rationale.
+- [x] An ADR is recorded for each architectural decision taken during remediation
       (shared library boundary, YAML dependency, destructive-operation policy,
       provider abstraction for subagents).
-- [ ] `docs/topic--*.md` articles updated where behavior or public surface changed.
+- [x] `docs/topic--*.md` articles updated where behavior or public surface changed.
