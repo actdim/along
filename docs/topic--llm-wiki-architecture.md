@@ -168,7 +168,46 @@ flowchart LR
 
 ---
 
-## 7. References & Useful Links
+## 7. Deterministic Topic Dictionary, Auto-Crosslinking & AST Symbol Grounding
+
+To guarantee factual precision and cross-reference coherence without human micro-management, Along equips `along-kb-sync` with three deterministic compiler mechanisms:
+
+### Deterministic Topic Dictionary & Auto-Crosslinking
+- **TopicDictionary Indexing**: The compiler automatically extracts title, slug, and tag permutations across all `docs/topic--*.md` files. Entries are sorted longest-first to prioritize specific domain aliases (e.g. `LLM-Wiki Architecture` before `Architecture`).
+- **Bounded Cross-Link Replacement**:
+  - `scan_crosslinks()` and `apply_crosslinks()` audit prose for unlinked concept opportunities.
+  - Skips Markdown headings (`#`, `##`), fenced code blocks (` ``` `), inline code spans (`` `...` ``), and existing relative/absolute links.
+  - Enforces the **First Occurrence Per Section Rule**: only the first unlinked mention within any H2 section (`## `) is converted to a link (`[Term](./topic--slug.md)`).
+  - Self-linking to the current article is strictly excluded.
+  - Idempotent: re-running `--crosslink-apply` yields zero modifications.
+- **CLI Options**:
+  - `along kb-sync --crosslink-check`: Audits documentation for unlinked topic opportunities without modifying files.
+  - `along kb-sync --crosslink-apply`: Applies deterministic cross-links in-place.
+
+### AST Code Symbol Grounding Gate
+- **AST Symbol Extraction**: Parses Python source files across `scripts/`, `dashboard/`, `tests/`, and `.along/scripts/` using Python's native `ast` module. Discovers classes, functions, async functions, methods, and uppercase module-level constants.
+- **Ghost Symbol Detection (`--check-symbols`)**:
+  - Inspects backticked spans (`` `symbol` ``) across all `docs/topic--*.md` articles.
+  - Identifies identifier signatures (snake_case, PascalCase, UPPER_SNAKE, dotted member accesses) and checks them against the AST symbol inventory.
+  - Flags ungrounded "ghost symbols" (non-existent classes, phantom functions, obsolete identifiers) that hallucinate codebase capabilities.
+  - Builtin filter whitelists Python keywords, standard library modules/attributes (`sys.path`, `os.remove`), Win32 platform APIs, Dynstruct framework symbols, and MCP tools.
+  - Exits with non-zero status in strict mode (`--check-symbols --strict`) when ghost symbols exist.
+
+### Structured Section Taxonomy Contracts
+- **Standard Article Schemas**: Core documentation types must satisfy required section structures defined in `SECTION_CONTRACTS`:
+  - `architecture`: System Topology & Overview, Core Components & Engine Implementation, Data Flow & Execution Workflow, Invariants & Failure Modes.
+  - `domain-model`: Entity Taxonomy & Ecosystem, Front-matter Schemas & Metadata, Graph Invariance & Relationships.
+  - `setup-workflow`: Prerequisites & Installation, Runner Commands & Lifecycle Scripts, Quality Gates & Verification.
+- **Fuzzy Heading & Non-Empty Body Verification**:
+  - Matches headings with flexible regex pattern sets (supporting numbered variants such as `## 1. System Topology & Architecture`).
+  - Requires each mandatory section to contain substantive documentation lines (preventing empty header stubs).
+- **Enforcement**:
+  - Automatically audited and logged as `[WARN]` during sync.
+  - Strictly enforced via `along kb-sync --strict-sections`, exiting with code 1 on violations.
+
+---
+
+## 8. References & Useful Links
 
 - **Andrej Karpathy's LLM-Wiki Concept**: Conceptual foundation for repository-native, human-readable structured LLM documentation.
 - **[System Architecture & Flow](./topic--architecture.md)**: System topology, multi-branch concurrency, and multi-agent state machine.
