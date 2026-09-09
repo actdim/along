@@ -5,11 +5,11 @@ type: feat
 status: open
 priority: critical
 created: 2026-09-04
-updated: 2026-09-07
+updated: 2026-09-09
 agent: antigravity
 tags: [circuit-breaker, stability, gates, systemic-errors, human-in-the-loop]
-milestone: v3.0.0-global-quality-revision
-blocked_by: []
+milestone: v4.0.0-runtime-gates-and-worktree-isolation
+blocked_by: [feat--runtime-enforcement-of-prose-rules]
 related: [feat--runtime-enforcement-of-prose-rules, feat--programmatic-integrity-gates-and-git-guard]
 ---
 
