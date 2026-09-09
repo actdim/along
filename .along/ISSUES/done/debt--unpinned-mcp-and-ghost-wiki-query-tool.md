@@ -3,10 +3,11 @@ protocol: along
 protocol_version: 2.2.8
 slug: unpinned-mcp-and-ghost-wiki-query-tool
 type: debt
-status: in-progress
+status: done
 priority: high
 created: 2026-09-01
-updated: 2026-09-07
+updated: 2026-09-09
+completed: 2026-09-09
 agent: antigravity
 tags: [mcp, dependencies, supply-chain, ghost-capability, gates]
 milestone: v3.0.0-global-quality-revision

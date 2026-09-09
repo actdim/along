@@ -5,7 +5,6 @@
 - [ ] `(debt)` [kb-search-ranking-and-snippet-quality](ISSUES/debt--kb-search-ranking-and-snippet-quality.md)
 - [ ] `(debt)` [line-ending-churn-vs-gitattributes](ISSUES/debt--line-ending-churn-vs-gitattributes.md)
 - [ ] `(debt)` [protocol-quality-audit-remediation](ISSUES/debt--protocol-quality-audit-remediation.md)
-- [ ] `(debt)` [unpinned-mcp-and-ghost-wiki-query-tool](ISSUES/debt--unpinned-mcp-and-ghost-wiki-query-tool.md)
 - [ ] `(feat)` [automated-ui-screenshots-and-visual-verification](ISSUES/feat--automated-ui-screenshots-and-visual-verification.md)
 - [ ] `(feat)` [cursor-agent-and-rules-integration](ISSUES/feat--cursor-agent-and-rules-integration.md)
 - [ ] `(feat)` [deterministic-kb-pipeline-and-ast-grounding](ISSUES/feat--deterministic-kb-pipeline-and-ast-grounding.md)
@@ -23,9 +22,9 @@
 <!-- Planned or deferred issues -->
 
 ## Done (recent)
+- [x] `(debt)` [unpinned-mcp-and-ghost-wiki-query-tool](ISSUES/done/debt--unpinned-mcp-and-ghost-wiki-query-tool.md)
 - [x] `(docs)` [pluggable-lifecycle-hooks-showcase](ISSUES/done/docs--pluggable-lifecycle-hooks-showcase.md)
 - [x] `(debt)` [generated-dashboard-artifact-committed](ISSUES/done/debt--generated-dashboard-artifact-committed.md)
 - [x] `(debt)` [exception-swallowing-hides-failures](ISSUES/done/debt--exception-swallowing-hides-failures.md)
 - [x] `(debt)` [entity-status-enum-and-unused-taxonomy](ISSUES/done/debt--entity-status-enum-and-unused-taxonomy.md)
-- [x] `(bug)` [kb-sync-readme-alert-summary](ISSUES/done/bug--kb-sync-readme-alert-summary.md)
-<!-- 69 older completed issue(s) archived in .along/ISSUES/done/ -->
+<!-- 70 older completed issue(s) archived in .along/ISSUES/done/ -->
