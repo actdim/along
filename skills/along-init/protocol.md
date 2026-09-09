@@ -128,7 +128,7 @@ To keep `.along/` lean and avoid token bloat:
   - `docs/topic--setup-and-workflow.md`: Build, run, test, and workflow instructions.
   - `docs/topic--<slug>.md`: Specific domain topics and module specifications.
 - **In-Place Source Grounding & Provenance**: Raw sources, specs, and notes remain in-place in their project locations (never moved to an archive directory). Every compiled article tracks its origin via `sources: [{path, hash}]` in YAML front-matter with SHA-256 content hashes, enabling drift detection and reproducible verification.
-- **Front-matter Schema**: Every `docs/*.md` article MUST include YAML front-matter: `protocol: along`, `protocol_version` (the current protocol version, quoted), `slug`, `title`, `type` (`topic` | `architecture` | `domain-model` | `setup-workflow` | `index`), `created`, `updated`, `tags: []`, and optional `sources: [{path, hash}]` / `curated: bool`.
+- **Front-matter Schema**: Every `docs/*.md` article MUST include YAML front-matter: `protocol: along` (mandatory protocol marker), `slug`, `title`, `type` (`topic` | `architecture` | `domain-model` | `setup-workflow` | `index`), `created`, `updated`, `tags: []`, and optional `protocol_version` (quoted protocol version at creation) / `sources: [{path, hash}]` / `curated: bool`.
 - **Stable Entry Point Rule**: Files outside the service directory (`README.md`, `docs/`, package manifests, external documentation) MUST NOT link directly into `.along/`, nor into legacy service paths from earlier protocol versions. Route every such reference through a stable canonical path in `docs/` (`docs/INDEX.md` or `docs/topic--<slug>.md`). The rule governs published links only: agents still read `.along/ISSUES.md` and `.along/CONSTRAINTS.md` directly, as instructed at session start.
 - **Inbound Link Rewriting Engine & Migration Invariance**: Whenever documentation schemas change, migration engines (`/along-update`, `/along-kb-sync`) MUST recursively rewrite legacy path references across all repository Markdown files before deleting legacy directories.
 - **Monorepo Scope Rule**: Knowledge Base synchronization, link rewriting, and link verification operate recursively across all subprojects, packages (`packages/*`, `apps/*`), and directories.
@@ -202,6 +202,18 @@ When a Stage or session completes, agents MUST execute this verification checkli
   - **Fixtures, Never the Real Root**: A test MUST point every engine, script, or command it executes at a throwaway fixture (`tempfile.mkdtemp()`), never at the repository that contains the test. Engines write: they normalize front-matter, sanitize typography, rewrite links, and move entities, so a test that passes the real root can silently edit work in progress.
   - **Read-Only Access to Live State**: Tests MAY read live repository content (project memory, `docs/`, manifests) to guard against format drift, and MUST open it read-only without invoking an engine that writes.
   - **Prove It**: Keep a meta-test that snapshots `git status --porcelain -u` before and after the suite and fails if the suite dirtied the tree. "The suite is green" and "the tree is clean" must be simultaneously achievable; otherwise the suite cannot serve as a gate and CI cannot tell a real change from test noise.
+- **Inquiry Read-Only Invariance (Zero-Mutation Rule on Questions)**:
+  - On user prompts with interrogative or verification intent (e.g. "is X done?", "why did Y fail?", "are all docs updated?"), calling write or modify tools (`replace_file_content`, `write_to_file`, `git commit`, mutating shell commands) is STRICTLY PROHIBITED.
+  - The agent MUST return a structured read-only audit report:
+    1. Direct Answer (factual status of the system).
+    2. Discrepancies / Findings (specific files, lines, and defects).
+    3. Proposed Remediation Plan (concrete proposed changes without executing them).
+    4. Confirmation Request ("Would you like me to proceed with these changes?").
+  - File modifications are permitted ONLY after explicit user confirmation.
+- **Mandatory Adaptive Complexity Escalation & Execution Mode Routing**:
+  - Evaluate task complexity against escalation thresholds: scope touches > 3 files or crosses subsystems, touches core shared engine (`scripts/alongkit/`), triggers cross-package impact, or refactors architecture/protocol.
+  - When any threshold is met, single-agent monolithic execution is forbidden: route to role-based execution (`along-team` or subagents).
+  - Implementation plans MUST declare an explicit `Execution Mode`: `Direct` (isolated 1-2 files) or `Role-Based (along-team)` (when thresholds are met).
 - Windows-safe filenames: dates `YYYY-MM-DD` (no `:`), date first.
 - Keep `ISSUES.md` compact - it costs context every session.
 - Never write secrets/credentials/tokens/keys into these files; they are committed.

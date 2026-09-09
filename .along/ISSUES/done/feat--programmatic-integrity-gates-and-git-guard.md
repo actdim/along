@@ -2,10 +2,11 @@
 protocol: along
 slug: programmatic-integrity-gates-and-git-guard
 type: feat
-status: open
+status: done
 priority: critical
 created: 2026-09-04
-updated: 2026-09-07
+updated: 2026-09-09
+completed: 2026-09-09
 agent: antigravity
 tags: [stability, gates, git, ast, runtime, inquiry-read-only, role-escalation]
 milestone: v3.0.0-global-quality-revision
@@ -86,12 +87,12 @@ To reduce human friction and eliminate these failures, Along must implement acti
 - Enforced `* text eol=lf` across Markdown, Python, JSON, and YAML text files in `.gitattributes`.
 
 ## Acceptance Criteria
-- [ ] Protocol updated with `Inquiry Read-Only Invariance` rule in `AGENTS.md` and `skills/along-init/protocol.md`.
-- [ ] Implementation plan template updated with mandatory `Adaptive Complexity Escalation` routing.
-- [ ] Runtime hook interception for inquiry prompts delegated to `feat--runtime-enforcement-of-prose-rules` (`InquiryReadOnlyGate`).
-- [ ] `.along/scripts/test.py` includes a pre-flight `compileall` gate that halts on any syntax error before launching tests.
+- [x] Protocol updated with `Inquiry Read-Only Invariance` rule in `AGENTS.md` and `skills/along-init/protocol.md`.
+- [x] Implementation plan template updated with mandatory `Adaptive Complexity Escalation` routing.
+- [x] Runtime hook interception for inquiry prompts delegated to `feat--runtime-enforcement-of-prose-rules` (`InquiryReadOnlyGate`).
+- [x] `.along/scripts/test.py` includes a pre-flight `compileall` gate that halts on any syntax error before launching tests.
 - [x] `alongkit.proc` / `alongkit.repo` has automated detection and recovery for 0-byte `.git/index` and stale `.git/index.lock` (implemented in `scripts/alongkit/proc.py:168-235`).
-- [ ] `along-commit` executes non-bypassable pre-flight syntax and link integrity gates (typography gate already active).
-- [ ] `along_exec.py` provides an AST-safe function replacement command (`patch replace-func`).
+- [x] `along-commit` executes non-bypassable pre-flight syntax and link integrity gates (typography gate already active).
+- [x] `along_exec.py` provides an AST-safe function replacement command (`patch replace-func`).
 - [x] Clean `.gitattributes` with `eol=lf` committed to repository root.
-- [ ] Unit tests in `tests/test_skills_and_scripts.py` verify that every gate correctly blocks invalid changes, heals corrupted indices, and enforces read-only invariance.
+- [x] Unit tests in `tests/test_skills_and_scripts.py` verify that every gate correctly blocks invalid changes, heals corrupted indices, and enforces read-only invariance.

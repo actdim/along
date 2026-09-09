@@ -117,18 +117,10 @@ def bump_along_dev_repo(repo_root, new_version, tx):
     # 1. Update skills/along-init/protocol.md
     apply(os.path.join(repo_root, "skills", "along-init", "protocol.md"), [protocol_line])
 
-    # 2. Update all skills/*/SKILL.md
-    for sdir in sorted(glob.glob(os.path.join(repo_root, "skills", "along-*"))):
-        apply(os.path.join(sdir, "SKILL.md"), [
-            (r'\[v\d+\.\d+\.\d+\]', f'[v{new_version}]'),
-            (r'version: "\d+\.\d+\.\d+"', f'version: "{new_version}"'),
-            protocol_mention,
-        ])
-
-    # 3. Update root AGENTS.md
+    # 2. Update root AGENTS.md
     apply(os.path.join(repo_root, "AGENTS.md"), [protocol_line])
 
-    # 4. Update README.md
+    # 3. Update README.md
     apply(os.path.join(repo_root, "README.md"), [
         (r'# Along \(v\d+\.\d+\.\d+\)', f'# Along (v{new_version})'),
         protocol_mention,
@@ -136,9 +128,7 @@ def bump_along_dev_repo(repo_root, new_version, tx):
          f'Skills & Slash Commands (v{new_version})'),
     ])
 
-    # 5. Update the protocol version constant. It is declared once, in the shared
-    #    package; the legacy per-engine copies were removed in v3.0.0. The older
-    #    paths stay in the list so a bump run inside an older checkout still works.
+    # 4. Update the protocol version constant (SSOT).
     for const_path in [os.path.join(repo_root, "scripts", "alongkit", "version.py"),
                        os.path.join(repo_root, "scripts", "migrate_protocol.py"),
                        os.path.join(repo_root, "skills", "along-init", "migrate_protocol.py"),
@@ -149,9 +139,14 @@ def bump_along_dev_repo(repo_root, new_version, tx):
         apply(const_path, [(r'CURRENT_PROTOCOL_VERSION = "\d+\.\d+\.\d+"',
                             f'CURRENT_PROTOCOL_VERSION = "{new_version}"')])
 
+    # 5. Update .along/.protocol-version state marker
+    along_state_dir = os.path.join(repo_root, ".along")
+    if os.path.isdir(along_state_dir):
+        proto_state_file = os.path.join(along_state_dir, ".protocol-version")
+        tx.write(proto_state_file, f"{new_version}\n")
+        modified_files.append(proto_state_file)
 
-
-    # 8. Update llms.txt and llms-full.txt (both root and .well-known/)
+    # 6. Update llms.txt and llms-full.txt (both root and .well-known/)
     for llm_file in [
         "llms.txt", "llms-full.txt",
         os.path.join(".well-known", "llms.txt"),
@@ -162,18 +157,10 @@ def bump_along_dev_repo(repo_root, new_version, tx):
             (r'Along \(v\d+\.\d+\.\d+\)', f'Along (v{new_version})'),
         ])
 
-    # 9. Update package.json and packages/dashboard-ui/package.json
+    # 7. Update package.json and packages/dashboard-ui/package.json
     for pkg_file in ["package.json", os.path.join("packages", "dashboard-ui", "package.json")]:
         apply(os.path.join(repo_root, pkg_file),
               [(r'"version":\s*"\d+\.\d+\.\d+"', f'"version": "{new_version}"')])
-
-    # 10. Update dashboard/app.py
-    apply(os.path.join(repo_root, "dashboard", "app.py"),
-          [(r'version="\d+\.\d+\.\d+"', f'version="{new_version}"')])
-
-    # 11. Update pyproject.toml
-    apply(os.path.join(repo_root, "pyproject.toml"),
-          [(r'version\s*=\s*"\d+\.\d+\.\d+"', f'version = "{new_version}"')])
 
     return modified_files
 

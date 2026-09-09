@@ -1,6 +1,5 @@
 ---
 protocol: along
-protocol_version: "2.2.27"
 slug: migrations
 title: Protocol & Repository Migrations Guide
 type: topic
@@ -40,6 +39,7 @@ flowchart TD
     C -->|Step 3: Entity Ecosystem| D["v1.5.0 (Milestones, Risks, Checklists)"]
     D -->|Step 4: Along Directory| E["v2.0.0 (Along Ecosystem & protocol: along)"]
     E -->|Step 7: LLM-Wiki & docs/| F["v2.1.0 (docs/ KB, In-Place Provenance, Domain-First Skills)"]
+    F -->|Step 10: Version SSOT Cleanup| G["v3.0.0 (Version SSOT & KB Schema Decoupling)"]
 ```
 
 ---
@@ -109,3 +109,9 @@ fails if the engine calls `shutil.move`, `os.remove` or their neighbours directl
 - Preserves raw, unmanaged source notes in-place with SHA-256 provenance tracking.
 - Standardizes all 3-part skills to Singular Domain-First format (`along-<entity>-<action>`).
 - Enforces mandatory `along-kb-search` agent querying rule to minimize token usage.
+
+### `v2.2.27` -> `v3.0.0`: Version SSOT Cleanup & KB Schema Decoupling (Step 10)
+- Strips legacy hardcoded `protocol_version` declarations from `docs/*.md` (`topic--*.md` and `INDEX.md`) front-matter while preserving mandatory `protocol: along` marker.
+- Strips ` [vX.Y.Z]` title suffixes from local `skills/*/SKILL.md` manifests.
+- Decouples documentation sync from version bump churn, preventing spurious diffs and hash invalidation across releases.
+

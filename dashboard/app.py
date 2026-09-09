@@ -27,6 +27,12 @@ try:
 except ImportError:
     HAS_RICH = False
 
+_scripts_dir = str(Path(__file__).resolve().parent.parent / "scripts")
+if _scripts_dir not in sys.path:
+    sys.path.insert(0, _scripts_dir)
+
+from alongkit.version import CURRENT_VERSION
+
 from .core.collector import EntityCollector, find_agents_dir
 from .core.watcher import RepoWatcher
 from .api.router import api_router
@@ -45,7 +51,7 @@ def create_app(agents_dir: Path) -> FastAPI:
 
     app = FastAPI(
         title="Along Dashboard & Knowledge Base API",
-        version="2.2.27",
+        version=CURRENT_VERSION,
         description="Type-safe OpenAPI REST & SSE service for Along Protocol entities, dependency DAGs, and Knowledge Base search.",
         docs_url="/docs",
         redoc_url="/redoc",

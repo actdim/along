@@ -397,6 +397,31 @@ class TestAlongSkillsAndScripts(unittest.TestCase):
         self.assertEqual(offenders, [],
                          f"engines must import the version, not declare it: {offenders}")
 
+        # Check .along/.protocol-version state marker
+        proto_state = os.path.join(REPO_ROOT, ".along", ".protocol-version")
+        if os.path.exists(proto_state):
+            with open(proto_state, "r", encoding="utf-8") as f:
+                self.assertEqual(f.read().strip(), version,
+                                 f".along/.protocol-version must match {version}")
+
+        # Check pyproject.toml dynamic versioning
+        pyproject_path = os.path.join(REPO_ROOT, "pyproject.toml")
+        with open(pyproject_path, "r", encoding="utf-8") as f:
+            pyproject_content = f.read()
+        self.assertIn('dynamic = ["version"]', pyproject_content,
+                      "pyproject.toml must declare dynamic versioning")
+        self.assertNotIn(f'version = "{version}"', pyproject_content,
+                         "pyproject.toml must not hardcode static version string")
+
+        # Check dashboard/app.py imports CURRENT_VERSION instead of literal
+        dashboard_app = os.path.join(REPO_ROOT, "dashboard", "app.py")
+        with open(dashboard_app, "r", encoding="utf-8") as f:
+            app_content = f.read()
+        self.assertIn("from alongkit.version import CURRENT_VERSION", app_content,
+                      "dashboard/app.py must import CURRENT_VERSION")
+        self.assertIn("version=CURRENT_VERSION", app_content,
+                      "dashboard/app.py must use CURRENT_VERSION in FastAPI")
+
     def test_04b_skill_catalog_consistency(self):
         """
         Verify that skills catalogs across README.md, AGENTS.md, and docs/ match skills/ 1:1 (REQ-2).
@@ -477,15 +502,9 @@ class TestAlongSkillsAndScripts(unittest.TestCase):
 
     def test_04d_docs_articles_protocol_version_consistency(self):
         """
-        Verify that all docs/topic--*.md and docs/INDEX.md declare protocol_version matching
-        CURRENT_PROTOCOL_VERSION and are quoted strings (REQ-2, REQ-3).
+        Verify that all docs/topic--*.md and docs/INDEX.md declare mandatory 'protocol: along'
+        namespace marker and are decoupled from version bump churn (REQ-2, REQ-3).
         """
-        version_module = os.path.join(REPO_ROOT, "scripts", "alongkit", "version.py")
-        with open(version_module, "r", encoding="utf-8") as f:
-            v_match = re.search(r'CURRENT_PROTOCOL_VERSION = "(\d+\.\d+\.\d+)"', f.read())
-        self.assertIsNotNone(v_match)
-        cur_version = v_match.group(1)
-
         docs_dir = os.path.join(REPO_ROOT, "docs")
         md_files = glob.glob(os.path.join(docs_dir, "*.md"))
         self.assertGreater(len(md_files), 5, "docs/ should contain at least 5 markdown articles")
@@ -495,21 +514,17 @@ class TestAlongSkillsAndScripts(unittest.TestCase):
             with open(md_path, "r", encoding="utf-8") as f:
                 content = f.read()
             fm, _ = frontmatter.parse_tolerant(content)
-            if fm.get("protocol") != "along":
-                continue
-
-            doc_version = str(fm.get("protocol_version", "")).strip()
             self.assertEqual(
-                doc_version, cur_version,
-                f"{rel} front-matter protocol_version '{doc_version}' does not match "
-                f"CURRENT_PROTOCOL_VERSION '{cur_version}'"
+                fm.get("protocol"), "along",
+                f"{rel} must declare mandatory front-matter 'protocol: along'"
             )
-            # Ensure protocol_version is quoted in raw frontmatter
-            self.assertRegex(
-                content,
-                rf'protocol_version:\s*"{re.escape(cur_version)}"',
-                f"{rel} must declare quoted protocol_version: \"{cur_version}\""
-            )
+            # protocol_version in docs/ is optional and decoupled from version bump churn
+            if "protocol_version" in fm:
+                pv = str(fm["protocol_version"]).strip()
+                self.assertRegex(
+                    pv, r"^\d+\.\d+\.\d+",
+                    f"{rel} protocol_version '{pv}', if present, must be valid semver"
+                )
 
     def test_05_clean_typography(self):
         """Verify zero non-ASCII typographic characters and byte order marks across repository text files."""
@@ -2159,6 +2174,192 @@ class TestAlongSkillsAndScripts(unittest.TestCase):
         import along_exec
         self.assertIn("graph-check", along_exec.TOOL_MAPPINGS)
         self.assertEqual(along_exec.TOOL_MAPPINGS["graph-check"], "along_graph_check.py")
+
+    def test_33_programmatic_integrity_gates_and_git_guard(self):
+        """Verify programmatic integrity gates, AST code patcher, commit gates, and Git guard."""
+        from alongkit import gates, patcher, proc
+
+        # 1. syntax_gate verification (REQ-3)
+        with tempfile.TemporaryDirectory(prefix="along-syntax-test-") as temp_dir:
+            good_dir = os.path.join(temp_dir, "good")
+            bad_dir = os.path.join(temp_dir, "bad")
+            os.makedirs(good_dir, exist_ok=True)
+            os.makedirs(bad_dir, exist_ok=True)
+
+            with open(os.path.join(good_dir, "clean.py"), "w", encoding="utf-8") as f:
+                f.write("def clean_func():\n    return 42\n")
+
+            with open(os.path.join(bad_dir, "broken.py"), "w", encoding="utf-8") as f:
+                f.write("def broken_func(\n    missing closing paren\n")
+
+            # Clean directory passes
+            self.assertTrue(gates.syntax_gate(temp_dir, target_dirs=["good"]))
+            # Broken directory fails
+            self.assertFalse(gates.syntax_gate(temp_dir, target_dirs=["bad"]))
+
+        # 2. test.py pre-flight syntax gate verification (REQ-3)
+        with hermetic.repo_fixture() as fixture:
+            # Install scripts and alongkit in fixture
+            shutil.copytree(SCRIPTS_DIR, os.path.join(fixture, "scripts"), dirs_exist_ok=True)
+            os.makedirs(os.path.join(fixture, ".along", "scripts"), exist_ok=True)
+            test_script = os.path.join(REPO_ROOT, ".along", "scripts", "test.py")
+            fixture_test_script = os.path.join(fixture, ".along", "scripts", "test.py")
+            shutil.copy2(test_script, fixture_test_script)
+
+            # Introduce a syntax error in fixture scripts/
+            broken_script = os.path.join(fixture, "scripts", "broken_syntax.py")
+            with open(broken_script, "w", encoding="utf-8") as f:
+                f.write("def bad_code(:\n")
+
+            env = dict(os.environ, ALONG_TEST_RUNNER="1")
+            res = proc.run_capture([sys.executable, fixture_test_script], cwd=fixture, env=env)
+            self.assertNotEqual(res.returncode, 0, "test.py must halt on syntax errors before test discovery")
+            self.assertIn("Syntax validation failed", (res.stderr or "") + (res.stdout or ""))
+
+        # 3. along_commit.py pre-flight syntax and link gates (REQ-4)
+        with hermetic.repo_fixture() as fixture:
+            # Initialize Git repo in fixture
+            proc.run_capture(["git", "init"], cwd=fixture)
+            proc.run_capture(["git", "config", "user.name", "Along Tester"], cwd=fixture)
+            proc.run_capture(["git", "config", "user.email", "test@along.actdim"], cwd=fixture)
+
+            commit_tool = os.path.join(SCRIPTS_DIR, "along_commit.py")
+            # Create a broken syntax file in scripts/
+            os.makedirs(os.path.join(fixture, "scripts"), exist_ok=True)
+            broken_py = os.path.join(fixture, "scripts", "invalid.py")
+            with open(broken_py, "w", encoding="utf-8") as f:
+                f.write("def invalid_syntax(\n")
+
+            # Commit must fail on syntax gate
+            res = proc.run_capture([sys.executable, commit_tool, "-a", "-m", "broken syntax commit"], cwd=fixture)
+            self.assertNotEqual(res.returncode, 0)
+            self.assertIn("Fix syntax errors before committing", (res.stderr or "") + (res.stdout or ""))
+
+            # Bypass flag (-n / --no-verify) allows skipping
+            res_bypass = proc.run_capture([sys.executable, commit_tool, "-a", "-m", "bypass commit", "-n"], cwd=fixture)
+            self.assertEqual(res_bypass.returncode, 0)
+
+            # Link integrity gate respects strict mode
+            shutil.copy2(os.path.join(SCRIPTS_DIR, "along_kb_sync.py"), os.path.join(fixture, "scripts", "along_kb_sync.py"))
+            shutil.copytree(os.path.join(SCRIPTS_DIR, "alongkit"), os.path.join(fixture, "scripts", "alongkit"), dirs_exist_ok=True)
+            doc_path = os.path.join(fixture, "README.md")
+            with open(doc_path, "w", encoding="utf-8") as f:
+                f.write("# Doc\n[Broken Link](./nonexistent.md)\n")
+            self.assertTrue(gates.link_integrity_gate(fixture, strict=False))
+            self.assertFalse(gates.link_integrity_gate(fixture, strict=True))
+
+        # 4. AST code patcher verification (REQ-5)
+        with tempfile.TemporaryDirectory(prefix="along-patch-test-") as td:
+            target_file = os.path.join(td, "module.py")
+            repl_func_file = os.path.join(td, "repl_func.py")
+            repl_method_file = os.path.join(td, "repl_method.py")
+            bad_syntax_file = os.path.join(td, "bad_syntax.py")
+
+            original_code = (
+                "# Header comment\n"
+                "def calculate(x, y):\n"
+                "    # old logic\n"
+                "    return x + y\n"
+                "\n"
+                "class Processor:\n"
+                "    # class comment\n"
+                "    def process(self, data):\n"
+                "        # method comment\n"
+                "        return data.strip()\n"
+                "\n"
+                "# Footer comment\n"
+            )
+            with open(target_file, "w", encoding="utf-8") as f:
+                f.write(original_code)
+
+            # Replace top-level function
+            with open(repl_func_file, "w", encoding="utf-8") as f:
+                f.write("def calculate(x, y):\n    # new logic\n    return x * y\n")
+
+            succ = patcher.replace_function_in_file(target_file, "calculate", repl_func_file)
+            self.assertTrue(succ)
+            with open(target_file, "r", encoding="utf-8") as f:
+                content = f.read()
+            self.assertIn("# Header comment", content)
+            self.assertIn("# new logic", content)
+            self.assertIn("return x * y", content)
+            self.assertIn("# class comment", content)
+
+            # Replace class method with proper indentation
+            with open(repl_method_file, "w", encoding="utf-8") as f:
+                f.write("def process(self, data):\n    # upgraded method\n    return data.upper()\n")
+
+            succ2 = patcher.replace_function_in_file(target_file, "Processor.process", repl_method_file)
+            self.assertTrue(succ2)
+            with open(target_file, "r", encoding="utf-8") as f:
+                content = f.read()
+            self.assertIn("    def process(self, data):", content)
+            self.assertIn("        # upgraded method", content)
+            self.assertIn("        return data.upper()", content)
+
+            # Reject invalid syntax without touching target file
+            content_before = content
+            with open(bad_syntax_file, "w", encoding="utf-8") as f:
+                f.write("def calculate(x, y):\n    syntax error here !!!\n")
+
+            with self.assertRaises(patcher.PatcherError):
+                patcher.replace_function_in_file(target_file, "calculate", bad_syntax_file)
+
+            with open(target_file, "r", encoding="utf-8") as f:
+                self.assertEqual(f.read(), content_before, "Target file must remain untouched on syntax failure")
+
+            # Reject nonexistent function
+            with self.assertRaises(patcher.PatcherError):
+                patcher.replace_function_in_file(target_file, "nonexistent_func", repl_func_file)
+
+            # CLI invocation via along_exec
+            exec_tool = os.path.join(SCRIPTS_DIR, "along_exec.py")
+            cli_res = proc.run_capture([sys.executable, exec_tool, "patch", "replace-func", target_file, "calculate", repl_func_file], cwd=td)
+            self.assertEqual(cli_res.returncode, 0)
+            self.assertIn("Successfully replaced 'calculate'", cli_res.stdout)
+
+        # 5. Git index & lock self-healing verification (REQ-4 / Git Guard)
+        with tempfile.TemporaryDirectory(prefix="along-git-heal-") as git_temp:
+            git_dir = os.path.join(git_temp, ".git")
+            os.makedirs(git_dir, exist_ok=True)
+            index_path = os.path.join(git_dir, "index")
+            lock_path = os.path.join(git_dir, "index.lock")
+
+            # Stale lock file healing
+            with open(lock_path, "w", encoding="utf-8") as f:
+                f.write("lock")
+            healed = proc._heal_git_index(git_dir, git_temp, force_lock=True)
+            self.assertTrue(healed)
+            self.assertFalse(os.path.exists(lock_path), "Stale lock must be removed")
+
+            # Corrupted 0-byte index healing
+            with open(index_path, "w", encoding="utf-8") as f:
+                pass  # 0 bytes
+            self.assertEqual(os.path.getsize(index_path), 0)
+            healed_idx = proc._heal_git_index(git_dir, git_temp)
+            self.assertTrue(healed_idx)
+            self.assertFalse(os.path.exists(index_path), "Corrupted 0-byte index must be removed")
+
+        # 6. Protocol & Rules verification (REQ-1, REQ-2)
+        agents_md = os.path.join(REPO_ROOT, "AGENTS.md")
+        protocol_md = os.path.join(REPO_ROOT, "skills", "along-init", "protocol.md")
+        commit_skill = os.path.join(REPO_ROOT, "skills", "along-commit", "SKILL.md")
+        team_skill = os.path.join(REPO_ROOT, "skills", "along-team", "SKILL.md")
+
+        for p in [agents_md, protocol_md]:
+            with open(p, "r", encoding="utf-8") as f:
+                content = f.read()
+            self.assertIn("Inquiry Read-Only Invariance (Zero-Mutation Rule on Questions)", content)
+            self.assertIn("Mandatory Adaptive Complexity Escalation & Execution Mode Routing", content)
+
+        with open(commit_skill, "r", encoding="utf-8") as f:
+            c_content = f.read()
+        self.assertIn("Pre-Commit Syntax Gate", c_content)
+        self.assertIn("Pre-Commit Link Integrity Gate", c_content)
+
+        with open(team_skill, "r", encoding="utf-8") as f:
+            t_content = f.read()
+        self.assertIn("Execution Mode", t_content)
 
 
 if __name__ == "__main__":

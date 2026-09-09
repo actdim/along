@@ -133,6 +133,7 @@ Along Protocol Tools:
                  default from a script, --apply performs it
   sanitize       Check (default) or repair non-ASCII typography; --write to apply
   feedback       Global diagnostics, error capture, and feedback dispatch (Telegram/Webhook/File)
+  patch          Deterministic AST code patching (replace-func)
 """)
 
 RECENT_DONE_LIMIT = 5
@@ -939,6 +940,38 @@ def handle_budget_command(repo_root: str, args: List[str]):
     sys.exit(0)
 
 
+def handle_patch_command(repo_root: str, args: List[str]):
+    if not args or args[0] in ("-h", "--help", "help"):
+        print("Usage: along patch replace-func <target_file> <function_name> <replacement_code_file>")
+        sys.exit(0)
+
+    subcmd = args[0].lower()
+    if subcmd == "replace-func":
+        if len(args) < 4:
+            print("[Error] Usage: along patch replace-func <target_file> <function_name> <replacement_code_file>", file=sys.stderr)
+            sys.exit(1)
+        target_file = args[1]
+        func_name = args[2]
+        repl_file = args[3]
+
+        if not os.path.isabs(target_file):
+            target_file = os.path.normpath(os.path.join(repo_root, target_file))
+        if not os.path.isabs(repl_file):
+            repl_file = os.path.normpath(os.path.join(repo_root, repl_file))
+
+        from alongkit import patcher
+        try:
+            patcher.replace_function_in_file(target_file, func_name, repl_file)
+            print(f"-> [AST Patch] Successfully replaced '{func_name}' in {repo.safe_relpath(target_file, repo_root)}.")
+            sys.exit(0)
+        except patcher.PatcherError as exc:
+            print(f"[Error] AST Patch failed: {exc}", file=sys.stderr)
+            sys.exit(1)
+    else:
+        print(f"[Error] Unknown patch subcommand: '{subcmd}'. Available: replace-func", file=sys.stderr)
+        sys.exit(1)
+
+
 def main():
     if len(sys.argv) < 2 or sys.argv[1] in ("-h", "--help", "help"):
         print_help()
@@ -965,6 +998,8 @@ def main():
         handle_rules_command(repo_root, extra_args)
     elif cmd in ("budget", "context-budget"):
         handle_budget_command(repo_root, extra_args)
+    elif cmd == "patch":
+        handle_patch_command(repo_root, extra_args)
     elif cmd == "kb":
         sub = extra_args[0].lower() if extra_args else "sync"
         mapped = "along_kb_sync.py" if sub == "sync" else "along_kb_search.py"

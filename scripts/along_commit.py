@@ -97,13 +97,25 @@ def main(argv=None):
     print(f"   Target: {repo_root}")
     print("==================================================")
 
-    # 1. Mandatory Pre-Commit Tests
+    # 1. Pre-Commit Syntax Gate
+    if not parsed.skip_tests:
+        if not gates.syntax_gate(repo_root, "Pre-Commit Quality Gate"):
+            print("Commit aborted. Fix syntax errors before committing.", file=sys.stderr)
+            sys.exit(1)
+
+    # 2. Pre-Commit Markdown Link Integrity Gate
+    if not parsed.skip_tests:
+        if not gates.link_integrity_gate(repo_root, "Pre-Commit Quality Gate", strict=parsed.strict):
+            print("Commit aborted. Fix broken Markdown links before committing.", file=sys.stderr)
+            sys.exit(1)
+
+    # 3. Mandatory Pre-Commit Tests
     if not parsed.skip_tests:
         if not gates.run_repository_tests(repo_root, "Pre-Commit Quality Gate"):
             print("Commit aborted. Fix failing tests before committing.", file=sys.stderr)
             sys.exit(1)
 
-    # 2. Pre-commit typography check. Reports and aborts; --fix-typography rewrites.
+    # 4. Pre-commit typography check. Reports and aborts; --fix-typography rewrites.
     if not parsed.skip_tests:
         if not typography_gate(repo_root, "Pre-Commit Quality Gate",
                                allow_fix=parsed.fix_typography):

@@ -91,10 +91,10 @@ def run_repository_tests(repo_root: str, label: str = "Quality Gate") -> bool:
     return False
 
 
-def link_integrity_gate(repo_root: str, label: str = "Quality Gate") -> bool:
+def link_integrity_gate(repo_root: str, label: str = "Quality Gate", strict: bool = True) -> bool:
     """Verify that every relative Markdown link resolves. True when the caller may proceed.
 
-    Delegates to the Knowledge Base engine in `--check --strict` mode, which walks the
+    Delegates to the Knowledge Base engine in `--check` mode (`--strict` by default), which walks the
     whole tree, resolves links against disk, and exits non-zero on a broken one. `--check`
     is the engine's read-only mode: nothing is rewritten, no index is recompiled, so this
     is safe to run before a release has mutated anything.
@@ -108,7 +108,10 @@ def link_integrity_gate(repo_root: str, label: str = "Quality Gate") -> bool:
         return True
 
     print(f"-> [{label}] Verifying Markdown link integrity...")
-    res = proc.run_python([engine, repo_root, "--check", "--strict"], cwd=repo_root)
+    cmd = [engine, repo_root, "--check"]
+    if strict:
+        cmd.append("--strict")
+    res = proc.run_python(cmd, cwd=repo_root)
     if res.ok:
         print(f"-> [{label}] Link integrity verified.")
         return True
@@ -292,3 +295,36 @@ def exception_handling_gate(repo_root: str, label: str = "Quality Gate") -> bool
     for v in violations:
         print(f"   - {v.path}:{v.line}: {v.message}", file=sys.stderr)
     return False
+
+
+def syntax_gate(repo_root: str, label: str = "Quality Gate",
+                target_dirs: Optional[List[str]] = None) -> bool:
+    """Pre-flight syntax validation gate.
+
+    Compiles Python source files across target directories using compileall and halts
+    if any syntax or indentation error is detected. Emits human- and agent-readable
+    diagnostic output naming the exact file, line number, and error message.
+    """
+    if target_dirs is None:
+        target_dirs = ["scripts", "tests", ".along/scripts"]
+
+    dirs_to_check = [
+        d for d in target_dirs
+        if os.path.exists(os.path.join(repo_root, d))
+    ]
+    if not dirs_to_check:
+        return True
+
+    print(f"-> [{label}] Verifying Python syntax integrity across {', '.join(dirs_to_check)}...")
+    cmd = [sys.executable, "-m", "compileall", "-q"] + dirs_to_check
+    res = proc.run_capture(cmd, cwd=repo_root)
+    if res.ok:
+        print(f"-> [{label}] Python syntax clean across {len(dirs_to_check)} target directory(ies).")
+        return True
+
+    print(f"[Error] {label}: Python syntax compilation failed.\n", file=sys.stderr)
+    output = (res.stderr or "") + (res.stdout or "")
+    if output.strip():
+        print(output.strip(), file=sys.stderr)
+    return False
+

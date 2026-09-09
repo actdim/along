@@ -14,6 +14,9 @@ Executes sequential, version-specific migration steps on target repository's str
                      - Updates AGENTS.md protocol markers and path references to .along/
                      - Cleans up empty .agents/ while preserving foreign files
                      - Migrates ~/.config/opencode/actdim-agents to actdim-along and ~/.cache
+  - v2.2.27 -> v3.0.0: Version SSOT cleanup & KB schema decoupling:
+                     - Strips legacy `protocol_version` from docs/*.md front-matter
+                     - Strips ` [vX.Y.Z]` title suffixes from local skills/*/SKILL.md
 
 Usage:
     python scripts/migrate_protocol.py [TARGET_REPO_ROOT] [--dry-run|--apply] [--force]
@@ -987,6 +990,11 @@ def run_migrations(repo_root, dry_run=True, force=False, backup=True, verbose=Fa
         else:
             print("   [DRY-RUN] Would generate .along/CONSTRAINTS.md")
 
+    # Step 10: v3.0.0 Version SSOT cleanup & KB schema decoupling
+    if semver.parse(detected_version) < (3, 0, 0) or force:
+        print("-> Step 10 [< v3.0.0]: Cleaning up version declarations in docs/ and skills/...")
+        step_migrate_v3_0_version_ssot_cleanup(mig, repo_root, detected_version)
+
     # The state marker is written last, so a run that died halfway is not recorded as
     # a completed migration.
     if not dry_run and not errors and not mig.errors:
@@ -1056,6 +1064,83 @@ def step_migrate_v2_2_5_link_rewriting_and_integrity(mig, repo_root, detected_ve
                 mig.record_error(err_msg)
         else:
             mig.record_error(f"Inbound link repair failed: {e}")
+
+def step_migrate_v3_0_version_ssot_cleanup(mig, repo_root, detected_version="1.0.0"):
+    """
+    Step 10 [< v3.0.0]:
+    Cleans up scattered version metadata across repository files:
+    1. Strips legacy `protocol_version` from docs/*.md (topic--*.md and INDEX.md)
+       front-matter while preserving mandatory `protocol: along`.
+    2. Strips ` [vX.Y.Z]` title suffixes from local skills/*/SKILL.md manifests.
+    """
+    # 1. Clean up docs/*.md front-matter
+    docs_dir = os.path.join(repo_root, "docs")
+    if os.path.isdir(docs_dir):
+        cleaned_docs = 0
+        for root, _, files in os.walk(docs_dir):
+            for fname in sorted(files):
+                if not fname.endswith(".md"):
+                    continue
+                fpath = os.path.join(root, fname)
+                try:
+                    content = textio.read_text(fpath)
+                except (OSError, UnicodeDecodeError) as e:
+                    mig.note_skipped(fpath, f"unreadable ({e})")
+                    continue
+
+                fields, _ = parse_yaml_frontmatter(content, path=fpath)
+                if not fields:
+                    continue
+
+                if "protocol_version" in fields:
+                    try:
+                        new_content = frontmatter.update(
+                            content, {}, remove=["protocol_version"], path=fpath)
+                        if new_content != content:
+                            mig.write(fpath, new_content,
+                                      detail="removed legacy protocol_version from front-matter")
+                            cleaned_docs += 1
+                    except frontmatter.FrontmatterError as e:
+                        mig.record_error(f"Failed to strip protocol_version from {fpath}: {e}")
+
+        verb = "would strip" if mig.dry_run else "Stripped"
+        if cleaned_docs > 0:
+            print(f"   [OK] {verb} protocol_version from {cleaned_docs} document(s) in docs/.")
+        else:
+            print("   [OK] docs/ front-matter is clean; no protocol_version churn detected.")
+
+    # 2. Clean up skills/*/SKILL.md titles
+    skills_dirs = [
+        os.path.join(repo_root, "skills"),
+        os.path.join(repo_root, ".along", "skills"),
+    ]
+    cleaned_skills = 0
+    for s_dir in skills_dirs:
+        if not os.path.isdir(s_dir):
+            continue
+        for skill_file in sorted(glob.glob(os.path.join(s_dir, "*", "SKILL.md"))):
+            try:
+                content = textio.read_text(skill_file)
+            except (OSError, UnicodeDecodeError) as e:
+                mig.note_skipped(skill_file, f"unreadable ({e})")
+                continue
+
+            new_content = re.sub(
+                r"^(#\s+.*?)\s+\[v\d+\.\d+\.\d+\]\s*$",
+                r"\1",
+                content,
+                flags=re.MULTILINE
+            )
+            if new_content != content:
+                mig.write(skill_file, new_content,
+                          detail="stripped legacy version suffix from title")
+                cleaned_skills += 1
+
+    verb = "would strip" if mig.dry_run else "Stripped"
+    if cleaned_skills > 0:
+        print(f"   [OK] {verb} version suffixes from {cleaned_skills} skill manifest(s).")
+    else:
+        print("   [OK] Skill manifests are clean; no legacy version suffixes found.")
 
 def main(argv=None):
     parser = argparse.ArgumentParser(
