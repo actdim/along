@@ -217,7 +217,7 @@ def reconcile_sources(repo_root, docs_dir, dry_run=False):
                         "tags": [slug.replace("topic--", "")],
                     }
                     dst_path = os.path.join(docs_dir, target_name)
-                    with open(dst_path, "w", encoding="utf-8") as fp:
+                    with open(dst_path, "w", encoding="utf-8", newline="\n") as fp:
                         fp.write(dump_frontmatter(fm, raw))
                     if target_name != item:
                         os.remove(f_path)
@@ -249,7 +249,7 @@ def bootstrap_docs_if_empty(docs_dir, repo_root, dry_run=False):
             body = f"# {title}\n\nCore technical specification and documentation for {repo_name}.\n\n## Overview\nDocument system components and engineering guidelines here.\n"
             full_text = dump_frontmatter(fm, body)
             if not dry_run:
-                with open(target_path, "w", encoding="utf-8") as f:
+                with open(target_path, "w", encoding="utf-8", newline="\n") as f:
                     f.write(full_text)
             print(f"   + Bootstrapped {filename}")
             created += 1
@@ -510,7 +510,7 @@ def rewrite_inbound_links(repo_root, dry_run=False, migrate_numbered=False, expl
 
             if file_rewrites > 0:
                 if not dry_run:
-                    with open(fpath, "w", encoding="utf-8") as fp:
+                    with open(fpath, "w", encoding="utf-8", newline="\n") as fp:
                         fp.write(new_content)
                 rel_disp = repo.safe_relpath(fpath, repo_root).replace('\\', '/')
                 action_tag = "[DRY-RUN]" if dry_run else "[REWRITE]"
@@ -1153,7 +1153,7 @@ def sync_kb(repo_root, check_only=False, strict=False, prune_intent=None, is_sub
 
     if not check_only and os.path.exists(docs_dir):
         full_index = dump_frontmatter(index_fm, "\n".join(index_body_lines))
-        with open(index_path, "w", encoding="utf-8") as fp:
+        with open(index_path, "w", encoding="utf-8", newline="\n") as fp:
             fp.write(full_index)
         print(f"   -> Rebuilt docs/INDEX.md ({len(articles)} articles indexed).")
 
