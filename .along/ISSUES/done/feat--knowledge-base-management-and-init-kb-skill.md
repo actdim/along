@@ -2,18 +2,23 @@
 protocol: along
 slug: knowledge-base-management-and-init-kb-skill
 type: feat
-status: open
+status: superseded
 priority: high
 created: 2026-08-26
-updated: 2026-08-26
+updated: 2026-09-09
+completed: 2026-09-09
 agent: antigravity
 tags: [kb]
 milestone: v1.5.0-dashboard-and-analytics
 blocked_by: []
 related: []
+superseded_by: feat--llm-wiki-docs-architecture-and-skill-refactor
 ---
 
 # Knowledge Base Management Standards & `/along-init-kb` Skill
+
+> [!NOTE]
+> Superseded by `[feat--llm-wiki-docs-architecture-and-skill-refactor]`. The proposed `/along-init-kb` skill and `.along/KB/` directory were superseded by the LLM-Wiki knowledge base pipeline in `docs/` and the `/along-kb-sync` skill.
 
 ## Goal
 Establish clear guidelines in the `AGENTS.md` protocol for creating and maintaining a structured, human- and agent-readable **Knowledge Base (KB)** (`.along/KB/` or `docs/`), and implement the **`/along-init-kb`** skill to bootstrap or refresh the Knowledge Base from existing `README.md`, `AGENTS.md`, and codebase structure.
@@ -34,7 +39,6 @@ Establish clear guidelines in the `AGENTS.md` protocol for creating and maintain
 - Automatically cross-links terms and syncs with `/along-sync-kb`.
 
 ## Acceptance Criteria
-- [ ] Protocol updated with Knowledge Base management guidelines.
-- [ ] `/along-init-kb` skill created in `skills/along-init-kb/SKILL.md`.
-- [ ] Skill deployed globally via `install.ps1`.
-
+- [x] Protocol updated with Knowledge Base management guidelines (delivered in LLM-Wiki KB spec).
+- [x] Superseded by `along-kb-sync` in `docs/` architecture.
+- [x] Replaced and integrated into Along protocol lifecycle.

@@ -65,6 +65,24 @@ class TestContextBudgetEngine(unittest.TestCase):
             )
         self.assertTrue(report["all_passed"], "Live repo must satisfy all context budget limits")
 
+    def test_agents_md_hard_size_limit(self):
+        """AGENTS.md MUST stay under 14 KB (REQ-4 of debt--agents-md-context-budget-pruning)."""
+        agents_md = os.path.join(REPO_ROOT, "AGENTS.md")
+        size = os.path.getsize(agents_md)
+        self.assertLess(
+            size, 14336,
+            f"AGENTS.md is {size} bytes, exceeds 14 KB budget ceiling (14336 B)"
+        )
+
+    def test_protocol_md_hard_size_limit(self):
+        """Canonical template MUST stay under 14 KB (REQ-4)."""
+        protocol_md = os.path.join(REPO_ROOT, "skills", "along-init", "protocol.md")
+        size = os.path.getsize(protocol_md)
+        self.assertLess(
+            size, 14336,
+            f"protocol.md is {size} bytes, exceeds 14 KB budget ceiling (14336 B)"
+        )
+
 
 class TestContextBudgetCLI(unittest.TestCase):
 

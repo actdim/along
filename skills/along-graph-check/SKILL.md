@@ -8,9 +8,9 @@ Inspects and verifies `code-review-graph` MCP server health, graph database stat
 
 ## Usage
 - Direct command: `/along-graph-check`
-- CLI command: `python scripts/along_exec.py graph-check` (or `along graph-check`)
+- CLI command: `along graph-check` (or fallback: `python ~/.along/bin/along_exec.py graph-check`)
 - Doctor preflight: `along doctor` (includes MCP health check)
-- JSON report: `python scripts/along_exec.py graph-check --json`
+- JSON report: `along graph-check --json` (or fallback: `python ~/.along/bin/along_exec.py graph-check --json`)
 
 ## Health Check Verification
 The check executes a preflight probe against the pinned MCP dependency (`code-review-graph==2.3.8`):
