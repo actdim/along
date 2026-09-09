@@ -20,7 +20,8 @@ from alongkit import bootstrap
 # installers and the documented skill commands invoke it.
 bootstrap.ensure_deps()
 
-from alongkit import frontmatter, markdown, proc, repo, textio
+from alongkit import frontmatter, kb, markdown, proc, repo, textio
+from alongkit.kb import STANDARD_ARTICLES, LEGACY_FILE_MAPPING, SECTION_CONTRACTS
 from alongkit.version import CURRENT_PROTOCOL_VERSION
 
 
@@ -29,21 +30,6 @@ def compute_content_hash(text: str) -> str:
     normalized = text.replace("\r\n", "\n")
     return hashlib.sha256(normalized.encode("utf-8")).hexdigest()
 
-
-STANDARD_ARTICLES = [
-    ("topic--architecture.md", "System Architecture & Flow", "architecture", ["architecture", "boundaries", "providers", "mcp", "dashboard"]),
-    ("topic--domain-model.md", "Domain Model & Entity Ecosystem", "domain-model", ["domain-model", "entities", "schemas", "dag", "metadata"]),
-    ("topic--setup-and-workflow.md", "Setup, Installation & Agent Workflows", "setup-workflow", ["setup", "workflow", "installation", "lifecycle", "quality-gates"]),
-]
-
-LEGACY_FILE_MAPPING = {
-    "01-architecture.md": "topic--architecture.md",
-    "02-domain-model.md": "topic--domain-model.md",
-    "03-setup-and-workflow.md": "topic--setup-and-workflow.md",
-    "04-frontend-frameworks.md": "topic--frontend-frameworks.md",
-    "dependencies.md": "topic--dependencies.md",
-    "MIGRATIONS.md": "topic--migrations.md",
-}
 
 #: Configured legacy KB storage directory roots (REQ-1).
 LEGACY_KB_ROOTS = (
@@ -586,7 +572,10 @@ def validate_repo_link_integrity(repo_root, return_violations=False):
                 if in_code_fence:
                     continue
 
-                for match in link_pattern.finditer(line):
+                # Mask inline code spans so illustrative code syntax like `[text](target)` is not treated as an active link
+                scan_line = re.sub(r"`+[^`\r\n]+`+", lambda m: " " * len(m.group(0)), line)
+
+                for match in link_pattern.finditer(scan_line):
                     link_text = match.group(1)
                     target = match.group(2).strip()
 
@@ -900,7 +889,20 @@ def sync_llms_full_txt(target_dir, articles, dry_run=False):
                 print(f"   -> Compiled {rel_disp} ({len(articles)} documents included).")
 
 
-def sync_kb(repo_root, check_only=False, strict=False, prune_intent=None, is_subproject=False, output_json=False, migrate_numbered=False, explicit_mapping=None):
+def sync_kb(
+    repo_root,
+    check_only=False,
+    strict=False,
+    prune_intent=None,
+    is_subproject=False,
+    output_json=False,
+    migrate_numbered=False,
+    explicit_mapping=None,
+    crosslink_check=False,
+    crosslink_apply=False,
+    check_symbols=False,
+    strict_sections=False,
+):
     repo_root = os.path.abspath(repo_root)
     docs_dir = os.path.join(repo_root, "docs")
     today = datetime.now().strftime("%Y-%m-%d")
@@ -932,6 +934,10 @@ def sync_kb(repo_root, check_only=False, strict=False, prune_intent=None, is_sub
         in_git = git_check.ok and git_check.stdout.strip() == "true"
     except OSError:
         in_git = False
+
+    topic_dict = kb.TopicDictionary.build_from_dir(docs_dir)
+    crosslink_candidates = []
+    total_crosslinks_applied = 0
 
     file_list = sorted(os.listdir(docs_dir)) if os.path.exists(docs_dir) else []
     for f in file_list:
@@ -1028,6 +1034,27 @@ def sync_kb(repo_root, check_only=False, strict=False, prune_intent=None, is_sub
                     place_after={'protocol_version': 'protocol', 'updated': 'created'})
                 if new_content != raw_content:
                     textio.write_text(file_path, new_content)
+                    raw_content = new_content
+
+            if crosslink_apply and not check_only:
+                new_raw, applied = kb.apply_crosslinks(f, raw_content, topic_dict, current_slug=slug)
+                if applied > 0:
+                    raw_content = new_raw
+                    total_crosslinks_applied += applied
+                    textio.write_text(file_path, new_raw)
+                    print(f"   [CROSSLINK] docs/{f}: inserted {applied} cross-link(s).")
+                    _, body = parse_frontmatter(raw_content)
+
+            if crosslink_check:
+                candidates = kb.scan_crosslinks(f, raw_content, topic_dict, current_slug=slug)
+                for cand in candidates:
+                    crosslink_candidates.append({
+                        "file": f"docs/{f}",
+                        "line": cand.line,
+                        "term": cand.term,
+                        "target": cand.target,
+                        "section": cand.section,
+                    })
 
             rel_links = re.findall(r"\[([^\]]+)\]\(([^\)]+)\)", body)
             doc_cross_links[f] = []
@@ -1181,7 +1208,9 @@ def sync_kb(repo_root, check_only=False, strict=False, prune_intent=None, is_sub
                 print(f"-> Cascading Knowledge Base sync to subproject: {rel_ctx}")
                 sync_kb(ctx, check_only=check_only, strict=strict, prune_intent=prune_intent,
                         is_subproject=True, migrate_numbered=migrate_numbered,
-                        explicit_mapping=explicit_mapping)
+                        explicit_mapping=explicit_mapping,
+                        crosslink_check=crosslink_check, crosslink_apply=crosslink_apply,
+                        check_symbols=check_symbols, strict_sections=strict_sections)
 
     rewritten_files = 0
     total_rewrites = 0
@@ -1236,6 +1265,76 @@ def sync_kb(repo_root, check_only=False, strict=False, prune_intent=None, is_sub
         for ep in entry_point_violations:
             print(f"      - {ep['file']}:{ep['line']} -> [{ep['text']}]({ep['target']}) (route through canonical {ep['canonical_alternative']} instead)")
 
+    if crosslink_check:
+        if crosslink_candidates:
+            print(f"   [INFO] Cross-Link Scanner identified {len(crosslink_candidates)} unlinked concept opportunity(ies):")
+            for cand in crosslink_candidates[:20]:
+                print(f"      - {cand['file']}:{cand['line']} '{cand['term']}' -> {cand['target']} ({cand['section']})")
+            if len(crosslink_candidates) > 20:
+                print(f"      ... and {len(crosslink_candidates) - 20} more.")
+        else:
+            print("   [OK] No unlinked topic concepts detected.")
+    if crosslink_apply:
+        print(f"   [OK] Total cross-links applied: {total_crosslinks_applied}")
+
+    # Step: Section Taxonomy Contract Gate
+    section_violations = []
+    if os.path.exists(docs_dir):
+        for art in articles:
+            f = art["filename"]
+            f_type = art["type"]
+            f_path = os.path.join(docs_dir, f)
+            if f_type in SECTION_CONTRACTS and os.path.isfile(f_path):
+                try:
+                    text_content = textio.read_text(f_path)
+                    v_list = kb.validate_topic_sections(f_path, text_content, f_type)
+                    for v in v_list:
+                        section_violations.append({
+                            "file": f"docs/{f}",
+                            "type": v.topic_type,
+                            "section": v.section,
+                            "error": v.error,
+                        })
+                except (OSError, UnicodeDecodeError):
+                    pass
+
+    if section_violations:
+        print(f"   [WARN] Section Taxonomy Contract detected {len(section_violations)} structural issue(s):")
+        for sv in section_violations:
+            print(f"      - {sv['file']} ({sv['type']}): {sv['section']} -> {sv['error']}")
+    elif any(art["type"] in SECTION_CONTRACTS for art in articles):
+        print("   [OK] Mandatory section taxonomy contracts verified across standard topic articles.")
+
+    # Step: AST Code Symbol Grounding Gate
+    ghost_symbols = []
+    if check_symbols and os.path.exists(docs_dir):
+        print("-> Executing AST Code Symbol Grounding Gate...")
+        symbol_inventory = kb.extract_code_symbols(repo_root)
+        for art in articles:
+            f = art["filename"]
+            f_path = os.path.join(docs_dir, f)
+            if not os.path.isfile(f_path):
+                continue
+            try:
+                raw_text = textio.read_text(f_path)
+                ghosts = kb.verify_grounded_symbols(f, raw_text, symbol_inventory)
+                for g in ghosts:
+                    ghost_symbols.append({
+                        "file": f"docs/{f}",
+                        "line": g.line,
+                        "symbol": g.symbol,
+                        "reason": g.reason,
+                    })
+            except (OSError, UnicodeDecodeError):
+                pass
+
+        if ghost_symbols:
+            print(f"   [GHOST SYMBOL] Grounding Gate detected {len(ghost_symbols)} ungrounded code symbol(s):")
+            for gs in ghost_symbols:
+                print(f"      - {gs['file']}:{gs['line']} `{gs['symbol']}` ({gs['reason']})")
+        else:
+            print("   [OK] All documented code symbols verified in repository AST.")
+
     total_articles = len(articles) + (1 if os.path.exists(index_path) else 0)
     print(f"-> Knowledge Base sync complete. Total active articles: {total_articles}\n")
 
@@ -1248,11 +1347,23 @@ def sync_kb(repo_root, check_only=False, strict=False, prune_intent=None, is_sub
             "rewritten_files": rewritten_files,
             "total_rewrites": total_rewrites,
             "articles_count": total_articles,
+            "section_violations": section_violations,
+            "crosslink_candidates": crosslink_candidates,
+            "total_crosslinks_applied": total_crosslinks_applied,
+            "ghost_symbols": ghost_symbols,
         }
         print(json.dumps(report, indent=2, ensure_ascii=False))
 
+    reasons = []
     if strict and broken_links:
-        print("   [FAIL] Link Integrity Gate failed in strict mode.")
+        reasons.append(f"{len(broken_links)} broken relative link(s)")
+    if strict_sections and section_violations:
+        reasons.append(f"{len(section_violations)} section contract violation(s)")
+    if strict and check_symbols and ghost_symbols:
+        reasons.append(f"{len(ghost_symbols)} ghost symbol(s)")
+
+    if reasons:
+        print(f"   [FAIL] Gate failed in strict mode: {', '.join(reasons)}.")
         sys.exit(1)
 
     return total_articles, len(broken_links)
@@ -1264,16 +1375,22 @@ def main():
     parser.add_argument("--dry-run", action="store_true", help="List intended link rewrites without modifying files")
     parser.add_argument("--migrate-numbered", action="store_true", help="Migrate numbered documentation links (e.g. 01-intro.md) to topic--intro.md")
     parser.add_argument("--strict", action="store_true", help="Fail with non-zero exit code if broken links are found")
+    parser.add_argument("--strict-sections", action="store_true", help="Fail with non-zero exit code if section taxonomy contracts are violated")
     parser.add_argument("--json", action="store_true", help="Output report in JSON format")
     parser.add_argument("--prune-intent", dest="prune_intent", nargs="?", const="Intentional content pruning", default=None, help="Acknowledge and allow content reduction with an optional intent rationale")
     parser.add_argument("--allow-shrink", dest="prune_intent", action="store_const", const="Allow shrink", help="Alias for --prune-intent")
+    parser.add_argument("--crosslink-check", action="store_true", help="Audit documentation for unlinked topic mentions")
+    parser.add_argument("--crosslink-apply", action="store_true", help="Deterministically insert relative cross-links for first mention per section")
+    parser.add_argument("--check-symbols", action="store_true", help="Extract codebase AST symbols and verify code spans in documentation")
     parser.add_argument("--verbose", "-v", action="store_true", help="Verbose output")
     parser.add_argument("--debug", action="store_true", help="Debug output with full tracebacks")
     args = parser.parse_args()
 
     check_mode = args.check or args.dry_run
     sync_kb(args.repo_root, check_only=check_mode, strict=args.strict, prune_intent=args.prune_intent,
-            output_json=args.json, migrate_numbered=args.migrate_numbered)
+            output_json=args.json, migrate_numbered=args.migrate_numbered,
+            crosslink_check=args.crosslink_check, crosslink_apply=args.crosslink_apply,
+            check_symbols=args.check_symbols, strict_sections=args.strict_sections)
 
 if __name__ == "__main__":
     main()

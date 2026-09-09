@@ -3,10 +3,11 @@ protocol: along
 protocol_version: "2.2.21"
 slug: deterministic-kb-pipeline-and-ast-grounding
 type: feat
-status: open
+status: done
 priority: high
 created: 2026-09-06
-updated: 2026-09-06
+updated: 2026-09-09
+completed: 2026-09-09
 agent: antigravity
 tags: [llm-wiki, kb, deterministic, ast-grounding, cross-link, quality-gate]
 milestone: v3.0.0-global-quality-revision
@@ -60,9 +61,9 @@ The current Along LLM-Wiki implementation (`along-kb-sync` and `docs/topic--*.md
 
 ## Acceptance Criteria
 
-- [ ] `along_kb_sync.py` includes a deterministic dictionary-based cross-link scanner (`--crosslink-check` and `--crosslink-apply`).
-- [ ] `along_kb_sync.py` includes an AST-based symbol verification pass (`--check-symbols`) that flags deleted or renamed code entities.
-- [ ] Topic templates and section schemas are enforced during `--strict` compilation.
-- [ ] Behavioral unit tests added in `tests/test_kb_sync.py` verifying cross-linking, symbol grounding, and section validation on hermetic fixtures.
-- [ ] Zero non-ASCII typography or forbidden characters in code, documentation, and issue entities.
+- [x] `along_kb_sync.py` includes a deterministic dictionary-based cross-link scanner (`--crosslink-check` and `--crosslink-apply`).
+- [x] `along_kb_sync.py` includes an AST-based symbol verification pass (`--check-symbols`) that flags deleted or renamed code entities.
+- [x] Topic templates and section schemas are enforced during `--strict-sections` compilation.
+- [x] Behavioral unit tests added in `tests/test_kb_sync.py` verifying cross-linking, symbol grounding, and section validation on hermetic fixtures.
+- [x] Zero non-ASCII typography or forbidden characters in code, documentation, and issue entities.
 

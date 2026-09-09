@@ -18,6 +18,9 @@ Idempotent LLM-Wiki Knowledge Base synchronization, inbound link rewriting, comp
    - **Intent Gate (`--prune-intent [REASON]`)** (exit 2): Halts with a warning if any article shrinks by >25% in lines (and >= 10 lines), requiring explicit developer or agent intent to confirm deletion.
    - **Drift Warnings**: Reports `[DRIFT]` when underlying source files change, prompting agentic smart merging.
 8. **LLM-Wiki Paradigm**: Native Python implementation of the Andrej Karpathy LLM-Wiki methodology. Zero heavy dependencies; standard library and `ruamel.yaml` resolved automatically by `uv`.
+9. **Deterministic Topic Dictionary & Auto-Crosslinking**: Automatically indexes topic titles, slugs, and tags with longest-term alias prioritization. In `--crosslink-check` mode, reports unlinked concept mentions. In `--crosslink-apply` mode, inserts relative cross-links for the first occurrence of each concept per section while strictly masking headings, code fences, inline code spans, and existing links.
+10. **AST Code Symbol Grounding Gate (`--check-symbols`)**: Extracts substantive codebase symbols (classes, functions, async methods, constants) via standard library `ast` and flags phantom "ghost symbols" documented in backticks. Exits with code 1 in `--strict` mode if ungrounded symbols are detected.
+11. **Structured Section Taxonomy Contracts (`--strict-sections`)**: Enforces required H2 section taxonomy schemas across standard article types (`architecture`, `domain-model`, `setup-workflow`), guaranteeing non-empty substantive documentation bodies. Exits with code 1 in `--strict-sections` mode on contract violations.
 
 ## Universal Rendering & Stable Entry Points
 
@@ -42,6 +45,9 @@ When executing `/along-kb-sync`:
 ## Usage
 ```bash
 along kb-sync [REPO_ROOT] [--check] [--strict]
+along kb-sync [REPO_ROOT] [--crosslink-check] [--crosslink-apply]
+along kb-sync [REPO_ROOT] [--check-symbols] [--strict]
+along kb-sync [REPO_ROOT] [--strict-sections]
 along kb-sync [REPO_ROOT] [--check] [--strict] [--prune-intent [REASON]]
 along kb-sync [REPO_ROOT] [--dry-run] [--migrate-numbered]
 ```
