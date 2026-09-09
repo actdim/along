@@ -2,6 +2,11 @@
 
 All notable changes to this project, newest first.
 
+## v2.2.27 - 2026-09-09
+
+- chore(protocol): untrack dashboard artifacts, formalize projection policy, and extend taxonomy (refs #generated-dashboard-artifact-committed)
+- feat: auto-generate CONSTRAINTS.md on along-update and migration
+
 ## v2.2.26 - 2026-09-07
 
 - refactor: optimize context budget, cap issues board, and compile active constraints (refs #always-on-context-budget-exceeds-claims)
