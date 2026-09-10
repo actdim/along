@@ -46,7 +46,7 @@ theme:
     repo: fontawesome/brands/github
 
 nav:
-  - Home: topic--index.md
+  - Home: index.md
   - Knowledge Base: INDEX.md
   - Architecture: topic--architecture.md
   - Domain Model: topic--domain-model.md

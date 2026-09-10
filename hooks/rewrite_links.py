@@ -11,6 +11,8 @@ import os
 from pathlib import Path
 import re
 
+from mkdocs.structure.files import File
+
 REPO_ROOT = Path(__file__).resolve().parent.parent
 DOCS_DIR = REPO_ROOT / "docs"
 
@@ -21,8 +23,22 @@ DEFAULT_BRANCH = "main"
 PAGE_ALIASES = {
     "LICENSE": "topic--license.md",
     "license.md": "topic--license.md",
-    "index.md": "topic--index.md",
 }
+
+
+def on_files(files, config):
+    """Inject repo root README.md as virtual root index.md."""
+    readme_path = REPO_ROOT / "README.md"
+    if readme_path.is_file():
+        readme_file = File(
+            path="index.md",
+            src_dir=str(REPO_ROOT),
+            dest_dir=config.site_dir,
+            use_directory_urls=config.use_directory_urls,
+        )
+        readme_file.abs_src_path = str(readme_path)
+        files.append(readme_file)
+    return files
 
 
 def resolve_link(target: str, src_path: str) -> str:

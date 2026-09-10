@@ -20,4 +20,4 @@
 - [~] `(feat)` [lsif-scip-lsp-mcp-integration](ISSUES/done/feat--lsif-scip-lsp-mcp-integration.md)
 - [x] `(feat)` [executable-along-wrap-engine](ISSUES/done/feat--executable-along-wrap-engine.md)
 - [x] `(debt)` [agents-md-context-budget-pruning](ISSUES/done/debt--agents-md-context-budget-pruning.md)
-<!-- 86 older completed issue(s) archived in .along/ISSUES/done/ -->
+<!-- 87 older completed issue(s) archived in .along/ISSUES/done/ -->
