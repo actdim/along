@@ -2,6 +2,10 @@
 
 All notable changes to this project, newest first.
 
+## v2.6.1 - 2026-09-10
+
+- fix(risks): resolve antigravity git index truncation following upstream v1.3.0 fix (refs #antigravity-extension-git-index-truncation)
+
 ## v2.6.0 - 2026-09-10
 
 - No commits recorded since the previous release tag.
