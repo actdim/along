@@ -5,7 +5,7 @@ slug: migration-version-cleanup-and-kb-schema-decoupling
 agent: antigravity
 branch: main
 commit: pending
-summary: Implemented Step 10 in migration engine to clean up legacy protocol_version in docs/ and version suffixes in skills, decoupled docs/*.md and docs/INDEX.md from version bump churn, harmonized protocol specification (protocol: along mandatory, protocol_version optional at creation), updated consistency tests, and added regression test.
+summary: "Implemented Step 10 in migration engine to clean up legacy protocol_version in docs/ and version suffixes in skills, decoupled docs/*.md and docs/INDEX.md from version bump churn, harmonized protocol specification (protocol: along mandatory, protocol_version optional at creation), updated consistency tests, and added regression test."
 milestone: v3.0.0-global-quality-revision
 issues_advanced: []
 issues_completed: [debt--migration-version-cleanup-and-kb-schema-decoupling]

@@ -1,0 +1,19 @@
+{
+  "name": "Along",
+  "description": "Provider-agnostic agent-context protocol, in-repo memory, and LLM-Wiki knowledge base for AI coding agents",
+  "url": "https://actdim.github.io/along",
+  "documentation_url": "https://actdim.github.io/along/",
+  "llms_txt": "https://actdim.github.io/along/llms.txt",
+  "llms_full_txt": "https://actdim.github.io/along/llms-full.txt",
+  "repository": "https://github.com/actdim/along",
+  "license": "MIT",
+  "capabilities": [
+    "agent-context",
+    "in-repo-memory",
+    "knowledge-base",
+    "issue-tracking",
+    "decision-records",
+    "multi-agent-orchestration",
+    "llm-wiki"
+  ]
+}

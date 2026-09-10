@@ -1,0 +1,33 @@
+{
+  "@context": "https://schema.org",
+  "@type": "SoftwareSourceCode",
+  "name": "Along",
+  "alternateName": "actdim-along",
+  "description": "Provider-agnostic agent-context protocol, in-repo memory, and LLM-Wiki knowledge base for AI coding agents (Claude Code, Codex, Antigravity, OpenCode)",
+  "url": "https://actdim.github.io/along/",
+  "codeRepository": "https://github.com/actdim/along",
+  "programmingLanguage": ["Python", "TypeScript"],
+  "runtimePlatform": "Python 3.10+",
+  "license": "https://opensource.org/licenses/MIT",
+  "author": {
+    "@type": "Organization",
+    "name": "actdim",
+    "url": "https://github.com/actdim"
+  },
+  "applicationCategory": "Developer Tools",
+  "operatingSystem": "Cross-platform",
+  "keywords": [
+    "ai-agent",
+    "agent-context",
+    "agent-memory",
+    "llm",
+    "llm-wiki",
+    "claude-code",
+    "codex",
+    "antigravity",
+    "protocol",
+    "knowledge-base",
+    "mcp",
+    "provider-agnostic"
+  ]
+}

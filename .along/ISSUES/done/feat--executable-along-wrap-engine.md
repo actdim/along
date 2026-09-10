@@ -59,9 +59,9 @@ Cognitive steps (critical diff review and drafting the markdown session log in `
 
 ## 4. Acceptance Criteria
 
-- [ ] `along wrap <slug>` executable from CLI in source and consumer repositories.
-- [ ] Tests run prior to issue relocation; failure halts wrap-up without modifying issue status.
-- [ ] Issue front-matter updated and file moved to `done/`.
-- [ ] `ISSUES.md` and Knowledge Base projections recompiled automatically.
-- [ ] Ephemeral session scratch directory purged.
-- [ ] Behavioral tests cover successful wrap and failure rollback.
+- [x] `along wrap <slug>` executable from CLI in source and consumer repositories.
+- [x] Tests run prior to issue relocation; failure halts wrap-up without modifying issue status.
+- [x] Issue front-matter updated and file moved to `done/`.
+- [x] `ISSUES.md` and Knowledge Base projections recompiled automatically.
+- [x] Ephemeral session scratch directory purged.
+- [x] Behavioral tests cover successful wrap and failure rollback.

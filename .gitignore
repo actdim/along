@@ -39,6 +39,9 @@ dashboard/ui/dist/
 .along/dashboard.html
 .along/DASHBOARD.md
 
+# MkDocs build output
+site/
+
 # Ephemeral session blackboards
 .along/.session/
 
