@@ -802,5 +802,37 @@ class TestExceptionHandlingGate(unittest.TestCase):
         self.assertTrue(gates.exception_handling_gate(REPO_ROOT))
 
 
+class TestSyncConstraints(unittest.TestCase):
+    """Verify entities.sync_constraints returns file path and compiles constraints."""
+
+    def test_sync_constraints_returns_file_path_and_writes_file(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            along_dir = os.path.join(tmp, ".along")
+            os.makedirs(along_dir)
+            decisions_file = os.path.join(along_dir, "DECISIONS.md")
+            with open(decisions_file, "w", encoding="utf-8") as f:
+                f.write(
+                    "# Architectural Decisions\n\n"
+                    "## ADR-2026-09-10--return-path - Return File Path\n"
+                    "- Status: active\n"
+                    "- Date: 2026-09-10\n"
+                    "- Decision: Return constraints_file path rather than content.\n"
+                    "- Consequences: Callers can safely pass output to os.path.relpath.\n"
+                )
+            result = entities.sync_constraints(tmp)
+            expected_file = os.path.join(along_dir, "CONSTRAINTS.md")
+            self.assertEqual(result, expected_file)
+            self.assertTrue(os.path.isfile(result))
+            with open(result, "r", encoding="utf-8") as f:
+                content = f.read()
+            self.assertIn("Return constraints_file path rather than content", content)
+
+    def test_sync_constraints_returns_empty_when_no_decisions(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            result = entities.sync_constraints(tmp)
+            self.assertEqual(result, "")
+
+
 if __name__ == "__main__":
     unittest.main()
+

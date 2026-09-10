@@ -737,6 +737,17 @@ class TestAlongSkillsAndScripts(unittest.TestCase):
                              f"along_update.py --check-only failed:\n{res.stderr}")
             self.assertIn("Check-Only Mode", res.stdout)
 
+        # Test -h and --help CLI flags
+        res_h = run_engine([sys.executable, update_script, "-h"])
+        self.assertEqual(res_h.returncode, 0, f"along_update.py -h failed: {res_h.stderr}")
+        self.assertIn("along_update.py", res_h.stdout)
+        self.assertIn("--check-only", res_h.stdout)
+
+        res_help = run_engine([sys.executable, update_script, "--help"])
+        self.assertEqual(res_help.returncode, 0, f"along_update.py --help failed: {res_help.stderr}")
+        self.assertIn("along_update.py", res_help.stdout)
+        self.assertIn("--check-only", res_help.stdout)
+
     #: What an installer must put on disk, with the probe that proves each side does it.
     #: The previous test compared skill folder NAMES only, which is why install.sh could
     #: ship without installing `rules/` at all and nothing noticed
@@ -1320,6 +1331,8 @@ class TestAlongSkillsAndScripts(unittest.TestCase):
             self.assertEqual(begin_count, 1, f"AGENTS.md should have exactly 1 BEGIN marker, found {begin_count}")
             self.assertEqual(end_count, 1, f"AGENTS.md should have exactly 1 END marker, found {end_count}")
             self.assertIn("## Project specifics", content, "Custom project specifics must be preserved")
+            self.assertIn("<!-- END ALONG-PROTOCOL -->\n\n## Project specifics", content,
+                          "Protocol block must be separated from project specifics by an empty line")
 
         finally:
             shutil.rmtree(temp_dir, ignore_errors=True)

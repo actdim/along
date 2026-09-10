@@ -256,9 +256,10 @@ def apply_migration_to_context(ctx_dir, protocol_text, migrate_script, is_root=T
             re.DOTALL
         )
         if pattern.search(existing):
-            new_content = pattern.sub(block, existing)
+            remainder = pattern.sub("", existing).lstrip("\r\n")
+            new_content = block + ("\n\n" + remainder if remainder else "\n")
         else:
-            new_content = block + "\n\n" + existing
+            new_content = block + "\n\n" + existing.lstrip("\r\n")
         with open(agents_md, "w", encoding="utf-8", newline="\n") as f:
             f.write(new_content)
         print(f"   [OK] Refreshed managed protocol block in {os.path.basename(agents_md)}.")
@@ -535,6 +536,10 @@ def run_update(repo_root, check_only=False, dry_run=False, force=False, local_on
     return True
 
 if __name__ == "__main__":
+    if any(a in sys.argv for a in ("-h", "--help")):
+        print(__doc__.strip())
+        sys.exit(0)
+
     target = os.getcwd()
     check_only_flag = "--check-only" in sys.argv
     dry_run_flag = "--dry-run" in sys.argv
