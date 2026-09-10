@@ -2,6 +2,11 @@
 
 All notable changes to this project, newest first.
 
+## v3.0.1 - 2026-09-10
+
+- fix(updater): resolve sync_constraints path, along_update help flag, and AGENTS.md spacing (refs #updater-regressions-and-sync-constraints)
+- fix: resolve MkDocs root 404 and sync home with README v3.0.0 (refs #mkdocs-root-index-404-and-version-drift)
+
 ## v3.0.0 - 2026-09-10
 
 - chore(entities): reconcile v3.0 milestone, register v3.1 modular decisions and clean session log
