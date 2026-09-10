@@ -327,7 +327,7 @@ def sync_constraints(repo_root: str) -> str:
     constraints_file = os.path.join(repo_root, ".along", "CONSTRAINTS.md")
     with open(constraints_file, "w", encoding="utf-8", newline="\n") as f:
         f.write(content)
-    return content
+    return constraints_file
 
 
 # ---------------------------------------------------------------------------
