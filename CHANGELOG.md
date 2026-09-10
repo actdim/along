@@ -2,6 +2,10 @@
 
 All notable changes to this project, newest first.
 
+## v3.0.0 - 2026-09-10
+
+- chore(entities): reconcile v3.0 milestone, register v3.1 modular decisions and clean session log
+
 ## v2.6.1 - 2026-09-10
 
 - fix(risks): resolve antigravity git index truncation following upstream v1.3.0 fix (refs #antigravity-extension-git-index-truncation)
