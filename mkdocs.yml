@@ -1,0 +1,93 @@
+site_name: Along
+site_url: https://actdim.github.io/along/
+site_description: >-
+  Provider-agnostic agent-context protocol, in-repo memory,
+  and LLM-Wiki knowledge base for AI coding agents
+  (Claude Code, Codex, Antigravity, OpenCode).
+site_author: actdim
+repo_url: https://github.com/actdim/along
+repo_name: actdim/along
+edit_uri: edit/main/docs/
+
+copyright: Copyright &copy; 2025-2026 actdim - MIT License
+
+hooks:
+  - hooks/rewrite_links.py
+
+theme:
+  name: material
+  custom_dir: overrides
+  palette:
+    - media: "(prefers-color-scheme: dark)"
+      scheme: slate
+      primary: deep purple
+      accent: amber
+      toggle:
+        icon: material/brightness-4
+        name: Switch to light mode
+    - media: "(prefers-color-scheme: light)"
+      scheme: default
+      primary: deep purple
+      accent: amber
+      toggle:
+        icon: material/brightness-7
+        name: Switch to dark mode
+  features:
+    - navigation.instant
+    - navigation.tracking
+    - navigation.sections
+    - navigation.expand
+    - navigation.top
+    - search.highlight
+    - search.share
+    - content.code.copy
+    - content.action.edit
+  icon:
+    repo: fontawesome/brands/github
+
+nav:
+  - Home: topic--index.md
+  - Knowledge Base: INDEX.md
+  - Architecture: topic--architecture.md
+  - Domain Model: topic--domain-model.md
+  - Skills Reference: topic--skills-reference.md
+  - Setup & Workflow: topic--setup-and-workflow.md
+  - LLM-Wiki Architecture: topic--llm-wiki-architecture.md
+  - Frontend Frameworks: topic--frontend-frameworks.md
+  - Migrations: topic--migrations.md
+  - Dependencies: topic--dependencies.md
+  - License: topic--license.md
+
+plugins:
+  - search
+  - minify:
+      minify_html: true
+
+markdown_extensions:
+  - admonition
+  - pymdownx.details
+  - pymdownx.superfences:
+      custom_fences:
+        - name: mermaid
+          class: mermaid
+          format: !!python/name:pymdownx.superfences.fence_code_format
+  - pymdownx.highlight:
+      anchor_linenums: true
+  - pymdownx.inlinehilite
+  - pymdownx.tabbed:
+      alternate_style: true
+  - pymdownx.tasklist:
+      custom_checkbox: true
+  - tables
+  - toc:
+      permalink: true
+  - attr_list
+  - md_in_html
+  - def_list
+  - meta
+
+extra:
+  social:
+    - icon: fontawesome/brands/github
+      link: https://github.com/actdim/along
+  generator: false

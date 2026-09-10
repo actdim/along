@@ -2,6 +2,10 @@
 
 All notable changes to this project, newest first.
 
+## v2.6.0 - 2026-09-10
+
+- No commits recorded since the previous release tag.
+
 ## v2.5.0 - 2026-09-10
 
 - feat: implement executable along wrap CLI engine (refs #executable-along-wrap-engine)

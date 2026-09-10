@@ -5,10 +5,10 @@ type: feat
 status: open
 priority: medium
 created: 2026-08-27
-updated: 2026-08-27
+updated: 2026-09-10
 agent: antigravity
-tags: [ui, visual-testing, web, verification, screenshots]
-milestone: v2.0.0-along-transition
+tags: [ui, visual-testing, web, verification, screenshots, backlog]
+milestone: ~
 blocked_by: []
 related: [feat--agentic-code-review-and-impact-radius-assessment]
 ---

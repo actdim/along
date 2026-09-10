@@ -1,8 +1,18 @@
-# Along (v2.6.0)
+---
+protocol: along
+slug: index
+title: Along Documentation
+type: overview
+created: 2026-09-10
+updated: 2026-09-10
+tags: [along, documentation, overview]
+---
+
+# Along (v2.5.0)
 
 **The Provider-Agnostic Context & Memory Operating System for AI Coding Agents.**
 
-One universal convention (`ALONG-PROTOCOL v2.6.0`) and automation skills suite honored natively across **Claude Code**, **Google Antigravity**, **OpenAI Codex**, and **OpenCode**.
+One universal convention (`ALONG-PROTOCOL v2.5.0`) and automation skills suite honored natively across **Claude Code**, **Google Antigravity**, **OpenAI Codex**, and **OpenCode**.
 
 Along eliminates **agent context amnesia**, prevents **architectural drift**, and stops **token bloat** by transforming any codebase into an AI-ready engineering workspace with durable in-repo memory, token-efficient LLM-Wiki intelligence, and autonomous multi-agent coordination.
 
@@ -73,20 +83,20 @@ bash install.sh --target=all
 An install records what it wrote in `~/.along/install-manifest.json`: it never deletes a
 directory it does not own, so rules you wrote yourself survive every re-install, and
 `install.ps1 -Uninstall` / `./install.sh --uninstall` removes exactly that record and
-nothing else. See [Setup, Installation & Workflows](./docs/topic--setup-and-workflow.md).
+nothing else. See [Setup, Installation & Workflows](./topic--setup-and-workflow.md).
 
 ---
 
 ## Knowledge Base & Architecture Index
 
-The repository's complete technical specification is maintained as a living LLM-Wiki in [`docs/`](./docs/INDEX.md):
+The repository's complete technical specification is maintained as a living LLM-Wiki in [`docs/`](./INDEX.md):
 
 | Topic | Description | Link |
 | :--- | :--- | :--- |
-| **System Architecture** | Provider flow, context boundaries, MCP servers, and bridge layers. | [System Architecture & Flow](./docs/topic--architecture.md) |
-| **Domain Model & Entities** | Machine-parseable schemas for Issues, ADRs, Milestones, and Risks. | [Domain Model & Entity Ecosystem](./docs/topic--domain-model.md) |
-| **Setup & Workflows** | Installation matrix, repository onboarding, and session lifecycle. | [Setup, Installation & Workflows](./docs/topic--setup-and-workflow.md) |
-| **LLM-Wiki Architecture** | Andrej Karpathy paradigm, source isolation, and token efficiency. | [LLM-Wiki Architecture & Paradigm](./docs/topic--llm-wiki-architecture.md) |
+| **System Architecture** | Provider flow, context boundaries, MCP servers, and bridge layers. | [System Architecture & Flow](./topic--architecture.md) |
+| **Domain Model & Entities** | Machine-parseable schemas for Issues, ADRs, Milestones, and Risks. | [Domain Model & Entity Ecosystem](./topic--domain-model.md) |
+| **Setup & Workflows** | Installation matrix, repository onboarding, and session lifecycle. | [Setup, Installation & Workflows](./topic--setup-and-workflow.md) |
+| **LLM-Wiki Architecture** | Andrej Karpathy paradigm, source isolation, and token efficiency. | [LLM-Wiki Architecture & Paradigm](./topic--llm-wiki-architecture.md) |
 ## Automation Skills Reference (Grouped by Workflow Phase)
 
 Along provides **18 singular automation skills** structured across 6 core lifecycle phases:
@@ -138,4 +148,4 @@ Along provides **18 singular automation skills** structured across 6 core lifecy
 
 ## License
 
-MIT License. See [LICENSE](./LICENSE) for details.
+MIT License. See [LICENSE](./topic--license.md) for details.

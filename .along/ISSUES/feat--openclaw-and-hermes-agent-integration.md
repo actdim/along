@@ -5,10 +5,10 @@ type: feat
 status: open
 priority: medium
 created: 2026-08-27
-updated: 2026-08-27
+updated: 2026-09-10
 agent: antigravity
-tags: [providers, openclaw, hermes-agent, agent-integration, cli]
-milestone: v2.0.0-along-transition
+tags: [providers, openclaw, hermes-agent, agent-integration, cli, backlog]
+milestone: ~
 blocked_by: []
 related: []
 ---

@@ -5,10 +5,10 @@ type: feat
 status: open
 priority: medium
 created: 2026-08-27
-updated: 2026-08-27
+updated: 2026-09-10
 agent: antigravity
-tags: [integration, issue-tracking, jira, redmine, linear, github, import]
-milestone: v2.0.0-along-transition
+tags: [integration, issue-tracking, jira, redmine, linear, github, import, backlog]
+milestone: ~
 blocked_by: []
 related: [feat--openclaw-and-hermes-agent-integration]
 ---

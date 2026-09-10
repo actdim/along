@@ -2,15 +2,17 @@
 protocol: along
 slug: token-efficiency-and-context-optimization-skills
 type: feat
-status: open
+status: superseded
+completed: 2026-09-10
 priority: high
 created: 2026-08-13
-updated: 2026-08-13
+updated: 2026-09-10
 agent: antigravity
 tags: []
 milestone: v1.5.0-dashboard-and-analytics
 blocked_by: []
 related: []
+superseded_by: debt--agents-md-context-budget-pruning
 ---
 
 # Token Efficiency & Context Window Optimization System

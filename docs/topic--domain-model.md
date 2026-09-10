@@ -79,7 +79,7 @@ Atomic units of engineering work. Along categorizes issues into **5 distinct typ
 ```yaml
 ---
 protocol: along
-protocol_version: "2.2.6"
+protocol_version: "2.6.0"
 slug: jwt-token-refresh
 type: feat
 status: in-progress
@@ -145,7 +145,7 @@ Group multiple issues into structured release targets, sprints, or major project
 ```yaml
 ---
 protocol: along
-protocol_version: "2.2.6"
+protocol_version: "2.6.0"
 slug: v2.3.0-security
 title: Security & Authentication Hardening
 status: in-progress
@@ -168,7 +168,7 @@ Track external dependencies, rate limits, security considerations, and potential
 ```yaml
 ---
 protocol: along
-protocol_version: "2.2.6"
+protocol_version: "2.6.0"
 slug: token-revocation-latency
 title: Redis Token Blacklist Synchronization Latency
 severity: high
@@ -189,7 +189,7 @@ Timeboxed research experiments, benchmark comparisons, and library evaluations c
 ```yaml
 ---
 protocol: along
-protocol_version: "2.2.6"
+protocol_version: "2.6.0"
 slug: duckdb-vs-sqlite-benchmarks
 title: Local Vector Indexing: DuckDB vs SQLite FTS5
 status: concluded
@@ -209,7 +209,7 @@ Reusable verification rubrics for pre-commit checks, stage completions, releases
 ```yaml
 ---
 protocol: along
-protocol_version: "2.2.6"
+protocol_version: "2.6.0"
 slug: stage-completion
 title: Mandatory Stage Completion Verification Checklist
 category: stage-completion
