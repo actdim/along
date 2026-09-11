@@ -6,7 +6,7 @@ type: feat
 status: open
 priority: critical
 created: 2026-09-02
-updated: 2026-09-09
+updated: 2026-09-10
 agent: antigravity
 tags: [architecture, runtimes, hooks, gates, security, mechanical-enforcement, transcript]
 milestone: v4.0.0-runtime-gates-and-worktree-isolation
@@ -82,20 +82,53 @@ To avoid code duplication across IDEs, Along implements a unified core engine wi
 |                                                                         |
 |  2. PreToolUse Gates (alongkit.hooks.gates):                            |
 |     - IssueAnchorGate: Blocks source file edits without active issue    |
+|     - ProjectionProtectionGate: Blocks manual edits to compiled views   |
 |     - InquiryReadOnlyGate: Blocks edits on questions / inquiry prompts  |
 |     - TypographyGate: Blocks writes containing forbidden unicode chars  |
 |     - CliSafetyGate: Blocks heredocs, inline writes, unvetted installs  |
-|     - CommitGuardGate: Enforces issue slug binding in git commit        |
+|     - CommitGuardGate: Enforces issue binding & blocks conflict markers |
 |                                                                         |
 |  3. PostToolUse Handlers:                                               |
 |     - SyntaxCheckHandler: Compiles modified Python/JS/TS files          |
 |     - StateUpdateHandler: Records edit timestamps and test outcomes     |
 |                                                                         |
 |  4. Stop Gates:                                                         |
+|     - ProjectionSyncGate: Blocks turn finish if projections not synced  |
 |     - TestStopGate: Blocks turn finish if code edited but tests skipped |
 |     - WrapStopGate: Blocks turn finish if along-wrap was omitted        |
 +-------------------------------------------------------------------------+
 ```
+
+### 3.1. Architectural Invariant: Zero Git Interception & No Git Hooks
+
+Along strictly rejects Git-level hooks (`.git/hooks/*`) and custom Git merge drivers (`merge=...` driver scripts):
+1. **Developer Transparency**: Developers must retain 100% control and visibility over standard Git behavior. Silent interception or automatic conflict resolution during `git merge` or `git pull` creates unpredictable side-effects, hides repository state, and breaks standard toolchains.
+2. **Zero VCS Pollution**: Repositories must never depend on machine-local `.git/hooks/` scripts that are untracked by default or require invasive installation into the developer's Git environment.
+3. **Layer Separation**: Protocol gates belong exclusively to the **Agent Runtime Harness** layer (`PreToolUse`, `PostToolUse`, `Stop` inside IDEs and agent runners). They intercept LLM tool invocations before bad disk mutations happen, leaving the underlying Git VCS standard, auditable, and unmolested.
+
+### 3.2. Architectural Rationale: Lifecycle Hooks vs Deep In-Process Monkey-Patching
+
+A critical architectural decision in Along is the complete rejection of in-process monkey-patching, AST bytecode injection, or reverse-engineering internal agent runtimes (e.g. patching OpenCode/Claude Code internals):
+
+1. **Why Deep In-Process Monkey-Patching is Rejected**:
+   - **Extreme Fragility**: Minor updates to agent runners (OpenCode, Claude Code, Cursor) alter private class names, bundled JavaScript modules, and internal execution flows. In-process hooks require perpetual reverse-engineering and break continuously.
+   - **Client Divergence**: Modern runtimes exist as CLI terminals, VS Code extensions, JetBrains plugins, and web UIs. Internal structures differ wildly across these surfaces.
+   - **Domain Conflict**: An agent harness's core competency is context window eviction, token streaming, and model communication. Attempting to usurp that loop inside their process creates an unmaintainable shadow IDE.
+
+2. **Why the Lifecycle Hook Model is Sufficient**:
+   - **Clear Separation of Concerns**:
+     - *Agent Harness*: Owns token streaming, context windows, model dispatch, and tool execution primitives.
+     - *Along Living Memory*: Owns structured repo context (`.along/ISSUES/`, `DECISIONS.md`, `docs/INDEX.md`).
+     - *Along Lifecycle Hooks*: Owns protocol compliance and repository state invariants as a deterministic state machine.
+   - **Mechanical Determinism**: Intercepting `PreToolUse`, `PostToolUse`, and `Stop` provides complete gatekeeping. An agent cannot write unauthorized bytes to disk, cannot commit without an issue slug, and cannot conclude a turn (`Stop`) without passing automated tests and updating session logs.
+   - **Cross-Runtime Portability**: Standard OS-level hook protocols (JSON over stdin/stdout or exit code 2 over stderr) work universally across Antigravity, Claude Code, Codex, and CI without depending on Node/Bun or internal runtime versions.
+
+3. **Trade-offs and Explicit Boundary of Responsibilities**:
+   - **Strengths**: 100% reliable state gating; zero codebase corruption; cross-runtime stability; zero Git hooks pollution.
+   - **Known Limitations**:
+     - *Reasoning Invariance*: Hooks cannot improve a model's inherent reasoning; they only restrict invalid actions.
+     - *Stalling Loops*: Repeated refusals can cause an agent to loop if unguided (addressed by `feat--systemic-anomaly-circuit-breaker`).
+     - *Client Coverage*: Environments without external hook support (simple web chats) fall back to prose rules and commit-time gates.
 
 ---
 
@@ -127,12 +160,16 @@ To avoid code duplication across IDEs, Along implements a unified core engine wi
 - **Action on Violation**: Block execution (`deny` / `exit 2`).
 - **Remediation Message**: "CLI Safety Gate Violation: Forbidden command pattern or file content over CLI detected."
 
-### Gate 4: Commit Message Issue Binding (`CommitGuardGate`)
+### Gate 4: Commit Message Issue Binding & Conflict Detection (`CommitGuardGate`)
 - **Trigger**: `PreToolUse` on `run_command`.
-- **Scan**: If command begins with `git commit`, inspect `-m` commit message.
-- **Rule**: Commit message must match `[type--slug]` or bind to the currently active issue slug.
+- **Scan**:
+  - If command begins with `git commit`:
+    1. Inspect `-m` commit message: must match `[type--slug]` or bind to the currently active issue slug.
+    2. Check staging area and working copy for unresolved Git conflict markers (`<<<<<<< HEAD`, `=======`, `>>>>>>>`), specifically inspecting compiled projections (`.along/ISSUES.md`, `docs/INDEX.md`).
 - **Action on Violation**: Block execution (`deny` / `exit 2`).
-- **Remediation Message**: "Commit Gate Violation: Commit message must include the active issue key [type--slug]."
+- **Remediation Message**:
+  - If issue unbound: "Commit Gate Violation: Commit message must include the active issue key [type--slug]."
+  - If conflict markers found: "Commit Gate Violation: Detected unresolved Git conflict markers in compiled projection (e.g. ISSUES.md). Accept either version (e.g. 'git checkout --ours .along/ISSUES.md') and run 'along issue sync' to cleanly recompile instead of committing corrupted markers."
 
 ### Gate 5: Inquiry Read-Only Gate (`InquiryReadOnlyGate`)
 - **Trigger**: `PreToolUse` on `write_to_file`, `replace_file_content`, mutating git commands.
@@ -153,6 +190,19 @@ To avoid code duplication across IDEs, Along implements a unified core engine wi
 - **Action on Violation**: Refuse stop (`decision: continue` / `exit 2`).
 - **Remediation Message**: "Stop Gate Violation: Mandatory Session Wrap checklist incomplete. Record session log in .along/SESSIONS/, synchronize issues, and append to .along/HISTORY.md before finishing."
 
+### Gate 8: Projection Protection Gate (`ProjectionProtectionGate`)
+- **Trigger**: `PreToolUse` on `write_to_file`, `replace_file_content`.
+- **Target Filter**: Compiled projection files: `.along/ISSUES.md`, `docs/INDEX.md`.
+- **Rule**: Direct manual edits to compiled views are strictly forbidden. The Single Source of Truth (SSOT) is atomic files (`.along/ISSUES/<type>--<slug>.md`, `docs/topic--<slug>.md`).
+- **Action on Violation**: Block execution (`deny` / `exit 2`).
+- **Remediation Message**: "Projection Protection Violation: Direct manual edits to '.along/ISSUES.md' or 'docs/INDEX.md' are forbidden. Create or modify atomic files in '.along/ISSUES/' or 'docs/' and run 'along issue sync' or 'along kb sync' to recompile."
+
+### Gate 9: Projection Sync Gate on Stop (`ProjectionSyncStopGate`)
+- **Trigger**: `Stop` event.
+- **Condition**: `.along/.hook_state.json` indicates that atomic issue files (`.along/ISSUES/*.md`) or documentation topic files (`docs/topic--*.md`) were created or edited during the session, but no subsequent execution of 'along issue sync' or 'along kb sync' was recorded.
+- **Action on Violation**: Refuse stop (`decision: continue` / `exit 2`).
+- **Remediation Message**: "Stop Gate Violation: Atomic issue or topic files were modified, but compiled projections are out of sync. Run 'along issue sync' or 'along kb sync' before completing the turn."
+
 ---
 ## 5. Dual-Mode Governance: Shadow Mode vs Enforce Mode
 
@@ -168,7 +218,9 @@ To prevent breaking existing workflows and to audit false positives before intro
          "typography": "enforce",
          "cli_safety": "enforce",
          "issue_anchor": "enforce",
+         "projection_protection": "enforce",
          "commit_guard": "shadow",
+         "projection_sync": "enforce",
          "stop_guard": "shadow"
        }
      }
@@ -240,7 +292,7 @@ Testing must be split into three distinct levels to ensure speed, determinism, a
   - Implement `alongkit/hooks/config.py` (dual-mode governance: shadow vs enforce).
   - Implement `alongkit/hooks/adapters.py` (Antigravity JSON vs Claude/Codex exit code adapters).
 - [ ] **Phase 2: Gate Implementations (`alongkit.hooks.gates`)**:
-  - Implement `issue_anchor.py`, `inquiry_read_only.py`, `typography.py`, `cli_safety.py`, `commit_guard.py`, `stop_guard.py`.
+  - Implement `issue_anchor.py`, `projection_protection.py`, `inquiry_read_only.py`, `typography.py`, `cli_safety.py`, `commit_guard.py` (with conflict marker scanner), `projection_sync.py`, `stop_guard.py`.
 - [ ] **Phase 3: CLI Driver (`scripts/along_hook.py`)**:
   - Entry point accepting `--runtime`, `--event`, and `--mode` flags.
   - Comprehensive audit logging in `.along/diagnostics/hooks_audit.jsonl`.
@@ -253,5 +305,9 @@ Testing must be split into three distinct levels to ensure speed, determinism, a
   - Level 1 & 2: `tests/test_hooks.py` and `tests/test_hooks_install.py` (hermetic, fast, zero-dependency).
   - Level 3: `scripts/along_test_runtime_e2e.py` (isolated E2E runner supporting Ollama backends).
 - [ ] **Phase 6: Documentation & Knowledge Base**:
-  - Create `docs/topic--runtime-hooks-and-gates.md`.
+  - Create `docs/topic--runtime-hooks-and-gates.md`, explicitly detailing:
+    - Architectural Rationale: Why standard lifecycle hooks (and not in-process monkey-patching) are sufficient for deterministic protocol governance.
+    - Trade-offs Analysis: Pros and cons of external lifecycle gates vs in-process runtime injection.
+    - Clear Separation of Concerns: Explicit boundary of responsibility between the Agent Harness and Along.
+    - Gate reference and remediation guides for all mechanical gates.
   - Update `docs/INDEX.md`, `README.md`, and `AGENTS.md`.
