@@ -2,6 +2,11 @@
 
 All notable changes to this project, newest first.
 
+## v3.1.0 - 2026-09-13
+
+- feat: implement declarative gate engine and protocol traceability matrix [feat--declarative-gates-and-protocol-traceability]
+- docs: record runtime hook rationale and reject monkey patching (refs #runtime-enforcement-of-prose-rules)
+
 ## v3.0.1 - 2026-09-10
 
 - fix(updater): resolve sync_constraints path, along_update help flag, and AGENTS.md spacing (refs #updater-regressions-and-sync-constraints)
