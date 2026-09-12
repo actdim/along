@@ -68,6 +68,8 @@ TOOL_MAPPINGS = {
     "graph-check": "along_graph_check.py",
     "graphcheck": "along_graph_check.py",
     "wrap": "along_wrap.py",
+    "hook": "along_hook.py",
+    "hooks": "along_hook.py",
 }
 
 LIFECYCLE_ACTIONS = {"build", "test", "dev", "debug"}
@@ -545,16 +547,24 @@ def handle_decision_command(repo_root: str, args: List[str]):
     if not args or args[0] in ("-h", "--help", "help"):
         print("Usage: along_exec.py decision [create|sync] [args...]")
         print("  create <slug> --title \"Title\" --context \"Context\" --decision \"Decision\" --consequences \"Tradeoffs\"")
-        print("  sync   Recompile .along/CONSTRAINTS.md projection from active ADRs")
+        print("  sync   Recompile .along/DECISIONS.md and .along/CONSTRAINTS.md projections from ADRs")
         sys.exit(0)
 
     subcmd = args[0].lower()
     from datetime import datetime
     today = datetime.now().strftime("%Y-%m-%d")
 
+    from alongkit import entities
+
     if subcmd == "sync":
-        from alongkit import entities
+        entities.compile_decisions_board(repo_root)
         entities.sync_constraints(repo_root)
+        try:
+            import along_kb_sync
+            along_kb_sync.sync_decisions_to_docs(repo_root)
+        except (ImportError, AttributeError):
+            pass
+        print("-> Recompiled .along/DECISIONS.md projection board.")
         print("-> Recompiled .along/CONSTRAINTS.md projection.")
         sys.exit(0)
 
@@ -590,23 +600,29 @@ def handle_decision_command(repo_root: str, args: List[str]):
                 else:
                     i += 1
 
-        dec_file = os.path.join(repo_root, ".along", "DECISIONS.md")
-        entry = f"""
-## ADR-{today}--{slug} - {title}
-- Date: {today}
-- Status: accepted
-- Context: {context}
-- Decision: {decision}
-- Consequences: {consequences}
-"""
-        with open(dec_file, "a", encoding="utf-8") as f:
-            f.write(entry)
-        print(f"-> Appended ADR-{today}--{slug} to .along/DECISIONS.md")
+        created_path = entities.create_decision_file(
+            repo_root=repo_root,
+            slug=slug,
+            title=title,
+            context=context,
+            decision=decision,
+            consequences=consequences,
+            day=today,
+            status="accepted",
+        )
+        rel_created = os.path.relpath(created_path, repo_root).replace("\\", "/")
+        print(f"-> Created modular ADR file: {rel_created}")
 
-        # Automatically recompile CONSTRAINTS.md projection
-        from alongkit import entities
+        # Automatically recompile projections
+        entities.compile_decisions_board(repo_root)
         entities.sync_constraints(repo_root)
-        print("-> Updated .along/CONSTRAINTS.md projection.")
+        try:
+            import along_kb_sync
+            along_kb_sync.sync_decisions_to_docs(repo_root)
+        except (ImportError, AttributeError):
+            pass
+        print("-> Recompiled .along/DECISIONS.md projection board.")
+        print("-> Recompiled .along/CONSTRAINTS.md projection.")
         sys.exit(0)
 
 
@@ -709,9 +725,13 @@ def handle_doctor_command(repo_root: str, args: List[str]):
             print("[WARN] .gitattributes exists but lacks merge=union for .along/ files.")
             warnings += 1
 
-    # Check DECISIONS.md
+    # Check DECISIONS
+    dec_dir = os.path.join(along_dir, "DECISIONS")
     dec_file = os.path.join(along_dir, "DECISIONS.md")
-    if os.path.exists(dec_file):
+    if os.path.isdir(dec_dir):
+        adr_count = len([f for f in os.listdir(dec_dir) if f.endswith(".md")])
+        print(f"[OK] .along/DECISIONS/ modular ADR directory exists ({adr_count} records).")
+    elif os.path.exists(dec_file):
         with open(dec_file, "r", encoding="utf-8", errors="ignore") as f:
             dec_content = f.read()
         if "## ADR-" in dec_content:

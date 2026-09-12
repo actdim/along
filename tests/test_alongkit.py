@@ -694,6 +694,23 @@ class TestPackagingContract(unittest.TestCase):
 
         self.assertTrue(callable(cli.main))
 
+    def test_all_cli_scripts_call_ensure_deps(self):
+        """Every executable CLI script in scripts/*.py must call bootstrap.ensure_deps()."""
+        missing = []
+        for name in sorted(os.listdir(SCRIPTS_DIR)):
+            if not name.endswith(".py"):
+                continue
+            path = os.path.join(SCRIPTS_DIR, name)
+            with open(path, "r", encoding="utf-8") as f:
+                content = f.read()
+            if "bootstrap.ensure_deps()" not in content:
+                missing.append(name)
+        self.assertEqual(
+            missing,
+            [],
+            f"These scripts in scripts/ are missing bootstrap.ensure_deps(): {missing}",
+        )
+
 
 class TestInstallersCarryThePackage(unittest.TestCase):
     """A global install is a file copy. If it misses `alongkit/`, every engine dies

@@ -4,7 +4,7 @@ slug: INDEX
 title: Knowledge Base Topic Index
 type: index
 created: 2026-09-10
-updated: 2026-09-10
+updated: 2026-09-13
 tags: [index, kb, topics, map]
 ---
 
@@ -19,6 +19,8 @@ flowchart TD
     INDEX["Knowledge Base (INDEX)"]
     T_ARCHITECTURE["System Architecture & Flow"]
     INDEX --> T_ARCHITECTURE
+    T_DECLARATIVE_GATES_AND_TRACEABILITY["Declarative Gate Engine & Protocol Traceability Matrix"]
+    INDEX --> T_DECLARATIVE_GATES_AND_TRACEABILITY
     T_DEPENDENCIES["Dependencies & Submodules AI Documentation and Rules"]
     INDEX --> T_DEPENDENCIES
     T_DOMAIN_MODEL["Domain Model & Entity Ecosystem"]
@@ -31,6 +33,8 @@ flowchart TD
     INDEX --> T_LLM_WIKI_ARCHITECTURE
     T_MIGRATIONS["Protocol & Repository Migrations Guide"]
     INDEX --> T_MIGRATIONS
+    T_RUNTIME_HOOKS_AND_GATES["Runtime Lifecycle Hooks & Mechanical Gates"]
+    INDEX --> T_RUNTIME_HOOKS_AND_GATES
     T_SETUP_AND_WORKFLOW["Setup & Developer Workflow"]
     INDEX --> T_SETUP_AND_WORKFLOW
     T_SKILLS_REFERENCE["Skills & Slash Commands Technical Reference"]
@@ -40,6 +44,7 @@ flowchart TD
     T_LLM_WIKI_ARCHITECTURE -.->|references| T_DOMAIN_MODEL
     T_LLM_WIKI_ARCHITECTURE -.->|references| T_SKILLS_REFERENCE
     T_LLM_WIKI_ARCHITECTURE -.->|references| T_SETUP_AND_WORKFLOW
+    T_RUNTIME_HOOKS_AND_GATES -.->|references| T_DECLARATIVE_GATES_AND_TRACEABILITY
 ```
 
 ---
@@ -47,12 +52,14 @@ flowchart TD
 ## Articles
 
 - **[System Architecture & Flow](./topic--architecture.md)** (architecture) `architecture`, `boundaries`, `multi-agent`, `blackboard`, `concurrency`, `mcp`, `flow`
+- **[Declarative Gate Engine & Protocol Traceability Matrix](./topic--declarative-gates-and-traceability.md)** (architecture) `hooks`, `gates`, `declarative`, `traceability`, `verification`, `protocol`, `predicates`
 - **[Dependencies & Submodules AI Documentation and Rules](./topic--dependencies.md)** (topic) `dependencies`, `ai-context`, `submodules`, `vendor`, `rules`
 - **[Domain Model & Entity Ecosystem](./topic--domain-model.md)** (domain-model) `domain-model`, `entities`, `schemas`, `dag`, `metadata`, `issues`, `milestones`, `risks`, `spikes`, `checklists`, `sessions`
 - **[Frontend Architecture, Dynstruct, MsgMesh & NSwag Integration](./topic--frontend-frameworks.md)** (topic) `dynstruct`, `dynstruct-mui`, `msgmesh`, `utico`, `react`, `mui`, `nswag`, `openapi`, `architecture`
 - **[License](./topic--license.md)** (license) `license`, `mit`
 - **[LLM-Wiki Knowledge Base Architecture & Paradigm](./topic--llm-wiki-architecture.md)** (topic) `llm-wiki`, `architecture`, `knowledge-base`, `token-efficiency`, `indexing`, `methodology`, `search`, `karpathy`
 - **[Protocol & Repository Migrations Guide](./topic--migrations.md)** (topic) `migrations`, `upgrade`, `protocol`, `changelog`, `versioning`, `data-safety`
+- **[Runtime Lifecycle Hooks & Mechanical Gates](./topic--runtime-hooks-and-gates.md)** (architecture) `hooks`, `gates`, `runtime`, `enforcement`, `antigravity`, `typography`, `cli-safety`
 - **[Setup & Developer Workflow](./topic--setup-and-workflow.md)** (setup-workflow) `setup-workflow`, `installation`, `lifecycle`, `runners`, `developer-workflow`, `testing`
 - **[Skills & Slash Commands Technical Reference](./topic--skills-reference.md)** (topic) `skills`, `commands`, `reference`, `runners`, `lifecycle`, `automation`, `multi-agent`
 
@@ -61,6 +68,6 @@ flowchart TD
 ## Related Context
 
 - [AGENTS.md](../AGENTS.md): Active protocol conventions and rules.
-- [.along/DECISIONS.md](../.along/DECISIONS.md): Architectural Decision Records.
+- [Decisions (ADRs)](./decisions/INDEX.md): Architectural Decision Records.
 - [.along/ISSUES.md](../.along/ISSUES.md): Active issue tracking board.
 - [.along/HISTORY.md](../.along/HISTORY.md): Append-only project history log.

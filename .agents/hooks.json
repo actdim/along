@@ -1,0 +1,16 @@
+{
+  "along-runtime-gates": {
+    "PreToolUse": [
+      {
+        "matcher": "write_to_file|replace_file_content|run_command",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python ../scripts/along_hook.py --runtime antigravity --event PreToolUse",
+            "timeout": 15
+          }
+        ]
+      }
+    ]
+  }
+}

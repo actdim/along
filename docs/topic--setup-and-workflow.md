@@ -77,7 +77,7 @@ The uninstall removes exactly the files listed in `~/.along/install-manifest.jso
 nothing else: rules you wrote yourself, `~/.along/config.json`, and any provider
 configuration stay. The same manifest is what lets a re-install remove a file Along used
 to ship without deleting the directory that holds it. See
-[ADR-2026-09-01--installers-never-delete-what-they-did-not-write](../.along/DECISIONS.md).
+[ADR-2026-09-01--installers-never-delete-what-they-did-not-write](./decisions/ADR-2026-09-01--installers-never-delete-what-they-did-not-write.md).
 
 ### MCP Registration Honesty
 
@@ -149,7 +149,7 @@ absent it exits with code 2 and the two commands above, rather than a traceback.
 
 Why a dependency at all: front-matter is YAML because tools that are not Along read it, and
 a hand-rolled parser silently dropped block sequences and emitted blocks that no strict YAML
-reader accepts. See [ADR-2026-09-01--frontmatter-on-ruamel-yaml](../.along/DECISIONS.md).
+reader accepts. See [ADR-2026-09-01--frontmatter-on-ruamel-yaml](./decisions/ADR-2026-09-01--frontmatter-on-ruamel-yaml.md).
 
 The dashboard (`/along-dash`) additionally needs FastAPI, Uvicorn, Pydantic, and Rich,
 declared as the `dash` extra and resolved automatically by `uv run scripts/along_dash.py`.
@@ -235,7 +235,7 @@ Scope is `.md`, `.py`, `.sh`, `.ps1`, `.bat`; hidden directories such as `.along
 included; localized resource directories (`locales/`, `i18n/`, `translations/`, ...) are
 never scanned. A file that is not valid UTF-8 is skipped and reported, and existing line
 endings are preserved, so a CRLF `.ps1` stays CRLF. See
-[ADR-2026-09-01--typography-rule-scope](../.along/DECISIONS.md).
+[ADR-2026-09-01--typography-rule-scope](./decisions/ADR-2026-09-01--typography-rule-scope.md).
 
 ### Releasing: gates first, then a transaction
 
@@ -317,7 +317,7 @@ sequenceDiagram
   are printed with file and line. Add `--fix-typography` to apply the replacements in the
   same run, or clean them by hand.
 - A file that is not valid UTF-8 is skipped and named, never decoded lossily and rewritten.
-  See [ADR-2026-09-01--typography-rule-scope](../.along/DECISIONS.md).
+  See [ADR-2026-09-01--typography-rule-scope](./decisions/ADR-2026-09-01--typography-rule-scope.md).
 
 ### Step 6: Session Wrap-Up
 - Invoke `/along-wrap` to execute the mandatory completion checklist:

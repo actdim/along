@@ -104,6 +104,7 @@ class DecisionSchema(BaseModel):
     model_config = ConfigDict(extra="ignore")
 
     id: str = Field(..., description="Decision identifier, e.g. ADR-001")
+    slug: Optional[str] = Field(None, description="Decision slug")
     number: Optional[int] = Field(None, description="Sequential ADR number")
     title: str = Field(..., description="Decision title")
     date: Optional[str] = Field(None, description="Date recorded YYYY-MM-DD")
@@ -112,5 +113,6 @@ class DecisionSchema(BaseModel):
     decision: Optional[str] = Field(None, description="Decision made")
     consequences: Optional[str] = Field(None, description="Consequences and trade-offs")
     superseded_by: Optional[str] = Field(None, description="ADR identifier that supersedes this")
+    file_path: Optional[str] = Field(None, description="Relative path to ADR file")
     raw_markdown: Optional[str] = Field(None, description="Full raw markdown of the entry")
 

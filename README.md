@@ -32,6 +32,7 @@ AI coding agents are exceptionally capable, but they start every session blind:
 | **Zero-Conflict Git Concurrency** | Single Source of Truth (SSOT) atomic files vs compiled projections (`ISSUES.md`, `INDEX.md`), union merges (`merge=union`), and decentralized date-slug ADRs that never collide in parallel branches. |
 | **Engineering Provenance & Dual-Track UI** | Living plans, fix loops, and verification gates are permanently recorded in session logs while projecting interactive visual review cards in IDEs (Antigravity). |
 | **Strict Data Safety & Verification Gates** | Hermetic engines (`alongkit`) with transactional byte-exact rollbacks, strict front-matter preservation (`ruamel.yaml`), and zero-unintended-deletions invariant. |
+| **Declarative Runtime Gates & Traceability** | Mechanical agent lifecycle interception (`PreToolUse`, `Stop`) enforcing 11 protocol invariants, backed by machine-checked bi-directional traceability (`along hook verify`) between prose badges and YAML rules. |
 | **Nearest Context Boundary** | Monorepos, microservices, and Git submodules maintain isolated localized memory, preventing root workspace pollution. |
 
 ---
@@ -87,6 +88,9 @@ The repository's complete technical specification is maintained as a living LLM-
 | **Domain Model & Entities** | Machine-parseable schemas for Issues, ADRs, Milestones, and Risks. | [Domain Model & Entity Ecosystem](./docs/topic--domain-model.md) |
 | **Setup & Workflows** | Installation matrix, repository onboarding, and session lifecycle. | [Setup, Installation & Workflows](./docs/topic--setup-and-workflow.md) |
 | **LLM-Wiki Architecture** | Andrej Karpathy paradigm, source isolation, and token efficiency. | [LLM-Wiki Architecture & Paradigm](./docs/topic--llm-wiki-architecture.md) |
+| **Runtime Hooks & Gates** | Agent lifecycle interception harness across Antigravity, Claude, and Codex. | [Runtime Lifecycle Hooks & Mechanical Gates](./docs/topic--runtime-hooks-and-gates.md) |
+| **Declarative Gates & Traceability** | Extensible YAML gate engine and bi-directional machine-checked matrix. | [Declarative Gate Engine & Traceability Matrix](./docs/topic--declarative-gates-and-traceability.md) |
+
 ## Automation Skills Reference (Grouped by Workflow Phase)
 
 Along provides **18 singular automation skills** structured across 6 core lifecycle phases:
@@ -116,6 +120,7 @@ Along provides **18 singular automation skills** structured across 6 core lifecy
 | Skill / Command | Purpose |
 | :--- | :--- |
 | **`along-commit`** (`/along-commit`) | Smart ASCII-clean Conventional Committer linked to active `.along/` issue. |
+| **`along hook verify`** (`along hook`) | Verify bi-directional traceability between prose badges and YAML gates. |
 | **`along-graph-check`** (`/along-graph-check`) | Preflight health check and verification for `code-review-graph` MCP server. |
 | **`along-dep-scan`** (`/along-dep-scan`) | Scan declared dependencies for AI instructions into `docs/topic--dependencies.md`. |
 | **`along context-budget`** (`along budget`) | Context budget measurement and regression gate (`--check`, `--json`). |

@@ -113,16 +113,49 @@ def collect_all_entries(repo_root, verbose=False):
                 except (OSError, ValueError, AttributeError, TypeError, frontmatter.FrontmatterError) as exc:
                     _record_skip(rel_path, exc)
 
-    # 3. Architectural Decision Records (.along/DECISIONS.md)
-    decisions_path = os.path.join(along_dir, "DECISIONS.md")
-    if os.path.exists(decisions_path):
-        dec_rel = os.path.relpath(decisions_path, repo_root).replace("\\", "/")
-        try:
-            with open(decisions_path, "r", encoding="utf-8", errors="replace") as p:
-                dec_raw = p.read()
-            entries.extend(parse_decision_entries(dec_raw, rel_path=dec_rel))
-        except (OSError, ValueError, AttributeError, TypeError) as exc:
-            _record_skip(dec_rel, exc)
+    # 3. Architectural Decision Records (.along/DECISIONS/*.md or .along/DECISIONS.md)
+    dec_dir = os.path.join(along_dir, "DECISIONS")
+    dec_files = [f for f in os.listdir(dec_dir) if f.endswith(".md")] if os.path.isdir(dec_dir) else []
+    if dec_files:
+        for f in sorted(dec_files):
+            fp = os.path.join(dec_dir, f)
+            rel_path = os.path.relpath(fp, repo_root).replace("\\", "/")
+            try:
+                with open(fp, "r", encoding="utf-8", errors="replace") as p:
+                    raw = p.read()
+                fm, body = parse_frontmatter(raw)
+                fslug = f[:-3]
+                slug_match = re.match(r"^ADR-\d{4}-\d{2}-\d{2}--(?P<slug>.+)$", fslug)
+                inferred_slug = slug_match.group("slug") if slug_match else fslug
+                dslug = fm.get("slug") or inferred_slug
+                title = fm.get("title")
+                if not title:
+                    first_line = body.strip().splitlines()[0] if body.strip() else ""
+                    h_match = re.match(r"^#+\s+(?:ADR-[^-\s]+--[^\s]+\s+-\s+)?(.*)$", first_line)
+                    title = h_match.group(1).strip() if h_match and h_match.group(1) else dslug.replace("-", " ").title()
+                entries.append({
+                    "category": "decision",
+                    "category_label": "ADR",
+                    "title": f"ADR - {title}",
+                    "slug": dslug,
+                    "type": "adr",
+                    "tags": fm.get("tags") or ["adr", "architecture", "decision"],
+                    "status": fm.get("status") or ("superseded" if re.search(r"superseded\s+by", body, re.IGNORECASE) else "active"),
+                    "file_path": rel_path,
+                    "body": body,
+                })
+            except (OSError, ValueError, AttributeError, TypeError, frontmatter.FrontmatterError) as exc:
+                _record_skip(rel_path, exc)
+    else:
+        decisions_path = os.path.join(along_dir, "DECISIONS.md")
+        if os.path.exists(decisions_path):
+            dec_rel = os.path.relpath(decisions_path, repo_root).replace("\\", "/")
+            try:
+                with open(decisions_path, "r", encoding="utf-8", errors="replace") as p:
+                    dec_raw = p.read()
+                entries.extend(parse_decision_entries(dec_raw, rel_path=dec_rel))
+            except (OSError, ValueError, AttributeError, TypeError) as exc:
+                _record_skip(dec_rel, exc)
 
     # 4. Milestones & Sprints (.along/MILESTONES/*.md)
     ms_dir = os.path.join(along_dir, "MILESTONES")

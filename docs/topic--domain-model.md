@@ -37,7 +37,7 @@ flowchart TD
     end
 
     subgraph GovernanceAndQuality["Governance & Architecture"]
-        ADR["Decisions / ADRs (.along/DECISIONS.md)"]
+        ADR["Decisions / ADRs (.along/DECISIONS/)"]
         CHECKLIST["Checklists (.along/CHECKLISTS/)"]
     end
 
@@ -118,17 +118,31 @@ Detailed problem statement, constraints, and verifiable acceptance criteria.
 
 ---
 
-### 2. Architectural Decision Records (ADRs) (`.along/DECISIONS.md` & `.along/CONSTRAINTS.md`)
-Dual-layer architecture: append-only SSOT in `.along/DECISIONS.md` paired with a compiled `.along/CONSTRAINTS.md` projection.
+### 2. Architectural Decision Records (ADRs) (`.along/DECISIONS/` & Projections)
+Dual-layer architecture: modular records in `.along/DECISIONS/ADR-YYYY-MM-DD--<slug>.md` paired with compiled `.along/DECISIONS.md` (compact summary board) and `.along/CONSTRAINTS.md` (active constraints) projections, alongside `docs/decisions/` for MkDocs search and publishing.
 
-#### Why Single-File Append-Only with Compiled Constraints Projection?
-- **Bounded Session-Start Context**: Agents read only active architectural rules and constraints in `.along/CONSTRAINTS.md` at session start, keeping session-start reads bounded while full history remains in `.along/DECISIONS.md`.
-- **Zero Lifecycle Moving Overhead**: Unlike issues, decisions in `DECISIONS.md` are immutable; they are never renamed or moved.
-- **Merge Collision Prevention**: Each entry uses a decentralized slug header (`## ADR-YYYY-MM-DD--<slug> - <Title>`), allowing `.gitattributes` (`merge=union`) to merge parallel branches cleanly without conflicts.
+#### Why Modular File-Per-ADR with Compiled Projections?
+- **Bounded Session-Start Context**: Agents read only active architectural rules in `.along/CONSTRAINTS.md` at session start, keeping session-start reads bounded.
+- **Git Branch Isolation**: Storing ADRs in distinct files (`.along/DECISIONS/ADR-YYYY-MM-DD--<slug>.md`) eliminates git merge collisions entirely.
+- **Search & MkDocs Integration**: Each ADR is published to `docs/decisions/`, making decisions fully searchable in the static documentation site.
+- **Legacy Compatibility**: Repositories using single-file append-only `DECISIONS.md` continue to work seamlessly.
 
 #### Schema & Entry Format:
 ```markdown
-## ADR-2026-08-31--session-scoped-blackboard-memory - Session-Scoped Blackboard Memory
+---
+title: "Session-Scoped Blackboard Memory"
+date: 2026-08-31
+status: accepted # or: superseded
+superseded_by: <target-slug> # optional
+type: decision
+slug: session-scoped-blackboard-memory
+tags:
+  - architecture
+  - memory
+---
+
+# ADR-2026-08-31--session-scoped-blackboard-memory - Session-Scoped Blackboard Memory
+
 - Date: 2026-08-31
 - Status: accepted (or: superseded by ADR-YYYY-MM-DD--<slug>)
 - Context: In-flight multi-agent coordination data cluttered conversation context.

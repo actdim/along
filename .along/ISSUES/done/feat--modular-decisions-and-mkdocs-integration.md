@@ -2,10 +2,11 @@
 protocol: along
 slug: modular-decisions-and-mkdocs-integration
 type: feat
-status: open
+status: done
 priority: high
 created: 2026-09-10
-updated: 2026-09-10
+updated: 2026-09-11
+completed: 2026-09-11
 agent: antigravity
 tags: [decisions, adr, mkdocs, documentation, entities, refactor]
 milestone: v3.1.0-native-ast-and-cursor-parity
