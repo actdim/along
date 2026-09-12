@@ -163,8 +163,8 @@ comments, key order, and quoting style, which is what makes editing a file the u
 safe. Reads are strict and refuse a block they cannot understand; edits name individual
 keys and leave every other line byte-identical.
 
-See [ADR-2026-09-01--frontmatter-on-ruamel-yaml](../.along/DECISIONS.md) and
-[ADR-2026-09-01--shared-engine-package](../.along/DECISIONS.md).
+See [ADR-2026-09-01--frontmatter-on-ruamel-yaml](./decisions/ADR-2026-09-01--frontmatter-on-ruamel-yaml.md) and
+[ADR-2026-09-01--shared-engine-package](./decisions/ADR-2026-09-01--shared-engine-package.md).
 
 ### The typography rule: what it governs, and who may rewrite
 
@@ -183,7 +183,7 @@ decision that touches a user's disk.
 
 The previous implementation did the opposite of each row and ran that way unattended
 before every commit and every release. See
-[ADR-2026-09-01--typography-rule-scope](../.along/DECISIONS.md).
+[ADR-2026-09-01--typography-rule-scope](./decisions/ADR-2026-09-01--typography-rule-scope.md).
 
 ### Gates precede mutations, and mutations roll back
 
@@ -248,7 +248,7 @@ it is meant to be run, inspected, and re-run. What the two share is the rule tha
 both defects: an operation that writes before it is sure, and cannot be undone, has no
 business being unattended. Which is why the migration is a dry run for every caller that
 is not a human at a terminal, and why installing no longer migrates at all. See
-[ADR-2026-09-01--migration-never-deletes-a-destination](../.along/DECISIONS.md).
+[ADR-2026-09-01--migration-never-deletes-a-destination](./decisions/ADR-2026-09-01--migration-never-deletes-a-destination.md).
 
 ### Three invocation paths, one package
 
@@ -286,7 +286,7 @@ A fifth structural gate enforces clean exception handling (`alongkit.gates.excep
 verifying via AST analysis that zero bare `except:` or swallowed generic `except Exception: pass`
 clauses exist across `scripts/` and `dashboard/`. Internal engine errors and skipped entity files
 are systematically reported and recorded through centralized telemetry in `alongkit.diagnostics`
-(`try_record_incident`). See [ADR-2026-09-09--error-handling-and-failure-visibility](../.along/DECISIONS.md).
+(`try_record_incident`). See [ADR-2026-09-09--error-handling-and-failure-visibility](./decisions/ADR-2026-09-09--error-handling-and-failure-visibility.md).
 
 Two more guard the suite itself
 ([tests/test_zz_hermetic_suite.py](../tests/test_zz_hermetic_suite.py)): the working tree

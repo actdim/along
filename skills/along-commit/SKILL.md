@@ -13,8 +13,9 @@ Routine development committer that enforces clean typography and links Git histo
 2. **Pre-Commit Link Integrity Gate**: Validates relative Markdown links via `along_kb_sync.py --check` (and in strict mode when `--strict` is passed) to prevent broken links.
 3. **Automated Tests Gate**: Executes repository automated tests before staging and committing.
 4. **Pre-Commit Typography Gate**: Reports forbidden non-breaking spaces (NBSP), zero-width characters (ZWSP), curly quotes, and byte order marks by file and line, and aborts the commit. It does not rewrite the working tree unless `--fix-typography` is passed. Files that are not valid UTF-8 are skipped and named, never rewritten.
-5. **Issue Traceability**: Deterministically resolves the active issue from SSOT entity files (`.along/ISSUES/*.md`) via explicit `--issue`, current Git branch, or single `in-progress` issue, appending `(refs #<slug>)` without arbitrary guessing.
-6. **Conventional Commits**: Auto-prefixes message types (`feat:`, `fix:`, `refactor:`, `docs:`, `chore:`).
+5. **Issue Traceability** [gate: commit_issue_binding]: Deterministically resolves the active issue from SSOT entity files (`.along/ISSUES/*.md`) via explicit `--issue`, current Git branch, or single `in-progress` issue, appending `(refs #<slug>)` without arbitrary guessing.
+6. **Conflict-Free Commits** [gate: commit_no_conflict_markers]: Rejects commits containing unresolved git merge conflict markers (`<<<<<<<`).
+7. **Conventional Commits**: Auto-prefixes message types (`feat:`, `fix:`, `refactor:`, `docs:`, `chore:`).
 
 ---
 

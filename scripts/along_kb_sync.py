@@ -889,6 +889,94 @@ def sync_llms_full_txt(target_dir, articles, dry_run=False):
                 print(f"   -> Compiled {rel_disp} ({len(articles)} documents included).")
 
 
+def sync_decisions_to_docs(repo_root: str, check_only: bool = False) -> str:
+    """Export .along/DECISIONS/*.md into docs/decisions/ for MkDocs publication."""
+    along_dir = os.path.join(repo_root, ".along")
+    dec_dir = os.path.join(along_dir, "DECISIONS")
+    docs_dir = os.path.join(repo_root, "docs")
+    if not os.path.isdir(docs_dir) or not os.path.isdir(dec_dir):
+        return ""
+
+    target_dir = os.path.join(docs_dir, "decisions")
+    if not check_only:
+        os.makedirs(target_dir, exist_ok=True)
+
+    from alongkit import entities
+
+    decisions = entities.scan_decisions(repo_root)
+    if not decisions:
+        return ""
+
+    active_adrs = []
+    superseded_adrs = []
+
+    for d in decisions:
+        fname = d.get("filename")
+        if not fname or fname == "DECISIONS.md":
+            continue
+        dest_file = os.path.join(target_dir, fname)
+        if not check_only and d.get("abs_path"):
+            try:
+                content = textio.read_text(d["abs_path"])
+                textio.write_text(dest_file, content)
+            except OSError:
+                pass
+
+        st = (d.get("status") or "").lower()
+        if st in ("accepted", "active", "proposed"):
+            active_adrs.append(d)
+        else:
+            superseded_adrs.append(d)
+
+    active_adrs.sort(key=lambda x: x.get("filename", ""))
+    superseded_adrs.sort(key=lambda x: x.get("filename", ""))
+
+    index_lines = [
+        "---",
+        "protocol: along",
+        "slug: decisions-index",
+        "title: Architectural Decision Records",
+        "type: index",
+        "tags: [adr, architecture, decisions, index]",
+        "---",
+        "",
+        "# Architectural Decision Records (ADRs)",
+        "",
+        "This directory contains the project's Architectural Decision Records.",
+        "Decisions are authored and maintained in `.along/DECISIONS/` and published here as first-class documentation.",
+        "",
+        f"## Active Decisions ({len(active_adrs)})",
+        "",
+    ]
+
+    for d in active_adrs:
+        fname = d.get("filename") or f"{d['slug']}.md"
+        title = d.get("title") or d["slug"]
+        index_lines.append(f"- **[{d['slug']}](./{fname})** - {title}")
+
+    index_lines.extend([
+        "",
+        f"## Superseded & Retired Decisions ({len(superseded_adrs)})",
+        "",
+    ])
+
+    for d in superseded_adrs:
+        fname = d.get("filename") or f"{d['slug']}.md"
+        title = d.get("title") or d["slug"]
+        sup_by = d.get("frontmatter", {}).get("superseded_by")
+        note = f" *(superseded by {sup_by})*" if sup_by else " *(superseded)*"
+        index_lines.append(f"- **[{d['slug']}](./{fname})** - {title}{note}")
+
+    index_lines.append("")
+    index_content = "\n".join(index_lines)
+    index_path = os.path.join(target_dir, "INDEX.md")
+    if not check_only:
+        textio.write_text(index_path, index_content)
+        print(f"   -> Synchronized docs/decisions/ ({len(active_adrs) + len(superseded_adrs)} ADRs published).")
+
+    return target_dir
+
+
 def sync_kb(
     repo_root,
     check_only=False,
@@ -1165,10 +1253,15 @@ def sync_kb(
         rel_agents = repo.safe_relpath(agents_cand, docs_dir).replace('\\', '/')
         index_body_lines.append(f"- [AGENTS.md]({rel_agents}): Active protocol conventions and rules.")
 
-    decisions_cand = os.path.join(repo_root, ".along", "DECISIONS.md")
-    if os.path.exists(decisions_cand):
-        rel_decisions = repo.safe_relpath(decisions_cand, docs_dir).replace('\\', '/')
-        index_body_lines.append(f"- [.along/DECISIONS.md]({rel_decisions}): Architectural Decision Records.")
+    dec_docs_index = os.path.join(docs_dir, "decisions", "INDEX.md")
+    dec_dir_cand = os.path.join(repo_root, ".along", "DECISIONS")
+    if os.path.isfile(dec_docs_index) or os.path.isdir(dec_dir_cand):
+        index_body_lines.append("- [Decisions (ADRs)](./decisions/INDEX.md): Architectural Decision Records.")
+    else:
+        decisions_cand = os.path.join(repo_root, ".along", "DECISIONS.md")
+        if os.path.exists(decisions_cand):
+            rel_decisions = repo.safe_relpath(decisions_cand, docs_dir).replace('\\', '/')
+            index_body_lines.append(f"- [.along/DECISIONS.md]({rel_decisions}): Architectural Decision Records.")
 
     issues_cand = os.path.join(repo_root, ".along", "ISSUES.md")
     if os.path.exists(issues_cand):
@@ -1185,6 +1278,9 @@ def sync_kb(
         with open(index_path, "w", encoding="utf-8", newline="\n") as fp:
             fp.write(full_index)
         print(f"   -> Rebuilt docs/INDEX.md ({len(articles)} articles indexed).")
+
+    # Step: Export modular decisions to docs/decisions/ for MkDocs publication
+    sync_decisions_to_docs(repo_root, check_only=check_only)
 
     # Step: Smart non-destructive synchronization of llms.txt and deterministic llms-full.txt
     sync_llms_txt(repo_root, articles, dry_run=check_only)

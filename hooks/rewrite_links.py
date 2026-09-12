@@ -54,12 +54,13 @@ def resolve_link(target: str, src_path: str) -> str:
     if not path_part:
         return target
 
+    current_dir = os.path.dirname(os.path.join(str(DOCS_DIR), src_path))
+
     # Normalize path syntactically without resolving symlinks
     if path_part.startswith(("./docs/", "docs/")):
         rel_from_root = path_part[7:] if path_part.startswith("./docs/") else path_part[5:]
         norm_full = os.path.normpath(os.path.join(str(DOCS_DIR), rel_from_root))
     else:
-        current_dir = os.path.dirname(os.path.join(str(DOCS_DIR), src_path))
         norm_full = os.path.normpath(os.path.join(current_dir, path_part))
 
     norm_path = Path(norm_full)
@@ -67,13 +68,20 @@ def resolve_link(target: str, src_path: str) -> str:
     # Zone 1: Inside docs/ directory (internal documentation site)
     try:
         rel_to_docs = norm_path.relative_to(DOCS_DIR)
-        rel_str = str(rel_to_docs).replace("\\", "/")
 
-        # Check explicit filename alias (e.g. INDEX.md -> kb-index.md)
-        filename = rel_to_docs.name
+        # Check explicit filename alias (e.g. LICENSE -> topic--license.md)
+        filename = norm_path.name
         if filename in PAGE_ALIASES:
             aliased = PAGE_ALIASES[filename]
-            rel_str = str(rel_to_docs.parent / aliased).replace("\\", "/").lstrip("./")
+            target_path = norm_path.parent / aliased
+        else:
+            target_path = norm_path
+
+        # Relative link from current document to target document
+        rel_to_current = os.path.relpath(str(target_path), current_dir)
+        rel_str = rel_to_current.replace("\\", "/")
+        if not rel_str.startswith((".", "/")):
+            rel_str = f"./{rel_str}"
 
         res = rel_str
         if hash_char:
@@ -102,10 +110,13 @@ def resolve_link(target: str, src_path: str) -> str:
 
         # Check if target is LICENSE at repo root
         if rel_to_repo.name in PAGE_ALIASES:
-            res = PAGE_ALIASES[rel_to_repo.name]
+            target_page = DOCS_DIR / PAGE_ALIASES[rel_to_repo.name]
+            rel_to_current = os.path.relpath(str(target_page), current_dir).replace("\\", "/")
+            if not rel_to_current.startswith((".", "/")):
+                rel_to_current = f"./{rel_to_current}"
             if hash_char:
-                res += f"#{anchor}"
-            return res
+                rel_to_current += f"#{anchor}"
+            return rel_to_current
 
         # Standard file inside this repository
         repo_rel_str = "/".join(parts)

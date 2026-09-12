@@ -31,11 +31,13 @@ Along provides repositories with an isolated, durable, and human-readable memory
 - [AGENTS.md](AGENTS.md): Active ALONG-PROTOCOL conventions and instructions.
 - [docs/INDEX.md](docs/INDEX.md): Central Knowledge Base topic catalog.
 - [docs/topic--architecture.md](docs/topic--architecture.md): System Architecture & Flow.
+- [docs/topic--declarative-gates-and-traceability.md](docs/topic--declarative-gates-and-traceability.md): Declarative Gate Engine & Protocol Traceability Matrix.
 - [docs/topic--dependencies.md](docs/topic--dependencies.md): Dependencies & Submodules AI Documentation and Rules.
 - [docs/topic--domain-model.md](docs/topic--domain-model.md): Domain Model & Entity Ecosystem.
 - [docs/topic--frontend-frameworks.md](docs/topic--frontend-frameworks.md): Frontend Architecture, Dynstruct, MsgMesh & NSwag Integration.
 - [docs/topic--license.md](docs/topic--license.md): License.
 - [docs/topic--llm-wiki-architecture.md](docs/topic--llm-wiki-architecture.md): LLM-Wiki Knowledge Base Architecture & Paradigm.
 - [docs/topic--migrations.md](docs/topic--migrations.md): Protocol & Repository Migrations Guide.
+- [docs/topic--runtime-hooks-and-gates.md](docs/topic--runtime-hooks-and-gates.md): Runtime Lifecycle Hooks & Mechanical Gates.
 - [docs/topic--setup-and-workflow.md](docs/topic--setup-and-workflow.md): Setup & Developer Workflow.
 - [docs/topic--skills-reference.md](docs/topic--skills-reference.md): Skills & Slash Commands Technical Reference.

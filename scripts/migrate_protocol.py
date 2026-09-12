@@ -321,7 +321,7 @@ def step_migrate_v1_5_entity_ecosystem(mig, repo_root, working_dir):
         updated = fields.get('updated') or updates.get('updated') or created
 
         if is_done:
-            if fields.get('status') != 'done':
+            if fields.get('status') not in ('done', 'superseded', 'cancelled', 'duplicate'):
                 updates['status'] = 'done'
             if not fields.get('completed'):
                 updates['completed'] = updated
@@ -892,10 +892,23 @@ def run_migrations(repo_root, dry_run=True, force=False, backup=True, verbose=Fa
     print("==================================================")
 
     # A completed migration is recorded, so a second run is a no-op instead of
-    # re-executing eight steps whose idempotency held only by accident of their
-    # individual guards.
+    # re-executing steps whose idempotency held only by accident of their individual guards.
+    dec_file = os.path.join(along_dir, "DECISIONS.md")
+    dec_dir = os.path.join(along_dir, "DECISIONS")
+    needs_modular_decisions = False
+    if os.path.isfile(dec_file) and not os.path.isdir(dec_dir):
+        try:
+            with open(dec_file, "r", encoding="utf-8", errors="ignore") as _df:
+                _head = _df.read(200)
+            if "<!-- Generated projection from .along/DECISIONS" not in _head:
+                needs_modular_decisions = True
+        except OSError:
+            pass
+
     if (recorded_version == CURRENT_PROTOCOL_VERSION
-            and not os.path.exists(agents_dir) and not force):
+            and not os.path.exists(agents_dir)
+            and not needs_modular_decisions
+            and not force):
         print(f"-> Already at v{CURRENT_PROTOCOL_VERSION}; nothing to do. "
               "Use --force to re-run every step.")
         return 0
@@ -994,6 +1007,10 @@ def run_migrations(repo_root, dry_run=True, force=False, backup=True, verbose=Fa
     if semver.parse(detected_version) < (3, 0, 0) or force:
         print("-> Step 10 [< v3.0.0]: Cleaning up version declarations in docs/ and skills/...")
         step_migrate_v3_0_version_ssot_cleanup(mig, repo_root, detected_version)
+
+    # Step 11: v3.1.0+ Modular Decisions Architecture
+    print("-> Step 11 [v3.1.0+]: Checking modular decisions architecture (.along/DECISIONS/)...")
+    step_migrate_v3_1_modular_decisions(mig, repo_root, detected_version, force=force)
 
     # The state marker is written last, so a run that died halfway is not recorded as
     # a completed migration.
@@ -1141,6 +1158,123 @@ def step_migrate_v3_0_version_ssot_cleanup(mig, repo_root, detected_version="1.0
         print(f"   [OK] {verb} version suffixes from {cleaned_skills} skill manifest(s).")
     else:
         print("   [OK] Skill manifests are clean; no legacy version suffixes found.")
+
+
+def step_migrate_v3_1_modular_decisions(mig, repo_root, detected_version="1.0.0", force=False):
+    """
+    Step 11 [v3.1.0+]:
+    Migrates monolithic .along/DECISIONS.md into individual .along/DECISIONS/ADR-*.md files,
+    recompiles .along/DECISIONS.md as a lean projection board, and syncs docs/decisions/.
+    """
+    along_dir = os.path.join(repo_root, ".along")
+    dec_file = os.path.join(along_dir, "DECISIONS.md")
+    dec_dir = os.path.join(along_dir, "DECISIONS")
+
+    if not os.path.isfile(dec_file):
+        return
+
+    from alongkit import entities, textio
+
+    try:
+        raw = textio.read_text(dec_file)
+    except OSError as e:
+        print(f"   [WARN] Could not read {dec_file}: {e}")
+        return
+
+    is_projection = "<!-- Generated projection from .along/DECISIONS" in raw
+    existing_adrs = [f for f in os.listdir(dec_dir) if f.endswith(".md")] if os.path.isdir(dec_dir) else []
+
+    if is_projection and len(existing_adrs) > 0 and not force:
+        return
+
+    entries = entities.parse_decision_entries(raw)
+    if not entries and os.path.isdir(dec_dir):
+        return
+
+    if not entries:
+        return
+
+    if len(existing_adrs) >= len(entries) and not force:
+        return
+
+    print(f"   -> Migrating {len(entries)} ADR(s) to modular files in .along/DECISIONS/...")
+    if mig.dry_run:
+        print(f"   [DRY-RUN] Would create {len(entries)} ADR files in {dec_dir}")
+        print(f"   [DRY-RUN] Would recompile {dec_file} as a projection board (< 6 KB)")
+        mig.record("modular decisions", dec_dir, f"would migrate {len(entries)} ADRs")
+        return
+
+    mig.ensure_backup()
+    os.makedirs(dec_dir, exist_ok=True)
+
+    migrated_count = 0
+    for e in entries:
+        lines = e["body"].splitlines()
+        heading = lines[0].strip()
+        m = entities.ADR_HEADER_RE.match(heading)
+        key = m.group("key") if m else None
+        title = m.group("title").strip() if m and m.group("title") else ""
+        date_m = re.search(r"-\s*Date:\s*(\d{4}-\d{2}-\d{2})", e["body"])
+        date_str = date_m.group(1) if date_m else "2026-01-01"
+        status_m = re.search(r"-\s*Status:\s*([^\n]+)", e["body"])
+        status_line = status_m.group(1).strip() if status_m else "accepted"
+
+        is_superseded = "superseded" in status_line.lower()
+        status = "superseded" if is_superseded else "accepted"
+        sup_target = None
+        if is_superseded:
+            sup_m = re.search(r"superseded\s+by\s+(?:ADR-\d{4}-\d{2}-\d{2}--)?(?P<target>[A-Za-z0-9._-]+)", status_line, re.IGNORECASE)
+            if sup_m:
+                sup_target = sup_m.group("target")
+
+        if key and "--" in key:
+            slug = key.split("--", 1)[1]
+        else:
+            slug = e["slug"]
+
+        body_lines = lines[1:]
+        while body_lines and not body_lines[0].strip():
+            body_lines.pop(0)
+        rest_body = "\n".join(body_lines)
+
+        fm_lines = [
+            "---",
+            "protocol: along",
+            f"slug: {slug}",
+            f'title: "{title}"',
+            f"date: {date_str}",
+            f"status: {status}",
+        ]
+        if sup_target:
+            fm_lines.append(f"superseded_by: {sup_target}")
+        fm_lines.extend([
+            "tags: [adr, architecture, decision]",
+            "---",
+            "",
+            f"# ADR-{date_str}--{slug} - {title}",
+            "",
+            rest_body,
+            "",
+        ])
+        adr_content = "\n".join(fm_lines)
+        adr_file = os.path.join(dec_dir, f"ADR-{date_str}--{slug}.md")
+        textio.write_text(adr_file, adr_content)
+        migrated_count += 1
+
+    # Recompile projections
+    entities.compile_decisions_board(repo_root)
+    entities.sync_constraints(repo_root)
+
+    # Export to docs/decisions if docs exists
+    try:
+        import along_kb_sync
+        along_kb_sync.sync_decisions_to_docs(repo_root)
+    except (ImportError, AttributeError):
+        pass
+
+    print(f"   [OK] Successfully migrated {migrated_count} ADR(s) to .along/DECISIONS/.")
+    mig.record("modular decisions", dec_dir, f"{migrated_count} ADRs migrated")
+
 
 def main(argv=None):
     parser = argparse.ArgumentParser(

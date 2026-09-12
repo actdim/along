@@ -372,7 +372,7 @@ def engine_files(source_root: str) -> Dict[str, str]:
         if os.path.isfile(path) and name.endswith(".py"):
             pairs[name] = path
     package = os.path.join(scripts_dir, "alongkit")
-    for path in walk_tree(package, (".py",)):
+    for path in walk_tree(package, (".py", ".yaml", ".json")):
         pairs[os.path.join("alongkit", os.path.relpath(path, package))] = path
     return pairs
 

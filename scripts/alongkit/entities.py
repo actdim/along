@@ -51,6 +51,8 @@ RISK_SEVERITIES: tuple = ("critical", "high", "medium", "low")
 RISK_STATUSES: tuple = ("active", "mitigated", "resolved")
 SPIKE_STATUSES: tuple = ("hypothesis", "evaluating", "concluded")
 CHECKLIST_CATEGORIES: tuple = ("pre-commit", "stage-completion", "release", "security")
+DECISION_STATUSES: tuple = ("accepted", "superseded", "retired", "proposed", "rejected", "active")
+ACTIVE_DECISION_STATUSES: tuple = ("accepted", "active")
 
 #: Front-matter keys that must be present on a closed issue.
 DONE_REQUIRED_FIELDS: tuple = ("status", "completed")
@@ -63,6 +65,7 @@ ENTITY_DIRS: Dict[str, str] = {
     "risk": "RISKS",
     "spike": "SPIKES",
     "checklist": "CHECKLISTS",
+    "decision": "DECISIONS",
 }
 
 
@@ -268,6 +271,31 @@ def parse_decision_entries(dec_raw: str,
             "file_path": f"{rel_path}#{github_heading_anchor(heading)}",
             "body": block,
         })
+
+    if not entries:
+        for line in dec_raw.splitlines():
+            line = line.strip()
+            m = re.match(r"^-\s+\[(?P<label>[^\]]+)\]\((?P<link>DECISIONS/(?:ADR-\d{4}-\d{2}-\d{2}--)?(?P<slug>[^.]+)\.md)\)(?:\s+-\s+(?P<extra>.*))?", line)
+            if not m:
+                continue
+            slug = m.group("slug").lower()
+            link = m.group("link")
+            extra = (m.group("extra") or "").strip()
+            label = m.group("label").strip()
+            title = extra if extra else label
+            clean_title = re.sub(r"\s*\*\(superseded.*?\)\*", "", title).strip()
+            status = "superseded" if "superseded" in line.lower() else "active"
+            entries.append({
+                "category": "decision",
+                "category_label": "ADR",
+                "title": f"ADR - {clean_title}",
+                "slug": slug,
+                "type": "adr",
+                "tags": ["adr", "architecture", "decision"],
+                "status": status,
+                "file_path": link,
+                "body": f"# {clean_title}\n\n- Slug: {slug}\n- Status: {status}\n- File: {link}\n",
+            })
     return entries
 
 
@@ -294,39 +322,269 @@ def extract_decision_summary(text: str, max_chars: int = 160) -> str:
     return buf.strip()
 
 
-def sync_constraints(repo_root: str) -> str:
-    """Compile active architectural constraints from .along/DECISIONS.md into .along/CONSTRAINTS.md."""
-    dec_path = os.path.join(repo_root, ".along", "DECISIONS.md")
-    if not os.path.isfile(dec_path):
+def scan_decisions(repo_root: str) -> List[Dict[str, Any]]:
+    """List decisions from .along/DECISIONS/*.md (with fallback to .along/DECISIONS.md).
+
+    Reads front-matter via frontmatter.try_parse() returning typed metadata:
+    slug, title, date, status, tags, file_path, abs_path, filename, body, frontmatter.
+    """
+    from . import frontmatter, repo, textio
+
+    sdir = repo.state_dir(repo_root)
+    dec_dir = os.path.join(sdir, "DECISIONS")
+    decisions: List[Dict[str, Any]] = []
+
+    if os.path.isdir(dec_dir):
+        for fname in sorted(os.listdir(dec_dir)):
+            if not fname.endswith(".md"):
+                continue
+            fpath = os.path.join(dec_dir, fname)
+            if not os.path.isfile(fpath):
+                continue
+            try:
+                content = textio.read_text(fpath)
+            except OSError:
+                continue
+            fm, body, _ = frontmatter.try_parse(content, path=fpath)
+            fslug = fname[:-3]
+            slug_match = re.match(r"^ADR-\d{4}-\d{2}-\d{2}--(?P<slug>.+)$", fslug)
+            inferred_slug = slug_match.group("slug") if slug_match else fslug
+            dslug = fm.get("slug") or inferred_slug
+            title = fm.get("title")
+            if not title:
+                first_line = body.strip().splitlines()[0] if body.strip() else ""
+                h_match = re.match(r"^#+\s+(?:ADR-[^-\s]+--[^\s]+\s+-\s+)?(.*)$", first_line)
+                title = h_match.group(1).strip() if h_match and h_match.group(1) else dslug.replace("-", " ").title()
+            ddate = fm.get("date")
+            if not ddate:
+                d_match = re.search(r"-\s*Date:\s*(\d{4}-\d{2}-\d{2})", body)
+                ddate = d_match.group(1) if d_match else None
+            status = fm.get("status")
+            if not status:
+                status = "superseded" if re.search(r"superseded\s+by", body, re.IGNORECASE) else "accepted"
+
+            c_match = re.search(r"-\s*Context:\s*(.*?)(?=\n-\s*[A-Z]|\Z)", body, re.DOTALL)
+            d_match = re.search(r"-\s*Decision:\s*(.*?)(?=\n-\s*[A-Z]|\Z)", body, re.DOTALL)
+            q_match = re.search(r"-\s*Consequences:\s*(.*?)(?=\n-\s*[A-Z]|\Z)", body, re.DOTALL)
+            sup_by = fm.get("superseded_by")
+            if not sup_by:
+                sup_m = re.search(r"superseded\s+by\s+(?:ADR-\d{4}-\d{2}-\d{2}--)?(?P<target>[A-Za-z0-9._-]+)", body, re.IGNORECASE)
+                if sup_m:
+                    sup_by = sup_m.group("target")
+
+            rel_path = os.path.relpath(fpath, repo_root).replace("\\", "/")
+            decisions.append({
+                "category": "decision",
+                "category_label": "ADR",
+                "slug": dslug,
+                "title": title,
+                "date": ddate,
+                "status": status,
+                "superseded_by": sup_by,
+                "context": c_match.group(1).strip() if c_match else "",
+                "decision": d_match.group(1).strip() if d_match else "",
+                "consequences": q_match.group(1).strip() if q_match else "",
+                "tags": fm.get("tags") or ["adr", "architecture", "decision"],
+                "file_path": rel_path,
+                "abs_path": fpath,
+                "filename": fname,
+                "body": body,
+                "frontmatter": fm,
+            })
+
+    if not decisions:
+        dec_path = os.path.join(sdir, "DECISIONS.md")
+        if os.path.isfile(dec_path):
+            try:
+                raw = textio.read_text(dec_path)
+                entries = parse_decision_entries(raw, rel_path=".along/DECISIONS.md")
+                for e in entries:
+                    raw_slug = e["slug"]
+                    m_slug = re.match(r"^adr-\d{4}-\d{2}-\d{2}--(?P<slug>.+)$", raw_slug, re.IGNORECASE)
+                    clean_slug = m_slug.group("slug") if m_slug else raw_slug
+
+                    c_match = re.search(r"-\s*Context:\s*(.*?)(?=\n-\s*[A-Z]|\Z)", e["body"], re.DOTALL)
+                    d_match = re.search(r"-\s*Decision:\s*(.*?)(?=\n-\s*[A-Z]|\Z)", e["body"], re.DOTALL)
+                    q_match = re.search(r"-\s*Consequences:\s*(.*?)(?=\n-\s*[A-Z]|\Z)", e["body"], re.DOTALL)
+
+                    sup_by = None
+                    if e["status"] == "superseded":
+                        sup_m = re.search(r"superseded\s+by\s+(?:ADR-\d{4}-\d{2}-\d{2}--)?(?P<target>[A-Za-z0-9._-]+)", e["body"], re.IGNORECASE)
+                        if sup_m:
+                            sup_by = sup_m.group("target")
+
+                    decisions.append({
+                        "category": "decision",
+                        "category_label": "ADR",
+                        "slug": clean_slug,
+                        "title": e["title"],
+                        "date": None,
+                        "status": "superseded" if e["status"] == "superseded" else "accepted",
+                        "superseded_by": sup_by,
+                        "context": c_match.group(1).strip() if c_match else "",
+                        "decision": d_match.group(1).strip() if d_match else "",
+                        "consequences": q_match.group(1).strip() if q_match else "",
+                        "tags": e.get("tags", ["adr", "architecture", "decision"]),
+                        "file_path": e["file_path"],
+                        "abs_path": dec_path,
+                        "filename": "DECISIONS.md",
+                        "body": e["body"],
+                        "frontmatter": {},
+                    })
+            except OSError:
+                pass
+
+    return decisions
+
+
+def compile_decisions_board(repo_root: str) -> str:
+    """Compile lightweight .along/DECISIONS.md projection board from .along/DECISIONS/*.md."""
+    from . import repo, textio
+
+    sdir = repo.state_dir(repo_root)
+    dec_dir = os.path.join(sdir, "DECISIONS")
+    if not os.path.isdir(dec_dir):
         return ""
 
-    with open(dec_path, "r", encoding="utf-8") as f:
-        raw = f.read()
+    decisions = scan_decisions(repo_root)
+    if not decisions:
+        return ""
 
-    entries = parse_decision_entries(raw, rel_path="DECISIONS.md")
-    active_entries = [e for e in entries if e.get("status") == "active"]
+    active_adrs = []
+    superseded_adrs = []
+
+    for d in decisions:
+        st = (d.get("status") or "").lower()
+        if st in ("accepted", "active", "proposed"):
+            active_adrs.append(d)
+        else:
+            superseded_adrs.append(d)
+
+    active_adrs.sort(key=lambda x: x.get("filename", ""))
+    superseded_adrs.sort(key=lambda x: x.get("filename", ""))
+
+    lines = [
+        "<!-- Generated projection from .along/DECISIONS/*.md. Do not edit by hand. Run: along decision sync -->",
+        "# Decisions (ADR Projection Board)",
+        "",
+        "Compiled index of Architectural Decision Records stored in `.along/DECISIONS/`.",
+        "",
+        f"## Active Decisions ({len(active_adrs)})",
+        "",
+    ]
+
+    for d in active_adrs:
+        fname = d.get("filename") or f"{d['slug']}.md"
+        title = d.get("title") or d["slug"]
+        lines.append(f"- [{title}](DECISIONS/{fname})")
+
+    lines.extend([
+        "",
+        f"## Superseded & Retired Decisions ({len(superseded_adrs)})",
+        "",
+    ])
+
+    for d in superseded_adrs:
+        fname = d.get("filename") or f"{d['slug']}.md"
+        title = d.get("title") or d["slug"]
+        sup_by = d.get("frontmatter", {}).get("superseded_by")
+        note = f" *(superseded by {sup_by})*" if sup_by else " *(superseded)*"
+        lines.append(f"- [{title}](DECISIONS/{fname}){note}")
+
+    lines.append("")
+    content = "\n".join(lines)
+    board_path = os.path.join(sdir, "DECISIONS.md")
+    textio.write_text(board_path, content)
+    return board_path
+
+
+def create_decision_file(repo_root: str,
+                         slug: str,
+                         title: str,
+                         context: str,
+                         decision: str,
+                         consequences: str,
+                         day: Optional[str] = None,
+                         status: str = "accepted",
+                         tags: Optional[List[str]] = None) -> str:
+    """Create a new modular ADR file under .along/DECISIONS/ADR-YYYY-MM-DD--<slug>.md."""
+    from . import repo, textio
+
+    day = day or today_iso()
+    sdir = repo.state_dir(repo_root)
+    dec_dir = os.path.join(sdir, "DECISIONS")
+    os.makedirs(dec_dir, exist_ok=True)
+
+    filename = f"ADR-{day}--{slug}.md"
+    target_path = os.path.join(dec_dir, filename)
+
+    tags = tags or ["adr", "architecture", "decision"]
+    tags_yaml = "[" + ", ".join(tags) + "]"
+
+    content = (
+        f"---\n"
+        f"protocol: along\n"
+        f"slug: {slug}\n"
+        f"type: decision\n"
+        f"title: \"{title}\"\n"
+        f"date: {day}\n"
+        f"status: {status}\n"
+        f"tags: {tags_yaml}\n"
+        f"---\n\n"
+        f"# ADR-{day}--{slug} - {title}\n\n"
+        f"- Date: {day}\n"
+        f"- Status: {status}\n"
+        f"- Context: {context}\n"
+        f"- Decision: {decision}\n"
+        f"- Consequences: {consequences}\n"
+    )
+    textio.write_text(target_path, content)
+    return target_path
+
+
+def sync_constraints(repo_root: str) -> str:
+    """Compile active architectural constraints into .along/CONSTRAINTS.md."""
+    from . import repo, textio
+
+    sdir = repo.state_dir(repo_root)
+    dec_dir = os.path.join(sdir, "DECISIONS")
+    dec_path = os.path.join(sdir, "DECISIONS.md")
+    if not os.path.isdir(dec_dir) and not os.path.isfile(dec_path):
+        return ""
+
+    decisions = scan_decisions(repo_root)
+    if not decisions:
+        return ""
+
+    active_entries = [e for e in decisions if (e.get("status") or "").lower() in ("accepted", "active")]
 
     blocks = [
-        "<!-- Generated projection from .along/DECISIONS.md. Do not edit by hand. Run: along decision sync -->",
+        "<!-- Generated projection from .along/DECISIONS. Do not edit by hand. Run: along decision sync -->",
         "# Active Architectural Constraints",
         "",
-        "This document compiles active architectural rules and constraints from `.along/DECISIONS.md`.",
-        "Detailed context, history, and superseded ADRs remain in the append-only `.along/DECISIONS.md` log.",
+        "This document compiles active architectural rules and constraints from `.along/DECISIONS/`.",
+        "Detailed context, history, and superseded ADRs remain in individual decision records.",
         "",
     ]
 
     for e in active_entries:
-        m = re.search(r"-\s*Decision:\s*(.*?)(?=\n-\s*Consequences:|\n-\s*Context:|\Z)", e["body"], re.DOTALL)
+        m = re.search(r"-\s*Decision:\s*(.*?)(?=\n-\s*Consequences:|\n-\s*Context:|\Z)", e.get("body", ""), re.DOTALL)
         decision_text = m.group(1).strip() if m else ""
         summary = extract_decision_summary(decision_text, max_chars=160)
         t_parts = e.get("title", "").split(" - ", 1)
         short_title = t_parts[1] if len(t_parts) > 1 else t_parts[0]
-        blocks.append(f"- **[{short_title}]({e['file_path']})**: {summary}")
+        fname = e.get("filename")
+        if fname and fname != "DECISIONS.md":
+            link_target = f"DECISIONS/{fname}"
+        else:
+            link_target = e.get("file_path", "DECISIONS.md")
+            if link_target.startswith(".along/"):
+                link_target = link_target[len(".along/"):]
+        blocks.append(f"- **[{short_title}]({link_target})**: {summary}")
 
     content = "\n".join(blocks).rstrip() + "\n"
-    constraints_file = os.path.join(repo_root, ".along", "CONSTRAINTS.md")
-    with open(constraints_file, "w", encoding="utf-8", newline="\n") as f:
-        f.write(content)
+    constraints_file = os.path.join(sdir, "CONSTRAINTS.md")
+    textio.write_text(constraints_file, content)
     return constraints_file
 
 
@@ -738,7 +996,7 @@ def validate_entities(repo_root: str) -> Dict[str, Any]:
         known_entity_keys.add(f"milestone--{m['slug']}")
 
     # Scan auxiliary entities to build full reference registry
-    for kind, dirname in (("risk", "RISKS"), ("spike", "SPIKES"), ("checklist", "CHECKLISTS")):
+    for kind, dirname in (("risk", "RISKS"), ("spike", "SPIKES"), ("checklist", "CHECKLISTS"), ("decision", "DECISIONS")):
         edir = os.path.join(sdir, dirname)
         if os.path.isdir(edir):
             for fname in os.listdir(edir):
@@ -746,6 +1004,10 @@ def validate_entities(repo_root: str) -> Dict[str, Any]:
                     slug = fname[:-3]
                     known_entity_keys.add(slug)
                     known_entity_keys.add(f"{kind}--{slug}")
+                    if slug.startswith("ADR-") and "--" in slug:
+                        bare = slug.split("--", 1)[1]
+                        known_entity_keys.add(bare)
+                        known_entity_keys.add(f"decision--{bare}")
 
     # 1. Validate Issues
     for iss in all_issues:
@@ -972,6 +1234,44 @@ def validate_entities(repo_root: str) -> Dict[str, Any]:
                         for item in items:
                             if item and not _resolve_ref(item, known_issue_keys):
                                 errors.append((rel, f"dangling {key} reference: '{item}'"))
+
+    # 5. Validate Decisions (.along/DECISIONS/*.md)
+    dec_dir = os.path.join(sdir, "DECISIONS")
+    if os.path.isdir(dec_dir):
+        for fname in sorted(os.listdir(dec_dir)):
+            if not fname.endswith(".md"):
+                continue
+            scanned += 1
+            fpath = os.path.join(dec_dir, fname)
+            rel = os.path.relpath(fpath, repo_root)
+            try:
+                c = textio.read_text(fpath)
+                fm, _, _ = frontmatter.try_parse(c, path=fpath)
+            except OSError:
+                continue
+            if not fm:
+                errors.append((rel, "missing or unparseable YAML front-matter"))
+                continue
+            if fm.get("protocol") != "along":
+                errors.append((rel, f"missing or invalid protocol: '{fm.get('protocol')}' (expected 'along')"))
+            dslug = fm.get("slug")
+            if not dslug:
+                errors.append((rel, "missing mandatory field: 'slug'"))
+            if not fm.get("title"):
+                errors.append((rel, "missing mandatory field: 'title'"))
+            ddate = fm.get("date")
+            if not ddate or not is_iso_date(ddate):
+                errors.append((rel, f"missing or invalid date: '{ddate}' (expected YYYY-MM-DD)"))
+            dstatus = fm.get("status")
+            if not dstatus:
+                errors.append((rel, "missing mandatory field: 'status'"))
+            elif dstatus not in DECISION_STATUSES and not str(dstatus).startswith("superseded"):
+                errors.append((rel, f"invalid status: '{dstatus}' (allowed: {', '.join(DECISION_STATUSES)})"))
+
+            sup_by = fm.get("superseded_by")
+            if sup_by and str(sup_by).strip():
+                if not _resolve_ref(sup_by, known_entity_keys):
+                    errors.append((rel, f"dangling superseded_by reference: '{sup_by}'"))
 
     return {
         "clean": len(errors) == 0,

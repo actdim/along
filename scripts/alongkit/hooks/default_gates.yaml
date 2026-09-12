@@ -1,0 +1,127 @@
+# Central Declarative Gate Catalogue for Along Protocol
+# Governed by alongkit.hooks.declarative and verified via [gate: <id>] anchors.
+version: 1
+
+gates:
+  - id: commit_issue_binding
+    title: "Git Commit Issue Slug Binding"
+    description: "Enforces issue slug binding [type--slug] in commit messages"
+    event: PreToolUse
+    tools: [run_command, execute_command, bash, shell]
+    match_args:
+      CommandLine: '^git\s+commit'
+    rule:
+      type: regex_match
+      field: CommandLine
+      pattern: '\[[a-z]+--[a-z0-9-]+\]'
+      error: "Git commit rejected by [gate: commit-issue-binding]: Commit message must include an active issue slug in brackets (e.g. '[feat--my-feature]'). Use /along-commit."
+
+  - id: commit_no_conflict_markers
+    title: "Git Commit Merge Conflict Protection"
+    description: "Blocks commits with unresolved git conflict markers"
+    event: PreToolUse
+    tools: [run_command, execute_command, bash, shell]
+    match_args:
+      CommandLine: '^git\s+commit'
+    rule:
+      type: regex_forbidden
+      field: CommandLine
+      pattern: '<<<<<<<|=======|>>>>>>>'
+      error: "Git commit rejected by [gate: commit-no-conflict-markers]: Unresolved git merge conflict markers detected in commit arguments."
+
+  - id: anti_stub_injection
+    title: "Anti-Stub Truncation Protection"
+    description: "Blocks lazy truncation skeletons and placeholder comments"
+    event: PreToolUse
+    tools: [write_to_file, write_file, replace_file_content, edit_file, patch_file, create_file]
+    rule:
+      type: regex_forbidden
+      field: [CodeContent, ReplacementContent, content]
+      pattern: '(?i)(//\s*\.\.\.\s*(rest|existing|code|here)|#\s*\.\.\.\s*(rest|existing|code|here)|<!--\s*\.\.\.\s*(rest|existing|code|here)|/\*\s*\.\.\.\s*(rest|existing|code|here)\s*\*/)'
+      error: "Write rejected by [gate: anti-stub-injection]: Truncation placeholder or code skeleton stub detected. Supply complete implementation."
+
+  - id: cli_safety
+    title: "Destructive Shell Command Protection"
+    description: "Blocks destructive shell commands, heredocs, and inline writers"
+    event: PreToolUse
+    tools: [run_command, execute_command, bash, shell]
+    rule:
+      type: predicate
+      handler: alongkit.hooks.predicates.check_cli_safety
+      error: "CLI Safety Gate Violation [gate: cli-safety]."
+
+  - id: projection_protection
+    title: "Projection View Protection"
+    description: "Blocks direct edits to compiled projections (.along/ISSUES.md, docs/INDEX.md)"
+    event: PreToolUse
+    tools: [write_to_file, write_file, replace_file_content, edit_file, patch_file, create_file]
+    rule:
+      type: predicate
+      handler: alongkit.hooks.predicates.check_projection_protection
+      error: "Manual edit to compiled projection rejected by [gate: projection-protection]."
+
+  - id: typography
+    title: "Clean ASCII Typography"
+    description: "Enforces clean ASCII characters and bans non-ASCII dashes, quotes, ellipsis, and invisible spaces"
+    event: PreToolUse
+    tools: [write_to_file, write_file, replace_file_content, edit_file, patch_file, create_file]
+    rule:
+      type: predicate
+      handler: alongkit.hooks.predicates.check_typography
+      error: "Typography violation detected by [gate: clean-ascii-typography]."
+
+  - id: require_active_issue
+    title: "Mandatory Issue Anchoring"
+    description: "Blocks modifying repository source code without an in-progress issue"
+    event: PreToolUse
+    tools: [write_to_file, write_file, replace_file_content, edit_file, patch_file, create_file]
+    rule:
+      type: predicate
+      handler: alongkit.hooks.predicates.check_active_issue
+      exclude_paths:
+        - '.along/ISSUES/**'
+        - '.along/.session/**'
+        - '.along/diagnostics/**'
+        - '.along/SESSIONS/**'
+        - '.along/DECISIONS/**'
+        - '.along/HISTORY.md'
+        - 'docs/**'
+        - 'CHANGELOG.md'
+      error: "Code edit rejected by [gate: require-active-issue]: Modifying repository source code requires an active issue with 'status: in-progress' in .along/ISSUES/. Create an issue first."
+
+  - id: test_before_stop
+    title: "Test Execution Before Turn Termination"
+    description: "Blocks turn completion if source code was changed without running tests"
+    event: Stop
+    rule:
+      type: predicate
+      handler: alongkit.hooks.predicates.check_test_before_stop
+      error: "Turn completion rejected by [gate: test-before-stop]: Source files were modified, but automated tests have not been executed afterward. Run tests via '/along-test' or 'python .along/scripts/test.py'."
+
+  - id: wrap_before_stop
+    title: "Session Wrap Before Turn Termination"
+    description: "Blocks turn completion if an issue was marked done without recording a session log"
+    event: Stop
+    rule:
+      type: predicate
+      handler: alongkit.hooks.predicates.check_wrap_before_stop
+      error: "Turn completion rejected by [gate: wrap-before-stop]: An issue was completed or moved to 'done/', but no session log exists in '.along/SESSIONS/' for today. Run '/along-wrap' before ending."
+
+  - id: projection_sync_before_stop
+    title: "Projection Synchronization Before Turn Termination"
+    description: "Blocks turn completion if atomic issues or docs changed without projection recompilation"
+    event: Stop
+    rule:
+      type: predicate
+      handler: alongkit.hooks.predicates.check_projection_sync_before_stop
+      error: "Turn completion rejected by [gate: projection-sync-before-stop]: Atomic issues or docs were modified without recompiling projections. Run 'along issue sync' or 'along kb sync'."
+
+  - id: subproject_boundary
+    title: "Subproject Localization Boundary"
+    description: "Blocks creating .along entities at workspace root when working inside subproject"
+    event: PreToolUse
+    tools: [write_to_file, write_file, replace_file_content, edit_file, patch_file, create_file]
+    rule:
+      type: predicate
+      handler: alongkit.hooks.predicates.check_subproject_boundary
+      error: "Subproject boundary violation detected by [gate: subproject-boundary]: Entities must be localized in the nearest subproject .along/ directory, not root."

@@ -48,6 +48,7 @@ theme:
 nav:
   - Home: index.md
   - Knowledge Base: INDEX.md
+  - Decisions: decisions/INDEX.md
   - Architecture: topic--architecture.md
   - Domain Model: topic--domain-model.md
   - Skills Reference: topic--skills-reference.md

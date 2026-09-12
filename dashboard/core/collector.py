@@ -284,6 +284,40 @@ class EntityCollector:
         self.sessions.sort(key=lambda s: s.date or "", reverse=True)
 
     def _collect_decisions(self):
+        dec_dir = self.agents_dir / "DECISIONS"
+        if dec_dir.exists() and dec_dir.is_dir():
+            dec_files = sorted([f for f in dec_dir.iterdir() if f.name.endswith(".md")])
+            if dec_files:
+                num = 1
+                for f in dec_files:
+                    try:
+                        content = f.read_text(encoding="utf-8", errors="replace")
+                        fm, body = _frontmatter.parse(content, path=f)
+                        fslug = f.stem
+                        slug_match = re.match(r"^ADR-\d{4}-\d{2}-\d{2}--(?P<slug>.+)$", fslug)
+                        dslug = fm.get("slug") or (slug_match.group("slug") if slug_match else fslug)
+                        title_str = fm.get("title") or dslug.replace("-", " ").title()
+                        date_str = fm.get("date")
+                        raw_status = str(fm.get("status") or "accepted")
+                        status = "Superseded" if "superseded" in raw_status.lower() or "superseded by" in body.lower() else "Accepted"
+                        rel_file_path = str(f.relative_to(self.repo_root)).replace("\\", "/")
+
+                        decision = DecisionSchema(
+                            id=f"ADR-{num:03d}",
+                            slug=str(dslug),
+                            number=num,
+                            title=title_str.strip(),
+                            date=str(date_str) if date_str else None,
+                            status=status,
+                            file_path=rel_file_path,
+                            raw_markdown=body,
+                        )
+                        self.decisions.append(decision)
+                        num += 1
+                    except (OSError, ValueError, AttributeError, TypeError, _frontmatter.FrontmatterError) as exc:
+                        self.skipped_entities.append((str(f), str(exc)))
+                return
+
         dec_file = self.agents_dir / "DECISIONS.md"
         if not dec_file.exists():
             return

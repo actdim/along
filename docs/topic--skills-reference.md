@@ -202,7 +202,7 @@ flowchart TD
 ### `along-commit`
 - **What it is**: Smart, ASCII-clean Conventional Committer. Validates typography, binds commit messages to active `.along/` issues, and creates clean Git commits.
 - **Architectural Rationale**:
-  - *Typography & Non-ASCII Gate*: Scans repository text to block forbidden typographic characters (em-dash, smart curly quotes, non-breaking spaces, byte order marks) that corrupt Windows shell execution or AST parsers. It reports findings by file and line and aborts; it does not rewrite the tree unless `--fix-typography` is passed, and it never rewrites a file that is not valid UTF-8. See [ADR-2026-09-01--typography-rule-scope](../.along/DECISIONS.md).
+  - *Typography & Non-ASCII Gate*: Scans repository text to block forbidden typographic characters (em-dash, smart curly quotes, non-breaking spaces, byte order marks) that corrupt Windows shell execution or AST parsers. It reports findings by file and line and aborts; it does not rewrite the tree unless `--fix-typography` is passed, and it never rewrites a file that is not valid UTF-8. See [ADR-2026-09-01--typography-rule-scope](./decisions/ADR-2026-09-01--typography-rule-scope.md).
   - *Issue Traceability*: Enforces issue slug references (`(refs #<slug>)` or `[<slug>]`) for 100% auditability.
 - **Invocation Triggers**:
   - *Explicit*: `/along-commit -i <slug> -m "<message>" [--fix-typography]`, `along commit` (fallback: `python ~/.along/bin/along_exec.py commit`).
