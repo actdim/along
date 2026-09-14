@@ -2,6 +2,10 @@
 
 All notable changes to this project, newest first.
 
+## v3.2.0 - 2026-09-14
+
+- feat(runtime): worktree workspace isolation, runtime hooks, and automated lifecycle gates (refs #runtime-worktree-isolation)
+
 ## v3.1.0 - 2026-09-13
 
 - feat: implement declarative gate engine and protocol traceability matrix [feat--declarative-gates-and-protocol-traceability]
