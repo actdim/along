@@ -88,15 +88,16 @@ flowchart TD
 ---
 
 ### `along-update`
-- **What it is**: Automated protocol and skill synchronizer. Checks and pulls latest Along skills, migrations, and protocol definitions across user home directories (`~/.claude`, `~/.codex`, `~/.gemini`) and local repositories.
+- **What it is**: Automated protocol, skill, and runtime hook synchronizer. Checks and pulls latest Along skills, migrations, and protocol definitions across user home directories (`~/.claude`, `~/.codex`, `~/.gemini`) and local repositories, and automatically reconciles runtime lifecycle hooks across supported agent environments.
 - **Architectural Rationale**:
   - Eliminates skill drift across multiple developer machines.
   - Automatically executes retroactive migration scripts (`scripts/migrate_protocol.py`) to upgrade legacy front-matter schemas and directory layouts without data loss.
+  - Automatically scaffolds and updates runtime lifecycle hooks (`.agents/hooks.json`, `.claude/settings.json`, `.codex/hooks.json`), guaranteeing that mechanical quality gates and typography invariants are enforced across all active agent tools without manual setup.
 - **Invocation Triggers**:
   - *Explicit*: `/along-update`, `along update` (fallback: `python ~/.along/bin/along_exec.py update`).
   - *Semantic / Automatic*: Triggered on protocol version mismatch, outdated skills warnings, or prompts like *"Upgrade Along protocol"*, *"Update agents"*.
-- **Entities Operated On**: Global skill folders (`~/.gemini/config/skills/along-*`), target repository `AGENTS.md`, `scripts/`.
-- **Ecosystem Chaining**: Runs `migrate_protocol.py` and triggers `/along-kb-sync --strict` to validate repository link integrity after updates.
+- **Entities Operated On**: Global skill folders (`~/.gemini/config/skills/along-*`), target repository `AGENTS.md`, `scripts/`, and runtime hook configurations (`.claude/`, `.codex/`, `.agents/`).
+- **Ecosystem Chaining**: Runs `migrate_protocol.py`, reconciles runtime hooks, and triggers `/along-kb-sync --strict` to validate repository link integrity after updates.
 
 ---
 

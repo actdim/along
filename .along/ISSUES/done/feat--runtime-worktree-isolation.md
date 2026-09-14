@@ -2,10 +2,11 @@
 protocol: along
 slug: runtime-worktree-isolation
 type: feat
-status: open
+status: done
 priority: medium
 created: 2026-09-06
-updated: 2026-09-07
+updated: 2026-09-13
+completed: 2026-09-13
 agent: antigravity
 tags: [git, worktree, runtime, along-team, isolation]
 milestone: v4.0.0-runtime-gates-and-worktree-isolation
@@ -92,17 +93,17 @@ Executing complex software development tasks or autonomous objectives (via `/alo
 
 ## Acceptance Criteria
 
-- [ ] Audit workspace and worktree isolation capabilities across target runtimes (Google Antigravity `Workspace: 'share'|'branch'`, Claude Code `--worktree`, OpenAI Codex, OpenCode).
-- [ ] Record an Architectural Decision Record in `.along/DECISIONS.md` defining the `--worktree` flag, runtime capability matrix, environment readiness contract, and fail-fast policy.
-- [ ] Update `along-team` (and `/goal` specification):
+- [x] Audit workspace and worktree isolation capabilities across target runtimes (Google Antigravity `Workspace: 'share'|'branch'`, Claude Code `--worktree`, OpenAI Codex, OpenCode).
+- [x] Record an Architectural Decision Record in `.along/DECISIONS.md` defining the `--worktree` flag, runtime capability matrix, environment readiness contract, and fail-fast policy.
+- [x] Update `along-team` (and `/goal` specification):
   - Document `--worktree` flag and semantic intent routing rules.
   - Implement false-positive trigger protections.
   - Implement Phase 0 (Supervisor) runtime capability verification.
   - Enforce strict fail-fast halt when worktree isolation with environment readiness is unsupported.
   - Add workspace mode reporting to the Gate Execution Manifest.
-- [ ] Define dependency safety boundaries (`node_modules`, `.venv`) in isolated trees.
-- [ ] Implement `.along/` state preservation protocol to prevent loss of session logs during worktree teardown.
-- [ ] Test complete worktree lifecycle (provisioning, environment linking, isolated test execution, merge, teardown) under Windows filesystem locking constraints.
+- [x] Define dependency safety boundaries (`node_modules`, `.venv`) in isolated trees.
+- [x] Implement `.along/` state preservation protocol to prevent loss of session logs during worktree teardown.
+- [x] Test complete worktree lifecycle (provisioning, environment linking, isolated test execution, merge, teardown) under Windows filesystem locking constraints.
 
 
 

@@ -20,6 +20,7 @@ meta-test in `tests/test_zz_hermetic_suite.py`.
 import os
 import sys
 import glob
+import json
 import re
 import unittest
 import subprocess
@@ -2373,6 +2374,56 @@ class TestAlongSkillsAndScripts(unittest.TestCase):
         with open(team_skill, "r", encoding="utf-8") as f:
             t_content = f.read()
         self.assertIn("Execution Mode", t_content)
+
+    def test_34_along_update_installs_runtime_hooks(self):
+        """Verify that along_update.py automatically installs and reconciles runtime lifecycle hooks."""
+        update_script = os.path.join(REPO_ROOT, "scripts", "along_update.py")
+        self.assertTrue(os.path.exists(update_script))
+
+        with hermetic.repo_fixture(prefix="along-update-hooks-") as fixture:
+            claude_settings = os.path.join(fixture, ".claude", "settings.json")
+            codex_hooks = os.path.join(fixture, ".codex", "hooks.json")
+            agents_hooks = os.path.join(fixture, ".agents", "hooks.json")
+
+            # 1. Test --dry-run: must not create hook files
+            res_dry = run_engine([sys.executable, update_script, fixture, "--local-only", "--dry-run"])
+            self.assertEqual(res_dry.returncode, 0, f"dry-run failed:\n{res_dry.stderr}")
+            self.assertFalse(os.path.exists(claude_settings), "Dry-run must not create .claude/settings.json")
+            self.assertFalse(os.path.exists(codex_hooks), "Dry-run must not create .codex/hooks.json")
+
+            # 2. Test --no-hooks: must update protocol but skip hook installation
+            res_nohooks = run_engine([sys.executable, update_script, fixture, "--local-only", "--no-hooks"])
+            self.assertEqual(res_nohooks.returncode, 0, f"no-hooks failed:\n{res_nohooks.stderr}")
+            self.assertFalse(os.path.exists(claude_settings), "--no-hooks must skip .claude/settings.json")
+            self.assertFalse(os.path.exists(codex_hooks), "--no-hooks must skip .codex/hooks.json")
+
+            # 3. Standard update: must automatically scaffold hooks for all supported runtimes
+            res_real = run_engine([sys.executable, update_script, fixture, "--local-only"])
+            self.assertEqual(res_real.returncode, 0, f"real update failed:\n{res_real.stderr}\n{res_real.stdout}")
+            self.assertTrue(os.path.exists(claude_settings), "Must create .claude/settings.json")
+            self.assertTrue(os.path.exists(codex_hooks), "Must create .codex/hooks.json")
+            self.assertTrue(os.path.exists(agents_hooks), "Must create .agents/hooks.json")
+
+            with open(claude_settings, "r", encoding="utf-8") as f:
+                c_data = json.load(f)
+            self.assertIn("hooks", c_data)
+            self.assertIn("PreToolUse", c_data["hooks"])
+            self.assertIn("along_hook.py", str(c_data["hooks"]["PreToolUse"]))
+
+            with open(codex_hooks, "r", encoding="utf-8") as f:
+                cx_data = json.load(f)
+            self.assertIn("hooks", cx_data)
+            self.assertIn("PreToolUse", cx_data["hooks"])
+            self.assertIn("along_hook.py", str(cx_data["hooks"]["PreToolUse"]))
+
+            with open(agents_hooks, "r", encoding="utf-8") as f:
+                ag_data = json.load(f)
+            self.assertIn("along-runtime-gates", ag_data)
+
+            # 4. Idempotency: second run reports already up to date without error
+            res_second = run_engine([sys.executable, update_script, fixture, "--local-only"])
+            self.assertEqual(res_second.returncode, 0)
+            self.assertIn("already up to date", res_second.stdout)
 
 
 if __name__ == "__main__":

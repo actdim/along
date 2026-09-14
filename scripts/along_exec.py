@@ -120,6 +120,12 @@ Entity Management Commands:
   scratch state  <slug> [--json]
   scratch update <slug> [--step N] [--step-status status] [--inc-retry] [--status status]
   scratch purge  <slug>
+  worktree create <slug> [--branch <name>] [--base-ref <ref>]
+  worktree remove <slug> [--force] [--keep-branch]
+  worktree merge  <slug> [--squash]
+  worktree list   [--json]
+  worktree status [--json]
+  worktree gc
   rules attach   Detect project stack and attach relevant engineering rule packs
   budget         Measure context footprint and check token budgets (--json, --check)
   context-budget Measure context footprint and check token budgets (--json, --check)
@@ -888,6 +894,114 @@ def handle_scratch_command(repo_root: str, args: List[str]):
         sys.exit(1)
 
 
+def handle_worktree_command(repo_root: str, args: List[str]):
+    if not args or args[0] in ("-h", "--help", "help"):
+        print("Usage: along worktree [create|remove|merge|list|status|gc] [args...]")
+        print("Subcommands:")
+        print("  create <slug> [--branch <name>] [--base-ref <ref>]")
+        print("  remove <slug> [--force] [--keep-branch]")
+        print("  merge  <slug> [--squash]")
+        print("  list   [--json]")
+        print("  status [--json]")
+        print("  gc")
+        sys.exit(0)
+
+    subcmd = args[0].lower().strip()
+    sub_args = args[1:]
+
+    from alongkit import worktree
+
+    if subcmd == "create":
+        if not sub_args:
+            print("[Error] Usage: along worktree create <slug> [--branch <name>] [--base-ref <ref>]", file=sys.stderr)
+            sys.exit(1)
+        slug = sub_args[0]
+        branch = None
+        base_ref = None
+        i = 1
+        while i < len(sub_args):
+            if sub_args[i] == "--branch" and i + 1 < len(sub_args):
+                branch = sub_args[i + 1]
+                i += 2
+            elif sub_args[i] == "--base-ref" and i + 1 < len(sub_args):
+                base_ref = sub_args[i + 1]
+                i += 2
+            else:
+                i += 1
+        try:
+            info = worktree.create_worktree(repo_root, slug, branch=branch, base_ref=base_ref)
+            print(f"-> Created isolated worktree: {info.path}")
+            print(f"   Branch: {info.branch}")
+            if info.linked_dirs:
+                print(f"   Linked dependencies: {', '.join(info.linked_dirs)}")
+            if info.copied_files:
+                print(f"   Propagated configs: {', '.join(info.copied_files)}")
+            sys.exit(0)
+        except RuntimeError as exc:
+            print(f"[Error] Worktree creation failed: {exc}", file=sys.stderr)
+            sys.exit(1)
+
+    elif subcmd == "remove":
+        if not sub_args:
+            print("[Error] Usage: along worktree remove <slug> [--force] [--keep-branch]", file=sys.stderr)
+            sys.exit(1)
+        slug = sub_args[0]
+        force = "--force" in sub_args or "-f" in sub_args
+        keep_branch = "--keep-branch" in sub_args
+        removed = worktree.remove_worktree(repo_root, slug, force=force, delete_branch=not keep_branch)
+        if removed:
+            print(f"-> Successfully removed worktree for '{slug}'.")
+            sys.exit(0)
+        else:
+            print(f"[Warning] Worktree for '{slug}' was unlinked from Git but directory removal is deferred due to active file locks.", file=sys.stderr)
+            print("Run 'along worktree gc' once open handles are closed.", file=sys.stderr)
+            sys.exit(0)
+
+    elif subcmd == "merge":
+        if not sub_args:
+            print("[Error] Usage: along worktree merge <slug> [--squash]", file=sys.stderr)
+            sys.exit(1)
+        slug = sub_args[0]
+        strategy = "squash" if "--squash" in sub_args or "-s" in sub_args or len(sub_args) == 1 else "ff"
+        res = worktree.merge_worktree(repo_root, slug, strategy=strategy)
+        if res.ok:
+            print(f"-> Successfully merged worktree branch 'along/{slug}' into current branch.")
+            if res.stdout.strip():
+                print(res.stdout.strip())
+            sys.exit(0)
+        else:
+            print(f"[Error] Worktree merge failed: {res.stderr or res.stdout}", file=sys.stderr)
+            sys.exit(1)
+
+    elif subcmd in ("list", "status"):
+        as_json = "--json" in sub_args
+        items = worktree.list_worktrees(repo_root)
+        if as_json:
+            import json
+            print(json.dumps(items, indent=2))
+        else:
+            if not items:
+                print("No active Along worktrees.")
+            else:
+                print(f"Active Along Worktrees ({len(items)}):")
+                for it in items:
+                    status_str = "ready" if it.get("is_git_registered") else "unregistered"
+                    print(f"  - {it['slug']} [{it['branch']}] ({status_str})")
+                    print(f"    Path: {it['path']}")
+                    if it.get("linked_dirs"):
+                        print(f"    Linked: {', '.join(it['linked_dirs'])}")
+        sys.exit(0)
+
+    elif subcmd == "gc":
+        cleaned = worktree.gc_worktrees(repo_root)
+        print(f"-> Pruned worktrees and cleaned {cleaned} deferred items.")
+        sys.exit(0)
+
+    else:
+        print(f"[Error] Unknown worktree subcommand: {subcmd}. Available: create, remove, merge, list, status, gc.", file=sys.stderr)
+        sys.exit(1)
+
+
 def handle_rules_command(repo_root: str, args: List[str]):
     if not args or args[0] in ("-h", "--help", "help"):
         print("Usage: along_exec.py rules attach")
@@ -987,6 +1101,8 @@ def main():
         handle_decision_command(repo_root, extra_args)
     elif cmd == "scratch":
         handle_scratch_command(repo_root, extra_args)
+    elif cmd == "worktree":
+        handle_worktree_command(repo_root, extra_args)
     elif cmd == "rules":
         handle_rules_command(repo_root, extra_args)
     elif cmd in ("budget", "context-budget"):

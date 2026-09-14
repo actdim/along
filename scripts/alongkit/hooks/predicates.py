@@ -67,7 +67,13 @@ def _extract_content(event: HookEvent) -> str:
     if tool in ("write_to_file", "write_file", "create_file"):
         return args.get("CodeContent") or args.get("content") or ""
     elif tool in ("replace_file_content", "edit_file", "patch_file"):
-        return args.get("ReplacementContent") or args.get("replacement_content") or args.get("content") or ""
+        return (
+            args.get("ReplacementContent")
+            or args.get("replacement_content")
+            or args.get("new_string")
+            or args.get("content")
+            or ""
+        )
     return ""
 
 
@@ -413,3 +419,68 @@ def check_subproject_boundary(event: HookEvent, repo_root: str, **kwargs: Any) -
                     f"Entities must be created in nearest '{subpath}/.along/'."
                 )
     return None
+
+
+def _is_reparse_or_link(path: str) -> bool:
+    """Check if path is a symlink or Windows directory junction."""
+    if os.path.islink(path):
+        return True
+    try:
+        attributes = os.lstat(path).st_file_attributes
+    except (AttributeError, OSError):
+        return False
+    return bool(attributes & 0x400)
+
+
+def check_worktree_env_readiness(event: HookEvent, repo_root: str, **kwargs: Any) -> Optional[str]:
+    """Verify that if operating inside a Git worktree, environment dependencies are linked."""
+    target = _extract_target_file(event)
+    cwd = os.getcwd()
+    check_dir = None
+
+    if target and os.path.isabs(target):
+        parent_dir = os.path.dirname(target)
+        if os.path.isfile(os.path.join(parent_dir, ".git")):
+            check_dir = parent_dir
+    if not check_dir and os.path.isfile(os.path.join(cwd, ".git")):
+        check_dir = cwd
+
+    if not check_dir:
+        return None
+
+    git_file = os.path.join(check_dir, ".git")
+    try:
+        content = textio.read_text(git_file).strip()
+        if not content.startswith("gitdir:"):
+            return None
+    except (OSError, UnicodeDecodeError):
+        return None
+
+    if repo_root and os.path.abspath(repo_root) != os.path.abspath(check_dir):
+        for dep in ("node_modules", ".venv"):
+            root_dep = os.path.join(repo_root, dep)
+            if os.path.isdir(root_dep):
+                worktree_dep = os.path.join(check_dir, dep)
+                if not os.path.exists(worktree_dep) and not _is_reparse_or_link(worktree_dep):
+                    return (
+                        f"Worktree Environment Readiness Violation [gate: worktree-env-readiness]: "
+                        f"Primary repository contains '{dep}', but it is not linked in worktree '{check_dir}'. "
+                        f"Run 'along worktree create' or link dependencies before modifying files."
+                    )
+
+    manifest_file = os.path.join(check_dir, ".along-worktree.json")
+    if os.path.isfile(manifest_file):
+        try:
+            data = json.loads(textio.read_text(manifest_file))
+            for rel_dir in data.get("linked_dirs", []):
+                full_path = os.path.join(check_dir, rel_dir)
+                if not (os.path.exists(full_path) or _is_reparse_or_link(full_path)):
+                    return (
+                        f"Worktree Environment Readiness Violation [gate: worktree-env-readiness]: "
+                        f"Required linked directory '{rel_dir}' is missing or broken in '{check_dir}'."
+                    )
+        except (OSError, json.JSONDecodeError):
+            pass
+
+    return None
+

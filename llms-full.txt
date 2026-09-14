@@ -24,6 +24,8 @@ AI coding agents are exceptionally capable, but they start every session blind:
 - **Multi-Branch Chaos**: Parallel agents clobber shared docs, status boards, and lock files, causing painful git merge conflicts.
 - **Unanchored Edits & Hallucinations**: Without strict guardrails, agents make rogue modifications, bypass test gates, and produce silent regressions.
 - **Stack Friction & Tool Blindness**: Agents stumble across differing build tools, test frameworks, and release workflows. They execute noisy commands that flood context buffers with megabytes of logs, or hallucinate project-specific build invocations.
+- **Workspace Pollution & Contamination**: Parallel or autonomous agents executing directly in developer working directories corrupt uncommitted work-in-progress, disrupt IDE language servers, or fail abruptly on bare worktrees lacking dependencies.
+- **Soft Prompt Decay & Hallucinated Compliance**: Natural language instructions in markdown rules or system prompts decay as context grows, lacking hard mechanical execution guardrails.
 
 **Along fixes this by embedding a durable, machine-parseable memory layer (`.along/`), an Andrej Karpathy-style LLM-Wiki (`docs/`), and a unified lifecycle contract (`.along/scripts/`) directly into your repository.** Agents read past decisions, track issues in a DAG, plan autonomously, and verify their own work before committing.
 
@@ -35,12 +37,14 @@ AI coding agents are exceptionally capable, but they start every session blind:
 | :--- | :--- |
 | **Persistent In-Repo Memory** | Durable, git-tracked memory (`.along/`): DAG issues, append-only ADR logs, milestones, risks, and session records that travel with the codebase. |
 | **Autonomous Multi-Agent Teams** | Sequential living-plan state machine (`along-team`): Supervisor -> Scout -> Architect -> Implementer -> Reviewer with session blackboards, hard retry limits, and single-agent degradation. |
+| **Runtime Worktree Workspace Isolation** | Ephemeral Git worktree isolation (`along worktree`, `/along-team --worktree`) satisfying the 3-part Environment Readiness Contract: NTFS junctions / symlinks for dependencies (`node_modules`, `.venv`), `.env` configuration copying, real-time session blackboard sharing, and Windows file lock resilient teardown. |
+| **Runtime Mechanical Prose Enforcement** | Active agent lifecycle interception (`PreToolUse`, `Stop`) turning markdown guidelines into hard runtime errors across Claude Code, Antigravity, and Codex, with machine-checked bi-directional traceability (`along hook verify`). |
 | **Token-Efficient LLM-Wiki (`docs/`)** | Modular knowledge base with in-place source provenance, SHA-256 drift detection, deterministic `llms.txt` compilation, and targeted snippet search (`along-kb-search`) avoiding full-file context ingestion. |
 | **Stack-Agnostic Lifecycle & Polyglot Hooks** | Unified agent execution contract (`/along-build`, `/along-test`, `/along-dev`, `/along-version-bump`, `/along-dep-scan`) with zero-config stack auto-detection and polyglot repository hooks (`.along/scripts/` in Python, Bash, PowerShell, Batch). |
 | **Zero-Conflict Git Concurrency** | Single Source of Truth (SSOT) atomic files vs compiled projections (`ISSUES.md`, `INDEX.md`), union merges (`merge=union`), and decentralized date-slug ADRs that never collide in parallel branches. |
 | **Engineering Provenance & Dual-Track UI** | Living plans, fix loops, and verification gates are permanently recorded in session logs while projecting interactive visual review cards in IDEs (Antigravity). |
 | **Strict Data Safety & Verification Gates** | Hermetic engines (`alongkit`) with transactional byte-exact rollbacks, strict front-matter preservation (`ruamel.yaml`), and zero-unintended-deletions invariant. |
-| **Declarative Runtime Gates & Traceability** | Mechanical agent lifecycle interception (`PreToolUse`, `Stop`) enforcing 11 protocol invariants, backed by machine-checked bi-directional traceability (`along hook verify`) between prose badges and YAML rules. |
+| **Declarative Runtime Gates & Traceability** | Mechanical agent lifecycle interception (`PreToolUse`, `Stop`) enforcing 12 protocol invariants, backed by machine-checked bi-directional traceability (`along hook verify`) between prose badges and YAML rules. |
 | **Nearest Context Boundary** | Monorepos, microservices, and Git submodules maintain isolated localized memory, preventing root workspace pollution. |
 
 ---
@@ -55,6 +59,8 @@ Add this badge and blurb to the `README.md` of any repository powered by Along:
 This repository follows the **Along Protocol** for AI agent context, persistent memory, and autonomous workflows:
 - **Persistent In-Repo Memory**: Past architectural decisions (`.along/DECISIONS.md`), active constraints (`.along/CONSTRAINTS.md`), active issues, and session history survive across all AI sessions.
 - **Token-Efficient Knowledge Base**: Structured LLM-Wiki documentation in `docs/` minimizes context overhead and eliminates architectural drift.
+- **Runtime Worktree Isolation**: Autonomous agent tasks execute in isolated Git worktrees with automatic dependency linking, preserving clean developer checkouts.
+- **Mechanical Quality Gates**: Protocol rules, clean typography, and issue bindings are mechanically enforced at runtime before tools execute.
 - **Standardized Lifecycle Contract**: Unified commands for build, test, dev, release, and dependency discovery via pluggable `.along/scripts/` hooks.
 - **Provider-Agnostic**: Compatible out of the box with **Claude Code**, **Google Antigravity**, **OpenAI Codex**, and **OpenCode**.
 ````
@@ -93,6 +99,7 @@ The repository's complete technical specification is maintained as a living LLM-
 | Topic | Description | Link |
 | :--- | :--- | :--- |
 | **System Architecture** | Provider flow, context boundaries, MCP servers, and bridge layers. | [System Architecture & Flow](./docs/topic--architecture.md) |
+| **CLI Command Reference** | Unified console command dictionary, subcommands, flags, and exit codes. | [Along CLI Command Reference](./docs/topic--cli-reference.md) |
 | **Domain Model & Entities** | Machine-parseable schemas for Issues, ADRs, Milestones, and Risks. | [Domain Model & Entity Ecosystem](./docs/topic--domain-model.md) |
 | **Setup & Workflows** | Installation matrix, repository onboarding, and session lifecycle. | [Setup, Installation & Workflows](./docs/topic--setup-and-workflow.md) |
 | **LLM-Wiki Architecture** | Andrej Karpathy paradigm, source isolation, and token efficiency. | [LLM-Wiki Architecture & Paradigm](./docs/topic--llm-wiki-architecture.md) |
@@ -526,7 +533,7 @@ Python places the running script's own directory on `sys.path`, and the installe
 `~/.along/bin/` install with no path manipulation and no package install. When the
 interpreter lacks `ruamel.yaml`, `alongkit.bootstrap` re-executes the engine under
 `uv run` once; if `uv` is absent it exits with an actionable message rather than a
-traceback.
+traceback. For the comprehensive reference of console subcommands, options, and exit codes, see [Along CLI Command Reference](./topic--cli-reference.md).
 
 ### Structural guards
 
@@ -743,6 +750,422 @@ flowchart TD
 3. **Safe Execution without Shell Injection**: All lifecycle commands avoid `shell=True`. Arguments are pre-split or passed as discrete argv lists, preserving spaces and special characters.
 4. **Nearest-Boundary Monorepo Localization**: In modular codebases and Git submodules, the dispatcher locates the nearest `.along/scripts/` hook before falling back to workspace root.
 5. **Non-Destructive Auto-Synthesis**: When hooks are absent, Along analyzes project manifests (`package.json`, `Cargo.toml`, `*.csproj`, `pyproject.toml`, `go.mod`), injects quiet flags (`-q`, `--silent`), and synthesizes an executable `.along/scripts/<action>.py` hook marked with `# Status: verified`.
+
+---
+
+## Document: docs/topic--cli-reference.md (Along CLI Command Reference)
+
+---
+title: Along CLI Command Reference
+type: topic
+tags: [cli, commands, router, lifecycle, tools, reference]
+---
+
+# Along CLI Command Reference
+
+This document provides the canonical command-line interface reference for the `along` toolchain.
+
+The Along CLI acts as the unified command router for human developers, terminal scripts, CI/CD pipelines, and autonomous AI agents. It guarantees identical execution semantics whether invoked as a globally installed console script, via Python directly in a repository checkout, or through a shared global installation.
+
+---
+
+## 1. Invocation Architecture & Paths
+
+The CLI is routed through `scripts/along_exec.py` backed by the shared `alongkit` engine library. It automatically ensures runtime dependencies (such as `ruamel.yaml`) via `uv run` fallback if they are missing in the active interpreter.
+
+```text
+Invocation Paths:
+  1. Canonical Console Script:   along <command> [subcommand] [options...]
+  2. Local Repository Checkout: python scripts/along_exec.py <command> [subcommand] [options...]
+  3. Global User Installation:   python ~/.along/bin/along_exec.py <command> [subcommand] [options...]
+```
+
+General help and command listing are accessible via:
+```bash
+along --help
+along <command> --help
+```
+
+---
+
+## 2. Project Lifecycle Hooks
+
+Lifecycle commands provide a uniform execution contract across any programming language or build stack. They execute repository-specific hooks in `.along/scripts/` when present, or automatically detect the underlying project runner.
+
+### `along build`
+Executes the project build lifecycle hook.
+- **Engine Script**: `.along/scripts/build.py`
+- **Auto-Detection Fallback**: Detects `package.json` (`npm run build`), `Cargo.toml` (`cargo build`), `.csproj`/`.sln` (`dotnet build`), `pyproject.toml`/`setup.py` (`python -m build`).
+- **Synthesis**: If no build script exists, automatically synthesizes a verified or unconfigured template in `.along/scripts/build.py`.
+- **Usage**:
+  ```bash
+  along build [args...]
+  ```
+
+### `along test`
+Executes automated test suites using quiet, token-efficient flags.
+- **Engine Script**: `.along/scripts/test.py`
+- **Auto-Detection Fallback**: Detects `pytest` (`pytest -q`), `npm` (`npm test -- --silent`), `dotnet` (`dotnet test -v q`), `cargo` (`cargo test -q`).
+- **Usage**:
+  ```bash
+  along test [args...]
+  ```
+
+### `along dev`
+Launches the local development server or watcher.
+- **Engine Script**: `.along/scripts/dev.py`
+- **Auto-Detection Fallback**: Detects `npm run dev`, `cargo run`, `dotnet run`, or `python main.py`.
+- **Usage**:
+  ```bash
+  along dev [args...]
+  ```
+
+### `along debug`
+Executes project debugging or diagnostics profile.
+- **Engine Script**: `.along/scripts/debug.py`
+- **Usage**:
+  ```bash
+  along debug [args...]
+  ```
+
+---
+
+## 3. Entity & Repository Management
+
+Entity commands manage the durable in-repo memory stored inside `.along/` (issues, decisions, sessions, scratchpads, and isolated worktrees).
+
+### `along status`
+Displays an instant terminal summary of repository health, active in-flight issues, and recent completed sessions.
+- **Usage**:
+  ```bash
+  along status
+  ```
+
+### `along doctor`
+Validates repository compliance with the Along protocol. Audits `.along/` directory layout, `.gitattributes` merge drivers, and ADR header formatting.
+- **Options**:
+  - `--entities`: Performs deep validation of the entity DAG graph, verifying parent/child relationships, `blocked_by` dependencies, and detecting circular references.
+- **Usage**:
+  ```bash
+  along doctor
+  along doctor --entities
+  ```
+
+### `along issue`
+Manages atomic issue files in `.along/ISSUES/` and recompiles the active board projection (`.along/ISSUES.md`).
+- **Subcommands**:
+  - `along issue create <type> <slug> --title "Title" [options...]`: Creates a new issue file. Valid types: `feat`, `bug`, `debt`, `task`, `docs`.
+    - Options: `--priority {high,medium,low}`, `--tags "t1,t2"`, `--agent <name>`, `--milestone <name>`.
+  - `along issue sync`: Recompiles `.along/ISSUES.md` deterministically from atomic files in `.along/ISSUES/` and `.along/ISSUES/done/`.
+  - `along issue done <slug>`: Marks the issue as completed, records `completed: YYYY-MM-DD`, and moves the file into `.along/ISSUES/done/`.
+  - `along issue list`: Lists all active in-progress and open issues in the terminal.
+- **Usage**:
+  ```bash
+  along issue create feat token-refresh --title "Add OAuth token refresh" --priority high
+  along issue list
+  along issue done token-refresh
+  along issue sync
+  ```
+
+### `along session`
+Manages session logs in `.along/SESSIONS/` and records engineering provenance.
+- **Subcommands**:
+  - `along session create <slug> --summary "Summary" [options...]`: Initializes a new session log.
+    - Options: `--issues "slug1,slug2"`, `--decisions "ADR-slug"`, `--agent <name>`, `--milestone <name>`.
+  - `along session wrap <slug> [options...]`: Finalizes a session, updates linked issue states, and recompiles projections.
+    - Options: `--status {done,superseded}`, `--summary "Summary"`, `--dry-run`, `-n`.
+- **Usage**:
+  ```bash
+  along session create token-refresh --summary "Implementing OAuth token refresh logic"
+  along session wrap token-refresh --status done --summary "Completed implementation and hermetic tests"
+  ```
+
+### `along decision`
+Manages Architectural Decision Records (ADRs) and architectural constraints.
+- **Subcommands**:
+  - `along decision create <slug> --title "Title" --context "Why" --decision "What" --consequences "Tradeoffs"`: Creates a decentralized ADR in `.along/DECISIONS/ADR-YYYY-MM-DD--<slug>.md` and mirrors to `docs/decisions/`.
+  - `along decision sync`: Recompiles the lean projection board `.along/DECISIONS.md` and active architectural constraints in `.along/CONSTRAINTS.md`.
+- **Usage**:
+  ```bash
+  along decision create jwt-auth --title "Adopt JWT for API Auth" --context "Need stateless tokens" --decision "Use RS256 JWTs" --consequences "Key rotation required"
+  along decision sync
+  ```
+
+### `along scratch`
+Manages ephemeral multi-agent session blackboard memory (`.along/.session/<slug>/`) used by `along-team`.
+- **Subcommands**:
+  - `along scratch init <slug> [--title "Title"] [--steps N] [--restart]`: Initializes session scratchpad directory, `state.json`, and `plan.md`.
+  - `along scratch state <slug> [--json]`: Displays current step progress, status, and retry counters.
+  - `along scratch update <slug> [--step N] [--step-status {pending,in-progress,passed,failed}] [--inc-retry] [--status {in-progress,completed,failed}]`: Updates execution state.
+  - `along scratch purge <slug>`: Deletes ephemeral session blackboard upon completion.
+- **Usage**:
+  ```bash
+  along scratch init token-refresh --title "Token Refresh Step Loop" --steps 4
+  along scratch state token-refresh
+  along scratch update token-refresh --step 1 --step-status passed
+  along scratch purge token-refresh
+  ```
+
+### `along worktree`
+Manages runtime Git worktree workspace isolation for parallel or multi-agent execution, enforcing the 3-part Environment Readiness Contract.
+- **Subcommands**:
+  - `along worktree create <slug> [--branch <name>] [--base-ref <ref>]`: Provisions an isolated worktree at `.along/worktrees/<slug>`, links heavy dependencies (`node_modules`, `.venv`) via NTFS directory junctions on Windows (`mklink /J`) or symlinks on POSIX, copies untracked `.env*` files, and shares the session blackboard.
+  - `along worktree remove <slug> [--force] [--keep-branch]`: Safely unlinks dependency junctions (`os.rmdir`) without touching parent files, resets CWD, and prunes the worktree with an exponential backoff loop for Windows file handle lock resilience.
+  - `along worktree merge <slug> [--squash]`: Merges changes from the worktree branch into the primary working branch.
+  - `along worktree list [--json]`: Lists active worktrees, branches, and linked dependencies.
+  - `along worktree status [--json]`: Displays environment readiness and filesystem capability matrix.
+  - `along worktree gc`: Prunes orphaned worktrees and purges deferred trash directories (`.along/worktrees/.trash_*`).
+- **Usage**:
+  ```bash
+  along worktree create worker-auth --branch feature/auth
+  along worktree list
+  along worktree merge worker-auth --squash
+  along worktree remove worker-auth --force
+  along worktree gc
+  ```
+
+### `along rules`
+Attaches engineering guidelines and rule packs to the project.
+- **Subcommands**:
+  - `along rules attach`: Automatically inspects repository dependencies and project manifests, attaching appropriate language and platform rule packs into `.along/rules/`.
+- **Usage**:
+  ```bash
+  along rules attach
+  ```
+
+### `along budget` (alias `along context-budget`)
+Audits repository token footprint and context budgets against protocol limits.
+- **Options**:
+  - `--check`: Exits with status code 1 if any measured file exceeds configured budget thresholds (e.g. `AGENTS.md` exceeding 14 KB).
+  - `--json`: Outputs structured JSON report for CI/CD gates.
+- **Usage**:
+  ```bash
+  along budget
+  along budget --check
+  along budget --json
+  ```
+
+### `along patch`
+Executes deterministic Python AST code modifications without LLM syntax corruption.
+- **Subcommands**:
+  - `along patch replace-func <target_file> <function_name> <replacement_code_file>`: Replaces an existing Python function definition in `<target_file>` with code from `<replacement_code_file>`, preserving comments, formatting, and surrounding file contents.
+- **Usage**:
+  ```bash
+  along patch replace-func scripts/engine.py validate_token scratch/new_validate.py
+  ```
+
+---
+
+## 4. Protocol Tool Engines
+
+Protocol tools provide specialized repository maintenance, release management, and intelligence operations.
+
+### `along wrap`
+Transactional end-of-stage wrap engine.
+- Validates quality gates, inspects git diffs, updates active issue status, moves files to `done/`, writes session logs, recompiles projections, and appends to `HISTORY.md`.
+- **Usage**:
+  ```bash
+  along wrap
+  ```
+
+### `along kb-sync` (alias `along kb sync`)
+Idempotent compiler and integrity gate for the living LLM-Wiki in `docs/`.
+- Validates SHA-256 provenance against source files, recompiles `docs/INDEX.md`, updates `llms.txt` and `llms-full.txt`, rewrites legacy `.along/KB/` links, and enforces link integrity.
+- **Options**:
+  - `--strict`: Fails with non-zero exit code on broken relative links or missing targets.
+  - `--crosslink-check`: Audits documentation for unlinked topic concepts.
+  - `--crosslink-apply`: Automatically applies deterministic markdown cross-links.
+  - `--strict-sections`: Enforces Section Taxonomy Contracts across standard topic files.
+  - `--dry-run`: Reports planned modifications without writing to disk.
+- **Usage**:
+  ```bash
+  along kb-sync
+  along kb-sync --strict
+  along kb-sync --crosslink-check
+  ```
+
+### `along kb-search` (alias `along kb search`)
+Targeted snippet retrieval engine across `docs/` and `.along/` living memory.
+- Uses token-based Inverse Document Frequency (IDF) scoring to extract relevant headings and paragraphs, minimizing prompt token consumption.
+- **Options**:
+  - `--category <cat>`: Filters by category (`topic`, `issue`, `decision`, `session`).
+  - `--any`: Matches any query token (OR match).
+  - `--prefix`: Enables prefix matching.
+  - `--stats`: Outputs query timing and corpus indexing statistics.
+- **Usage**:
+  ```bash
+  along kb-search "worktree readiness contract"
+  along kb-search "token refresh" --category issue
+  ```
+
+### `along dep-scan`
+Hierarchical dependency discovery and AI instruction scanner.
+- Traverses multi-project repositories (npm, pip, cargo, nuget, go), parses dependencies, discovers vendor AI instruction files, and updates `docs/topic--dependencies.md`.
+- **Options**:
+  - `--json`: Emits raw JSON discovery data.
+- **Usage**:
+  ```bash
+  along dep-scan
+  along dep-scan --json
+  ```
+
+### `along history-sync`
+Git commit history reconciliation engine.
+- Reconstructs `.along/` milestones, issues, and session logs from existing Git commit history, tags, and PR references.
+- **Usage**:
+  ```bash
+  along history-sync
+  ```
+
+### `along commit`
+Conventional Commits generator with active issue binding and typography validation.
+- Automatically checks modified files for forbidden non-ASCII typography, binds commit messages to the active `.along/` issue slug, and creates clean Git commits.
+- **Options**:
+  - `-i <slug>`: Explicitly specifies target issue slug (otherwise auto-detected from active issue).
+  - `-m "<message>"`: Commit message body.
+  - `--fix-typography`: Automatically rewrites non-ASCII typography violations before committing.
+  - `--no-verify`: Skips pre-commit test gate.
+- **Usage**:
+  ```bash
+  along commit -i token-refresh -m "feat(auth): implement refresh token rotation"
+  along commit -i token-refresh -m "fix(auth): handle expired token" --fix-typography
+  ```
+
+### `along version-bump` (alias `along bump`)
+Multi-stack project version incrementer and release packager.
+- Checks pre-release quality gates, updates package manifests (`package.json`, `pyproject.toml`, `Cargo.toml`), updates `CHANGELOG.md`, creates annotated Git release tags, and generates release commits with transactional rollback on test failure.
+- **Options**:
+  - `patch` | `minor` | `major` | `<version>`: Version increment level (default: `patch`).
+  - `-c`, `--commit`: Automatically creates release commit.
+  - `-p`, `--push`: Pushes release commit and tag to remote.
+  - `--fix-typography`: Automatically repairs typography before releasing.
+  - `-n`, `--no-verify`: Bypasses pre-mutation quality gates.
+- **Usage**:
+  ```bash
+  along bump patch
+  along bump minor --commit
+  ```
+
+### `along update`
+Self-update engine for the Along protocol and skills suite.
+- Reconciles local repository files, managed protocol blocks, and global user skills (`~/.claude/`, `~/.gemini/`, `~/.codex/`) against the latest upstream release from GitHub.
+- Automatically scaffolds and reconciles runtime lifecycle hooks across all supported agent environments (Antigravity `.agents/hooks.json`, Claude Code `.claude/settings.json`, and OpenAI Codex `.codex/hooks.json`).
+- **Options**:
+  - `--check-only`: Only inspect versions without making modifications.
+  - `--dry-run`: Simulate updates, migrations, and hook installations without writing files.
+  - `--force`: Force reinstallation even if versions match.
+  - `--local-only`: Skip remote GitHub check and use local installation.
+  - `--no-hooks`: Skip automatic reconciliation of runtime lifecycle hooks.
+  - `--kb-sync`, `--dep-scan`, `--history-sync`, `--all-sync`: Post-update sync triggers.
+- **Usage**:
+  ```bash
+  along update
+  along update --dry-run
+  along update --no-hooks
+  ```
+
+### `along dash` (alias `along dashboard`)
+Launches the Along executive dashboard service.
+- Provides interactive web UI (FastAPI + MobX), Cytoscape DAG dependency graph, OpenAPI Swagger interface, and static HTML reporting.
+- **Options**:
+  - `-w`, `--web`: Starts local web server on port 8000.
+  - `-c`, `--cli`: Displays terminal summary table.
+  - `-e`, `--export`: Generates standalone static HTML report.
+- **Usage**:
+  ```bash
+  along dash --web
+  along dash --cli
+  ```
+
+### `along migrate`
+Protocol migration engine.
+- Migrates legacy directory structures (`.agents/` to `.along/`, monolithic `DECISIONS.md` to modular ADRs), updates front-matter schemas, and preserves destination backups in `.along/.migration-backup/`.
+- **Options**:
+  - `--apply`: Applies planned migration operations (default is safe dry-run plan output).
+- **Usage**:
+  ```bash
+  along migrate
+  along migrate --apply
+  ```
+
+### `along sanitize` (alias `along typography`)
+Typography inspection and ASCII enforcement utility.
+- Scans documentation, scripts, and code files for forbidden unicode characters (em-dash, en-dash, curly quotes, guillemets, unicode ellipsis, non-breaking spaces) and reports line-by-line violations.
+- **Options**:
+  - `--dry-run`: Reports findings and exits with code 0 without modifying files.
+  - `--write`: Applies clean ASCII replacements in-place.
+  - `--json`: Emits structured JSON findings for CI automation.
+  - `--include-data`: Also scans `.json`, `.yaml`, `.yml`, and `.toml` files.
+  - `--exclude '<glob>'`: Skips paths matching specified glob pattern.
+- **Usage**:
+  ```bash
+  along sanitize
+  along sanitize --write
+  along sanitize --check
+  ```
+
+### `along feedback` (aliases `diagnostics`, `telemetry`)
+System diagnostics and incident dispatch engine.
+- Gathers sanitized incident traces from `~/.along/diagnostics/` and exports or dispatches reports via Telegram bot, Webhook, or local export.
+- **Options**:
+  - `--export`: Exports sanitized diagnostics archive to disk.
+  - `--send`: Dispatches incident report to configured alert endpoint.
+- **Usage**:
+  ```bash
+  along feedback
+  along feedback --export
+  ```
+
+### `along graph-check`
+Preflight verification for `code-review-graph` MCP server.
+- Verifies graph indexing status, validates `.code-review-graph-ignore` configuration to prevent repository bloat, and checks tool accessibility.
+- **Usage**:
+  ```bash
+  along graph-check
+  ```
+
+### `along hook` (alias `along hooks`)
+Runtime lifecycle hook interceptor and declarative gate evaluation harness.
+- **Subcommands**:
+  - `along hook eval <event> [--runtime {antigravity,claude,codex,generic}]`: Evaluates declarative gates against an incoming event payload passed via stdin or argument.
+  - `along hook install [--runtime {antigravity,claude,codex,all}]`: Scaffolds or updates runtime hook configuration manifests (`.agents/hooks.json`, `.claude/settings.json`, `.codex/hooks.json`).
+  - `along hook verify [--strict]`: Audits bi-directional traceability between prose badges (`[gate: <id>]`) across documentation/skills and declarative YAML gate rules in `default_gates.yaml`.
+- **Usage**:
+  ```bash
+  along hook verify --strict
+  along hook install --runtime all
+  ```
+
+---
+
+## 5. Exit Codes and CI/CD Automation
+
+All Along CLI commands adhere to standard POSIX process exit code conventions:
+
+| Exit Code | Meaning | Example Scenarios |
+| :--- | :--- | :--- |
+| `0` | Success | Operation completed cleanly; all gates passed. |
+| `1` | General Failure / Gate Denial | Syntax error, broken link (`kb-sync --strict`), forbidden typography (`sanitize`), failed test. |
+| `2` | Agent Denied Action | Specific runtime hook denial for OpenAI Codex stderr routing. |
+
+For automated CI/CD validation pipelines, run the following sequence to enforce total repository integrity:
+
+```bash
+# 1. Verify gate traceability
+along hook verify --strict
+
+# 2. Check typography cleanliness
+along sanitize
+
+# 3. Check link integrity and taxonomy
+along kb-sync --strict --strict-sections
+
+# 4. Check context budget
+along budget --check
+
+# 5. Run hermetic tests
+along test
+```
 
 ---
 
@@ -1769,6 +2192,8 @@ The Along Runtime Hook and Gate System establishes deterministic, programmatic i
 |                                                                         |
 |  3. Runtime Adapters (alongkit.hooks.adapters):                         |
 |     - AntigravityAdapter: JSON { decision: "deny" | "allow" }          |
+|     - ClaudeCodeAdapter: exit code 0 (allow) / 2 (deny + stderr)        |
+|     - CodexAdapter: exit code 0 (allow) / 2 (deny + stderr)             |
 +-------------------------------------------------------------------------+
 ```
 
@@ -1801,10 +2226,15 @@ The Along Runtime Hook and Gate System establishes deterministic, programmatic i
 Beyond hardcoded Python gates, Along provides an extensible, declarative YAML gate catalogue (`default_gates.yaml` and `.along/rules/gates.yaml`) enforcing 11 canonical gates, verified bi-directionally against prose badges (`[gate: <id>]`) via `along hook verify`.
 For full specification and architecture, see [Declarative Gate Engine & Traceability Matrix](./topic--declarative-gates-and-traceability.md).
 
-### 2.4 Execution Pipeline & Dispatcher (`alongkit.hooks.engine` & `scripts/along_hook.py`)
+### 2.4 Runtime Adapters (`alongkit.hooks.adapters`)
+- **`AntigravityAdapter`**: Translates Google Antigravity JSON payloads (`toolCall.name`, `toolCall.args`) to `HookEvent`, returning JSON stdout with `allow`/`deny` decisions.
+- **`ClaudeCodeAdapter`**: Translates Anthropic Claude Code CLI payloads to `HookEvent`, mapping `Write`/`WriteFile` to `write_to_file`, `Edit`/`EditFile` to `replace_file_content`, and `Bash` to `run_command`. Formats exit code 0 for allow, and exit code 2 with the remediation message written to `stderr` for gate denials.
+- **`CodexAdapter`**: Translates OpenAI Codex CLI and headless harness JSON payloads to HookEvent, mapping write_file/create_file to write_to_file, edit_file/patch to replace_file_content, and shell/bash/exec to run_command. Formats exit code 0 for allow, and exit code 2 with the remediation message written to stderr for gate denials.
+
+### 2.5 Execution Pipeline & Dispatcher (`alongkit.hooks.engine` & `scripts/along_hook.py`)
 - `HookEngine`: Evaluates incoming events sequentially against all registered gates (both built-in and declarative).
 - `along_hook.py`: Universal CLI driver handling process I/O, error recovery, adapter dispatch, and `verify` audit.
-- Subcommand `along hook install`: Scaffolds `.agents/hooks.json` in the target repository.
+- Subcommand `along hook install`: Scaffolds runtime hook configurations (`.agents/hooks.json` for Antigravity, `.claude/settings.json` for Claude Code, `.codex/hooks.json` for OpenAI Codex). Accepts `--runtime {antigravity,claude,codex,all}`.
 - Subcommand `along hook verify`: Audits bi-directional traceability between prose badges and YAML gates.
 
 ---
@@ -2020,7 +2450,7 @@ along-init
 *(Or invoke `/along-init` directly inside your AI agent prompt).*
 
 ### What `along-init` Configures:
-1. `AGENTS.md`: Generates the root protocol context with the managed `ALONG-PROTOCOL v3.1.0` block.
+1. `AGENTS.md`: Generates the root protocol context with the managed `ALONG-PROTOCOL v2.6.0` block.
 2. `CLAUDE.md`: Scaffolds the standard `@AGENTS.md` import line.
 3. `.gitattributes`: Configures `merge=union` for `.along/HISTORY.md` and `.along/DECISIONS.md` to prevent merge collisions across branches.
 4. `.along/`: Creates the persistent repository memory skeleton (`ISSUES/`, `DECISIONS.md`, `MILESTONES/`, `RISKS/`, `SPIKES/`, `CHECKLISTS/`, `SESSIONS/`, `docs/`).
@@ -2092,6 +2522,16 @@ never scanned. A file that is not valid UTF-8 is skipped and reported, and exist
 endings are preserved, so a CRLF `.ps1` stays CRLF. See
 [ADR-2026-09-01--typography-rule-scope](./decisions/ADR-2026-09-01--typography-rule-scope.md).
 
+### Repository Diagnostics, Health & Token Budgets
+
+Along provides terminal utilities for inspecting repository state, verifying protocol adherence, and guarding context budgets:
+
+- **`along status`**: Quick terminal overview of repository health, active issues, and recent sessions.
+- **`along doctor [--entities]`**: Comprehensive repository health check validating directory structure, `.gitattributes`, ADR headers, and entity DAG dependencies.
+- **`along budget [--check]`**: Audits context footprint across root protocol files (`AGENTS.md`, `CLAUDE.md`, `.along/ISSUES.md`, `.along/CONSTRAINTS.md`) against strict limits (14 KB for `AGENTS.md`), exiting with code 1 on budget breach.
+
+For full command syntax, flags, exit codes, and subcommands, see the [Along CLI Command Reference](./topic--cli-reference.md).
+
 ### Releasing: gates first, then a transaction
 
 `/along-version-bump [patch|minor|major|<version>]` runs in a fixed order, and the order is
@@ -2160,6 +2600,23 @@ sequenceDiagram
 ### Step 3: Execution via `/along-team`
 - For S-size tasks (1-2 files): The agent fast-paths edits directly and runs tests.
 - For M/L/XL-size tasks: The agent activates the multi-agent sequential state machine, creating a dynamic Living Plan and verifying each step with an independent Reviewer subagent.
+
+### Git Worktree Workspace Isolation (`along worktree`)
+For complex or autonomous tasks requiring complete isolation from uncommitted developer work:
+- Run with `--worktree` flag (e.g. `/along-team <slug> --worktree` or `along worktree create <slug>`).
+- **Environment Readiness Contract** [gate: worktree-env-readiness]:
+  - Package dependencies (`node_modules`, `.venv`) are linked via NTFS directory junctions on Windows (`mklink /J`) or symlinks on POSIX (`os.symlink`) without duplicating storage.
+  - Untracked configuration files (`.env`, `.env.local`) are copied to the worktree.
+  - Ephemeral session blackboards (`.along/.session/<slug>/`) are shared in real time and preserved before teardown.
+- **Fail-Fast Policy**: If worktree isolation is requested but environment readiness cannot be satisfied, execution halts immediately in Phase 0.
+- **CLI Commands**:
+  - `along worktree create <slug> [--branch <name>]`: Provisions `.along/worktrees/<slug>` and links dependencies.
+  - `along worktree remove <slug> [--force]`: Safely unlinks junctions (`os.rmdir`) and prunes worktree with Windows lock retry backoff.
+  - `along worktree merge <slug> [--squash]`: Merges worktree branch into current working branch.
+  - `along worktree status [--json]`: Lists active worktrees and environment readiness states.
+  - `along worktree gc`: Prunes orphaned worktrees and purges deferred trash directories.
+
+For complete options, flags, and teardown mechanics, see [Along CLI Command Reference: along worktree](./topic--cli-reference.md#along-worktree).
 
 ### Step 4: Verification & AST Blast Radius Gate
 - Run `/along-test` to ensure zero regressions.
@@ -2313,15 +2770,16 @@ flowchart TD
 ---
 
 ### `along-update`
-- **What it is**: Automated protocol and skill synchronizer. Checks and pulls latest Along skills, migrations, and protocol definitions across user home directories (`~/.claude`, `~/.codex`, `~/.gemini`) and local repositories.
+- **What it is**: Automated protocol, skill, and runtime hook synchronizer. Checks and pulls latest Along skills, migrations, and protocol definitions across user home directories (`~/.claude`, `~/.codex`, `~/.gemini`) and local repositories, and automatically reconciles runtime lifecycle hooks across supported agent environments.
 - **Architectural Rationale**:
   - Eliminates skill drift across multiple developer machines.
   - Automatically executes retroactive migration scripts (`scripts/migrate_protocol.py`) to upgrade legacy front-matter schemas and directory layouts without data loss.
+  - Automatically scaffolds and updates runtime lifecycle hooks (`.agents/hooks.json`, `.claude/settings.json`, `.codex/hooks.json`), guaranteeing that mechanical quality gates and typography invariants are enforced across all active agent tools without manual setup.
 - **Invocation Triggers**:
   - *Explicit*: `/along-update`, `along update` (fallback: `python ~/.along/bin/along_exec.py update`).
   - *Semantic / Automatic*: Triggered on protocol version mismatch, outdated skills warnings, or prompts like *"Upgrade Along protocol"*, *"Update agents"*.
-- **Entities Operated On**: Global skill folders (`~/.gemini/config/skills/along-*`), target repository `AGENTS.md`, `scripts/`.
-- **Ecosystem Chaining**: Runs `migrate_protocol.py` and triggers `/along-kb-sync --strict` to validate repository link integrity after updates.
+- **Entities Operated On**: Global skill folders (`~/.gemini/config/skills/along-*`), target repository `AGENTS.md`, `scripts/`, and runtime hook configurations (`.claude/`, `.codex/`, `.agents/`).
+- **Ecosystem Chaining**: Runs `migrate_protocol.py`, reconciles runtime hooks, and triggers `/along-kb-sync --strict` to validate repository link integrity after updates.
 
 ---
 

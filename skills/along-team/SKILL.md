@@ -19,8 +19,10 @@ The protocol replaces unstructured multi-agent chat and parallel swarms with a *
 ## When to Use & Triggers
 
 - **Explicit Skill Invocation**: `/along-team <issue-slug>` or `/along-team` with a task description.
+- **Worktree Isolation Mode**: `/along-team <issue-slug> --worktree`, `/goal --worktree`, or configuration `workspace: worktree`.
 - **Autonomous Goal Trigger**: Whenever `/goal` is invoked or high-autonomy mode is requested for feature implementation.
-- **Natural Language Triggers**: "Execute issue via team", "Run multi-agent pipeline", "Implement with agent team".
+- **Natural Language Triggers**: "Execute issue via team", "Run multi-agent pipeline", "Implement with agent team", "in an isolated worktree", "run without touching active workspace".
+- **False-Positive Guard**: Standard requests lacking explicit isolation intent ("implement feature", "fix bug") default strictly to `workspace: inherit` to avoid unnecessary worktree provisioning overhead.
 
 ---
 
@@ -83,13 +85,18 @@ When subagent spawning is unavailable (OpenAI Codex, OpenCode) or disabled/throt
 
 Workspaces isolate changes during step implementation:
 
-- **Default Mode (`Workspace: "inherit"`)**: Implementer executes directly in the working tree. This is the universal default across all providers and avoids git merge complexity.
-- **Branch Mode (`Workspace: "branch"`)**: Available where providers natively support git worktree isolation (e.g., Google Antigravity).
-  - **Branch Naming**: `along/<issue-slug>/step-<N>`.
-  - **Merge Strategy**: Fast-forward or squash merge into the parent working branch upon Reviewer `PASS`.
+- **Default Mode (`Workspace: "inherit"`)**: Implementer executes directly in the primary working tree. This is the universal default across all providers and avoids git merge complexity.
+- **Worktree Mode (`Workspace: "worktree"` / `--worktree`)**: Available across all platforms via the `along worktree` engine (`scripts/alongkit/worktree.py`) and host-assisted providers (Google Antigravity `Workspace: "branch" | "share"`, Claude Code `--worktree`).
+  - **Environment Readiness Contract** [gate: worktree-env-readiness]: Bare `git worktree add` checkouts lack gitignored dependencies and local configuration, which immediately crashes test runners. Before worker execution begins, the orchestrator satisfies three readiness prerequisites:
+    1. **Dependency Linking**: Heavy package directories (`node_modules`, `.venv`, `venv`) are linked from the primary repository to the worktree via NTFS directory junctions on Windows (`mklink /J`) or symbolic links on POSIX (`os.symlink`) without duplicating storage. Mutating operations (`npm install`, `pip install`) inside worktrees affect parent packages through junctions and are forbidden without confirmation.
+    2. **Configuration Propagation**: Untracked configuration files (`.env`, `.env.local`, `local.settings.json`) are copied into the worktree so runtime secrets and flags are available.
+    3. **State Preservation**: The session blackboard (`.along/.session/<slug>/`) is linked or flushed before teardown to ensure failure forensics, retry counters, and session logs survive worktree pruning.
+  - **Strict Fail-Fast Policy**: In Phase 0 (Supervisor), the orchestrator verifies host runtime and filesystem capability (`along worktree is_supported`). If `--worktree` or semantic isolation was requested but environment readiness cannot be satisfied (unsupported filesystem, uncommitted merge conflicts, broken junctions), the agent **MUST IMMEDIATELY HALT WITH AN ERROR**. Silent fallback to the primary working tree is strictly forbidden.
+  - **Branch Naming**: `along/<issue-slug>` (or `along/<issue-slug>/step-<N>`).
+  - **Merge Strategy**: Fast-forward or squash merge (`along worktree merge <slug> --squash`) into the parent working branch upon Reviewer `PASS`.
   - **Conflict Handling**: If merge conflicts arise during squash/merge, the Supervisor discards the worktree, creates a fresh branch from current HEAD, and retries the step.
-  - **Abort & Cleanup**: Upon step failure, abort, or completion, temporary worktrees and branches are immediately pruned (`git worktree remove --force <path>` and `git branch -D along/<issue-slug>/step-<N>`).
-  - **Non-Worktree Fallback**: On providers without worktree isolation, all steps operate in the main working tree guarded by `git diff` review and `git checkout` rollback.
+  - **Teardown & Windows Lock Resilience**: Worktrees are safely pruned via `along worktree remove <slug> --force`. On Windows NTFS, file handle locks from language servers or indexers are mitigated through junction pre-unlinking (`os.rmdir`), CWD reset to repo root, an exponential backoff retry loop (4 attempts, 0.5s backoff), and deferred garbage collection via `.along/.pending_worktrees.json` and `along worktree gc`.
+  - **Non-Worktree Fallback**: When `--worktree` is not requested, all steps operate in the main working tree guarded by `git diff` review and `git checkout` rollback.
 
 ---
 
@@ -114,6 +121,8 @@ Every Reviewer report and session log MUST conclude with an explicit Gate Execut
 
 ```text
 Gate Execution Manifest:
+- Workspace Isolation: EXECUTED (PASS) [mode: worktree, path: .along/worktrees/<slug>]
+- Environment Readiness: EXECUTED (PASS) [junctions: node_modules, .venv; copied: .env; blackboard: linked]
 - File Integrity: EXECUTED (PASS)
 - Automated Tests: EXECUTED (PASS) [along test]
 - Diff Scope Audit: EXECUTED (PASS)
@@ -121,6 +130,14 @@ Gate Execution Manifest:
 - Blast Radius: DEGRADED (PASS) [static search, code-review-graph offline]
 - Documentation Parity: EXECUTED (PASS)
 - Clean Typography: EXECUTED (PASS)
+```
+
+When operating in standard working tree mode:
+```text
+Gate Execution Manifest:
+- Workspace Isolation: EXECUTED (PASS) [mode: inherit (default)]
+- File Integrity: EXECUTED (PASS)
+...
 ```
 
 ---
@@ -171,6 +188,7 @@ TASK / GOAL
 2. Read target `.along/ISSUES/<type>--<slug>.md` (or user prompt) and `.along/DECISIONS.md`.
 3. Construct an explicit **Requirement Traceability Matrix** decomposing the user request into atomic requirements (`REQ-1`, `REQ-2`, `REQ-3`).
 4. Classify task size (`S`, `M`, or `L/XL`). Announce routing decision and requirement matrix.
+5. **Workspace Mode & Environment Readiness Gate** [gate: worktree-env-readiness]: Evaluate `--worktree` flag, configuration (`workspace: worktree`), and semantic isolation intent. If worktree mode is requested, verify runtime and filesystem readiness via `along worktree status` or engine verification. If readiness prerequisites cannot be guaranteed, agent **MUST IMMEDIATELY HALT WITH AN ERROR**. Silent fallback to primary working directory is prohibited. Announce selected workspace mode (`workspace: worktree` or `workspace: inherit`).
 
 ### Phase 1: Research (Scout)
 1. Launch read-only research via `spawn_readonly_researcher` (or execute inline Phase 1 in single-agent mode).

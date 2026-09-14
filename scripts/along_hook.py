@@ -40,7 +40,12 @@ def main() -> int:
             prog="along hook install",
             description="Install or update runtime lifecycle hook configuration.",
         )
-        parser.add_argument("--runtime", default="antigravity", help="Target runtime (antigravity)")
+        parser.add_argument(
+            "--runtime",
+            default="antigravity",
+            choices=["antigravity", "claude", "codex", "all"],
+            help="Target runtime (antigravity, claude, codex, all)",
+        )
         parser.add_argument("--dry-run", action="store_true", help="Preview changes without writing")
         parser.add_argument("--repo-root", default=None, help="Path to repository root")
         args = parser.parse_args(sys.argv[2:])
@@ -50,10 +55,29 @@ def main() -> int:
             sys.stderr.write("[Along Hook] Error: cannot locate repository root.\n")
             return 1
 
-        from alongkit.hooks.config import install_antigravity_hooks
-        status, msg = install_antigravity_hooks(repo_root, dry_run=args.dry_run)
-        print(f"-> [Along Hook] {msg}")
-        return 0 if status in ("installed", "present", "dry-run") else 1
+        from alongkit.hooks.config import (
+            install_antigravity_hooks,
+            install_claude_hooks,
+            install_codex_hooks,
+        )
+
+        statuses = []
+        if args.runtime in ("antigravity", "all"):
+            status, msg = install_antigravity_hooks(repo_root, dry_run=args.dry_run)
+            print(f"-> [Along Hook] {msg}")
+            statuses.append(status)
+
+        if args.runtime in ("claude", "all"):
+            status, msg = install_claude_hooks(repo_root, dry_run=args.dry_run)
+            print(f"-> [Along Hook] {msg}")
+            statuses.append(status)
+
+        if args.runtime in ("codex", "all"):
+            status, msg = install_codex_hooks(repo_root, dry_run=args.dry_run)
+            print(f"-> [Along Hook] {msg}")
+            statuses.append(status)
+
+        return 0 if all(s in ("installed", "present", "dry-run") for s in statuses) else 1
 
     if len(sys.argv) > 1 and sys.argv[1] == "verify":
         parser = argparse.ArgumentParser(
@@ -107,6 +131,8 @@ def main() -> int:
     config: HooksConfig = load_config(repo_root)
     if args.mode:
         config.mode = args.mode
+        for k in config.gates:
+            config.gates[k] = args.mode
 
     adapter = get_adapter(args.runtime)
 
@@ -134,8 +160,9 @@ def main() -> int:
 
     exit_code, response_str = adapter.format_response(result)
     if response_str:
-        sys.stdout.write(response_str + "\n")
-        sys.stdout.flush()
+        target_stream = sys.stderr if exit_code != 0 else sys.stdout
+        target_stream.write(response_str + "\n")
+        target_stream.flush()
 
     return exit_code
 

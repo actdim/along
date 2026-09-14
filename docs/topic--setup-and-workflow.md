@@ -237,6 +237,16 @@ never scanned. A file that is not valid UTF-8 is skipped and reported, and exist
 endings are preserved, so a CRLF `.ps1` stays CRLF. See
 [ADR-2026-09-01--typography-rule-scope](./decisions/ADR-2026-09-01--typography-rule-scope.md).
 
+### Repository Diagnostics, Health & Token Budgets
+
+Along provides terminal utilities for inspecting repository state, verifying protocol adherence, and guarding context budgets:
+
+- **`along status`**: Quick terminal overview of repository health, active issues, and recent sessions.
+- **`along doctor [--entities]`**: Comprehensive repository health check validating directory structure, `.gitattributes`, ADR headers, and entity DAG dependencies.
+- **`along budget [--check]`**: Audits context footprint across root protocol files (`AGENTS.md`, `CLAUDE.md`, `.along/ISSUES.md`, `.along/CONSTRAINTS.md`) against strict limits (14 KB for `AGENTS.md`), exiting with code 1 on budget breach.
+
+For full command syntax, flags, exit codes, and subcommands, see the [Along CLI Command Reference](./topic--cli-reference.md).
+
 ### Releasing: gates first, then a transaction
 
 `/along-version-bump [patch|minor|major|<version>]` runs in a fixed order, and the order is
@@ -305,6 +315,23 @@ sequenceDiagram
 ### Step 3: Execution via `/along-team`
 - For S-size tasks (1-2 files): The agent fast-paths edits directly and runs tests.
 - For M/L/XL-size tasks: The agent activates the multi-agent sequential state machine, creating a dynamic Living Plan and verifying each step with an independent Reviewer subagent.
+
+### Git Worktree Workspace Isolation (`along worktree`)
+For complex or autonomous tasks requiring complete isolation from uncommitted developer work:
+- Run with `--worktree` flag (e.g. `/along-team <slug> --worktree` or `along worktree create <slug>`).
+- **Environment Readiness Contract** [gate: worktree-env-readiness]:
+  - Package dependencies (`node_modules`, `.venv`) are linked via NTFS directory junctions on Windows (`mklink /J`) or symlinks on POSIX (`os.symlink`) without duplicating storage.
+  - Untracked configuration files (`.env`, `.env.local`) are copied to the worktree.
+  - Ephemeral session blackboards (`.along/.session/<slug>/`) are shared in real time and preserved before teardown.
+- **Fail-Fast Policy**: If worktree isolation is requested but environment readiness cannot be satisfied, execution halts immediately in Phase 0.
+- **CLI Commands**:
+  - `along worktree create <slug> [--branch <name>]`: Provisions `.along/worktrees/<slug>` and links dependencies.
+  - `along worktree remove <slug> [--force]`: Safely unlinks junctions (`os.rmdir`) and prunes worktree with Windows lock retry backoff.
+  - `along worktree merge <slug> [--squash]`: Merges worktree branch into current working branch.
+  - `along worktree status [--json]`: Lists active worktrees and environment readiness states.
+  - `along worktree gc`: Prunes orphaned worktrees and purges deferred trash directories.
+
+For complete options, flags, and teardown mechanics, see [Along CLI Command Reference: along worktree](./topic--cli-reference.md#along-worktree).
 
 ### Step 4: Verification & AST Blast Radius Gate
 - Run `/along-test` to ensure zero regressions.
