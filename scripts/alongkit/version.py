@@ -21,7 +21,7 @@ if __name__ == "__main__":
     )
 
 
-CURRENT_PROTOCOL_VERSION = "3.1.0"
+CURRENT_PROTOCOL_VERSION = "3.2.0"
 
 #: Alias for readers that care about the toolchain rather than the protocol. They move
 #: together: the engines and the protocol ship as one artifact.
