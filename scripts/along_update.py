@@ -21,6 +21,7 @@ Usage:
       --dep-scan        Run AI dependencies and submodules scan after updating protocol.
       --history-sync    Run Git history reconciliation after updating protocol.
       --all-sync        Run all three post-update sync operations (kb-sync, dep-scan, history-sync).
+      --no-hooks        Skip automatic installation of runtime lifecycle hooks.
 """
 
 import os
@@ -214,7 +215,7 @@ safe_relpath = repo.safe_relpath
 
 find_existing_agent_contexts = repo.find_agent_contexts
 
-def apply_migration_to_context(ctx_dir, protocol_text, migrate_script, is_root=True, ancestor_root=None, dry_run=False):
+def apply_migration_to_context(ctx_dir, protocol_text, migrate_script, is_root=True, ancestor_root=None, dry_run=False, no_hooks=False):
     context_ok = True
     rel_display = safe_relpath(ctx_dir, ancestor_root or ctx_dir)
     if rel_display in (".", ""):
@@ -223,6 +224,18 @@ def apply_migration_to_context(ctx_dir, protocol_text, migrate_script, is_root=T
     print(f"-> Updating agent context: {rel_display} ({ctx_dir})")
     if dry_run:
         print(f"   [DRY-RUN] Would refresh protocol block and run migration engine on {ctx_dir}.")
+        if not no_hooks:
+            try:
+                from alongkit.hooks.config import (
+                    install_antigravity_hooks,
+                    install_claude_hooks,
+                    install_codex_hooks,
+                )
+                for installer in (install_antigravity_hooks, install_claude_hooks, install_codex_hooks):
+                    status, msg = installer(ctx_dir, dry_run=True)
+                    print(f"   [DRY-RUN] {msg}")
+            except (ImportError, OSError, ValueError) as e:
+                print(f"   [WARN] Could not preview runtime hooks for {ctx_dir}: {e}")
         return True
 
     agents_md = os.path.join(ctx_dir, "AGENTS.md")
@@ -325,6 +338,23 @@ def apply_migration_to_context(ctx_dir, protocol_text, migrate_script, is_root=T
         except (OSError, ValueError) as e:
             print(f"   [WARN] Could not attach rule packs for {ctx_dir}: {e}")
 
+    # Automatically install or update runtime lifecycle hooks across supported agents
+    if not dry_run and not no_hooks:
+        try:
+            from alongkit.hooks.config import (
+                install_antigravity_hooks,
+                install_claude_hooks,
+                install_codex_hooks,
+            )
+            for installer in (install_antigravity_hooks, install_claude_hooks, install_codex_hooks):
+                status, msg = installer(ctx_dir, dry_run=False)
+                if status in ("installed", "present"):
+                    print(f"   [OK] {msg}")
+                elif status == "failed":
+                    print(f"   [WARN] {msg}")
+        except (ImportError, OSError, ValueError) as e:
+            print(f"   [WARN] Could not update runtime hooks for {ctx_dir}: {e}")
+
     return context_ok
 
 def find_uninitialized_subprojects(repo_root, contexts):
@@ -374,7 +404,8 @@ def execute_post_update_syncs(contexts: list, repo_root: str, do_kb: bool, do_de
     return all_ok
 
 def run_update(repo_root, check_only=False, dry_run=False, force=False, local_only=False,
-               do_kb_sync=False, do_dep_scan=False, do_history_sync=False, verbose=False):
+               do_kb_sync=False, do_dep_scan=False, do_history_sync=False, verbose=False,
+               no_hooks=False):
     repo_root = os.path.abspath(repo_root)
     print("==================================================")
     print("-> ALONG One-Liner Updater (/along-update)")
@@ -483,7 +514,8 @@ def run_update(repo_root, check_only=False, dry_run=False, force=False, local_on
             migrate_script=migrate_script,
             is_root=is_root,
             ancestor_root=ancestor,
-            dry_run=dry_run
+            dry_run=dry_run,
+            no_hooks=no_hooks
         )
         if not ok:
             all_contexts_ok = False
@@ -551,6 +583,7 @@ if __name__ == "__main__":
     kb_sync_flag = "--kb-sync" in sys.argv or all_sync_flag
     dep_scan_flag = "--dep-scan" in sys.argv or all_sync_flag
     history_sync_flag = "--history-sync" in sys.argv or all_sync_flag
+    no_hooks_flag = "--no-hooks" in sys.argv
 
     args = [a for a in sys.argv[1:] if not a.startswith("--") and not a.startswith("-")]
     if args:
@@ -565,7 +598,8 @@ if __name__ == "__main__":
         do_kb_sync=kb_sync_flag,
         do_dep_scan=dep_scan_flag,
         do_history_sync=history_sync_flag,
-        verbose=verbose_flag
+        verbose=verbose_flag,
+        no_hooks=no_hooks_flag
     )
     if check_only_flag:
         sys.exit(0)

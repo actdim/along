@@ -55,7 +55,14 @@ along migrate <target_root> --apply
 *(Or fallback: `python ~/.along/bin/along_exec.py migrate <target_root> --apply`)*
 `--apply` is mandatory for any non-interactive caller: without it the engine prints the plan and writes nothing. It never deletes a destination file (append-only files are merged, projections keep the destination, a colliding legacy entity is preserved as `<name>.legacy.md`), it copies the state directory into `.along/.migration-backup/<timestamp>/` before the first change, and it records `.along/.protocol-version` so a second run is a no-op. Add `--force` to re-run every step anyway.
 
-### Step 6: Propose Onboarding & Repository Synchronization Operations
+### Step 6: Scaffold Runtime Lifecycle Hooks
+Install or update runtime lifecycle hooks across supported agent environments (Antigravity `.agents/hooks.json`, Claude Code `.claude/settings.json`, and OpenAI Codex `.codex/hooks.json`):
+```bash
+along hook install --runtime all
+```
+*(Or fallback: `python ~/.along/bin/along_hook.py install --runtime all`)*
+
+### Step 7: Propose Onboarding & Repository Synchronization Operations
 Upon completing initialization, agents and tools MUST present a clear onboarding proposal to the user with the following optional operations:
 
 | Proposed Skill / Operation | Command | Purpose & Impact |

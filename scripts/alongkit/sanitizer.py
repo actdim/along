@@ -327,6 +327,17 @@ def run(root: str,
         raise ValueError(f"unknown sanitizer mode: {mode!r} (expected one of {Mode.ALL})")
 
     root = os.path.abspath(root)
+    if os.path.isfile(root):
+        base_dir = os.path.dirname(root)
+        report = Report(mode=mode, root=base_dir)
+        report.files_scanned = 1
+        finding, skipped = inspect_file(root, base_dir, mode)
+        if finding:
+            report.findings.append(finding)
+        elif skipped:
+            report.skipped.append(skipped)
+        return report
+
     patterns = list(excludes)
     if use_ignore_file:
         patterns.extend(load_ignore_patterns(root))

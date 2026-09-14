@@ -1,10 +1,10 @@
 ---
 name: along-update
-description: Check and update Along protocol and skills to the latest version across local repository, global installation, and GitHub. Cleans up legacy un-namespaced skills and optionally runs post-update sync engines. Use when the user asks to update agents/along, upgrade the repository protocol, or invokes /along-update.
+description: Check and update Along protocol and skills to the latest version across local repository, global installation, and GitHub. Automatically reconciles runtime lifecycle hooks (.claude, .codex, .agents), cleans up legacy un-namespaced skills, and optionally runs post-update sync engines. Use when the user asks to update agents/along, upgrade the repository protocol, or invokes /along-update.
 ---
 
 # Along Update (`/along-update`)
-Discovers all existing agent contexts across the repository tree and updates them to the latest protocol standard, synchronizing global skill installations, executing versioned migrations, rewriting legacy inbound links, and validating repository-wide link integrity.
+Discovers all existing agent contexts across the repository tree and updates them to the latest protocol standard: synchronizing global skill installations, executing versioned migrations, automatically configuring runtime lifecycle hooks for supported agents (Antigravity, Claude Code, OpenAI Codex), rewriting legacy inbound links, and validating repository-wide link integrity.
 
 ## When to use
 - The user requests an update of Along protocol, instructions, or skills (`/along-update`, "update along", "upgrade protocol").
@@ -23,6 +23,7 @@ along update [target_root] [options]
 - `--dry-run`: Simulate updates and migrations without writing to disk.
 - `--force`: Force reinstallation and refresh even if versions match.
 - `--local-only`: Skip remote GitHub check and use local installation.
+- `--no-hooks`: Skip automatic reconciliation of runtime lifecycle hooks.
 - `--kb-sync`: Run Knowledge Base sync (`/along-kb-sync`) across all contexts.
 - `--dep-scan`: Run multi-project dependencies scan (`/along-dep-scan`) across all contexts.
 - `--history-sync`: Run Git commit history reconciliation (`/along-history-sync`).

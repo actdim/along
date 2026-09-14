@@ -269,7 +269,7 @@ Python places the running script's own directory on `sys.path`, and the installe
 `~/.along/bin/` install with no path manipulation and no package install. When the
 interpreter lacks `ruamel.yaml`, `alongkit.bootstrap` re-executes the engine under
 `uv run` once; if `uv` is absent it exits with an actionable message rather than a
-traceback.
+traceback. For the comprehensive reference of console subcommands, options, and exit codes, see [Along CLI Command Reference](./topic--cli-reference.md).
 
 ### Structural guards
 

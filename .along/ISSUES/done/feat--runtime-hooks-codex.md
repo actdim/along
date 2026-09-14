@@ -2,10 +2,11 @@
 protocol: along
 slug: runtime-hooks-codex
 type: feat
-status: open
+status: done
+completed: 2026-09-13
 priority: high
 created: 2026-09-11
-updated: 2026-09-11
+updated: 2026-09-13
 agent: antigravity
 tags: [hooks, codex, runtime, adapters, mechanical-enforcement]
 milestone: v4.0.0-runtime-gates-and-worktree-isolation

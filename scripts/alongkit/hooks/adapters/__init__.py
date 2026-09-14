@@ -9,10 +9,19 @@ from typing import Dict, Type
 
 from .antigravity import AntigravityAdapter
 from .base import BaseAdapter
+from .claude import ClaudeCodeAdapter
+from .codex import CodexAdapter
 
 ADAPTERS: Dict[str, Type[BaseAdapter]] = {
     "antigravity": AntigravityAdapter,
     "agy": AntigravityAdapter,
+    "claude": ClaudeCodeAdapter,
+    "claudecode": ClaudeCodeAdapter,
+    "claude-code": ClaudeCodeAdapter,
+    "codex": CodexAdapter,
+    "openaicodex": CodexAdapter,
+    "openai-codex": CodexAdapter,
+    "openai": CodexAdapter,
 }
 
 

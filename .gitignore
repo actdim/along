@@ -42,6 +42,9 @@ dashboard/ui/dist/
 # MkDocs build output
 site/
 
-# Ephemeral session blackboards
+# Ephemeral session blackboards and isolated worktrees
 .along/.session/
+.along/worktrees/
+.along/.pending_worktrees.json
+
 

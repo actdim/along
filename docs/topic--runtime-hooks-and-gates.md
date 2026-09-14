@@ -4,11 +4,13 @@ slug: runtime-hooks-and-gates
 title: Runtime Lifecycle Hooks & Mechanical Gates
 type: architecture
 created: 2026-09-11
-updated: 2026-09-11
-tags: [hooks, gates, runtime, enforcement, antigravity, typography, cli-safety]
+updated: 2026-09-13
+tags: [hooks, gates, runtime, enforcement, antigravity, claude, codex, typography, cli-safety]
 sources:
   - path: scripts/alongkit/hooks/engine.py
   - path: scripts/along_hook.py
+  - path: scripts/alongkit/hooks/adapters/claude.py
+  - path: scripts/alongkit/hooks/adapters/codex.py
 ---
 
 # Runtime Lifecycle Hooks & Mechanical Gates
@@ -49,6 +51,8 @@ The Along Runtime Hook and Gate System establishes deterministic, programmatic i
 |                                                                         |
 |  3. Runtime Adapters (alongkit.hooks.adapters):                         |
 |     - AntigravityAdapter: JSON { decision: "deny" | "allow" }          |
+|     - ClaudeCodeAdapter: exit code 0 (allow) / 2 (deny + stderr)        |
+|     - CodexAdapter: exit code 0 (allow) / 2 (deny + stderr)             |
 +-------------------------------------------------------------------------+
 ```
 
@@ -81,10 +85,15 @@ The Along Runtime Hook and Gate System establishes deterministic, programmatic i
 Beyond hardcoded Python gates, Along provides an extensible, declarative YAML gate catalogue (`default_gates.yaml` and `.along/rules/gates.yaml`) enforcing 11 canonical gates, verified bi-directionally against prose badges (`[gate: <id>]`) via `along hook verify`.
 For full specification and architecture, see [Declarative Gate Engine & Traceability Matrix](./topic--declarative-gates-and-traceability.md).
 
-### 2.4 Execution Pipeline & Dispatcher (`alongkit.hooks.engine` & `scripts/along_hook.py`)
+### 2.4 Runtime Adapters (`alongkit.hooks.adapters`)
+- **`AntigravityAdapter`**: Translates Google Antigravity JSON payloads (`toolCall.name`, `toolCall.args`) to `HookEvent`, returning JSON stdout with `allow`/`deny` decisions.
+- **`ClaudeCodeAdapter`**: Translates Anthropic Claude Code CLI payloads to `HookEvent`, mapping `Write`/`WriteFile` to `write_to_file`, `Edit`/`EditFile` to `replace_file_content`, and `Bash` to `run_command`. Formats exit code 0 for allow, and exit code 2 with the remediation message written to `stderr` for gate denials.
+- **`CodexAdapter`**: Translates OpenAI Codex CLI and headless harness JSON payloads to HookEvent, mapping write_file/create_file to write_to_file, edit_file/patch to replace_file_content, and shell/bash/exec to run_command. Formats exit code 0 for allow, and exit code 2 with the remediation message written to stderr for gate denials.
+
+### 2.5 Execution Pipeline & Dispatcher (`alongkit.hooks.engine` & `scripts/along_hook.py`)
 - `HookEngine`: Evaluates incoming events sequentially against all registered gates (both built-in and declarative).
 - `along_hook.py`: Universal CLI driver handling process I/O, error recovery, adapter dispatch, and `verify` audit.
-- Subcommand `along hook install`: Scaffolds `.agents/hooks.json` in the target repository.
+- Subcommand `along hook install`: Scaffolds runtime hook configurations (`.agents/hooks.json` for Antigravity, `.claude/settings.json` for Claude Code, `.codex/hooks.json` for OpenAI Codex). Accepts `--runtime {antigravity,claude,codex,all}`.
 - Subcommand `along hook verify`: Audits bi-directional traceability between prose badges and YAML gates.
 
 ---

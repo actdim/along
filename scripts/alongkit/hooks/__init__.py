@@ -10,7 +10,11 @@ from .config import (
     HookMode,
     HooksConfig,
     get_antigravity_hook_manifest,
+    get_claude_hook_manifest,
+    get_codex_hook_manifest,
     install_antigravity_hooks,
+    install_claude_hooks,
+    install_codex_hooks,
     load_config,
 )
 from .engine import HookEngine, evaluate_event
@@ -27,6 +31,10 @@ __all__ = [
     "load_config",
     "get_antigravity_hook_manifest",
     "install_antigravity_hooks",
+    "get_claude_hook_manifest",
+    "install_claude_hooks",
+    "get_codex_hook_manifest",
+    "install_codex_hooks",
     "BaseGate",
     "TypographyGate",
     "ProjectionProtectionGate",

@@ -103,8 +103,8 @@ def main():
         index += 1
 
     target = os.path.abspath(root) if root else repo.find_repo_root()
-    if not os.path.isdir(target):
-        print(f"[Error] not a directory: {target}", file=sys.stderr)
+    if not os.path.isdir(target) and not os.path.isfile(target):
+        print(f"[Error] path not found: {target}", file=sys.stderr)
         return 2
 
     report = sanitizer.run(target, mode=mode, include_data=include_data,

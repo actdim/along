@@ -125,3 +125,14 @@ gates:
       type: predicate
       handler: alongkit.hooks.predicates.check_subproject_boundary
       error: "Subproject boundary violation detected by [gate: subproject-boundary]: Entities must be localized in the nearest subproject .along/ directory, not root."
+
+  - id: worktree_env_readiness
+    title: "Worktree Environment Readiness"
+    description: "Blocks execution in bare worktrees lacking linked dependencies or configuration"
+    event: PreToolUse
+    tools: [write_to_file, write_file, replace_file_content, edit_file, patch_file, create_file, run_command, execute_command, bash, shell]
+    rule:
+      type: predicate
+      handler: alongkit.hooks.predicates.check_worktree_env_readiness
+      error: "Worktree environment readiness violation detected by [gate: worktree-env-readiness]."
+
