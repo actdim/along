@@ -1193,10 +1193,17 @@ def sync_kb(
         except (OSError, UnicodeDecodeError, ValueError, frontmatter.FrontmatterError):
             pass
 
+    raw_project_title, _ = _extract_project_meta(repo_root)
+    clean_project_name = re.sub(r"\s*\(v\d+\.\d+\.\d+\)", "", raw_project_title).strip()
+    if clean_project_name and clean_project_name != "Knowledge Base Topic Index":
+        index_title = f"{clean_project_name} - Knowledge Base Topic Index"
+    else:
+        index_title = "Knowledge Base Topic Index"
+
     index_fm = {
         "protocol": "along",
         "slug": "INDEX",
-        "title": "Knowledge Base Topic Index",
+        "title": index_title,
         "type": "index",
         "created": index_created,
         "updated": today,
@@ -1238,7 +1245,7 @@ def sync_kb(
     mermaid_lines.append("## Articles\n")
 
     index_body_lines = [
-        "# Knowledge Base Topic Index\n",
+        f"# {index_title}\n",
         "Central entry point and cross-linked topic catalog for project documentation:\n",
         "\n".join(mermaid_lines),
     ]

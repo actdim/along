@@ -1,9 +1,9 @@
-# Along (actdim-along)
+# ActDim Along (actdim-along)
 
 > Provider-agnostic agent-context, memory system, dynamic dashboard, and Knowledge Base engine for AI coding agents (Claude Code, Codex, OpenCode, Antigravity).
 
 ## Summary
-Along provides repositories with an isolated, durable, and human-readable memory directory (`.along/`) and an executive dashboard engine (`/along-dash`). It unifies repository conventions, active issues, architectural decisions, and structured documentation across all AI coding tools.
+ActDim Along provides repositories with an isolated, durable, and human-readable memory directory (`.along/`) and an executive dashboard engine (`/along-dash`). It unifies repository conventions, active issues, architectural decisions, and structured documentation across all AI coding tools.
 
 ## Key Capabilities & Components
 - **Dynamic Executive Dashboard (`/along-dash`)**:

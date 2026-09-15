@@ -13,8 +13,8 @@
 
 ## Done (recent)
 - [x] `(feat)` [systemic-anomaly-circuit-breaker](ISSUES/done/feat--systemic-anomaly-circuit-breaker.md)
+- [x] `(feat)` [graph-build-lifecycle-integration](ISSUES/done/feat--graph-build-lifecycle-integration.md)
 - [x] `(docs)` [actdim-along-full-branding](ISSUES/done/docs--actdim-along-full-branding.md)
 - [x] `(feat)` [along-update-auto-installs-runtime-hooks](ISSUES/done/feat--along-update-auto-installs-runtime-hooks.md)
 - [x] `(docs)` [cli-reference-and-readme-showcase](ISSUES/done/docs--cli-reference-and-readme-showcase.md)
-- [x] `(feat)` [runtime-worktree-isolation](ISSUES/done/feat--runtime-worktree-isolation.md)
-<!-- 98 older completed issue(s) archived in .along/ISSUES/done/ -->
+<!-- 99 older completed issue(s) archived in .along/ISSUES/done/ -->

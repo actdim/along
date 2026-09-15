@@ -4,6 +4,7 @@ date: 2026-09-07
 slug: remove-git-locking-workarounds
 agent: antigravity
 branch: main
+commit: pending
 commit: dd2ed51
 summary: Reverted broken GIT_OPTIONAL_LOCKS=0 and diff.autoRefreshIndex=false workarounds across repo code, tooling, and documentation to restore clean Git stat-cache behavior on Windows.
 issues_advanced: []

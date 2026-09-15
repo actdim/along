@@ -19,3 +19,6 @@ coverage/
 *.pyc
 __pycache__/
 
+
+# Additional critical exclusions appended by Along
+.venv/

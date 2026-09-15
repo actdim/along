@@ -108,6 +108,24 @@ def run_graph_check(repo_root: Optional[str] = None, timeout: float = 7.0) -> Di
         status = "offline"
         summary = f"code-review-graph=={version} probe failed ({probe_msg})."
 
+    # Check graph database stats if probe succeeded
+    graph_stats: Dict[str, Any] = {}
+    if probe_ok and uvx_bin:
+        try:
+            stat_res = subprocess.run(
+                [uvx_bin, package_spec, "status", "--repo", repo_root],
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                text=True,
+                timeout=timeout,
+                check=False,
+            )
+            if stat_res.returncode == 0 and stat_res.stdout:
+                from along_graph_sync import parse_graph_status
+                graph_stats = parse_graph_status(stat_res.stdout)
+        except (subprocess.TimeoutExpired, OSError):
+            pass
+
     recommendations: List[str] = []
     if not uvx_bin:
         recommendations.append("Install uv package manager from https://astral.sh/uv to run uvx.")
@@ -117,6 +135,8 @@ def run_graph_check(repo_root: Optional[str] = None, timeout: float = 7.0) -> Di
         recommendations.append("Create .code-review-graph-ignore excluding node_modules/, dist/, and build/.")
     elif missing_rec:
         recommendations.append(f"Consider adding missing exclusions to .code-review-graph-ignore: {', '.join(missing_rec)}")
+    if probe_ok and graph_stats.get("files", 0) == 0:
+        recommendations.append("Graph database is empty. Run 'along graph-sync' to index repository symbols.")
 
     return {
         "status": status,
@@ -131,6 +151,7 @@ def run_graph_check(repo_root: Optional[str] = None, timeout: float = 7.0) -> Di
         "probe_message": probe_msg.splitlines()[0] if probe_msg else "",
         "ignore_file_present": ignore_exists,
         "missing_recommended_ignores": missing_rec,
+        "graph_stats": graph_stats,
         "recommendations": recommendations,
     }
 
@@ -165,6 +186,11 @@ def main() -> int:
     print(f"uvx binary:  {report['uvx_path'] or 'NOT FOUND'}")
     print(f"Probe:       {'OK (exit code 0)' if report['probe_success'] else 'FAILED: ' + report['probe_message']}")
     print(f"Ignore File: {'PRESENT' if report['ignore_file_present'] else 'MISSING (.code-review-graph-ignore)'}")
+    stats = report.get("graph_stats", {})
+    if stats and stats.get("files", 0) > 0:
+        print(f"Graph Stats: {stats.get('files', 0)} files, {stats.get('nodes', 0)} nodes, {stats.get('edges', 0)} edges (updated: {stats.get('last_updated', 'unknown')})")
+    elif report["probe_success"]:
+        print("Graph Stats: EMPTY (run 'along graph-sync' to build)")
     print("-" * 60)
     print(f"Summary:     {report['summary']}")
 

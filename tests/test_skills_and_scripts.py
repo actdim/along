@@ -197,7 +197,7 @@ class TestAlongSkillsAndScripts(unittest.TestCase):
             glob.glob(os.path.join(REPO_ROOT, "scripts", "**", "*.py"), recursive=True) +
             glob.glob(os.path.join(REPO_ROOT, "skills", "**", "*.py"), recursive=True)
         )
-        forbidden_starters = ["# Along (v", "# ALONG-PROTOCOL v", "AI agents start every session blind"]
+        forbidden_starters = ["# Along (v", "# ActDim Along (v", "# ALONG-PROTOCOL v", "AI agents start every session blind"]
         
         for py_path in py_files:
             rel = os.path.relpath(py_path, REPO_ROOT)
@@ -376,7 +376,10 @@ class TestAlongSkillsAndScripts(unittest.TestCase):
         readme_md = os.path.join(REPO_ROOT, "README.md")
         with open(readme_md, "r", encoding="utf-8") as f:
             readme_text = f.read()
-            self.assertIn(f"# Along (v{version})", readme_text, "README.md header must match protocol version")
+            self.assertTrue(
+                f"# ActDim Along (v{version})" in readme_text or f"# Along (v{version})" in readme_text,
+                "README.md header must match protocol version (ActDim Along or Along)",
+            )
             self.assertIn(f"ALONG-PROTOCOL v{version}", readme_text, "README.md text must match protocol version")
 
         # Check the single protocol version constant. It used to be declared
@@ -2188,6 +2191,59 @@ class TestAlongSkillsAndScripts(unittest.TestCase):
         import along_exec
         self.assertIn("graph-check", along_exec.TOOL_MAPPINGS)
         self.assertEqual(along_exec.TOOL_MAPPINGS["graph-check"], "along_graph_check.py")
+
+        # 5. Graph sync module tests
+        import along_graph_sync
+        self.assertIn("graph-sync", along_exec.TOOL_MAPPINGS)
+        self.assertIn("graph-build", along_exec.TOOL_MAPPINGS)
+        self.assertIn("graphsync", along_exec.TOOL_MAPPINGS)
+        self.assertIn("graphbuild", along_exec.TOOL_MAPPINGS)
+        self.assertEqual(along_exec.TOOL_MAPPINGS["graph-sync"], "along_graph_sync.py")
+        self.assertEqual(along_exec.TOOL_MAPPINGS["graph-build"], "along_graph_sync.py")
+
+        # Test ensure_ignore_file on a temporary clean directory
+        with tempfile.TemporaryDirectory(prefix="along-ignore-test-") as temp_dir:
+            mod, added = along_graph_sync.ensure_ignore_file(temp_dir)
+            self.assertTrue(mod)
+            self.assertIn("node_modules", added)
+            ignore_file = os.path.join(temp_dir, ".code-review-graph-ignore")
+            self.assertTrue(os.path.isfile(ignore_file))
+            with open(ignore_file, "r", encoding="utf-8") as f:
+                content = f.read()
+            self.assertIn("node_modules/", content)
+            self.assertIn(".venv/", content)
+
+            # Second run on same dir should be a no-op
+            mod2, added2 = along_graph_sync.ensure_ignore_file(temp_dir)
+            self.assertFalse(mod2)
+            self.assertEqual(added2, [])
+
+            # Test graceful handling of missing uvx in run_graph_sync with optional=True
+            orig_path = os.environ.get("PATH", "")
+            try:
+                os.environ["PATH"] = temp_dir
+                res = along_graph_sync.run_graph_sync(repo_root=temp_dir, optional=True)
+                self.assertTrue(res["success"])
+                self.assertEqual(res["status"], "skipped")
+            finally:
+                os.environ["PATH"] = orig_path
+
+        # Test parse_graph_status parser
+        dummy_status = (
+            "Nodes: 1234\n"
+            "Edges: 5678\n"
+            "Files: 42\n"
+            "Languages: python, typescript\n"
+            "Last updated: 2026-09-15T22:00:00\n"
+            "Built on branch: main\n"
+            "Built at commit: abcdef12\n"
+        )
+        parsed = along_graph_sync.parse_graph_status(dummy_status)
+        self.assertEqual(parsed["nodes"], 1234)
+        self.assertEqual(parsed["edges"], 5678)
+        self.assertEqual(parsed["files"], 42)
+        self.assertEqual(parsed["languages"], ["python", "typescript"])
+        self.assertEqual(parsed["last_updated"], "2026-09-15T22:00:00")
 
     def test_33_programmatic_integrity_gates_and_git_guard(self):
         """Verify programmatic integrity gates, AST code patcher, commit gates, and Git guard."""

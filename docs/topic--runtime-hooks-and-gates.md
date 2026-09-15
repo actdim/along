@@ -4,9 +4,10 @@ slug: runtime-hooks-and-gates
 title: Runtime Lifecycle Hooks & Mechanical Gates
 type: architecture
 created: 2026-09-11
-updated: 2026-09-13
-tags: [hooks, gates, runtime, enforcement, antigravity, claude, codex, typography, cli-safety]
+updated: 2026-09-15
+tags: [hooks, gates, runtime, enforcement, antigravity, claude, codex, typography, cli-safety, circuit-breaker]
 sources:
+  - path: scripts/alongkit/circuit.py
   - path: scripts/alongkit/hooks/engine.py
   - path: scripts/along_hook.py
   - path: scripts/alongkit/hooks/adapters/claude.py
@@ -95,6 +96,19 @@ For full specification and architecture, see [Declarative Gate Engine & Traceabi
 - `along_hook.py`: Universal CLI driver handling process I/O, error recovery, adapter dispatch, and `verify` audit.
 - Subcommand `along hook install`: Scaffolds runtime hook configurations (`.agents/hooks.json` for Antigravity, `.claude/settings.json` for Claude Code, `.codex/hooks.json` for OpenAI Codex). Accepts `--runtime {antigravity,claude,codex,all}`.
 - Subcommand `along hook verify`: Audits bi-directional traceability between prose badges and YAML gates.
+
+### 2.6 Systemic Anomaly Circuit Breaker (`alongkit.circuit`)
+When deep infrastructure or toolchain failures occur (corrupted `.git/index`, NTFS file locks, permission denials, missing system binaries, or repeated syntax edit thrashing), probabilistic LLMs often enter destructive self-healing loops (e.g. attempting unauthorized global package installations or repeatedly overwriting corrupted files).
+
+The Circuit Breaker (`[gate: circuit-breaker]`) acts as a programmatic hard stop:
+- **5 Systemic Anomaly Classes**:
+  - Class 1: VCS & Repository State Corruption (truncated `.git/index`, stale `index.lock`, loose object corruption).
+  - Class 2: OS & Filesystem Contention (NTFS/POSIX sharing violations, `EACCES`, `EBUSY`, permission denied, disk full).
+  - Class 3: Global Environment & Toolchain Defects (missing `uv`/`git`/`python`, unauthorized global package manager commands like `pip install` or `npm install -g`).
+  - Class 4: Process Cascades & Zombie Hangs (process timeouts, zombie runners).
+  - Class 5: Syntax Churn & Self-Destructive Edit Loops (consecutive syntax compilation failures on the same file >= 2 times).
+- **Zero-Retry Tripping**: Trips immediately to `TRIPPED` state in `.along/diagnostics/circuit_breaker.json`, prints a standardized high-visibility human escalation banner, and blocks modifying tool calls via `PreToolUse`.
+- **Pre-Flight Health Probe & Resumption Gate**: Requires human remediation and execution of `along circuit reset`, which executes `run_health_probe()` (verifying `.git/index` integrity, absence of stale locks, and clean AST syntax) before unlocking agent tools.
 
 ---
 
