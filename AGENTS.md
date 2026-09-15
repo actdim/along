@@ -1,5 +1,5 @@
 <!-- BEGIN ALONG-PROTOCOL root (managed by along-init - do not edit by hand) -->
-# ALONG-PROTOCOL v3.2.0
+# ALONG-PROTOCOL v3.3.0
 
 This repo carries its own agent context, provider-agnostically. Follow it every session, whatever tool you are.
 
@@ -97,7 +97,7 @@ See the following engineering guidelines:
 - `[platforms/web.md](.along/rules/platforms/web.md)`
 <!-- END ALONG-RULES -->
 
-This repository is `Along` (`actdim-along`) - the provider-agnostic agent-context protocol and skills suite.
+This repository is **ActDim Along** (`actdim-along`) - the provider-agnostic agent-context protocol and skills suite.
 
 - **Skills Source**: `skills/` (`along-init`, `along-update`, `along-dash`, `along-wrap`, `along-commit`, `along-build`, `along-test`, `along-dev`, `along-team`, `along-kb-sync`, `along-kb-search`, `along-issue-sync`, `along-decision-sync`, `along-history-sync`, `along-graph-check`, `along-dep-scan`, `along-version-bump`, `along-feedback`).
 - **Engines**: `scripts/` (one per skill) on shared `scripts/alongkit/` package. Helpers defined there only; `tests/test_alongkit.py` enforces no duplicates. Runtime dep: `ruamel.yaml`.

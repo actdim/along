@@ -2,6 +2,10 @@
 
 All notable changes to this project, newest first.
 
+## v3.3.0 - 2026-09-15
+
+- No commits recorded since the previous release tag.
+
 ## v3.2.0 - 2026-09-14
 
 - feat(runtime): worktree workspace isolation, runtime hooks, and automated lifecycle gates (refs #runtime-worktree-isolation)

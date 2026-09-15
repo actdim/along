@@ -1,4 +1,4 @@
-# Along (v3.2.0) - Full Documentation Context
+# ActDim Along (v3.3.0) - Full Documentation Context
 
 > **The Provider-Agnostic Context & Memory Operating System for AI Coding Agents.**
 
@@ -6,13 +6,13 @@
 
 ## Document: README.md (Overview)
 
-# Along (v3.2.0)
+# ActDim Along (v3.3.0)
 
 **The Provider-Agnostic Context & Memory Operating System for AI Coding Agents.**
 
-One universal convention (`ALONG-PROTOCOL v3.2.0`) and automation skills suite honored natively across **Claude Code**, **Google Antigravity**, **OpenAI Codex**, and **OpenCode**.
+One universal convention (`ALONG-PROTOCOL v3.3.0`) and automation skills suite honored natively across **Claude Code**, **Google Antigravity**, **OpenAI Codex**, and **OpenCode**.
 
-Along eliminates **agent context amnesia**, prevents **architectural drift**, and stops **token bloat** by transforming any codebase into an AI-ready engineering workspace with durable in-repo memory, token-efficient LLM-Wiki intelligence, and autonomous multi-agent coordination.
+ActDim Along eliminates **agent context amnesia**, prevents **architectural drift**, and stops **token bloat** by transforming any codebase into an AI-ready engineering workspace with durable in-repo memory, token-efficient LLM-Wiki intelligence, and autonomous multi-agent coordination.
 
 ---
 
@@ -54,9 +54,9 @@ AI coding agents are exceptionally capable, but they start every session blind:
 Add this badge and blurb to the `README.md` of any repository powered by Along:
 
 ````markdown
-### AI Development: Powered by [Along](https://github.com/actdim/along)
+### AI Development: Powered by [ActDim Along](https://github.com/actdim/along)
 
-This repository follows the **Along Protocol** for AI agent context, persistent memory, and autonomous workflows:
+This repository follows the **ActDim Along Protocol** for AI agent context, persistent memory, and autonomous workflows:
 - **Persistent In-Repo Memory**: Past architectural decisions (`.along/DECISIONS.md`), active constraints (`.along/CONSTRAINTS.md`), active issues, and session history survive across all AI sessions.
 - **Token-Efficient Knowledge Base**: Structured LLM-Wiki documentation in `docs/` minimizes context overhead and eliminates architectural drift.
 - **Runtime Worktree Isolation**: Autonomous agent tasks execute in isolated Git worktrees with automatic dependency linking, preserving clean developer checkouts.
@@ -165,7 +165,7 @@ MIT License. See [LICENSE](./LICENSE) for details.
 ## Document: AGENTS.md (Agent Conventions & Protocol)
 
 <!-- BEGIN ALONG-PROTOCOL root (managed by along-init - do not edit by hand) -->
-# ALONG-PROTOCOL v3.2.0
+# ALONG-PROTOCOL v3.3.0
 
 This repo carries its own agent context, provider-agnostically. Follow it every session, whatever tool you are.
 
@@ -263,7 +263,7 @@ See the following engineering guidelines:
 - `[platforms/web.md](.along/rules/platforms/web.md)`
 <!-- END ALONG-RULES -->
 
-This repository is `Along` (`actdim-along`) - the provider-agnostic agent-context protocol and skills suite.
+This repository is **ActDim Along** (`actdim-along`) - the provider-agnostic agent-context protocol and skills suite.
 
 - **Skills Source**: `skills/` (`along-init`, `along-update`, `along-dash`, `along-wrap`, `along-commit`, `along-build`, `along-test`, `along-dev`, `along-team`, `along-kb-sync`, `along-kb-search`, `along-issue-sync`, `along-decision-sync`, `along-history-sync`, `along-graph-check`, `along-dep-scan`, `along-version-bump`, `along-feedback`).
 - **Engines**: `scripts/` (one per skill) on shared `scripts/alongkit/` package. Helpers defined there only; `tests/test_alongkit.py` enforces no duplicates. Runtime dep: `ruamel.yaml`.
@@ -281,7 +281,7 @@ This repository is `Along` (`actdim-along`) - the provider-agnostic agent-contex
 
 # System Architecture & Flow
 
-Along (`actdim-along`) is a provider-agnostic agent-context, project memory, and documentation protocol designed to give software repositories a persistent, durable, token-efficient, and human-readable context layer.
+ActDim Along (`actdim-along`) is a provider-agnostic agent-context, project memory, and documentation protocol designed to give software repositories a persistent, durable, token-efficient, and human-readable context layer.
 
 ---
 
@@ -922,6 +922,22 @@ Manages runtime Git worktree workspace isolation for parallel or multi-agent exe
   along worktree merge worker-auth --squash
   along worktree remove worker-auth --force
   along worktree gc
+  ```
+
+### `along circuit`
+Manages the Systemic Anomaly Circuit Breaker and Human Escalation Gate.
+- Detects VCS corruption, OS/NTFS file contention, missing toolchain binaries, unauthorized global package manager commands, and repetitive syntax edit churn.
+- **Subcommands**:
+  - `along circuit status [--json]`: Displays current circuit breaker state (`CLOSED` or `TRIPPED`) and active anomaly escalation report.
+  - `along circuit trip [--class N] [-r MSG]`: Manually trips the circuit breaker for a specified anomaly class (1 through 5).
+  - `along circuit reset [--force]`: Executes pre-flight health probe and resets breaker to `CLOSED` when healthy.
+  - `along circuit verify`: Executes environment health probe (checking `.git/index` size >= 12 bytes, absence of stale locks, and AST syntax parsing) without altering state.
+- **Usage**:
+  ```bash
+  along circuit status
+  along circuit verify
+  along circuit reset
+  along circuit trip --class 1 -r "Corrupted git index detected"
   ```
 
 ### `along rules`
@@ -2237,6 +2253,19 @@ For full specification and architecture, see [Declarative Gate Engine & Traceabi
 - Subcommand `along hook install`: Scaffolds runtime hook configurations (`.agents/hooks.json` for Antigravity, `.claude/settings.json` for Claude Code, `.codex/hooks.json` for OpenAI Codex). Accepts `--runtime {antigravity,claude,codex,all}`.
 - Subcommand `along hook verify`: Audits bi-directional traceability between prose badges and YAML gates.
 
+### 2.6 Systemic Anomaly Circuit Breaker (`alongkit.circuit`)
+When deep infrastructure or toolchain failures occur (corrupted `.git/index`, NTFS file locks, permission denials, missing system binaries, or repeated syntax edit thrashing), probabilistic LLMs often enter destructive self-healing loops (e.g. attempting unauthorized global package installations or repeatedly overwriting corrupted files).
+
+The Circuit Breaker (`[gate: circuit-breaker]`) acts as a programmatic hard stop:
+- **5 Systemic Anomaly Classes**:
+  - Class 1: VCS & Repository State Corruption (truncated `.git/index`, stale `index.lock`, loose object corruption).
+  - Class 2: OS & Filesystem Contention (NTFS/POSIX sharing violations, `EACCES`, `EBUSY`, permission denied, disk full).
+  - Class 3: Global Environment & Toolchain Defects (missing `uv`/`git`/`python`, unauthorized global package manager commands like `pip install` or `npm install -g`).
+  - Class 4: Process Cascades & Zombie Hangs (process timeouts, zombie runners).
+  - Class 5: Syntax Churn & Self-Destructive Edit Loops (consecutive syntax compilation failures on the same file >= 2 times).
+- **Zero-Retry Tripping**: Trips immediately to `TRIPPED` state in `.along/diagnostics/circuit_breaker.json`, prints a standardized high-visibility human escalation banner, and blocks modifying tool calls via `PreToolUse`.
+- **Pre-Flight Health Probe & Resumption Gate**: Requires human remediation and execution of `along circuit reset`, which executes `run_health_probe()` (verifying `.git/index` integrity, absence of stale locks, and clean AST syntax) before unlocking agent tools.
+
 ---
 
 ## 3. Data Flow & Execution Workflow
@@ -2450,7 +2479,7 @@ along-init
 *(Or invoke `/along-init` directly inside your AI agent prompt).*
 
 ### What `along-init` Configures:
-1. `AGENTS.md`: Generates the root protocol context with the managed `ALONG-PROTOCOL v3.2.0` block.
+1. `AGENTS.md`: Generates the root protocol context with the managed `ALONG-PROTOCOL v3.3.0` block.
 2. `CLAUDE.md`: Scaffolds the standard `@AGENTS.md` import line.
 3. `.gitattributes`: Configures `merge=union` for `.along/HISTORY.md` and `.along/DECISIONS.md` to prevent merge collisions across branches.
 4. `.along/`: Creates the persistent repository memory skeleton (`ISSUES/`, `DECISIONS.md`, `MILESTONES/`, `RISKS/`, `SPIKES/`, `CHECKLISTS/`, `SESSIONS/`, `docs/`).
