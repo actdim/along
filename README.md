@@ -1,10 +1,10 @@
-# Along (v3.2.0)
+# ActDim Along (v3.3.0)
 
 **The Provider-Agnostic Context & Memory Operating System for AI Coding Agents.**
 
-One universal convention (`ALONG-PROTOCOL v3.2.0`) and automation skills suite honored natively across **Claude Code**, **Google Antigravity**, **OpenAI Codex**, and **OpenCode**.
+One universal convention (`ALONG-PROTOCOL v3.3.0`) and automation skills suite honored natively across **Claude Code**, **Google Antigravity**, **OpenAI Codex**, and **OpenCode**.
 
-Along eliminates **agent context amnesia**, prevents **architectural drift**, and stops **token bloat** by transforming any codebase into an AI-ready engineering workspace with durable in-repo memory, token-efficient LLM-Wiki intelligence, and autonomous multi-agent coordination.
+ActDim Along eliminates **agent context amnesia**, prevents **architectural drift**, and stops **token bloat** by transforming any codebase into an AI-ready engineering workspace with durable in-repo memory, token-efficient LLM-Wiki intelligence, and autonomous multi-agent coordination.
 
 ---
 
@@ -46,9 +46,9 @@ AI coding agents are exceptionally capable, but they start every session blind:
 Add this badge and blurb to the `README.md` of any repository powered by Along:
 
 ````markdown
-### AI Development: Powered by [Along](https://github.com/actdim/along)
+### AI Development: Powered by [ActDim Along](https://github.com/actdim/along)
 
-This repository follows the **Along Protocol** for AI agent context, persistent memory, and autonomous workflows:
+This repository follows the **ActDim Along Protocol** for AI agent context, persistent memory, and autonomous workflows:
 - **Persistent In-Repo Memory**: Past architectural decisions (`.along/DECISIONS.md`), active constraints (`.along/CONSTRAINTS.md`), active issues, and session history survive across all AI sessions.
 - **Token-Efficient Knowledge Base**: Structured LLM-Wiki documentation in `docs/` minimizes context overhead and eliminates architectural drift.
 - **Runtime Worktree Isolation**: Autonomous agent tasks execute in isolated Git worktrees with automatic dependency linking, preserving clean developer checkouts.
