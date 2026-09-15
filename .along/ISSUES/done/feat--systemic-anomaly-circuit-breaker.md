@@ -2,14 +2,15 @@
 protocol: along
 slug: systemic-anomaly-circuit-breaker
 type: feat
-status: open
+status: done
+completed: 2026-09-15
 priority: critical
 created: 2026-09-04
-updated: 2026-09-09
+updated: 2026-09-15
 agent: antigravity
 tags: [circuit-breaker, stability, gates, systemic-errors, human-in-the-loop]
 milestone: v4.0.0-runtime-gates-and-worktree-isolation
-blocked_by: [feat--runtime-enforcement-of-prose-rules]
+blocked_by: []
 related: [feat--runtime-enforcement-of-prose-rules, feat--programmatic-integrity-gates-and-git-guard]
 ---
 
@@ -92,12 +93,13 @@ Agent Action: Execution halted. Awaiting human confirmation.
   - An automated pre-flight health probe confirms that the anomaly condition has cleared (`git status` succeeds, `.git/index` > 0 bytes, target file parses).
 
 ## Acceptance Criteria
-- [ ] Error signature classifier implemented in `alongkit.proc` detecting Classes 1 through 5.
-- [ ] Circuit breaker halts execution immediately upon detecting any Class 1-5 anomaly with zero automatic write retries.
-- [ ] High-visibility human escalation report formatted with prescribed remediation steps.
-- [ ] Tool execution guard blocks prohibited global install commands (`pip install`, `npm install -g`).
-- [ ] Unit tests in `tests/test_skills_and_scripts.py` verify that:
+- [x] Error signature classifier implemented in `alongkit.proc` and `alongkit.circuit` detecting Classes 1 through 5.
+- [x] Circuit breaker halts execution immediately upon detecting any Class 1-5 anomaly with zero automatic write retries.
+- [x] High-visibility human escalation report formatted with prescribed remediation steps.
+- [x] Tool execution guard blocks prohibited global install commands (`pip install`, `npm install -g`).
+- [x] Unit tests in `tests/test_circuit_breaker.py` verify that:
   - Unrecoverable VCS corruption (or failure of `alongkit.proc` self-healing) trips the breaker and stops execution.
   - Repeated syntax failures trigger a circuit breaker halt instead of infinite edit loops.
   - Human confirmation and clean health probe reset the breaker cleanly.
+
 
