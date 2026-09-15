@@ -22,7 +22,7 @@ Scaffold or refresh the provider-agnostic agent-context structure in a repositor
 ### Step 2: Rule Pack Attachment
 - Run `along rules attach` (or fallback: `python ~/.along/bin/along_exec.py rules attach`) to detect the project stack, copy matching rule packs from `~/.along/rules/` into `.along/rules/`, and inject references into `AGENTS.md`.
 
-### Step 3: `CLAUDE.md` & `.gitattributes` Scaffolding
+### Step 3: `CLAUDE.md`, `.gitattributes` & Graph Exclusions Scaffolding
 - Ensure `CLAUDE.md` contains the line:
   ```markdown
   See @AGENTS.md for project instructions and guidance.
@@ -33,6 +33,7 @@ Scaffold or refresh the provider-agnostic agent-context structure in a repositor
   .along/HISTORY.md merge=union
   .along/DECISIONS.md merge=union
   ```
+- Ensure `.code-review-graph-ignore` exists at repository root (or run `along graph-sync --status`) to exclude `node_modules/`, `dist/`, `build/`, and `.venv/` from AST parsing.
 
 ### Step 4: Scaffold `.along/` Directory Skeleton (Create only if missing)
 Create the directory structure if missing:
@@ -69,4 +70,5 @@ Upon completing initialization, agents and tools MUST present a clear onboarding
 | **Knowledge Base Ingestion & Sync** | `/along-kb-sync` | Ingests `README.md` and raw notes into structured `docs/topic--*.md`, tracks in-place source provenance, compiles `llms.txt` and `llms-full.txt`, and cross-links `docs/INDEX.md`. |
 | **Dependencies & Submodules AI Scan** | `/along-dep-scan` | Recursively inspects package manifests (`package.json`, `pyproject.toml`, `*.csproj`, `Cargo.toml`), Git submodules, and symlinks for AI rules and updates `docs/topic--dependencies.md`. |
 | **Git History & Entities Reconcile** | `/along-history-sync` | Analyzes commit history, tags, and PRs to retroactively synthesize `.along/ISSUES/done/`, `.along/SESSIONS/`, and `HISTORY.md`. *(Recommended for existing repositories)* |
+| **Code Intelligence Graph Indexing** | `/along-graph-sync` | Builds code-review-graph AST database (`along graph-sync --full`) to empower semantic blast-radius and symbol dependency analysis. |
 | **Executive Dashboard & Health** | `/along-dash` | Launches the interactive dashboard to inspect repository KPI metrics, Knowledge Base, and Cytoscape DAG graph. |

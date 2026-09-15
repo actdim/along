@@ -123,7 +123,7 @@ def bump_along_dev_repo(repo_root, new_version, tx):
 
     # 3. Update README.md
     apply(os.path.join(repo_root, "README.md"), [
-        (r'# Along \(v\d+\.\d+\.\d+\)', f'# Along (v{new_version})'),
+        (r'# (?:ActDim )?Along \(v\d+\.\d+\.\d+\)', f'# ActDim Along (v{new_version})'),
         protocol_mention,
         (r'Skills & Slash Commands \(v\d+\.\d+\.\d+\)',
          f'Skills & Slash Commands (v{new_version})'),
@@ -155,7 +155,7 @@ def bump_along_dev_repo(repo_root, new_version, tx):
     ]:
         apply(os.path.join(repo_root, llm_file), [
             protocol_mention,
-            (r'Along \(v\d+\.\d+\.\d+\)', f'Along (v{new_version})'),
+            (r'(?:ActDim )?Along \(v\d+\.\d+\.\d+\)', f'ActDim Along (v{new_version})'),
         ])
 
     # 7. Update package.json and packages/dashboard-ui/package.json

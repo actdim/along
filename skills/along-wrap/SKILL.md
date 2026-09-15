@@ -39,7 +39,7 @@ along wrap <slug> --status superseded
 ### Phase A: Cognitive Review (Agent)
 1. **Code Review & Blast Radius Assessment**:
    - Inspect `git diff` for unintended side effects, unhandled nulls/errors, and edge cases.
-   - Evaluate systemic blast radius on callers/dependents using `code-review-graph` (`get_impact_radius_tool`, `get_affected_flows_tool`) when available; otherwise fall back to static AST / text search.
+   - Synchronize the AST code graph (`along graph-sync`) to reflect recent modifications, then evaluate systemic blast radius on callers/dependents using `code-review-graph` (`get_impact_radius_tool`, `get_affected_flows_tool`) when available; otherwise fall back to static AST / text search.
    - Factually update all affected `docs/topic--*.md` articles.
 2. **Session Log & Engineering Provenance**:
    - Write `.along/SESSIONS/<YYYY>/<YYYY-MM-DD>--<short-slug>.md` in the nearest `.along/`.

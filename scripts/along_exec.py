@@ -19,6 +19,8 @@ Dispatches:
    - migrate      -> runs migrate_protocol.py
    - sanitize     -> runs sanitize_typography.py
    - graph-check  -> runs along_graph_check.py (doctor preflight check)
+   - graph-sync   -> runs along_graph_sync.py (build or update AST code graph)
+   - graph-build  -> alias for graph-sync
 """
 
 import sys
@@ -27,6 +29,7 @@ import re
 import json
 import shlex
 import shutil
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Optional, List, Dict, Tuple
 
@@ -40,7 +43,7 @@ from alongkit import bootstrap
 # installers and the documented skill commands invoke it.
 bootstrap.ensure_deps()
 
-from alongkit import diagnostics, entities, frontmatter, lifecycle, proc, repo, session
+from alongkit import circuit, diagnostics, entities, frontmatter, lifecycle, proc, repo, session
 from alongkit.version import CURRENT_PROTOCOL_VERSION
 
 TOOL_MAPPINGS = {
@@ -67,6 +70,10 @@ TOOL_MAPPINGS = {
     "telemetry": "along_feedback.py",
     "graph-check": "along_graph_check.py",
     "graphcheck": "along_graph_check.py",
+    "graph-sync": "along_graph_sync.py",
+    "graphsync": "along_graph_sync.py",
+    "graph-build": "along_graph_sync.py",
+    "graphbuild": "along_graph_sync.py",
     "wrap": "along_wrap.py",
     "hook": "along_hook.py",
     "hooks": "along_hook.py",
@@ -129,6 +136,7 @@ Entity Management Commands:
   rules attach   Detect project stack and attach relevant engineering rule packs
   budget         Measure context footprint and check token budgets (--json, --check)
   context-budget Measure context footprint and check token budgets (--json, --check)
+  circuit        Systemic anomaly circuit breaker (status, trip, reset, verify)
 
 Along Protocol Tools:
   wrap           Transactional session and issue wrap engine
@@ -144,6 +152,9 @@ Along Protocol Tools:
                  default from a script, --apply performs it
   sanitize       Check (default) or repair non-ASCII typography; --write to apply
   feedback       Global diagnostics, error capture, and feedback dispatch (Telegram/Webhook/File)
+  graph-check    Check code-review-graph MCP server and repository filters
+  graph-sync     Build or incrementally update code-review-graph AST database
+  graph-build    Alias for graph-sync (supports --full, --status)
   patch          Deterministic AST code patching (replace-func)
 """)
 
@@ -776,6 +787,21 @@ def handle_doctor_command(repo_root: str, args: List[str]):
         print(f"[WARN] Could not run MCP health check: {exc}")
         warnings += 1
 
+    # Check Systemic Anomaly Circuit Breaker
+    try:
+        cb_state, cb_anomaly = circuit.get_breaker_state(repo_root)
+        if cb_state == circuit.CircuitState.TRIPPED:
+            sig = cb_anomaly.signature if cb_anomaly else "Unknown anomaly"
+            cls_name = cb_anomaly.anomaly_class.value if cb_anomaly else "Systemic Anomaly"
+            print(f"[FAIL] Systemic Anomaly Circuit Breaker is TRIPPED ({cls_name}: {sig}).")
+            print("       Run 'along circuit status' for human remediation steps or 'along circuit reset'.")
+            errors += 1
+        else:
+            print("[OK] Systemic Anomaly Circuit Breaker: CLOSED (normal operation).")
+    except (OSError, UnicodeDecodeError, ValueError) as exc:
+        print(f"[WARN] Could not check circuit breaker status: {exc}")
+        warnings += 1
+
     print(f"\nDoctor Summary: {errors} errors, {warnings} warnings.")
     sys.exit(1 if errors > 0 else 0)
 
@@ -1079,6 +1105,106 @@ def handle_patch_command(repo_root: str, args: List[str]):
         sys.exit(1)
 
 
+def handle_circuit_command(repo_root: str, args: List[str]):
+    sub = args[0].lower() if args else "status"
+
+    if sub in ("status", "info"):
+        as_json = "--json" in args
+        state, anomaly = circuit.get_breaker_state(repo_root)
+        if as_json:
+            out = {
+                "state": state.value,
+                "anomaly": anomaly.to_dict() if anomaly else None,
+            }
+            print(json.dumps(out, indent=2))
+        else:
+            if state == circuit.CircuitState.TRIPPED and anomaly:
+                print(circuit.format_escalation_report(anomaly))
+            else:
+                print(f"[Circuit Breaker] Status: {state.value.upper()} (Normal Operation)")
+        sys.exit(0 if state != circuit.CircuitState.TRIPPED else 1)
+
+    elif sub == "trip":
+        cls_num = 1
+        reason = "Manual circuit breaker trip requested"
+        idx = 1
+        while idx < len(args):
+            arg = args[idx]
+            if arg in ("--class", "-c") and idx + 1 < len(args):
+                try:
+                    cls_num = int(args[idx + 1])
+                except ValueError:
+                    pass
+                idx += 2
+            elif arg in ("--reason", "-r", "--sig") and idx + 1 < len(args):
+                reason = args[idx + 1]
+                idx += 2
+            else:
+                idx += 1
+
+        cls_map = {
+            1: circuit.AnomalyClass.CLASS_1_VCS_CORRUPTION,
+            2: circuit.AnomalyClass.CLASS_2_OS_CONTENTION,
+            3: circuit.AnomalyClass.CLASS_3_GLOBAL_ENV,
+            4: circuit.AnomalyClass.CLASS_4_PROCESS_CASCADE,
+            5: circuit.AnomalyClass.CLASS_5_SYNTAX_CHURN,
+        }
+        selected_cls = cls_map.get(cls_num, circuit.AnomalyClass.CLASS_1_VCS_CORRUPTION)
+        now_iso = datetime.now(timezone.utc).isoformat()
+        rem_map = {
+            1: circuit.REMEDIATION_CLASS_1,
+            2: circuit.REMEDIATION_CLASS_2,
+            3: circuit.REMEDIATION_CLASS_3,
+            4: circuit.REMEDIATION_CLASS_4,
+            5: circuit.REMEDIATION_CLASS_5,
+        }
+        anomaly = circuit.AnomalyMatch(
+            anomaly_class=selected_cls,
+            signature=reason,
+            detail="Tripped manually via along circuit trip",
+            impact="Automated tool execution is halted.",
+            remediation=rem_map.get(cls_num, circuit.REMEDIATION_CLASS_1),
+            timestamp=now_iso,
+        )
+        circuit.trip_breaker(repo_root, anomaly)
+        sys.exit(0)
+
+    elif sub == "reset":
+        force = "--force" in args or "-f" in args
+        success, msg = circuit.reset_breaker(repo_root, force=force)
+        if success:
+            print(f"[OK] {msg}")
+            sys.exit(0)
+        else:
+            print(f"[FAIL] {msg}", file=sys.stderr)
+            sys.exit(1)
+
+    elif sub in ("verify", "check", "probe"):
+        healthy, issues = circuit.run_health_probe(repo_root)
+        if healthy:
+            print("[OK] Environment health probe PASSED. No systemic anomalies detected.")
+            sys.exit(0)
+        else:
+            print("[FAIL] Environment health probe FAILED:")
+            for iss in issues:
+                print(f"  - {iss}")
+            sys.exit(1)
+
+    elif sub in ("-h", "--help", "help"):
+        print("Usage: along circuit [status|trip|reset|verify] [options]")
+        print("")
+        print("Commands:")
+        print("  status [--json]           Display current circuit breaker state and active anomaly report")
+        print("  trip [--class N] [-r MSG] Manually trip the circuit breaker with a specified anomaly class (1-5)")
+        print("  reset [--force]           Verify environment health probe and reset circuit breaker to CLOSED")
+        print("  verify                    Execute environment health probe without altering breaker state")
+        sys.exit(0)
+
+    else:
+        print(f"[Error] Unknown circuit subcommand: '{sub}'. Run 'along circuit --help'.", file=sys.stderr)
+        sys.exit(1)
+
+
 def main():
     if len(sys.argv) < 2 or sys.argv[1] in ("-h", "--help", "help"):
         print_help()
@@ -1093,6 +1219,8 @@ def main():
         handle_status_command(repo_root, extra_args)
     elif cmd == "doctor":
         handle_doctor_command(repo_root, extra_args)
+    elif cmd == "circuit":
+        handle_circuit_command(repo_root, extra_args)
     elif cmd == "issue":
         handle_issue_command(repo_root, extra_args)
     elif cmd == "session":

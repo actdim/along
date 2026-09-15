@@ -84,6 +84,11 @@ gates:
         - '.along/diagnostics/**'
         - '.along/SESSIONS/**'
         - '.along/DECISIONS/**'
+        - '.along/MILESTONES/**'
+        - '.along/RISKS/**'
+        - '.along/SPIKES/**'
+        - '.along/CHECKLISTS/**'
+        - '.along/*.md'
         - '.along/HISTORY.md'
         - 'docs/**'
         - 'CHANGELOG.md'
@@ -135,4 +140,15 @@ gates:
       type: predicate
       handler: alongkit.hooks.predicates.check_worktree_env_readiness
       error: "Worktree environment readiness violation detected by [gate: worktree-env-readiness]."
+
+  - id: circuit_breaker
+    title: "Systemic Anomaly Circuit Breaker"
+    description: "Blocks modifying tools and shell commands when the circuit breaker is tripped"
+    event: PreToolUse
+    tools: [write_to_file, write_file, replace_file_content, edit_file, patch_file, create_file, run_command, execute_command, bash, shell]
+    rule:
+      type: predicate
+      handler: alongkit.hooks.predicates.check_circuit_breaker
+      error: "Tool execution rejected by [gate: circuit-breaker]: The systemic anomaly circuit breaker is TRIPPED."
+
 

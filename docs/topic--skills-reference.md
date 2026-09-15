@@ -226,6 +226,19 @@ flowchart TD
 
 ---
 
+### `along-graph-sync`
+- **What it is**: Code intelligence AST graph build and incremental synchronization engine. Connects to `code-review-graph` to index repository symbols, functions, classes, and call hierarchies.
+- **Architectural Rationale**:
+  - *Incremental Synchronization*: Updates only modified files by default, keeping the AST database current without long rebuild delays.
+  - *Self-Healing Exclusions*: Automatically creates or verifies `.code-review-graph-ignore` with standard exclusions to prevent parser bloat from `node_modules` and build directories.
+- **Invocation Triggers**:
+  - *Explicit*: `/along-graph-sync`, `along graph-sync` (or `along graph-build`), `along graph-sync --full`.
+  - *Semantic / Automatic*: Invoked during `along-init` (initial index), `along-update` (symbol refresh), and before blast-radius review in `along-wrap`.
+- **Entities Operated On**: `.code-review-graph-ignore`, AST graph database.
+- **Ecosystem Chaining**: Feeds the AST call graph used by `code-review-graph` MCP tools (`get_impact_radius_tool`, `get_affected_flows_tool`) during `along-wrap` and `along-team`.
+
+---
+
 ### `along-dep-scan`
 - **What it is**: Hierarchical multi-project and submodule dependency scanner. Scans package manifests (`package.json`, `pyproject.toml`, `Cargo.toml`, `*.csproj`), custom hooks (`.along/scripts/dep_scan.py`), submodules, and symlinks for declared AI instructions and vendor rules.
 - **Architectural Rationale**:

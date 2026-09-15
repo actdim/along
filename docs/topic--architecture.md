@@ -8,7 +8,7 @@ updated: 2026-09-09
 tags: [architecture, boundaries, multi-agent, blackboard, concurrency, mcp, flow]
 sources:
   - path: README.md
-    hash: "43dd66b243e20806c2dfb27aee41af1ba52cec257fc441e2fbcd9a079cc969fb"
+    hash: "98182572db0863c1cf303ada58cae4f352331e4b9866b96259823ec1df5aefb9"
   - path: dashboard/app.py
     hash: "ccf083c7f8d006fbfd12f6e7128bc91c7f3eb71992e1719424174484bc0ae4ce"
   - path: skills/along-dash/SKILL.md
@@ -17,7 +17,7 @@ sources:
 
 # System Architecture & Flow
 
-Along (`actdim-along`) is a provider-agnostic agent-context, project memory, and documentation protocol designed to give software repositories a persistent, durable, token-efficient, and human-readable context layer.
+ActDim Along (`actdim-along`) is a provider-agnostic agent-context, project memory, and documentation protocol designed to give software repositories a persistent, durable, token-efficient, and human-readable context layer.
 
 ---
 

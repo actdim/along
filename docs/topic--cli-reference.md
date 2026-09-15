@@ -179,6 +179,22 @@ Manages runtime Git worktree workspace isolation for parallel or multi-agent exe
   along worktree gc
   ```
 
+### `along circuit`
+Manages the Systemic Anomaly Circuit Breaker and Human Escalation Gate.
+- Detects VCS corruption, OS/NTFS file contention, missing toolchain binaries, unauthorized global package manager commands, and repetitive syntax edit churn.
+- **Subcommands**:
+  - `along circuit status [--json]`: Displays current circuit breaker state (`CLOSED` or `TRIPPED`) and active anomaly escalation report.
+  - `along circuit trip [--class N] [-r MSG]`: Manually trips the circuit breaker for a specified anomaly class (1 through 5).
+  - `along circuit reset [--force]`: Executes pre-flight health probe and resets breaker to `CLOSED` when healthy.
+  - `along circuit verify`: Executes environment health probe (checking `.git/index` size >= 12 bytes, absence of stale locks, and AST syntax parsing) without altering state.
+- **Usage**:
+  ```bash
+  along circuit status
+  along circuit verify
+  along circuit reset
+  along circuit trip --class 1 -r "Corrupted git index detected"
+  ```
+
 ### `along rules`
 Attaches engineering guidelines and rule packs to the project.
 - **Subcommands**:
@@ -377,6 +393,18 @@ Preflight verification for `code-review-graph` MCP server.
 - **Usage**:
   ```bash
   along graph-check
+  ```
+
+### `along graph-sync` (alias `along graph-build`)
+Code intelligence AST knowledge graph synchronization engine.
+- Runs incremental AST update (default) or full rebuild (`--full`) via pinned `code-review-graph`.
+- Automatically creates or repairs `.code-review-graph-ignore` with standard exclusions (`node_modules/`, `dist/`, `.venv/`, etc.) before indexing.
+- **Usage**:
+  ```bash
+  along graph-sync              # Incremental update (changed files only)
+  along graph-sync --full       # Full graph rebuild from scratch
+  along graph-sync --status     # Show current graph statistics
+  along graph-build             # Alias for graph-sync
   ```
 
 ### `along hook` (alias `along hooks`)

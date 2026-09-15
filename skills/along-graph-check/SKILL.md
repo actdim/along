@@ -19,9 +19,14 @@ The check executes a preflight probe against the pinned MCP dependency (`code-re
 3. **Filter Audit**: Ensures `.code-review-graph-ignore` exists in the repository root and excludes `node_modules`, `dist`, and `build` to prevent graph database ballooning.
 
 ## Diagnostic Statuses
-- **`HEALTHY`**: MCP server starts cleanly and exclusion filters are in place.
-- **`DEGRADED`**: MCP server starts, but `.code-review-graph-ignore` is missing or incomplete.
+- **`HEALTHY`**: MCP server starts cleanly, exclusion filters are in place, and graph stats are reported.
+- **`DEGRADED`**: MCP server starts, but `.code-review-graph-ignore` is missing or graph database is empty. Run `along graph-sync` to self-heal and index symbols.
 - **`OFFLINE`**: `uvx` is missing or the server failed to respond. The tool outputs actionable remediation instructions (install uv, check network, verify python environment).
+
+## Building and Updating the Graph
+To build or synchronize the code knowledge graph after passing the health check:
+- Incremental update: `along graph-sync` (or `/along-graph-sync`)
+- Full rebuild: `along graph-sync --full`
 
 ## Fallback Blast-Radius Procedure (When Offline)
 If `code-review-graph` is offline during a code review gate, agents MUST NOT skip the gate silently. They must:

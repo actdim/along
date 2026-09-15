@@ -35,7 +35,8 @@ DANGEROUS_CLI_PATTERNS: List[Tuple[re.Pattern, str]] = [
     (re.compile(r"git\s+reset\s+--hard", re.IGNORECASE), "Destructive unstaged Git wipe (git reset --hard)"),
     (re.compile(r"git\s+clean\s+-[a-zA-Z]*f", re.IGNORECASE), "Destructive Git clean (git clean -f)"),
     (re.compile(r"npm\s+install\s+(-g|--global)", re.IGNORECASE), "Global package manager mutation (npm -g)"),
-    (re.compile(r"(choco|winget)\s+install", re.IGNORECASE), "Global system package installation"),
+    (re.compile(r"pip\s+install\s+(?!-e\s)(?!.*--target)(?!.*--user)[a-zA-Z0-9_\-]+", re.IGNORECASE), "Global package manager mutation (pip install)"),
+    (re.compile(r"(choco|winget|apt-get|brew)\s+install", re.IGNORECASE), "Global system package installation"),
 ]
 
 TEST_COMMAND_PATTERNS: List[re.Pattern] = [
@@ -251,6 +252,11 @@ def check_active_issue(event: HookEvent, repo_root: str, exclude_paths: Optional
         ".along/diagnostics/**",
         ".along/SESSIONS/**",
         ".along/DECISIONS/**",
+        ".along/MILESTONES/**",
+        ".along/RISKS/**",
+        ".along/SPIKES/**",
+        ".along/CHECKLISTS/**",
+        ".along/*.md",
         ".along/HISTORY.md",
         "docs/**",
         "CHANGELOG.md",
@@ -483,4 +489,28 @@ def check_worktree_env_readiness(event: HookEvent, repo_root: str, **kwargs: Any
             pass
 
     return None
+
+
+def check_circuit_breaker(event: HookEvent, repo_root: str, **kwargs: Any) -> Optional[str]:
+    """Block execution if the systemic anomaly circuit breaker is tripped."""
+    if not repo_root:
+        return None
+
+    # Recovery and status commands must never be blocked by the breaker
+    cmd = _extract_command(event)
+    if cmd and re.search(r"\b(along|along_exec\.py)\s+circuit\b", cmd):
+        return None
+
+    from .. import circuit
+    state, anomaly = circuit.get_breaker_state(repo_root)
+    if state == circuit.CircuitState.TRIPPED:
+        sig = anomaly.signature if anomaly else "Environment failure"
+        cls_name = anomaly.anomaly_class.value if anomaly else "Systemic Anomaly"
+        return (
+            f"Circuit Breaker Violation [gate: circuit-breaker]: Tool execution is blocked because "
+            f"the systemic anomaly circuit breaker is TRIPPED ({cls_name}: {sig}). "
+            "Human remediation is required. Run 'along circuit status' or 'along circuit reset' to recover."
+        )
+    return None
+
 

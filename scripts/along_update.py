@@ -20,7 +20,8 @@ Usage:
       --kb-sync         Run Knowledge Base sync after updating protocol.
       --dep-scan        Run AI dependencies and submodules scan after updating protocol.
       --history-sync    Run Git history reconciliation after updating protocol.
-      --all-sync        Run all three post-update sync operations (kb-sync, dep-scan, history-sync).
+      --graph-sync      Run AST code graph sync (code-review-graph) after updating protocol.
+      --all-sync        Run all post-update sync operations (kb-sync, dep-scan, history-sync, graph-sync).
       --no-hooks        Skip automatic installation of runtime lifecycle hooks.
 """
 
@@ -370,7 +371,7 @@ def locate_skill_script(repo_root: str, skill_folder: str, script_name: str) -> 
     return repo.resolve_tool_script(script_name, repo_root, skill_folder=skill_folder)
 
 
-def execute_post_update_syncs(contexts: list, repo_root: str, do_kb: bool, do_dep: bool, do_hist: bool) -> bool:
+def execute_post_update_syncs(contexts: list, repo_root: str, do_kb: bool, do_dep: bool, do_hist: bool, do_graph: bool = False) -> bool:
     """Executes requested post-update sync engines across all discovered contexts."""
     all_ok = True
     if do_kb:
@@ -401,11 +402,20 @@ def execute_post_update_syncs(contexts: list, repo_root: str, do_kb: bool, do_de
             if code != 0:
                 print(f"   [WARN] History sync returned exit code {code}", file=sys.stderr)
                 all_ok = False
+
+    if do_graph:
+        graph_script = locate_skill_script(repo_root, "along-graph-sync", "along_graph_sync.py")
+        if graph_script:
+            print(f"\n-> Running Code Intelligence Graph sync (/along-graph-sync)...")
+            code = proc.run_passthrough([sys.executable, graph_script, "--repo", repo_root, "--optional"])
+            if code != 0:
+                print(f"   [WARN] Graph sync returned exit code {code}", file=sys.stderr)
+                all_ok = False
     return all_ok
 
 def run_update(repo_root, check_only=False, dry_run=False, force=False, local_only=False,
-               do_kb_sync=False, do_dep_scan=False, do_history_sync=False, verbose=False,
-               no_hooks=False):
+               do_kb_sync=False, do_dep_scan=False, do_history_sync=False, do_graph_sync=False,
+               verbose=False, no_hooks=False):
     repo_root = os.path.abspath(repo_root)
     print("==================================================")
     print("-> ALONG One-Liner Updater (/along-update)")
@@ -541,15 +551,16 @@ def run_update(repo_root, check_only=False, dry_run=False, force=False, local_on
         print("==================================================")
 
     sync_ok = True
-    if do_kb_sync or do_dep_scan or do_history_sync:
-        sync_ok = execute_post_update_syncs(contexts, repo_root, do_kb_sync, do_dep_scan, do_history_sync)
+    if do_kb_sync or do_dep_scan or do_history_sync or do_graph_sync:
+        sync_ok = execute_post_update_syncs(contexts, repo_root, do_kb_sync, do_dep_scan, do_history_sync, do_graph_sync)
     else:
         print("\n==================================================")
         print("-> Recommended Next Steps (Optional Onboarding & Sync):")
         print("   1. /along-kb-sync      : Ingest & compile Knowledge Base in docs/ with in-place provenance and llms.txt")
         print("   2. /along-dep-scan     : Discover multi-project AI guidelines into docs/topic--dependencies.md")
         print("   3. /along-history-sync : Reconcile unmapped Git commit history into .along/ entities")
-        print("   4. /along-dash         : Launch executive dashboard & dependency graph")
+        print("   4. /along-graph-sync   : Build or update code intelligence graph (code-review-graph)")
+        print("   5. /along-dash         : Launch executive dashboard & dependency graph")
         print("==================================================")
 
     # Check for uninitialized subprojects with manifests
@@ -583,6 +594,7 @@ if __name__ == "__main__":
     kb_sync_flag = "--kb-sync" in sys.argv or all_sync_flag
     dep_scan_flag = "--dep-scan" in sys.argv or all_sync_flag
     history_sync_flag = "--history-sync" in sys.argv or all_sync_flag
+    graph_sync_flag = ("--graph-sync" in sys.argv or "--graph-build" in sys.argv) or all_sync_flag
     no_hooks_flag = "--no-hooks" in sys.argv
 
     args = [a for a in sys.argv[1:] if not a.startswith("--") and not a.startswith("-")]
@@ -598,6 +610,7 @@ if __name__ == "__main__":
         do_kb_sync=kb_sync_flag,
         do_dep_scan=dep_scan_flag,
         do_history_sync=history_sync_flag,
+        do_graph_sync=graph_sync_flag,
         verbose=verbose_flag,
         no_hooks=no_hooks_flag
     )

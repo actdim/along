@@ -1,4 +1,4 @@
-# ActDim Along (v3.3.0) - Full Documentation Context
+# ActDim Along (v3.4.0) - Full Documentation Context
 
 > **The Provider-Agnostic Context & Memory Operating System for AI Coding Agents.**
 
@@ -6,11 +6,11 @@
 
 ## Document: README.md (Overview)
 
-# ActDim Along (v3.3.0)
+# ActDim Along (v3.4.0)
 
 **The Provider-Agnostic Context & Memory Operating System for AI Coding Agents.**
 
-One universal convention (`ALONG-PROTOCOL v3.3.0`) and automation skills suite honored natively across **Claude Code**, **Google Antigravity**, **OpenAI Codex**, and **OpenCode**.
+One universal convention (`ALONG-PROTOCOL v3.4.0`) and automation skills suite honored natively across **Claude Code**, **Google Antigravity**, **OpenAI Codex**, and **OpenCode**.
 
 ActDim Along eliminates **agent context amnesia**, prevents **architectural drift**, and stops **token bloat** by transforming any codebase into an AI-ready engineering workspace with durable in-repo memory, token-efficient LLM-Wiki intelligence, and autonomous multi-agent coordination.
 
@@ -137,6 +137,7 @@ Along provides **18 singular automation skills** structured across 6 core lifecy
 | **`along-commit`** (`/along-commit`) | Smart ASCII-clean Conventional Committer linked to active `.along/` issue. |
 | **`along hook verify`** (`along hook`) | Verify bi-directional traceability between prose badges and YAML gates. |
 | **`along-graph-check`** (`/along-graph-check`) | Preflight health check and verification for `code-review-graph` MCP server. |
+| **`along-graph-sync`** (`/along-graph-sync`) | Build or incrementally update `code-review-graph` AST code intelligence database. |
 | **`along-dep-scan`** (`/along-dep-scan`) | Scan declared dependencies for AI instructions into `docs/topic--dependencies.md`. |
 | **`along context-budget`** (`along budget`) | Context budget measurement and regression gate (`--check`, `--json`). |
 
@@ -165,7 +166,7 @@ MIT License. See [LICENSE](./LICENSE) for details.
 ## Document: AGENTS.md (Agent Conventions & Protocol)
 
 <!-- BEGIN ALONG-PROTOCOL root (managed by along-init - do not edit by hand) -->
-# ALONG-PROTOCOL v3.3.0
+# ALONG-PROTOCOL v3.4.0
 
 This repo carries its own agent context, provider-agnostically. Follow it every session, whatever tool you are.
 
@@ -265,7 +266,7 @@ See the following engineering guidelines:
 
 This repository is **ActDim Along** (`actdim-along`) - the provider-agnostic agent-context protocol and skills suite.
 
-- **Skills Source**: `skills/` (`along-init`, `along-update`, `along-dash`, `along-wrap`, `along-commit`, `along-build`, `along-test`, `along-dev`, `along-team`, `along-kb-sync`, `along-kb-search`, `along-issue-sync`, `along-decision-sync`, `along-history-sync`, `along-graph-check`, `along-dep-scan`, `along-version-bump`, `along-feedback`).
+- **Skills Source**: `skills/` (`along-init`, `along-update`, `along-dash`, `along-wrap`, `along-commit`, `along-build`, `along-test`, `along-dev`, `along-team`, `along-kb-sync`, `along-kb-search`, `along-issue-sync`, `along-decision-sync`, `along-history-sync`, `along-graph-check`, `along-graph-sync`, `along-dep-scan`, `along-version-bump`, `along-feedback`).
 - **Engines**: `scripts/` (one per skill) on shared `scripts/alongkit/` package. Helpers defined there only; `tests/test_alongkit.py` enforces no duplicates. Runtime dep: `ruamel.yaml`.
 - **Typography**: `along sanitize` checks (writes with `--write`). `/along-commit` and `/along-version-bump` verify and abort (rewrite with `--fix-typography`). Scope: `.md`, `.py`, `.sh`, `.ps1`, `.bat`.
 - **Release**: `/along-version-bump` runs pre-mutation gates, transactional rollback via `alongkit.transaction.FileTransaction`.
@@ -1138,6 +1139,18 @@ Preflight verification for `code-review-graph` MCP server.
 - **Usage**:
   ```bash
   along graph-check
+  ```
+
+### `along graph-sync` (alias `along graph-build`)
+Code intelligence AST knowledge graph synchronization engine.
+- Runs incremental AST update (default) or full rebuild (`--full`) via pinned `code-review-graph`.
+- Automatically creates or repairs `.code-review-graph-ignore` with standard exclusions (`node_modules/`, `dist/`, `.venv/`, etc.) before indexing.
+- **Usage**:
+  ```bash
+  along graph-sync              # Incremental update (changed files only)
+  along graph-sync --full       # Full graph rebuild from scratch
+  along graph-sync --status     # Show current graph statistics
+  along graph-build             # Alias for graph-sync
   ```
 
 ### `along hook` (alias `along hooks`)
@@ -2479,7 +2492,7 @@ along-init
 *(Or invoke `/along-init` directly inside your AI agent prompt).*
 
 ### What `along-init` Configures:
-1. `AGENTS.md`: Generates the root protocol context with the managed `ALONG-PROTOCOL v3.3.0` block.
+1. `AGENTS.md`: Generates the root protocol context with the managed `ALONG-PROTOCOL v3.4.0` block.
 2. `CLAUDE.md`: Scaffolds the standard `@AGENTS.md` import line.
 3. `.gitattributes`: Configures `merge=union` for `.along/HISTORY.md` and `.along/DECISIONS.md` to prevent merge collisions across branches.
 4. `.along/`: Creates the persistent repository memory skeleton (`ISSUES/`, `DECISIONS.md`, `MILESTONES/`, `RISKS/`, `SPIKES/`, `CHECKLISTS/`, `SESSIONS/`, `docs/`).
@@ -2934,6 +2947,19 @@ flowchart TD
   - *Semantic / Automatic*: Triggered during Phase 4 (Reviewer) in `along-team` and before session wrap-up for non-trivial refactorings.
 - **Entities Operated On**: `.code-review-graph-ignore`, AST symbol database.
 - **Ecosystem Chaining**: Maps identified AST symbols directly into `along-kb-search` for Knowledge Base synchronization.
+
+---
+
+### `along-graph-sync`
+- **What it is**: Code intelligence AST graph build and incremental synchronization engine. Connects to `code-review-graph` to index repository symbols, functions, classes, and call hierarchies.
+- **Architectural Rationale**:
+  - *Incremental Synchronization*: Updates only modified files by default, keeping the AST database current without long rebuild delays.
+  - *Self-Healing Exclusions*: Automatically creates or verifies `.code-review-graph-ignore` with standard exclusions to prevent parser bloat from `node_modules` and build directories.
+- **Invocation Triggers**:
+  - *Explicit*: `/along-graph-sync`, `along graph-sync` (or `along graph-build`), `along graph-sync --full`.
+  - *Semantic / Automatic*: Invoked during `along-init` (initial index), `along-update` (symbol refresh), and before blast-radius review in `along-wrap`.
+- **Entities Operated On**: `.code-review-graph-ignore`, AST graph database.
+- **Ecosystem Chaining**: Feeds the AST call graph used by `code-review-graph` MCP tools (`get_impact_radius_tool`, `get_affected_flows_tool`) during `along-wrap` and `along-team`.
 
 ---
 
