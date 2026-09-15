@@ -2,6 +2,17 @@
 
 All notable changes to this project, newest first.
 
+## v3.5.0 - 2026-09-15
+
+- feat(graph): add along-graph-sync engine, auto-ignore, and lifecycle hooks [feat--graph-build-lifecycle-integration]
+- docs(actdim-along-full-branding): close issue, move to done
+
+## v3.4.0 - 2026-09-15
+
+- feat(graph): code intelligence AST graph synchronization engine and lifecycle integration (refs #graph-build-lifecycle-integration)
+- feat(resilience): systemic anomaly circuit breaker and zero-retry execution halts (refs #systemic-anomaly-circuit-breaker)
+- docs(actdim-along-full-branding): adopt canonical ActDim Along branding across protocol entry points
+
 ## v3.3.0 - 2026-09-15
 
 - No commits recorded since the previous release tag.
