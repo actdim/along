@@ -14,6 +14,8 @@ from __future__ import annotations
 
 import argparse
 import os
+import shlex
+import shutil
 import sys
 
 # Ensure repository scripts directory is on sys.path
@@ -21,11 +23,12 @@ _HERE = os.path.dirname(os.path.abspath(__file__))
 if _HERE not in sys.path:
     sys.path.insert(0, _HERE)
 
-from alongkit import bootstrap, repo
+from alongkit import bootstrap, proc, repo
 
 bootstrap.ensure_deps()
 
 from alongkit.hooks import (
+    HookEvent,
     HookEventType,
     HooksConfig,
     evaluate_event,
@@ -43,8 +46,8 @@ def main() -> int:
         parser.add_argument(
             "--runtime",
             default="antigravity",
-            choices=["antigravity", "claude", "codex", "all"],
-            help="Target runtime (antigravity, claude, codex, all)",
+            choices=["antigravity", "claude", "codex", "cursor", "all"],
+            help="Target runtime (antigravity, claude, codex, cursor, all)",
         )
         parser.add_argument("--dry-run", action="store_true", help="Preview changes without writing")
         parser.add_argument("--repo-root", default=None, help="Path to repository root")
@@ -59,6 +62,7 @@ def main() -> int:
             install_antigravity_hooks,
             install_claude_hooks,
             install_codex_hooks,
+            install_cursor_hooks,
         )
 
         statuses = []
@@ -74,6 +78,11 @@ def main() -> int:
 
         if args.runtime in ("codex", "all"):
             status, msg = install_codex_hooks(repo_root, dry_run=args.dry_run)
+            print(f"-> [Along Hook] {msg}")
+            statuses.append(status)
+
+        if args.runtime in ("cursor", "all"):
+            status, msg = install_cursor_hooks(repo_root, dry_run=args.dry_run)
             print(f"-> [Along Hook] {msg}")
             statuses.append(status)
 
@@ -99,6 +108,37 @@ def main() -> int:
         return 0
 
 
+    if len(sys.argv) > 1 and sys.argv[1] == "run":
+        run_args = sys.argv[2:]
+        if not run_args or run_args[0] in ("-h", "--help", "help"):
+            print("Usage: along_hook.py run <command...>")
+            print("       along run <command...>")
+            return 0
+        repo_root = repo.find_repo_root()
+        config = load_config(repo_root)
+        cmd_str = " ".join(run_args)
+        effective_root = repo_root or os.getcwd()
+        event = HookEvent(
+            event_type=HookEventType.PRE_TOOL_USE,
+            tool_name="run_command",
+            tool_args={"CommandLine": cmd_str},
+            workspace_root=effective_root,
+            runtime="generic",
+        )
+        result = evaluate_event(event, repo_root=repo_root, config=config)
+        if result.is_denied:
+            sys.stderr.write(f"[Along Gate Error] {result.reason}\n")
+            return 2
+        exec_args = list(run_args)
+        if len(exec_args) == 1 and not shutil.which(exec_args[0]):
+            try:
+                split_args = shlex.split(exec_args[0], posix=(os.name != "nt"))
+                if split_args and shutil.which(split_args[0]):
+                    exec_args = split_args
+            except ValueError:
+                pass
+        return proc.run_passthrough(exec_args, cwd=repo_root)
+
     parser = argparse.ArgumentParser(
         description="Along Protocol runtime hook dispatcher.",
         formatter_class=argparse.ArgumentDefaultsHelpFormatter,
@@ -106,7 +146,7 @@ def main() -> int:
     parser.add_argument(
         "--runtime",
         default="antigravity",
-        help="Target agent runtime (antigravity, claude, codex, generic)",
+        help="Target agent runtime (antigravity, claude, codex, cursor, opencode, generic)",
     )
     parser.add_argument(
         "--event",
