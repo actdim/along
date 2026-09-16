@@ -2,10 +2,11 @@
 protocol: along
 slug: runtime-hooks-cursor-opencode
 type: feat
-status: open
+status: done
+completed: 2026-09-15
 priority: medium
 created: 2026-09-11
-updated: 2026-09-11
+updated: 2026-09-15
 agent: antigravity
 tags: [hooks, cursor, opencode, runtime, adapters, mechanical-enforcement]
 milestone: v4.0.0-runtime-gates-and-worktree-isolation

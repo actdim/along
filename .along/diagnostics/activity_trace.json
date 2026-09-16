@@ -1,6 +1,6 @@
 {
-  "last_edit_time": "2026-09-15T21:06:27.170544+00:00",
-  "last_test_time": "2026-09-15T20:57:25.084347+00:00",
+  "last_edit_time": "2026-09-15T21:32:26.100080+00:00",
+  "last_test_time": "2026-09-15T21:30:43.067823+00:00",
   "edited_files": [
     "d:\\Src\\my\\actdim\\public\\along\\scripts\\alongkit\\install.py",
     "d:\\Src\\my\\actdim\\public\\along\\scripts\\alongkit\\hooks\\predicates.py",
@@ -114,6 +114,22 @@
     "d:\\Src\\my\\actdim\\public\\along\\pyproject.toml",
     "C:\\Users\\Admin\\.gemini\\antigravity\\brain\\15d42fc0-cde6-4f11-8817-3d16322d1536\\walkthrough.md",
     "d:\\Src\\my\\actdim\\public\\along\\scripts\\migrate_protocol.py",
-    "d:\\Src\\my\\actdim\\public\\along\\CHANGELOG.md"
+    "d:\\Src\\my\\actdim\\public\\along\\CHANGELOG.md",
+    "d:\\Src\\my\\actdim\\public\\along\\.along\\.session\\feat--runtime-hooks-cursor-opencode\\research.md",
+    "d:\\Src\\my\\actdim\\public\\along\\.along\\.session\\feat--runtime-hooks-cursor-opencode\\plan.md",
+    "C:\\Users\\Admin\\.gemini\\antigravity\\brain\\7d360545-7082-4b97-b53d-74af77acd908\\implementation_plan.md",
+    "C:\\Users\\Admin\\.gemini\\antigravity\\brain\\15d42fc0-cde6-4f11-8817-3d16322d1536\\scratch\\check_db.py",
+    "C:\\Users\\Admin\\.gemini\\antigravity\\brain\\15d42fc0-cde6-4f11-8817-3d16322d1536\\scratch\\test_collect.py",
+    "C:\\Users\\Admin\\.gemini\\antigravity\\brain\\15d42fc0-cde6-4f11-8817-3d16322d1536\\scratch\\run_full.py",
+    "d:\\Src\\my\\actdim\\public\\along\\.along\\ISSUES\\task--code-review-graph-windows-ignore-hardening.md",
+    "d:\\Src\\my\\actdim\\public\\along\\.along\\ISSUES\\feat--runtime-hooks-cursor-opencode.md",
+    "d:\\Src\\my\\actdim\\public\\along\\scripts\\alongkit\\hooks\\adapters\\generic.py",
+    "d:\\Src\\my\\actdim\\public\\along\\.along\\.session\\feat--runtime-hooks-cursor-opencode\\reviews\\step-1.md",
+    "d:\\Src\\my\\actdim\\public\\along\\.along\\.session\\feat--runtime-hooks-cursor-opencode\\reviews\\step-2.md",
+    "d:\\Src\\my\\actdim\\public\\along\\.along\\.session\\feat--runtime-hooks-cursor-opencode\\reviews\\step-3.md",
+    "d:\\Src\\my\\actdim\\public\\along\\tests\\test_hooks_generic.py",
+    "d:\\Src\\my\\actdim\\public\\along\\.along\\.session\\feat--runtime-hooks-cursor-opencode\\reviews\\step-4.md",
+    "C:\\Users\\Admin\\.gemini\\antigravity\\brain\\7d360545-7082-4b97-b53d-74af77acd908\\walkthrough.md",
+    "d:\\Src\\my\\actdim\\public\\along\\.along\\SESSIONS\\2026\\2026-09-15--runtime-hooks-cursor-opencode.md"
   ]
 }

@@ -57,6 +57,8 @@ def load_config(repo_root: Optional[str] = None) -> HooksConfig:
     env_mode = os.environ.get("ALONG_HOOK_MODE", "").strip().lower()
     if env_mode in (HookMode.ENFORCE, HookMode.SHADOW):
         config.mode = env_mode
+        for k in config.gates:
+            config.gates[k] = env_mode
 
     if not repo_root:
         repo_root = repo.find_repo_root()
@@ -339,6 +341,96 @@ def install_codex_hooks(repo_root: str, dry_run: bool = False) -> Tuple[str, str
     os.makedirs(codex_dir, exist_ok=True)
     textio.write_text(hooks_file, json.dumps(existing, indent=2) + "\n", newline="\n")
     return "installed", f"updated {hooks_file} with Along hooks"
+
+
+def get_cursor_hook_manifest() -> Dict[str, Any]:
+    """Canonical hook configuration dictionary for Cursor (.cursor/hooks.json)."""
+    return {
+        "version": 1,
+        "hooks": {
+            "preToolUse": [
+                {
+                    "command": "python scripts/along_hook.py --runtime cursor --event PreToolUse",
+                }
+            ],
+            "postToolUse": [
+                {
+                    "command": "python scripts/along_hook.py --runtime cursor --event PostToolUse",
+                }
+            ],
+            "stop": [
+                {
+                    "command": "python scripts/along_hook.py --runtime cursor --event Stop",
+                }
+            ],
+        },
+    }
+
+
+def install_cursor_hooks(repo_root: str, dry_run: bool = False) -> Tuple[str, str]:
+    """Scaffold or update .cursor/hooks.json for Cursor in the given repository."""
+    cursor_dir = os.path.join(repo_root, ".cursor")
+    hooks_file = os.path.join(cursor_dir, "hooks.json")
+
+    existing: Dict[str, Any] = {}
+    if os.path.isfile(hooks_file):
+        try:
+            content = textio.read_text(hooks_file, strict=False)
+            if content.strip():
+                existing = json.loads(content)
+                if not isinstance(existing, dict):
+                    return "failed", f"left {hooks_file} alone: top-level is not a JSON object"
+        except (OSError, ValueError) as exc:
+            return "failed", f"left {hooks_file} alone: cannot parse JSON ({exc})"
+
+    spec = get_cursor_hook_manifest()
+    spec_hooks = spec.get("hooks", {})
+
+    if "version" not in existing:
+        existing["version"] = 1
+
+    hooks_container = existing.get("hooks")
+    if not isinstance(hooks_container, dict):
+        hooks_container = {}
+        existing["hooks"] = hooks_container
+
+    changed = False
+    for event_name, hook_list in spec_hooks.items():
+        cur_list = hooks_container.get(event_name)
+        if not isinstance(cur_list, list):
+            cur_list = []
+            hooks_container[event_name] = cur_list
+            changed = True
+
+        for expected_hook in hook_list:
+            matched_idx = -1
+            for idx, item in enumerate(cur_list):
+                if (
+                    isinstance(item, dict)
+                    and "along_hook.py" in str(item.get("command", ""))
+                    and f"--event {event_name}".lower() in str(item.get("command", "")).lower()
+                ):
+                    matched_idx = idx
+                    break
+
+            if matched_idx >= 0:
+                if cur_list[matched_idx] != expected_hook:
+                    cur_list[matched_idx] = expected_hook
+                    changed = True
+            else:
+                cur_list.append(expected_hook)
+                changed = True
+
+    if not changed:
+        return "present", f"{hooks_file}: already up to date"
+
+    if dry_run:
+        return "dry-run", f"would update {hooks_file} with Along hooks"
+
+    os.makedirs(cursor_dir, exist_ok=True)
+    textio.write_text(hooks_file, json.dumps(existing, indent=2) + "\n", newline="\n")
+    return "installed", f"updated {hooks_file} with Along hooks"
+
 
 
 

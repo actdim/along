@@ -137,6 +137,7 @@ Entity Management Commands:
   budget         Measure context footprint and check token budgets (--json, --check)
   context-budget Measure context footprint and check token budgets (--json, --check)
   circuit        Systemic anomaly circuit breaker (status, trip, reset, verify)
+  run            Execute command behind runtime gate pipeline (along run <cmd...>)
 
 Along Protocol Tools:
   wrap           Transactional session and issue wrap engine
@@ -1205,6 +1206,48 @@ def handle_circuit_command(repo_root: str, args: List[str]):
         sys.exit(1)
 
 
+def handle_run_command(repo_root: Optional[str], args: List[str]):
+    if not args or args[0] in ("-h", "--help", "help"):
+        print("Usage: along run <command...>")
+        print("       python scripts/along_exec.py run <command...>")
+        print("")
+        print("Execute a shell command behind the Along runtime lifecycle hook and gate pipeline.")
+        print("Commands violating active protocol gates (typography, CLI safety, commit guard)")
+        print("are blocked with exit code 2 and an error message on stderr.")
+        sys.exit(0)
+
+    from alongkit.hooks import HookEvent, HookEventType, evaluate_event, load_config
+    config = load_config(repo_root)
+
+    cmd_str = " ".join(args)
+    effective_root = repo_root or os.getcwd()
+    event = HookEvent(
+        event_type=HookEventType.PRE_TOOL_USE,
+        tool_name="run_command",
+        tool_args={"CommandLine": cmd_str},
+        workspace_root=effective_root,
+        runtime="generic",
+    )
+
+    result = evaluate_event(event, repo_root=repo_root, config=config)
+    if result.is_denied:
+        sys.stderr.write(f"[Along Gate Error] {result.reason}\n")
+        sys.exit(2)
+
+    # Resolve arguments for direct execution
+    exec_args = list(args)
+    if len(exec_args) == 1 and not shutil.which(exec_args[0]):
+        try:
+            split_args = shlex.split(exec_args[0], posix=(os.name != "nt"))
+            if split_args and shutil.which(split_args[0]):
+                exec_args = split_args
+        except ValueError:
+            pass
+
+    code = proc.run_passthrough(exec_args, cwd=repo_root)
+    sys.exit(code)
+
+
 def main():
     if len(sys.argv) < 2 or sys.argv[1] in ("-h", "--help", "help"):
         print_help()
@@ -1237,6 +1280,8 @@ def main():
         handle_budget_command(repo_root, extra_args)
     elif cmd == "patch":
         handle_patch_command(repo_root, extra_args)
+    elif cmd == "run":
+        handle_run_command(repo_root, extra_args)
     elif cmd == "kb":
         sub = extra_args[0].lower() if extra_args else "sync"
         mapped = "along_kb_sync.py" if sub == "sync" else "along_kb_search.py"

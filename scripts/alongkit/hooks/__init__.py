@@ -12,9 +12,11 @@ from .config import (
     get_antigravity_hook_manifest,
     get_claude_hook_manifest,
     get_codex_hook_manifest,
+    get_cursor_hook_manifest,
     install_antigravity_hooks,
     install_claude_hooks,
     install_codex_hooks,
+    install_cursor_hooks,
     load_config,
 )
 from .engine import HookEngine, evaluate_event
@@ -35,6 +37,8 @@ __all__ = [
     "install_claude_hooks",
     "get_codex_hook_manifest",
     "install_codex_hooks",
+    "get_cursor_hook_manifest",
+    "install_cursor_hooks",
     "BaseGate",
     "TypographyGate",
     "ProjectionProtectionGate",
