@@ -2,6 +2,10 @@
 
 All notable changes to this project, newest first.
 
+## v3.6.0 - 2026-09-16
+
+- feat(hooks): Cursor and OpenCode runtime hook adapters, GenericCliAdapter, and along run proxy [feat--runtime-hooks-cursor-opencode]
+
 ## v3.5.0 - 2026-09-15
 
 - feat(graph): add along-graph-sync engine, auto-ignore, and lifecycle hooks [feat--graph-build-lifecycle-integration]
