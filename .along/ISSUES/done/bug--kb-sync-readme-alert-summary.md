@@ -12,6 +12,7 @@ agent: antigravity
 tags: [kb-sync, parser, readme]
 blocked_by: []
 related: []
+milestone: v1.3.0-knowledge-base-and-graph
 ---
 
 # Ignore alerts and extract first text block in along_kb_sync

@@ -11,6 +11,7 @@ agent: antigravity
 tags: [git, windows, cache]
 blocked_by: []
 related: []
+milestone: v1.3.0-knowledge-base-and-graph
 ---
 
 # Remove broken git locking workarounds and restore clean stat-cache

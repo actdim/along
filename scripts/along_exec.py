@@ -114,10 +114,16 @@ Lifecycle Commands (project hooks):
 Entity Management Commands:
   status         Instant terminal summary of repository state, active issues, and recent sessions
   doctor         Validate .along/ structure, .gitattributes, and ADR headers (--entities for entity graph)
+  start          Atomically mark issue in-progress, initialize session blackboard, and optional --worktree
   issue create   <type> <slug> --title "Title" [--priority high|medium|low] [--tags "t1,t2"] [--agent <name>] [--milestone <name>]
+  issue update   <slug> [--milestone <name>] [--priority <priority>] [--status <status>] [--tags <tags>] [--title <title>]
+  issue show     <slug> [--json]
   issue sync     Recompile .along/ISSUES.md projection deterministically from entity files
   issue done     <slug>
   issue list     List active issues in terminal
+  milestone sync [<slug>] Recompute target_issues, progress_pct, and status across milestones
+  milestone list [--status open|in-progress|completed] [--json]
+  milestone show <slug> [--json]
   session create <slug> --summary "Summary" [--issues "slug1,slug2"] [--decisions "ADR-slug"] [--agent <name>] [--milestone <name>]
   session wrap   <slug> [--status done|superseded] [--summary "Summary"] [--dry-run] [-n]
   decision create <slug> --title "Title" --context "Why" --decision "What" --consequences "Tradeoffs"
@@ -165,7 +171,7 @@ compile_issues_board = entities.compile_issues_board
 
 def handle_issue_command(repo_root: str, args: List[str]):
     if not args or args[0] in ("-h", "--help", "help"):
-        print("Usage: along_exec.py issue [create|done|list] [args...]")
+        print("Usage: along_exec.py issue [create|update|done|sync|list|show] [args...]")
         sys.exit(0)
 
     subcmd = args[0].lower()
@@ -412,6 +418,276 @@ Describe the feature, requirements, and background context here.
                 count += 1
         print(f"Total active issues: {count}")
         sys.exit(0)
+
+    elif subcmd in ("update", "edit"):
+        if len(args) < 2:
+            print("[Error] Usage: along issue update <slug> [--milestone <name>] [--priority <high|medium|low>] [--status <status>] [--tags <t1,t2>] [--title <title>]", file=sys.stderr)
+            sys.exit(1)
+        raw_slug = args[1].lower()
+        issue = entities.find_issue_by_slug(repo_root, raw_slug)
+        if not issue:
+            print(f"[Error] Issue '{raw_slug}' not found in .along/ISSUES/.", file=sys.stderr)
+            sys.exit(1)
+
+        updates: Dict[str, Any] = {"updated": today}
+        milestone_updated = False
+        target_milestone_slug = None
+
+        i = 2
+        while i < len(args):
+            flag = args[i]
+            val = args[i + 1] if i + 1 < len(args) else None
+            if flag in ("--milestone", "-m") and val:
+                if val in ("~", "none", "null", ""):
+                    updates["milestone"] = None
+                else:
+                    m_resolved = entities.resolve_milestone_by_query(repo_root, val)
+                    if not m_resolved:
+                        print(f"[Error] Milestone '{val}' not found or ambiguous in .along/MILESTONES/.", file=sys.stderr)
+                        sys.exit(1)
+                    updates["milestone"] = m_resolved["slug"]
+                    target_milestone_slug = m_resolved["slug"]
+                milestone_updated = True
+                i += 2
+            elif flag in ("--priority", "-p") and val:
+                pval = val.lower()
+                if pval not in entities.PRIORITIES:
+                    print(f"[Error] Invalid priority '{pval}'. Allowed: {', '.join(entities.PRIORITIES)}", file=sys.stderr)
+                    sys.exit(1)
+                updates["priority"] = pval
+                i += 2
+            elif flag in ("--status", "-s") and val:
+                sval = val.lower()
+                if sval not in entities.ISSUE_STATUSES:
+                    print(f"[Error] Invalid status '{sval}'. Allowed: {', '.join(entities.ISSUE_STATUSES)}", file=sys.stderr)
+                    sys.exit(1)
+                updates["status"] = sval
+                i += 2
+            elif flag in ("--tags",) and val:
+                updates["tags"] = [t.strip() for t in val.split(",") if t.strip()]
+                i += 2
+            elif flag in ("--title", "-t") and val:
+                updates["title"] = val
+                i += 2
+            else:
+                i += 1
+
+        fpath, new_fm = entities.update_issue_frontmatter(repo_root, issue["slug"], updates)
+        rel_path = os.path.relpath(fpath, repo_root).replace("\\", "/")
+        print(f"-> Updated issue {issue['slug']}: {rel_path}")
+        for k, v in updates.items():
+            if k != "updated":
+                print(f"   {k}: {v}")
+
+        if milestone_updated:
+            old_m = issue["frontmatter"].get("milestone")
+            if old_m and old_m != target_milestone_slug:
+                try:
+                    entities.sync_milestones(repo_root, old_m)
+                except ValueError:
+                    pass
+            if target_milestone_slug:
+                try:
+                    entities.sync_milestones(repo_root, target_milestone_slug)
+                except ValueError:
+                    pass
+            print("-> Synchronized affected milestone(s).")
+
+        board_content = compile_issues_board(repo_root, recent_done_limit=RECENT_DONE_LIMIT)
+        issues_board = os.path.join(repo_root, ".along", "ISSUES.md")
+        with open(issues_board, "w", encoding="utf-8", newline="\n") as f:
+            f.write(board_content)
+        sys.exit(0)
+
+    elif subcmd in ("show", "get"):
+        if len(args) < 2:
+            print("[Error] Usage: along issue show <slug> [--json]", file=sys.stderr)
+            sys.exit(1)
+        raw_slug = args[1].lower()
+        summary = entities.get_issue_summary(repo_root, raw_slug)
+        if not summary:
+            print(f"[Error] Issue '{raw_slug}' not found in .along/ISSUES/.", file=sys.stderr)
+            sys.exit(1)
+
+        if "--json" in args:
+            import json
+            print(json.dumps(summary, indent=2))
+        else:
+            print(f"=== Issue: {summary['slug']} ({summary['type']}) ===")
+            print(f"Title:     {summary['title']}")
+            print(f"Status:    {summary['status']}")
+            print(f"Priority:  {summary['priority']}")
+            print(f"Milestone: {summary.get('milestone') or 'none'}")
+            print(f"Agent:     {summary.get('agent') or 'unknown'}")
+            print(f"Tags:      {', '.join(summary.get('tags') or [])}")
+            print(f"Path:      {summary['file_path']}")
+            if summary.get("body"):
+                print("\n--- Summary / Body ---")
+                lines = summary["body"].splitlines()
+                preview = lines[:25]
+                print("\n".join(preview))
+                if len(lines) > 25:
+                    print(f"... ({len(lines) - 25} more lines)")
+        sys.exit(0)
+
+    else:
+        print(f"[Error] Unknown issue subcommand '{subcmd}'. Run 'along issue --help'.", file=sys.stderr)
+        sys.exit(1)
+
+
+def handle_milestone_command(repo_root: str, args: List[str]):
+    if not args or args[0] in ("-h", "--help", "help"):
+        print("Usage: along milestone [sync|list|show] [args...]")
+        print("  sync [<slug>]             Recompute target_issues, progress_pct, and status")
+        print("  list [--status <status>] [--json]")
+        print("  show <slug> [--json]")
+        sys.exit(0)
+
+    subcmd = args[0].lower()
+
+    if subcmd == "sync":
+        target = args[1] if len(args) > 1 and not args[1].startswith("-") else None
+        try:
+            results = entities.sync_milestones(repo_root, target_slug=target)
+        except ValueError as e:
+            print(f"[Error] {e}", file=sys.stderr)
+            sys.exit(1)
+
+        print(f"-> Synchronized {len(results)} milestone(s):")
+        for r in results:
+            print(f"   - {r['slug']}: {r['status']} ({r['progress_pct']}%, {r['done_issues']}/{r['total_issues']} issues completed)")
+        sys.exit(0)
+
+    elif subcmd == "list":
+        as_json = "--json" in args
+        filter_status = None
+        for i in range(1, len(args)):
+            if args[i] in ("--status", "-s") and i + 1 < len(args):
+                filter_status = args[i + 1].lower()
+
+        milestones = entities.scan_milestones(repo_root)
+        if filter_status:
+            milestones = [m for m in milestones if m["status"] == filter_status]
+
+        if as_json:
+            import json
+            out = []
+            for m in milestones:
+                fm = m["frontmatter"]
+                out.append({
+                    "slug": m["slug"],
+                    "title": m.get("title"),
+                    "status": m["status"],
+                    "progress_pct": fm.get("progress_pct", 0),
+                    "target_issues": fm.get("target_issues", []),
+                    "file_path": os.path.relpath(m["file_path"], repo_root).replace("\\", "/"),
+                })
+            print(json.dumps(out, indent=2))
+        else:
+            print(f"-> Milestones in {repo_root}:")
+            for m in milestones:
+                fm = m["frontmatter"]
+                pct = fm.get("progress_pct", 0)
+                targets = fm.get("target_issues", [])
+                print(f"   - [{m['status']}] {m['slug']} ({pct}%, {len(targets)} target issues)")
+        sys.exit(0)
+
+    elif subcmd == "show":
+        if len(args) < 2:
+            print("[Error] Usage: along milestone show <slug> [--json]", file=sys.stderr)
+            sys.exit(1)
+        query = args[1]
+        m = entities.resolve_milestone_by_query(repo_root, query)
+        if not m:
+            print(f"[Error] Milestone '{query}' not found in .along/MILESTONES/.", file=sys.stderr)
+            sys.exit(1)
+
+        fm = m["frontmatter"]
+        target_keys = fm.get("target_issues", [])
+        all_issues = entities.scan_issues(repo_root, include_done=True)
+        assigned = []
+        for iss in all_issues:
+            key = entities.canonical_key(iss["type"], iss["slug"])
+            if key in target_keys or iss["slug"] in target_keys or str(iss["frontmatter"].get("milestone")) in (m["slug"], os.path.basename(m["file_path"])[:-3]):
+                assigned.append(iss)
+
+        if "--json" in args:
+            import json
+            out = {
+                "slug": m["slug"],
+                "title": m["title"],
+                "status": m["status"],
+                "progress_pct": fm.get("progress_pct", 0),
+                "due_date": fm.get("due_date"),
+                "file_path": os.path.relpath(m["file_path"], repo_root).replace("\\", "/"),
+                "target_issues": [
+                    {
+                        "slug": iss["slug"],
+                        "type": iss["type"],
+                        "status": iss["status"],
+                        "done": iss["done"],
+                    }
+                    for iss in assigned
+                ]
+            }
+            print(json.dumps(out, indent=2))
+        else:
+            print(f"=== Milestone: {m['slug']} ===")
+            print(f"Title:        {m['title']}")
+            print(f"Status:       {m['status']}")
+            print(f"Progress:     {fm.get('progress_pct', 0)}%")
+            print(f"Due Date:     {fm.get('due_date') or 'none'}")
+            print(f"Target Issues ({len(assigned)}):")
+            for iss in assigned:
+                box = "x" if iss["done"] else " "
+                print(f"   - [{box}] ({iss['type']}) {iss['slug']} [{iss['status']}]")
+        sys.exit(0)
+
+    else:
+        print(f"[Error] Unknown milestone subcommand '{subcmd}'. Run 'along milestone --help'.", file=sys.stderr)
+        sys.exit(1)
+
+
+def handle_start_command(repo_root: str, args: List[str]):
+    if not args or args[0] in ("-h", "--help", "help"):
+        print("Usage: along start <slug> [--worktree]")
+        print("  Atomically marks issue in-progress, initializes session blackboard,")
+        print("  and optionally creates an isolated worktree.")
+        sys.exit(0)
+
+    from datetime import datetime
+    today = datetime.now().strftime("%Y-%m-%d")
+
+    slug = args[0].lower()
+    issue = entities.find_issue_by_slug(repo_root, slug)
+    if not issue:
+        print(f"[Error] Issue '{slug}' not found in .along/ISSUES/.", file=sys.stderr)
+        sys.exit(1)
+
+    updates = {"status": "in-progress", "updated": today}
+    fpath, new_fm = entities.update_issue_frontmatter(repo_root, issue["slug"], updates)
+    rel_path = os.path.relpath(fpath, repo_root).replace("\\", "/")
+    print(f"-> Marked issue in-progress: {rel_path}")
+
+    board_content = compile_issues_board(repo_root, recent_done_limit=RECENT_DONE_LIMIT)
+    issues_board = os.path.join(repo_root, ".along", "ISSUES.md")
+    with open(issues_board, "w", encoding="utf-8", newline="\n") as f:
+        f.write(board_content)
+
+    title = new_fm.get("title", issue["slug"].replace("-", " ").capitalize())
+    st = session.init_session(repo_root, issue["slug"], title=title)
+    sdir = session.get_session_dir(repo_root, issue["slug"])
+    print(f"-> Initialized session blackboard: {sdir}")
+
+    if "--worktree" in args:
+        from alongkit import worktree
+        wt_path = worktree.create_worktree(repo_root, issue["slug"])
+        print(f"-> Created isolated worktree: {wt_path}")
+        print(f"-> Ready to work in worktree. Run tests and edits there.")
+    else:
+        print(f"-> Ready to work on issue '{issue['slug']}'. Active issue bound.")
+
+    sys.exit(0)
 
 
 def handle_session_command(repo_root: str, args: List[str]):
@@ -1266,6 +1542,10 @@ def main():
         handle_circuit_command(repo_root, extra_args)
     elif cmd == "issue":
         handle_issue_command(repo_root, extra_args)
+    elif cmd in ("milestone", "milestones"):
+        handle_milestone_command(repo_root, extra_args)
+    elif cmd in ("start", "begin"):
+        handle_start_command(repo_root, extra_args)
     elif cmd == "session":
         handle_session_command(repo_root, extra_args)
     elif cmd == "decision":

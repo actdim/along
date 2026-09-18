@@ -10,6 +10,9 @@ created: 2026-09-04
 updated: 2026-09-04
 agent: antigravity
 tags: [llms-txt, well-known, alongkit, discovery, kb-sync]
+milestone: v1.3.0-knowledge-base-and-graph
+blocked_by: []
+related: []
 ---
 
 # Feature: Deterministic llms.txt & llms-full.txt with .well-known/ Support and Centralized Context Discovery

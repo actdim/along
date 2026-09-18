@@ -12,6 +12,7 @@ tags: [antigravity, git, upstream, bug]
 blocked_by: []
 related: [bug--remove-git-locking-workarounds]
 superseded_by: antigravity-git-index-truncation
+milestone: v1.3.0-knowledge-base-and-graph
 ---
 
 # Track Upstream Antigravity Extension Git Index Truncation Bug and Hotfix

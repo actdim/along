@@ -10,6 +10,10 @@ updated: 2026-09-10
 completed: 2026-09-10
 agent: antigravity
 title: Fix MkDocs root 404 and version drift by injecting README.md as virtual index.md
+tags: []
+milestone: v1.3.0-knowledge-base-and-graph
+blocked_by: []
+related: []
 ---
 
 # Bug: Fix MkDocs root 404 and version drift by injecting README.md as virtual index.md

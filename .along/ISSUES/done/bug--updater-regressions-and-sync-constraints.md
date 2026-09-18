@@ -10,6 +10,10 @@ updated: 2026-09-10
 completed: 2026-09-10
 agent: antigravity
 title: Fix sync_constraints return value, along_update help CLI flag, and protocol block spacing
+tags: []
+milestone: v1.3.0-knowledge-base-and-graph
+blocked_by: []
+related: []
 ---
 
 # Bug: Fix sync_constraints return value, along_update help CLI flag, and protocol block spacing

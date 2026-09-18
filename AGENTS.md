@@ -88,6 +88,7 @@ When a stage or session completes, agents MUST execute in this order:
 - Keep `ISSUES.md` compact - it costs context every session.
 - Never write secrets/credentials/tokens/keys into tracked files.
 <!-- END ALONG-PROTOCOL -->
+
 ## Project specifics
 
 <!-- BEGIN ALONG-RULES -->

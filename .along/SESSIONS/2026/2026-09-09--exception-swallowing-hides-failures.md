@@ -11,6 +11,8 @@ issues_completed: [debt--exception-swallowing-hides-failures]
 decisions: [ADR-2026-09-09--error-handling-and-failure-visibility]
 risks_logged: []
 spikes_conducted: []
+branch: main
+commit: unknown
 ---
 
 # Session Log: 2026-09-09 - Exception Swallowing & Failure Visibility Remediation

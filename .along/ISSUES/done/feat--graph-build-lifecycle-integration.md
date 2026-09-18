@@ -9,7 +9,7 @@ created: 2026-09-15
 updated: 2026-09-15
 agent: antigravity
 tags: [code-review-graph, mcp, lifecycle, cli, blast-radius, graph-build]
-milestone: ~
+milestone: v1.3.0-knowledge-base-and-graph
 blocked_by: []
 related: [feat--native-ast-blast-radius-analyzer]
 ---

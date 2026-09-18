@@ -12,6 +12,7 @@ issues_completed: [kb-sync-readme-alert-summary]
 decisions: []
 risks_logged: []
 spikes_conducted: []
+milestone: v2.0.0-along-transition
 ---
 
 # Session: Kb sync readme alert summary

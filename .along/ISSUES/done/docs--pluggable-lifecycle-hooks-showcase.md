@@ -12,6 +12,7 @@ agent: antigravity
 tags: [docs, lifecycle, protocol, agents]
 blocked_by: []
 related: []
+milestone: v1.3.0-knowledge-base-and-graph
 ---
 
 # Elevate Pluggable Lifecycle Hooks as Core Feature and Agent Directives

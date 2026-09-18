@@ -1,7 +1,13 @@
 # Code Review Graph Exclusions
 node_modules/
+node_modules/**
+*node_modules*
 dist/
+dist/**
+*dist*
 build/
+build/**
+*build*
 out/
 .next/
 .nuxt/
@@ -9,6 +15,12 @@ vendor/
 tmp/
 temp/
 coverage/
+site/
+.venv/
+.venv/**
+*.venv*
+venv/
+env/
 .git/
 .along/SESSIONS/
 .along/.session/
@@ -18,10 +30,3 @@ coverage/
 *.map
 *.pyc
 __pycache__/
-
-
-# Additional critical exclusions appended by Along
-.venv/
-
-# Additional critical exclusions appended by Along
-*node_modules*

@@ -8,7 +8,7 @@ created: 2026-08-27
 updated: 2026-09-10
 agent: antigravity
 tags: [integration, issue-tracking, jira, redmine, linear, github, github-projects, import, backlog]
-milestone: ~
+milestone: v2.0.0-along-transition
 blocked_by: []
 related: [feat--openclaw-and-hermes-agent-integration]
 ---
