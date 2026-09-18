@@ -39,8 +39,14 @@ from alongkit import install, repo
 STANDARD_IGNORES = [
     "# Code Review Graph Exclusions",
     "node_modules/",
+    "node_modules/**",
+    "*node_modules*",
     "dist/",
+    "dist/**",
+    "*dist*",
     "build/",
+    "build/**",
+    "*build*",
     "out/",
     ".next/",
     ".nuxt/",
@@ -50,6 +56,8 @@ STANDARD_IGNORES = [
     "coverage/",
     "site/",
     ".venv/",
+    ".venv/**",
+    "*.venv*",
     "venv/",
     "env/",
     ".git/",
@@ -63,50 +71,60 @@ STANDARD_IGNORES = [
     "__pycache__/",
 ]
 
-CRITICAL_PATTERNS = ["node_modules", "dist", "build", ".venv"]
+CRITICAL_PATTERNS = ["node_modules", "dist", "build", ".venv", "*node_modules*"]
 
 
 def ensure_ignore_file(repo_root: str, verbose: bool = False) -> Tuple[bool, List[str]]:
-    """Ensure .code-review-graph-ignore exists and contains critical exclusions.
+    """Ensure both .code-review-graph-ignore and .code-review-graphignore exist and contain critical exclusions.
 
     Returns (was_modified_or_created, missing_patterns_added).
     """
-    ignore_path = os.path.join(repo_root, ".code-review-graph-ignore")
-    if not os.path.exists(ignore_path):
+    modified = False
+    all_added: List[str] = []
+
+    # Check both canonical Along filename and native crg filename
+    target_files = [
+        os.path.join(repo_root, ".code-review-graph-ignore"),
+        os.path.join(repo_root, ".code-review-graphignore"),
+    ]
+
+    for ignore_path in target_files:
+        if not os.path.exists(ignore_path):
+            try:
+                with open(ignore_path, "w", encoding="utf-8", newline="\n") as f:
+                    f.write("\n".join(STANDARD_IGNORES) + "\n")
+                if verbose:
+                    print(f"-> [Graph Sync] Created {os.path.basename(ignore_path)} at {ignore_path}")
+                modified = True
+                all_added = list(CRITICAL_PATTERNS)
+            except OSError as exc:
+                if verbose:
+                    print(f"[Warning] Failed to write {ignore_path}: {exc}", file=sys.stderr)
+            continue
+
+        # File exists: check if critical exclusions are present
         try:
-            with open(ignore_path, "w", encoding="utf-8", newline="\n") as f:
-                f.write("\n".join(STANDARD_IGNORES) + "\n")
-            if verbose:
-                print(f"-> [Graph Sync] Created .code-review-graph-ignore at {ignore_path}")
-            return True, [p for p in CRITICAL_PATTERNS]
-        except OSError as exc:
-            if verbose:
-                print(f"[Warning] Failed to write {ignore_path}: {exc}", file=sys.stderr)
-            return False, []
+            with open(ignore_path, "r", encoding="utf-8", errors="ignore") as f:
+                content = f.read()
+        except OSError:
+            continue
 
-    # File exists: check if critical exclusions are present
-    try:
-        with open(ignore_path, "r", encoding="utf-8", errors="ignore") as f:
-            content = f.read()
-    except OSError:
-        return False, []
+        missing = [p for p in CRITICAL_PATTERNS if p not in content]
+        if missing:
+            try:
+                with open(ignore_path, "a", encoding="utf-8", newline="\n") as f:
+                    f.write("\n# Additional critical exclusions appended by Along\n")
+                    for item in missing:
+                        f.write(f"{item}\n")
+                if verbose:
+                    print(f"-> [Graph Sync] Appended missing exclusions to {os.path.basename(ignore_path)}: {', '.join(missing)}")
+                modified = True
+                all_added.extend(missing)
+            except OSError as exc:
+                if verbose:
+                    print(f"[Warning] Failed to append to {ignore_path}: {exc}", file=sys.stderr)
 
-    missing = [p for p in CRITICAL_PATTERNS if p not in content]
-    if missing:
-        try:
-            with open(ignore_path, "a", encoding="utf-8", newline="\n") as f:
-                f.write("\n# Additional critical exclusions appended by Along\n")
-                for item in missing:
-                    f.write(f"{item}/\n")
-            if verbose:
-                print(f"-> [Graph Sync] Appended missing exclusions to .code-review-graph-ignore: {', '.join(missing)}")
-            return True, missing
-        except OSError as exc:
-            if verbose:
-                print(f"[Warning] Failed to append to {ignore_path}: {exc}", file=sys.stderr)
-            return False, []
-
-    return False, []
+    return modified, list(set(all_added))
 
 
 def parse_graph_status(output: str) -> Dict[str, Any]:

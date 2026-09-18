@@ -10,6 +10,10 @@ updated: 2026-09-10
 completed: 2026-09-10
 agent: antigravity
 title: Bump minor version to v2.6.0 and reconcile stale protocol version references
+tags: []
+milestone: v1.3.0-knowledge-base-and-graph
+blocked_by: []
+related: []
 ---
 
 # Task: Bump minor version to v2.6.0 and reconcile stale protocol version references

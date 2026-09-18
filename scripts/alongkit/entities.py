@@ -947,6 +947,199 @@ def resolve_in_progress_milestone(repo_root: str) -> Optional[str]:
     return None
 
 
+def resolve_milestone_by_query(repo_root: str, query: str) -> Optional[Dict[str, Any]]:
+    """Fuzzy resolve milestone by exact slug, filename, version prefix, or substring.
+
+    Examples:
+    - 'v4.0.0-runtime-gates-and-worktree-isolation' -> exact match
+    - '4.0', 'v4.0', '4.0.0' -> version prefix match
+    - 'runtime-gates' -> substring match
+    """
+    if not query or not isinstance(query, str):
+        return None
+    raw = query.strip()
+    if raw.endswith(".md"):
+        raw = raw[:-3]
+    lowered = raw.lower()
+
+    milestones = scan_milestones(repo_root)
+    if not milestones:
+        return None
+
+    # 1. Exact match on slug or filename stem
+    for m in milestones:
+        stem = os.path.basename(m["file_path"])[:-3].lower()
+        if m["slug"].lower() == lowered or stem == lowered:
+            return m
+
+    # 2. Version prefix matching
+    clean_v = lowered.lstrip("v")
+    v_candidates = []
+    for m in milestones:
+        m_slug_clean = m["slug"].lower().lstrip("v")
+        m_stem_clean = os.path.basename(m["file_path"])[:-3].lower().lstrip("v")
+        if (m_slug_clean.startswith(clean_v + ".") or
+                m_slug_clean.startswith(clean_v + "-") or
+                m_slug_clean == clean_v or
+                m_stem_clean.startswith(clean_v + ".") or
+                m_stem_clean.startswith(clean_v + "-") or
+                m_stem_clean == clean_v):
+            v_candidates.append(m)
+
+    if len(v_candidates) == 1:
+        return v_candidates[0]
+    elif len(v_candidates) > 1:
+        exact_v = [m for m in v_candidates if m["slug"].lower().startswith(f"v{clean_v}") or m["slug"].lower().startswith(clean_v)]
+        if len(exact_v) == 1:
+            return exact_v[0]
+        return None
+
+    # 3. Substring matching
+    sub_candidates = [
+        m for m in milestones
+        if lowered in m["slug"].lower() or lowered in m.get("title", "").lower()
+    ]
+    if len(sub_candidates) == 1:
+        return sub_candidates[0]
+
+    return None
+
+
+def update_issue_frontmatter(repo_root: str, slug: str, updates: Dict[str, Any]) -> Tuple[str, Dict[str, Any]]:
+    """Update issue frontmatter fields preserving comments, order, and structure."""
+    from . import frontmatter, textio
+
+    issue = find_issue_by_slug(repo_root, slug)
+    if not issue:
+        raise ValueError(f"Issue with slug '{slug}' not found.")
+
+    fpath = issue["file_path"]
+    content = textio.read_text(fpath)
+    updated_content = frontmatter.update(content, updates, path=fpath)
+    textio.write_text(fpath, updated_content, newline="\n")
+
+    new_fm, _, _ = frontmatter.try_parse(updated_content, path=fpath)
+    return fpath, new_fm
+
+
+def sync_milestones(repo_root: str, target_slug: Optional[str] = None) -> List[Dict[str, Any]]:
+    """Synchronize milestone files: target_issues, progress_pct, and status.
+
+    Scans all issues in .along/ISSUES/ and .along/ISSUES/done/, associates them
+    with milestones, and recomputes progress statistics deterministically.
+    """
+    from . import frontmatter, textio
+
+    all_milestones = scan_milestones(repo_root)
+    if not all_milestones:
+        return []
+
+    target_m = None
+    if target_slug:
+        target_m = resolve_milestone_by_query(repo_root, target_slug)
+        if not target_m:
+            raise ValueError(f"Milestone '{target_slug}' not found.")
+
+    milestones_to_sync = [target_m] if target_m else all_milestones
+    all_issues = scan_issues(repo_root, include_done=True)
+
+    results = []
+    for m in milestones_to_sync:
+        m_slug = m["slug"]
+        m_stem = os.path.basename(m["file_path"])[:-3]
+
+        assigned_issues = []
+        for iss in all_issues:
+            iss_m = iss["frontmatter"].get("milestone")
+            if not iss_m:
+                continue
+            iss_m_str = str(iss_m).strip()
+            if iss_m_str in (m_slug, m_stem):
+                assigned_issues.append(iss)
+
+        assigned_keys = sorted(list({
+            canonical_key(iss["type"], iss["slug"]) for iss in assigned_issues
+        }))
+
+        total = len(assigned_issues)
+        done_count = len([iss for iss in assigned_issues if iss["done"]])
+        in_prog_count = len([iss for iss in assigned_issues if iss["status"] == "in-progress"])
+
+        if total > 0:
+            pct = round(100 * done_count / total)
+            if done_count == total:
+                new_status = "completed"
+            elif in_prog_count > 0 or done_count > 0:
+                new_status = "in-progress"
+            else:
+                new_status = "open"
+        else:
+            pct = 100 if m["status"] == "completed" else 0
+            new_status = m["status"]
+
+        fpath = m["file_path"]
+        content = textio.read_text(fpath)
+        cur_target = m["frontmatter"].get("target_issues", [])
+        cur_pct = m["frontmatter"].get("progress_pct")
+        cur_status = m["frontmatter"].get("status")
+
+        if cur_target != assigned_keys or cur_pct != pct or cur_status != new_status:
+            updates = {
+                "target_issues": assigned_keys,
+                "progress_pct": pct,
+                "status": new_status,
+            }
+            updated_content = frontmatter.update(content, updates, path=fpath)
+            textio.write_text(fpath, updated_content, newline="\n")
+
+        results.append({
+            "slug": m_slug,
+            "title": m["title"],
+            "file_path": fpath,
+            "status": new_status,
+            "progress_pct": pct,
+            "total_issues": total,
+            "done_issues": done_count,
+            "target_issues": assigned_keys,
+        })
+
+    return results
+
+
+def get_issue_summary(repo_root: str, slug: str) -> Optional[Dict[str, Any]]:
+    """Retrieve structured summary of an issue including frontmatter and body."""
+    from . import frontmatter, repo, textio
+
+    iss = find_issue_by_slug(repo_root, slug)
+    if not iss:
+        return None
+
+    fpath = iss["file_path"]
+    try:
+        content = textio.read_text(fpath)
+        fm, body, _ = frontmatter.try_parse(content, path=fpath)
+    except OSError:
+        fm, body = iss["frontmatter"], ""
+
+    return {
+        "slug": iss["slug"],
+        "type": iss["type"],
+        "status": iss["status"],
+        "priority": iss["priority"],
+        "title": fm.get("title", iss["slug"].replace("-", " ").capitalize()),
+        "milestone": fm.get("milestone"),
+        "agent": fm.get("agent"),
+        "tags": fm.get("tags", []),
+        "created": fm.get("created"),
+        "updated": fm.get("updated"),
+        "completed": fm.get("completed"),
+        "blocked_by": fm.get("blocked_by", []),
+        "related": fm.get("related", []),
+        "file_path": repo.safe_relpath(fpath, repo_root),
+        "body": body.strip(),
+    }
+
+
 # ---------------------------------------------------------------------------
 # Entity Schema & Graph Validation (REQ-6)
 # ---------------------------------------------------------------------------

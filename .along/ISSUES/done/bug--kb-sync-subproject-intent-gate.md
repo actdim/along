@@ -12,6 +12,7 @@ agent: antigravity
 tags: [kb-sync, git, monorepo, intent-gate]
 blocked_by: []
 related: []
+milestone: v1.3.0-knowledge-base-and-graph
 ---
 
 # Fix Intent Gate false positive in subprojects during kb-sync

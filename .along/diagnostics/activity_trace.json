@@ -1,6 +1,6 @@
 {
-  "last_edit_time": "2026-09-15T21:32:26.100080+00:00",
-  "last_test_time": "2026-09-15T21:30:43.067823+00:00",
+  "last_edit_time": "2026-09-18T19:39:38.560358+00:00",
+  "last_test_time": "2026-09-18T19:38:24.437190+00:00",
   "edited_files": [
     "d:\\Src\\my\\actdim\\public\\along\\scripts\\alongkit\\install.py",
     "d:\\Src\\my\\actdim\\public\\along\\scripts\\alongkit\\hooks\\predicates.py",
@@ -130,6 +130,18 @@
     "d:\\Src\\my\\actdim\\public\\along\\tests\\test_hooks_generic.py",
     "d:\\Src\\my\\actdim\\public\\along\\.along\\.session\\feat--runtime-hooks-cursor-opencode\\reviews\\step-4.md",
     "C:\\Users\\Admin\\.gemini\\antigravity\\brain\\7d360545-7082-4b97-b53d-74af77acd908\\walkthrough.md",
-    "d:\\Src\\my\\actdim\\public\\along\\.along\\SESSIONS\\2026\\2026-09-15--runtime-hooks-cursor-opencode.md"
+    "d:\\Src\\my\\actdim\\public\\along\\.along\\SESSIONS\\2026\\2026-09-15--runtime-hooks-cursor-opencode.md",
+    "d:/Src/my/actdim/public/along/.along/diagnostics/circuit_breaker.json",
+    "d:/Src/my/actdim/public/along/.along/ISSUES/debt--python-monolithic-functions-and-boilerplate.md",
+    "d:/Src/my/actdim/public/along/.along/ISSUES/debt--python-error-handling-and-io-consistency.md",
+    "d:/Src/my/actdim/public/along/.along/ISSUES/debt--dashboard-ui-type-safety-and-security.md",
+    "d:/Src/my/actdim/public/along/.along/ISSUES/docs--cli-and-documentation-traceability-reconciliation.md",
+    "d:/Src/my/actdim/public/along/.along/MILESTONES/v4.0.0-runtime-gates-and-worktree-isolation.md",
+    "C:/Users/Admin/.gemini/antigravity/brain/05106f89-6c14-4f29-8c79-3a7a8d13627e/implementation_plan.md",
+    "d:/Src/my/actdim/public/along/.along/ISSUES/feat--entity-lifecycle-cli-orchestration.md",
+    "d:/Src/my/actdim/public/along/scripts/alongkit/entities.py",
+    "d:/Src/my/actdim/public/along/tests/test_entity_lifecycle_cli.py",
+    "C:/Users/Admin/.gemini/antigravity/brain/05106f89-6c14-4f29-8c79-3a7a8d13627e/walkthrough.md",
+    "d:/Src/my/actdim/public/along/.along/ISSUES/docs--entity-lifecycle-cli-documentation.md"
   ]
 }

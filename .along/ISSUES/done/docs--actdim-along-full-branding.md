@@ -11,6 +11,7 @@ agent: antigravity
 tags: [branding, docs, index, seo, release]
 blocked_by: []
 related: []
+milestone: v1.3.0-knowledge-base-and-graph
 ---
 
 # ActDim Along Full Branding Integration
