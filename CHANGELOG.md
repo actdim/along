@@ -2,6 +2,10 @@
 
 All notable changes to this project, newest first.
 
+## v3.7.0 - 2026-09-18
+
+- feat: entity lifecycle orchestration, issue update, and milestone sync (refs #entity-lifecycle-cli-orchestration)
+
 ## v3.6.0 - 2026-09-16
 
 - feat(hooks): Cursor and OpenCode runtime hook adapters, GenericCliAdapter, and along run proxy [feat--runtime-hooks-cursor-opencode]
