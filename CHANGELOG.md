@@ -2,6 +2,10 @@
 
 All notable changes to this project, newest first.
 
+## v3.8.0 - 2026-09-20
+
+- fix: fix CLI wrap flag collision and add dev script UV bootstrap (refs #cli-flag-collision-and-bootstrap)
+
 ## v3.7.0 - 2026-09-18
 
 - feat: entity lifecycle orchestration, issue update, and milestone sync (refs #entity-lifecycle-cli-orchestration)
