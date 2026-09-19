@@ -74,18 +74,22 @@ Gates are declared in YAML format with standard schema fields:
 - `predicate`: Name of python predicate handler in `alongkit.hooks.predicates`.
 - `remediation`: Explicit remediation message returned to the agent on violation.
 
-The 11 canonical gates defined in the catalogue:
+The 14 canonical gates defined in the catalogue:
 1. `commit_issue_binding`: Intercepts `git commit` to require issue binding (`--issue` or `(<type>--<slug>)`).
 2. `commit_no_conflict_markers`: Intercepts `git commit` to reject unresolved merge conflict markers (`<<<<<<<`, `=======`, `>>>>>>>`).
-3. `anti_stub_injection`: Intercepts file mutation tools to forbid stub markers (`// ... rest of code`, `/* existing code */`).
+3. `anti_stub_injection`: Intercepts file mutation tools to forbid stub markers and lazy truncation skeletons.
 4. `cli_safety`: Intercepts shell commands to block heredocs (`<<EOF`), inline python file writers, destructive wipes (`git reset --hard`), and global installs.
 5. `projection_protection`: Intercepts file writes to derived projections (`.along/ISSUES.md`, `docs/INDEX.md`, `DECISIONS.md`).
 6. `typography`: Intercepts text writes to enforce ASCII typography (no em-dashes, curly quotes, guillemets, ellipsis glyphs, or NBSP).
-7. `require_active_issue`: Stateful predicate requiring an active `in-progress` issue in `.along/ISSUES/` before modifying repository source code.
+7. `require_active_issue`: Stateful predicate requiring an active `in-progress` issue in `.along/ISSUES/` bound to the current session.
 8. `test_before_stop`: Intercepts session termination (`Stop`) to ensure `/along-test` or test suites ran cleanly if code was modified.
 9. `wrap_before_stop`: Intercepts session termination (`Stop`) to ensure a session log exists if an issue was marked done.
 10. `projection_sync_before_stop`: Intercepts session termination (`Stop`) to require `/along-issue-sync` if issue files changed.
 11. `subproject_boundary`: Enforces context localization in monorepos, preventing subproject entities from leaking to workspace root `.along/`.
+12. `worktree_env_readiness`: Verifies dependency junctions and environment config propagation before worktree tool execution.
+13. `circuit_breaker`: Hard stop that halts mutating commands and edits upon systemic environment anomalies.
+14. `require_plan_approval`: Blocks repository file mutations and mutating shell commands in inquiry mode without an approved plan.
+
 
 ### 2.2 Stateful Predicate Handlers (`alongkit.hooks.predicates`)
 

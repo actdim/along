@@ -122,6 +122,29 @@ Manages atomic issue files in `.along/ISSUES/` and recompiles the active board p
   along issue sync
   ```
 
+### `along start`
+Atomically marks an issue as `in-progress`, initializes the session blackboard in `.along/.session/<slug>/`, updates `.along/ISSUES.md`, and optionally provisions an isolated Git worktree.
+- **Options**:
+  - `--worktree`: Automatically provisions an isolated worktree at `.along/worktrees/<slug>` with dependency links and copies of `.env*` files.
+- **Usage**:
+  ```bash
+  along start token-refresh
+  along start token-refresh --worktree
+  ```
+
+### `along milestone`
+Tracks progress across high-level milestones and sprints in `.along/MILESTONES/`.
+- **Subcommands**:
+  - `along milestone sync [<slug>]`: Recomputes target issues, completion percentage, and status for all or a specific milestone.
+  - `along milestone list [--status <status>] [--json]`: Lists all milestones with progress statistics, optionally filtered by status (`open`, `in-progress`, `completed`).
+  - `along milestone show <slug> [--json]`: Displays detailed milestone status, due date, and target issues checklist.
+- **Usage**:
+  ```bash
+  along milestone sync
+  along milestone list --status in-progress
+  along milestone show v4.0.0-runtime-gates-and-worktree-isolation
+  ```
+
 ### `along session`
 Manages session logs in `.along/SESSIONS/` and records engineering provenance.
 - **Subcommands**:
@@ -234,9 +257,16 @@ Protocol tools provide specialized repository maintenance, release management, a
 ### `along wrap`
 Transactional end-of-stage wrap engine.
 - Validates quality gates, inspects git diffs, updates active issue status, moves files to `done/`, writes session logs, recompiles projections, and appends to `HISTORY.md`.
+- **Options**:
+  - `-s, --status <status>`: Closing status (`done`, `superseded`, `cancelled`, `duplicate`). Default: `done`.
+  - `-m, --summary "<text>"`: One-line summary for `.along/HISTORY.md` index.
+  - `--dry-run`: Simulate wrap-up operations without writing or moving files.
+  - `-n, --no-verify`: Skip pre-flight automated tests.
+  - `-a, --agent "<name>"`: Explicit agent name.
 - **Usage**:
   ```bash
-  along wrap
+  along wrap <slug> -m "Summary of work"
+  along wrap <slug> -s superseded
   ```
 
 ### `along kb-sync` (alias `along kb sync`)
@@ -417,6 +447,15 @@ Runtime lifecycle hook interceptor and declarative gate evaluation harness.
   ```bash
   along hook verify --strict
   along hook install --runtime all
+  ```
+
+### `along run`
+Executes a shell command behind the Along runtime lifecycle hook and declarative gate pipeline.
+- Intercepts shell commands, validating CLI safety, typography, and circuit breaker gates before executing.
+- **Usage**:
+  ```bash
+  along run pytest -q
+  along run npm test
   ```
 
 ---

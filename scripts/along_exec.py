@@ -676,8 +676,9 @@ def handle_start_command(repo_root: str, args: List[str]):
 
     title = new_fm.get("title", issue["slug"].replace("-", " ").capitalize())
     st = session.init_session(repo_root, issue["slug"], title=title)
+    st = session.approve_plan(repo_root, issue["slug"])
     sdir = session.get_session_dir(repo_root, issue["slug"])
-    print(f"-> Initialized session blackboard: {sdir}")
+    print(f"-> Initialized session blackboard: {sdir} (phase: execution, plan_approved: true)")
 
     if "--worktree" in args:
         from alongkit import worktree
@@ -1085,16 +1086,18 @@ def handle_doctor_command(repo_root: str, args: List[str]):
 
 def handle_scratch_command(repo_root: str, args: List[str]):
     if not args or args[0] in ("-h", "--help", "help"):
-        print("Usage: along scratch [init|state|update|purge] <slug> [options]")
+        print("Usage: along scratch [init|state|update|approve|phase|purge] <slug> [options]")
         print("  init   <slug> [--title <title>] [--steps <N>] [--restart]")
         print("  state  <slug> [--json]")
-        print("  update <slug> [--step <N>] [--step-status <pending|in-progress|passed|failed>] [--inc-retry] [--status <in-progress|completed|failed>] [--plan-rev <N>]")
+        print("  update <slug> [--step <N>] [--step-status <pending|in-progress|passed|failed>] [--inc-retry] [--status <in-progress|completed|failed>] [--plan-rev <N>] [--phase <inquiry|planning|execution>] [--approve]")
+        print("  approve <slug>")
+        print("  phase  <slug> <inquiry|planning|execution> [--approve]")
         print("  purge  <slug>")
         sys.exit(0)
 
     subcmd = args[0].lower()
     if len(args) < 2:
-        print("[Error] Usage: along scratch [init|state|update|purge] <slug> [options]", file=sys.stderr)
+        print("[Error] Usage: along scratch [init|state|update|approve|phase|purge] <slug> [options]", file=sys.stderr)
         sys.exit(1)
     slug = args[1].lower()
 
@@ -1137,11 +1140,34 @@ def handle_scratch_command(repo_root: str, args: List[str]):
             print(session.format_state_summary(st))
         sys.exit(0)
 
+    elif subcmd in ("approve", "plan-approve"):
+        st = session.approve_plan(repo_root, slug)
+        print(f"-> Granted plan approval for session: {slug} (phase: execution, plan_approved: true)")
+        print(session.format_state_summary(st))
+        sys.exit(0)
+
+    elif subcmd == "phase":
+        if len(args) < 3:
+            print("[Error] Usage: along scratch phase <slug> <inquiry|planning|execution> [--approve]", file=sys.stderr)
+            sys.exit(1)
+        phase_val = args[2].lower()
+        approve_flag = "--approve" in args
+        try:
+            st = session.set_session_phase(repo_root, phase_val, slug=slug, plan_approved=True if approve_flag else None)
+        except ValueError as exc:
+            print(f"[Error] {exc}", file=sys.stderr)
+            sys.exit(1)
+        print(f"-> Set session phase for {slug} to '{phase_val}' (plan_approved: {st.get('plan_approved', False)})")
+        print(session.format_state_summary(st))
+        sys.exit(0)
+
     elif subcmd == "update":
         current_step = None
         step_status = None
         status = None
         plan_rev = None
+        phase_val = None
+        plan_approved = None
         inc_retry = False
         i = 2
         while i < len(args):
@@ -1157,6 +1183,12 @@ def handle_scratch_command(repo_root: str, args: List[str]):
             elif args[i] in ("--status",) and i + 1 < len(args):
                 status = args[i + 1].lower()
                 i += 2
+            elif args[i] in ("--phase",) and i + 1 < len(args):
+                phase_val = args[i + 1].lower()
+                i += 2
+            elif args[i] in ("--approve", "--plan-approved"):
+                plan_approved = True
+                i += 1
             elif args[i] in ("--plan-rev", "--revision") and i + 1 < len(args):
                 try:
                     plan_rev = int(args[i + 1])
@@ -1173,6 +1205,8 @@ def handle_scratch_command(repo_root: str, args: List[str]):
             current_step=current_step,
             step_status=step_status,
             status=status,
+            phase=phase_val,
+            plan_approved=plan_approved,
             plan_revision=plan_rev,
             increment_retry=inc_retry,
         )
@@ -1191,6 +1225,7 @@ def handle_scratch_command(repo_root: str, args: List[str]):
         else:
             print(f"-> Session blackboard not found (already clean): {session.get_session_dir(repo_root, slug)}")
         sys.exit(0)
+
 
     else:
         print(f"[Error] Unknown scratch subcommand: {subcmd}. Use init, state, update, or purge.", file=sys.stderr)

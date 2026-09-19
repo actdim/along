@@ -3,10 +3,10 @@ protocol: along
 protocol_version: "3.6.0"
 slug: cli-and-documentation-traceability-reconciliation
 type: docs
-status: open
+status: in-progress
 priority: medium
 created: 2026-09-16
-updated: 2026-09-16
+updated: 2026-09-19
 agent: antigravity
 tags: [documentation, cli, mkdocs, traceability, versioning, skills]
 milestone: v4.0.0-runtime-gates-and-worktree-isolation

@@ -4,20 +4,20 @@ slug: skills-reference
 title: Skills & Slash Commands Technical Reference
 type: topic
 created: 2026-08-30
-updated: 2026-09-09
+updated: 2026-09-19
 tags: [skills, commands, reference, runners, lifecycle, automation, multi-agent]
 sources:
   - path: skills/along-init/SKILL.md
-    hash: "8192c01e56a2456ed0d9f5af68575317346b5a4036f7bc4b1844c1f54e2f57da"
+    hash: "bd418df91bfe5842a62660ea53089ac4fd9854a5d01b09f46a55c523b10aee55"
   - path: skills/along-kb-sync/SKILL.md
-    hash: "df17474bd865bb88a9e18977dbafada9d4dbea718786f56d34beaff18473c7fb"
+    hash: "e43f8e63715f943e940edd5abf260b6ea45bf69f784213bac3b1bd7327f75527"
   - path: skills/along-update/SKILL.md
-    hash: "1f6b3474dfbce56db76132fa9852bac17abc264e11f1eae271e2f166312247f6"
+    hash: "8be7bb0dfd98d48971707976f622ea320d7b3116402b8be752facaa949457f5a"
 ---
 
 # Skills & Slash Commands Technical Reference
 
-Along provides an integrated suite of **18 singular automation skills** operating across Claude Code, OpenAI Codex, OpenCode, and Google Antigravity.
+Along provides an integrated suite of **19 singular automation skills** operating across Claude Code, OpenAI Codex, OpenCode, and Google Antigravity.
 
 Each skill is built on a domain-first naming pattern (`along-<entity>-<action>`), guarantees clean ASCII output, operates on strongly typed repository entities, and can be invoked either explicitly via slash commands/CLI or automatically via semantic intent recognition.
 
@@ -48,6 +48,7 @@ flowchart TD
     subgraph Phase4["4. Quality & Code Graph"]
         COMMIT["along-commit"]
         GRAPH["along-graph-check"]
+        GRAPH_SYNC["along-graph-sync"]
         DEP["along-dep-scan"]
     end
 

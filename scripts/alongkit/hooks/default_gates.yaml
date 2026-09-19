@@ -151,4 +151,15 @@ gates:
       handler: alongkit.hooks.predicates.check_circuit_breaker
       error: "Tool execution rejected by [gate: circuit-breaker]: The systemic anomaly circuit breaker is TRIPPED."
 
+  - id: require_plan_approval
+    title: "Inquiry Read-Only Mode & Plan Approval Enforcement"
+    description: "Blocks modifying repository files and executing state-mutating commands in inquiry phase without an approved plan"
+    event: PreToolUse
+    tools: [write_to_file, write_file, replace_file_content, edit_file, patch_file, create_file, run_command, execute_command, bash, shell]
+    rule:
+      type: predicate
+      handler: alongkit.hooks.predicates.check_mutation_authorization
+      error: "Mutation rejected by [gate: require-plan-approval]: Plan approval required before repository mutations."
+
+
 

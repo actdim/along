@@ -28,6 +28,9 @@ from . import repo, textio
 DEFAULT_RETRY_LIMIT: int = 2
 STEP_STATUSES: tuple = ("pending", "in-progress", "passed", "failed")
 SESSION_STATUSES: tuple = ("in-progress", "completed", "failed")
+SESSION_PHASES: tuple = ("inquiry", "planning", "execution")
+DEFAULT_PHASE: str = "inquiry"
+
 
 
 def _utc_now_iso() -> str:
@@ -59,6 +62,127 @@ def save_state(repo_root: str, slug: str, state: Dict[str, Any]) -> None:
     state["updated"] = _utc_now_iso()
     raw = json.dumps(state, indent=2) + "\n"
     textio.write_text(os.path.join(session_dir, "state.json"), raw, newline="\n")
+
+
+def get_global_session_file(repo_root: str) -> str:
+    """Path to the repository-level session phase lock (.along/.session/state.json)."""
+    return os.path.join(repo.state_dir(repo_root), ".session", "state.json")
+
+
+def load_global_session_state(repo_root: str) -> Optional[Dict[str, Any]]:
+    """Read and parse global session state from .along/.session/state.json, or None."""
+    gfile = get_global_session_file(repo_root)
+    if not os.path.isfile(gfile):
+        return None
+    try:
+        raw = textio.read_text(gfile, strict=False)
+        return json.loads(raw)
+    except (OSError, UnicodeDecodeError, json.JSONDecodeError):
+        return None
+
+
+def save_global_session_state(repo_root: str, state: Dict[str, Any]) -> None:
+    """Save global session state dict to .along/.session/state.json."""
+    gfile = get_global_session_file(repo_root)
+    os.makedirs(os.path.dirname(gfile), exist_ok=True)
+    state["updated"] = _utc_now_iso()
+    raw = json.dumps(state, indent=2) + "\n"
+    textio.write_text(gfile, raw, newline="\n")
+
+
+def get_active_session_slug(repo_root: str) -> Optional[str]:
+    """Resolve active session slug from global state or scan in-progress sessions."""
+    gst = load_global_session_state(repo_root)
+    if gst and gst.get("active_slug"):
+        return str(gst["active_slug"])
+
+    s_root = os.path.join(repo.state_dir(repo_root), ".session")
+    if os.path.isdir(s_root):
+        try:
+            for entry in os.scandir(s_root):
+                if entry.is_dir() and not entry.name.startswith("."):
+                    st = load_state(repo_root, entry.name)
+                    if st and st.get("status") == "in-progress":
+                        return entry.name
+        except (OSError, UnicodeDecodeError):
+            pass
+    return None
+
+
+def get_session_phase(repo_root: str, slug: Optional[str] = None) -> str:
+    """Return the current session phase: 'inquiry', 'planning', or 'execution'."""
+    effective_slug = slug or get_active_session_slug(repo_root)
+    if effective_slug:
+        st = load_state(repo_root, effective_slug)
+        if st and "phase" in st:
+            return str(st["phase"])
+
+    gst = load_global_session_state(repo_root)
+    if gst and "phase" in gst:
+        return str(gst["phase"])
+
+    return DEFAULT_PHASE
+
+
+def is_plan_approved(repo_root: str, slug: Optional[str] = None) -> bool:
+    """Return True if plan approval has been granted for the active session."""
+    effective_slug = slug or get_active_session_slug(repo_root)
+    if effective_slug:
+        st = load_state(repo_root, effective_slug)
+        if st:
+            return bool(st.get("plan_approved", False))
+
+    gst = load_global_session_state(repo_root)
+    if gst:
+        return bool(gst.get("plan_approved", False))
+
+    return False
+
+
+def set_session_phase(
+    repo_root: str,
+    phase: str,
+    slug: Optional[str] = None,
+    plan_approved: Optional[bool] = None,
+) -> Dict[str, Any]:
+    """Set session phase ('inquiry', 'planning', 'execution') and optional approval."""
+    if phase not in SESSION_PHASES:
+        raise ValueError(f"Invalid session phase '{phase}'. Allowed: {', '.join(SESSION_PHASES)}")
+
+    effective_slug = slug or get_active_session_slug(repo_root)
+    now = _utc_now_iso()
+
+    if effective_slug:
+        st = load_state(repo_root, effective_slug) or init_session(repo_root, effective_slug)
+        st["phase"] = phase
+        if plan_approved is not None:
+            st["plan_approved"] = plan_approved
+        save_state(repo_root, effective_slug, st)
+
+        save_global_session_state(repo_root, {
+            "active_slug": effective_slug,
+            "phase": phase,
+            "plan_approved": st.get("plan_approved", False),
+            "updated": now,
+        })
+        return st
+    else:
+        gst = load_global_session_state(repo_root) or {
+            "phase": DEFAULT_PHASE,
+            "plan_approved": False,
+            "created": now,
+        }
+        gst["phase"] = phase
+        if plan_approved is not None:
+            gst["plan_approved"] = plan_approved
+        save_global_session_state(repo_root, gst)
+        return gst
+
+
+def approve_plan(repo_root: str, slug: Optional[str] = None) -> Dict[str, Any]:
+    """Grant plan approval and transition phase to 'execution'."""
+    return set_session_phase(repo_root, phase="execution", slug=slug, plan_approved=True)
+
 
 
 def init_session(
@@ -114,6 +238,8 @@ def init_session(
         "slug": slug,
         "title": effective_title,
         "status": "in-progress",
+        "phase": DEFAULT_PHASE,
+        "plan_approved": False,
         "current_step": 1,
         "total_steps": len(steps_list),
         "retry_limit": retry_limit,
@@ -155,6 +281,8 @@ def update_state(
     current_step: Optional[int] = None,
     step_status: Optional[str] = None,
     status: Optional[str] = None,
+    phase: Optional[str] = None,
+    plan_approved: Optional[bool] = None,
     plan_revision: Optional[int] = None,
     increment_retry: bool = False,
     max_retries: Optional[int] = None,
@@ -166,6 +294,14 @@ def update_state(
 
     if status:
         state["status"] = status
+
+    if phase:
+        if phase not in SESSION_PHASES:
+            raise ValueError(f"Invalid session phase '{phase}'. Allowed: {', '.join(SESSION_PHASES)}")
+        state["phase"] = phase
+
+    if plan_approved is not None:
+        state["plan_approved"] = bool(plan_approved)
 
     if plan_revision is not None:
         state["plan_revision"] = int(plan_revision)
@@ -213,6 +349,15 @@ def update_state(
             step_entry["status"] = "failed"
 
     save_state(repo_root, slug, state)
+
+    # Sync to global state if this is the active session
+    save_global_session_state(repo_root, {
+        "active_slug": slug,
+        "phase": state.get("phase", DEFAULT_PHASE),
+        "plan_approved": state.get("plan_approved", False),
+        "updated": now,
+    })
+
     return state, retry_exhausted
 
 
@@ -229,6 +374,8 @@ def format_state_summary(state: Dict[str, Any]) -> str:
     """Format a clean ASCII summary of the session state."""
     slug = state.get("slug", "unknown")
     status = state.get("status", "unknown")
+    phase = state.get("phase", DEFAULT_PHASE)
+    approved = state.get("plan_approved", False)
     title = state.get("title", slug)
     curr = state.get("current_step", 1)
     total = state.get("total_steps", 1)
@@ -236,9 +383,10 @@ def format_state_summary(state: Dict[str, Any]) -> str:
     limit = state.get("retry_limit", DEFAULT_RETRY_LIMIT)
 
     lines = [
-        f"Session: {slug} (status: {status})",
-        f"Title:   {title}",
-        f"Step:    {curr} of {total} (Plan Rev {rev}, Retry Limit: {limit})",
+        f"Session:  {slug} (status: {status})",
+        f"Title:    {title}",
+        f"Phase:    {phase} (plan_approved: {approved})",
+        f"Step:     {curr} of {total} (Plan Rev {rev}, Retry Limit: {limit})",
         "Steps:"
     ]
 
@@ -251,4 +399,5 @@ def format_state_summary(state: Dict[str, Any]) -> str:
         lines.append(f"{marker} [{s_idx}] {s_title} ({s_status}, retries: {s_retries}/{limit})")
 
     return "\n".join(lines)
+
 

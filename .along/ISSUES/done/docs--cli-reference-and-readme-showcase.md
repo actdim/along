@@ -11,7 +11,7 @@ agent: antigravity
 tags: [cli, docs, readme, worktree, hooks, gates]
 milestone: v4.0.0-runtime-gates-and-worktree-isolation
 blocked_by: []
-related: [feat--runtime-worktree-isolation, feat--declarative-gates-and-traceability]
+related: [feat--runtime-worktree-isolation, feat--declarative-gates-and-protocol-traceability]
 ---
 
 # Unified CLI Reference and README Capabilities Showcase

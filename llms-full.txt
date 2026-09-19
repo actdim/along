@@ -249,7 +249,7 @@ When a stage or session completes, agents MUST execute in this order:
 - **File Content Via Tools Only** [gate: cli_safety]: Create/edit files with the agent's file tools. NEVER carry content in heredocs, `python -c`, or inline shell. Write scripts to a file first.
 - **Verify Written Files**: After writing/patching, confirm parsing (`python -m compileall -q`, `bash -n`, etc.) before moving on.
 - **Hermetic Tests**: Tests MUST target throwaway fixtures (`tempfile.mkdtemp()`), never the live repository. Read-only access to live state is allowed. Keep a meta-test that verifies `git status --porcelain -u` stays clean.
-- **Inquiry Read-Only Invariance (Zero-Mutation Rule on Questions)**: On interrogative prompts ("is X done?", "why did Y fail?"), write/modify tools are STRICTLY PROHIBITED. Return a read-only audit report and ask for confirmation before modifying anything.
+- **Inquiry Read-Only Invariance (Zero-Mutation Rule on Questions)** [gate: require-plan-approval]: On interrogative prompts ("is X done?", "why did Y fail?"), write/modify tools are STRICTLY PROHIBITED. Return a read-only audit report and ask for confirmation before modifying anything.
 - **Mandatory Adaptive Complexity Escalation & Execution Mode Routing**: When scope touches > 3 files, crosses subsystems, or refactors core engines: single-agent execution is forbidden - route to `along-team`. Plans MUST declare `Execution Mode: Direct` or `Role-Based`.
 - Windows-safe filenames: dates `YYYY-MM-DD` (no `:`), date first.
 - Keep `ISSUES.md` compact - it costs context every session.
@@ -869,6 +869,29 @@ Manages atomic issue files in `.along/ISSUES/` and recompiles the active board p
   along issue sync
   ```
 
+### `along start`
+Atomically marks an issue as `in-progress`, initializes the session blackboard in `.along/.session/<slug>/`, updates `.along/ISSUES.md`, and optionally provisions an isolated Git worktree.
+- **Options**:
+  - `--worktree`: Automatically provisions an isolated worktree at `.along/worktrees/<slug>` with dependency links and copies of `.env*` files.
+- **Usage**:
+  ```bash
+  along start token-refresh
+  along start token-refresh --worktree
+  ```
+
+### `along milestone`
+Tracks progress across high-level milestones and sprints in `.along/MILESTONES/`.
+- **Subcommands**:
+  - `along milestone sync [<slug>]`: Recomputes target issues, completion percentage, and status for all or a specific milestone.
+  - `along milestone list [--status <status>] [--json]`: Lists all milestones with progress statistics, optionally filtered by status (`open`, `in-progress`, `completed`).
+  - `along milestone show <slug> [--json]`: Displays detailed milestone status, due date, and target issues checklist.
+- **Usage**:
+  ```bash
+  along milestone sync
+  along milestone list --status in-progress
+  along milestone show v4.0.0-runtime-gates-and-worktree-isolation
+  ```
+
 ### `along session`
 Manages session logs in `.along/SESSIONS/` and records engineering provenance.
 - **Subcommands**:
@@ -981,9 +1004,16 @@ Protocol tools provide specialized repository maintenance, release management, a
 ### `along wrap`
 Transactional end-of-stage wrap engine.
 - Validates quality gates, inspects git diffs, updates active issue status, moves files to `done/`, writes session logs, recompiles projections, and appends to `HISTORY.md`.
+- **Options**:
+  - `-s, --status <status>`: Closing status (`done`, `superseded`, `cancelled`, `duplicate`). Default: `done`.
+  - `-m, --summary "<text>"`: One-line summary for `.along/HISTORY.md` index.
+  - `--dry-run`: Simulate wrap-up operations without writing or moving files.
+  - `-n, --no-verify`: Skip pre-flight automated tests.
+  - `-a, --agent "<name>"`: Explicit agent name.
 - **Usage**:
   ```bash
-  along wrap
+  along wrap <slug> -m "Summary of work"
+  along wrap <slug> -s superseded
   ```
 
 ### `along kb-sync` (alias `along kb sync`)
@@ -1166,6 +1196,15 @@ Runtime lifecycle hook interceptor and declarative gate evaluation harness.
   along hook install --runtime all
   ```
 
+### `along run`
+Executes a shell command behind the Along runtime lifecycle hook and declarative gate pipeline.
+- Intercepts shell commands, validating CLI safety, typography, and circuit breaker gates before executing.
+- **Usage**:
+  ```bash
+  along run pytest -q
+  along run npm test
+  ```
+
 ---
 
 ## 5. Exit Codes and CI/CD Automation
@@ -1261,18 +1300,22 @@ Gates are declared in YAML format with standard schema fields:
 - `predicate`: Name of python predicate handler in `alongkit.hooks.predicates`.
 - `remediation`: Explicit remediation message returned to the agent on violation.
 
-The 11 canonical gates defined in the catalogue:
+The 14 canonical gates defined in the catalogue:
 1. `commit_issue_binding`: Intercepts `git commit` to require issue binding (`--issue` or `(<type>--<slug>)`).
 2. `commit_no_conflict_markers`: Intercepts `git commit` to reject unresolved merge conflict markers (`<<<<<<<`, `=======`, `>>>>>>>`).
-3. `anti_stub_injection`: Intercepts file mutation tools to forbid stub markers (`// ... rest of code`, `/* existing code */`).
+3. `anti_stub_injection`: Intercepts file mutation tools to forbid stub markers and lazy truncation skeletons.
 4. `cli_safety`: Intercepts shell commands to block heredocs (`<<EOF`), inline python file writers, destructive wipes (`git reset --hard`), and global installs.
 5. `projection_protection`: Intercepts file writes to derived projections (`.along/ISSUES.md`, `docs/INDEX.md`, `DECISIONS.md`).
 6. `typography`: Intercepts text writes to enforce ASCII typography (no em-dashes, curly quotes, guillemets, ellipsis glyphs, or NBSP).
-7. `require_active_issue`: Stateful predicate requiring an active `in-progress` issue in `.along/ISSUES/` before modifying repository source code.
+7. `require_active_issue`: Stateful predicate requiring an active `in-progress` issue in `.along/ISSUES/` bound to the current session.
 8. `test_before_stop`: Intercepts session termination (`Stop`) to ensure `/along-test` or test suites ran cleanly if code was modified.
 9. `wrap_before_stop`: Intercepts session termination (`Stop`) to ensure a session log exists if an issue was marked done.
 10. `projection_sync_before_stop`: Intercepts session termination (`Stop`) to require `/along-issue-sync` if issue files changed.
 11. `subproject_boundary`: Enforces context localization in monorepos, preventing subproject entities from leaking to workspace root `.along/`.
+12. `worktree_env_readiness`: Verifies dependency junctions and environment config propagation before worktree tool execution.
+13. `circuit_breaker`: Hard stop that halts mutating commands and edits upon systemic environment anomalies.
+14. `require_plan_approval`: Blocks repository file mutations and mutating shell commands in inquiry mode without an approved plan.
+
 
 ### 2.2 Stateful Predicate Handlers (`alongkit.hooks.predicates`)
 
@@ -2253,8 +2296,9 @@ The Along Runtime Hook and Gate System establishes deterministic, programmatic i
    - Scans command strings for forbidden patterns: heredocs (`<<EOF`), inline Python file writers (`python -c "open('...', 'w')"`), destructive unstaged Git wipes (`git reset --hard`, `git clean -f`), and unauthorized global package managers (`npm install -g`).
 
 ### 2.3 Declarative Extension & Traceability Matrix
-Beyond hardcoded Python gates, Along provides an extensible, declarative YAML gate catalogue (`default_gates.yaml` and `.along/rules/gates.yaml`) enforcing 11 canonical gates, verified bi-directionally against prose badges (`[gate: <id>]`) via `along hook verify`.
+Beyond hardcoded Python gates, Along provides an extensible, declarative YAML gate catalogue (`default_gates.yaml` and `.along/rules/gates.yaml`) enforcing 14 canonical gates (including `require_plan_approval` for inquiry read-only locks, `circuit_breaker`, and `worktree_env_readiness`), verified bi-directionally against prose badges (`[gate: <id>]`) via `along hook verify`.
 For full specification and architecture, see [Declarative Gate Engine & Traceability Matrix](./topic--declarative-gates-and-traceability.md).
+
 
 ### 2.4 Runtime Adapters (`alongkit.hooks.adapters`)
 - **`AntigravityAdapter`**: Translates Google Antigravity JSON payloads (`toolCall.name`, `toolCall.args`) to `HookEvent`, returning JSON stdout with `allow`/`deny` decisions.
@@ -2744,7 +2788,7 @@ when the interpreter lacks it) or `uv run python -m unittest discover tests -q`.
 
 # Skills & Slash Commands Technical Reference
 
-Along provides an integrated suite of **18 singular automation skills** operating across Claude Code, OpenAI Codex, OpenCode, and Google Antigravity.
+Along provides an integrated suite of **19 singular automation skills** operating across Claude Code, OpenAI Codex, OpenCode, and Google Antigravity.
 
 Each skill is built on a domain-first naming pattern (`along-<entity>-<action>`), guarantees clean ASCII output, operates on strongly typed repository entities, and can be invoked either explicitly via slash commands/CLI or automatically via semantic intent recognition.
 
@@ -2775,6 +2819,7 @@ flowchart TD
     subgraph Phase4["4. Quality & Code Graph"]
         COMMIT["along-commit"]
         GRAPH["along-graph-check"]
+        GRAPH_SYNC["along-graph-sync"]
         DEP["along-dep-scan"]
     end
 

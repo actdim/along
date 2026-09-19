@@ -8,17 +8,19 @@
 - [ ] `(docs)` [entity-lifecycle-cli-documentation](ISSUES/docs--entity-lifecycle-cli-documentation.md)
 - [ ] `(feat)` [automated-ui-screenshots-and-visual-verification](ISSUES/feat--automated-ui-screenshots-and-visual-verification.md)
 - [ ] `(feat)` [cursor-agent-and-rules-integration](ISSUES/feat--cursor-agent-and-rules-integration.md)
+- [ ] `(feat)` [deepseek-harness-bridge](ISSUES/feat--deepseek-harness-bridge.md)
 - [ ] `(feat)` [external-issue-trackers-sync-and-import](ISSUES/feat--external-issue-trackers-sync-and-import.md)
 - [ ] `(feat)` [native-ast-blast-radius-analyzer](ISSUES/feat--native-ast-blast-radius-analyzer.md)
 - [ ] `(feat)` [openclaw-and-hermes-agent-integration](ISSUES/feat--openclaw-and-hermes-agent-integration.md)
+- [ ] `(feat)` [pi-harness-support](ISSUES/feat--pi-harness-support.md)
 
 ## Backlog
 <!-- Planned or deferred issues -->
 
 ## Done (recent)
+- [x] `(bug)` [cli-flag-collision-and-bootstrap](ISSUES/done/bug--cli-flag-collision-and-bootstrap.md)
 - [x] `(task)` [code-review-graph-windows-ignore-hardening](ISSUES/done/task--code-review-graph-windows-ignore-hardening.md)
+- [x] `(feat)` [inquiry-read-only-and-plan-approval-gate](ISSUES/done/feat--inquiry-read-only-and-plan-approval-gate.md)
 - [x] `(feat)` [entity-lifecycle-cli-orchestration](ISSUES/done/feat--entity-lifecycle-cli-orchestration.md)
 - [x] `(feat)` [systemic-anomaly-circuit-breaker](ISSUES/done/feat--systemic-anomaly-circuit-breaker.md)
-- [x] `(feat)` [runtime-hooks-cursor-opencode](ISSUES/done/feat--runtime-hooks-cursor-opencode.md)
-- [x] `(feat)` [graph-build-lifecycle-integration](ISSUES/done/feat--graph-build-lifecycle-integration.md)
-<!-- 102 older completed issue(s) archived in .along/ISSUES/done/ -->
+<!-- 104 older completed issue(s) archived in .along/ISSUES/done/ -->

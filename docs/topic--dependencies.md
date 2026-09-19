@@ -4,13 +4,13 @@ slug: dependencies
 title: Dependencies & Submodules AI Documentation and Rules
 type: topic
 created: 2026-09-02
-updated: 2026-09-09
+updated: 2026-09-19
 tags: [dependencies, ai-context, submodules, vendor, rules]
 sources:
   - path: pyproject.toml
-    hash: "2ca12e69d7ceafb95b69040a3ffb58aba74e7757c6fba6d66406b23e1f066526"
+    hash: "6f7a72d4e5eac4b4bb59b8d822e53e7b7dc61cca7abe98b387ff5a97a1505a95"
   - path: package.json
-    hash: "febb2e71352d6091afce25991d7e2a4d09e92564938317a307ae5bec7c2a4c50"
+    hash: "a01f5065e3e4271f93baaa892e211379b7c1b4a66ecc42181f0f941141f8e3b2"
 ---
 
 # Dependencies & Submodules AI Documentation and Rules

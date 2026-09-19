@@ -15,14 +15,22 @@ import os
 import re
 from typing import Any, Dict, List, Optional, Tuple
 
-from .. import frontmatter, repo, sanitizer, textio, typography
-from .models import HookEvent, HookEventType
+from .. import frontmatter, repo, sanitizer, session, textio, typography
+from .models import GateDecision, GateResult, HookEvent, HookEventType
 
 
 GOVERNED_TYPOGRAPHY_SUFFIXES: Tuple[str, ...] = (
     ".md", ".py", ".ts", ".js", ".tsx", ".jsx",
     ".sh", ".ps1", ".bat", ".rs", ".go", ".txt",
 )
+
+SAFE_READ_TOOLS: Tuple[str, ...] = (
+    "view_file", "read_file", "view_image", "grep_search", "find_by_name",
+    "list_dir", "list_directory", "read_url_content", "search_web",
+    "manage_task", "schedule", "send_message", "ask_question",
+    "call_mcp_tool", "list_resources", "read_resource",
+)
+
 
 PROTECTED_PROJECTIONS: Tuple[str, ...] = (
     ".along/issues.md",
@@ -48,6 +56,33 @@ TEST_COMMAND_PATTERNS: List[re.Pattern] = [
     re.compile(r"\bdotnet\s+test\b", re.IGNORECASE),
     re.compile(r"unittest\s+discover", re.IGNORECASE),
 ]
+
+SAFE_READ_COMMAND_PATTERNS: List[re.Pattern] = [
+    re.compile(r"^git\s+(status|diff|log|branch|show|rev-parse|describe)", re.IGNORECASE),
+    re.compile(r"^along\s+(test|status|doctor|budget|context-budget|kb-search|scratch\s+state|worktree\s+list|worktree\s+status|hook\s+verify)", re.IGNORECASE),
+    re.compile(r"^python\s+scripts[/\\]along_exec\.py\s+(test|status|doctor|budget|context-budget|kb-search|scratch\s+state|worktree\s+list|worktree\s+status|hook\s+verify)", re.IGNORECASE),
+    re.compile(r"^\s*(echo|printf|cat|dir|ls|type|head|tail|grep|which|where)\b", re.IGNORECASE),
+    re.compile(r"(?:^|[/\\])python(?:\d*(?:\.exe)?)?\s+(-V|--version|-c\s+['\"]?print\b)", re.IGNORECASE),
+    re.compile(r"\balong(\s+|[-_])test\b", re.IGNORECASE),
+    re.compile(r"\.along[/\\]scripts[/\\]test\.py", re.IGNORECASE),
+    re.compile(r"\bpytest\b", re.IGNORECASE),
+    re.compile(r"\bnpm\s+test\b", re.IGNORECASE),
+    re.compile(r"\bcargo\s+test\b", re.IGNORECASE),
+    re.compile(r"\bdotnet\s+test\b", re.IGNORECASE),
+    re.compile(r"\bpython\s+-m\s+unittest\b", re.IGNORECASE),
+    re.compile(r"\bunittest\s+discover\b", re.IGNORECASE),
+]
+
+
+MUTATION_WHITELIST_PATTERNS: Tuple[str, ...] = (
+    ".along/.session/**",
+    ".along/diagnostics/**",
+    ".along/SESSIONS/**",
+    "implementation_plan.md",
+    "walkthrough.md",
+    "living_plan.md",
+)
+
 
 
 def _extract_target_file(event: HookEvent) -> str:
@@ -240,8 +275,73 @@ def check_cli_safety(event: HookEvent, repo_root: str, **kwargs: Any) -> Optiona
     return None
 
 
+def check_mutation_authorization(event: HookEvent, repo_root: str, **kwargs: Any) -> Optional[Any]:
+    """Intercept file mutations and shell commands outside execution phase without plan approval."""
+    if event.event_type != HookEventType.PRE_TOOL_USE:
+        return None
+
+    tool = event.tool_name
+    if tool in SAFE_READ_TOOLS:
+        return None
+
+    # Check shell commands
+    if tool in ("run_command", "execute_command", "bash", "shell"):
+        cmd = _extract_command(event).strip()
+        if not cmd:
+            return None
+        if any(p.search(cmd) for p in SAFE_READ_COMMAND_PATTERNS):
+            return None
+
+    # Check file modification tools
+    elif tool in ("write_to_file", "write_file", "replace_file_content", "edit_file", "patch_file", "create_file"):
+        target = _extract_target_file(event)
+        if not target or not repo_root:
+            return None
+
+        # Check if outside repository root (e.g. brain artifacts, temporary directories)
+        if os.path.isabs(target):
+            try:
+                rel_target = os.path.relpath(target, repo_root)
+                if rel_target.startswith("..") or os.path.isabs(rel_target):
+                    return None
+            except ValueError:
+                return None
+        else:
+            rel_target = target
+
+        # Check whitelisted session/planning/diagnostics paths
+        if _matches_pattern(rel_target, list(MUTATION_WHITELIST_PATTERNS)):
+            return None
+    else:
+        # Other / unknown tools: do not block
+        return None
+
+    # Non-whitelisted file mutation or shell command. Verify session phase and plan approval.
+    phase = session.get_session_phase(repo_root)
+    approved = session.is_plan_approved(repo_root)
+
+    if phase == "execution" and approved:
+        return None
+
+    # Violation: inquiry phase or unapproved plan
+    reason = (
+        f"Inquiry Read-Only Invariance [gate: require-plan-approval]: "
+        f"Current session phase is '{phase}' (plan_approved: {str(approved).lower()}). "
+        "Modifying repository files or executing state-mutating commands is prohibited without an approved execution plan. "
+        "Output your analysis, present an implementation plan to the user, and obtain approval before making changes."
+    )
+
+    if event.runtime == "antigravity":
+        return GateResult(
+            decision=GateDecision.ASK,
+            reason=reason,
+            gate_name="require_plan_approval",
+        )
+    return reason
+
+
 def check_active_issue(event: HookEvent, repo_root: str, exclude_paths: Optional[List[str]] = None, **kwargs: Any) -> Optional[str]:
-    """Enforce that code modifications occur under an in-progress issue."""
+    """Enforce that code modifications occur under an in-progress issue bound to the session."""
     target = _extract_target_file(event)
     if not target or not repo_root:
         return None
@@ -281,18 +381,52 @@ def check_active_issue(event: HookEvent, repo_root: str, exclude_paths: Optional
     if not os.path.isdir(issues_dir):
         return None
 
-    # Check if any issue directly in ISSUES/ has status: in-progress
+    # Verify session-bound active issue first
+    active_slug = session.get_active_session_slug(repo_root)
+    if active_slug:
+        has_active = False
+        try:
+            for prefix in ("feat--", "bug--", "debt--", "task--", "docs--", ""):
+                candidate = os.path.join(issues_dir, f"{prefix}{active_slug}.md")
+                if os.path.isfile(candidate):
+                    content = textio.read_text(candidate, strict=False)
+                    mapping, _body, _err = frontmatter.try_parse(content)
+                    if mapping and mapping.get("status") == "in-progress":
+                        has_active = True
+                        break
+        except (OSError, UnicodeDecodeError, ValueError):
+            pass
+
+        if not has_active:
+            return (
+                f"Mandatory Issue Anchoring Violation [gate: require-active-issue]: "
+                f"Active session '{active_slug}' is not bound to an in-progress issue in .along/ISSUES/. "
+                f"Run 'along start {active_slug}' before modifying repository code."
+            )
+        return None
+
+    # If no session-bound issue, check if any issue is in-progress
     has_active = False
     try:
-        for entry in os.scandir(issues_dir):
-            if entry.is_file() and entry.name.endswith(".md"):
-                content = textio.read_text(entry.path, strict=False)
-                mapping, _body, _err = frontmatter.try_parse(content)
-                if mapping and mapping.get("status") == "in-progress":
-                    has_active = True
-                    break
+        with os.scandir(issues_dir) as entries:
+            for entry in entries:
+                if entry.is_file() and entry.name.endswith(".md"):
+                    content = textio.read_text(entry.path, strict=False)
+                    mapping, _body, _err = frontmatter.try_parse(content)
+                    if mapping and mapping.get("status") == "in-progress":
+                        has_active = True
+                        break
     except (OSError, UnicodeDecodeError, ValueError):
         pass
+
+    # If explicit global session state is in inquiry mode without approved plan, block stale issue reuse
+    gst = session.load_global_session_state(repo_root)
+    if gst and gst.get("phase") == "inquiry" and not gst.get("plan_approved", False):
+        return (
+            f"Mandatory Issue Anchoring Violation [gate: require-active-issue]: "
+            f"Cannot modify repository file '{rel_target}'. Current session is locked in inquiry mode. "
+            f"Run 'along start <slug>' to activate the issue before writing code."
+        )
 
     if not has_active:
         return (

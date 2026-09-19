@@ -117,15 +117,19 @@ class DeclarativeGate(BaseGate):
 
             elif rule.rule_type == "predicate":
                 if rule.handler:
-                    err = rule.handler(
+                    res = rule.handler(
                         event,
                         repo_root=effective_root,
                         exclude_paths=rule.exclude_paths,
                     )
-                    if err:
+                    if isinstance(res, GateResult):
+                        if not res.gate_name:
+                            res.gate_name = self.name
+                        return res
+                    elif res:
                         return GateResult(
                             decision=GateDecision.DENY,
-                            reason=err or rule.error_message,
+                            reason=str(res) or rule.error_message,
                             gate_name=self.name,
                             exit_code=2,
                         )

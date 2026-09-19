@@ -252,6 +252,52 @@ class TestLifecycleWrap(unittest.TestCase):
         self.assertTrue(res.ok, f"STDOUT: {res.stdout}\nSTDERR: {res.stderr}")
         self.assertTrue(os.path.isfile(dest_issue))
 
+    def test_10_short_flag_status_and_summary_parity(self):
+        """Verify that -s sets status and -m sets summary in along_wrap.py."""
+        along_wrap = os.path.join(SCRIPTS_DIR, "along_wrap.py")
+        history_file = os.path.join(self.root, ".along", "HISTORY.md")
+        textio.write_text(history_file, "# History\n\n_Log:_\n")
+
+        dest_issue = os.path.join(self.root, ".along", "ISSUES", "done", "task--fixture-sample-task.md")
+        res = proc.run_python(
+            [along_wrap, "fixture-sample-task", "-s", "superseded", "-m", "Direct wrap summary", "-n"],
+            cwd=self.root,
+        )
+        self.assertTrue(res.ok, f"STDOUT: {res.stdout}\nSTDERR: {res.stderr}")
+        self.assertTrue(os.path.isfile(dest_issue))
+        fm, _ = frontmatter.parse(textio.read_text(dest_issue))
+        self.assertEqual(fm["status"], "superseded")
+        history = textio.read_text(history_file)
+        self.assertIn("Direct wrap summary", history)
+
+    def test_11_session_wrap_short_flag_parity(self):
+        """Verify that along session wrap uses -s for status and -m for summary."""
+        along_exec = os.path.join(SCRIPTS_DIR, "along_exec.py")
+        history_file = os.path.join(self.root, ".along", "HISTORY.md")
+        textio.write_text(history_file, "# History\n\n_Log:_\n")
+
+        dest_issue = os.path.join(self.root, ".along", "ISSUES", "done", "task--fixture-sample-task.md")
+        res = proc.run_python(
+            [along_exec, "session", "wrap", "fixture-sample-task", "-s", "cancelled", "-m", "Cancelled summary", "-n"],
+            cwd=self.root,
+        )
+        self.assertTrue(res.ok, f"STDOUT: {res.stdout}\nSTDERR: {res.stderr}")
+        self.assertTrue(os.path.isfile(dest_issue))
+        fm, _ = frontmatter.parse(textio.read_text(dest_issue))
+        self.assertEqual(fm["status"], "cancelled")
+        history = textio.read_text(history_file)
+        self.assertIn("Cancelled summary", history)
+
+    def test_12_invalid_status_flag_rejected(self):
+        """Invalid status via -s must exit non-zero and reject wrap."""
+        along_wrap = os.path.join(SCRIPTS_DIR, "along_wrap.py")
+        res = proc.run_python(
+            [along_wrap, "fixture-sample-task", "-s", "invalid_status", "-n"],
+            cwd=self.root,
+        )
+        self.assertFalse(res.ok)
+        self.assertIn("invalid choice", res.stderr.lower())
+
 
 if __name__ == "__main__":
     unittest.main()

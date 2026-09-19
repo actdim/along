@@ -56,15 +56,23 @@ class HookEngine:
                 setattr(gate, "repo_root", effective_root)
 
             result = gate.evaluate(event)
-            if result.is_denied:
+            if not result.is_allowed:
                 gate_mode = self.config.get_gate_mode(gate.name)
                 record_audit_entry(effective_root, event, result, gate_mode)
 
                 if self.config.is_enforcing(gate.name):
+                    if result.decision in (GateDecision.ASK, GateDecision.FORCE_ASK):
+                        if event.runtime != "antigravity":
+                            return GateResult(
+                                decision=GateDecision.DENY,
+                                reason=result.reason or "Operation rejected: plan approval required before code mutations.",
+                                gate_name=result.gate_name or gate.name,
+                                exit_code=2,
+                            )
                     return result
                 else:
                     # Shadow mode: print warning to stderr and continue
-                    sys.stderr.write(f"[ALONG HOOK: SHADOW] Would deny execution: {result.reason}\n")
+                    sys.stderr.write(f"[ALONG HOOK: SHADOW] Would block execution ({result.decision.value}): {result.reason}\n")
                     sys.stderr.flush()
 
         return GateResult(decision=GateDecision.ALLOW, exit_code=0)
