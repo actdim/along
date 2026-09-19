@@ -19,7 +19,11 @@ SCRIPTS_DIR = os.path.join(REPO_ROOT, "scripts")
 if SCRIPTS_DIR not in sys.path:
     sys.path.insert(0, SCRIPTS_DIR)
 
-from alongkit import proc
+from alongkit import bootstrap
+bootstrap.ensure_deps()
+
+from alongkit import proc, session
+
 from alongkit.hooks import (
     GateDecision,
     GateResult,
@@ -271,10 +275,12 @@ class TestCodexEndToEnd(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             along_dir = os.path.join(tmp, ".along")
             os.makedirs(along_dir, exist_ok=True)
+            session.approve_plan(tmp)
             res = proc.run_capture(
                 [sys.executable, script_path, "--runtime", "codex", "--event", "PreToolUse", "--repo-root", tmp],
                 stdin_text=input_payload,
             )
+
             self.assertEqual(res.returncode, 0)
             self.assertEqual(res.stdout.strip(), "")
             clean_stderr = "\n".join(

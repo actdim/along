@@ -21,7 +21,12 @@ SCRIPTS_DIR = os.path.join(REPO_ROOT, "scripts")
 if SCRIPTS_DIR not in sys.path:
     sys.path.insert(0, SCRIPTS_DIR)
 
-from alongkit import proc
+from alongkit import bootstrap
+bootstrap.ensure_deps()
+
+from alongkit import proc, session
+
+
 from alongkit.hooks import (
     GateDecision,
     GateResult,
@@ -254,6 +259,7 @@ class TestEngineGovernanceAndAudit(unittest.TestCase):
                 workspace_root=tmp,
             )
 
+            session.approve_plan(tmp)
             result = engine.evaluate(event, repo_root=tmp)
             # In shadow mode, decision remains ALLOW
             self.assertEqual(result.decision, GateDecision.ALLOW)

@@ -4,7 +4,7 @@ slug: INDEX
 title: ActDim Along - Knowledge Base Topic Index
 type: index
 created: 2026-09-10
-updated: 2026-09-18
+updated: 2026-09-20
 tags: [index, kb, topics, map]
 ---
 
@@ -74,5 +74,4 @@ flowchart TD
 
 - [AGENTS.md](../AGENTS.md): Active protocol conventions and rules.
 - [Decisions (ADRs)](./decisions/INDEX.md): Architectural Decision Records.
-- [.along/ISSUES.md](../.along/ISSUES.md): Active issue tracking board.
-- [.along/HISTORY.md](../.along/HISTORY.md): Append-only project history log.
+- [Domain Model & Entity Ecosystem](./topic--domain-model.md): Specifications for active issues and project history.

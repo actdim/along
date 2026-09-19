@@ -12,7 +12,7 @@ Executes automated lifecycle finalization:
 - Automatically rolls back all changes via FileTransaction on failure
 
 Usage:
-  along wrap <slug> [--status done|superseded|cancelled|duplicate] [--summary "..."] [--dry-run] [-n]
+  along wrap <slug> [--status|-s done|superseded|cancelled|duplicate] [--summary|-m "..."] [--dry-run] [-n]
   python scripts/along_wrap.py <slug> [options]
 """
 
@@ -38,12 +38,13 @@ def main(argv=None) -> int:
     )
     parser.add_argument(
         "--status",
+        "-s",
         default="done",
+        choices=["done", "superseded", "cancelled", "duplicate"],
         help="Closing status (done, superseded, cancelled, duplicate). Default: done",
     )
     parser.add_argument(
         "--summary",
-        "-s",
         "-m",
         dest="summary",
         default=None,

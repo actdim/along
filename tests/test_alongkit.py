@@ -278,9 +278,10 @@ class TestSubprocessConventions(unittest.TestCase):
         self.assertEqual(env["PYTHONUTF8"], "1")
 
     def test_timeout_is_reported_not_raised(self):
-        res = proc.run_capture([sys.executable, "-c", "import time; time.sleep(5)"], timeout=0.5)
+        res = proc.run_capture([sys.executable, "-c", "import time; time.sleep(5)"], timeout=0.5, trip_on_anomaly=False)
         self.assertFalse(res.ok)
         self.assertIn("timed out", res.stderr)
+
 
     def test_git_self_healing_on_truncated_index(self):
         with tempfile.TemporaryDirectory() as tmp:

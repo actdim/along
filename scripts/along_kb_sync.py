@@ -1270,15 +1270,11 @@ def sync_kb(
             rel_decisions = repo.safe_relpath(decisions_cand, docs_dir).replace('\\', '/')
             index_body_lines.append(f"- [.along/DECISIONS.md]({rel_decisions}): Architectural Decision Records.")
 
-    issues_cand = os.path.join(repo_root, ".along", "ISSUES.md")
-    if os.path.exists(issues_cand):
-        rel_issues = repo.safe_relpath(issues_cand, docs_dir).replace('\\', '/')
-        index_body_lines.append(f"- [.along/ISSUES.md]({rel_issues}): Active issue tracking board.")
-
-    history_cand = os.path.join(repo_root, ".along", "HISTORY.md")
-    if os.path.exists(history_cand):
-        rel_history = repo.safe_relpath(history_cand, docs_dir).replace('\\', '/')
-        index_body_lines.append(f"- [.along/HISTORY.md]({rel_history}): Append-only project history log.")
+    domain_cand = os.path.join(docs_dir, "topic--domain-model.md")
+    if os.path.isfile(domain_cand):
+        index_body_lines.append("- [Domain Model & Entity Ecosystem](./topic--domain-model.md): Specifications for active issues and project history.")
+    else:
+        index_body_lines.append("- Active Issues & History: Tracked in `.along/` (see `AGENTS.md`).")
 
     if not check_only and os.path.exists(docs_dir):
         full_index = dump_frontmatter(index_fm, "\n".join(index_body_lines))

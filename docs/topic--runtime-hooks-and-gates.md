@@ -83,8 +83,9 @@ The Along Runtime Hook and Gate System establishes deterministic, programmatic i
    - Scans command strings for forbidden patterns: heredocs (`<<EOF`), inline Python file writers (`python -c "open('...', 'w')"`), destructive unstaged Git wipes (`git reset --hard`, `git clean -f`), and unauthorized global package managers (`npm install -g`).
 
 ### 2.3 Declarative Extension & Traceability Matrix
-Beyond hardcoded Python gates, Along provides an extensible, declarative YAML gate catalogue (`default_gates.yaml` and `.along/rules/gates.yaml`) enforcing 11 canonical gates, verified bi-directionally against prose badges (`[gate: <id>]`) via `along hook verify`.
+Beyond hardcoded Python gates, Along provides an extensible, declarative YAML gate catalogue (`default_gates.yaml` and `.along/rules/gates.yaml`) enforcing 14 canonical gates (including `require_plan_approval` for inquiry read-only locks, `circuit_breaker`, and `worktree_env_readiness`), verified bi-directionally against prose badges (`[gate: <id>]`) via `along hook verify`.
 For full specification and architecture, see [Declarative Gate Engine & Traceability Matrix](./topic--declarative-gates-and-traceability.md).
+
 
 ### 2.4 Runtime Adapters (`alongkit.hooks.adapters`)
 - **`AntigravityAdapter`**: Translates Google Antigravity JSON payloads (`toolCall.name`, `toolCall.args`) to `HookEvent`, returning JSON stdout with `allow`/`deny` decisions.

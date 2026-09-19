@@ -4,13 +4,13 @@ slug: setup-and-workflow
 title: Setup & Developer Workflow
 type: setup-workflow
 created: 2026-08-30
-updated: 2026-09-09
+updated: 2026-09-19
 tags: [setup-workflow, installation, lifecycle, runners, developer-workflow, testing]
 sources:
   - path: README.md
-    hash: "43dd66b243e20806c2dfb27aee41af1ba52cec257fc441e2fbcd9a079cc969fb"
+    hash: "f369adb11567ecc86ca19e3184ccd86f8420dd1f6c8b66ca307a5bbb66708f6a"
   - path: AGENTS.md
-    hash: "1bcec877848caf6f61003db77c2eb3eccd31e7298769a7b7623f0f7a38efc07e"
+    hash: "6e5c91dbad6fd9f847fb8c13723e1eee30d76dcf180c1dca352af2699e880fdf"
 ---
 
 # Setup & Developer Workflow
@@ -165,7 +165,7 @@ along-init
 *(Or invoke `/along-init` directly inside your AI agent prompt).*
 
 ### What `along-init` Configures:
-1. `AGENTS.md`: Generates the root protocol context with the managed `ALONG-PROTOCOL v3.6.0` block.
+1. `AGENTS.md`: Generates the root protocol context with the managed `ALONG-PROTOCOL v3.7.0` block.
 2. `CLAUDE.md`: Scaffolds the standard `@AGENTS.md` import line.
 3. `.gitattributes`: Configures `merge=union` for `.along/HISTORY.md` and `.along/DECISIONS.md` to prevent merge collisions across branches.
 4. `.along/`: Creates the persistent repository memory skeleton (`ISSUES/`, `DECISIONS.md`, `MILESTONES/`, `RISKS/`, `SPIKES/`, `CHECKLISTS/`, `SESSIONS/`, `docs/`).

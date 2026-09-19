@@ -19,15 +19,15 @@ Universal finalization and memory synchronization protocol for sessions, tasks, 
 The mechanical synchronization steps (tests gate, moving the issue to `done/`, updating YAML front-matter, recompiling `ISSUES.md` and KB projections, purging the session blackboard, and appending to `HISTORY.md`) are executed transactionally in a single command:
 
 ```bash
-along wrap <slug> [--summary "Summary of completed work"]
+along wrap <slug> [-m "Summary of completed work"]
 along wrap <slug> --dry-run
-along wrap <slug> --status superseded
+along wrap <slug> -s superseded
 ```
 *(Or fallback: `python ~/.along/bin/along_exec.py wrap <slug>` or `along session wrap <slug>`)*
 
 ### Command Flags:
-- `--status <done|superseded|cancelled|duplicate>`: Terminal status to set in the issue front-matter (default: `done`).
-- `-s`, `-m`, `--summary "<text>"`: One-line summary appended to `.along/HISTORY.md`.
+- `-s`, `--status <done|superseded|cancelled|duplicate>`: Terminal status to set in the issue front-matter (default: `done`).
+- `-m`, `--summary "<text>"`: One-line summary appended to `.along/HISTORY.md`.
 - `--dry-run`: Inspect planned actions without writing or moving files.
 - `-n`, `--no-verify`: Skip pre-flight automated tests.
 - `-a`, `--agent "<name>"`: Explicit agent name (defaults to detected agent).

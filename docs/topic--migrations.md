@@ -4,11 +4,11 @@ slug: migrations
 title: Protocol & Repository Migrations Guide
 type: topic
 created: 2026-08-30
-updated: 2026-09-07
+updated: 2026-09-19
 tags: [migrations, upgrade, protocol, changelog, versioning, data-safety]
 sources:
   - path: scripts/migrate_protocol.py
-    hash: "6a67fc8c10b9eb8c691703abf099276ceadabd4d84f12931115875c0eb6266a5"
+    hash: "1f469ee839194b64e8108d1074c9d0bf9b0dabf74b96f00b6eba2e02c5eb35b8"
 ---
 
 # Protocol & Repository Migrations Guide
