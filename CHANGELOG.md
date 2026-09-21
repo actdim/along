@@ -2,6 +2,10 @@
 
 All notable changes to this project, newest first.
 
+## v3.9.3 - 2026-09-21
+
+- fix: update engine deadlock, recursive hook purge, and CLI launcher shims (refs #update-engine-deadlock-and-cli-hardening)
+
 ## v3.9.2 - 2026-09-21
 
 - fix: preserve agent runtime dirs on hook purge and sync doc versions (refs #preserve-runtime-dirs-and-doc-version-sync)
