@@ -2,6 +2,10 @@
 
 All notable changes to this project, newest first.
 
+## v3.9.0 - 2026-09-21
+
+- feat: decouple repository updates from global skill installation (refs #updater-explicit-global-sync)
+
 ## v3.8.0 - 2026-09-20
 
 - fix: fix CLI wrap flag collision and add dev script UV bootstrap (refs #cli-flag-collision-and-bootstrap)
