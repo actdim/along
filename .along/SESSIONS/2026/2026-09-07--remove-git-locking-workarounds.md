@@ -11,6 +11,7 @@ issues_completed: [bug--remove-git-locking-workarounds]
 decisions: [ADR-2026-09-07--revert-git-stat-cache-workarounds]
 risks_logged: []
 spikes_conducted: []
+milestone: v2.0.0-along-transition
 ---
 
 # Session: Revert Broken Git Locking Workarounds

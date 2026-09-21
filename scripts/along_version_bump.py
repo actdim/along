@@ -163,6 +163,12 @@ def bump_along_dev_repo(repo_root, new_version, tx):
         apply(os.path.join(repo_root, pkg_file),
               [(r'"version":\s*"\d+\.\d+\.\d+"', f'"version": "{new_version}"')])
 
+    # 8. Update topic articles in docs/ (e.g. topic--setup-and-workflow.md)
+    docs_dir = os.path.join(repo_root, "docs")
+    if os.path.isdir(docs_dir):
+        for doc_file in glob.glob(os.path.join(docs_dir, "topic--*.md")):
+            apply(doc_file, [protocol_mention])
+
     return modified_files
 
 def synthesize_script(script_path, content, tx=None):
