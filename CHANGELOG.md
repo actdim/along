@@ -2,6 +2,10 @@
 
 All notable changes to this project, newest first.
 
+## v3.9.1 - 2026-09-21
+
+- fix: harden runtime hooks dispatch and monorepo sync (refs #update-hooks-and-monorepo-sync-hardening)
+
 ## v3.9.0 - 2026-09-21
 
 - feat: decouple repository updates from global skill installation (refs #updater-explicit-global-sync)
