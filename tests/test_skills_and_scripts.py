@@ -751,6 +751,7 @@ class TestAlongSkillsAndScripts(unittest.TestCase):
         self.assertEqual(res_help.returncode, 0, f"along_update.py --help failed: {res_help.stderr}")
         self.assertIn("along_update.py", res_help.stdout)
         self.assertIn("--check-only", res_help.stdout)
+        self.assertIn("--global", res_help.stdout)
 
     #: What an installer must put on disk, with the probe that proves each side does it.
     #: The previous test compared skill folder NAMES only, which is why install.sh could
@@ -2480,6 +2481,37 @@ class TestAlongSkillsAndScripts(unittest.TestCase):
             res_second = run_engine([sys.executable, update_script, fixture, "--local-only"])
             self.assertEqual(res_second.returncode, 0)
             self.assertIn("already up to date", res_second.stdout)
+
+    def test_35_along_update_explicit_global_isolation(self):
+        """Verify that along_update.py operates in isolated mode by default and only syncs global skills with --global."""
+        update_script = os.path.join(REPO_ROOT, "scripts", "along_update.py")
+
+        with hermetic.repo_fixture(prefix="along-dev-sim-") as dev_fixture:
+            os.makedirs(os.path.join(dev_fixture, "skills", "along-init"), exist_ok=True)
+            with open(os.path.join(dev_fixture, "skills", "along-init", "SKILL.md"), "w", encoding="utf-8") as f:
+                f.write("---\nname: along-init\n---\n")
+            with open(os.path.join(dev_fixture, "skills", "along-init", "protocol.md"), "w", encoding="utf-8") as f:
+                f.write("<!-- BEGIN ALONG-PROTOCOL root -->\n# ALONG-PROTOCOL v3.8.0\n<!-- END ALONG-PROTOCOL -->\n")
+            os.makedirs(os.path.join(dev_fixture, "skills", "along-version-bump"), exist_ok=True)
+            with open(os.path.join(dev_fixture, "skills", "along-version-bump", "SKILL.md"), "w", encoding="utf-8") as f:
+                f.write("---\nname: along-version-bump\n---\n")
+
+            # 1. Dev repo dry-run without --global: must not request global install
+            res_default = run_engine([sys.executable, update_script, dev_fixture, "--dry-run"])
+            self.assertEqual(res_default.returncode, 0)
+            self.assertIn("isolated repository mode", res_default.stdout)
+            self.assertNotIn("[Global Sync Requested]", res_default.stdout)
+
+            # 2. Dev repo dry-run with --global: must request global install
+            res_global = run_engine([sys.executable, update_script, dev_fixture, "--dry-run", "--global"])
+            self.assertEqual(res_global.returncode, 0)
+            self.assertIn("[Global Sync Requested]", res_global.stdout)
+
+        # 3. Hermetic consumer repo fixture without --global: isolated mode
+        with hermetic.repo_fixture(prefix="along-isolated-update-") as fixture:
+            res_fixture = run_engine([sys.executable, update_script, fixture, "--dry-run", "--local-only"])
+            self.assertEqual(res_fixture.returncode, 0)
+            self.assertIn("Isolated Mode", res_fixture.stdout)
 
 
 if __name__ == "__main__":

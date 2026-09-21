@@ -17,6 +17,7 @@ Usage:
       --dry-run         Simulate updates and migrations without writing files.
       --force           Force reinstall/refresh even if versions match.
       --local-only      Skip remote GitHub check, use only local global installation.
+      --global          Synchronize global skills installation (dev repo -> host, or GitHub -> host).
       --kb-sync         Run Knowledge Base sync after updating protocol.
       --dep-scan        Run AI dependencies and submodules scan after updating protocol.
       --history-sync    Run Git history reconciliation after updating protocol.
@@ -414,6 +415,7 @@ def execute_post_update_syncs(contexts: list, repo_root: str, do_kb: bool, do_de
     return all_ok
 
 def run_update(repo_root, check_only=False, dry_run=False, force=False, local_only=False,
+               sync_global=False,
                do_kb_sync=False, do_dep_scan=False, do_history_sync=False, do_graph_sync=False,
                verbose=False, no_hooks=False):
     repo_root = os.path.abspath(repo_root)
@@ -441,24 +443,30 @@ def run_update(repo_root, check_only=False, dry_run=False, force=False, local_on
 
     is_dev = is_dev_repo(repo_root)
 
-    if is_dev:
-        print("-> [Dev Repo Detected] Working inside along repository.")
-        install_global_from_local(repo_root, dry_run=dry_run)
-    else:
-        if v_remote > v_global or (force and v_remote > (0, 0, 0)):
-            print(f"-> Remote version (v{v_remote_str}) is newer than global (v{v_global_str}).")
-            success = update_global_from_git(dry_run=dry_run)
-            if not success:
-                print("   [WARN] Falling back to existing global installation.")
-        elif v_global > (0, 0, 0):
-            print(f"-> Global installation (v{v_global_str}) is up-to-date.")
+    if sync_global:
+        if is_dev:
+            print("-> [Global Sync Requested] Installing skills locally from dev repository...")
+            install_global_from_local(repo_root, dry_run=dry_run)
         else:
-            if v_remote > (0, 0, 0):
-                print("-> No global installation detected. Installing from remote git...")
-                update_global_from_git(dry_run=dry_run)
+            if v_remote > v_global or (force and v_remote > (0, 0, 0)):
+                print(f"-> Remote version (v{v_remote_str}) is newer than global (v{v_global_str}).")
+                success = update_global_from_git(dry_run=dry_run)
+                if not success:
+                    print("   [WARN] Falling back to existing global installation.")
+            elif v_global > (0, 0, 0):
+                print(f"-> Global installation (v{v_global_str}) is up-to-date.")
             else:
-                print("   [ERROR] No global installation and remote is unreachable.")
-                return False
+                if v_remote > (0, 0, 0):
+                    print("-> No global installation detected. Installing from remote git...")
+                    update_global_from_git(dry_run=dry_run)
+                else:
+                    print("   [ERROR] No global installation and remote is unreachable.")
+                    return False
+    else:
+        if is_dev:
+            print("-> [Dev Repo Detected] Operating in isolated repository mode (global skills untouched).")
+        else:
+            print("-> [Isolated Mode] Updating repository context (pass --global to synchronize host skills).")
 
     protocol_src = None
     local_proto = os.path.join(repo_root, "skills", "along-init", "protocol.md")
@@ -588,6 +596,7 @@ if __name__ == "__main__":
     dry_run_flag = "--dry-run" in sys.argv
     force_flag = "--force" in sys.argv
     local_only_flag = "--local-only" in sys.argv
+    global_flag = "--global" in sys.argv or "--sync-global" in sys.argv
     verbose_flag = any(a in sys.argv for a in ("-v", "--verbose", "--debug"))
     
     all_sync_flag = "--all-sync" in sys.argv
@@ -607,6 +616,7 @@ if __name__ == "__main__":
         dry_run=dry_run_flag,
         force=force_flag,
         local_only=local_only_flag,
+        sync_global=global_flag,
         do_kb_sync=kb_sync_flag,
         do_dep_scan=dep_scan_flag,
         do_history_sync=history_sync_flag,

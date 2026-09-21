@@ -622,11 +622,12 @@ RECENT_DONE_LIMIT: int = 5
 
 
 def compile_issues_board(repo_root: str, recent_done_limit: int = RECENT_DONE_LIMIT) -> str:
-    """Compile active issues and recent completed issues into ISSUES.md content."""
+    """Compile active issues, backlog issues, and recent completed issues into ISSUES.md content."""
     from . import repo
     issues_dir = os.path.join(repo.state_dir(repo_root), "ISSUES")
     done_dir = os.path.join(issues_dir, "done")
     active_items = []
+    backlog_items = []
     done_items = []
 
     if os.path.exists(issues_dir):
@@ -635,7 +636,22 @@ def compile_issues_board(repo_root: str, recent_done_limit: int = RECENT_DONE_LI
                 parts = f[:-3].split("--", 1)
                 itype = parts[0]
                 islug = parts[1] if len(parts) > 1 else f[:-3]
-                active_items.append(f"- [ ] `({itype})` [{islug}](ISSUES/{f})")
+                fpath = os.path.join(issues_dir, f)
+                istatus = "open"
+                try:
+                    with open(fpath, "r", encoding="utf-8", errors="ignore") as handle:
+                        head = handle.read(500)
+                    m_stat = re.search(r"^status:\s*[\"']?([a-z-]+)[\"']?", head, re.MULTILINE)
+                    if m_stat:
+                        istatus = m_stat.group(1).lower()
+                except OSError:
+                    pass
+
+                entry = f"- [ ] `({itype})` [{islug}](ISSUES/{f})"
+                if istatus == "in-progress":
+                    active_items.append(entry)
+                else:
+                    backlog_items.append(entry)
 
     if os.path.exists(done_dir):
         done_records = []
@@ -688,7 +704,7 @@ def compile_issues_board(repo_root: str, recent_done_limit: int = RECENT_DONE_LI
 {chr(10).join(active_items) if active_items else "<!-- No active issues -->"}
 
 ## Backlog
-<!-- Planned or deferred issues -->
+{chr(10).join(backlog_items) if backlog_items else "<!-- Planned or deferred issues -->"}
 
 ## Done (recent)
 {chr(10).join(done_items) if done_items else "<!-- No completed issues -->"}

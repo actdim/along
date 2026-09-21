@@ -12,7 +12,7 @@ sources:
   - path: skills/along-kb-sync/SKILL.md
     hash: "e43f8e63715f943e940edd5abf260b6ea45bf69f784213bac3b1bd7327f75527"
   - path: skills/along-update/SKILL.md
-    hash: "8be7bb0dfd98d48971707976f622ea320d7b3116402b8be752facaa949457f5a"
+    hash: "db5cd83f793ab76deba0cac3c932eefa59f9b70cf11656e0cfd1a70c8da941ba"
 ---
 
 # Skills & Slash Commands Technical Reference
@@ -91,7 +91,7 @@ flowchart TD
 ### `along-update`
 - **What it is**: Automated protocol, skill, and runtime hook synchronizer. Checks and pulls latest Along skills, migrations, and protocol definitions across user home directories (`~/.claude`, `~/.codex`, `~/.gemini`) and local repositories, and automatically reconciles runtime lifecycle hooks across supported agent environments.
 - **Architectural Rationale**:
-  - Eliminates skill drift across multiple developer machines.
+  - Eliminates skill drift across multiple developer machines while isolating updates to the target repository by default (global machine skills update requires an explicit `--global` flag).
   - Automatically executes retroactive migration scripts (`scripts/migrate_protocol.py`) to upgrade legacy front-matter schemas and directory layouts without data loss.
   - Automatically scaffolds and updates runtime lifecycle hooks (`.agents/hooks.json`, `.claude/settings.json`, `.codex/hooks.json`), guaranteeing that mechanical quality gates and typography invariants are enforced across all active agent tools without manual setup.
 - **Invocation Triggers**:
