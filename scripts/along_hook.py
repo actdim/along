@@ -49,14 +49,18 @@ def main() -> int:
             choices=["antigravity", "claude", "codex", "cursor", "all"],
             help="Target runtime (antigravity, claude, codex, cursor, all)",
         )
+        parser.add_argument("--global", dest="is_global", action="store_true", help="Install hooks globally in user home")
+        parser.add_argument("--target-home", default=None, help="Target home directory for global installation")
         parser.add_argument("--dry-run", action="store_true", help="Preview changes without writing")
-        parser.add_argument("--repo-root", default=None, help="Path to repository root")
+        parser.add_argument("--repo-root", default=None, help="Path to repository root (for local install)")
         args = parser.parse_args(sys.argv[2:])
 
-        repo_root = args.repo_root or repo.find_repo_root()
-        if not repo_root:
-            sys.stderr.write("[Along Hook] Error: cannot locate repository root.\n")
-            return 1
+        repo_root = None
+        if not args.is_global:
+            repo_root = args.repo_root or repo.find_repo_root()
+            if not repo_root:
+                sys.stderr.write("[Along Hook] Error: cannot locate repository root.\n")
+                return 1
 
         from alongkit.hooks.config import (
             install_antigravity_hooks,
@@ -67,26 +71,35 @@ def main() -> int:
 
         statuses = []
         if args.runtime in ("antigravity", "all"):
-            status, msg = install_antigravity_hooks(repo_root, dry_run=args.dry_run)
+            status, msg = install_antigravity_hooks(
+                repo_root, dry_run=args.dry_run, is_global=args.is_global, target_home=args.target_home
+            )
             print(f"-> [Along Hook] {msg}")
             statuses.append(status)
 
         if args.runtime in ("claude", "all"):
-            status, msg = install_claude_hooks(repo_root, dry_run=args.dry_run)
+            status, msg = install_claude_hooks(
+                repo_root, dry_run=args.dry_run, is_global=args.is_global, target_home=args.target_home
+            )
             print(f"-> [Along Hook] {msg}")
             statuses.append(status)
 
         if args.runtime in ("codex", "all"):
-            status, msg = install_codex_hooks(repo_root, dry_run=args.dry_run)
+            status, msg = install_codex_hooks(
+                repo_root, dry_run=args.dry_run, is_global=args.is_global, target_home=args.target_home
+            )
             print(f"-> [Along Hook] {msg}")
             statuses.append(status)
 
         if args.runtime in ("cursor", "all"):
-            status, msg = install_cursor_hooks(repo_root, dry_run=args.dry_run)
+            status, msg = install_cursor_hooks(
+                repo_root, dry_run=args.dry_run, is_global=args.is_global, target_home=args.target_home
+            )
             print(f"-> [Along Hook] {msg}")
             statuses.append(status)
 
         return 0 if all(s in ("installed", "present", "dry-run") for s in statuses) else 1
+
 
     if len(sys.argv) > 1 and sys.argv[1] == "verify":
         parser = argparse.ArgumentParser(
@@ -167,13 +180,6 @@ def main() -> int:
     )
     args = parser.parse_args()
 
-    repo_root = args.repo_root or repo.find_repo_root()
-    config: HooksConfig = load_config(repo_root)
-    if args.mode:
-        config.mode = args.mode
-        for k in config.gates:
-            config.gates[k] = args.mode
-
     adapter = get_adapter(args.runtime)
 
     try:
@@ -184,8 +190,41 @@ def main() -> int:
 
     event_type = HookEventType(args.event)
     event = adapter.parse(raw_input, event_type=event_type)
+
+    if args.repo_root:
+        repo_root = args.repo_root
+    elif event.workspace_root:
+        repo_root = repo.find_repo_root(event.workspace_root) or event.workspace_root
+    else:
+        repo_root = repo.find_repo_root()
+
+    # Fail-open check: if workspace does not carry Along protocol, do not block
+    is_along_repo = bool(
+        repo_root and (
+            os.path.isdir(os.path.join(repo_root, ".along"))
+            or os.path.isdir(os.path.join(repo_root, ".agents"))
+            or os.path.isfile(os.path.join(repo_root, "AGENTS.md"))
+        )
+    )
+    if not is_along_repo:
+        from alongkit.hooks import GateDecision, GateResult
+        exit_code, response_str = adapter.format_response(
+            GateResult(decision=GateDecision.ALLOW, exit_code=0)
+        )
+        if response_str:
+            sys.stdout.write(response_str + "\n")
+            sys.stdout.flush()
+        return 0
+
     if not event.workspace_root and repo_root:
         event.workspace_root = repo_root
+
+    config: HooksConfig = load_config(repo_root)
+    if args.mode:
+        config.mode = args.mode
+        for k in config.gates:
+            config.gates[k] = args.mode
+
 
     try:
         result = evaluate_event(event, repo_root=repo_root, config=config)

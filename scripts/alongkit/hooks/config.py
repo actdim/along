@@ -118,7 +118,19 @@ def record_audit_entry(
         pass
 
 
-def get_antigravity_hook_manifest() -> Dict[str, Any]:
+def get_hook_command(runtime: str, event: str, is_global: bool = False) -> str:
+    """Generate command string for a runtime lifecycle hook."""
+    if not is_global:
+        return f"python scripts/along_hook.py --runtime {runtime} --event {event}"
+    return (
+        f'python -c "import os, sys, subprocess; '
+        f's = os.path.expanduser(\'~/.along/bin/along_hook.py\'); '
+        f'sys.exit(subprocess.call([sys.executable, s] + sys.argv[1:]) if os.path.isfile(s) else 0)" '
+        f'--runtime {runtime} --event {event}'
+    )
+
+
+def get_antigravity_hook_manifest(is_global: bool = False) -> Dict[str, Any]:
     """Canonical hook configuration dictionary for Google Antigravity."""
     return {
         "along-runtime-gates": {
@@ -128,7 +140,7 @@ def get_antigravity_hook_manifest() -> Dict[str, Any]:
                     "hooks": [
                         {
                             "type": "command",
-                            "command": "python ../scripts/along_hook.py --runtime antigravity --event PreToolUse",
+                            "command": get_hook_command("antigravity", "PreToolUse", is_global=is_global),
                             "timeout": 15,
                         }
                     ],
@@ -138,9 +150,19 @@ def get_antigravity_hook_manifest() -> Dict[str, Any]:
     }
 
 
-def install_antigravity_hooks(repo_root: str, dry_run: bool = False) -> Tuple[str, str]:
-    """Scaffold or update .agents/hooks.json for Antigravity in the given repository."""
-    agents_dir = os.path.join(repo_root, ".agents")
+def install_antigravity_hooks(
+    repo_root: Optional[str] = None,
+    dry_run: bool = False,
+    is_global: bool = False,
+    target_home: Optional[str] = None,
+) -> Tuple[str, str]:
+    """Scaffold or update hooks.json for Antigravity globally or in repo_root."""
+    if is_global:
+        agents_dir = target_home or os.path.expanduser("~/.gemini/config")
+    else:
+        if not repo_root:
+            return "failed", "repo_root is required for local hook install"
+        agents_dir = os.path.join(repo_root, ".agents")
     hooks_file = os.path.join(agents_dir, "hooks.json")
 
     existing: Dict[str, Any] = {}
@@ -154,7 +176,7 @@ def install_antigravity_hooks(repo_root: str, dry_run: bool = False) -> Tuple[st
         except (OSError, ValueError) as exc:
             return "failed", f"left {hooks_file} alone: cannot parse JSON ({exc})"
 
-    spec = get_antigravity_hook_manifest()
+    spec = get_antigravity_hook_manifest(is_global=is_global)
     gate_key = "along-runtime-gates"
     if existing.get(gate_key) == spec[gate_key]:
         return "present", f"{hooks_file}: already up to date"
@@ -168,32 +190,42 @@ def install_antigravity_hooks(repo_root: str, dry_run: bool = False) -> Tuple[st
     return "installed", f"updated {hooks_file} with {gate_key}"
 
 
-def get_claude_hook_manifest() -> Dict[str, Any]:
+def get_claude_hook_manifest(is_global: bool = False) -> Dict[str, Any]:
     """Canonical hook configuration dictionary for Anthropic Claude Code (.claude/settings.json)."""
     return {
         "PreToolUse": [
             {
                 "matcher": "Write|WriteFile|Edit|EditFile|Bash|PowerShell",
-                "command": "python scripts/along_hook.py --runtime claude --event PreToolUse",
+                "command": get_hook_command("claude", "PreToolUse", is_global=is_global),
             }
         ],
         "PostToolUse": [
             {
                 "matcher": "Write|WriteFile|Edit|EditFile",
-                "command": "python scripts/along_hook.py --runtime claude --event PostToolUse",
+                "command": get_hook_command("claude", "PostToolUse", is_global=is_global),
             }
         ],
         "Stop": [
             {
-                "command": "python scripts/along_hook.py --runtime claude --event Stop",
+                "command": get_hook_command("claude", "Stop", is_global=is_global),
             }
         ],
     }
 
 
-def install_claude_hooks(repo_root: str, dry_run: bool = False) -> Tuple[str, str]:
-    """Scaffold or update .claude/settings.json for Claude Code in the given repository."""
-    claude_dir = os.path.join(repo_root, ".claude")
+def install_claude_hooks(
+    repo_root: Optional[str] = None,
+    dry_run: bool = False,
+    is_global: bool = False,
+    target_home: Optional[str] = None,
+) -> Tuple[str, str]:
+    """Scaffold or update settings.json for Claude Code globally or in repo_root."""
+    if is_global:
+        claude_dir = target_home or os.path.expanduser("~/.claude")
+    else:
+        if not repo_root:
+            return "failed", "repo_root is required for local hook install"
+        claude_dir = os.path.join(repo_root, ".claude")
     settings_file = os.path.join(claude_dir, "settings.json")
 
     existing: Dict[str, Any] = {}
@@ -207,7 +239,7 @@ def install_claude_hooks(repo_root: str, dry_run: bool = False) -> Tuple[str, st
         except (OSError, ValueError) as exc:
             return "failed", f"left {settings_file} alone: cannot parse JSON ({exc})"
 
-    spec = get_claude_hook_manifest()
+    spec = get_claude_hook_manifest(is_global=is_global)
     existing_hooks = existing.get("hooks")
     if not isinstance(existing_hooks, dict):
         existing_hooks = {}
@@ -251,34 +283,45 @@ def install_claude_hooks(repo_root: str, dry_run: bool = False) -> Tuple[str, st
     return "installed", f"updated {settings_file} with Along hooks"
 
 
-def get_codex_hook_manifest() -> Dict[str, Any]:
+
+def get_codex_hook_manifest(is_global: bool = False) -> Dict[str, Any]:
     """Canonical hook configuration dictionary for OpenAI Codex (.codex/hooks.json)."""
     return {
         "hooks": {
             "PreToolUse": [
                 {
                     "matcher": "write_file|WriteFile|Write|create_file|edit_file|EditFile|Edit|patch|patch_file|shell|exec|execute|bash|Bash|run_command",
-                    "command": "python scripts/along_hook.py --runtime codex --event PreToolUse",
+                    "command": get_hook_command("codex", "PreToolUse", is_global=is_global),
                 }
             ],
             "PostToolUse": [
                 {
                     "matcher": "write_file|WriteFile|Write|create_file|edit_file|EditFile|Edit|patch|patch_file",
-                    "command": "python scripts/along_hook.py --runtime codex --event PostToolUse",
+                    "command": get_hook_command("codex", "PostToolUse", is_global=is_global),
                 }
             ],
             "Stop": [
                 {
-                    "command": "python scripts/along_hook.py --runtime codex --event Stop",
+                    "command": get_hook_command("codex", "Stop", is_global=is_global),
                 }
             ],
         }
     }
 
 
-def install_codex_hooks(repo_root: str, dry_run: bool = False) -> Tuple[str, str]:
-    """Scaffold or update .codex/hooks.json for OpenAI Codex in the given repository."""
-    codex_dir = os.path.join(repo_root, ".codex")
+def install_codex_hooks(
+    repo_root: Optional[str] = None,
+    dry_run: bool = False,
+    is_global: bool = False,
+    target_home: Optional[str] = None,
+) -> Tuple[str, str]:
+    """Scaffold or update hooks.json for OpenAI Codex globally or in repo_root."""
+    if is_global:
+        codex_dir = target_home or os.path.expanduser("~/.codex")
+    else:
+        if not repo_root:
+            return "failed", "repo_root is required for local hook install"
+        codex_dir = os.path.join(repo_root, ".codex")
     hooks_file = os.path.join(codex_dir, "hooks.json")
 
     existing: Dict[str, Any] = {}
@@ -292,7 +335,7 @@ def install_codex_hooks(repo_root: str, dry_run: bool = False) -> Tuple[str, str
         except (OSError, ValueError) as exc:
             return "failed", f"left {hooks_file} alone: cannot parse JSON ({exc})"
 
-    spec = get_codex_hook_manifest()
+    spec = get_codex_hook_manifest(is_global=is_global)
     spec_hooks = spec.get("hooks", {})
 
     hooks_container: Dict[str, Any]
@@ -343,33 +386,43 @@ def install_codex_hooks(repo_root: str, dry_run: bool = False) -> Tuple[str, str
     return "installed", f"updated {hooks_file} with Along hooks"
 
 
-def get_cursor_hook_manifest() -> Dict[str, Any]:
+def get_cursor_hook_manifest(is_global: bool = False) -> Dict[str, Any]:
     """Canonical hook configuration dictionary for Cursor (.cursor/hooks.json)."""
     return {
         "version": 1,
         "hooks": {
             "preToolUse": [
                 {
-                    "command": "python scripts/along_hook.py --runtime cursor --event PreToolUse",
+                    "command": get_hook_command("cursor", "PreToolUse", is_global=is_global),
                 }
             ],
             "postToolUse": [
                 {
-                    "command": "python scripts/along_hook.py --runtime cursor --event PostToolUse",
+                    "command": get_hook_command("cursor", "PostToolUse", is_global=is_global),
                 }
             ],
             "stop": [
                 {
-                    "command": "python scripts/along_hook.py --runtime cursor --event Stop",
+                    "command": get_hook_command("cursor", "Stop", is_global=is_global),
                 }
             ],
         },
     }
 
 
-def install_cursor_hooks(repo_root: str, dry_run: bool = False) -> Tuple[str, str]:
-    """Scaffold or update .cursor/hooks.json for Cursor in the given repository."""
-    cursor_dir = os.path.join(repo_root, ".cursor")
+def install_cursor_hooks(
+    repo_root: Optional[str] = None,
+    dry_run: bool = False,
+    is_global: bool = False,
+    target_home: Optional[str] = None,
+) -> Tuple[str, str]:
+    """Scaffold or update hooks.json for Cursor globally or in repo_root."""
+    if is_global:
+        cursor_dir = target_home or os.path.expanduser("~/.cursor")
+    else:
+        if not repo_root:
+            return "failed", "repo_root is required for local hook install"
+        cursor_dir = os.path.join(repo_root, ".cursor")
     hooks_file = os.path.join(cursor_dir, "hooks.json")
 
     existing: Dict[str, Any] = {}
@@ -383,7 +436,7 @@ def install_cursor_hooks(repo_root: str, dry_run: bool = False) -> Tuple[str, st
         except (OSError, ValueError) as exc:
             return "failed", f"left {hooks_file} alone: cannot parse JSON ({exc})"
 
-    spec = get_cursor_hook_manifest()
+    spec = get_cursor_hook_manifest(is_global=is_global)
     spec_hooks = spec.get("hooks", {})
 
     if "version" not in existing:
@@ -430,6 +483,167 @@ def install_cursor_hooks(repo_root: str, dry_run: bool = False) -> Tuple[str, st
     os.makedirs(cursor_dir, exist_ok=True)
     textio.write_text(hooks_file, json.dumps(existing, indent=2) + "\n", newline="\n")
     return "installed", f"updated {hooks_file} with Along hooks"
+
+
+def purge_local_along_hooks(repo_root: str, dry_run: bool = False) -> List[str]:
+    """Purge spurious local Along hooks and workaround scripts from a consumer repository."""
+    actions: List[str] = []
+    if not repo_root or not os.path.isdir(repo_root):
+        return actions
+
+    # 1. Purge .agents/hooks.json
+    agents_hooks = os.path.join(repo_root, ".agents", "hooks.json")
+    if os.path.isfile(agents_hooks):
+        try:
+            content = textio.read_text(agents_hooks, strict=False)
+            data = json.loads(content) if content.strip() else {}
+            if isinstance(data, dict) and "along-runtime-gates" in data:
+                del data["along-runtime-gates"]
+                if not data:
+                    if not dry_run:
+                        os.remove(agents_hooks)
+                    actions.append(f"removed {agents_hooks}")
+                    agents_dir = os.path.dirname(agents_hooks)
+                    if not dry_run and os.path.isdir(agents_dir) and not os.listdir(agents_dir):
+                        os.rmdir(agents_dir)
+                        actions.append(f"removed empty directory {agents_dir}")
+                else:
+                    if not dry_run:
+                        textio.write_text(agents_hooks, json.dumps(data, indent=2) + "\n", newline="\n")
+                    actions.append(f"cleaned along-runtime-gates from {agents_hooks}")
+        except (OSError, ValueError):
+            pass
+
+    # 2. Purge .claude/settings.json
+    claude_settings = os.path.join(repo_root, ".claude", "settings.json")
+    if os.path.isfile(claude_settings):
+        try:
+            content = textio.read_text(claude_settings, strict=False)
+            data = json.loads(content) if content.strip() else {}
+            if isinstance(data, dict) and "hooks" in data and isinstance(data["hooks"], dict):
+                modified = False
+                for ev in list(data["hooks"].keys()):
+                    ev_list = data["hooks"][ev]
+                    if isinstance(ev_list, list):
+                        new_list = [h for h in ev_list if isinstance(h, dict) and "along_hook.py" not in str(h.get("command", ""))]
+                        if len(new_list) != len(ev_list):
+                            modified = True
+                            if new_list:
+                                data["hooks"][ev] = new_list
+                            else:
+                                del data["hooks"][ev]
+                if modified:
+                    if not data["hooks"]:
+                        del data["hooks"]
+                    if not data:
+                        if not dry_run:
+                            os.remove(claude_settings)
+                        actions.append(f"removed {claude_settings}")
+                        c_dir = os.path.dirname(claude_settings)
+                        if not dry_run and os.path.isdir(c_dir) and not os.listdir(c_dir):
+                            os.rmdir(c_dir)
+                            actions.append(f"removed empty directory {c_dir}")
+                    else:
+                        if not dry_run:
+                            textio.write_text(claude_settings, json.dumps(data, indent=2) + "\n", newline="\n")
+                        actions.append(f"cleaned Along hooks from {claude_settings}")
+        except (OSError, ValueError):
+            pass
+
+    # 3. Purge .codex/hooks.json
+    codex_hooks = os.path.join(repo_root, ".codex", "hooks.json")
+    if os.path.isfile(codex_hooks):
+        try:
+            content = textio.read_text(codex_hooks, strict=False)
+            data = json.loads(content) if content.strip() else {}
+            if isinstance(data, dict):
+                hooks_dict = data.get("hooks", data)
+                modified = False
+                for ev in list(hooks_dict.keys()):
+                    ev_list = hooks_dict[ev]
+                    if isinstance(ev_list, list):
+                        new_list = [h for h in ev_list if isinstance(h, dict) and "along_hook.py" not in str(h.get("command", ""))]
+                        if len(new_list) != len(ev_list):
+                            modified = True
+                            if new_list:
+                                hooks_dict[ev] = new_list
+                            else:
+                                del hooks_dict[ev]
+                if modified:
+                    if "hooks" in data and not data["hooks"]:
+                        del data["hooks"]
+                    if not data or (len(data) == 1 and "hooks" in data and not data["hooks"]):
+                        if not dry_run:
+                            os.remove(codex_hooks)
+                        actions.append(f"removed {codex_hooks}")
+                        cx_dir = os.path.dirname(codex_hooks)
+                        if not dry_run and os.path.isdir(cx_dir) and not os.listdir(cx_dir):
+                            os.rmdir(cx_dir)
+                            actions.append(f"removed empty directory {cx_dir}")
+                    else:
+                        if not dry_run:
+                            textio.write_text(codex_hooks, json.dumps(data, indent=2) + "\n", newline="\n")
+                        actions.append(f"cleaned Along hooks from {codex_hooks}")
+        except (OSError, ValueError):
+            pass
+
+    # 4. Purge .cursor/hooks.json
+    cursor_hooks = os.path.join(repo_root, ".cursor", "hooks.json")
+    if os.path.isfile(cursor_hooks):
+        try:
+            content = textio.read_text(cursor_hooks, strict=False)
+            data = json.loads(content) if content.strip() else {}
+            if isinstance(data, dict) and "hooks" in data and isinstance(data["hooks"], dict):
+                modified = False
+                for ev in list(data["hooks"].keys()):
+                    ev_list = data["hooks"][ev]
+                    if isinstance(ev_list, list):
+                        new_list = [h for h in ev_list if isinstance(h, dict) and "along_hook.py" not in str(h.get("command", ""))]
+                        if len(new_list) != len(ev_list):
+                            modified = True
+                            if new_list:
+                                data["hooks"][ev] = new_list
+                            else:
+                                del data["hooks"][ev]
+                if modified:
+                    if not data["hooks"]:
+                        del data["hooks"]
+                    keys_left = [k for k in data.keys() if k != "version"]
+                    if not keys_left:
+                        if not dry_run:
+                            os.remove(cursor_hooks)
+                        actions.append(f"removed {cursor_hooks}")
+                        cur_dir = os.path.dirname(cursor_hooks)
+                        if not dry_run and os.path.isdir(cur_dir) and not os.listdir(cur_dir):
+                            os.rmdir(cur_dir)
+                            actions.append(f"removed empty directory {cur_dir}")
+                    else:
+                        if not dry_run:
+                            textio.write_text(cursor_hooks, json.dumps(data, indent=2) + "\n", newline="\n")
+                        actions.append(f"cleaned Along hooks from {cursor_hooks}")
+        except (OSError, ValueError):
+            pass
+
+    # 5. Purge workaround scripts/along_hook.py or .along/scripts/along_hook.py in consumer repos
+    if not repo.is_dev_repo(repo_root):
+        for candidate_script in [
+            os.path.join(repo_root, "scripts", "along_hook.py"),
+            os.path.join(repo_root, ".along", "scripts", "along_hook.py"),
+        ]:
+            if os.path.isfile(candidate_script):
+                try:
+                    if not dry_run:
+                        os.remove(candidate_script)
+                    actions.append(f"removed workaround {candidate_script}")
+                    s_dir = os.path.dirname(candidate_script)
+                    if not dry_run and os.path.isdir(s_dir) and not os.listdir(s_dir):
+                        os.rmdir(s_dir)
+                        actions.append(f"removed empty directory {s_dir}")
+                except OSError:
+                    pass
+
+    return actions
+
 
 
 

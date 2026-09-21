@@ -130,15 +130,7 @@ def detect_remote_version(verbose=False):
 
     return None
 
-def is_dev_repo(repo_root):
-    is_along_repo = (
-        (os.path.exists(os.path.join(repo_root, "skills", "along-init", "SKILL.md")) or
-         os.path.exists(os.path.join(repo_root, "skills", "init-agents", "SKILL.md"))) and
-        (os.path.exists(os.path.join(repo_root, "skills", "along-version-bump", "SKILL.md")) or
-         os.path.exists(os.path.join(repo_root, "skills", "along-bump-version", "SKILL.md")) or
-         os.path.exists(os.path.join(repo_root, "skills", "bump-version", "SKILL.md")))
-    )
-    return is_along_repo
+is_dev_repo = repo.is_dev_repo
 
 def purge_legacy_global_skills():
     user_home = os.path.expanduser("~")
@@ -226,19 +218,8 @@ def apply_migration_to_context(ctx_dir, protocol_text, migrate_script, is_root=T
     print(f"-> Updating agent context: {rel_display} ({ctx_dir})")
     if dry_run:
         print(f"   [DRY-RUN] Would refresh protocol block and run migration engine on {ctx_dir}.")
-        if not no_hooks:
-            try:
-                from alongkit.hooks.config import (
-                    install_antigravity_hooks,
-                    install_claude_hooks,
-                    install_codex_hooks,
-                )
-                for installer in (install_antigravity_hooks, install_claude_hooks, install_codex_hooks):
-                    status, msg = installer(ctx_dir, dry_run=True)
-                    print(f"   [DRY-RUN] {msg}")
-            except (ImportError, OSError, ValueError) as e:
-                print(f"   [WARN] Could not preview runtime hooks for {ctx_dir}: {e}")
         return True
+
 
     agents_md = os.path.join(ctx_dir, "AGENTS.md")
 
@@ -328,7 +309,8 @@ def apply_migration_to_context(ctx_dir, protocol_text, migrate_script, is_root=T
         try:
             from alongkit import entities
             out_path = entities.sync_constraints(ctx_dir)
-            print(f"   Recompiled {os.path.relpath(out_path, ctx_dir)}")
+            if out_path:
+                print(f"   Recompiled {os.path.relpath(out_path, ctx_dir)}")
         except (OSError, ValueError) as e:
             print(f"   [WARN] Could not recompile CONSTRAINTS.md: {e}")
 
@@ -340,24 +322,18 @@ def apply_migration_to_context(ctx_dir, protocol_text, migrate_script, is_root=T
         except (OSError, ValueError) as e:
             print(f"   [WARN] Could not attach rule packs for {ctx_dir}: {e}")
 
-    # Automatically install or update runtime lifecycle hooks across supported agents
-    if not dry_run and not no_hooks:
+    # Purge any legacy spurious local hooks or workaround scripts from consumer context
+    if not dry_run:
         try:
-            from alongkit.hooks.config import (
-                install_antigravity_hooks,
-                install_claude_hooks,
-                install_codex_hooks,
-            )
-            for installer in (install_antigravity_hooks, install_claude_hooks, install_codex_hooks):
-                status, msg = installer(ctx_dir, dry_run=False)
-                if status in ("installed", "present"):
-                    print(f"   [OK] {msg}")
-                elif status == "failed":
-                    print(f"   [WARN] {msg}")
+            from alongkit.hooks.config import purge_local_along_hooks
+            purged = purge_local_along_hooks(ctx_dir)
+            for item in purged:
+                print(f"   [OK] Cleaned legacy hook: {item}")
         except (ImportError, OSError, ValueError) as e:
-            print(f"   [WARN] Could not update runtime hooks for {ctx_dir}: {e}")
+            print(f"   [WARN] Could not clean legacy local hooks for {ctx_dir}: {e}")
 
     return context_ok
+
 
 def find_uninitialized_subprojects(repo_root, contexts):
     context_set = set(os.path.abspath(c) for c in contexts)

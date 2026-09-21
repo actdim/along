@@ -26,6 +26,7 @@ if __name__ == "__main__":
 
 import os
 import tempfile
+import time
 from dataclasses import dataclass
 from typing import Optional, Tuple
 
@@ -120,26 +121,37 @@ def write_text(path: str, text: str, *, newline: Optional[str] = None,
         if newline != "\n":
             body = body.replace("\n", newline)
     data = body.encode("utf-8")
-
-    if not atomic:
-        with open(path, "wb") as handle:
-            handle.write(data)
-        return
-
-    directory = os.path.dirname(os.path.abspath(path)) or "."
-    os.makedirs(directory, exist_ok=True)
-    fd, tmp_path = tempfile.mkstemp(dir=directory, prefix=".along-tmp-",
-                                    suffix=os.path.basename(path))
-    try:
-        with os.fdopen(fd, "wb") as handle:
-            handle.write(data)
-        os.replace(tmp_path, path)
-    except BaseException:
+    max_attempts = 5
+    for attempt in range(max_attempts):
         try:
-            os.unlink(tmp_path)
-        except OSError:
-            pass
-        raise
+            if not atomic:
+                with open(path, "wb") as handle:
+                    handle.write(data)
+                return
+
+            directory = os.path.dirname(os.path.abspath(path)) or "."
+            os.makedirs(directory, exist_ok=True)
+            fd, tmp_path = tempfile.mkstemp(dir=directory, prefix=".along-tmp-",
+                                            suffix=os.path.basename(path))
+            try:
+                with os.fdopen(fd, "wb") as handle:
+                    handle.write(data)
+                os.replace(tmp_path, path)
+                return
+            except BaseException:
+                try:
+                    os.unlink(tmp_path)
+                except OSError:
+                    pass
+                raise
+        except OSError as exc:
+            # On Windows, transient file locks by IDEs/antivirus raise Errno 13 (EACCES) or 22 (EINVAL)
+            is_transient = getattr(exc, "errno", None) in (13, 22) or isinstance(exc, PermissionError)
+            if is_transient and attempt < max_attempts - 1:
+                time.sleep(0.05 * (2 ** attempt))
+            else:
+                raise
+
 
 
 def update_text_file(path: str, transform) -> Tuple[bool, str]:

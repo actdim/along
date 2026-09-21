@@ -1,6 +1,6 @@
 {
-  "last_edit_time": "2026-09-21T14:54:29.382013+00:00",
-  "last_test_time": "2026-09-20T14:56:56.788657+00:00",
+  "last_edit_time": "2026-09-21T15:38:52.445647+00:00",
+  "last_test_time": "2026-09-21T15:36:26.272386+00:00",
   "edited_files": [
     "d:\\Src\\my\\actdim\\public\\along\\scripts\\alongkit\\install.py",
     "d:\\Src\\my\\actdim\\public\\along\\scripts\\alongkit\\hooks\\predicates.py",
@@ -204,6 +204,14 @@
     "d:\\Src\\my\\actdim\\public\\along\\.along\\ISSUES\\feat--docs-semantic-conflict-resolution.md",
     "d:\\Src\\my\\actdim\\public\\along\\.along\\ISSUES\\feat--test-gated-code-merge-pipeline.md",
     "d:/Src/my/actdim/public/along/docs/topic--skills-reference.md",
-    "d:\\Src\\my\\actdim\\public\\along\\.along\\SESSIONS\\2026\\2026-09-21--updater-explicit-global-sync.md"
+    "d:\\Src\\my\\actdim\\public\\along\\.along\\SESSIONS\\2026\\2026-09-21--updater-explicit-global-sync.md",
+    "d:\\Src\\my\\actdim\\public\\along\\scripts\\alongkit\\repo.py",
+    "d:\\Src\\my\\actdim\\public\\along\\install.ps1",
+    "d:\\Src\\my\\actdim\\public\\along\\install.sh",
+    "d:\\Src\\my\\actdim\\public\\along\\scripts\\alongkit\\textio.py",
+    "d:\\Src\\my\\actdim\\public\\along\\tests\\test_update_and_hooks_hardening.py",
+    "d:\\Src\\my\\actdim\\public\\along\\.along\\SESSIONS\\2026\\2026-09-21--update-hooks-and-monorepo-sync-hardening.md",
+    "C:\\Users\\Admin\\.gemini\\antigravity\\brain\\96368d8b-1e5b-4c76-bee1-e6f1586c369f\\walkthrough.md",
+    "d:\\Src\\my\\actdim\\public\\along\\.along\\ISSUES\\feat--workspace-containment-and-path-scoping.md"
   ]
 }

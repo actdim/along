@@ -312,7 +312,25 @@ else {
     Write-Host "   (skipped: python not found, so no provider configuration was touched)"
 }
 
+# --- Runtime lifecycle hooks, registered globally in the installed providers ---
+$hookTool = Get-AlongTool 'along_hook.py'
+if ($hookTool) {
+    Write-Host "-> Registering global runtime lifecycle hooks..."
+    foreach ($t in $targets) {
+        $homeDir = switch ($t) {
+            'claude'      { $ClaudeHome }
+            'codex'       { $CodexHome }
+            'antigravity' { $AntigravityHome }
+            default       { $null }
+        }
+        if ($homeDir) {
+            & (Get-PythonExe) $hookTool install --runtime $t --global --target-home $homeDir
+        }
+    }
+}
+
 # --- Install manifest: what was written, and what a previous install left behind ---
+
 # Nothing here deletes a directory. The manifest names the files Along itself wrote, so
 # a superseded one can be removed by name and a file the user wrote is never a candidate.
 # It is also what `-Uninstall` reads.

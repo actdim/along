@@ -18,6 +18,7 @@ from .config import (
     install_codex_hooks,
     install_cursor_hooks,
     load_config,
+    purge_local_along_hooks,
 )
 from .engine import HookEngine, evaluate_event
 from .gates import BaseGate, CliSafetyGate, ProjectionProtectionGate, TypographyGate
@@ -39,6 +40,7 @@ __all__ = [
     "install_codex_hooks",
     "get_cursor_hook_manifest",
     "install_cursor_hooks",
+    "purge_local_along_hooks",
     "BaseGate",
     "TypographyGate",
     "ProjectionProtectionGate",
@@ -47,3 +49,4 @@ __all__ = [
     "evaluate_event",
     "get_adapter",
 ]
+

@@ -306,3 +306,18 @@ def resolve_llm_targets(target_dir: str, filename: str) -> List[str]:
         return [wk_candidate]
     return [root_candidate]
 
+
+def is_dev_repo(repo_root: Optional[str] = None) -> bool:
+    """True if repo_root is the actdim-along framework development repository."""
+    if not repo_root:
+        repo_root = find_repo_root()
+    if not repo_root:
+        return False
+    return bool(
+        (os.path.exists(os.path.join(repo_root, "skills", "along-init", "SKILL.md")) or
+         os.path.exists(os.path.join(repo_root, "skills", "init-agents", "SKILL.md"))) and
+        (os.path.exists(os.path.join(repo_root, "skills", "along-version-bump", "SKILL.md")) or
+         os.path.exists(os.path.join(repo_root, "skills", "along-bump-version", "SKILL.md")) or
+         os.path.exists(os.path.join(repo_root, "skills", "bump-version", "SKILL.md")))
+    )
+

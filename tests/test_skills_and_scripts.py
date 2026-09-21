@@ -2432,8 +2432,8 @@ class TestAlongSkillsAndScripts(unittest.TestCase):
             t_content = f.read()
         self.assertIn("Execution Mode", t_content)
 
-    def test_34_along_update_installs_runtime_hooks(self):
-        """Verify that along_update.py automatically installs and reconciles runtime lifecycle hooks."""
+    def test_34_along_update_purges_local_runtime_hooks(self):
+        """Verify that along_update.py does not create local hooks and purges legacy local hooks."""
         update_script = os.path.join(REPO_ROOT, "scripts", "along_update.py")
         self.assertTrue(os.path.exists(update_script))
 
@@ -2441,46 +2441,40 @@ class TestAlongSkillsAndScripts(unittest.TestCase):
             claude_settings = os.path.join(fixture, ".claude", "settings.json")
             codex_hooks = os.path.join(fixture, ".codex", "hooks.json")
             agents_hooks = os.path.join(fixture, ".agents", "hooks.json")
+            spurious_script = os.path.join(fixture, "scripts", "along_hook.py")
 
-            # 1. Test --dry-run: must not create hook files
-            res_dry = run_engine([sys.executable, update_script, fixture, "--local-only", "--dry-run"])
-            self.assertEqual(res_dry.returncode, 0, f"dry-run failed:\n{res_dry.stderr}")
-            self.assertFalse(os.path.exists(claude_settings), "Dry-run must not create .claude/settings.json")
-            self.assertFalse(os.path.exists(codex_hooks), "Dry-run must not create .codex/hooks.json")
-
-            # 2. Test --no-hooks: must update protocol but skip hook installation
-            res_nohooks = run_engine([sys.executable, update_script, fixture, "--local-only", "--no-hooks"])
-            self.assertEqual(res_nohooks.returncode, 0, f"no-hooks failed:\n{res_nohooks.stderr}")
-            self.assertFalse(os.path.exists(claude_settings), "--no-hooks must skip .claude/settings.json")
-            self.assertFalse(os.path.exists(codex_hooks), "--no-hooks must skip .codex/hooks.json")
-
-            # 3. Standard update: must automatically scaffold hooks for all supported runtimes
+            # 1. Test update on clean repo: must NOT scaffold local hooks
             res_real = run_engine([sys.executable, update_script, fixture, "--local-only"])
-            self.assertEqual(res_real.returncode, 0, f"real update failed:\n{res_real.stderr}\n{res_real.stdout}")
-            self.assertTrue(os.path.exists(claude_settings), "Must create .claude/settings.json")
-            self.assertTrue(os.path.exists(codex_hooks), "Must create .codex/hooks.json")
-            self.assertTrue(os.path.exists(agents_hooks), "Must create .agents/hooks.json")
+            self.assertEqual(res_real.returncode, 0, f"update failed:\n{res_real.stderr}\n{res_real.stdout}")
+            self.assertFalse(os.path.exists(claude_settings), "Update must not create .claude/settings.json")
+            self.assertFalse(os.path.exists(codex_hooks), "Update must not create .codex/hooks.json")
+            self.assertFalse(os.path.exists(agents_hooks), "Update must not create .agents/hooks.json")
+            self.assertFalse(os.path.exists(spurious_script), "Update must not create scripts/along_hook.py")
 
-            with open(claude_settings, "r", encoding="utf-8") as f:
-                c_data = json.load(f)
-            self.assertIn("hooks", c_data)
-            self.assertIn("PreToolUse", c_data["hooks"])
-            self.assertIn("along_hook.py", str(c_data["hooks"]["PreToolUse"]))
+            # 2. Seed legacy local hook files and workaround scripts
+            os.makedirs(os.path.dirname(claude_settings), exist_ok=True)
+            with open(claude_settings, "w", encoding="utf-8") as f:
+                json.dump({"hooks": {"PreToolUse": [{"command": "python ../scripts/along_hook.py --event PreToolUse"}]}}, f)
 
-            with open(codex_hooks, "r", encoding="utf-8") as f:
-                cx_data = json.load(f)
-            self.assertIn("hooks", cx_data)
-            self.assertIn("PreToolUse", cx_data["hooks"])
-            self.assertIn("along_hook.py", str(cx_data["hooks"]["PreToolUse"]))
+            os.makedirs(os.path.dirname(codex_hooks), exist_ok=True)
+            with open(codex_hooks, "w", encoding="utf-8") as f:
+                json.dump({"hooks": {"PreToolUse": [{"command": "python ../scripts/along_hook.py --event PreToolUse"}]}}, f)
 
-            with open(agents_hooks, "r", encoding="utf-8") as f:
-                ag_data = json.load(f)
-            self.assertIn("along-runtime-gates", ag_data)
+            os.makedirs(os.path.dirname(agents_hooks), exist_ok=True)
+            with open(agents_hooks, "w", encoding="utf-8") as f:
+                json.dump({"along-runtime-gates": {"pre_tool": "python ../scripts/along_hook.py"}}, f)
 
-            # 4. Idempotency: second run reports already up to date without error
-            res_second = run_engine([sys.executable, update_script, fixture, "--local-only"])
-            self.assertEqual(res_second.returncode, 0)
-            self.assertIn("already up to date", res_second.stdout)
+            os.makedirs(os.path.dirname(spurious_script), exist_ok=True)
+            with open(spurious_script, "w", encoding="utf-8") as f:
+                f.write("# legacy workaround\n")
+
+            # 3. Running update must purge all legacy local hooks and workarounds
+            res_purge = run_engine([sys.executable, update_script, fixture, "--local-only"])
+            self.assertEqual(res_purge.returncode, 0, f"purge update failed:\n{res_purge.stderr}\n{res_purge.stdout}")
+            self.assertFalse(os.path.exists(claude_settings), "Must purge legacy .claude/settings.json")
+            self.assertFalse(os.path.exists(codex_hooks), "Must purge legacy .codex/hooks.json")
+            self.assertFalse(os.path.exists(agents_hooks), "Must purge legacy .agents/hooks.json")
+            self.assertFalse(os.path.exists(spurious_script), "Must purge legacy scripts/along_hook.py")
 
     def test_35_along_update_explicit_global_isolation(self):
         """Verify that along_update.py operates in isolated mode by default and only syncs global skills with --global."""

@@ -627,6 +627,33 @@ def validate_and_build_entity_graph(along_dir):
             if clean_slug != key:
                 nodes[clean_slug] = node_data
 
+    # Collect known external keys from ancestor and monorepo contexts
+    external_keys = set()
+    parent_ctx = os.path.dirname(os.path.abspath(along_dir))
+    current = os.path.dirname(parent_ctx)
+    while current and current != os.path.dirname(current):
+        candidate_along = os.path.join(current, ".along")
+        if os.path.isdir(candidate_along) and os.path.abspath(candidate_along) != os.path.abspath(along_dir):
+            for p in (
+                os.path.join(candidate_along, "ISSUES", "**", "*.md"),
+                os.path.join(candidate_along, "RISKS", "*.md"),
+                os.path.join(candidate_along, "SPIKES", "*.md"),
+                os.path.join(candidate_along, "MILESTONES", "*.md"),
+                os.path.join(candidate_along, "DECISIONS", "*.md"),
+            ):
+                for fp in glob.glob(p, recursive=True):
+                    fn = os.path.basename(fp)
+                    if fn not in ("ISSUES.md", "README.md", "CONSTRAINTS.md", "DECISIONS.md") and fn.endswith(".md"):
+                        ek = fn[:-3]
+                        external_keys.add(ek)
+                        if "--" in ek:
+                            slug_part = ek.split("--", 1)[1]
+                            external_keys.add(slug_part)
+                            external_keys.add(f"decision--{slug_part}")
+        if os.path.exists(os.path.join(current, ".git")):
+            break
+        current = os.path.dirname(current)
+
     # Collect edges and validate dangling references
     adj_blocked = {}
     visited_keys = set()
@@ -647,7 +674,7 @@ def validate_and_build_entity_graph(along_dir):
                 continue
             edges.append({"source": b, "target": k, "type": "blocks"})
             adj_blocked[k].append(b)
-            if b not in nodes:
+            if b not in nodes and b not in external_keys:
                 warnings.append(f"Dangling link in {k}: blocked_by '{b}' not found.")
 
         # related
@@ -658,15 +685,16 @@ def validate_and_build_entity_graph(along_dir):
             if not r:
                 continue
             edges.append({"source": k, "target": r, "type": "related"})
-            if r not in nodes:
+            if r not in nodes and r not in external_keys:
                 warnings.append(f"Dangling link in {k}: related '{r}' not found.")
 
         # parent
         parent = fm.get("parent")
         if parent:
             edges.append({"source": parent, "target": k, "type": "parent_of"})
-            if parent not in nodes:
+            if parent not in nodes and parent not in external_keys:
                 warnings.append(f"Dangling link in {k}: parent '{parent}' not found.")
+
 
     # Cycle detection in blocked_by DAG
     state = {}  # 0=unvisited, 1=visiting, 2=visited
@@ -905,9 +933,21 @@ def run_migrations(repo_root, dry_run=True, force=False, backup=True, verbose=Fa
         except OSError:
             pass
 
+    has_spurious_hooks = False
+    if not repo.is_dev_repo(repo_root):
+        for candidate in [
+            os.path.join(repo_root, ".agents", "hooks.json"),
+            os.path.join(repo_root, "scripts", "along_hook.py"),
+            os.path.join(repo_root, ".along", "scripts", "along_hook.py"),
+        ]:
+            if os.path.exists(candidate):
+                has_spurious_hooks = True
+                break
+
     if (recorded_version == CURRENT_PROTOCOL_VERSION
             and not os.path.exists(agents_dir)
             and not needs_modular_decisions
+            and not has_spurious_hooks
             and not force):
         print(f"-> Already at v{CURRENT_PROTOCOL_VERSION}; nothing to do. "
               "Use --force to re-run every step.")
@@ -1012,10 +1052,20 @@ def run_migrations(repo_root, dry_run=True, force=False, backup=True, verbose=Fa
     print("-> Step 11 [v3.1.0+]: Checking modular decisions architecture (.along/DECISIONS/)...")
     step_migrate_v3_1_modular_decisions(mig, repo_root, detected_version, force=force)
 
+    # Step 12: Clean legacy local hook artifacts and workarounds from consumer repositories
+    print("-> Step 12: Checking legacy local hook artifacts in consumer repositories...")
+    from alongkit.hooks.config import purge_local_along_hooks
+    purged = purge_local_along_hooks(repo_root, dry_run=dry_run)
+    for p in purged:
+        action_verb = "Would clean" if dry_run else "Cleaned"
+        mig.record("legacy hook cleanup", p, "would purge" if dry_run else "purged")
+        print(f"   [{'DRY-RUN' if dry_run else 'OK'}] {action_verb} legacy local hook artifact: {p}")
+
     # The state marker is written last, so a run that died halfway is not recorded as
     # a completed migration.
     if not dry_run and not errors and not mig.errors:
         mig.record_state(CURRENT_PROTOCOL_VERSION)
+
 
     print("--------------------------------------------------")
     for line in mig.summary():
