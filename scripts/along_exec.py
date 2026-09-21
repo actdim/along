@@ -292,11 +292,10 @@ Describe the feature, requirements, and background context here.
         # Update ISSUES.md
         issues_board = os.path.join(repo_root, ".along", "ISSUES.md")
         if os.path.exists(issues_board):
-            board_content = compile_issues_board(repo_root, recent_done_limit=RECENT_DONE_LIMIT)
-            with open(issues_board, "w", encoding="utf-8", newline="\n") as f:
-                f.write(board_content)
+            entities.sync_issues_board(repo_root, recent_done_limit=RECENT_DONE_LIMIT)
             print("-> Updated .along/ISSUES.md")
         sys.exit(0)
+
 
     elif subcmd in ("done", "close"):
         if len(args) < 2:
@@ -400,19 +399,15 @@ Describe the feature, requirements, and background context here.
         # Update ISSUES.md projection with sliding window
         issues_board = os.path.join(repo_root, ".along", "ISSUES.md")
         if os.path.exists(issues_board):
-            board_content = compile_issues_board(repo_root, recent_done_limit=RECENT_DONE_LIMIT)
-            with open(issues_board, "w", encoding="utf-8", newline="\n") as f:
-                f.write(board_content)
+            entities.sync_issues_board(repo_root, recent_done_limit=RECENT_DONE_LIMIT)
             print(f"-> Updated .along/ISSUES.md")
         sys.exit(0)
 
     elif subcmd == "sync":
-        board_content = compile_issues_board(repo_root, recent_done_limit=RECENT_DONE_LIMIT)
-        issues_board = os.path.join(repo_root, ".along", "ISSUES.md")
-        with open(issues_board, "w", encoding="utf-8", newline="\n") as f:
-            f.write(board_content)
+        entities.sync_issues_board(repo_root, recent_done_limit=RECENT_DONE_LIMIT)
         print(f"-> Recompiled .along/ISSUES.md projection (capped to {RECENT_DONE_LIMIT} recent completed issues).")
         sys.exit(0)
+
 
     elif subcmd == "list":
         print(f"-> Active issues in {issues_dir}:")

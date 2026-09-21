@@ -1,7 +1,6 @@
 # Active Issues
 
 ## Active
-- [ ] `(bug)` [update-hooks-and-monorepo-sync-hardening](ISSUES/bug--update-hooks-and-monorepo-sync-hardening.md)
 - [ ] `(docs)` [cli-and-documentation-traceability-reconciliation](ISSUES/docs--cli-and-documentation-traceability-reconciliation.md)
 - [ ] `(feat)` [issues-board-backlog-partition](ISSUES/feat--issues-board-backlog-partition.md)
 
@@ -20,11 +19,12 @@
 - [ ] `(feat)` [openclaw-and-hermes-agent-integration](ISSUES/feat--openclaw-and-hermes-agent-integration.md)
 - [ ] `(feat)` [pi-harness-support](ISSUES/feat--pi-harness-support.md)
 - [ ] `(feat)` [test-gated-code-merge-pipeline](ISSUES/feat--test-gated-code-merge-pipeline.md)
+- [ ] `(feat)` [workspace-containment-and-path-scoping](ISSUES/feat--workspace-containment-and-path-scoping.md)
 
 ## Done (recent)
 - [x] `(feat)` [updater-explicit-global-sync](ISSUES/done/feat--updater-explicit-global-sync.md)
+- [x] `(bug)` [update-hooks-and-monorepo-sync-hardening](ISSUES/done/bug--update-hooks-and-monorepo-sync-hardening.md)
 - [x] `(bug)` [cli-flag-collision-and-bootstrap](ISSUES/done/bug--cli-flag-collision-and-bootstrap.md)
 - [x] `(task)` [code-review-graph-windows-ignore-hardening](ISSUES/done/task--code-review-graph-windows-ignore-hardening.md)
 - [x] `(feat)` [inquiry-read-only-and-plan-approval-gate](ISSUES/done/feat--inquiry-read-only-and-plan-approval-gate.md)
-- [x] `(feat)` [entity-lifecycle-cli-orchestration](ISSUES/done/feat--entity-lifecycle-cli-orchestration.md)
-<!-- 105 older completed issue(s) archived in .along/ISSUES/done/ -->
+<!-- 106 older completed issue(s) archived in .along/ISSUES/done/ -->

@@ -278,7 +278,24 @@ else
   echo "   (skipped: python3 not found, so no provider configuration was touched)"
 fi
 
+# --- Runtime lifecycle hooks, registered globally in the installed providers ---
+if [ -n "$PYTHON" ] && [ -f "$SCRIPT_DIR/scripts/along_hook.py" ]; then
+  echo "-> Registering global runtime lifecycle hooks..."
+  for provider in "${PROVIDER_ARGS[@]}"; do
+    target_home=""
+    case "$provider" in
+      claude)      target_home="$CLAUDE_HOME" ;;
+      codex)       target_home="$CODEX_HOME" ;;
+      antigravity) target_home="$ANTIGRAVITY_HOME" ;;
+    esac
+    if [ -n "$target_home" ]; then
+      "$PYTHON" "$SCRIPT_DIR/scripts/along_hook.py" install --runtime "$provider" --global --target-home "$target_home" || true
+    fi
+  done
+fi
+
 # --- Install manifest: what was written, and what a previous install left behind ---
+
 # Nothing here deletes a directory. The manifest names the files Along itself wrote, so
 # a superseded one can be removed by name and a file the user wrote is never a candidate.
 # It is also what `--uninstall` reads.

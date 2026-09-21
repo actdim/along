@@ -3,7 +3,8 @@ protocol: along
 protocol_version: "3.8.0"
 slug: update-hooks-and-monorepo-sync-hardening
 type: bug
-status: in-progress
+status: done
+completed: 2026-09-21
 priority: high
 created: 2026-09-21
 updated: 2026-09-21
@@ -40,8 +41,8 @@ During repository update via `/along-update` across consumer multi-context monor
 
 ## Acceptance Criteria
 
-- [ ] Provide portable, safe hook dispatching for Antigravity, Claude, and Codex that does not hardcode non-existent `scripts/along_hook.py` in consumer repositories and degrades gracefully (fails open) if Along is not locally installed.
-- [ ] Route `along issue sync` through `entities.sync_issues_board()` and add retry/backoff for transient `OSError` in `alongkit.textio.write_text()`.
-- [ ] Guard `entities.sync_constraints()` return value in `along_update.py` before calling `os.path.relpath`.
-- [ ] Expand entity key resolution in `migrate_protocol.py` to include ancestor contexts up to repository root, eliminating false-positive dangling link warnings for cross-context links.
-- [ ] All unit tests pass cleanly.
+- [x] Provide portable, safe hook dispatching for Antigravity, Claude, and Codex that does not hardcode non-existent `scripts/along_hook.py` in consumer repositories and degrades gracefully (fails open) if Along is not locally installed.
+- [x] Route `along issue sync` through `entities.sync_issues_board()` and add retry/backoff for transient `OSError` in `alongkit.textio.write_text()`.
+- [x] Guard `entities.sync_constraints()` return value in `along_update.py` before calling `os.path.relpath`.
+- [x] Expand entity key resolution in `migrate_protocol.py` to include ancestor contexts up to repository root, eliminating false-positive dangling link warnings for cross-context links.
+- [x] All unit tests pass cleanly.
