@@ -7,13 +7,11 @@ status: in-progress
 priority: high
 created: 2026-09-20
 updated: 2026-09-20
-completed:
 agent: antigravity
 tags: [along-exec, entities, issues-board, backlog, milestone]
 milestone: v4.0.0-runtime-gates-and-worktree-isolation
 blocked_by: []
 related: [issue-create-stamps-wrong-agent-and-milestone, entity-lifecycle-cli-orchestration]
-parent:
 ---
 
 # Partition Active vs Backlog on ISSUES Board and Decouple Milestone Stamping

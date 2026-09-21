@@ -503,10 +503,9 @@ def purge_local_along_hooks(repo_root: str, dry_run: bool = False) -> List[str]:
                     if not dry_run:
                         os.remove(agents_hooks)
                     actions.append(f"removed {agents_hooks}")
-                    agents_dir = os.path.dirname(agents_hooks)
-                    if not dry_run and os.path.isdir(agents_dir) and not os.listdir(agents_dir):
-                        os.rmdir(agents_dir)
-                        actions.append(f"removed empty directory {agents_dir}")
+                    # Note: We do not remove agents_dir (.agents) even if empty, because active
+                    # agent processes (e.g. Antigravity) may hold in-memory hook registrations
+                    # with cwd set to this directory; deleting it causes OS-level chdir failures.
                 else:
                     if not dry_run:
                         textio.write_text(agents_hooks, json.dumps(data, indent=2) + "\n", newline="\n")
@@ -539,10 +538,7 @@ def purge_local_along_hooks(repo_root: str, dry_run: bool = False) -> List[str]:
                         if not dry_run:
                             os.remove(claude_settings)
                         actions.append(f"removed {claude_settings}")
-                        c_dir = os.path.dirname(claude_settings)
-                        if not dry_run and os.path.isdir(c_dir) and not os.listdir(c_dir):
-                            os.rmdir(c_dir)
-                            actions.append(f"removed empty directory {c_dir}")
+                        # Note: preserve .claude directory to protect active Claude processes
                     else:
                         if not dry_run:
                             textio.write_text(claude_settings, json.dumps(data, indent=2) + "\n", newline="\n")
@@ -576,10 +572,7 @@ def purge_local_along_hooks(repo_root: str, dry_run: bool = False) -> List[str]:
                         if not dry_run:
                             os.remove(codex_hooks)
                         actions.append(f"removed {codex_hooks}")
-                        cx_dir = os.path.dirname(codex_hooks)
-                        if not dry_run and os.path.isdir(cx_dir) and not os.listdir(cx_dir):
-                            os.rmdir(cx_dir)
-                            actions.append(f"removed empty directory {cx_dir}")
+                        # Note: preserve .codex directory to protect active Codex processes
                     else:
                         if not dry_run:
                             textio.write_text(codex_hooks, json.dumps(data, indent=2) + "\n", newline="\n")
@@ -613,10 +606,7 @@ def purge_local_along_hooks(repo_root: str, dry_run: bool = False) -> List[str]:
                         if not dry_run:
                             os.remove(cursor_hooks)
                         actions.append(f"removed {cursor_hooks}")
-                        cur_dir = os.path.dirname(cursor_hooks)
-                        if not dry_run and os.path.isdir(cur_dir) and not os.listdir(cur_dir):
-                            os.rmdir(cur_dir)
-                            actions.append(f"removed empty directory {cur_dir}")
+                        # Note: preserve .cursor directory to protect active Cursor processes
                     else:
                         if not dry_run:
                             textio.write_text(cursor_hooks, json.dumps(data, indent=2) + "\n", newline="\n")
