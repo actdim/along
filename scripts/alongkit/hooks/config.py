@@ -122,12 +122,8 @@ def get_hook_command(runtime: str, event: str, is_global: bool = False) -> str:
     """Generate command string for a runtime lifecycle hook."""
     if not is_global:
         return f"python scripts/along_hook.py --runtime {runtime} --event {event}"
-    return (
-        f'python -c "import os, sys, subprocess; '
-        f's = os.path.expanduser(\'~/.along/bin/along_hook.py\'); '
-        f'sys.exit(subprocess.call([sys.executable, s] + sys.argv[1:]) if os.path.isfile(s) else 0)" '
-        f'--runtime {runtime} --event {event}'
-    )
+    script_path = os.path.expanduser("~/.along/bin/along_hook.py")
+    return f'python "{script_path}" --runtime {runtime} --event {event}'
 
 
 def get_antigravity_hook_manifest(is_global: bool = False) -> Dict[str, Any]:
@@ -485,152 +481,163 @@ def install_cursor_hooks(
     return "installed", f"updated {hooks_file} with Along hooks"
 
 
-def purge_local_along_hooks(repo_root: str, dry_run: bool = False) -> List[str]:
-    """Purge spurious local Along hooks and workaround scripts from a consumer repository."""
+def purge_local_along_hooks(repo_root: str, recursive: bool = True, dry_run: bool = False) -> List[str]:
+    """Purge spurious local Along hooks and workaround scripts from a consumer repository and its subprojects."""
     actions: List[str] = []
     if not repo_root or not os.path.isdir(repo_root):
         return actions
 
-    # 1. Purge .agents/hooks.json
-    agents_hooks = os.path.join(repo_root, ".agents", "hooks.json")
-    if os.path.isfile(agents_hooks):
+    contexts = [os.path.abspath(repo_root)]
+    if recursive:
         try:
-            content = textio.read_text(agents_hooks, strict=False)
-            data = json.loads(content) if content.strip() else {}
-            if isinstance(data, dict) and "along-runtime-gates" in data:
-                del data["along-runtime-gates"]
-                if not data:
-                    if not dry_run:
-                        os.remove(agents_hooks)
-                    actions.append(f"removed {agents_hooks}")
-                    # Note: We do not remove agents_dir (.agents) even if empty, because active
-                    # agent processes (e.g. Antigravity) may hold in-memory hook registrations
-                    # with cwd set to this directory; deleting it causes OS-level chdir failures.
-                else:
-                    if not dry_run:
-                        textio.write_text(agents_hooks, json.dumps(data, indent=2) + "\n", newline="\n")
-                    actions.append(f"cleaned along-runtime-gates from {agents_hooks}")
+            for c in repo.find_agent_contexts(repo_root):
+                abs_c = os.path.abspath(c)
+                if abs_c not in contexts:
+                    contexts.append(abs_c)
         except (OSError, ValueError):
             pass
 
-    # 2. Purge .claude/settings.json
-    claude_settings = os.path.join(repo_root, ".claude", "settings.json")
-    if os.path.isfile(claude_settings):
-        try:
-            content = textio.read_text(claude_settings, strict=False)
-            data = json.loads(content) if content.strip() else {}
-            if isinstance(data, dict) and "hooks" in data and isinstance(data["hooks"], dict):
-                modified = False
-                for ev in list(data["hooks"].keys()):
-                    ev_list = data["hooks"][ev]
-                    if isinstance(ev_list, list):
-                        new_list = [h for h in ev_list if isinstance(h, dict) and "along_hook.py" not in str(h.get("command", ""))]
-                        if len(new_list) != len(ev_list):
-                            modified = True
-                            if new_list:
-                                data["hooks"][ev] = new_list
-                            else:
-                                del data["hooks"][ev]
-                if modified:
-                    if not data["hooks"]:
-                        del data["hooks"]
+    for ctx in contexts:
+        # 1. Purge .agents/hooks.json
+        agents_hooks = os.path.join(ctx, ".agents", "hooks.json")
+        if os.path.isfile(agents_hooks):
+            try:
+                content = textio.read_text(agents_hooks, strict=False)
+                data = json.loads(content) if content.strip() else {}
+                if isinstance(data, dict) and "along-runtime-gates" in data:
+                    del data["along-runtime-gates"]
                     if not data:
                         if not dry_run:
-                            os.remove(claude_settings)
-                        actions.append(f"removed {claude_settings}")
-                        # Note: preserve .claude directory to protect active Claude processes
+                            os.remove(agents_hooks)
+                        actions.append(f"removed {agents_hooks}")
+                        # Note: We do not remove agents_dir (.agents) even if empty, because active
+                        # agent processes (e.g. Antigravity) may hold in-memory hook registrations
+                        # with cwd set to this directory; deleting it causes OS-level chdir failures.
                     else:
                         if not dry_run:
-                            textio.write_text(claude_settings, json.dumps(data, indent=2) + "\n", newline="\n")
-                        actions.append(f"cleaned Along hooks from {claude_settings}")
-        except (OSError, ValueError):
-            pass
+                            textio.write_text(agents_hooks, json.dumps(data, indent=2) + "\n", newline="\n")
+                        actions.append(f"cleaned along-runtime-gates from {agents_hooks}")
+            except (OSError, ValueError):
+                pass
 
-    # 3. Purge .codex/hooks.json
-    codex_hooks = os.path.join(repo_root, ".codex", "hooks.json")
-    if os.path.isfile(codex_hooks):
-        try:
-            content = textio.read_text(codex_hooks, strict=False)
-            data = json.loads(content) if content.strip() else {}
-            if isinstance(data, dict):
-                hooks_dict = data.get("hooks", data)
-                modified = False
-                for ev in list(hooks_dict.keys()):
-                    ev_list = hooks_dict[ev]
-                    if isinstance(ev_list, list):
-                        new_list = [h for h in ev_list if isinstance(h, dict) and "along_hook.py" not in str(h.get("command", ""))]
-                        if len(new_list) != len(ev_list):
-                            modified = True
-                            if new_list:
-                                hooks_dict[ev] = new_list
-                            else:
-                                del hooks_dict[ev]
-                if modified:
-                    if "hooks" in data and not data["hooks"]:
-                        del data["hooks"]
-                    if not data or (len(data) == 1 and "hooks" in data and not data["hooks"]):
-                        if not dry_run:
-                            os.remove(codex_hooks)
-                        actions.append(f"removed {codex_hooks}")
-                        # Note: preserve .codex directory to protect active Codex processes
-                    else:
-                        if not dry_run:
-                            textio.write_text(codex_hooks, json.dumps(data, indent=2) + "\n", newline="\n")
-                        actions.append(f"cleaned Along hooks from {codex_hooks}")
-        except (OSError, ValueError):
-            pass
+        # 2. Purge .claude/settings.json
+        claude_settings = os.path.join(ctx, ".claude", "settings.json")
+        if os.path.isfile(claude_settings):
+            try:
+                content = textio.read_text(claude_settings, strict=False)
+                data = json.loads(content) if content.strip() else {}
+                if isinstance(data, dict) and "hooks" in data and isinstance(data["hooks"], dict):
+                    modified = False
+                    for ev in list(data["hooks"].keys()):
+                        ev_list = data["hooks"][ev]
+                        if isinstance(ev_list, list):
+                            new_list = [h for h in ev_list if isinstance(h, dict) and "along_hook.py" not in str(h.get("command", ""))]
+                            if len(new_list) != len(ev_list):
+                                modified = True
+                                if new_list:
+                                    data["hooks"][ev] = new_list
+                                else:
+                                    del data["hooks"][ev]
+                    if modified:
+                        if not data["hooks"]:
+                            del data["hooks"]
+                        if not data:
+                            if not dry_run:
+                                os.remove(claude_settings)
+                            actions.append(f"removed {claude_settings}")
+                            # Note: preserve .claude directory to protect active Claude processes
+                        else:
+                            if not dry_run:
+                                textio.write_text(claude_settings, json.dumps(data, indent=2) + "\n", newline="\n")
+                            actions.append(f"cleaned Along hooks from {claude_settings}")
+            except (OSError, ValueError):
+                pass
 
-    # 4. Purge .cursor/hooks.json
-    cursor_hooks = os.path.join(repo_root, ".cursor", "hooks.json")
-    if os.path.isfile(cursor_hooks):
-        try:
-            content = textio.read_text(cursor_hooks, strict=False)
-            data = json.loads(content) if content.strip() else {}
-            if isinstance(data, dict) and "hooks" in data and isinstance(data["hooks"], dict):
-                modified = False
-                for ev in list(data["hooks"].keys()):
-                    ev_list = data["hooks"][ev]
-                    if isinstance(ev_list, list):
-                        new_list = [h for h in ev_list if isinstance(h, dict) and "along_hook.py" not in str(h.get("command", ""))]
-                        if len(new_list) != len(ev_list):
-                            modified = True
-                            if new_list:
-                                data["hooks"][ev] = new_list
-                            else:
-                                del data["hooks"][ev]
-                if modified:
-                    if not data["hooks"]:
-                        del data["hooks"]
-                    keys_left = [k for k in data.keys() if k != "version"]
-                    if not keys_left:
-                        if not dry_run:
-                            os.remove(cursor_hooks)
-                        actions.append(f"removed {cursor_hooks}")
-                        # Note: preserve .cursor directory to protect active Cursor processes
-                    else:
-                        if not dry_run:
-                            textio.write_text(cursor_hooks, json.dumps(data, indent=2) + "\n", newline="\n")
-                        actions.append(f"cleaned Along hooks from {cursor_hooks}")
-        except (OSError, ValueError):
-            pass
+        # 3. Purge .codex/hooks.json
+        codex_hooks = os.path.join(ctx, ".codex", "hooks.json")
+        if os.path.isfile(codex_hooks):
+            try:
+                content = textio.read_text(codex_hooks, strict=False)
+                data = json.loads(content) if content.strip() else {}
+                if isinstance(data, dict):
+                    hooks_dict = data.get("hooks", data)
+                    modified = False
+                    for ev in list(hooks_dict.keys()):
+                        ev_list = hooks_dict[ev]
+                        if isinstance(ev_list, list):
+                            new_list = [h for h in ev_list if isinstance(h, dict) and "along_hook.py" not in str(h.get("command", ""))]
+                            if len(new_list) != len(ev_list):
+                                modified = True
+                                if new_list:
+                                    hooks_dict[ev] = new_list
+                                else:
+                                    del hooks_dict[ev]
+                    if modified:
+                        if "hooks" in data and not data["hooks"]:
+                            del data["hooks"]
+                        if not data or (len(data) == 1 and "hooks" in data and not data["hooks"]):
+                            if not dry_run:
+                                os.remove(codex_hooks)
+                            actions.append(f"removed {codex_hooks}")
+                            # Note: preserve .codex directory to protect active Codex processes
+                        else:
+                            if not dry_run:
+                                textio.write_text(codex_hooks, json.dumps(data, indent=2) + "\n", newline="\n")
+                            actions.append(f"cleaned Along hooks from {codex_hooks}")
+            except (OSError, ValueError):
+                pass
 
-    # 5. Purge workaround scripts/along_hook.py or .along/scripts/along_hook.py in consumer repos
-    if not repo.is_dev_repo(repo_root):
-        for candidate_script in [
-            os.path.join(repo_root, "scripts", "along_hook.py"),
-            os.path.join(repo_root, ".along", "scripts", "along_hook.py"),
-        ]:
-            if os.path.isfile(candidate_script):
-                try:
-                    if not dry_run:
-                        os.remove(candidate_script)
-                    actions.append(f"removed workaround {candidate_script}")
-                    s_dir = os.path.dirname(candidate_script)
-                    if not dry_run and os.path.isdir(s_dir) and not os.listdir(s_dir):
-                        os.rmdir(s_dir)
-                        actions.append(f"removed empty directory {s_dir}")
-                except OSError:
-                    pass
+        # 4. Purge .cursor/hooks.json
+        cursor_hooks = os.path.join(ctx, ".cursor", "hooks.json")
+        if os.path.isfile(cursor_hooks):
+            try:
+                content = textio.read_text(cursor_hooks, strict=False)
+                data = json.loads(content) if content.strip() else {}
+                if isinstance(data, dict) and "hooks" in data and isinstance(data["hooks"], dict):
+                    modified = False
+                    for ev in list(data["hooks"].keys()):
+                        ev_list = data["hooks"][ev]
+                        if isinstance(ev_list, list):
+                            new_list = [h for h in ev_list if isinstance(h, dict) and "along_hook.py" not in str(h.get("command", ""))]
+                            if len(new_list) != len(ev_list):
+                                modified = True
+                                if new_list:
+                                    data["hooks"][ev] = new_list
+                                else:
+                                    del data["hooks"][ev]
+                    if modified:
+                        if not data["hooks"]:
+                            del data["hooks"]
+                        keys_left = [k for k in data.keys() if k != "version"]
+                        if not keys_left:
+                            if not dry_run:
+                                os.remove(cursor_hooks)
+                            actions.append(f"removed {cursor_hooks}")
+                            # Note: preserve .cursor directory to protect active Cursor processes
+                        else:
+                            if not dry_run:
+                                textio.write_text(cursor_hooks, json.dumps(data, indent=2) + "\n", newline="\n")
+                            actions.append(f"cleaned Along hooks from {cursor_hooks}")
+            except (OSError, ValueError):
+                pass
+
+        # 5. Purge workaround scripts/along_hook.py or .along/scripts/along_hook.py in consumer repos
+        if not repo.is_dev_repo(ctx):
+            for candidate_script in [
+                os.path.join(ctx, "scripts", "along_hook.py"),
+                os.path.join(ctx, ".along", "scripts", "along_hook.py"),
+            ]:
+                if os.path.isfile(candidate_script):
+                    try:
+                        if not dry_run:
+                            os.remove(candidate_script)
+                        actions.append(f"removed workaround {candidate_script}")
+                        s_dir = os.path.dirname(candidate_script)
+                        if not dry_run and os.path.isdir(s_dir) and not os.listdir(s_dir):
+                            os.rmdir(s_dir)
+                            actions.append(f"removed empty directory {s_dir}")
+                    except OSError:
+                        pass
 
     return actions
 

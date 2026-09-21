@@ -221,6 +221,7 @@ def apply_migration_to_context(ctx_dir, protocol_text, migrate_script, is_root=T
         return True
 
 
+    ctx_dir = os.path.normpath(ctx_dir.strip())
     agents_md = os.path.join(ctx_dir, "AGENTS.md")
 
     # Sanitize protocol_text by stripping existing wrapper markers to prevent duplication
@@ -244,25 +245,39 @@ def apply_migration_to_context(ctx_dir, protocol_text, migrate_script, is_root=T
             f"{end_marker}"
         )
 
-    if os.path.exists(agents_md):
-        with open(agents_md, "r", encoding="utf-8", errors="ignore") as f:
-            existing = f.read()
-        pattern = re.compile(
-            r"(?:<!-- BEGIN (?:ALONG-PROTOCOL|ACTDIM-AGENTS-PROTOCOL).*?-->\s*)+.*?(?:<!-- END (?:ALONG-PROTOCOL|ACTDIM-AGENTS-PROTOCOL) -->\s*)+",
-            re.DOTALL
-        )
-        if pattern.search(existing):
-            remainder = pattern.sub("", existing).lstrip("\r\n")
-            new_content = block + ("\n\n" + remainder if remainder else "\n")
-        else:
-            new_content = block + "\n\n" + existing.lstrip("\r\n")
-        with open(agents_md, "w", encoding="utf-8", newline="\n") as f:
-            f.write(new_content)
-        print(f"   [OK] Refreshed managed protocol block in {os.path.basename(agents_md)}.")
+    if os.path.islink(agents_md) and not os.path.exists(agents_md):
+        print(f"   [WARN] Broken symlink detected: {agents_md}; skipping AGENTS.md update for this context.", file=sys.stderr)
+        context_ok = False
+    elif os.path.isdir(agents_md):
+        print(f"   [WARN] AGENTS.md is a directory, not a file: {agents_md}; skipping.", file=sys.stderr)
+        context_ok = False
+    elif os.path.exists(agents_md):
+        try:
+            with open(agents_md, "r", encoding="utf-8", errors="ignore") as f:
+                existing = f.read()
+            pattern = re.compile(
+                r"(?:<!-- BEGIN (?:ALONG-PROTOCOL|ACTDIM-AGENTS-PROTOCOL).*?-->\s*)+.*?(?:<!-- END (?:ALONG-PROTOCOL|ACTDIM-AGENTS-PROTOCOL) -->\s*)+",
+                re.DOTALL
+            )
+            if pattern.search(existing):
+                remainder = pattern.sub("", existing).lstrip("\r\n")
+                new_content = block + ("\n\n" + remainder if remainder else "\n")
+            else:
+                new_content = block + "\n\n" + existing.lstrip("\r\n")
+            with open(agents_md, "w", encoding="utf-8", newline="\n") as f:
+                f.write(new_content)
+            print(f"   [OK] Refreshed managed protocol block in {os.path.basename(agents_md)}.")
+        except OSError as exc:
+            print(f"   [WARN] Could not update {agents_md}: {exc}", file=sys.stderr)
+            context_ok = False
     elif is_root:
-        with open(agents_md, "w", encoding="utf-8", newline="\n") as f:
-            f.write(block + "\n\n## Project specifics\n\n- Add project conventions here.\n")
-        print("   [OK] Created root AGENTS.md with managed protocol block.")
+        try:
+            with open(agents_md, "w", encoding="utf-8", newline="\n") as f:
+                f.write(block + "\n\n## Project specifics\n\n- Add project conventions here.\n")
+            print("   [OK] Created root AGENTS.md with managed protocol block.")
+        except OSError as exc:
+            print(f"   [WARN] Could not create {agents_md}: {exc}", file=sys.stderr)
+            context_ok = False
 
     along_dir = os.path.join(ctx_dir, ".along")
     agents_dir = os.path.join(ctx_dir, ".agents")
@@ -417,6 +432,18 @@ def run_update(repo_root, check_only=False, dry_run=False, force=False, local_on
         print("-> [Check-Only Mode] No modifications made.")
         return True
 
+    # Pre-flight: recursively purge legacy local hooks across repository and subprojects
+    if not dry_run:
+        try:
+            from alongkit.hooks.config import purge_local_along_hooks
+            purged = purge_local_along_hooks(repo_root, recursive=True)
+            for p in purged:
+                if verbose:
+                    print(f"   [Pre-flight] Cleaned legacy hook: {p}")
+        except (OSError, ValueError, RuntimeError) as exc:
+            if verbose:
+                print(f"   [Warning] Pre-flight hook purge: {exc}", file=sys.stderr)
+
     is_dev = is_dev_repo(repo_root)
 
     if sync_global:
@@ -429,12 +456,22 @@ def run_update(repo_root, check_only=False, dry_run=False, force=False, local_on
                 success = update_global_from_git(dry_run=dry_run)
                 if not success:
                     print("   [WARN] Falling back to existing global installation.")
+                elif not dry_run and os.environ.get("ALONG_UPDATE_SELF_EXEC") != "1":
+                    print("-> [Self-Exec] Re-executing updater with newly installed global tools...")
+                    env = dict(os.environ)
+                    env["ALONG_UPDATE_SELF_EXEC"] = "1"
+                    os.execve(sys.executable, [sys.executable] + sys.argv, env)
             elif v_global > (0, 0, 0):
                 print(f"-> Global installation (v{v_global_str}) is up-to-date.")
             else:
                 if v_remote > (0, 0, 0):
                     print("-> No global installation detected. Installing from remote git...")
                     update_global_from_git(dry_run=dry_run)
+                    if not dry_run and os.environ.get("ALONG_UPDATE_SELF_EXEC") != "1":
+                        print("-> [Self-Exec] Re-executing updater with newly installed global tools...")
+                        env = dict(os.environ)
+                        env["ALONG_UPDATE_SELF_EXEC"] = "1"
+                        os.execve(sys.executable, [sys.executable] + sys.argv, env)
                 else:
                     print("   [ERROR] No global installation and remote is unreachable.")
                     return False
@@ -502,16 +539,21 @@ def run_update(repo_root, check_only=False, dry_run=False, force=False, local_on
     for ctx in contexts:
         is_root = (ctx == root_context)
         ancestor = root_context if not is_root else None
-        ok = apply_migration_to_context(
-            ctx_dir=ctx,
-            protocol_text=protocol_text,
-            migrate_script=migrate_script,
-            is_root=is_root,
-            ancestor_root=ancestor,
-            dry_run=dry_run,
-            no_hooks=no_hooks
-        )
-        if not ok:
+        try:
+            ok = apply_migration_to_context(
+                ctx_dir=ctx,
+                protocol_text=protocol_text,
+                migrate_script=migrate_script,
+                is_root=is_root,
+                ancestor_root=ancestor,
+                dry_run=dry_run,
+                no_hooks=no_hooks
+            )
+            if not ok:
+                all_contexts_ok = False
+        except (OSError, RuntimeError, ValueError, KeyError, AttributeError) as exc:
+            rel = safe_relpath(ctx, repo_root)
+            print(f"   [ERROR] Context update failed for {rel if rel not in ('.', '') else '<root>'}: {exc}", file=sys.stderr)
             all_contexts_ok = False
 
     # Post-update sync execution: interactive prompt if in terminal, or follow CLI flags

@@ -247,4 +247,8 @@ def main() -> int:
 
 
 if __name__ == "__main__":
-    sys.exit(main())
+    try:
+        sys.exit(main())
+    except (OSError, RuntimeError, ValueError, KeyError, AttributeError, TypeError) as exc:
+        sys.stderr.write(f"[Along Hook] Internal error (fail-open): {exc}\n")
+        sys.exit(0)

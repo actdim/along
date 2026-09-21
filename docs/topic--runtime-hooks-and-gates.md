@@ -169,3 +169,11 @@ When an agent emits a tool call, the execution loop flows through the hook harne
 4. **Hermetic Test Guarantees**:
    - All hook engine unit tests target temporary directories (`tempfile.mkdtemp()`).
    - The test suite strictly asserts that `.along/diagnostics/` is never written into the repository root during automated testing.
+5. **Fail-Open & Crash Resilience Invariant**:
+   - Runtime lifecycle hooks must never cause agent paralysis (tool interception deadlock) due to missing scripts, unhandled exceptions, or non-Along workspaces.
+   - Hook commands use direct, robust script paths rather than fragile shell inline scripts (`python -c`).
+   - If `along_hook.py` encounters any unexpected internal error or runs in a workspace without Along protocol files, it catches the exception and exits `0` (`ALLOW`), ensuring tools are never blocked by infrastructure faults.
+6. **Global Hook Centralization & Recursive Monorepo Purge**:
+   - Since Along v3.9.2, runtime hooks are installed globally in user home configurations (`~/.gemini/config/hooks.json`, `~/.claude/settings.json`, `~/.codex/hooks.json`).
+   - Consumer repositories and all nested subprojects are recursively purged of legacy local hooks during `along update`.
+   - Out-of-band execution via `along update` in an external OS terminal serves as the canonical disaster recovery path if runtime hooks are ever damaged.

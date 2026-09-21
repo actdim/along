@@ -29,32 +29,39 @@ from alongkit.hooks import purge_local_along_hooks
 class TestUpdateAndHooksHardening(unittest.TestCase):
 
     def test_global_hook_manifests(self):
-        """Global manifests must generate shell-independent python fail-open commands."""
+        """Global manifests must generate direct script paths without fragile python -c."""
+        expanded_path = os.path.expanduser("~/.along/bin/along_hook.py")
         # Antigravity
         ag_manifest = hook_config.get_antigravity_hook_manifest(is_global=True)
         self.assertIn("along-runtime-gates", ag_manifest)
         pre_tool_cmd = ag_manifest["along-runtime-gates"]["PreToolUse"][0]["hooks"][0]["command"]
         self.assertIn("along_hook.py", pre_tool_cmd)
-        self.assertIn("~/.along/bin/along_hook.py", pre_tool_cmd)
+        self.assertIn(expanded_path, pre_tool_cmd)
+        self.assertNotIn("python -c", pre_tool_cmd)
         self.assertIn("--runtime antigravity", pre_tool_cmd)
 
         # Claude
         claude_manifest = hook_config.get_claude_hook_manifest(is_global=True)
         self.assertIn("PreToolUse", claude_manifest)
         self.assertIn("--runtime claude", claude_manifest["PreToolUse"][0]["command"])
-        self.assertIn("~/.along/bin/along_hook.py", claude_manifest["PreToolUse"][0]["command"])
+        self.assertIn(expanded_path, claude_manifest["PreToolUse"][0]["command"])
+        self.assertNotIn("python -c", claude_manifest["PreToolUse"][0]["command"])
 
         # Codex
         codex_manifest = hook_config.get_codex_hook_manifest(is_global=True)
         self.assertIn("hooks", codex_manifest)
         self.assertIn("PreToolUse", codex_manifest["hooks"])
         self.assertIn("--runtime codex", codex_manifest["hooks"]["PreToolUse"][0]["command"])
+        self.assertIn(expanded_path, codex_manifest["hooks"]["PreToolUse"][0]["command"])
+        self.assertNotIn("python -c", codex_manifest["hooks"]["PreToolUse"][0]["command"])
 
         # Cursor
         cursor_manifest = hook_config.get_cursor_hook_manifest(is_global=True)
         self.assertIn("hooks", cursor_manifest)
         self.assertIn("preToolUse", cursor_manifest["hooks"])
         self.assertIn("--runtime cursor", cursor_manifest["hooks"]["preToolUse"][0]["command"])
+        self.assertIn(expanded_path, cursor_manifest["hooks"]["preToolUse"][0]["command"])
+        self.assertNotIn("python -c", cursor_manifest["hooks"]["preToolUse"][0]["command"])
 
     def test_purge_local_along_hooks_removes_spurious_artifacts(self):
         """purge_local_along_hooks must remove Along hooks, workaround scripts, and empty dirs."""
@@ -289,6 +296,67 @@ class TestUpdateAndHooksHardening(unittest.TestCase):
 
             nodes2, edges2, errors2, warnings2 = migrate_protocol.validate_and_build_entity_graph(sub_along)
             self.assertTrue(any("non-existent-task" in w for w in warnings2), f"Expected warning for non-existent-task: {warnings2}")
+
+    def test_purge_local_along_hooks_recursive_subprojects(self):
+        """purge_local_along_hooks with recursive=True must clean hooks across all subprojects."""
+        with hermetic.repo_fixture(prefix="test-purge-rec-") as tmp:
+            # Create root hook
+            root_ag = os.path.join(tmp, ".agents", "hooks.json")
+            os.makedirs(os.path.dirname(root_ag), exist_ok=True)
+            textio.write_text(root_ag, json.dumps({"along-runtime-gates": {"pre_tool": "python foo"}}))
+
+            # Create subproject 1 with .agents/hooks.json
+            sub1 = os.path.join(tmp, "services", "auth")
+            sub1_ag = os.path.join(sub1, ".agents", "hooks.json")
+            sub1_proto = os.path.join(sub1, "AGENTS.md")
+            os.makedirs(os.path.dirname(sub1_ag), exist_ok=True)
+            textio.write_text(sub1_proto, "<!-- BEGIN ALONG-PROTOCOL ref=../../AGENTS.md -->\n<!-- END ALONG-PROTOCOL -->\n")
+            textio.write_text(sub1_ag, json.dumps({"along-runtime-gates": {"pre_tool": "python bar"}}))
+
+            # Create subproject 2 with .claude/settings.json
+            sub2 = os.path.join(tmp, "packages", "core")
+            sub2_cl = os.path.join(sub2, ".claude", "settings.json")
+            sub2_proto = os.path.join(sub2, "AGENTS.md")
+            os.makedirs(os.path.dirname(sub2_cl), exist_ok=True)
+            textio.write_text(sub2_proto, "<!-- BEGIN ALONG-PROTOCOL ref=../../AGENTS.md -->\n<!-- END ALONG-PROTOCOL -->\n")
+            textio.write_text(sub2_cl, json.dumps({"hooks": {"PreToolUse": [{"command": "python scripts/along_hook.py"}]}}))
+
+            # Purge with recursive=True
+            actions = purge_local_along_hooks(tmp, recursive=True, dry_run=False)
+            self.assertTrue(len(actions) >= 3, f"Expected at least 3 purge actions, got {actions}")
+
+            self.assertFalse(os.path.exists(root_ag), "Root .agents/hooks.json must be removed")
+            self.assertFalse(os.path.exists(sub1_ag), "Subproject 1 .agents/hooks.json must be removed")
+            self.assertFalse(os.path.exists(sub2_cl), "Subproject 2 .claude/settings.json must be removed")
+
+    def test_along_update_context_exception_isolation(self):
+        """along_update.py must isolate context failures and continue processing other contexts."""
+        from scripts import along_update
+        with hermetic.repo_fixture(prefix="test-update-iso-") as tmp:
+            root_agents = os.path.join(tmp, "AGENTS.md")
+            textio.write_text(root_agents, "<!-- BEGIN ALONG-PROTOCOL root -->\nALONG-PROTOCOL v3.8.0\n<!-- END ALONG-PROTOCOL -->\n")
+
+            # Subproject 1: valid context
+            sub1 = os.path.join(tmp, "sub1")
+            os.makedirs(sub1, exist_ok=True)
+            textio.write_text(os.path.join(sub1, "AGENTS.md"), "<!-- BEGIN ALONG-PROTOCOL ref=../AGENTS.md -->\n<!-- END ALONG-PROTOCOL -->\n")
+
+            # Subproject 2: valid context
+            sub2 = os.path.join(tmp, "sub2")
+            os.makedirs(sub2, exist_ok=True)
+            textio.write_text(os.path.join(sub2, "AGENTS.md"), "<!-- BEGIN ALONG-PROTOCOL ref=../AGENTS.md -->\n<!-- END ALONG-PROTOCOL -->\n")
+
+            # Patch apply_migration_to_context to raise on sub1
+            orig_apply = along_update.apply_migration_to_context
+            def flaky_apply(ctx_dir, *args, **kwargs):
+                if os.path.basename(ctx_dir) == "sub1":
+                    raise OSError(22, "Simulated invalid argument on sub1")
+                return orig_apply(ctx_dir, *args, **kwargs)
+
+            with mock.patch("scripts.along_update.apply_migration_to_context", side_effect=flaky_apply):
+                # Run update (should return False because sub1 failed, but sub2 must be processed)
+                success = along_update.run_update(tmp, local_only=True, dry_run=False, no_hooks=True)
+                self.assertFalse(success, "Update should report failure when one context fails")
 
 
 if __name__ == "__main__":
