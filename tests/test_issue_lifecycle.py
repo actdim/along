@@ -514,6 +514,52 @@ class TestIssueCreateCommand(unittest.TestCase):
         self.assertEqual(res.returncode, 0)
         self.assertIn("matches bug keywords", res.stdout)
 
+    def test_24c_create_no_milestone_opt_out(self):
+        m_file = os.path.join(self.milestones, "v1.0.0-release.md")
+        with open(m_file, "w", encoding="utf-8") as f:
+            f.write("---\nprotocol: along\nslug: v1.0.0-release\ntitle: v1.0.0\nstatus: in-progress\n---\n# M\n")
+
+        # Opt-out via --no-milestone
+        res1 = self._run_create("feat", "opt-out-flag", "--no-milestone")
+        self.assertEqual(res1.returncode, 0)
+        data1, content1 = self._read_issue("feat--opt-out-flag.md")
+        self.assertNotIn("milestone:", content1)
+        self.assertIsNone(data1.get("milestone"))
+
+        # Opt-out via --milestone none
+        res2 = self._run_create("feat", "opt-out-sentinel", "--milestone", "none")
+        self.assertEqual(res2.returncode, 0)
+        data2, content2 = self._read_issue("feat--opt-out-sentinel.md")
+        self.assertNotIn("milestone:", content2)
+        self.assertIsNone(data2.get("milestone"))
+
+    def test_24d_board_partitions_active_and_backlog(self):
+        # Create an issue (defaults to status: open)
+        res = self._run_create("feat", "backlog-item")
+        self.assertEqual(res.returncode, 0)
+
+        board_path = os.path.join(self.along_dir, "ISSUES.md")
+        self.assertTrue(os.path.isfile(board_path))
+        with open(board_path, "r", encoding="utf-8") as f:
+            board = f.read()
+
+        # Should be in Backlog, not Active
+        active_part, backlog_part = board.split("## Backlog")
+        self.assertNotIn("backlog-item", active_part)
+        self.assertIn("backlog-item", backlog_part)
+
+        # Mark in-progress
+        update_cmd = [sys.executable, self.EXEC, "issue", "update", "backlog-item", "--status", "in-progress"]
+        res_up = proc.run_capture(update_cmd, cwd=self.repo)
+        self.assertEqual(res_up.returncode, 0)
+
+        with open(board_path, "r", encoding="utf-8") as f:
+            board2 = f.read()
+
+        active_part2, backlog_part2 = board2.split("## Backlog")
+        self.assertIn("backlog-item", active_part2)
+        self.assertNotIn("backlog-item", backlog_part2)
+
 
 class TestDoctorEntitiesCommand(unittest.TestCase):
     """

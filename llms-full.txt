@@ -2539,7 +2539,7 @@ along-init
 *(Or invoke `/along-init` directly inside your AI agent prompt).*
 
 ### What `along-init` Configures:
-1. `AGENTS.md`: Generates the root protocol context with the managed `ALONG-PROTOCOL v3.8.0` block.
+1. `AGENTS.md`: Generates the root protocol context with the managed `ALONG-PROTOCOL v3.7.0` block.
 2. `CLAUDE.md`: Scaffolds the standard `@AGENTS.md` import line.
 3. `.gitattributes`: Configures `merge=union` for `.along/HISTORY.md` and `.along/DECISIONS.md` to prevent merge collisions across branches.
 4. `.along/`: Creates the persistent repository memory skeleton (`ISSUES/`, `DECISIONS.md`, `MILESTONES/`, `RISKS/`, `SPIKES/`, `CHECKLISTS/`, `SESSIONS/`, `docs/`).
@@ -2862,7 +2862,7 @@ flowchart TD
 ### `along-update`
 - **What it is**: Automated protocol, skill, and runtime hook synchronizer. Checks and pulls latest Along skills, migrations, and protocol definitions across user home directories (`~/.claude`, `~/.codex`, `~/.gemini`) and local repositories, and automatically reconciles runtime lifecycle hooks across supported agent environments.
 - **Architectural Rationale**:
-  - Eliminates skill drift across multiple developer machines.
+  - Eliminates skill drift across multiple developer machines while isolating updates to the target repository by default (global machine skills update requires an explicit `--global` flag).
   - Automatically executes retroactive migration scripts (`scripts/migrate_protocol.py`) to upgrade legacy front-matter schemas and directory layouts without data loss.
   - Automatically scaffolds and updates runtime lifecycle hooks (`.agents/hooks.json`, `.claude/settings.json`, `.codex/hooks.json`), guaranteeing that mechanical quality gates and typography invariants are enforced across all active agent tools without manual setup.
 - **Invocation Triggers**:

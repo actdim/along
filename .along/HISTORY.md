@@ -93,3 +93,4 @@ _Index of sessions (newest last). One line per session:_
 
 
 2026-09-20 - cli-flag-collision-and-bootstrap - antigravity - Fix CLI wrap flag collision and add UV auto-bootstrap to dev script - [bug](./ISSUES/done/bug--cli-flag-collision-and-bootstrap.md)
+2026-09-21 - updater-explicit-global-sync - antigravity - Decoupled repo updates from global skills installation in along_update.py with explicit --global flag - [Session Log](./SESSIONS/2026/2026-09-21--updater-explicit-global-sync.md)

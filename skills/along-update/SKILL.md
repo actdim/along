@@ -23,6 +23,7 @@ along update [target_root] [options]
 - `--dry-run`: Simulate updates and migrations without writing to disk.
 - `--force`: Force reinstallation and refresh even if versions match.
 - `--local-only`: Skip remote GitHub check and use local installation.
+- `--global`: Synchronize global skills installation on the host machine (dev repo -> host, or GitHub -> host). By default, updates are strictly isolated to the target repository.
 - `--no-hooks`: Skip automatic reconciliation of runtime lifecycle hooks.
 - `--kb-sync`: Run Knowledge Base sync (`/along-kb-sync`) across all contexts.
 - `--dep-scan`: Run multi-project dependencies scan (`/along-dep-scan`) across all contexts.

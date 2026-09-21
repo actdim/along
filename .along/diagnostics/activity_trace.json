@@ -1,6 +1,6 @@
 {
-  "last_edit_time": "2026-09-19T22:05:45.711521+00:00",
-  "last_test_time": "2026-09-19T22:04:31.630024+00:00",
+  "last_edit_time": "2026-09-21T14:54:29.382013+00:00",
+  "last_test_time": "2026-09-20T14:56:56.788657+00:00",
   "edited_files": [
     "d:\\Src\\my\\actdim\\public\\along\\scripts\\alongkit\\install.py",
     "d:\\Src\\my\\actdim\\public\\along\\scripts\\alongkit\\hooks\\predicates.py",
@@ -184,6 +184,26 @@
     "d:\\Src\\my\\actdim\\public\\along\\scripts\\along_wrap.py",
     "d:\\Src\\my\\actdim\\public\\along\\.along\\scripts\\dev.py",
     "d:\\Src\\my\\actdim\\public\\along\\tests\\test_lifecycle_wrap.py",
-    "C:\\Users\\Admin\\.gemini\\antigravity\\brain\\ac1704ed-5de0-4b8f-bce1-e4313dd0b458\\walkthrough.md"
+    "C:\\Users\\Admin\\.gemini\\antigravity\\brain\\ac1704ed-5de0-4b8f-bce1-e4313dd0b458\\walkthrough.md",
+    "d:\\Src\\my\\actdim\\public\\along\\.along\\ISSUES\\feat--issues-board-backlog-partition.md",
+    "C:\\Users\\Admin\\.gemini\\antigravity\\brain\\be8edb3b-bf49-4616-a673-4a76badca7c4\\implementation_plan.md",
+    "d:\\Src\\my\\actdim\\public\\along\\scripts\\alongkit\\entities.py",
+    "d:\\Src\\my\\actdim\\public\\along\\tests\\test_issue_lifecycle.py",
+    "C:\\Users\\Admin\\.gemini\\antigravity\\brain\\be8edb3b-bf49-4616-a673-4a76badca7c4\\walkthrough.md",
+    "C:\\Users\\Admin\\.gemini\\antigravity\\brain\\44b01c11-a2a0-4151-8b31-4c6f4f8d5a2c\\implementation_plan.md",
+    "d:\\Src\\my\\actdim\\public\\along\\.along\\ISSUES\\feat--updater-explicit-global-sync.md",
+    "d:/Src/my/actdim/public/along/scripts/along_update.py",
+    "d:/Src/my/actdim/public/along/skills/along-update/SKILL.md",
+    "d:/Src/my/actdim/public/along/tests/test_skills_and_scripts.py",
+    "C:\\Users\\Admin\\.gemini\\antigravity\\brain\\44b01c11-a2a0-4151-8b31-4c6f4f8d5a2c\\walkthrough.md",
+    "d:\\Src\\my\\actdim\\public\\along\\.along\\ISSUES\\done\\feat--updater-explicit-global-sync.md",
+    "d:\\Src\\my\\actdim\\public\\along\\.along\\ISSUES\\bug--update-hooks-and-monorepo-sync-hardening.md",
+    "C:\\Users\\Admin\\.gemini\\antigravity\\brain\\96368d8b-1e5b-4c76-bee1-e6f1586c369f\\implementation_plan.md",
+    "d:\\Src\\my\\actdim\\public\\along\\.along\\MILESTONES\\v4.5.0-multi-user-merge-automation.md",
+    "d:\\Src\\my\\actdim\\public\\along\\.along\\ISSUES\\feat--git-merge-drivers-and-setup.md",
+    "d:\\Src\\my\\actdim\\public\\along\\.along\\ISSUES\\feat--docs-semantic-conflict-resolution.md",
+    "d:\\Src\\my\\actdim\\public\\along\\.along\\ISSUES\\feat--test-gated-code-merge-pipeline.md",
+    "d:/Src/my/actdim/public/along/docs/topic--skills-reference.md",
+    "d:\\Src\\my\\actdim\\public\\along\\.along\\SESSIONS\\2026\\2026-09-21--updater-explicit-global-sync.md"
   ]
 }

@@ -208,6 +208,7 @@ def handle_issue_command(repo_root: str, args: List[str]):
         tags = []
         explicit_agent = None
         explicit_milestone = None
+        no_milestone = False
 
         i = 3
         while i < len(args):
@@ -226,6 +227,9 @@ def handle_issue_command(repo_root: str, args: List[str]):
             elif args[i] in ("--milestone", "-m") and i + 1 < len(args):
                 explicit_milestone = args[i + 1]
                 i += 2
+            elif args[i] in ("--no-milestone",):
+                no_milestone = True
+                i += 1
             else:
                 i += 1
 
@@ -236,13 +240,18 @@ def handle_issue_command(repo_root: str, args: List[str]):
         agent = entities.detect_agent(explicit_agent)
 
         milestone = None
-        if explicit_milestone:
-            clean_m = explicit_milestone[:-3] if explicit_milestone.endswith(".md") else explicit_milestone
-            m_path = os.path.join(repo_root, ".along", "MILESTONES", f"{clean_m}.md")
-            if not os.path.exists(m_path):
-                print(f"[Error] Milestone '{explicit_milestone}' does not exist in .along/MILESTONES/.", file=sys.stderr)
-                sys.exit(1)
-            milestone = clean_m
+        if no_milestone:
+            milestone = None
+        elif explicit_milestone:
+            if explicit_milestone.lower() in ("none", "null", "~", ""):
+                milestone = None
+            else:
+                clean_m = explicit_milestone[:-3] if explicit_milestone.endswith(".md") else explicit_milestone
+                m_path = os.path.join(repo_root, ".along", "MILESTONES", f"{clean_m}.md")
+                if not os.path.exists(m_path):
+                    print(f"[Error] Milestone '{explicit_milestone}' does not exist in .along/MILESTONES/.", file=sys.stderr)
+                    sys.exit(1)
+                milestone = clean_m
         else:
             milestone = entities.resolve_in_progress_milestone(repo_root)
 
@@ -283,14 +292,10 @@ Describe the feature, requirements, and background context here.
         # Update ISSUES.md
         issues_board = os.path.join(repo_root, ".along", "ISSUES.md")
         if os.path.exists(issues_board):
-            with open(issues_board, "r", encoding="utf-8") as f:
-                b_content = f.read()
-            entry = f"- [ ] `({itype})` [{islug}](ISSUES/{itype}--{islug}.md)"
-            if entry not in b_content:
-                b_content = b_content.replace("## Active\n", f"## Active\n{entry}\n")
-                with open(issues_board, "w", encoding="utf-8", newline="\n") as f:
-                    f.write(b_content)
-                print(f"-> Updated .along/ISSUES.md")
+            board_content = compile_issues_board(repo_root, recent_done_limit=RECENT_DONE_LIMIT)
+            with open(issues_board, "w", encoding="utf-8", newline="\n") as f:
+                f.write(board_content)
+            print("-> Updated .along/ISSUES.md")
         sys.exit(0)
 
     elif subcmd in ("done", "close"):
