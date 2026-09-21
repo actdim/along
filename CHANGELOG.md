@@ -2,6 +2,11 @@
 
 All notable changes to this project, newest first.
 
+## v3.9.4 - 2026-09-21
+
+- chore(milestone): update v4.0.0 progress (refs #windows-hook-command-quote-escaping)
+- fix(hooks): omit quotes on windows hook commands (refs #windows-hook-command-quote-escaping)
+
 ## v3.9.3 - 2026-09-21
 
 - fix: update engine deadlock, recursive hook purge, and CLI launcher shims (refs #update-engine-deadlock-and-cli-hardening)
