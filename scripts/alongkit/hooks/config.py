@@ -14,6 +14,7 @@ from dataclasses import dataclass, field
 from datetime import datetime, timezone
 import json
 import os
+import sys
 from typing import Any, Dict, Optional, Tuple
 
 from .. import repo, textio
@@ -118,12 +119,39 @@ def record_audit_entry(
         pass
 
 
+def _format_hook_script_path(script_path: str) -> str:
+    """Format script path safely across operating systems.
+
+    On Windows, wrapping paths in quotes inside cmd /c commands spawned by Go/Node
+    causes quotes to be escaped as \\", which cmd.exe does not unescape, passing
+    literal quotes into Python and triggering [Errno 22] Invalid argument.
+    If whitespace is present on Windows, resolve the 8.3 short path. If no
+    whitespace exists (or short path succeeds), omit quotes.
+    """
+    if sys.platform == "win32":
+        if " " in script_path:
+            try:
+                import ctypes
+                norm = os.path.normpath(script_path)
+                buf = ctypes.create_unicode_buffer(500)
+                if ctypes.windll.kernel32.GetShortPathNameW(norm, buf, 500) > 0:
+                    return buf.value
+            except (AttributeError, OSError, ValueError, RuntimeError):
+                pass
+            return f'"{script_path}"'
+        return script_path
+    if " " in script_path:
+        return f'"{script_path}"'
+    return script_path
+
+
 def get_hook_command(runtime: str, event: str, is_global: bool = False) -> str:
     """Generate command string for a runtime lifecycle hook."""
     if not is_global:
         return f"python scripts/along_hook.py --runtime {runtime} --event {event}"
     script_path = os.path.expanduser("~/.along/bin/along_hook.py")
-    return f'python "{script_path}" --runtime {runtime} --event {event}'
+    formatted_path = _format_hook_script_path(script_path)
+    return f"python {formatted_path} --runtime {runtime} --event {event}"
 
 
 def get_antigravity_hook_manifest(is_global: bool = False) -> Dict[str, Any]:
