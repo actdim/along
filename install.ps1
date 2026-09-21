@@ -194,6 +194,8 @@ function Install-AlongScripts {
             Remove-Item -Recurse -Force -ErrorAction SilentlyContinue
         Write-Host "-> Along tools installed -> $alongBin"
     }
+
+
     $cfgFile = Join-Path $alongHome 'config.json'
     $exampleCfg = Join-Path $PSScriptRoot 'config\along-config.example.json'
     if (-not (Test-Path $cfgFile) -and (Test-Path $exampleCfg)) {

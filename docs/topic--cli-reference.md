@@ -35,6 +35,11 @@ Invocation Paths:
   3. Global User Installation:   python ~/.along/bin/along_exec.py <command> [subcommand] [options...]
 ```
 
+### In-Band vs Out-of-Band Execution
+
+- **In-Band (Inside Agent Session)**: Standard day-to-day workflow driven by the agent using specialized skills (`/along-test`, `/along-wrap`, `/along-kb-sync`).
+- **Out-of-Band (External OS Terminal CLI)**: Direct command execution by the developer or bootstrap scripts via `along <command>` (e.g. `along update`, `along doctor`). Essential for initial bootstrapping, protocol upgrades, and disaster recovery when runtime lifecycle hooks are in a broken state.
+
 General help and command listing are accessible via:
 ```bash
 along --help
@@ -350,7 +355,9 @@ Multi-stack project version incrementer and release packager.
 ### `along update`
 Self-update engine for the Along protocol and skills suite.
 - Reconciles local repository files, managed protocol blocks, and global user skills (`~/.claude/`, `~/.gemini/`, `~/.codex/`) against the latest upstream release from GitHub.
-- Automatically scaffolds and reconciles runtime lifecycle hooks across all supported agent environments (Antigravity `.agents/hooks.json`, Claude Code `.claude/settings.json`, and OpenAI Codex `.codex/hooks.json`).
+- Automatically scaffolds and reconciles global runtime lifecycle hooks in user home configurations (`~/.gemini/config/hooks.json`, `~/.claude/settings.json`, and `~/.codex/hooks.json`) and recursively purges legacy local hooks and workaround scripts from consumer repositories.
+- Performs pre-flight hook cleanup and per-context exception isolation so that corrupt or locked files in one subproject do not abort the update for remaining contexts.
+- **Out-of-Band Recovery**: If an agent session is ever locked due to a broken hook configuration (chicken-and-egg problem), running `along update` from an external OS terminal bypasses agent interception, cleans up broken local hooks, and restores the environment.
 - **Options**:
   - `--check-only`: Only inspect versions without making modifications.
   - `--dry-run`: Simulate updates, migrations, and hook installations without writing files.

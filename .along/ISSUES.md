@@ -24,7 +24,7 @@
 ## Done (recent)
 - [x] `(feat)` [updater-explicit-global-sync](ISSUES/done/feat--updater-explicit-global-sync.md)
 - [x] `(bug)` [update-hooks-and-monorepo-sync-hardening](ISSUES/done/bug--update-hooks-and-monorepo-sync-hardening.md)
+- [x] `(bug)` [update-engine-deadlock-and-cli-hardening](ISSUES/done/bug--update-engine-deadlock-and-cli-hardening.md)
 - [x] `(bug)` [preserve-runtime-dirs-and-doc-version-sync](ISSUES/done/bug--preserve-runtime-dirs-and-doc-version-sync.md)
 - [x] `(bug)` [cli-flag-collision-and-bootstrap](ISSUES/done/bug--cli-flag-collision-and-bootstrap.md)
-- [x] `(task)` [code-review-graph-windows-ignore-hardening](ISSUES/done/task--code-review-graph-windows-ignore-hardening.md)
-<!-- 107 older completed issue(s) archived in .along/ISSUES/done/ -->
+<!-- 108 older completed issue(s) archived in .along/ISSUES/done/ -->

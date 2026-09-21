@@ -782,6 +782,11 @@ Invocation Paths:
   3. Global User Installation:   python ~/.along/bin/along_exec.py <command> [subcommand] [options...]
 ```
 
+### In-Band vs Out-of-Band Execution
+
+- **In-Band (Inside Agent Session)**: Standard day-to-day workflow driven by the agent using specialized skills (`/along-test`, `/along-wrap`, `/along-kb-sync`).
+- **Out-of-Band (External OS Terminal CLI)**: Direct command execution by the developer or bootstrap scripts via `along <command>` (e.g. `along update`, `along doctor`). Essential for initial bootstrapping, protocol upgrades, and disaster recovery when runtime lifecycle hooks are in a broken state.
+
 General help and command listing are accessible via:
 ```bash
 along --help
@@ -1097,7 +1102,9 @@ Multi-stack project version incrementer and release packager.
 ### `along update`
 Self-update engine for the Along protocol and skills suite.
 - Reconciles local repository files, managed protocol blocks, and global user skills (`~/.claude/`, `~/.gemini/`, `~/.codex/`) against the latest upstream release from GitHub.
-- Automatically scaffolds and reconciles runtime lifecycle hooks across all supported agent environments (Antigravity `.agents/hooks.json`, Claude Code `.claude/settings.json`, and OpenAI Codex `.codex/hooks.json`).
+- Automatically scaffolds and reconciles global runtime lifecycle hooks in user home configurations (`~/.gemini/config/hooks.json`, `~/.claude/settings.json`, and `~/.codex/hooks.json`) and recursively purges legacy local hooks and workaround scripts from consumer repositories.
+- Performs pre-flight hook cleanup and per-context exception isolation so that corrupt or locked files in one subproject do not abort the update for remaining contexts.
+- **Out-of-Band Recovery**: If an agent session is ever locked due to a broken hook configuration (chicken-and-egg problem), running `along update` from an external OS terminal bypasses agent interception, cleans up broken local hooks, and restores the environment.
 - **Options**:
   - `--check-only`: Only inspect versions without making modifications.
   - `--dry-run`: Simulate updates, migrations, and hook installations without writing files.
@@ -2382,6 +2389,14 @@ When an agent emits a tool call, the execution loop flows through the hook harne
 4. **Hermetic Test Guarantees**:
    - All hook engine unit tests target temporary directories (`tempfile.mkdtemp()`).
    - The test suite strictly asserts that `.along/diagnostics/` is never written into the repository root during automated testing.
+5. **Fail-Open & Crash Resilience Invariant**:
+   - Runtime lifecycle hooks must never cause agent paralysis (tool interception deadlock) due to missing scripts, unhandled exceptions, or non-Along workspaces.
+   - Hook commands use direct, robust script paths rather than fragile shell inline scripts (`python -c`).
+   - If `along_hook.py` encounters any unexpected internal error or runs in a workspace without Along protocol files, it catches the exception and exits `0` (`ALLOW`), ensuring tools are never blocked by infrastructure faults.
+6. **Global Hook Centralization & Recursive Monorepo Purge**:
+   - Since Along v3.9.2, runtime hooks are installed globally in user home configurations (`~/.gemini/config/hooks.json`, `~/.claude/settings.json`, `~/.codex/hooks.json`).
+   - Consumer repositories and all nested subprojects are recursively purged of legacy local hooks during `along update`.
+   - Out-of-band execution via `along update` in an external OS terminal serves as the canonical disaster recovery path if runtime hooks are ever damaged.
 
 ---
 

@@ -1,0 +1,14 @@
+#!/usr/bin/env bash
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+PYTHON=""
+for candidate in python3 python; do
+  if command -v "$candidate" >/dev/null 2>&1 && "$candidate" -V >/dev/null 2>&1; then
+    PYTHON="$candidate"
+    break
+  fi
+done
+if [ -z "$PYTHON" ]; then
+  echo "[Error] python3 not found" >&2
+  exit 1
+fi
+exec "$PYTHON" "$SCRIPT_DIR/along_exec.py" "$@"
