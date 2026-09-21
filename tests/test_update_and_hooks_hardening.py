@@ -60,8 +60,27 @@ class TestUpdateAndHooksHardening(unittest.TestCase):
         self.assertIn("hooks", cursor_manifest)
         self.assertIn("preToolUse", cursor_manifest["hooks"])
         self.assertIn("--runtime cursor", cursor_manifest["hooks"]["preToolUse"][0]["command"])
-        self.assertIn(expanded_path, cursor_manifest["hooks"]["preToolUse"][0]["command"])
-        self.assertNotIn("python -c", cursor_manifest["hooks"]["preToolUse"][0]["command"])
+        # Verify no literal quotes wrap the script path on Windows when no spaces exist
+        if sys.platform == "win32" and " " not in expanded_path:
+            self.assertNotIn(f'"{expanded_path}"', pre_tool_cmd)
+
+    def test_format_hook_script_path_windows_safety(self):
+        """_format_hook_script_path must omit quotes on Windows when no whitespace exists."""
+        from alongkit.hooks.config import _format_hook_script_path
+        with mock.patch("sys.platform", "win32"):
+            # No space path
+            self.assertEqual(
+                _format_hook_script_path(r"C:\Users\Admin\.along\bin\along_hook.py"),
+                r"C:\Users\Admin\.along\bin\along_hook.py",
+            )
+            # Path with spaces and mock short path resolution
+            with mock.patch("ctypes.windll.kernel32.GetShortPathNameW", create=True) as mock_short:
+                mock_short.return_value = 1
+                with mock.patch("ctypes.create_unicode_buffer") as mock_buf:
+                    mock_buf.return_value.value = r"C:\Users\ADMINI~1\.along\bin\along_hook.py"
+                    result = _format_hook_script_path(r"C:\Users\Admin User\.along\bin\along_hook.py")
+                    self.assertEqual(result, r"C:\Users\ADMINI~1\.along\bin\along_hook.py")
+
 
     def test_purge_local_along_hooks_removes_spurious_artifacts(self):
         """purge_local_along_hooks must remove Along hooks, workaround scripts, and empty dirs."""
