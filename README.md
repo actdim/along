@@ -65,16 +65,23 @@ Install Along across all supported AI providers with a single command:
 
 ### Windows (PowerShell)
 ```powershell
-git clone https://github.com/actdim/along.git
-cd along
-powershell -NoProfile -ExecutionPolicy Bypass -File install.ps1 -Target all
+powershell -NoProfile -ExecutionPolicy Bypass -Command "irm https://raw.githubusercontent.com/actdim/along/main/install.ps1 | iex"
 ```
 
 ### Linux / macOS (Bash)
 ```bash
+curl -fsSL https://raw.githubusercontent.com/actdim/along/main/install.sh | bash
+```
+
+The one-liner installer automatically bootstraps the repository into `~/.cache/actdim-along/repo` (via shallow `git clone` or archive fallback) and configures skills across Claude Code, OpenAI Codex, Google Antigravity, and OpenCode.
+
+#### Manual / Local Checkout Installation
+If you prefer to clone the repository manually or are developing Along:
+```powershell
 git clone https://github.com/actdim/along.git
 cd along
-bash install.sh --target=all
+powershell -NoProfile -ExecutionPolicy Bypass -File install.ps1 -Target all # Windows
+bash install.sh --target=all                                               # Linux / macOS
 ```
 
 An install records what it wrote in `~/.along/install-manifest.json`: it never deletes a
@@ -100,7 +107,7 @@ The repository's complete technical specification is maintained as a living LLM-
 
 ## Automation Skills Reference (Grouped by Workflow Phase)
 
-Along provides **18 singular automation skills** structured across 6 core lifecycle phases:
+Along provides **19 singular automation skills** structured across 6 core lifecycle phases:
 
 ### 1. Bootstrap & Repository Protocol Management
 | Skill / Command | Purpose |

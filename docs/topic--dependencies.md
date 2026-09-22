@@ -10,7 +10,7 @@ sources:
   - path: pyproject.toml
     hash: "6f7a72d4e5eac4b4bb59b8d822e53e7b7dc61cca7abe98b387ff5a97a1505a95"
   - path: package.json
-    hash: "a01f5065e3e4271f93baaa892e211379b7c1b4a66ecc42181f0f941141f8e3b2"
+    hash: "4c732b953341c1070bacca0eea4a74c8cac5a640c2c4c114462ef8ce3a9180c7"
 ---
 
 # Dependencies & Submodules AI Documentation and Rules

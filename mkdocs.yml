@@ -50,6 +50,9 @@ nav:
   - Knowledge Base: INDEX.md
   - Decisions: decisions/INDEX.md
   - Architecture: topic--architecture.md
+  - CLI Reference: topic--cli-reference.md
+  - Runtime Hooks & Gates: topic--runtime-hooks-and-gates.md
+  - Declarative Gates & Traceability: topic--declarative-gates-and-traceability.md
   - Domain Model: topic--domain-model.md
   - Skills Reference: topic--skills-reference.md
   - Setup & Workflow: topic--setup-and-workflow.md

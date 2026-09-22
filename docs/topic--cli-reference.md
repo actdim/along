@@ -1,18 +1,12 @@
 ---
 protocol: along
-protocol_version: "3.1.0"
+protocol_version: "3.9.4"
 slug: cli-reference
 title: Along CLI Command Reference
 type: topic
 curated: true
 created: 2026-09-14
-updated: 2026-09-14
-tags: [cli-reference]
----
-
----
-title: Along CLI Command Reference
-type: topic
+updated: 2026-09-21
 tags: [cli, commands, router, lifecycle, tools, reference]
 ---
 

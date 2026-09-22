@@ -24,7 +24,7 @@ ActDim Along provides repositories with an isolated, durable, and human-readable
 - **Append-Only Architectural Decision Records (`.along/DECISIONS.md`)**:
   - Single-file ADR log allowing agents to load all active architectural constraints in a single read.
 - **Cross-Provider Skills Suite**:
-  - 17 provider-agnostic skills installed automatically into Claude Code, Codex, OpenCode, and Antigravity.
+  - 19 provider-agnostic skills installed automatically into Claude Code, Codex, OpenCode, and Antigravity.
 
 ## Documentation Links
 - [README.md](README.md): Overview, quick installation, and full skill list.
