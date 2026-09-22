@@ -3,10 +3,11 @@ protocol: along
 protocol_version: "3.6.0"
 slug: python-error-handling-and-io-consistency
 type: debt
-status: open
+status: done
+completed: 2026-09-21
 priority: high
 created: 2026-09-16
-updated: 2026-09-16
+updated: 2026-09-21
 agent: antigravity
 tags: [error-handling, cli, io, paths, semver, consistency]
 milestone: v4.0.0-runtime-gates-and-worktree-isolation
@@ -42,8 +43,8 @@ Inconsistencies and silent failure modes in the Python codebase hinder reliabili
 - Deduplicate gate constants and protocol version threshold constants into shared definitions.
 
 ## Acceptance Criteria
-- [ ] Invalid numeric CLI arguments produce helpful stderr error messages with non-zero exit codes.
-- [ ] BOM normalization in `along_exec.py` genuinely strips BOM bytes on output.
-- [ ] Manual string path replacements replaced by `repo.normalize_posix`.
-- [ ] Version selection in `along_dep_scan.py` correctly ranks semantic versions (e.g. 1.10.0 > 1.9.0).
-- [ ] All unit tests pass: `python .along/scripts/test.py`.
+- [x] Invalid numeric CLI arguments produce helpful stderr error messages with non-zero exit codes.
+- [x] BOM normalization in `along_exec.py` genuinely strips BOM bytes on output.
+- [x] Manual string path replacements replaced by `repo.normalize_posix`.
+- [x] Version selection in `along_dep_scan.py` correctly ranks semantic versions (e.g. 1.10.0 > 1.9.0).
+- [x] All unit tests pass: `python .along/scripts/test.py`.

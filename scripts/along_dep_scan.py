@@ -32,7 +32,7 @@ from alongkit import bootstrap
 bootstrap.ensure_deps()
 
 
-from alongkit import entities, proc, repo
+from alongkit import entities, proc, repo, semver
 from alongkit.version import CURRENT_PROTOCOL_VERSION
 
 TARGET_AI_FILES = [
@@ -569,7 +569,7 @@ def scan_nuget_project_deps(project: ProjectScope, repo_root: str) -> List[Dict[
             if os.path.isdir(pkg_root_in_cache):
                 versions = [v for v in os.listdir(pkg_root_in_cache) if os.path.isdir(os.path.join(pkg_root_in_cache, v))]
                 if versions:
-                    matched_v = ver if ver in versions else sorted(versions)[-1]
+                    matched_v = ver if ver in versions else max(versions, key=semver.parse)
                     found_pkg_dir = os.path.join(pkg_root_in_cache, matched_v)
                     actual_ver = matched_v
                     break

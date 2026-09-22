@@ -16,6 +16,11 @@ from typing import Any, Dict, List, Optional, Tuple
 
 from .. import repo, sanitizer, typography
 from .models import GateDecision, GateResult, HookEvent, HookEventType
+from .predicates import (
+    DANGEROUS_CLI_PATTERNS,
+    GOVERNED_TYPOGRAPHY_SUFFIXES,
+    PROTECTED_PROJECTIONS,
+)
 
 
 class BaseGate:
@@ -31,10 +36,7 @@ class TypographyGate(BaseGate):
     name: str = "typography"
 
     # Suffixes governed by the rule (code, docstrings, prose)
-    GOVERNED_SUFFIXES: Tuple[str, ...] = (
-        ".md", ".py", ".ts", ".js", ".tsx", ".jsx",
-        ".sh", ".ps1", ".bat", ".rs", ".go", ".txt",
-    )
+    GOVERNED_SUFFIXES: Tuple[str, ...] = GOVERNED_TYPOGRAPHY_SUFFIXES
 
     def evaluate(self, event: HookEvent) -> GateResult:
         if event.event_type != HookEventType.PRE_TOOL_USE:
@@ -102,10 +104,7 @@ class ProjectionProtectionGate(BaseGate):
     """Blocks manual edits to compiled views (.along/ISSUES.md, docs/INDEX.md)."""
     name: str = "projection_protection"
 
-    PROTECTED_PROJECTIONS: Tuple[str, ...] = (
-        ".along/issues.md",
-        "docs/index.md",
-    )
+    PROTECTED_PROJECTIONS: Tuple[str, ...] = PROTECTED_PROJECTIONS
 
     def evaluate(self, event: HookEvent) -> GateResult:
         if event.event_type != HookEventType.PRE_TOOL_USE:
@@ -146,14 +145,7 @@ class CliSafetyGate(BaseGate):
     """Blocks dangerous shell patterns, heredocs, and inline file writers."""
     name: str = "cli_safety"
 
-    DANGEROUS_PATTERNS: List[Tuple[re.Pattern, str]] = [
-        (re.compile(r"<<\s*['\"]?EOF['\"]?", re.IGNORECASE), "Heredoc syntax (<<EOF)"),
-        (re.compile(r"python\d*\s+-c\s+.*open\(.*['\"][wa]['\"].*\)", re.DOTALL), "Inline Python file writer"),
-        (re.compile(r"git\s+reset\s+--hard", re.IGNORECASE), "Destructive unstaged Git wipe (git reset --hard)"),
-        (re.compile(r"git\s+clean\s+-[a-zA-Z]*f", re.IGNORECASE), "Destructive Git clean (git clean -f)"),
-        (re.compile(r"npm\s+install\s+(-g|--global)", re.IGNORECASE), "Global package manager mutation (npm -g)"),
-        (re.compile(r"(choco|winget)\s+install", re.IGNORECASE), "Global system package installation"),
-    ]
+    DANGEROUS_PATTERNS: List[Tuple[re.Pattern, str]] = DANGEROUS_CLI_PATTERNS
 
     def evaluate(self, event: HookEvent) -> GateResult:
         if event.event_type != HookEventType.PRE_TOOL_USE:

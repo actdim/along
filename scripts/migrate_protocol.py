@@ -51,7 +51,7 @@ from alongkit import bootstrap
 # installers and the documented skill commands invoke it.
 bootstrap.ensure_deps()
 from alongkit import frontmatter, migration, proc, repo, sanitizer, semver, textio
-from alongkit.version import CURRENT_PROTOCOL_VERSION
+from alongkit.version import CURRENT_PROTOCOL_VERSION, V2_0_0, V2_2_9, V2_2_26, V3_0_0
 
 
 def repair_unquoted_frontmatter_scalars(content, path=None):
@@ -815,7 +815,7 @@ def step_repair_legacy_frontmatter_colons(mig, target_dir, detected_version):
 
     Active ONLY when detected_version < 2.2.9 (prior to ruamel.yaml integration).
     """
-    if semver.parse(detected_version) >= (2, 2, 9) or not os.path.exists(target_dir):
+    if semver.parse(detected_version) >= V2_2_9 or not os.path.exists(target_dir):
         return 0
 
     repaired_count = 0
@@ -847,7 +847,7 @@ def scan_shell_escape_artifacts_in_docs(repo_root, detected_version):
 
     Reports warnings for manual review without modifying any files on disk.
     """
-    if not (semver.parse(detected_version) >= (2, 0, 0) and semver.parse(detected_version) < (2, 2, 9)):
+    if not (semver.parse(detected_version) >= V2_0_0 and semver.parse(detected_version) < V2_2_9):
         return []
 
     docs_dir = os.path.join(repo_root, "docs")
@@ -968,7 +968,7 @@ def run_migrations(repo_root, dry_run=True, force=False, backup=True, verbose=Fa
     step_migrate_v1_3_kb_scaffolding(mig, repo_root, target_working_dir)
 
     # Step 2b: Repair legacy front-matter colons before entity enrichment
-    if semver.parse(detected_version) < (2, 2, 9):
+    if semver.parse(detected_version) < V2_2_9:
         print("-> Step 2b [v1.5 -> v2.2.8]: Repairing unquoted front-matter colons...")
         step_repair_legacy_frontmatter_colons(mig, target_working_dir, detected_version)
 
@@ -981,7 +981,7 @@ def run_migrations(repo_root, dry_run=True, force=False, backup=True, verbose=Fa
     step_migrate_v2_0_along_directory(mig, repo_root)
 
     active_along_dir = os.path.join(repo_root, ".along")
-    if semver.parse(detected_version) < (2, 2, 9) and os.path.exists(active_along_dir):
+    if semver.parse(detected_version) < V2_2_9 and os.path.exists(active_along_dir):
         step_repair_legacy_frontmatter_colons(mig, active_along_dir, detected_version)
 
     # Step 5: Typography sanitation
@@ -1015,7 +1015,7 @@ def run_migrations(repo_root, dry_run=True, force=False, backup=True, verbose=Fa
     step_migrate_v2_2_5_link_rewriting_and_integrity(mig, repo_root, detected_version)
 
     # Step 8b: Advisory scan for shell-escaping artifacts in docs/ (gated to v2.0.0 <= v < v2.2.9)
-    if semver.parse(detected_version) >= (2, 0, 0) and semver.parse(detected_version) < (2, 2, 9):
+    if semver.parse(detected_version) >= V2_0_0 and semver.parse(detected_version) < V2_2_9:
         print("-> Step 8b [v2.0 -> v2.2.8]: Advisory scan for potential shell-escaping artifacts in docs/...")
         shell_warnings = scan_shell_escape_artifacts_in_docs(repo_root, detected_version)
         if shell_warnings:
@@ -1031,7 +1031,7 @@ def run_migrations(repo_root, dry_run=True, force=False, backup=True, verbose=Fa
     constraints_file = os.path.join(repo_root, ".along", "CONSTRAINTS.md")
     if (os.path.isfile(decisions_file)
             and not os.path.isfile(constraints_file)
-            and semver.parse(detected_version) < (2, 2, 26)):
+            and semver.parse(detected_version) < V2_2_26):
         print("-> Step 9 [< v2.2.26]: Generating .along/CONSTRAINTS.md from DECISIONS.md...")
         if not dry_run:
             try:
@@ -1044,7 +1044,7 @@ def run_migrations(repo_root, dry_run=True, force=False, backup=True, verbose=Fa
             print("   [DRY-RUN] Would generate .along/CONSTRAINTS.md")
 
     # Step 10: v3.0.0 Version SSOT cleanup & KB schema decoupling
-    if semver.parse(detected_version) < (3, 0, 0) or force:
+    if semver.parse(detected_version) < V3_0_0 or force:
         print("-> Step 10 [< v3.0.0]: Cleaning up version declarations in docs/ and skills/...")
         step_migrate_v3_0_version_ssot_cleanup(mig, repo_root, detected_version)
 
@@ -1318,9 +1318,13 @@ def step_migrate_v3_1_modular_decisions(mig, repo_root, detected_version="1.0.0"
     # Export to docs/decisions if docs exists
     try:
         import along_kb_sync
-        along_kb_sync.sync_decisions_to_docs(repo_root)
-    except (ImportError, AttributeError):
-        pass
+    except ImportError:
+        along_kb_sync = None
+    if along_kb_sync is not None and hasattr(along_kb_sync, "sync_decisions_to_docs"):
+        try:
+            along_kb_sync.sync_decisions_to_docs(repo_root)
+        except (OSError, ValueError, AttributeError, RuntimeError) as exc:
+            mig.record_error(f"Failed to sync decisions to docs: {exc}")
 
     print(f"   [OK] Successfully migrated {migrated_count} ADR(s) to .along/DECISIONS/.")
     mig.record("modular decisions", dec_dir, f"{migrated_count} ADRs migrated")
