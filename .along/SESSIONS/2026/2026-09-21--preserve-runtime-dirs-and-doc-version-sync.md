@@ -1,3 +1,19 @@
+---
+protocol: along
+slug: preserve-runtime-dirs-and-doc-version-sync
+date: 2026-09-21
+agent: antigravity
+summary: "Preserved agent runtime directories on hook purge and synchronized protocol version mentions in documentation"
+milestone: v4.0.0-runtime-gates-and-worktree-isolation
+issues_advanced: []
+issues_completed: [bug--preserve-runtime-dirs-and-doc-version-sync]
+decisions: []
+risks_logged: []
+spikes_conducted: []
+branch: main
+commit: unknown
+---
+
 # Session Log: 2026-09-21 Preserve Runtime Dirs and Doc Version Sync
 
 **Date**: 2026-09-21

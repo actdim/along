@@ -1,3 +1,19 @@
+---
+protocol: along
+slug: update-hooks-and-monorepo-sync-hardening
+date: 2026-09-21
+agent: antigravity
+summary: "Refactored global lifecycle hooks dispatch, automatic legacy hook purge, and Windows file contention hardening"
+milestone: v4.0.0-runtime-gates-and-worktree-isolation
+issues_advanced: []
+issues_completed: [bug--update-hooks-and-monorepo-sync-hardening]
+decisions: []
+risks_logged: []
+spikes_conducted: []
+branch: main
+commit: unknown
+---
+
 # Session Log: 2026-09-21 Update Hooks Dispatch and Monorepo Sync Hardening
 
 **Date**: 2026-09-21

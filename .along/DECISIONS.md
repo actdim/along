@@ -3,7 +3,7 @@
 
 Compiled index of Architectural Decision Records stored in `.along/DECISIONS/`.
 
-## Active Decisions (36)
+## Active Decisions (37)
 
 - [Code Graph & Hybrid Knowledge Base Search MCP Integration](DECISIONS/ADR-2026-08-26--code-graph-mcp-and-hybrid-kb-search.md)
 - [Protocol v1.2.0 & Knowledge Base (KB) Architecture Standard](DECISIONS/ADR-2026-08-26--protocol-v120-knowledge-base-architecture.md)
@@ -41,6 +41,7 @@ Compiled index of Architectural Decision Records stored in `.along/DECISIONS/`.
 - [Single Source of Truth Versioning, PEP 621 Dynamic Hatchling Packaging, and Skill Manifest Decoupling](DECISIONS/ADR-2026-09-09--version-ssot-consolidation-and-dynamic-packaging.md)
 - [Declarative Gate Engine and Protocol Traceability Matrix](DECISIONS/ADR-2026-09-13--declarative-gate-engine-and-traceability.md)
 - [Runtime-Native Git Worktree Workspace Isolation and Environment Readiness](DECISIONS/ADR-2026-09-13--runtime-worktree-isolation-and-readiness.md)
+- [One-Liner Self-Bootstrapping Installer and Update Harmonization Over Binary Distribution](DECISIONS/ADR-2026-09-21--oneliner-installer-bootstrap-over-binary-dist.md)
 
 ## Superseded & Retired Decisions (2)
 

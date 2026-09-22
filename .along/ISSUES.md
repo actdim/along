@@ -4,8 +4,6 @@
 <!-- No active issues -->
 
 ## Backlog
-- [ ] `(debt)` [dashboard-ui-type-safety-and-security](ISSUES/debt--dashboard-ui-type-safety-and-security.md)
-- [ ] `(debt)` [python-monolithic-functions-and-boilerplate](ISSUES/debt--python-monolithic-functions-and-boilerplate.md)
 - [ ] `(docs)` [entity-lifecycle-cli-documentation](ISSUES/docs--entity-lifecycle-cli-documentation.md)
 - [ ] `(feat)` [automated-ui-screenshots-and-visual-verification](ISSUES/feat--automated-ui-screenshots-and-visual-verification.md)
 - [ ] `(feat)` [code-review-graph-user-skills](ISSUES/feat--code-review-graph-user-skills.md)
@@ -22,9 +20,9 @@
 - [ ] `(feat)` [workspace-containment-and-path-scoping](ISSUES/feat--workspace-containment-and-path-scoping.md)
 
 ## Done (recent)
+- [x] `(debt)` [python-monolithic-functions-and-boilerplate](ISSUES/done/debt--python-monolithic-functions-and-boilerplate.md)
+- [x] `(debt)` [dashboard-ui-type-safety-and-security](ISSUES/done/debt--dashboard-ui-type-safety-and-security.md)
 - [x] `(feat)` [updater-explicit-global-sync](ISSUES/done/feat--updater-explicit-global-sync.md)
 - [x] `(feat)` [oneliner-installer](ISSUES/done/feat--oneliner-installer.md)
 - [x] `(feat)` [issues-board-backlog-partition](ISSUES/done/feat--issues-board-backlog-partition.md)
-- [x] `(docs)` [cli-and-documentation-traceability-reconciliation](ISSUES/done/docs--cli-and-documentation-traceability-reconciliation.md)
-- [x] `(debt)` [python-error-handling-and-io-consistency](ISSUES/done/debt--python-error-handling-and-io-consistency.md)
-<!-- 114 older completed issue(s) archived in .along/ISSUES/done/ -->
+<!-- 116 older completed issue(s) archived in .along/ISSUES/done/ -->
