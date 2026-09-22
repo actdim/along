@@ -3,10 +3,11 @@ protocol: along
 protocol_version: "3.6.0"
 slug: entity-lifecycle-cli-documentation
 type: docs
-status: open
+status: done
+completed: 2026-09-22
 priority: medium
 created: 2026-09-18
-updated: 2026-09-18
+updated: 2026-09-22
 agent: antigravity
 tags: [documentation, cli, milestones, workflow, kb]
 milestone: v4.0.0-runtime-gates-and-worktree-isolation

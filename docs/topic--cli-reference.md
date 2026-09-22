@@ -109,22 +109,35 @@ Validates repository compliance with the Along protocol. Audits `.along/` direct
 Manages atomic issue files in `.along/ISSUES/` and recompiles the active board projection (`.along/ISSUES.md`).
 - **Subcommands**:
   - `along issue create <type> <slug> --title "Title" [options...]`: Creates a new issue file. Valid types: `feat`, `bug`, `debt`, `task`, `docs`.
-    - Options: `--priority {high,medium,low}`, `--tags "t1,t2"`, `--agent <name>`, `--milestone <name>`.
+    - Options: `--priority {high,medium,low,critical}`, `--tags "t1,t2"`, `--agent <name>`, `--milestone <name>`.
+  - `along issue update <slug> [options...]` (alias: `along issue edit`): Updates frontmatter metadata of an existing issue, preserving YAML comments and ordering.
+    - Options:
+      - `--milestone <name>`, `-m <name>`: Assigns or reassigns issue to a milestone. Supports fuzzy matching (exact slug, version prefix such as `v4.0` or `4.0`, or unambiguous substring). Use `"none"`, `"null"`, or `""` to unassign. Automatically triggers bidirectional milestone synchronization.
+      - `--priority <p>`, `-p <p>`: Updates priority (`critical`, `high`, `medium`, `low`).
+      - `--status <s>`, `-s <s>`: Updates status (`open`, `in-progress`, `blocked`, `done`, `superseded`, `cancelled`, `duplicate`).
+      - `--tags <t1,t2>`: Replaces tags with a comma-separated list.
+      - `--title <title>`, `-t <title>`: Updates the issue title in frontmatter.
+    - Side-effects: Automatically recompiles `.along/ISSUES.md` board projection and synchronizes affected milestones.
+  - `along issue show <slug> [--json]` (alias: `along issue get`): Displays detailed summary of an issue, including frontmatter metadata, priority, status, milestone, and body excerpt.
+    - Options: `--json` outputs structured JSON payload.
+  - `along issue done <slug> [options...]`: Marks the issue as completed, records `completed: YYYY-MM-DD`, and moves the file into `.along/ISSUES/done/`.
+    - Options: `--status {done,superseded,cancelled,duplicate}`, `--superseded-by <slug>`, `--duplicate-of <slug>`.
   - `along issue sync`: Recompiles `.along/ISSUES.md` deterministically from atomic files in `.along/ISSUES/` and `.along/ISSUES/done/`.
-  - `along issue done <slug>`: Marks the issue as completed, records `completed: YYYY-MM-DD`, and moves the file into `.along/ISSUES/done/`.
   - `along issue list`: Lists all active in-progress and open issues in the terminal.
 - **Usage**:
   ```bash
   along issue create feat token-refresh --title "Add OAuth token refresh" --priority high
+  along issue update token-refresh --priority critical --tags "auth,security" --milestone v4.0.0
+  along issue show token-refresh
   along issue list
   along issue done token-refresh
   along issue sync
   ```
 
 ### `along start`
-Atomically marks an issue as `in-progress`, initializes the session blackboard in `.along/.session/<slug>/`, updates `.along/ISSUES.md`, and optionally provisions an isolated Git worktree.
+Atomically marks an issue as `in-progress`, updates `updated: YYYY-MM-DD`, recompiles the active board projection (`.along/ISSUES.md`), initializes the session blackboard (`.along/.session/<slug>/`), marks the living plan as approved (`phase: execution`, `plan_approved: true`), and binds the active issue for agent execution.
 - **Options**:
-  - `--worktree`: Automatically provisions an isolated worktree at `.along/worktrees/<slug>` with dependency links and copies of `.env*` files.
+  - `--worktree`: Enforces git worktree workspace isolation. Verifies environment readiness, provisions an isolated worktree at `.along/worktrees/<slug>` on branch `along/<slug>`, links heavy dependencies (`node_modules`, `.venv`) via NTFS junctions on Windows or symlinks on POSIX, copies untracked configuration (`.env*`), and points agent execution to the worktree path.
 - **Usage**:
   ```bash
   along start token-refresh
@@ -132,16 +145,19 @@ Atomically marks an issue as `in-progress`, initializes the session blackboard i
   ```
 
 ### `along milestone`
-Tracks progress across high-level milestones and sprints in `.along/MILESTONES/`.
+Tracks progress across high-level milestones and sprints in `.along/MILESTONES/`. Provides bidirectional synchronization with issues and dynamic progress tracking.
 - **Subcommands**:
-  - `along milestone sync [<slug>]`: Recomputes target issues, completion percentage, and status for all or a specific milestone.
-  - `along milestone list [--status <status>] [--json]`: Lists all milestones with progress statistics, optionally filtered by status (`open`, `in-progress`, `completed`).
-  - `along milestone show <slug> [--json]`: Displays detailed milestone status, due date, and target issues checklist.
+  - `along milestone sync [<slug>]`: Scans all active and completed issues in `.along/ISSUES/`, discovers issues declaring `milestone: <slug>`, dynamically updates `target_issues: [...]` in milestone frontmatter, recalculates `progress_pct = round(100 * done_count / total)`, and automatically transitions status to `completed` when all target issues are closed. If `<slug>` is omitted, synchronizes all milestones in `.along/MILESTONES/`.
+  - `along milestone list [--status <status>] [--json]`: Lists all milestones with progress statistics, completion percentages, and target issue counts.
+    - Options: `--status` filters by status (`open`, `in-progress`, `completed`), `--json` outputs machine-readable JSON array.
+  - `along milestone show <slug> [--json]`: Displays detailed milestone status, due date, progress percentage, and checklist of all target issues with individual completion states. Supports fuzzy query resolution (exact slug, version prefix such as `4.0`, or substring).
+    - Options: `--json` emits structured JSON payload.
 - **Usage**:
   ```bash
   along milestone sync
   along milestone list --status in-progress
   along milestone show v4.0.0-runtime-gates-and-worktree-isolation
+  along milestone show 4.0
   ```
 
 ### `along session`

@@ -1,6 +1,6 @@
 {
-  "last_edit_time": "2026-09-22T20:11:58.119560+00:00",
-  "last_test_time": "2026-09-22T20:13:41.593951+00:00",
+  "last_edit_time": "2026-09-22T20:21:04.839102+00:00",
+  "last_test_time": "2026-09-22T20:21:16.664441+00:00",
   "edited_files": [
     "d:\\Src\\my\\actdim\\public\\along\\scripts\\alongkit\\install.py",
     "d:\\Src\\my\\actdim\\public\\along\\scripts\\alongkit\\hooks\\predicates.py",
@@ -323,6 +323,10 @@
     "C:\\Users\\Admin\\.gemini\\antigravity\\brain\\29741d0c-d630-4885-b8ba-09698ecb78be\\scratch\\compute_hashes.py",
     "d:\\Src\\my\\actdim\\public\\along\\.along\\ISSUES\\docs--reconcile-kb-drift-and-provenance.md",
     "d:\\Src\\my\\actdim\\public\\along\\.along\\ISSUES\\done\\docs--reconcile-kb-drift-and-provenance.md",
-    "C:\\Users\\Admin\\.gemini\\antigravity\\brain\\665fa1c9-1654-4f74-a94f-c527fc1d3f69\\walkthrough.md"
+    "C:\\Users\\Admin\\.gemini\\antigravity\\brain\\665fa1c9-1654-4f74-a94f-c527fc1d3f69\\walkthrough.md",
+    "d:\\Src\\my\\actdim\\public\\along\\.along\\.session\\entity-lifecycle-cli-documentation\\plan.md",
+    "C:\\Users\\Admin\\.gemini\\antigravity\\brain\\0200420e-b56e-4f3e-b0ad-bc244ba59a8f\\implementation_plan.md",
+    "C:\\Users\\Admin\\.gemini\\antigravity\\brain\\0200420e-b56e-4f3e-b0ad-bc244ba59a8f\\walkthrough.md",
+    "d:\\Src\\my\\actdim\\public\\along\\.along\\SESSIONS\\2026\\2026-09-22--entity-lifecycle-cli-documentation.md"
   ]
 }

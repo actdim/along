@@ -8,7 +8,7 @@ updated: 2026-09-22
 tags: [setup-workflow, installation, lifecycle, runners, developer-workflow, testing]
 sources:
   - path: README.md
-    hash: "d790393ec378f5a5849731afe6cacdd379033465f9842171da28a8f25112d81a"
+    hash: "742705a98e1e98608b43a4f7421f9fb62471e304357adfffc96f29ebd2b7bbac"
   - path: AGENTS.md
     hash: "d3cf40bcdb2d985decb6937e7b7b838666599607788cf6d3bf64245312fdd92d"
 ---
@@ -325,11 +325,19 @@ sequenceDiagram
 
 ### Step 1: Morning Sync & Task Triage
 - Launch `/along-dash` to inspect sprint KPIs, active blockers in `.along/RISKS/`, and the entity DAG.
-- Review active issues in `.along/ISSUES.md`.
+- Review active issues in `.along/ISSUES.md` or inspect milestone progress via `along milestone list` and `along milestone show <slug>`.
 
-### Step 2: Task Claiming & Intent Recognition
-- Issue a natural language prompt to the agent (e.g. *"Fix Windows path escaping in CLI"*).
-- The agent automatically infers the issue type (`bug`), creates `.along/ISSUES/bug--windows-path-escaping.md`, and sets `status: in-progress`.
+### Step 2: Task Claiming & Atomic Session Start
+- Issue a natural language prompt to the agent (e.g. *"Fix Windows path escaping in CLI"*) or invoke `along start <slug> [--worktree]`.
+- The agent infers the issue type (`bug`), creates `.along/ISSUES/bug--windows-path-escaping.md`, and runs `along start <slug> [--worktree]`.
+- **Atomic Initialization**:
+  - Sets issue `status: in-progress` and updates `updated: YYYY-MM-DD`.
+  - Recompiles the active board projection (`.along/ISSUES.md`).
+  - Initializes session blackboard in `.along/.session/<slug>/` (`state.json` and `plan.md`).
+  - Marks the plan as approved (`phase: execution`, `plan_approved: true`) and binds the active issue.
+  - If `--worktree` is specified, provisions an isolated Git worktree at `.along/worktrees/<slug>` with linked dependencies.
+- **Mid-Flight Metadata Adjustments**:
+  Use `along issue update <slug> [--milestone <m>] [--priority <p>] [--tags <t>]` to adjust issue metadata without manually editing YAML frontmatter.
 
 ### Step 3: Execution via `/along-team`
 - For S-size tasks (1-2 files): The agent fast-paths edits directly and runs tests.
