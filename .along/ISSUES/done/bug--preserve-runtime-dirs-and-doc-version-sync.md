@@ -1,5 +1,7 @@
 ---
-id: bug--preserve-runtime-dirs-and-doc-version-sync
+protocol: along
+protocol_version: "3.9.4"
+slug: preserve-runtime-dirs-and-doc-version-sync
 title: "Preserve Agent Runtime Dirs on Hook Purge and Sync Doc Versions on Release"
 type: bug
 status: done

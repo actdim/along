@@ -3,10 +3,11 @@ protocol: along
 protocol_version: "3.8.0"
 slug: issues-board-backlog-partition
 type: feat
-status: in-progress
+status: done
+completed: 2026-09-21
 priority: high
 created: 2026-09-20
-updated: 2026-09-20
+updated: 2026-09-21
 agent: antigravity
 tags: [along-exec, entities, issues-board, backlog, milestone]
 milestone: v4.0.0-runtime-gates-and-worktree-isolation
@@ -29,10 +30,10 @@ Currently, the distinction between active work (`status: in-progress`) and backl
 
 ## Acceptance Criteria
 
-- [ ] `compile_issues_board` inspects front-matter `status` of issues:
+- [x] `compile_issues_board` inspects front-matter `status` of issues:
   - `in-progress` issues are placed under `## Active`.
   - `open` and `blocked` issues are placed under `## Backlog`.
   - When either section is empty, clean placeholder comments are rendered (`<!-- No active issues -->` or `<!-- No backlog issues -->`).
-- [ ] `along issue create` no longer hacks the board with string replacements on `## Active`, but uses `compile_issues_board` / `sync_issues_board`.
-- [ ] `along issue create` supports `--no-milestone` and `--milestone none|null|~` to deliberately create issues in the general backlog without auto-stamping the active milestone.
-- [ ] Existing tests in `tests/test_issue_lifecycle.py` and other test files pass cleanly, and new unit tests verify the Active vs Backlog board partitioning and milestone opt-out.
+- [x] `along issue create` no longer hacks the board with string replacements on `## Active`, but uses `compile_issues_board` / `sync_issues_board`.
+- [x] `along issue create` supports `--no-milestone` and `--milestone none|null|~` to deliberately create issues in the general backlog without auto-stamping the active milestone.
+- [x] Existing tests in `tests/test_issue_lifecycle.py` and other test files pass cleanly, and new unit tests verify the Active vs Backlog board partitioning and milestone opt-out.

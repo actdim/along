@@ -1,3 +1,19 @@
+---
+protocol: along
+slug: update-engine-deadlock-and-cli-hardening
+date: 2026-09-21
+agent: antigravity
+summary: "Fixed update engine deadlock, monorepo recursive hook purge, and hardened CLI launcher shims across platforms"
+milestone: v4.0.0-runtime-gates-and-worktree-isolation
+issues_advanced: []
+issues_completed: [bug--update-engine-deadlock-and-cli-hardening]
+decisions: []
+risks_logged: []
+spikes_conducted: []
+branch: main
+commit: unknown
+---
+
 # Session Log: 2026-09-21 Update Engine Deadlock, Monorepo Hook Purge, and CLI Hardening
 
 **Date**: 2026-09-21
