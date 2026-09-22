@@ -19,14 +19,107 @@ param(
     [switch]$Migrate,
     [switch]$Uninstall,
     [switch]$IncludeUnverifiedMcp,
+    [switch]$NoPathUpdate,
     [string]$AlongHome       = (Join-Path $env:USERPROFILE '.along'),
     [string]$ClaudeHome      = (Join-Path $env:USERPROFILE '.claude'),
     [string]$CodexHome       = (Join-Path $env:USERPROFILE '.codex'),
     [string]$OpencodeHome    = (Join-Path $env:USERPROFILE '.config\opencode'),
-    [string]$AntigravityHome = (Join-Path $env:USERPROFILE '.gemini\config')
+    [string]$AntigravityHome = (Join-Path $env:USERPROFILE '.gemini\config'),
+    [string]$CacheDir        = (Join-Path (Join-Path $env:USERPROFILE '.cache') 'actdim-along\repo')
 )
 
 $ErrorActionPreference = 'Stop'
+
+$isLocalCheckout = $false
+if ($PSScriptRoot) {
+    $localSkills = Join-Path $PSScriptRoot 'skills'
+    $localScripts = Join-Path $PSScriptRoot 'scripts'
+    if ((Test-Path $localSkills) -and (Test-Path $localScripts)) {
+        $isLocalCheckout = $true
+    }
+}
+
+if (-not $isLocalCheckout) {
+    Write-Host "-> Along: standalone/remote installer detected. Bootstrapping repository..."
+    $repoUrl = "https://github.com/actdim/along.git"
+    $zipUrl = "https://github.com/actdim/along/archive/refs/heads/main.zip"
+
+    $bootstrapped = $false
+    if ((Test-Path (Join-Path $CacheDir 'skills')) -and (Test-Path (Join-Path $CacheDir 'scripts'))) {
+        $bootstrapped = $true
+    }
+
+    $gitCmd = Get-Command 'git' -ErrorAction SilentlyContinue
+    if ($gitCmd) {
+        try {
+            if (Test-Path (Join-Path $CacheDir '.git')) {
+                Write-Host "-> Updating cached Along repository in $CacheDir..."
+                & git -C $CacheDir fetch --all --tags --quiet
+                & git -C $CacheDir reset --hard origin/main --quiet
+                if ($LASTEXITCODE -eq 0) { $bootstrapped = $true }
+            } elseif (-not $bootstrapped) {
+                Write-Host "-> Cloning Along repository into $CacheDir..."
+                New-Item -ItemType Directory -Force -Path (Split-Path $CacheDir -Parent) | Out-Null
+                if (Test-Path $CacheDir) { Remove-Item -Recurse -Force $CacheDir -ErrorAction SilentlyContinue }
+                & git clone --depth 1 $repoUrl $CacheDir --quiet
+                if ($LASTEXITCODE -eq 0) { $bootstrapped = $true }
+            }
+        } catch {
+            Write-Host "-> [Warning] git operation failed: $_"
+        }
+    }
+
+    if (-not $bootstrapped) {
+        Write-Host "-> Fetching Along archive from GitHub ($zipUrl)..."
+        $tempZip = Join-Path ([System.IO.Path]::GetTempPath()) ("along-bootstrap-" + [System.Guid]::NewGuid().ToString('N') + ".zip")
+        $tempExtract = Join-Path ([System.IO.Path]::GetTempPath()) ("along-extract-" + [System.Guid]::NewGuid().ToString('N'))
+        try {
+            [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
+            Invoke-WebRequest -Uri $zipUrl -OutFile $tempZip -UseBasicParsing
+            Expand-Archive -Path $tempZip -DestinationPath $tempExtract -Force
+            $inner = Get-ChildItem -Directory -Path $tempExtract | Select-Object -First 1
+            if (-not $inner) { throw "Extracted archive did not contain a root directory." }
+            New-Item -ItemType Directory -Force -Path $CacheDir | Out-Null
+            Copy-Item -Path "$($inner.FullName)\*" -Destination $CacheDir -Recurse -Force
+            $bootstrapped = $true
+        } catch {
+            Write-Host "-> [Error] Archive download failed: $_"
+            if ($MyInvocation.MyCommand -and $MyInvocation.MyCommand.Path) { exit 1 } else { return }
+        } finally {
+            if (Test-Path $tempZip) { Remove-Item -Force $tempZip -ErrorAction SilentlyContinue }
+            if (Test-Path $tempExtract) { Remove-Item -Recurse -Force $tempExtract -ErrorAction SilentlyContinue }
+        }
+    }
+
+    $targetScript = Join-Path $CacheDir 'install.ps1'
+    if (-not (Test-Path $targetScript)) {
+        Write-Host "-> [Error] Bootstrapped install script not found at $targetScript"
+        if ($MyInvocation.MyCommand -and $MyInvocation.MyCommand.Path) { exit 1 } else { return }
+    }
+
+    $forwardArgs = @()
+    if ($PSBoundParameters.Count -gt 0) {
+        foreach ($kv in $PSBoundParameters.GetEnumerator()) {
+            $k = $kv.Key
+            if ($k -eq 'CacheDir') { continue }
+            $v = $kv.Value
+            if ($v -is [switch]) {
+                if ($v.IsPresent) { $forwardArgs += "-$k" }
+            } else {
+                $forwardArgs += "-$k"
+                $forwardArgs += $v
+            }
+        }
+    }
+    if ($args) { $forwardArgs += $args }
+
+    & powershell -NoProfile -ExecutionPolicy Bypass -File $targetScript @forwardArgs
+    if ($MyInvocation.MyCommand -and $MyInvocation.MyCommand.Path) {
+        exit $LASTEXITCODE
+    } else {
+        return
+    }
+}
 
 # The engines this installer delegates to. Everything that has to decide something -
 # which MCP configuration file a provider really reads, what a previous install put on
@@ -58,6 +151,65 @@ function Get-AlongTool([string]$scriptName) {
     return $toolPath
 }
 
+function Configure-UserPath([string]$binDir, [switch]$Remove) {
+    if ($NoPathUpdate) { return }
+    $defaultAlong = Join-Path $env:USERPROFILE '.along'
+    $isRealHome = ($AlongHome -eq $defaultAlong) -or ($env:ALONG_HOME -and ($AlongHome -eq $env:ALONG_HOME))
+    if (-not $isRealHome) { return }
+
+    try {
+        $userPath = [Environment]::GetEnvironmentVariable('PATH', 'User')
+        if (-not $userPath) { $userPath = '' }
+        $parts = $userPath -split ';' | Where-Object { $_ -ne '' }
+        $normalizedBin = [System.IO.Path]::GetFullPath($binDir).TrimEnd('\', '/')
+
+        $filtered = @()
+        $exists = $false
+        foreach ($p in $parts) {
+            try {
+                if ([System.IO.Path]::GetFullPath($p).TrimEnd('\', '/') -ieq $normalizedBin) {
+                    $exists = $true
+                    continue
+                }
+            } catch { }
+            $filtered += $p
+        }
+
+        if ($Remove) {
+            if ($exists) {
+                $newPath = $filtered -join ';'
+                [Environment]::SetEnvironmentVariable('PATH', $newPath, 'User')
+                Write-Host "-> Removed from User PATH: $binDir"
+            }
+            return
+        }
+
+        if (-not $exists) {
+            $newPath = (@($binDir) + $filtered) -join ';'
+            [Environment]::SetEnvironmentVariable('PATH', $newPath, 'User')
+            Write-Host "-> Added to User PATH: $binDir (restart terminal/IDE to refresh)"
+        }
+
+        # Also update current session PATH
+        $currentParts = $env:PATH -split ';'
+        $inCurrent = $false
+        foreach ($cp in $currentParts) {
+            try {
+                if ([System.IO.Path]::GetFullPath($cp).TrimEnd('\', '/') -ieq $normalizedBin) {
+                    $inCurrent = $true
+                    break
+                }
+            } catch { }
+        }
+        if (-not $inCurrent) {
+            $env:PATH = "$binDir;$env:PATH"
+        }
+    }
+    catch {
+        Write-Host "-> [Note] Could not update User PATH: $_"
+    }
+}
+
 # Passed to both engines so a run never has to guess where a provider was installed,
 # and so a test can point the whole installer at a throwaway directory.
 $HomeArgs = @(
@@ -71,6 +223,7 @@ $HomeArgs = @(
 
 if ($Uninstall) {
     Write-Host "-> Uninstalling Along: removing exactly the files the install manifest records."
+    Configure-UserPath (Join-Path $AlongHome 'bin') -Remove
     $tool = Get-AlongTool 'install_manifest.py'
     if (-not $tool) {
         Write-Host "-> [Error] python not found; cannot read the install manifest."
@@ -193,6 +346,7 @@ function Install-AlongScripts {
         Get-ChildItem -Path $alongBin -Directory -Recurse -Filter '__pycache__' |
             Remove-Item -Recurse -Force -ErrorAction SilentlyContinue
         Write-Host "-> Along tools installed -> $alongBin"
+        Configure-UserPath $alongBin
     }
 
 

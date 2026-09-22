@@ -428,6 +428,62 @@ class TestInstallerScriptsMatchThePlan(InstallerCase):
         self.assertFalse(os.path.lexists(linked))
 
 
+class TestInstallerSelfBootstrap(InstallerCase):
+    """Standalone / remote bootstrap execution when skills/ is not in the script root."""
+
+    def test_powershell_standalone_bootstrap_installs_matching_plan(self):
+        if sys.platform != "win32":
+            self.skipTest("powershell installer is only exercised on Windows")
+        home = self.make_home()
+        homes = self.homes_for(home)
+        standalone_dir = tempfile.mkdtemp(prefix="along-standalone-")
+        self.addCleanup(shutil.rmtree, standalone_dir, ignore_errors=True)
+
+        script_copy = os.path.join(standalone_dir, "install.ps1")
+        shutil.copy2(os.path.join(REPO_ROOT, "install.ps1"), script_copy)
+
+        command = [
+            self.powershell(), "-NoProfile", "-ExecutionPolicy", "Bypass",
+            "-File", script_copy,
+            "-Target", "claude",
+            "-CacheDir", self.checkout,
+        ] + self.home_arguments(home, "ps1")
+
+        result = proc.run_capture(command, cwd=standalone_dir, timeout=600)
+        self.assertTrue(result.ok, f"standalone install.ps1 failed: {result.stderr}\n{result.stdout}")
+        self.assertIn("standalone/remote installer detected", result.stdout)
+
+        plan = install.planned_files(self.checkout, homes, ["claude"])
+        expected = {install.path_key(path) for path in plan}
+        actual = self.installed_under(install.owned_roots(homes, ["claude"]))
+        self.assertEqual(sorted(expected - actual), [])
+
+    def test_bash_standalone_bootstrap_installs_matching_plan(self):
+        bash_bin = self.bash()
+        home = self.make_home()
+        homes = self.homes_for(home)
+        standalone_dir = tempfile.mkdtemp(prefix="along-standalone-")
+        self.addCleanup(shutil.rmtree, standalone_dir, ignore_errors=True)
+
+        script_copy = os.path.join(standalone_dir, "install.sh")
+        shutil.copy2(os.path.join(REPO_ROOT, "install.sh"), script_copy)
+
+        command = [
+            bash_bin, script_copy,
+            "--target=claude",
+            f"--cache-dir={self.checkout}",
+        ] + self.home_arguments(home, "sh")
+
+        result = proc.run_capture(command, cwd=standalone_dir, timeout=600)
+        self.assertTrue(result.ok, f"standalone install.sh failed: {result.stderr}\n{result.stdout}")
+        self.assertIn("standalone/remote installer detected", result.stdout)
+
+        plan = install.planned_files(self.checkout, homes, ["claude"])
+        expected = {install.path_key(path) for path in plan}
+        actual = self.installed_under(install.owned_roots(homes, ["claude"]))
+        self.assertEqual(sorted(expected - actual), [])
+
+
 class TestInstallerSourceHygiene(unittest.TestCase):
     """Two rules the installers themselves have to obey, checked in their source."""
 
