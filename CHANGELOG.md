@@ -2,6 +2,15 @@
 
 All notable changes to this project, newest first.
 
+## v3.9.5 - 2026-09-22
+
+- chore(entities): synchronize session logs, milestones, and backlog partition [feat--issues-board-backlog-partition]
+- refactor(dashboard-ui): NSwag type safety, DOMPurify XSS, and security hardening [debt--dashboard-ui-type-safety-and-security]
+- refactor(scripts): Python monolithic functions refactoring and cleanup [debt--python-monolithic-functions-and-boilerplate]
+- docs(cli): documentation traceability and CLI reference reconciliation [docs--cli-and-documentation-traceability-reconciliation]
+- feat(installer): cross-platform one-liner installer and CLI resolution [feat--oneliner-installer]
+- refactor: Python CLI error handling hardening, BOM normalization, and IO standardization (refs #python-error-handling-and-io-consistency)
+
 ## v3.9.4 - 2026-09-21
 
 - chore(milestone): update v4.0.0 progress (refs #windows-hook-command-quote-escaping)
