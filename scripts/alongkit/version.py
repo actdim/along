@@ -32,3 +32,11 @@ __version__ = CURRENT_VERSION
 def protocol_version() -> str:
     """The protocol version this toolchain implements."""
     return CURRENT_PROTOCOL_VERSION
+
+
+#: Milestone version threshold tuples for migrations and compatibility checks
+V2_0_0: tuple = (2, 0, 0)
+V2_2_9: tuple = (2, 2, 9)
+V2_2_26: tuple = (2, 2, 26)
+V3_0_0: tuple = (3, 0, 0)
+V3_1_0: tuple = (3, 1, 0)

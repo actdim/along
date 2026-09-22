@@ -43,7 +43,7 @@ from alongkit import bootstrap
 # installers and the documented skill commands invoke it.
 bootstrap.ensure_deps()
 
-from alongkit import circuit, diagnostics, entities, frontmatter, lifecycle, proc, repo, session
+from alongkit import circuit, diagnostics, entities, frontmatter, lifecycle, proc, repo, session, textio
 from alongkit.version import CURRENT_PROTOCOL_VERSION
 
 TOOL_MAPPINGS = {
@@ -110,6 +110,7 @@ Lifecycle Commands (project hooks):
   build          Execute project build (.along/scripts/build.py or auto-detected)
   test           Execute project tests (.along/scripts/test.py or auto-detected)
   dev            Launch project dev server (.along/scripts/dev.py or auto-detected)
+  debug          Execute project debug runner (.along/scripts/debug.py or auto-detected)
 
 Entity Management Commands:
   status         Instant terminal summary of repository state, active issues, and recent sessions
@@ -285,8 +286,7 @@ Describe the feature, requirements, and background context here.
 - [ ] Task requirement 1
 - [ ] Automated tests passing
 """
-        with open(target_file, "w", encoding="utf-8", newline="\n") as f:
-            f.write(content)
+        textio.write_text(target_file, content, newline="\n", atomic=True)
         print(f"-> Created issue: {target_file}")
 
         # Update ISSUES.md
@@ -338,8 +338,7 @@ Describe the feature, requirements, and background context here.
         filename = os.path.basename(found_file)
         dest_file = os.path.join(done_dir, filename)
 
-        with open(found_file, "r", encoding="utf-8") as f:
-            content = f.read()
+        content = textio.read_text(found_file)
 
         if not has_frontmatter(content):
             print(
@@ -350,6 +349,7 @@ Describe the feature, requirements, and background context here.
             sys.exit(1)
 
         if content.startswith("\ufeff"):
+            content = content.lstrip("\ufeff")
             print(
                 f"-> [Notice] Normalized a UTF-8 BOM in {filename}. "
                 "The protocol requires BOM-free UTF-8. To avoid producing one: PowerShell 7+ "
@@ -389,10 +389,9 @@ Describe the feature, requirements, and background context here.
                     adjusted_body_lines.append(line)
                     continue
                 adjusted_body_lines.append(sibling_link_re.sub(r'\1../\2', line))
-            content = block.bom + block.open_delim + block.raw + block.close_delim + "".join(adjusted_body_lines)
+            content = block.open_delim + block.raw + block.close_delim + "".join(adjusted_body_lines)
 
-        with open(dest_file, "w", encoding="utf-8", newline="\n") as f:
-            f.write(content)
+        textio.write_text(dest_file, content, newline="\n", atomic=True)
         os.remove(found_file)
         print(f"-> Moved issue to done: {dest_file}")
 
@@ -473,7 +472,7 @@ Describe the feature, requirements, and background context here.
                 i += 1
 
         fpath, new_fm = entities.update_issue_frontmatter(repo_root, issue["slug"], updates)
-        rel_path = os.path.relpath(fpath, repo_root).replace("\\", "/")
+        rel_path = repo.normalize_posix(repo.safe_relpath(fpath, repo_root))
         print(f"-> Updated issue {issue['slug']}: {rel_path}")
         for k, v in updates.items():
             if k != "updated":
@@ -493,10 +492,7 @@ Describe the feature, requirements, and background context here.
                     pass
             print("-> Synchronized affected milestone(s).")
 
-        board_content = compile_issues_board(repo_root, recent_done_limit=RECENT_DONE_LIMIT)
-        issues_board = os.path.join(repo_root, ".along", "ISSUES.md")
-        with open(issues_board, "w", encoding="utf-8", newline="\n") as f:
-            f.write(board_content)
+        entities.sync_issues_board(repo_root, recent_done_limit=RECENT_DONE_LIMIT)
         sys.exit(0)
 
     elif subcmd in ("show", "get"):
@@ -580,7 +576,7 @@ def handle_milestone_command(repo_root: str, args: List[str]):
                     "status": m["status"],
                     "progress_pct": fm.get("progress_pct", 0),
                     "target_issues": fm.get("target_issues", []),
-                    "file_path": os.path.relpath(m["file_path"], repo_root).replace("\\", "/"),
+                    "file_path": repo.normalize_posix(repo.safe_relpath(m["file_path"], repo_root)),
                 })
             print(json.dumps(out, indent=2))
         else:
@@ -619,7 +615,7 @@ def handle_milestone_command(repo_root: str, args: List[str]):
                 "status": m["status"],
                 "progress_pct": fm.get("progress_pct", 0),
                 "due_date": fm.get("due_date"),
-                "file_path": os.path.relpath(m["file_path"], repo_root).replace("\\", "/"),
+                "file_path": repo.normalize_posix(repo.safe_relpath(m["file_path"], repo_root)),
                 "target_issues": [
                     {
                         "slug": iss["slug"],
@@ -666,13 +662,10 @@ def handle_start_command(repo_root: str, args: List[str]):
 
     updates = {"status": "in-progress", "updated": today}
     fpath, new_fm = entities.update_issue_frontmatter(repo_root, issue["slug"], updates)
-    rel_path = os.path.relpath(fpath, repo_root).replace("\\", "/")
+    rel_path = repo.normalize_posix(repo.safe_relpath(fpath, repo_root))
     print(f"-> Marked issue in-progress: {rel_path}")
 
-    board_content = compile_issues_board(repo_root, recent_done_limit=RECENT_DONE_LIMIT)
-    issues_board = os.path.join(repo_root, ".along", "ISSUES.md")
-    with open(issues_board, "w", encoding="utf-8", newline="\n") as f:
-        f.write(board_content)
+    entities.sync_issues_board(repo_root, recent_done_limit=RECENT_DONE_LIMIT)
 
     title = new_fm.get("title", issue["slug"].replace("-", " ").capitalize())
     st = session.init_session(repo_root, issue["slug"], title=title)
@@ -779,20 +772,17 @@ spikes_conducted: []
 ## Code Review & Blast Radius
 - Automated tests verified and passing.
 """
-        with open(target_file, "w", encoding="utf-8", newline="\n") as f:
-            f.write(content)
+        textio.write_text(target_file, content, newline="\n", atomic=True)
         print(f"-> Created session log: {target_file}")
 
         # Update HISTORY.md
         history_file = os.path.join(repo_root, ".along", "HISTORY.md")
         if os.path.exists(history_file):
-            with open(history_file, "r", encoding="utf-8") as f:
-                h_content = f.read()
+            h_content = textio.read_text(history_file)
             entry = f"{today} - {slug} - {agent} - {summary} - [.along/SESSIONS/{year}/{today}--{slug}.md](./SESSIONS/{year}/{today}--{slug}.md)"
             if entry not in h_content:
                 h_content = h_content.strip() + f"\n{entry}\n"
-                with open(history_file, "w", encoding="utf-8", newline="\n") as f:
-                    f.write(h_content)
+                textio.write_text(history_file, h_content, newline="\n")
         sys.exit(0)
 
     elif subcmd == "wrap":
@@ -856,9 +846,13 @@ def handle_decision_command(repo_root: str, args: List[str]):
         entities.sync_constraints(repo_root)
         try:
             import along_kb_sync
-            along_kb_sync.sync_decisions_to_docs(repo_root)
-        except (ImportError, AttributeError):
-            pass
+        except ImportError:
+            along_kb_sync = None
+        if along_kb_sync is not None and hasattr(along_kb_sync, "sync_decisions_to_docs"):
+            try:
+                along_kb_sync.sync_decisions_to_docs(repo_root)
+            except (OSError, ValueError, AttributeError, RuntimeError) as exc:
+                print(f"[Warning] Failed to sync decisions to docs: {exc}", file=sys.stderr)
         print("-> Recompiled .along/DECISIONS.md projection board.")
         print("-> Recompiled .along/CONSTRAINTS.md projection.")
         sys.exit(0)
@@ -905,7 +899,7 @@ def handle_decision_command(repo_root: str, args: List[str]):
             day=today,
             status="accepted",
         )
-        rel_created = os.path.relpath(created_path, repo_root).replace("\\", "/")
+        rel_created = repo.normalize_posix(repo.safe_relpath(created_path, repo_root))
         print(f"-> Created modular ADR file: {rel_created}")
 
         # Automatically recompile projections
@@ -913,9 +907,13 @@ def handle_decision_command(repo_root: str, args: List[str]):
         entities.sync_constraints(repo_root)
         try:
             import along_kb_sync
-            along_kb_sync.sync_decisions_to_docs(repo_root)
-        except (ImportError, AttributeError):
-            pass
+        except ImportError:
+            along_kb_sync = None
+        if along_kb_sync is not None and hasattr(along_kb_sync, "sync_decisions_to_docs"):
+            try:
+                along_kb_sync.sync_decisions_to_docs(repo_root)
+            except (OSError, ValueError, AttributeError, RuntimeError) as exc:
+                print(f"[Warning] Failed to sync decisions to docs: {exc}", file=sys.stderr)
         print("-> Recompiled .along/DECISIONS.md projection board.")
         print("-> Recompiled .along/CONSTRAINTS.md projection.")
         sys.exit(0)
@@ -955,10 +953,10 @@ def handle_status_command(repo_root: str, args: List[str]):
 
     if latest_session:
         print(f"\nLatest Session: {os.path.basename(latest_session)}")
-        with open(latest_session, "r", encoding="utf-8", errors="ignore") as f:
-            lines = [l.strip() for l in f.readlines() if l.strip().startswith("summary:")]
-            if lines:
-                print(f"  {lines[0]}")
+        session_text = textio.read_text(latest_session, strict=False)
+        lines = [l.strip() for l in session_text.splitlines() if l.strip().startswith("summary:")]
+        if lines:
+            print(f"  {lines[0]}")
     else:
         print("\nLatest Session: None recorded yet")
 
@@ -1012,8 +1010,7 @@ def handle_doctor_command(repo_root: str, args: List[str]):
         print("[WARN] Missing .gitattributes (recommended for merge=union on HISTORY.md/DECISIONS.md).")
         warnings += 1
     else:
-        with open(gitattributes_file, "r", encoding="utf-8", errors="ignore") as f:
-            ga_content = f.read()
+        ga_content = textio.read_text(gitattributes_file, strict=False)
         if "merge=union" in ga_content:
             print("[OK] .gitattributes configured with merge=union.")
         else:
@@ -1027,8 +1024,7 @@ def handle_doctor_command(repo_root: str, args: List[str]):
         adr_count = len([f for f in os.listdir(dec_dir) if f.endswith(".md")])
         print(f"[OK] .along/DECISIONS/ modular ADR directory exists ({adr_count} records).")
     elif os.path.exists(dec_file):
-        with open(dec_file, "r", encoding="utf-8", errors="ignore") as f:
-            dec_content = f.read()
+        dec_content = textio.read_text(dec_file, strict=False)
         if "## ADR-" in dec_content:
             print("[OK] .along/DECISIONS.md uses decentralized ADR-YYYY-MM-DD--<slug> format.")
         else:
@@ -1048,6 +1044,19 @@ def handle_doctor_command(repo_root: str, args: List[str]):
     else:
         print("[FAIL] Missing AGENTS.md at repository root.")
         errors += 1
+
+    # Check along CLI availability on PATH
+    along_cmd = shutil.which("along") or (shutil.which("along.cmd") if sys.platform == "win32" else None)
+    if along_cmd:
+        print(f"[OK] 'along' CLI executable found on PATH: {along_cmd}")
+    else:
+        user_along_bin = os.path.join(os.path.expanduser("~"), ".along", "bin")
+        print("[WARN] 'along' CLI is not found on PATH.")
+        if sys.platform == "win32":
+            print(f"       To fix: re-run install.ps1, or add '{user_along_bin}' to your User PATH.")
+        else:
+            print(f"       To fix: add 'export PATH=\"{user_along_bin}:$PATH\"' to your shell profile (~/.bashrc or ~/.zshrc).")
+        warnings += 1
 
     # Check code-review-graph MCP server
     try:
@@ -1114,7 +1123,8 @@ def handle_scratch_command(repo_root: str, args: List[str]):
                 try:
                     total_steps = int(args[i + 1])
                 except ValueError:
-                    pass
+                    print(f"[Error] --steps expects an integer, got '{args[i + 1]}'", file=sys.stderr)
+                    sys.exit(1)
                 i += 2
             elif args[i] in ("--restart", "--force", "-f"):
                 force_restart = True
@@ -1175,7 +1185,8 @@ def handle_scratch_command(repo_root: str, args: List[str]):
                 try:
                     current_step = int(args[i + 1])
                 except ValueError:
-                    pass
+                    print(f"[Error] --step expects an integer, got '{args[i + 1]}'", file=sys.stderr)
+                    sys.exit(1)
                 i += 2
             elif args[i] in ("--step-status",) and i + 1 < len(args):
                 step_status = args[i + 1].lower()
@@ -1193,7 +1204,8 @@ def handle_scratch_command(repo_root: str, args: List[str]):
                 try:
                     plan_rev = int(args[i + 1])
                 except ValueError:
-                    pass
+                    print(f"[Error] --plan-rev expects an integer, got '{args[i + 1]}'", file=sys.stderr)
+                    sys.exit(1)
                 i += 2
             elif args[i] in ("--inc-retry", "--retry"):
                 inc_retry = True
@@ -1446,7 +1458,8 @@ def handle_circuit_command(repo_root: str, args: List[str]):
                 try:
                     cls_num = int(args[idx + 1])
                 except ValueError:
-                    pass
+                    print(f"[Error] --class expects an integer (1-5), got '{args[idx + 1]}'", file=sys.stderr)
+                    sys.exit(1)
                 idx += 2
             elif arg in ("--reason", "-r", "--sig") and idx + 1 < len(args):
                 reason = args[idx + 1]
@@ -1631,8 +1644,7 @@ def main():
         script_file = get_lifecycle_script_path(repo_root, cmd)
 
         if os.path.exists(script_file):
-            with open(script_file, "r", encoding="utf-8", errors="ignore") as f:
-                header = f.read(500)
+            header = textio.read_text(script_file, strict=False)[:500]
             if "# Status: unconfigured" in header:
                 print(f"[Notice] {script_file} is unconfigured. Please customize it for this repository.")
 

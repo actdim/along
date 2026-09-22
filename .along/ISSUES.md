@@ -1,12 +1,10 @@
 # Active Issues
 
 ## Active
-- [ ] `(docs)` [cli-and-documentation-traceability-reconciliation](ISSUES/docs--cli-and-documentation-traceability-reconciliation.md)
-- [ ] `(feat)` [issues-board-backlog-partition](ISSUES/feat--issues-board-backlog-partition.md)
+<!-- No active issues -->
 
 ## Backlog
 - [ ] `(debt)` [dashboard-ui-type-safety-and-security](ISSUES/debt--dashboard-ui-type-safety-and-security.md)
-- [ ] `(debt)` [python-error-handling-and-io-consistency](ISSUES/debt--python-error-handling-and-io-consistency.md)
 - [ ] `(debt)` [python-monolithic-functions-and-boilerplate](ISSUES/debt--python-monolithic-functions-and-boilerplate.md)
 - [ ] `(docs)` [entity-lifecycle-cli-documentation](ISSUES/docs--entity-lifecycle-cli-documentation.md)
 - [ ] `(feat)` [automated-ui-screenshots-and-visual-verification](ISSUES/feat--automated-ui-screenshots-and-visual-verification.md)
@@ -25,8 +23,8 @@
 
 ## Done (recent)
 - [x] `(feat)` [updater-explicit-global-sync](ISSUES/done/feat--updater-explicit-global-sync.md)
-- [x] `(bug)` [windows-hook-command-quote-escaping](ISSUES/done/bug--windows-hook-command-quote-escaping.md)
-- [x] `(bug)` [update-hooks-and-monorepo-sync-hardening](ISSUES/done/bug--update-hooks-and-monorepo-sync-hardening.md)
-- [x] `(bug)` [update-engine-deadlock-and-cli-hardening](ISSUES/done/bug--update-engine-deadlock-and-cli-hardening.md)
-- [x] `(bug)` [preserve-runtime-dirs-and-doc-version-sync](ISSUES/done/bug--preserve-runtime-dirs-and-doc-version-sync.md)
-<!-- 109 older completed issue(s) archived in .along/ISSUES/done/ -->
+- [x] `(feat)` [oneliner-installer](ISSUES/done/feat--oneliner-installer.md)
+- [x] `(feat)` [issues-board-backlog-partition](ISSUES/done/feat--issues-board-backlog-partition.md)
+- [x] `(docs)` [cli-and-documentation-traceability-reconciliation](ISSUES/done/docs--cli-and-documentation-traceability-reconciliation.md)
+- [x] `(debt)` [python-error-handling-and-io-consistency](ISSUES/done/debt--python-error-handling-and-io-consistency.md)
+<!-- 114 older completed issue(s) archived in .along/ISSUES/done/ -->
