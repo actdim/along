@@ -120,6 +120,9 @@ Along provides **19 singular automation skills** structured across 6 core lifecy
 | Skill / Command | Purpose |
 | :--- | :--- |
 | **`along-team`** (`/along-team`) | Sequential multi-agent autonomous development engine and living plan. |
+| **`along start`** | Atomically claim issue, initialize session blackboard, and provision worktree. |
+| **`along issue`** | Create, update (fuzzy milestones, priority), show, and close issues. |
+| **`along milestone`** | Synchronize bidirectional target issues, calculate progress %, and show status. |
 | **`along-issue-sync`** (`/along-issue-sync`) | Reconcile active issue board projection (`ISSUES.md`) with atomic issue files. |
 | **`along-decision-sync`** (`/along-decision-sync`) | Record ADRs into append-only `.along/DECISIONS.md` and compile active `.along/CONSTRAINTS.md`. |
 

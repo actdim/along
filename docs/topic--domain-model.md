@@ -109,12 +109,12 @@ Detailed problem statement, constraints, and verifiable acceptance criteria.
 
 #### Lifecycle States:
 - **`open`**: Backlog item, not currently being executed.
-- **`in-progress`**: Actively being developed by an agent or human. Non-trivial code edits require an active issue.
+- **`in-progress`**: Actively being developed by an agent or human. Initiated atomically via `along start <slug> [--worktree]`. Non-trivial code edits require an active issue.
 - **`blocked`**: Waiting on an external dependency (`blocked_by`), API key, or active risk.
-- **`done`**: Delivered terminal state. Fully implemented, verified by tests and code review. Mandatory field `completed: YYYY-MM-DD` is set, and the file is moved to `.along/ISSUES/done/<type>--<slug>.md`. Only `done` issues count towards milestone and sprint completion metrics.
-- **`superseded`**: Non-delivered terminal state. Replaced by another issue or architectural decision. Mandatory field `completed: YYYY-MM-DD` is set, `superseded_by: <target-slug>` references the replacement entity, and the file is moved to `.along/ISSUES/done/`.
-- **`cancelled`**: Non-delivered terminal state. Abandoned or intentionally dropped requirements. Mandatory field `completed: YYYY-MM-DD` is set, and the file is moved to `.along/ISSUES/done/`.
-- **`duplicate`**: Non-delivered terminal state. Redundant issue covered by another entity. Mandatory field `completed: YYYY-MM-DD` is set, `duplicate_of: <primary-slug>` references the primary entity, and the file is moved to `.along/ISSUES/done/`.
+- **`done`**: Delivered terminal state. Fully implemented, verified by tests and code review. Closed via `along issue done <slug>` or `/along-wrap`. Mandatory field `completed: YYYY-MM-DD` is set, and the file is moved to `.along/ISSUES/done/<type>--<slug>.md`. Only `done` issues count towards milestone and sprint completion metrics.
+- **`superseded`**: Non-delivered terminal state. Replaced by another issue or architectural decision. Closed via `along issue done <slug> --status superseded --superseded-by <slug>`. Mandatory field `completed: YYYY-MM-DD` is set, `superseded_by: <target-slug>` references the replacement entity, and the file is moved to `.along/ISSUES/done/`.
+- **`cancelled`**: Non-delivered terminal state. Abandoned or intentionally dropped requirements. Closed via `along issue done <slug> --status cancelled`. Mandatory field `completed: YYYY-MM-DD` is set, and the file is moved to `.along/ISSUES/done/`.
+- **`duplicate`**: Non-delivered terminal state. Redundant issue covered by another entity. Closed via `along issue done <slug> --status duplicate --duplicate-of <slug>`. Mandatory field `completed: YYYY-MM-DD` is set, `duplicate_of: <primary-slug>` references the primary entity, and the file is moved to `.along/ISSUES/done/`.
 
 ---
 
@@ -172,6 +172,27 @@ target_issues:
 progress_pct: 33
 ---
 ```
+
+#### Milestone Synchronization & Progress Engine
+Milestones and issues maintain a **bidirectional relationship** orchestrated by `along milestone sync` and `along issue update`:
+- **Bidirectional Linkage**:
+  - Issues declare their assigned milestone via frontmatter `milestone: <slug>`.
+  - Milestones declare their target issues via frontmatter `target_issues: [<type>--<slug>, ...]`.
+- **Dynamic Discovery**:
+  Running `along milestone sync [<slug>]` scans all issues across `.along/ISSUES/` and `.along/ISSUES/done/`. Any issue declaring `milestone: <slug>` is dynamically aggregated into `target_issues` (sorted alphabetically by canonical key).
+- **Progress Calculation**:
+  Progress percentage is automatically computed based on terminal issue states:
+  $$\text{progress\_pct} = \operatorname{round}\left(\frac{\text{done\_count}}{\text{total\_target\_issues}} \times 100\right)$$
+  Where `done_count` includes all issues in `.along/ISSUES/done/` or having a terminal status (`done`, `superseded`, `cancelled`, `duplicate`). If `total_target_issues` is 0, `progress_pct` evaluates to 100 if the milestone is already completed, else 0.
+- **Automated Status State Machine**:
+  - `total > 0` and `done_count == total`: Milestone status transitions to `completed`.
+  - `total > 0` and (`in_progress_count > 0` or `done_count > 0`) with `done_count < total`: Milestone status transitions to `in-progress`.
+  - `total > 0` and `done_count == 0` and `in_progress_count == 0`: Milestone status transitions to `open`.
+- **Fuzzy Milestone Resolution**:
+  Commands accepting milestone identifiers (`along milestone show`, `along issue update --milestone`) support 3 levels of query matching:
+  1. *Exact Match*: Exact slug or filename stem (e.g. `v4.0.0-runtime-gates-and-worktree-isolation`).
+  2. *Version Prefix Match*: Version query with or without leading `v` (e.g. `4.0`, `v4.0`, `4.0.0` resolve to `v4.0.0-runtime-gates-and-worktree-isolation`).
+  3. *Substring Match*: Unambiguous substring in slug or title (e.g. `runtime-gates`).
 
 ---
 

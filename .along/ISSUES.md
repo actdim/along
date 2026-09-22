@@ -4,7 +4,6 @@
 <!-- No active issues -->
 
 ## Backlog
-- [ ] `(docs)` [entity-lifecycle-cli-documentation](ISSUES/docs--entity-lifecycle-cli-documentation.md)
 - [ ] `(feat)` [automated-ui-screenshots-and-visual-verification](ISSUES/feat--automated-ui-screenshots-and-visual-verification.md)
 - [ ] `(feat)` [code-review-graph-user-skills](ISSUES/feat--code-review-graph-user-skills.md)
 - [ ] `(feat)` [cursor-agent-and-rules-integration](ISSUES/feat--cursor-agent-and-rules-integration.md)
@@ -22,7 +21,7 @@
 ## Done (recent)
 - [x] `(feat)` [dashboard-architecture-graph-and-pages-publish](ISSUES/done/feat--dashboard-architecture-graph-and-pages-publish.md)
 - [x] `(docs)` [reconcile-kb-drift-and-provenance](ISSUES/done/docs--reconcile-kb-drift-and-provenance.md)
+- [x] `(docs)` [entity-lifecycle-cli-documentation](ISSUES/done/docs--entity-lifecycle-cli-documentation.md)
 - [x] `(debt)` [python-monolithic-functions-and-boilerplate](ISSUES/done/debt--python-monolithic-functions-and-boilerplate.md)
 - [x] `(debt)` [dashboard-ui-type-safety-and-security](ISSUES/done/debt--dashboard-ui-type-safety-and-security.md)
-- [x] `(feat)` [updater-explicit-global-sync](ISSUES/done/feat--updater-explicit-global-sync.md)
-<!-- 118 older completed issue(s) archived in .along/ISSUES/done/ -->
+<!-- 119 older completed issue(s) archived in .along/ISSUES/done/ -->
