@@ -4,13 +4,13 @@ slug: llm-wiki-architecture
 title: LLM-Wiki Knowledge Base Architecture & Paradigm
 type: topic
 created: 2026-08-30
-updated: 2026-09-19
+updated: 2026-09-22
 tags: [llm-wiki, architecture, knowledge-base, token-efficiency, indexing, methodology, search, karpathy]
 sources:
   - path: skills/along-kb-sync/SKILL.md
     hash: "e43f8e63715f943e940edd5abf260b6ea45bf69f784213bac3b1bd7327f75527"
   - path: scripts/along_kb_sync.py
-    hash: "c559b08cef6808605bdfcc0e05b0e25f75d8bfbeca0d073407a524e03da1ba4e"
+    hash: "9dee3d79a0bce2f7948a0b8eb2b09f2265e6812d865bdd9f4bd51e1e82f50c4e"
 ---
 
 # LLM-Wiki Knowledge Base Architecture & Paradigm

@@ -11,7 +11,7 @@ tags: [adr, architecture, decisions, index]
 This directory contains the project's Architectural Decision Records.
 Decisions are authored and maintained in `.along/DECISIONS/` and published here as first-class documentation.
 
-## Active Decisions (36)
+## Active Decisions (37)
 
 - **[code-graph-mcp-and-hybrid-kb-search](./ADR-2026-08-26--code-graph-mcp-and-hybrid-kb-search.md)** - Code Graph & Hybrid Knowledge Base Search MCP Integration
 - **[protocol-v120-knowledge-base-architecture](./ADR-2026-08-26--protocol-v120-knowledge-base-architecture.md)** - Protocol v1.2.0 & Knowledge Base (KB) Architecture Standard
@@ -49,6 +49,7 @@ Decisions are authored and maintained in `.along/DECISIONS/` and published here 
 - **[version-ssot-consolidation-and-dynamic-packaging](./ADR-2026-09-09--version-ssot-consolidation-and-dynamic-packaging.md)** - Single Source of Truth Versioning, PEP 621 Dynamic Hatchling Packaging, and Skill Manifest Decoupling
 - **[declarative-gate-engine-and-traceability](./ADR-2026-09-13--declarative-gate-engine-and-traceability.md)** - Declarative Gate Engine and Protocol Traceability Matrix
 - **[runtime-worktree-isolation-and-readiness](./ADR-2026-09-13--runtime-worktree-isolation-and-readiness.md)** - Runtime-Native Git Worktree Workspace Isolation and Environment Readiness
+- **[oneliner-installer-bootstrap-over-binary-dist](./ADR-2026-09-21--oneliner-installer-bootstrap-over-binary-dist.md)** - One-Liner Self-Bootstrapping Installer and Update Harmonization Over Binary Distribution
 
 ## Superseded & Retired Decisions (2)
 

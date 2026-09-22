@@ -8,9 +8,9 @@ updated: 2026-09-19
 tags: [architecture, boundaries, multi-agent, blackboard, concurrency, mcp, flow]
 sources:
   - path: README.md
-    hash: "f369adb11567ecc86ca19e3184ccd86f8420dd1f6c8b66ca307a5bbb66708f6a"
+    hash: "9df3eb9eb487a28d4d01a1b371dc637994253dec3f748c7af028eaa21d1521ea"
   - path: dashboard/app.py
-    hash: "bb28866ab01d4c9e10d23d98b5c1bf7591931ff4cc7f1fedc21bb75ebbc38f3b"
+    hash: "eba5ee090ca45c803bafc1f41ff0c7ac4b03aac5ef0da0d16457b62269784fb6"
   - path: skills/along-dash/SKILL.md
     hash: "44b1f9dfd4da3313fd2e3f12beb6057079a9244968638ab43a241d7b55d985d9"
 ---

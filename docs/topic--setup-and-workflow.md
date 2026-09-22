@@ -8,9 +8,9 @@ updated: 2026-09-19
 tags: [setup-workflow, installation, lifecycle, runners, developer-workflow, testing]
 sources:
   - path: README.md
-    hash: "f369adb11567ecc86ca19e3184ccd86f8420dd1f6c8b66ca307a5bbb66708f6a"
+    hash: "9df3eb9eb487a28d4d01a1b371dc637994253dec3f748c7af028eaa21d1521ea"
   - path: AGENTS.md
-    hash: "6e5c91dbad6fd9f847fb8c13723e1eee30d76dcf180c1dca352af2699e880fdf"
+    hash: "b41b72c3035258d6ba845797c50452aa78044631e7ed179be4c92c21666a6d69"
 ---
 
 # Setup & Developer Workflow
@@ -23,8 +23,27 @@ Complete guide for installing Along, configuring repository lifecycle runners, a
 
 Along installs globally and configures provider-agnostic agent discoverability across Claude Code, OpenAI Codex, OpenCode, and Google Antigravity.
 
-### Windows Installation
-Run PowerShell as Administrator or with standard permissions:
+### One-Liner Installation (Recommended)
+
+Install Along across all supported agent runtimes without cloning the repository manually:
+
+**Windows (PowerShell)**:
+```powershell
+powershell -NoProfile -ExecutionPolicy Bypass -Command "irm https://raw.githubusercontent.com/actdim/along/main/install.ps1 | iex"
+```
+
+**Linux / macOS (Bash)**:
+```bash
+curl -fsSL https://raw.githubusercontent.com/actdim/along/main/install.sh | bash
+```
+
+The one-liner detects standalone/remote execution, bootstraps the repository into `~/.cache/actdim-along/repo` (using shallow `git clone` or downloading the GitHub archive if `git` is absent), and executes the installer with manifest tracking.
+
+### Manual / Local Checkout Installation
+
+When working from a local clone of the repository:
+
+**Windows**:
 ```powershell
 # Install for all supported agent runtimes (Claude, Codex, Antigravity, OpenCode)
 powershell -NoProfile -ExecutionPolicy Bypass -File install.ps1 -Target all
@@ -33,7 +52,7 @@ powershell -NoProfile -ExecutionPolicy Bypass -File install.ps1 -Target all
 install.bat -Target all
 ```
 
-### Linux / macOS Installation
+**Linux / macOS**:
 ```bash
 # Make installer executable and run
 chmod +x install.sh

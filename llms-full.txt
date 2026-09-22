@@ -73,16 +73,23 @@ Install Along across all supported AI providers with a single command:
 
 ### Windows (PowerShell)
 ```powershell
-git clone https://github.com/actdim/along.git
-cd along
-powershell -NoProfile -ExecutionPolicy Bypass -File install.ps1 -Target all
+powershell -NoProfile -ExecutionPolicy Bypass -Command "irm https://raw.githubusercontent.com/actdim/along/main/install.ps1 | iex"
 ```
 
 ### Linux / macOS (Bash)
 ```bash
+curl -fsSL https://raw.githubusercontent.com/actdim/along/main/install.sh | bash
+```
+
+The one-liner installer automatically bootstraps the repository into `~/.cache/actdim-along/repo` (via shallow `git clone` or archive fallback) and configures skills across Claude Code, OpenAI Codex, Google Antigravity, and OpenCode.
+
+#### Manual / Local Checkout Installation
+If you prefer to clone the repository manually or are developing Along:
+```powershell
 git clone https://github.com/actdim/along.git
 cd along
-bash install.sh --target=all
+powershell -NoProfile -ExecutionPolicy Bypass -File install.ps1 -Target all # Windows
+bash install.sh --target=all                                               # Linux / macOS
 ```
 
 An install records what it wrote in `~/.along/install-manifest.json`: it never deletes a
@@ -108,7 +115,7 @@ The repository's complete technical specification is maintained as a living LLM-
 
 ## Automation Skills Reference (Grouped by Workflow Phase)
 
-Along provides **18 singular automation skills** structured across 6 core lifecycle phases:
+Along provides **19 singular automation skills** structured across 6 core lifecycle phases:
 
 ### 1. Bootstrap & Repository Protocol Management
 | Skill / Command | Purpose |
@@ -756,12 +763,6 @@ flowchart TD
 ---
 
 ## Document: docs/topic--cli-reference.md (Along CLI Command Reference)
-
----
-title: Along CLI Command Reference
-type: topic
-tags: [cli, commands, router, lifecycle, tools, reference]
----
 
 # Along CLI Command Reference
 
@@ -1543,7 +1544,7 @@ Atomic units of engineering work. Along categorizes issues into **5 distinct typ
 ```yaml
 ---
 protocol: along
-protocol_version: "2.6.0"
+protocol_version: "3.9.4"
 slug: jwt-token-refresh
 type: feat
 status: in-progress
@@ -1623,7 +1624,7 @@ Group multiple issues into structured release targets, sprints, or major project
 ```yaml
 ---
 protocol: along
-protocol_version: "2.6.0"
+protocol_version: "3.9.4"
 slug: v2.3.0-security
 title: Security & Authentication Hardening
 status: in-progress
@@ -1646,7 +1647,7 @@ Track external dependencies, rate limits, security considerations, and potential
 ```yaml
 ---
 protocol: along
-protocol_version: "2.6.0"
+protocol_version: "3.9.4"
 slug: token-revocation-latency
 title: Redis Token Blacklist Synchronization Latency
 severity: high
@@ -1667,7 +1668,7 @@ Timeboxed research experiments, benchmark comparisons, and library evaluations c
 ```yaml
 ---
 protocol: along
-protocol_version: "2.6.0"
+protocol_version: "3.9.4"
 slug: duckdb-vs-sqlite-benchmarks
 title: Local Vector Indexing: DuckDB vs SQLite FTS5
 status: concluded
@@ -1687,7 +1688,7 @@ Reusable verification rubrics for pre-commit checks, stage completions, releases
 ```yaml
 ---
 protocol: along
-protocol_version: "2.6.0"
+protocol_version: "3.9.4"
 slug: stage-completion
 title: Mandatory Stage Completion Verification Checklist
 category: stage-completion
@@ -2412,8 +2413,27 @@ Complete guide for installing Along, configuring repository lifecycle runners, a
 
 Along installs globally and configures provider-agnostic agent discoverability across Claude Code, OpenAI Codex, OpenCode, and Google Antigravity.
 
-### Windows Installation
-Run PowerShell as Administrator or with standard permissions:
+### One-Liner Installation (Recommended)
+
+Install Along across all supported agent runtimes without cloning the repository manually:
+
+**Windows (PowerShell)**:
+```powershell
+powershell -NoProfile -ExecutionPolicy Bypass -Command "irm https://raw.githubusercontent.com/actdim/along/main/install.ps1 | iex"
+```
+
+**Linux / macOS (Bash)**:
+```bash
+curl -fsSL https://raw.githubusercontent.com/actdim/along/main/install.sh | bash
+```
+
+The one-liner detects standalone/remote execution, bootstraps the repository into `~/.cache/actdim-along/repo` (using shallow `git clone` or downloading the GitHub archive if `git` is absent), and executes the installer with manifest tracking.
+
+### Manual / Local Checkout Installation
+
+When working from a local clone of the repository:
+
+**Windows**:
 ```powershell
 # Install for all supported agent runtimes (Claude, Codex, Antigravity, OpenCode)
 powershell -NoProfile -ExecutionPolicy Bypass -File install.ps1 -Target all
@@ -2422,7 +2442,7 @@ powershell -NoProfile -ExecutionPolicy Bypass -File install.ps1 -Target all
 install.bat -Target all
 ```
 
-### Linux / macOS Installation
+**Linux / macOS**:
 ```bash
 # Make installer executable and run
 chmod +x install.sh

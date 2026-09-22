@@ -8,7 +8,7 @@ updated: 2026-09-19
 tags: [domain-model, entities, schemas, dag, metadata, issues, milestones, risks, spikes, checklists, sessions]
 sources:
   - path: AGENTS.md
-    hash: "6e5c91dbad6fd9f847fb8c13723e1eee30d76dcf180c1dca352af2699e880fdf"
+    hash: "b41b72c3035258d6ba845797c50452aa78044631e7ed179be4c92c21666a6d69"
   - path: dashboard/schemas/entities.py
     hash: "14cd9c6263d6909ab8b678d1c70f98bda3e70f270cecf970d01d5377324b511a"
 ---
@@ -79,7 +79,7 @@ Atomic units of engineering work. Along categorizes issues into **5 distinct typ
 ```yaml
 ---
 protocol: along
-protocol_version: "2.6.0"
+protocol_version: "3.9.4"
 slug: jwt-token-refresh
 type: feat
 status: in-progress
@@ -159,7 +159,7 @@ Group multiple issues into structured release targets, sprints, or major project
 ```yaml
 ---
 protocol: along
-protocol_version: "2.6.0"
+protocol_version: "3.9.4"
 slug: v2.3.0-security
 title: Security & Authentication Hardening
 status: in-progress
@@ -182,7 +182,7 @@ Track external dependencies, rate limits, security considerations, and potential
 ```yaml
 ---
 protocol: along
-protocol_version: "2.6.0"
+protocol_version: "3.9.4"
 slug: token-revocation-latency
 title: Redis Token Blacklist Synchronization Latency
 severity: high
@@ -203,7 +203,7 @@ Timeboxed research experiments, benchmark comparisons, and library evaluations c
 ```yaml
 ---
 protocol: along
-protocol_version: "2.6.0"
+protocol_version: "3.9.4"
 slug: duckdb-vs-sqlite-benchmarks
 title: Local Vector Indexing: DuckDB vs SQLite FTS5
 status: concluded
@@ -223,7 +223,7 @@ Reusable verification rubrics for pre-commit checks, stage completions, releases
 ```yaml
 ---
 protocol: along
-protocol_version: "2.6.0"
+protocol_version: "3.9.4"
 slug: stage-completion
 title: Mandatory Stage Completion Verification Checklist
 category: stage-completion
