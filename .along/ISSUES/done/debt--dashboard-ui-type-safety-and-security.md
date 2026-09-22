@@ -1,12 +1,13 @@
 ---
 protocol: along
-protocol_version: "3.6.0"
+protocol_version: "3.9.4"
 slug: dashboard-ui-type-safety-and-security
 type: debt
-status: open
+status: done
 priority: high
 created: 2026-09-16
-updated: 2026-09-16
+updated: 2026-09-22
+completed: 2026-09-22
 agent: antigravity
 tags: [frontend, nswag, typescript, security, xss, mobx, dynstruct]
 milestone: v4.0.0-runtime-gates-and-worktree-isolation
@@ -42,9 +43,9 @@ The frontend dashboard (`packages/dashboard-ui`) deviates from architectural con
 - Establish frontend test runner and typecheck script.
 
 ## Acceptance Criteria
-- [ ] Zero `any` types generated in `src/api/client.ts`.
-- [ ] No `as unknown as` assertions in `App.tsx` or service layer.
-- [ ] Markdown HTML passed through sanitization before DOM injection.
-- [ ] Header displays dynamic repository protocol version.
-- [ ] Keydown event listener safely removed on teardown.
-- [ ] Frontend build succeeds cleanly: `npm run build`.
+- [x] Zero `any` types generated in `src/api/client.ts`.
+- [x] No `as unknown as` assertions in `App.tsx` or service layer.
+- [x] Markdown HTML passed through sanitization before DOM injection.
+- [x] Header displays dynamic repository protocol version.
+- [x] Keydown event listener safely removed on teardown.
+- [x] Frontend build succeeds cleanly: `npm run build`.

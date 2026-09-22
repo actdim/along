@@ -13,8 +13,13 @@ import { FullDashboardData } from '../types';
 export class DashboardApiService {
   private static instance: DashboardApiService | null = null;
   private sseSource: EventSource | null = null;
+  private client: DashboardApiClient;
 
-  static start() {
+  constructor() {
+    this.client = new DashboardApiClient();
+  }
+
+  static start(): DashboardApiService {
     if (!this.instance) {
       this.instance = new DashboardApiService();
       this.instance.registerAdapter();
@@ -23,9 +28,19 @@ export class DashboardApiService {
     return this.instance;
   }
 
+  static stop(): void {
+    if (this.instance) {
+      if (this.instance.sseSource) {
+        this.instance.sseSource.close();
+        this.instance.sseSource = null;
+      }
+      this.instance = null;
+    }
+  }
+
   private registerAdapter() {
     const services: Record<DashboardChannelPrefix, any> = {
-      'API.DASHBOARD.': new DashboardApiClient(),
+      'API.DASHBOARD.': this.client,
     };
 
     const adapters = Object.entries(services).map(
@@ -51,16 +66,13 @@ export class DashboardApiService {
       };
 
       this.sseSource.addEventListener('reload', async () => {
-        console.log('[SSE] File change detected -> reloading dashboard data via MsgMesh...');
+        console.log('[SSE] File change detected -> reloading dashboard data via client...');
         try {
-          const res = await fetch('/api/data');
-          if (res.ok) {
-            const data: FullDashboardData = await res.json();
-            dashboardBus.send({
-              channel: 'APP.DATA.UPDATED',
-              payload: data,
-            });
-          }
+          const data: FullDashboardData = await this.client.getFullData();
+          dashboardBus.send({
+            channel: 'APP.DATA.UPDATED',
+            payload: data,
+          });
         } catch (err) {
           console.error('[SSE] Failed refreshing data:', err);
         }

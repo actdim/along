@@ -1,4 +1,3 @@
-import React from 'react';
 import cytoscape from 'cytoscape';
 import {
   type ComponentStruct,

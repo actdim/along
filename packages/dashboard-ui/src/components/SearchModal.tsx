@@ -1,4 +1,3 @@
-import React from 'react';
 import {
   type ComponentStruct,
   type ComponentDef,
@@ -89,9 +88,10 @@ export const useSearchModal = (
                   id: kb.id,
                   type: 'kb',
                   title,
-                  file_path: kb.file_path,
+                  file_path: kb.file_path || '',
                   score: title.toLowerCase().includes(q) ? 1.0 : 0.7,
                   snippet: kb.body ? kb.body.slice(0, 150) + '...' : title,
+                  tags: kb.tags || [],
                 });
               }
             }
@@ -111,9 +111,10 @@ export const useSearchModal = (
                   id: iss.id,
                   type: 'issue',
                   title,
-                  file_path: iss.file_path,
+                  file_path: iss.file_path || '',
                   score: title.toLowerCase().includes(q) ? 1.0 : 0.7,
                   snippet: iss.body ? iss.body.slice(0, 150) + '...' : title,
+                  tags: iss.tags || [],
                 });
               }
             }
@@ -132,9 +133,10 @@ export const useSearchModal = (
                   id: dec.id,
                   type: 'decision',
                   title,
-                  file_path: '.along/DECISIONS.md',
+                  file_path: dec.file_path || '.along/DECISIONS.md',
                   score: title.toLowerCase().includes(q) ? 1.0 : 0.7,
-                  snippet: dec.summary || (dec.raw_markdown ? dec.raw_markdown.slice(0, 150) + '...' : title),
+                  snippet: dec.decision || (dec.raw_markdown ? dec.raw_markdown.slice(0, 150) + '...' : title),
+                  tags: [],
                 });
               }
             }
@@ -154,9 +156,10 @@ export const useSearchModal = (
                   id: sess.id,
                   type: 'session',
                   title,
-                  file_path: sess.file_path,
+                  file_path: sess.file_path || '',
                   score: title.toLowerCase().includes(q) ? 1.0 : 0.7,
                   snippet: sess.summary || (sess.body ? sess.body.slice(0, 150) + '...' : title),
+                  tags: [],
                 });
               }
             }

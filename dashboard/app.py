@@ -49,6 +49,10 @@ def create_app(agents_dir: Path) -> FastAPI:
     collector = EntityCollector(agents_dir)
     watcher = RepoWatcher(agents_dir.parent)
 
+    def custom_generate_unique_id(route):
+        parts = route.name.split('_')
+        return parts[0] + ''.join(word.capitalize() for word in parts[1:])
+
     app = FastAPI(
         title="Along Dashboard & Knowledge Base API",
         version=CURRENT_VERSION,
@@ -56,6 +60,7 @@ def create_app(agents_dir: Path) -> FastAPI:
         docs_url="/docs",
         redoc_url="/redoc",
         openapi_url="/openapi.json",
+        generate_unique_id_function=custom_generate_unique_id,
     )
 
     # Enable CORS for local dev servers (e.g. Vite on 5173)

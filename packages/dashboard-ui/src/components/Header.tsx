@@ -1,4 +1,3 @@
-import React from 'react';
 import {
   type ComponentStruct,
   type ComponentDef,
@@ -7,7 +6,6 @@ import {
   type ComponentModel,
 } from '@actdim/dynstruct/componentModel/contracts';
 import { useComponent, toReact } from '@actdim/dynstruct/componentModel/react/hooks';
-import { type BaseAppMsgStruct } from '@actdim/dynstruct/appDomain/appContracts';
 import { Icon } from '@iconify/react';
 import { DashboardAppMsgStruct, DashboardMsgChannels } from '../bus';
 
@@ -18,6 +16,7 @@ export type HeaderStruct = ComponentStruct<
       repoName: string;
       scanTimestamp: string;
       sseConnected: boolean;
+      protocolVersion?: string;
       onSearchClick?: () => void;
     };
     msgScope: {
@@ -36,6 +35,7 @@ export const useHeader = (params: ComponentParams<HeaderStruct>): Component<Head
       repoName: 'Along',
       scanTimestamp: '',
       sseConnected: false,
+      protocolVersion: '3.9.4',
       onSearchClick: () => {},
     },
     view: () => (
@@ -51,7 +51,7 @@ export const useHeader = (params: ComponentParams<HeaderStruct>): Component<Head
                 <div className="flex items-center gap-2">
                   <h1 className="text-base font-bold text-slate-100 tracking-tight">{m.repoName}</h1>
                   <span className="text-[10px] uppercase font-mono px-1.5 py-0.5 rounded bg-sky-950 text-sky-400 border border-sky-800/60 font-semibold">
-                    v2.0.9
+                    {m.protocolVersion ? (m.protocolVersion.startsWith('v') ? m.protocolVersion : `v${m.protocolVersion}`) : 'v3.9.4'}
                   </span>
                   <div
                     className={`w-2 h-2 rounded-full ${

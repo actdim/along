@@ -1,4 +1,3 @@
-import React from 'react';
 import ReactDOM from 'react-dom/client';
 import { ComponentContextProvider } from '@actdim/dynstruct/componentModel/react/componentContext';
 import { dashboardBus } from './bus';

@@ -1,4 +1,3 @@
-import React from 'react';
 import {
   type ComponentStruct,
   type ComponentDef,
@@ -23,6 +22,8 @@ import {
   type FullDashboardData,
 } from '../types';
 
+import DOMPurify from 'dompurify';
+
 export type DrawerEntity =
   | (Issue & { entityType: 'issue' })
   | (Milestone & { entityType: 'milestone' })
@@ -32,10 +33,13 @@ export type DrawerEntity =
   | (KBArticle & { entityType: 'kb' })
   | (Decision & { entityType: 'decision'; body?: string });
 
-interface WindowWithMermaid {
-  mermaid?: {
-    run: (options: { nodes: NodeListOf<Element> }) => void;
-  };
+declare global {
+  interface Window {
+    mermaid?: {
+      run: (options: { nodes: NodeListOf<Element> }) => void;
+      initialize?: (config: Record<string, unknown>) => void;
+    };
+  }
 }
 
 export type MarkdownContentStruct = ComponentStruct<
@@ -66,8 +70,7 @@ export const useMarkdownContent = (
         const container = document.getElementById(c.id);
         if (!container) return;
 
-        const w = window as unknown as WindowWithMermaid;
-        if (!w.mermaid) return;
+        if (!window.mermaid) return;
 
         const codeBlocks = container.querySelectorAll('pre code.language-mermaid');
         if (codeBlocks.length === 0) return;
@@ -85,7 +88,7 @@ export const useMarkdownContent = (
         try {
           const mermaidNodes = container.querySelectorAll('.mermaid');
           if (mermaidNodes.length > 0) {
-            w.mermaid.run({ nodes: mermaidNodes });
+            window.mermaid.run({ nodes: mermaidNodes });
           }
         } catch (err) {
           console.warn('Mermaid rendering error:', err);
@@ -178,9 +181,10 @@ export const useEntityDrawer = (
         const ent = m.entity;
         if (!ent || !ent.body) return '';
         try {
-          return marked.parse(ent.body) as string;
+          const parsed = marked.parse(ent.body);
+          return DOMPurify.sanitize(typeof parsed === 'string' ? parsed : String(parsed));
         } catch {
-          return ent.body;
+          return DOMPurify.sanitize(ent.body);
         }
       },
     },
