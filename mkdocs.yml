@@ -47,6 +47,7 @@ theme:
 
 nav:
   - Home: index.md
+  - Dashboard: https://actdim.github.io/along/dashboard/
   - Knowledge Base: INDEX.md
   - Decisions: decisions/INDEX.md
   - Architecture: topic--architecture.md

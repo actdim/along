@@ -1,0 +1,122 @@
+{
+  "summary": "Architecture: 10 communities, 159 cross-community edges, 3 warning(s)",
+  "communities": [
+    {
+      "id": 10,
+      "name": "tests-up",
+      "description": "Directory-based community: tests",
+      "size": 654,
+      "cohesion": 0.1003,
+      "dominant_language": "python",
+      "level": 0
+    },
+    {
+      "id": 9,
+      "name": "alongkit-file",
+      "description": "Directory-based community: scripts/alongkit",
+      "size": 416,
+      "cohesion": 0.1697,
+      "dominant_language": "python",
+      "level": 0
+    },
+    {
+      "id": 7,
+      "name": "api-schema",
+      "description": "Directory-based community: packages/dashboard-ui",
+      "size": 172,
+      "cohesion": 0.3468,
+      "dominant_language": "typescript",
+      "level": 0
+    },
+    {
+      "id": 8,
+      "name": "scripts-handle",
+      "description": "Directory-based community: scripts",
+      "size": 149,
+      "cohesion": 0.0607,
+      "dominant_language": "python",
+      "level": 0
+    },
+    {
+      "id": 3,
+      "name": "core-collect",
+      "description": "Directory-based community: dashboard/core",
+      "size": 26,
+      "cohesion": 0.1182,
+      "dominant_language": "python",
+      "level": 0
+    },
+    {
+      "id": 1,
+      "name": "api-list",
+      "description": "Directory-based community: dashboard/api",
+      "size": 19,
+      "cohesion": 0.1852,
+      "dominant_language": "python",
+      "level": 0
+    },
+    {
+      "id": 4,
+      "name": "schemas-schema",
+      "description": "Directory-based community: dashboard/schemas",
+      "size": 18,
+      "cohesion": 0.0,
+      "dominant_language": "python",
+      "level": 0
+    },
+    {
+      "id": 2,
+      "name": "dashboard-app",
+      "description": "Directory-based community: dashboard",
+      "size": 8,
+      "cohesion": 0.0388,
+      "dominant_language": "python",
+      "level": 0
+    },
+    {
+      "id": 6,
+      "name": "along-install",
+      "description": "Directory-based community: install",
+      "size": 5,
+      "cohesion": 0.0161,
+      "dominant_language": "bash",
+      "level": 0
+    },
+    {
+      "id": 5,
+      "name": "hooks-link",
+      "description": "Directory-based community: hooks",
+      "size": 4,
+      "cohesion": 0.0233,
+      "dominant_language": "python",
+      "level": 0
+    }
+  ],
+  "cross_community_edges": [
+    {
+      "source_community": 8,
+      "target_community": 9,
+      "count": 16
+    },
+    {
+      "source_community": 10,
+      "target_community": 9,
+      "count": 101
+    },
+    {
+      "source_community": 10,
+      "target_community": 8,
+      "count": 35
+    },
+    {
+      "source_community": 10,
+      "target_community": 3,
+      "count": 7
+    }
+  ],
+  "warnings": [
+    "High coupling (101 edges) between 'alongkit-file' and 'tests-up'",
+    "High coupling (35 edges) between 'scripts-handle' and 'tests-up'",
+    "High coupling (16 edges) between 'scripts-handle' and 'alongkit-file'"
+  ]
+}

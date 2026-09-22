@@ -4,13 +4,13 @@ slug: architecture
 title: System Architecture & Flow
 type: architecture
 created: 2026-08-30
-updated: 2026-09-19
+updated: 2026-09-22
 tags: [architecture, boundaries, multi-agent, blackboard, concurrency, mcp, flow]
 sources:
   - path: README.md
-    hash: "9df3eb9eb487a28d4d01a1b371dc637994253dec3f748c7af028eaa21d1521ea"
+    hash: "d790393ec378f5a5849731afe6cacdd379033465f9842171da28a8f25112d81a"
   - path: dashboard/app.py
-    hash: "eba5ee090ca45c803bafc1f41ff0c7ac4b03aac5ef0da0d16457b62269784fb6"
+    hash: "1a0b0c9e4b40adf717712a6c3c14bebb72728d579ae37ca844bf39eecc287fd7"
   - path: skills/along-dash/SKILL.md
     hash: "44b1f9dfd4da3313fd2e3f12beb6057079a9244968638ab43a241d7b55d985d9"
 ---

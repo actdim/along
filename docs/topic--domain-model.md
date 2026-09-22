@@ -4,11 +4,11 @@ slug: domain-model
 title: Domain Model & Entity Ecosystem
 type: domain-model
 created: 2026-08-30
-updated: 2026-09-19
+updated: 2026-09-22
 tags: [domain-model, entities, schemas, dag, metadata, issues, milestones, risks, spikes, checklists, sessions]
 sources:
   - path: AGENTS.md
-    hash: "b41b72c3035258d6ba845797c50452aa78044631e7ed179be4c92c21666a6d69"
+    hash: "d3cf40bcdb2d985decb6937e7b7b838666599607788cf6d3bf64245312fdd92d"
   - path: dashboard/schemas/entities.py
     hash: "14cd9c6263d6909ab8b678d1c70f98bda3e70f270cecf970d01d5377324b511a"
 ---

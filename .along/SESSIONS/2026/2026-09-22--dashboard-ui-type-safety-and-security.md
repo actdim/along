@@ -11,6 +11,10 @@ issues_advanced: []
 decisions: []
 tags: [frontend, nswag, typescript, security, xss, mobx, dynstruct]
 summary: "Hardened packages/dashboard-ui: regenerated NSwag client eliminating 55 dummy interfaces and all any index signatures, re-exported client schemas in types.ts, replaced manual fetch with client.getFullData, added DOMPurify XSS sanitization, hardened Mermaid security to strict with CSP, replaced stale v2.0.9 badge with dynamic version, added onDestroy keydown and SSE cleanup, and configured vitest test runner with strict linter options."
+commit: unknown
+milestone: v2.0.0-along-transition
+risks_logged: []
+spikes_conducted: []
 ---
 
 # Session: Dashboard UI NSwag Generation, Type Safety, and Content Security Hardening

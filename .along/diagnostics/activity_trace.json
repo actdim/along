@@ -1,6 +1,6 @@
 {
-  "last_edit_time": "2026-09-22T15:54:03.749077+00:00",
-  "last_test_time": "2026-09-22T15:50:16.879916+00:00",
+  "last_edit_time": "2026-09-22T20:11:58.119560+00:00",
+  "last_test_time": "2026-09-22T20:13:41.593951+00:00",
   "edited_files": [
     "d:\\Src\\my\\actdim\\public\\along\\scripts\\alongkit\\install.py",
     "d:\\Src\\my\\actdim\\public\\along\\scripts\\alongkit\\hooks\\predicates.py",
@@ -312,6 +312,17 @@
     "d:\\Src\\my\\actdim\\public\\along\\.along\\ISSUES\\done\\bug--installer-path-configuration-and-cli-resolution.md",
     "d:\\Src\\my\\actdim\\public\\along\\.along\\ISSUES\\done\\bug--preserve-runtime-dirs-and-doc-version-sync.md",
     "d:\\Src\\my\\actdim\\public\\along\\.along\\SESSIONS\\2026\\2026-09-21--preserve-runtime-dirs-and-doc-version-sync.md",
-    "d:\\Src\\my\\actdim\\public\\along\\.along\\SESSIONS\\2026\\2026-09-21--update-engine-deadlock-and-cli-hardening.md"
+    "d:\\Src\\my\\actdim\\public\\along\\.along\\SESSIONS\\2026\\2026-09-21--update-engine-deadlock-and-cli-hardening.md",
+    "C:\\Users\\Admin\\.gemini\\antigravity\\brain\\1a08ee0b-4f41-4f10-bcc7-2739f79894aa\\walkthrough.md",
+    "d:\\Src\\my\\actdim\\public\\along\\.along\\ISSUES\\feat--dashboard-architecture-graph-and-pages-publish.md",
+    "C:\\Users\\Admin\\.gemini\\antigravity\\brain\\665fa1c9-1654-4f74-a94f-c527fc1d3f69\\scratch\\extract_arch.py",
+    "d:\\Src\\my\\actdim\\public\\along\\dashboard\\core\\graph.py",
+    "d:\\Src\\my\\actdim\\public\\along\\.along\\.session\\state.json",
+    "d:\\Src\\my\\actdim\\public\\along\\packages\\dashboard-ui\\vite.config.ts",
+    "d:\\Src\\my\\actdim\\public\\along\\.github\\workflows\\pages.yml",
+    "C:\\Users\\Admin\\.gemini\\antigravity\\brain\\29741d0c-d630-4885-b8ba-09698ecb78be\\scratch\\compute_hashes.py",
+    "d:\\Src\\my\\actdim\\public\\along\\.along\\ISSUES\\docs--reconcile-kb-drift-and-provenance.md",
+    "d:\\Src\\my\\actdim\\public\\along\\.along\\ISSUES\\done\\docs--reconcile-kb-drift-and-provenance.md",
+    "C:\\Users\\Admin\\.gemini\\antigravity\\brain\\665fa1c9-1654-4f74-a94f-c527fc1d3f69\\walkthrough.md"
   ]
 }

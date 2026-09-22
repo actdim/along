@@ -4,11 +4,11 @@ slug: frontend-frameworks
 title: Frontend Architecture, Dynstruct, MsgMesh & NSwag Integration
 type: topic
 created: 2026-08-27
-updated: 2026-09-19
-tags: [dynstruct, dynstruct-mui, msgmesh, utico, react, mui, nswag, openapi, architecture]
+updated: 2026-09-22
+tags: [dynstruct, dynstruct-mui, msgmesh, utico, react, mui, nswag, openapi, architecture, security, vitest]
 sources:
   - path: packages/dashboard-ui/package.json
-    hash: "ef934c8c7b78d657d6ce9859fe3355f3e7d1be0864926272d7ae4c30beff5c9a"
+    hash: "c757eb626c337c468c3afb3c3be936adc61e42147ffafcafe39f059d6f6a815e"
 ---
 
 # Frontend Architecture, Dynstruct, MsgMesh & NSwag Integration
@@ -113,3 +113,11 @@ The Along Dashboard UI (`packages/dashboard-ui/`) is built strictly on the ActDi
 - No `as ...` type assertions.
 - No storing state on `window` (`window.__ALONG_DATA__`).
 - All payloads are strictly typed through the channel definitions and NSwag DTO interfaces.
+
+### 7. Content Security & Markdown Sanitization
+- Markdown rendering (e.g. in `EntityDrawer.tsx`) must always be sanitized via `DOMPurify.sanitize(marked.parse(...))` to prevent XSS vulnerabilities.
+- Mermaid diagrams must be configured with `securityLevel: 'strict'` under Content Security Policy (CSP).
+
+### 8. Testing & Quality Gates
+- Component and unit tests use `vitest` with `happy-dom` (`pnpm test` or `npm test`).
+- Type checking is enforced via `tsc --noEmit` (`pnpm run typecheck` or `npm run typecheck`).
