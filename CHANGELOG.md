@@ -2,6 +2,11 @@
 
 All notable changes to this project, newest first.
 
+## v4.0.0 - 2026-09-22
+
+- docs(cli): document entity lifecycle and milestone synchronization (refs #entity-lifecycle-cli-documentation)
+- feat(dashboard): add architecture graph and automated GitHub Pages deployment (refs #dashboard-architecture-graph-and-pages-publish)
+
 ## v3.9.5 - 2026-09-22
 
 - chore(entities): synchronize session logs, milestones, and backlog partition [feat--issues-board-backlog-partition]
