@@ -78,6 +78,7 @@ When subagent spawning is unavailable (OpenAI Codex, OpenCode) or disabled/throt
    1. [Check Name]: Concrete reason for failure...
    ```
 4. **Retry Counters**: Tracked on disk in `state.json` via `along scratch update <slug> --step <N> --inc-retry` (maximum 2 retries per step, governed by `retry_limit`). If the retry limit is exceeded, execution immediately halts and escalates to the human user.
+5. **CLI Resolution & Fallback**: Agents invoke `along <subcommand>` (e.g. `along scratch init <slug>`). If `along` is not found on `PATH`, fallback to `~/.along/bin/along.cmd <subcommand>` (Windows), `~/.along/bin/along <subcommand>` (POSIX), or `python ~/.along/bin/along_exec.py <subcommand>`.
 
 ---
 

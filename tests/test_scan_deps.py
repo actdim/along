@@ -143,6 +143,30 @@ class TestAlongScanDeps(unittest.TestCase):
         self.assertEqual(results[0]["package"], "Actdim.MsgMesh")
         self.assertEqual(results[0]["ecosystem"], "nuget")
 
+    def test_04b_nuget_semver_sorting_discovery(self):
+        """Test scanning .NET project picks highest semver (10.0.0 > 9.0.0)."""
+        csproj_content = """<Project Sdk="Microsoft.NET.Sdk">
+  <ItemGroup>
+    <PackageReference Include="Actdim.BigLib" />
+  </ItemGroup>
+</Project>"""
+        with open(os.path.join(self.test_dir, "App2.csproj"), "w", encoding="utf-8") as f:
+            f.write(csproj_content)
+
+        # Mock packages cache with multiple versions where ASCII order differs from semver
+        pkg_base = os.path.join(self.test_dir, "packages", "actdim.biglib")
+        for v in ("2.0.0", "9.0.0", "10.0.0"):
+            v_dir = os.path.join(pkg_base, v)
+            os.makedirs(v_dir, exist_ok=True)
+            with open(os.path.join(v_dir, "AGENTS.md"), "w", encoding="utf-8") as f:
+                f.write(f"# BigLib v{v} Guidelines")
+
+        scope = along_scan_deps.ProjectScope(name="[root]", rel_path=".", full_path=self.test_dir, is_root=True)
+        results = along_scan_deps.scan_nuget_project_deps(scope, self.test_dir)
+        matched = [r for r in results if r["package"] == "Actdim.BigLib"]
+        self.assertEqual(len(matched), 1)
+        self.assertEqual(matched[0]["version"], "10.0.0")
+
     def test_05_hierarchical_monorepo_subprojects_and_kb_generation(self):
         """Test recursive discovery of nested packages and submodules with Wiki generation."""
         # Root package.json (no deps)

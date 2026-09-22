@@ -183,11 +183,7 @@ def step_migrate_v1_3_kb_scaffolding(mig, repo_root, working_dir):
 # ----------------------------------------------------------------------
 # Step 3: v1.3.3 -> v1.5.0 (Entity Ecosystem, Retro-Synthesis & Checklists)
 # ----------------------------------------------------------------------
-def step_migrate_v1_5_entity_ecosystem(mig, repo_root, working_dir):
-    today_str = datetime.now().strftime("%Y-%m-%d")
-    today_year = datetime.now().strftime("%Y")
-
-    # 1. Ensure directory skeleton (KB is located in docs/ since v2.1)
+def _v1_5_ensure_directory_skeleton(working_dir, today_year, mig):
     dirs = [
         os.path.join(working_dir, "ISSUES", "done"),
         os.path.join(working_dir, "SESSIONS", today_year),
@@ -202,7 +198,8 @@ def step_migrate_v1_5_entity_ecosystem(mig, repo_root, working_dir):
         if not os.path.isdir(d) or len(os.listdir(d)) == 0:
             mig.touch(gitkeep)
 
-    # 2. Synthesize standard Checklists if missing
+
+def _v1_5_synthesize_standard_checklists(working_dir, today_str, mig):
     checklists_dir = os.path.join(working_dir, "CHECKLISTS")
     standard_checklists = {
         "stage-completion.md": {
@@ -242,15 +239,9 @@ def step_migrate_v1_5_entity_ecosystem(mig, repo_root, working_dir):
             }
             mig.write(cpath, dump_yaml_frontmatter(fm, data["body"]))
 
-    # 3. Analyze past work to retroactively synthesize Milestones
+
+def _v1_5_synthesize_milestones_from_history(working_dir, done_slugs, active_slugs, mig):
     milestones_dir = os.path.join(working_dir, "MILESTONES")
-    done_issues = glob.glob(os.path.join(working_dir, "ISSUES", "done", "*.md"))
-    active_issues = glob.glob(os.path.join(working_dir, "ISSUES", "*.md"))
-
-    done_slugs = [os.path.basename(f).replace(".md", "") for f in done_issues]
-    active_slugs = [os.path.basename(f).replace(".md", "") for f in active_issues]
-
-    # If no milestones exist, synthesize from past history
     if len(glob.glob(os.path.join(milestones_dir, "*.md"))) == 0:
         if done_slugs:
             past_m = os.path.join(milestones_dir, "v1.3.0-knowledge-base-and-graph.md")
@@ -281,8 +272,8 @@ def step_migrate_v1_5_entity_ecosystem(mig, repo_root, working_dir):
         body_curr = "# Milestone: v2.0.0 Along Transition\n\nDelivers isolated `.along/` directory, protocol: along metadata validation, /along-dash visual analytics, and full namespaced along-* command suite.\n"
         mig.write(current_m, dump_yaml_frontmatter(fm_curr, body_curr))
 
-    # 4. Enrich all ISSUES front-matter (with milestone linkage and protocol: along)
-    all_issue_files = done_issues + active_issues
+
+def _v1_5_enrich_issues_frontmatter(all_issue_files, today_str, mig):
     for filepath in all_issue_files:
         is_done = "done" in os.path.dirname(filepath).replace("\\", "/").split("/")
         filename = os.path.basename(filepath)
@@ -299,10 +290,6 @@ def step_migrate_v1_5_entity_ecosystem(mig, repo_root, working_dir):
         if fields is None:
             continue
 
-        # Only the keys that are missing or wrong are written, so a file that is
-        # already correct is left byte-identical. The previous implementation
-        # re-serialized every entity on every run, which is how block sequences
-        # and quoting were lost.
         updates = {}
         removals = []
         slug = fields.get('slug') or clean_slug
@@ -355,7 +342,8 @@ def step_migrate_v1_5_entity_ecosystem(mig, repo_root, working_dir):
                 place_after={'completed': 'status', 'updated': 'created'})
             mig.write(filepath, new_content, detail="front-matter normalized")
 
-    # 5. Enrich SESSIONS front-matter
+
+def _v1_5_enrich_sessions_frontmatter(working_dir, today_str, mig):
     session_files = glob.glob(os.path.join(working_dir, "SESSIONS", "**", "*.md"), recursive=True)
     for filepath in session_files:
         try:
@@ -391,26 +379,28 @@ def step_migrate_v1_5_entity_ecosystem(mig, repo_root, working_dir):
             new_content = frontmatter.update(content, updates, path=filepath)
             mig.write(filepath, new_content, detail="front-matter normalized")
 
+
+def step_migrate_v1_5_entity_ecosystem(mig, repo_root, working_dir):
+    today_str = datetime.now().strftime("%Y-%m-%d")
+    today_year = datetime.now().strftime("%Y")
+
+    _v1_5_ensure_directory_skeleton(working_dir, today_year, mig)
+    _v1_5_synthesize_standard_checklists(working_dir, today_str, mig)
+
+    done_issues = glob.glob(os.path.join(working_dir, "ISSUES", "done", "*.md"))
+    active_issues = glob.glob(os.path.join(working_dir, "ISSUES", "*.md"))
+    done_slugs = [os.path.basename(f).replace(".md", "") for f in done_issues]
+    active_slugs = [os.path.basename(f).replace(".md", "") for f in active_issues]
+
+    _v1_5_synthesize_milestones_from_history(working_dir, done_slugs, active_slugs, mig)
+    _v1_5_enrich_issues_frontmatter(done_issues + active_issues, today_str, mig)
+    _v1_5_enrich_sessions_frontmatter(working_dir, today_str, mig)
     return True
 
 # ----------------------------------------------------------------------
 # Step 4: v1.5.7 -> v2.0.0 (Transition to Along & .along/ Directory)
 # ----------------------------------------------------------------------
-def step_migrate_v2_0_along_directory(mig, repo_root):
-    """Bring legacy `.agents/` content into `.along/` without losing either side.
-
-    The destination is never deleted. `mig.adopt` decides per file class: append-only
-    files (`DECISIONS.md`, `HISTORY.md`) are union-merged the way `.gitattributes`
-    already merges them across branches, derived projections keep the destination and
-    drop the legacy copy for recompilation, and anything else keeps the destination
-    with the legacy copy preserved as `<name>.legacy.md` and reported as a conflict.
-    """
-    agents_dir = os.path.join(repo_root, ".agents")
-    along_dir = os.path.join(repo_root, ".along")
-
-    # CONTEXT.md is no longer purged here. It is adopted so Step 7 can evaluate its
-    # content, archive it, and ingest any substantive documentation into docs/.
-
+def _v2_0_adopt_agents_directory(mig, agents_dir, along_dir):
     recognized_files = [
         "ISSUES.md", "DECISIONS.md", "HISTORY.md", "CONTEXT.md",
         "GLOSSARY.md", "VISION.md", "DASHBOARD.md", "dashboard.html", "TASKS.md"
@@ -441,12 +431,12 @@ def step_migrate_v2_0_along_directory(mig, repo_root):
 
         # 3. Clean up .agents/ only when nothing of the user's is left in it
         mig.rmdir_if_empty(agents_dir)
+    return moved_count
 
-    # 4. Inject protocol: along across all markdown files in .along/
+
+def _v2_0_inject_protocol_frontmatter(along_dir, mig):
     if os.path.exists(along_dir):
         for root, dirs, files in os.walk(along_dir):
-            # Never walk into the backup this run just wrote: a backup that the engine
-            # keeps editing is not a copy of the state it was taken from.
             dirs[:] = [d for d in dirs if d != migration.BACKUP_DIRNAME]
             for f in files:
                 if f.endswith(".md"):
@@ -463,7 +453,8 @@ def step_migrate_v2_0_along_directory(mig, repo_root):
                         updated = frontmatter.update(content, {'protocol': 'along'}, path=fpath)
                         mig.write(fpath, updated, detail="protocol: along injected")
 
-    # 5. Update AGENTS.md references & markers
+
+def _v2_0_update_agents_protocol_markers(repo_root, mig):
     agents_md_files = glob.glob(os.path.join(repo_root, "**", "AGENTS.md"), recursive=True)
     for amd in agents_md_files:
         try:
@@ -481,12 +472,6 @@ def step_migrate_v2_0_along_directory(mig, repo_root):
             content
         )
         content = re.sub(r"<!-- END ACTDIM-AGENTS-PROTOCOL -->", r"<!-- END ALONG-PROTOCOL -->", content)
-        # Collapse REPEATED markers. `{2,}` rather than `+`, and the file's own newline
-        # rather than a hardcoded one: `\s*` swallows the marker's own line ending, so
-        # over a file with a single pair - every already-current AGENTS.md - the `+`
-        # version rewrote two CRLF line endings as LF and called it a migration. Same
-        # family as the legacy renames guarded below, found by reading the dry-run plan
-        # of a repository that had nothing to migrate.
         newline = textio.detect_newline(content)
         content = re.sub(r"(?:<!-- BEGIN ALONG-PROTOCOL (.*?) -->\s*){2,}",
                          f"<!-- BEGIN ALONG-PROTOCOL \\1 -->{newline}", content)
@@ -495,17 +480,6 @@ def step_migrate_v2_0_along_directory(mig, repo_root):
         content = re.sub(r"# ACTDIM-AGENTS-PROTOCOL v\d+\.\d+\.\d+", f"# ALONG-PROTOCOL v{CURRENT_PROTOCOL_VERSION}", content)
         content = re.sub(r"# ALONG-PROTOCOL v\d+\.\d+\.\d+", f"# ALONG-PROTOCOL v{CURRENT_PROTOCOL_VERSION}", content)
 
-        # Legacy path and command renames, applied ONLY to a file that still carries a
-        # pre-v2.0.0 marker or a legacy skill name. Running them unconditionally over a
-        # current AGENTS.md is not a no-op, it is damage: the substitutions below are
-        # substring replacements over prose.
-        #
-        # Both failure modes were observed in this repository. `.agents/` -> `.along/`
-        # rewrote a deliberate mention of the legacy directory inside the managed protocol
-        # block, leaving a sentence that named `.along/KB/` twice. `/dashboard` ->
-        # `/along-dash` turned the real path `packages/dashboard-ui/` into
-        # `packages/along-dash-ui/`, which does not exist. Neither was detectable until
-        # `test_03b_managed_block_matches_its_source` compared the block with its source.
         needs_legacy_rename = (
             "ACTDIM-AGENTS-PROTOCOL" in original
             or (".agents/" in original and ".along/" not in original)
@@ -514,8 +488,6 @@ def step_migrate_v2_0_along_directory(mig, repo_root):
         )
         if needs_legacy_rename:
             content = content.replace(".agents/", ".along/")
-            # Anchored so a slash-command name is only rewritten when it stands alone.
-            # `/dashboard` inside `packages/dashboard-ui` must not match.
             for legacy, current in (("init-agents", "along-init"),
                                     ("update-agents", "along-update"),
                                     ("init-kb", "along-init-kb"),
@@ -529,7 +501,8 @@ def step_migrate_v2_0_along_directory(mig, repo_root):
             mig.write(amd, content, detail="protocol markers and legacy names updated",
                       announce=True)
 
-    # 6. Update .code-review-graph-ignore
+
+def _v2_0_update_crg_ignore(repo_root, mig):
     crg_ignore = os.path.join(repo_root, ".code-review-graph-ignore")
     if os.path.exists(crg_ignore):
         try:
@@ -541,10 +514,8 @@ def step_migrate_v2_0_along_directory(mig, repo_root):
             mig.write(crg_ignore, c.replace(".agents/", ".along/"),
                       detail=".agents/ -> .along/", announce=True)
 
-    # 7. Migrate user home configuration / cache directories
-    # 7. Rename Along's own legacy directories under the user's home. Only when the
-    #    new name is free, so this can never overwrite a current installation, and only
-    #    outside dry-run, like every other mutation here.
+
+def _v2_0_migrate_home_directories(mig):
     user_home = os.path.expanduser("~")
     for label, old, new in (
             ("config", os.path.join(user_home, ".config", "opencode", "actdim-agents"),
@@ -555,10 +526,20 @@ def step_migrate_v2_0_along_directory(mig, repo_root):
             try:
                 mig.move(old, new, f"legacy {label} directory renamed")
             except OSError as exc:
-                # Reported rather than swallowed: a half-renamed home directory is
-                # exactly what the user needs to know about.
                 print(f"   [WARN] could not rename the legacy {label} directory "
                       f"{old}: {exc}", file=sys.stderr)
+
+
+def step_migrate_v2_0_along_directory(mig, repo_root):
+    """Bring legacy `.agents/` content into `.along/` without losing either side."""
+    agents_dir = os.path.join(repo_root, ".agents")
+    along_dir = os.path.join(repo_root, ".along")
+
+    moved_count = _v2_0_adopt_agents_directory(mig, agents_dir, along_dir)
+    _v2_0_inject_protocol_frontmatter(along_dir, mig)
+    _v2_0_update_agents_protocol_markers(repo_root, mig)
+    _v2_0_update_crg_ignore(repo_root, mig)
+    _v2_0_migrate_home_directories(mig)
 
     return moved_count
 
@@ -726,19 +707,6 @@ def validate_and_build_entity_graph(along_dir):
 # Step 7: v2.0 -> v2.1 (Knowledge Base -> docs/)
 # ----------------------------------------------------------------------
 def step_migrate_v2_1_docs_wiki_and_archive(mig, repo_root, interactive=True):
-    # Locate along_kb_sync.py in local scripts/ or global paths
-    exec_dir = os.path.dirname(os.path.abspath(__file__))
-    candidates = [
-        os.path.join(repo_root, "scripts", "along_kb_sync.py"),
-        os.path.join(exec_dir, "along_kb_sync.py"),
-        os.path.expanduser("~/.along/bin/along_kb_sync.py"),
-        os.path.expanduser("~/.config/opencode/actdim-along/along_kb_sync.py"),
-    ]
-    kb_script = None
-    for c in candidates:
-        if os.path.isfile(c):
-            kb_script = c
-            break
     # Locate along_kb_sync.py via shared resolver
     kb_script = repo.resolve_tool_script("along_kb_sync.py", repo_root, skill_folder="along-kb-sync")
 
@@ -890,6 +858,39 @@ def scan_shell_escape_artifacts_in_docs(repo_root, detected_version):
     return warnings
 
 
+def _should_run_migrations(repo_root, along_dir, agents_dir, recorded_version, force):
+    dec_file = os.path.join(along_dir, "DECISIONS.md")
+    dec_dir = os.path.join(along_dir, "DECISIONS")
+    needs_modular_decisions = False
+    if os.path.isfile(dec_file) and not os.path.isdir(dec_dir):
+        try:
+            with open(dec_file, "r", encoding="utf-8", errors="ignore") as _df:
+                _head = _df.read(200)
+            if "<!-- Generated projection from .along/DECISIONS" not in _head:
+                needs_modular_decisions = True
+        except OSError:
+            pass
+
+    has_spurious_hooks = False
+    if not repo.is_dev_repo(repo_root):
+        for candidate in [
+            os.path.join(repo_root, ".agents", "hooks.json"),
+            os.path.join(repo_root, "scripts", "along_hook.py"),
+            os.path.join(repo_root, ".along", "scripts", "along_hook.py"),
+        ]:
+            if os.path.exists(candidate):
+                has_spurious_hooks = True
+                break
+
+    if (recorded_version == CURRENT_PROTOCOL_VERSION
+            and not os.path.exists(agents_dir)
+            and not needs_modular_decisions
+            and not has_spurious_hooks
+            and not force):
+        return False
+    return True
+
+
 # Main Migration Controller
 # ----------------------------------------------------------------------
 def run_migrations(repo_root, dry_run=True, force=False, backup=True, verbose=False):
@@ -919,36 +920,7 @@ def run_migrations(repo_root, dry_run=True, force=False, backup=True, verbose=Fa
     print(f"   Target Protocol Version:   v{CURRENT_PROTOCOL_VERSION}")
     print("==================================================")
 
-    # A completed migration is recorded, so a second run is a no-op instead of
-    # re-executing steps whose idempotency held only by accident of their individual guards.
-    dec_file = os.path.join(along_dir, "DECISIONS.md")
-    dec_dir = os.path.join(along_dir, "DECISIONS")
-    needs_modular_decisions = False
-    if os.path.isfile(dec_file) and not os.path.isdir(dec_dir):
-        try:
-            with open(dec_file, "r", encoding="utf-8", errors="ignore") as _df:
-                _head = _df.read(200)
-            if "<!-- Generated projection from .along/DECISIONS" not in _head:
-                needs_modular_decisions = True
-        except OSError:
-            pass
-
-    has_spurious_hooks = False
-    if not repo.is_dev_repo(repo_root):
-        for candidate in [
-            os.path.join(repo_root, ".agents", "hooks.json"),
-            os.path.join(repo_root, "scripts", "along_hook.py"),
-            os.path.join(repo_root, ".along", "scripts", "along_hook.py"),
-        ]:
-            if os.path.exists(candidate):
-                has_spurious_hooks = True
-                break
-
-    if (recorded_version == CURRENT_PROTOCOL_VERSION
-            and not os.path.exists(agents_dir)
-            and not needs_modular_decisions
-            and not has_spurious_hooks
-            and not force):
+    if not _should_run_migrations(repo_root, along_dir, agents_dir, recorded_version, force):
         print(f"-> Already at v{CURRENT_PROTOCOL_VERSION}; nothing to do. "
               "Use --force to re-run every step.")
         return 0

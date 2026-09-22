@@ -692,29 +692,6 @@ def run_custom_dep_scan_hook(project_dir: str, repo_root: str) -> List[Dict[str,
     return []
 
 
-def synthesize_dep_scan_hook_template(script_path: str):
-    """Generate a template for project-specific custom dependency scanner."""
-    os.makedirs(os.path.dirname(script_path), exist_ok=True)
-    content = '''#!/usr/bin/env python3
-"""
-.along/scripts/dep_scan.py - Custom Project Dependency Scanner Hook.
-Outputs JSON list of discovered dependencies with AI instructions.
-"""
-import sys
-import json
-
-def main():
-    # Return list of dicts: [{"package": "...", "ecosystem": "...", "version": "...", "files": [{"filename": "...", "path": "..."}]}]
-    results = []
-    print(json.dumps(results, indent=2))
-
-if __name__ == "__main__":
-    main()
-'''
-    with open(script_path, "w", encoding="utf-8", newline="\n") as f:
-        f.write(content)
-
-
 # ---------------------------------------------------------------------------
 # Knowledge Base (Wiki) Markdown Generator
 # ---------------------------------------------------------------------------

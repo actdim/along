@@ -27,7 +27,7 @@ PAGE_ALIASES = {
 
 
 def on_files(files, config):
-    """Inject repo root README.md as virtual root index.md."""
+    """Inject repo root README.md as virtual root index.md and site-extra assets."""
     readme_path = REPO_ROOT / "README.md"
     if readme_path.is_file():
         readme_file = File(
@@ -38,6 +38,22 @@ def on_files(files, config):
         )
         readme_file.abs_src_path = str(readme_path)
         files.append(readme_file)
+
+    site_extra_dir = REPO_ROOT / "site-extra"
+    if site_extra_dir.is_dir():
+        for root, _, filenames in os.walk(site_extra_dir):
+            for filename in filenames:
+                full_path = Path(root) / filename
+                rel_path = full_path.relative_to(site_extra_dir)
+                extra_file = File(
+                    path=str(rel_path).replace("\\", "/"),
+                    src_dir=str(site_extra_dir),
+                    dest_dir=config.site_dir,
+                    use_directory_urls=False,
+                )
+                extra_file.abs_src_path = str(full_path)
+                files.append(extra_file)
+
     return files
 
 

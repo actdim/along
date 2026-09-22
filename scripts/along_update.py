@@ -30,7 +30,9 @@ import os
 import re
 import sys
 import shutil
+import tempfile
 import urllib.request
+import zipfile
 from datetime import datetime
 from typing import Optional
 
@@ -44,6 +46,7 @@ from alongkit import proc, repo, semver
 
 REMOTE_GIT_URL = "https://github.com/actdim/along.git"
 REMOTE_RAW_URL = "https://raw.githubusercontent.com/actdim/along/main/AGENTS.md"
+REMOTE_ARCHIVE_URL = "https://github.com/actdim/along/archive/refs/heads/main.zip"
 NETWORK_TIMEOUT_SECS = 4
 
 LEGACY_SKILLS = [
@@ -153,6 +156,27 @@ def purge_legacy_global_skills():
     if purged > 0:
         print(f"   Purged {purged} legacy un-namespaced skill directories from global environments.")
 
+def _download_and_extract_archive(cache_dir):
+    print(f"-> Downloading Along archive from {REMOTE_ARCHIVE_URL}...")
+    req = urllib.request.Request(REMOTE_ARCHIVE_URL, headers={"User-Agent": "along-updater/2.0"})
+    with tempfile.TemporaryDirectory() as tmpdir:
+        zip_path = os.path.join(tmpdir, "along.zip")
+        with urllib.request.urlopen(req, timeout=30) as resp, open(zip_path, "wb") as f:
+            shutil.copyfileobj(resp, f)
+        with zipfile.ZipFile(zip_path, "r") as zf:
+            zf.extractall(tmpdir)
+        entries = [os.path.join(tmpdir, e) for e in os.listdir(tmpdir) if os.path.isdir(os.path.join(tmpdir, e))]
+        inner_dir = entries[0] if entries else tmpdir
+        os.makedirs(cache_dir, exist_ok=True)
+        for item in os.listdir(inner_dir):
+            s = os.path.join(inner_dir, item)
+            d = os.path.join(cache_dir, item)
+            if os.path.isdir(s):
+                shutil.rmtree(d, ignore_errors=True)
+                shutil.copytree(s, d)
+            else:
+                shutil.copy2(s, d)
+
 def update_global_from_git(dry_run=False):
     print("-> Synchronizing global skills from remote GitHub repository (actdim/along)...")
     cache_dir = os.path.expanduser("~/.cache/actdim-along/repo")
@@ -161,14 +185,24 @@ def update_global_from_git(dry_run=False):
         return True
 
     try:
-        if os.path.exists(os.path.join(cache_dir, ".git")):
-            proc.git(["-C", cache_dir, "fetch", "--all", "--tags"], check=True, timeout=15)
-            proc.git(["-C", cache_dir, "reset", "--hard", "origin/main"], check=True, timeout=10)
-        else:
-            os.makedirs(os.path.dirname(cache_dir), exist_ok=True)
-            if os.path.exists(cache_dir):
-                shutil.rmtree(cache_dir, ignore_errors=True)
-            proc.git(["clone", "--depth", "1", REMOTE_GIT_URL, cache_dir], check=True, timeout=20)
+        git_ok = False
+        if shutil.which("git"):
+            try:
+                if os.path.exists(os.path.join(cache_dir, ".git")):
+                    proc.git(["-C", cache_dir, "fetch", "--all", "--tags"], check=True, timeout=15)
+                    proc.git(["-C", cache_dir, "reset", "--hard", "origin/main"], check=True, timeout=10)
+                    git_ok = True
+                else:
+                    os.makedirs(os.path.dirname(cache_dir), exist_ok=True)
+                    if os.path.exists(cache_dir):
+                        shutil.rmtree(cache_dir, ignore_errors=True)
+                    proc.git(["clone", "--depth", "1", REMOTE_GIT_URL, cache_dir], check=True, timeout=20)
+                    git_ok = True
+            except (OSError, RuntimeError) as exc:
+                print(f"   [Warning] git sync failed: {exc}; falling back to archive download...")
+
+        if not git_ok:
+            _download_and_extract_archive(cache_dir)
 
         if sys.platform == "win32":
             ps1_script = os.path.join(cache_dir, "install.ps1")

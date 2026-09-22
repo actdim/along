@@ -30,7 +30,7 @@ from typing import List, Optional, Sequence, Tuple, Union
 
 from . import entities, frontmatter, gates, proc, repo, session, textio, transaction
 
-LIFECYCLE_ACTIONS: tuple = ("build", "test", "dev")
+LIFECYCLE_ACTIONS: tuple = ("build", "test", "dev", "debug")
 
 
 def build_interpreter_cmd(script_file: str, extra_args: Sequence[str] = ()) -> List[str]:

@@ -3,10 +3,11 @@ protocol: along
 protocol_version: "3.6.0"
 slug: python-monolithic-functions-and-boilerplate
 type: debt
-status: open
+status: done
+completed: 2026-09-22
 priority: high
 created: 2026-09-16
-updated: 2026-09-16
+updated: 2026-09-22
 agent: antigravity
 tags: [refactoring, architecture, maintainability, dead-code, boilerplate]
 milestone: v4.0.0-runtime-gates-and-worktree-isolation
@@ -38,7 +39,7 @@ Several core engine modules suffer from monolithic function sizing and repetitiv
 - Verify that all hermetic unit tests pass with zero regressions.
 
 ## Acceptance Criteria
-- [ ] `sync_kb` decomposed into stage-specific helper functions with cyclomatic complexity reduced.
-- [ ] `handle_issue_command` split into individual subcommand functions (`do_create`, `do_done`, `do_sync`, `do_list`).
-- [ ] Dead code in `migrate_protocol.py:703-713` and unused imports in `along_exec.py` purged.
-- [ ] Automated tests pass: `python .along/scripts/test.py`.
+- [x] `sync_kb` decomposed into stage-specific helper functions with cyclomatic complexity reduced.
+- [x] `handle_issue_command` split into individual subcommand functions (`_issue_create`, `_issue_done`, `_issue_sync`, `_issue_list`, `_issue_update`, `_issue_show`).
+- [x] Dead code in `migrate_protocol.py:703-713` and unused imports in `along_exec.py` purged.
+- [x] Automated tests pass: `python .along/scripts/test.py`.
