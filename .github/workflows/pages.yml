@@ -10,6 +10,9 @@ on:
       - 'llms.txt'
       - 'llms-full.txt'
       - 'site-extra/**'
+      - 'packages/dashboard-ui/**'
+      - 'dashboard/**'
+      - '.along/**'
   workflow_dispatch:
 
 permissions:
@@ -31,11 +34,31 @@ jobs:
         with:
           python-version: '3.12'
 
+      - name: Install pnpm
+        uses: pnpm/action-setup@v3
+        with:
+          version: 10
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'pnpm'
+          cache-dependency-path: 'packages/dashboard-ui/pnpm-lock.yaml'
+
+      - name: Build Dashboard UI
+        run: |
+          pnpm --prefix packages/dashboard-ui install --frozen-lockfile
+          pnpm --prefix packages/dashboard-ui run build
+
       - name: Install MkDocs and plugins
         run: pip install mkdocs-material mkdocs-minify-plugin
 
       - name: Build site
         run: mkdocs build
+
+      - name: Export Dashboard static bundle
+        run: python scripts/along_dash.py --export site/dashboard
 
       - name: Copy extra static files
         run: |

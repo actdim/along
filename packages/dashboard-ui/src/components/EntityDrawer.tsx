@@ -31,7 +31,21 @@ export type DrawerEntity =
   | (Spike & { entityType: 'spike' })
   | (Session & { entityType: 'session' })
   | (KBArticle & { entityType: 'kb' })
-  | (Decision & { entityType: 'decision'; body?: string });
+  | (Decision & { entityType: 'decision'; body?: string })
+  | {
+      id: string;
+      label: string;
+      title?: string;
+      slug?: string;
+      entityType: 'architecture';
+      description?: string;
+      dominant_language?: string;
+      size?: number;
+      cohesion?: number;
+      level?: number;
+      body?: string;
+      file_path?: string;
+    };
 
 declare global {
   interface Window {
@@ -174,6 +188,36 @@ export const useEntityDrawer = (
 
         const dec = m.data.decisions.find((d) => d.id === id);
         if (dec) return { ...dec, entityType: 'decision' as const, body: dec.raw_markdown };
+
+        // Support architecture graph nodes
+        if (id.startsWith('arch--') && m.data.graph?.nodes) {
+          const archNode = m.data.graph.nodes.find((n: any) => n.id === id);
+          if (archNode) {
+            const body = [
+              `### Architecture Module: ${archNode.label}`,
+              '',
+              `- **Description**: ${archNode.description || 'N/A'}`,
+              `- **Dominant Language**: ${archNode.dominant_language || 'N/A'}`,
+              `- **AST Symbols**: ${archNode.size ?? 'N/A'}`,
+              `- **Internal Cohesion**: ${archNode.cohesion ?? 'N/A'}`,
+              `- **Hierarchy Level**: ${archNode.level ?? 0}`,
+            ].join('\n');
+            return {
+              id: archNode.id,
+              label: archNode.label,
+              title: archNode.label,
+              slug: archNode.label,
+              entityType: 'architecture' as const,
+              description: archNode.description,
+              dominant_language: archNode.dominant_language,
+              size: archNode.size,
+              cohesion: archNode.cohesion,
+              level: archNode.level,
+              file_path: archNode.description || 'Architecture Module',
+              body,
+            };
+          }
+        }
 
         return null;
       },

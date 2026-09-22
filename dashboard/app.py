@@ -2,6 +2,7 @@
 
 import os
 import sys
+import shutil
 import argparse
 import subprocess
 import time
@@ -262,9 +263,30 @@ def main():
             out_path = collector.repo_root / out_path
         collector.collect_all()
         full_data_json = collector.to_full_data().model_dump_json(indent=2)
-        out_path.parent.mkdir(parents=True, exist_ok=True)
-        out_path.write_text(f"<script>window.__ALONG_DATA__ = {full_data_json};</script>", encoding="utf-8")
-        print(f"-> Static dashboard exported: {out_path}")
+        ui_dist = Path(__file__).resolve().parent / "ui" / "dist"
+
+        if out_path.suffix == ".html":
+            out_path.parent.mkdir(parents=True, exist_ok=True)
+            out_path.write_text(f"<script>window.__ALONG_DATA__ = {full_data_json};</script>", encoding="utf-8")
+            print(f"-> Static dashboard script exported: {out_path}")
+        elif out_path.suffix == ".json":
+            out_path.parent.mkdir(parents=True, exist_ok=True)
+            out_path.write_text(full_data_json, encoding="utf-8")
+            print(f"-> Static dashboard JSON exported: {out_path}")
+        else:
+            out_path.mkdir(parents=True, exist_ok=True)
+            data_file = out_path / "data.json"
+            data_file.write_text(full_data_json, encoding="utf-8")
+            if ui_dist.exists():
+                for item in ui_dist.iterdir():
+                    dst = out_path / item.name
+                    if item.is_dir():
+                        shutil.copytree(item, dst, dirs_exist_ok=True)
+                    else:
+                        shutil.copy2(item, dst)
+                print(f"-> Static dashboard UI and data.json exported to: {out_path}")
+            else:
+                print(f"-> Static data.json exported to: {data_file} (UI bundle not found at {ui_dist})")
         return
 
     if args.dev:

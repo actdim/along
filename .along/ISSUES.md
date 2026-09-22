@@ -20,9 +20,9 @@
 - [ ] `(feat)` [workspace-containment-and-path-scoping](ISSUES/feat--workspace-containment-and-path-scoping.md)
 
 ## Done (recent)
+- [x] `(feat)` [dashboard-architecture-graph-and-pages-publish](ISSUES/done/feat--dashboard-architecture-graph-and-pages-publish.md)
+- [x] `(docs)` [reconcile-kb-drift-and-provenance](ISSUES/done/docs--reconcile-kb-drift-and-provenance.md)
 - [x] `(debt)` [python-monolithic-functions-and-boilerplate](ISSUES/done/debt--python-monolithic-functions-and-boilerplate.md)
 - [x] `(debt)` [dashboard-ui-type-safety-and-security](ISSUES/done/debt--dashboard-ui-type-safety-and-security.md)
 - [x] `(feat)` [updater-explicit-global-sync](ISSUES/done/feat--updater-explicit-global-sync.md)
-- [x] `(feat)` [oneliner-installer](ISSUES/done/feat--oneliner-installer.md)
-- [x] `(feat)` [issues-board-backlog-partition](ISSUES/done/feat--issues-board-backlog-partition.md)
-<!-- 116 older completed issue(s) archived in .along/ISSUES/done/ -->
+<!-- 118 older completed issue(s) archived in .along/ISSUES/done/ -->

@@ -10,7 +10,7 @@ import { useComponent, toReact } from '@actdim/dynstruct/componentModel/react/ho
 import { Icon } from '@iconify/react';
 import { DashboardAppMsgStruct, DashboardMsgChannels } from '../bus';
 
-export type GraphFilterMode = 'all' | 'dag' | 'kb' | 'decisions';
+export type GraphFilterMode = 'all' | 'dag' | 'kb' | 'decisions' | 'architecture';
 
 export type GraphViewStruct = ComponentStruct<
   DashboardAppMsgStruct,
@@ -56,6 +56,7 @@ export const useGraphView = (
       if (currentFilter === 'dag') return ['issue', 'milestone', 'risk'].includes(n.type);
       if (currentFilter === 'kb') return n.type === 'kb';
       if (currentFilter === 'decisions') return ['decision', 'spike'].includes(n.type);
+      if (currentFilter === 'architecture') return n.type === 'architecture';
       return true;
     });
 
@@ -91,6 +92,9 @@ export const useGraphView = (
       } else if (n.type === 'kb') {
         color = '#a855f7';
         shape = 'round-rectangle';
+      } else if (n.type === 'architecture') {
+        color = '#14b8a6';
+        shape = 'round-rectangle';
       }
 
       elements.push({
@@ -122,6 +126,9 @@ export const useGraphView = (
       } else if (e.type === 'links_to') {
         edgeColor = '#c084fc';
         lineStyle = 'dashed';
+      } else if (e.type === 'calls') {
+        edgeColor = '#2dd4bf';
+        lineStyle = 'solid';
       }
 
       elements.push({
@@ -257,6 +264,7 @@ export const useGraphView = (
                 { id: 'dag', label: 'Tasks & DAG' },
                 { id: 'kb', label: 'Knowledge Base' },
                 { id: 'decisions', label: 'Decisions (ADR)' },
+                { id: 'architecture', label: 'Architecture' },
               ] as const
             ).map((filter) => (
               <button
@@ -332,6 +340,9 @@ export const useGraphView = (
             </div>
             <div className="flex items-center gap-1.5">
               <span className="w-2.5 h-2.5 rounded bg-purple-500" /> KB Article
+            </div>
+            <div className="flex items-center gap-1.5">
+              <span className="w-2.5 h-2.5 rounded bg-teal-500" /> Architecture
             </div>
           </div>
         </div>

@@ -4,13 +4,13 @@ slug: setup-and-workflow
 title: Setup & Developer Workflow
 type: setup-workflow
 created: 2026-08-30
-updated: 2026-09-19
+updated: 2026-09-22
 tags: [setup-workflow, installation, lifecycle, runners, developer-workflow, testing]
 sources:
   - path: README.md
-    hash: "9df3eb9eb487a28d4d01a1b371dc637994253dec3f748c7af028eaa21d1521ea"
+    hash: "d790393ec378f5a5849731afe6cacdd379033465f9842171da28a8f25112d81a"
   - path: AGENTS.md
-    hash: "b41b72c3035258d6ba845797c50452aa78044631e7ed179be4c92c21666a6d69"
+    hash: "d3cf40bcdb2d985decb6937e7b7b838666599607788cf6d3bf64245312fdd92d"
 ---
 
 # Setup & Developer Workflow
