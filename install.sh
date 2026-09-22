@@ -27,6 +27,7 @@ CLAUDE_HOME="${CLAUDE_HOME:-$HOME/.claude}"
 CODEX_HOME="${CODEX_HOME:-$HOME/.codex}"
 OPENCODE_HOME="${OPENCODE_HOME:-$HOME/.config/opencode}"
 ANTIGRAVITY_HOME="${ANTIGRAVITY_HOME:-$HOME/.gemini/config}"
+CACHE_DIR="${ALONG_CACHE_DIR:-$HOME/.cache/actdim-along/repo}"
 
 # Un-namespaced OpenCode commands from before the /along-* prefix. Kept at parity with
 # $shortAliases in install.ps1; tests/test_skills_and_scripts.py compares the two.
@@ -55,16 +56,68 @@ for arg in "$@"; do
     --migrate)            MIGRATE=1 ;;
     --uninstall)          UNINSTALL=1 ;;
     --include-unverified-mcp) INCLUDE_UNVERIFIED_MCP=1 ;;
+    --no-path-update)     NO_PATH_UPDATE=1 ;;
     --along-home=*)       ALONG_HOME="${arg#*=}" ;;
     --claude-home=*)      CLAUDE_HOME="${arg#*=}" ;;
     --codex-home=*)       CODEX_HOME="${arg#*=}" ;;
     --opencode-home=*)    OPENCODE_HOME="${arg#*=}" ;;
     --antigravity-home=*) ANTIGRAVITY_HOME="${arg#*=}" ;;
+    --cache-dir=*)        CACHE_DIR="${arg#*=}" ;;
     *) echo "unknown arg: $arg" >&2; exit 1 ;;
   esac
 done
 
-SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+SCRIPT_DIR="$(cd "$(dirname "$0")" 2>/dev/null && pwd || echo "")"
+
+if [ -z "$SCRIPT_DIR" ] || [ ! -d "$SCRIPT_DIR/skills" ] || [ ! -d "$SCRIPT_DIR/scripts" ]; then
+  echo "-> Along: standalone/remote installer detected. Bootstrapping repository..."
+  REPO_URL="https://github.com/actdim/along.git"
+  ARCHIVE_URL="https://github.com/actdim/along/archive/refs/heads/main.tar.gz"
+  BOOTSTRAPPED=0
+
+  if [ -d "$CACHE_DIR/skills" ] && [ -d "$CACHE_DIR/scripts" ]; then
+    BOOTSTRAPPED=1
+  fi
+
+  if command -v git >/dev/null 2>&1; then
+    if [ -d "$CACHE_DIR/.git" ]; then
+      echo "-> Updating cached Along repository in $CACHE_DIR..."
+      if git -C "$CACHE_DIR" fetch --all --tags --quiet && git -C "$CACHE_DIR" reset --hard origin/main --quiet; then
+        BOOTSTRAPPED=1
+      fi
+    elif [ "$BOOTSTRAPPED" -eq 0 ]; then
+      echo "-> Cloning Along repository into $CACHE_DIR..."
+      mkdir -p "$(dirname "$CACHE_DIR")"
+      rm -rf "$CACHE_DIR"
+      if git clone --depth 1 "$REPO_URL" "$CACHE_DIR" --quiet; then
+        BOOTSTRAPPED=1
+      fi
+    fi
+  fi
+
+  if [ "$BOOTSTRAPPED" -eq 0 ]; then
+    echo "-> Fetching Along archive from GitHub ($ARCHIVE_URL)..."
+    mkdir -p "$CACHE_DIR"
+    TEMP_TAR="$(mktemp 2>/dev/null || echo "/tmp/along-bootstrap.$$.tar.gz")"
+    if curl -fsSL "$ARCHIVE_URL" -o "$TEMP_TAR" 2>/dev/null || wget -qO "$TEMP_TAR" "$ARCHIVE_URL" 2>/dev/null; then
+      tar -xzf "$TEMP_TAR" --strip-components=1 -C "$CACHE_DIR"
+      rm -f "$TEMP_TAR"
+      BOOTSTRAPPED=1
+    else
+      rm -f "$TEMP_TAR"
+      echo "-> [Error] Failed to download Along archive." >&2
+      exit 1
+    fi
+  fi
+
+  TARGET_SCRIPT="$CACHE_DIR/install.sh"
+  if [ ! -f "$TARGET_SCRIPT" ]; then
+    echo "-> [Error] Bootstrapped install script not found at $TARGET_SCRIPT" >&2
+    exit 1
+  fi
+
+  exec bash "$TARGET_SCRIPT" "$@"
+fi
 
 # The engines this installer delegates to. Everything that has to decide something -
 # which MCP configuration file a provider really reads, what a previous install put on
@@ -181,6 +234,13 @@ install_along_scripts() {
     find "$along_bin" -name "__pycache__" -type d -prune -exec rm -rf {} + 2>/dev/null || true
     chmod +x "$along_bin/along" 2>/dev/null || true
     echo "-> Along tools installed -> $along_bin"
+    case ":$PATH:" in
+      *":$along_bin:"*) ;;
+      *)
+        echo "-> [Note] To run 'along' from anywhere, ensure $along_bin is in your PATH:"
+        echo "   export PATH=\"$along_bin:\$PATH\""
+        ;;
+    esac
   fi
   local cfg_file="$along_home/config.json"
   local example_cfg="$SCRIPT_DIR/config/along-config.example.json"
