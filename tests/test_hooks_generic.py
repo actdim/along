@@ -234,6 +234,37 @@ class TestInstallCursorHooks(unittest.TestCase):
             self.assertIn("updated", res.stdout)
             self.assertTrue(os.path.isfile(os.path.join(tmp, ".cursor", "hooks.json")))
 
+    def test_cli_along_hook_eval_with_payload_opt(self):
+        script_path = os.path.join(SCRIPTS_DIR, "along_hook.py")
+        with tempfile.TemporaryDirectory() as tmp:
+            payload = json.dumps({"tool_name": "run_command", "tool_args": {"CommandLine": "dir"}})
+            res = proc.run_capture(
+                [sys.executable, script_path, "eval", "PreToolUse", "--payload", payload, "--repo-root", tmp],
+            )
+            self.assertEqual(res.returncode, 0)
+
+    def test_cli_along_hook_eval_with_positional_payload_denied(self):
+        script_path = os.path.join(SCRIPTS_DIR, "along_hook.py")
+        with tempfile.TemporaryDirectory() as tmp:
+            os.makedirs(os.path.join(tmp, ".along"), exist_ok=True)
+            payload = json.dumps({"tool_name": "run_command", "tool_args": {"CommandLine": "git commit -m \"feat: bad message\""}})
+            res = proc.run_capture(
+                [sys.executable, script_path, "eval", "PreToolUse", payload, "--repo-root", tmp],
+            )
+            self.assertNotEqual(res.returncode, 0)
+            self.assertIn("commit-issue-binding", res.stderr + res.stdout)
+
+    def test_cli_along_hook_eval_stdin_pipe(self):
+        script_path = os.path.join(SCRIPTS_DIR, "along_hook.py")
+        with tempfile.TemporaryDirectory() as tmp:
+            os.makedirs(os.path.join(tmp, ".along"), exist_ok=True)
+            payload = json.dumps({"tool_name": "run_command", "tool_args": {"CommandLine": "dir"}})
+            res = proc.run_capture(
+                [sys.executable, script_path, "eval", "PreToolUse", "--repo-root", tmp],
+                stdin_text=payload,
+            )
+            self.assertEqual(res.returncode, 0)
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -10,7 +10,7 @@ divergence this package exists to remove.
 works from a source checkout, from a global file install in `~/.along/bin/`, and from
 a wheel where the engines ship inside the package as `alongkit/engines/`.
 
-Rewriting the eighteen `SKILL.md` files onto this command is tracked separately as
+Rewriting the nineteen `SKILL.md` files onto this command is tracked separately as
 `[bug--skill-commands-reference-missing-script-paths]`; until then both invocations
 work and neither is deprecated.
 """

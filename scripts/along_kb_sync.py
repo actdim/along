@@ -977,24 +977,7 @@ def sync_decisions_to_docs(repo_root: str, check_only: bool = False) -> str:
     return target_dir
 
 
-def sync_kb(
-    repo_root,
-    check_only=False,
-    strict=False,
-    prune_intent=None,
-    is_subproject=False,
-    output_json=False,
-    migrate_numbered=False,
-    explicit_mapping=None,
-    crosslink_check=False,
-    crosslink_apply=False,
-    check_symbols=False,
-    strict_sections=False,
-):
-    repo_root = os.path.abspath(repo_root)
-    docs_dir = os.path.join(repo_root, "docs")
-    today = datetime.now().strftime("%Y-%m-%d")
-
+def _kb_reconcile_and_bootstrap(repo_root: str, docs_dir: str, check_only: bool):
     print(f"-> Synchronizing Knowledge Base in {docs_dir}...")
     reconcile_sources(repo_root, docs_dir, dry_run=check_only)
 
@@ -1009,21 +992,22 @@ def sync_kb(
         else:
             print("   docs/ does not exist (check-only mode; zero modifications made).")
 
+
+def _kb_ingest_articles(
+    repo_root: str,
+    docs_dir: str,
+    in_git: bool,
+    check_only: bool,
+    crosslink_apply: bool,
+    crosslink_check: bool,
+    topic_dict,
+    today: str,
+):
     articles = []
     doc_cross_links = {}
     orphaned_sources = []
     drifted_sources = []
     shrunk_articles = []
-
-    # Check for git repository to inspect content reduction against HEAD
-    in_git = False
-    try:
-        git_check = proc.run_capture(["git", "rev-parse", "--is-inside-work-tree"], cwd=repo_root)
-        in_git = git_check.ok and git_check.stdout.strip() == "true"
-    except OSError:
-        in_git = False
-
-    topic_dict = kb.TopicDictionary.build_from_dir(docs_dir)
     crosslink_candidates = []
     total_crosslinks_applied = 0
 
@@ -1169,7 +1153,18 @@ def sync_kb(
         except (OSError, ValueError, frontmatter.FrontmatterError) as e:
             print(f"   [WARN] Failed to process {f}: {e}")
 
-    # Intent Gate: Check if any article shrank significantly without --prune-intent
+    return (
+        articles,
+        doc_cross_links,
+        orphaned_sources,
+        drifted_sources,
+        shrunk_articles,
+        crosslink_candidates,
+        total_crosslinks_applied,
+    )
+
+
+def _kb_check_shrunk_articles(shrunk_articles, prune_intent):
     if shrunk_articles:
         if not prune_intent:
             print("\n[WARNING] Detected significant content reduction in Knowledge Base:")
@@ -1182,6 +1177,8 @@ def sync_kb(
         else:
             print(f"   [PRUNE-INTENT] Acknowledged content reduction: {prune_intent}")
 
+
+def _kb_generate_index(repo_root: str, docs_dir: str, articles, doc_cross_links, today: str, check_only: bool):
     index_path = os.path.join(docs_dir, "INDEX.md")
     index_created = today
     if os.path.isfile(index_path):
@@ -1217,7 +1214,7 @@ def sync_kb(
         "flowchart TD",
         "    INDEX[\"Knowledge Base (INDEX)\"]",
     ]
-    
+
     node_ids = {}
     for i, art in enumerate(articles, 1):
         clean_nid = "T_" + re.sub(r"[^A-Z0-9_]", "_", art['slug'].replace('topic--', '').upper())
@@ -1226,7 +1223,6 @@ def sync_kb(
         mermaid_lines.append(f'    {clean_nid}["{safe_title}"]')
         mermaid_lines.append(f'    INDEX --> {clean_nid}')
 
-    # A2: deduplicate graph edges - a file may reference another multiple times
     seen_edges: set[tuple[str, str]] = set()
     for f_name, cross_targets in doc_cross_links.items():
         src_id = node_ids.get(f_name)
@@ -1282,14 +1278,28 @@ def sync_kb(
             fp.write(full_index)
         print(f"   -> Rebuilt docs/INDEX.md ({len(articles)} articles indexed).")
 
-    # Step: Export modular decisions to docs/decisions/ for MkDocs publication
-    sync_decisions_to_docs(repo_root, check_only=check_only)
+    return index_path
 
-    # Step: Smart non-destructive synchronization of llms.txt and deterministic llms-full.txt
+
+def _kb_export_artifacts(repo_root: str, articles, check_only: bool):
+    sync_decisions_to_docs(repo_root, check_only=check_only)
     sync_llms_txt(repo_root, articles, dry_run=check_only)
     sync_llms_full_txt(repo_root, articles, dry_run=check_only)
 
-    # Step: Cascading subproject synchronization for Along contexts
+
+def _kb_sync_subprojects(
+    repo_root: str,
+    is_subproject: bool,
+    check_only: bool,
+    strict: bool,
+    prune_intent,
+    migrate_numbered: bool,
+    explicit_mapping,
+    crosslink_check: bool,
+    crosslink_apply: bool,
+    check_symbols: bool,
+    strict_sections: bool,
+):
     if not is_subproject:
         all_contexts = repo.find_agent_contexts(repo_root)
         abs_root = os.path.abspath(repo_root)
@@ -1311,10 +1321,11 @@ def sync_kb(
                         crosslink_check=crosslink_check, crosslink_apply=crosslink_apply,
                         check_symbols=check_symbols, strict_sections=strict_sections)
 
+
+def _kb_rewrite_inbound_links(repo_root: str, is_subproject: bool, check_only: bool, migrate_numbered: bool, explicit_mapping):
     rewritten_files = 0
     total_rewrites = 0
     if not is_subproject:
-        # Step: Inbound Link Rewriting across the entire repository
         print("-> Scanning repository for inbound legacy links (Link Rewriting Engine)...")
         rewritten_files, total_rewrites = rewrite_inbound_links(
             repo_root, dry_run=check_only, migrate_numbered=migrate_numbered,
@@ -1325,16 +1336,23 @@ def sync_kb(
             print(f"   [OK] {verb} {total_rewrites} legacy link(s) across {rewritten_files} file(s).")
         else:
             print("   [OK] Inbound links are clean and up to date.")
+    return rewritten_files, total_rewrites
 
-    # Step: Repository-wide Link Integrity Gate (runs BEFORE legacy directory deletion, REQ-5)
+
+def _kb_validate_integrity_and_cleanup(
+    repo_root: str,
+    is_subproject: bool,
+    check_only: bool,
+    crosslink_check: bool,
+    crosslink_apply: bool,
+    crosslink_candidates,
+    total_crosslinks_applied: int,
+):
     print("-> Executing Global Link Integrity Gate across all repository Markdown files...")
     integrity_res = validate_repo_link_integrity(repo_root, return_violations=True)
     broken_links, total_checked, entry_point_violations = integrity_res
     legacy_kb_references = getattr(integrity_res, "legacy_kb_references", [])
 
-    # Step: Safe legacy directory cleanup (REQ-5)
-    # The rewrite pass must complete and be verified before any legacy directory deletion,
-    # and deletion must be skipped if unresolved references to that directory remain.
     if not is_subproject and not check_only:
         legacy_dirs = [os.path.join(repo_root, ".along", "KB"), os.path.join(repo_root, ".agents", "KB")]
         for old_kb in legacy_dirs:
@@ -1376,7 +1394,10 @@ def sync_kb(
     if crosslink_apply:
         print(f"   [OK] Total cross-links applied: {total_crosslinks_applied}")
 
-    # Step: Section Taxonomy Contract Gate
+    return broken_links, total_checked, entry_point_violations
+
+
+def _kb_validate_taxonomy_and_symbols(repo_root: str, docs_dir: str, articles, check_symbols: bool):
     section_violations = []
     if os.path.exists(docs_dir):
         for art in articles:
@@ -1404,7 +1425,6 @@ def sync_kb(
     elif any(art["type"] in SECTION_CONTRACTS for art in articles):
         print("   [OK] Mandatory section taxonomy contracts verified across standard topic articles.")
 
-    # Step: AST Code Symbol Grounding Gate
     ghost_symbols = []
     if check_symbols and os.path.exists(docs_dir):
         print("-> Executing AST Code Symbol Grounding Gate...")
@@ -1434,7 +1454,25 @@ def sync_kb(
         else:
             print("   [OK] All documented code symbols verified in repository AST.")
 
-    total_articles = len(articles) + (1 if os.path.exists(index_path) else 0)
+    return section_violations, ghost_symbols
+
+
+def _kb_format_report_and_exit(
+    total_articles: int,
+    broken_links,
+    total_checked: int,
+    entry_point_violations,
+    rewritten_files: int,
+    total_rewrites: int,
+    section_violations,
+    crosslink_candidates,
+    total_crosslinks_applied: int,
+    ghost_symbols,
+    output_json: bool,
+    strict: bool,
+    strict_sections: bool,
+    check_symbols: bool,
+):
     print(f"-> Knowledge Base sync complete. Total active articles: {total_articles}\n")
 
     if output_json:
@@ -1464,6 +1502,112 @@ def sync_kb(
     if reasons:
         print(f"   [FAIL] Gate failed in strict mode: {', '.join(reasons)}.")
         sys.exit(1)
+
+
+def sync_kb(
+    repo_root,
+    check_only=False,
+    strict=False,
+    prune_intent=None,
+    is_subproject=False,
+    output_json=False,
+    migrate_numbered=False,
+    explicit_mapping=None,
+    crosslink_check=False,
+    crosslink_apply=False,
+    check_symbols=False,
+    strict_sections=False,
+):
+    repo_root = os.path.abspath(repo_root)
+    docs_dir = os.path.join(repo_root, "docs")
+    today = datetime.now().strftime("%Y-%m-%d")
+
+    _kb_reconcile_and_bootstrap(repo_root, docs_dir, check_only)
+
+    in_git = False
+    try:
+        git_check = proc.run_capture(["git", "rev-parse", "--is-inside-work-tree"], cwd=repo_root)
+        in_git = git_check.ok and git_check.stdout.strip() == "true"
+    except OSError:
+        in_git = False
+
+    topic_dict = kb.TopicDictionary.build_from_dir(docs_dir)
+
+    (
+        articles,
+        doc_cross_links,
+        orphaned_sources,
+        drifted_sources,
+        shrunk_articles,
+        crosslink_candidates,
+        total_crosslinks_applied,
+    ) = _kb_ingest_articles(
+        repo_root,
+        docs_dir,
+        in_git,
+        check_only,
+        crosslink_apply,
+        crosslink_check,
+        topic_dict,
+        today,
+    )
+
+    _kb_check_shrunk_articles(shrunk_articles, prune_intent)
+
+    index_path = _kb_generate_index(repo_root, docs_dir, articles, doc_cross_links, today, check_only)
+
+    _kb_export_artifacts(repo_root, articles, check_only)
+
+    _kb_sync_subprojects(
+        repo_root,
+        is_subproject,
+        check_only,
+        strict,
+        prune_intent,
+        migrate_numbered,
+        explicit_mapping,
+        crosslink_check,
+        crosslink_apply,
+        check_symbols,
+        strict_sections,
+    )
+
+    rewritten_files, total_rewrites = _kb_rewrite_inbound_links(
+        repo_root, is_subproject, check_only, migrate_numbered, explicit_mapping
+    )
+
+    broken_links, total_checked, entry_point_violations = _kb_validate_integrity_and_cleanup(
+        repo_root,
+        is_subproject,
+        check_only,
+        crosslink_check,
+        crosslink_apply,
+        crosslink_candidates,
+        total_crosslinks_applied,
+    )
+
+    section_violations, ghost_symbols = _kb_validate_taxonomy_and_symbols(
+        repo_root, docs_dir, articles, check_symbols
+    )
+
+    total_articles = len(articles) + (1 if os.path.exists(index_path) else 0)
+
+    _kb_format_report_and_exit(
+        total_articles,
+        broken_links,
+        total_checked,
+        entry_point_violations,
+        rewritten_files,
+        total_rewrites,
+        section_violations,
+        crosslink_candidates,
+        total_crosslinks_applied,
+        ghost_symbols,
+        output_json,
+        strict,
+        strict_sections,
+        check_symbols,
+    )
 
     return total_articles, len(broken_links)
 

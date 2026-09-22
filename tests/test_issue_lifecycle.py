@@ -534,19 +534,28 @@ class TestIssueCreateCommand(unittest.TestCase):
         self.assertIsNone(data2.get("milestone"))
 
     def test_24d_board_partitions_active_and_backlog(self):
+        # Initially board has placeholders
+        board_path = os.path.join(self.along_dir, "ISSUES.md")
+        entities.sync_issues_board(self.repo)
+        with open(board_path, "r", encoding="utf-8") as f:
+            board_empty = f.read()
+        self.assertIn("<!-- No active issues -->", board_empty)
+        self.assertIn("<!-- No backlog issues -->", board_empty)
+
         # Create an issue (defaults to status: open)
         res = self._run_create("feat", "backlog-item")
         self.assertEqual(res.returncode, 0)
 
-        board_path = os.path.join(self.along_dir, "ISSUES.md")
         self.assertTrue(os.path.isfile(board_path))
         with open(board_path, "r", encoding="utf-8") as f:
             board = f.read()
 
-        # Should be in Backlog, not Active
+        # Should be in Backlog, not Active, and Active should have placeholder
         active_part, backlog_part = board.split("## Backlog")
         self.assertNotIn("backlog-item", active_part)
+        self.assertIn("<!-- No active issues -->", active_part)
         self.assertIn("backlog-item", backlog_part)
+        self.assertNotIn("<!-- No backlog issues -->", backlog_part)
 
         # Mark in-progress
         update_cmd = [sys.executable, self.EXEC, "issue", "update", "backlog-item", "--status", "in-progress"]
@@ -558,7 +567,31 @@ class TestIssueCreateCommand(unittest.TestCase):
 
         active_part2, backlog_part2 = board2.split("## Backlog")
         self.assertIn("backlog-item", active_part2)
+        self.assertNotIn("<!-- No active issues -->", active_part2)
         self.assertNotIn("backlog-item", backlog_part2)
+        self.assertIn("<!-- No backlog issues -->", backlog_part2)
+
+        # Create a blocked issue
+        res_blocked = self._run_create("bug", "blocked-item")
+        self.assertEqual(res_blocked.returncode, 0)
+        res_block_up = proc.run_capture(
+            [sys.executable, self.EXEC, "issue", "update", "blocked-item", "--status", "blocked"],
+            cwd=self.repo,
+        )
+        self.assertEqual(res_block_up.returncode, 0)
+
+        with open(board_path, "r", encoding="utf-8") as f:
+            board3 = f.read()
+        active_part3, backlog_part3 = board3.split("## Backlog")
+        self.assertIn("backlog-item", active_part3)
+        self.assertIn("blocked-item", backlog_part3)
+
+    def test_24e_compile_issues_board_unit(self):
+        # Test direct compilation on synthetic repository
+        content_empty = entities.compile_issues_board(self.repo)
+        self.assertIn("## Active\n<!-- No active issues -->", content_empty)
+        self.assertIn("## Backlog\n<!-- No backlog issues -->", content_empty)
+        self.assertIn("## Done (recent)\n<!-- No completed issues -->", content_empty)
 
 
 class TestDoctorEntitiesCommand(unittest.TestCase):

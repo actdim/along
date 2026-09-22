@@ -623,7 +623,7 @@ RECENT_DONE_LIMIT: int = 5
 
 def compile_issues_board(repo_root: str, recent_done_limit: int = RECENT_DONE_LIMIT) -> str:
     """Compile active issues, backlog issues, and recent completed issues into ISSUES.md content."""
-    from . import repo
+    from . import frontmatter, repo, textio
     issues_dir = os.path.join(repo.state_dir(repo_root), "ISSUES")
     done_dir = os.path.join(issues_dir, "done")
     active_items = []
@@ -639,11 +639,10 @@ def compile_issues_board(repo_root: str, recent_done_limit: int = RECENT_DONE_LI
                 fpath = os.path.join(issues_dir, f)
                 istatus = "open"
                 try:
-                    with open(fpath, "r", encoding="utf-8", errors="ignore") as handle:
-                        head = handle.read(500)
-                    m_stat = re.search(r"^status:\s*[\"']?([a-z-]+)[\"']?", head, re.MULTILINE)
-                    if m_stat:
-                        istatus = m_stat.group(1).lower()
+                    content = textio.read_text(fpath)
+                    fm, _, _ = frontmatter.try_parse(content, path=fpath)
+                    if fm.get("status"):
+                        istatus = str(fm["status"]).lower()
                 except OSError:
                     pass
 
@@ -664,18 +663,14 @@ def compile_issues_board(repo_root: str, recent_done_limit: int = RECENT_DONE_LI
                 comp_date = ""
                 istatus = "done"
                 try:
-                    with open(fpath, "r", encoding="utf-8", errors="ignore") as handle:
-                        head = handle.read(500)
-                    m_stat = re.search(r"^status:\s*[\"']?([a-z-]+)[\"']?", head, re.MULTILINE)
-                    if m_stat:
-                        istatus = m_stat.group(1).lower()
-                    m_comp = re.search(r"^completed:\s*[\"']?([0-9-]+)[\"']?", head, re.MULTILINE)
-                    if m_comp:
-                        comp_date = m_comp.group(1)
-                    else:
-                        m_creat = re.search(r"^created:\s*[\"']?([0-9-]+)[\"']?", head, re.MULTILINE)
-                        if m_creat:
-                            comp_date = m_creat.group(1)
+                    content = textio.read_text(fpath)
+                    fm, _, _ = frontmatter.try_parse(content, path=fpath)
+                    if fm.get("status"):
+                        istatus = str(fm["status"]).lower()
+                    if fm.get("completed"):
+                        comp_date = str(fm["completed"])
+                    elif fm.get("created"):
+                        comp_date = str(fm["created"])
                 except OSError:
                     pass
                 if not comp_date:
@@ -704,7 +699,7 @@ def compile_issues_board(repo_root: str, recent_done_limit: int = RECENT_DONE_LI
 {chr(10).join(active_items) if active_items else "<!-- No active issues -->"}
 
 ## Backlog
-{chr(10).join(backlog_items) if backlog_items else "<!-- Planned or deferred issues -->"}
+{chr(10).join(backlog_items) if backlog_items else "<!-- No backlog issues -->"}
 
 ## Done (recent)
 {chr(10).join(done_items) if done_items else "<!-- No completed issues -->"}

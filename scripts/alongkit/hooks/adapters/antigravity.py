@@ -23,8 +23,9 @@ class AntigravityAdapter(BaseAdapter):
     def parse(self, raw_input: str, event_type: HookEventType = HookEventType.PRE_TOOL_USE) -> HookEvent:
         payload: Dict[str, Any] = {}
         if raw_input and raw_input.strip():
+            clean_text = raw_input.lstrip("\ufeff").strip()
             try:
-                payload = json.loads(raw_input)
+                payload = json.loads(clean_text)
             except json.JSONDecodeError:
                 pass
 

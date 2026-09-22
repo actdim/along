@@ -70,8 +70,9 @@ class GenericCliAdapter(BaseAdapter):
         is_json = False
 
         if raw_input and raw_input.strip():
+            clean_text = raw_input.lstrip("\ufeff").strip()
             try:
-                parsed = json.loads(raw_input)
+                parsed = json.loads(clean_text)
                 if isinstance(parsed, dict):
                     payload = parsed
                     is_json = True
@@ -131,13 +132,13 @@ class GenericCliAdapter(BaseAdapter):
 
         # 3. Extract and normalize tool arguments
         raw_params = None
-        for key in ("tool_input", "parameters", "arguments", "args", "input"):
+        for key in ("tool_input", "tool_args", "parameters", "arguments", "args", "input"):
             if key in payload and payload[key] is not None:
                 raw_params = payload[key]
                 break
 
         if raw_params is None and isinstance(tool_call, dict):
-            for key in ("parameters", "arguments", "args", "input"):
+            for key in ("tool_args", "parameters", "arguments", "args", "input"):
                 if key in tool_call and tool_call[key] is not None:
                     raw_params = tool_call[key]
                     break

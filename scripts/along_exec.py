@@ -30,8 +30,7 @@ import json
 import shlex
 import shutil
 from datetime import datetime, timezone
-from pathlib import Path
-from typing import Optional, List, Dict, Tuple
+from typing import Optional, List, Dict, Any
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
@@ -43,7 +42,7 @@ from alongkit import bootstrap
 # installers and the documented skill commands invoke it.
 bootstrap.ensure_deps()
 
-from alongkit import circuit, diagnostics, entities, frontmatter, lifecycle, proc, repo, session, textio
+from alongkit import circuit, entities, frontmatter, lifecycle, proc, repo, session, textio
 from alongkit.version import CURRENT_PROTOCOL_VERSION
 
 TOOL_MAPPINGS = {
@@ -88,9 +87,6 @@ find_repo_root = repo.find_repo_root
 resolve_tool_script = repo.resolve_tool_script
 has_frontmatter = frontmatter.has_frontmatter
 update_frontmatter_fields = frontmatter.update
-
-
-try_record_incident = diagnostics.try_record_incident
 
 
 get_lifecycle_script_path = lifecycle.get_lifecycle_script_path
@@ -170,100 +166,86 @@ RECENT_DONE_LIMIT = entities.RECENT_DONE_LIMIT
 compile_issues_board = entities.compile_issues_board
 
 
-def handle_issue_command(repo_root: str, args: List[str]):
-    if not args or args[0] in ("-h", "--help", "help"):
-        print("Usage: along_exec.py issue [create|update|done|sync|list|show] [args...]")
-        sys.exit(0)
+def _issue_create(repo_root: str, args: List[str], issues_dir: str, today: str):
+    if len(args) < 3:
+        print("[Error] Usage: along_exec.py issue create <type> <slug> --title \"Title\" [--priority high|medium|low] [--tags \"tag1,tag2\"] [--agent <name>] [--milestone <name>]", file=sys.stderr)
+        sys.exit(1)
+    itype = args[1].lower()
+    if itype not in entities.ISSUE_TYPES:
+        print(f"[Error] Invalid issue type '{itype}'. Allowed types: {', '.join(entities.ISSUE_TYPES)}", file=sys.stderr)
+        sys.exit(1)
 
-    subcmd = args[0].lower()
-    from datetime import datetime
+    islug = args[2].lower()
+    if not entities.is_valid_slug(islug):
+        print(f"[Error] Invalid issue slug '{islug}'. Slug must be 2-5 lowercase kebab-case words (e.g. my-feature-name).", file=sys.stderr)
+        sys.exit(1)
 
-    issues_dir = os.path.join(repo_root, ".along", "ISSUES")
-    done_dir = os.path.join(issues_dir, "done")
-    os.makedirs(issues_dir, exist_ok=True)
-    os.makedirs(done_dir, exist_ok=True)
-    today = datetime.now().strftime("%Y-%m-%d")
+    existing_issue = entities.find_issue_by_slug(repo_root, islug)
+    if existing_issue:
+        rel_existing = os.path.relpath(existing_issue["file_path"], repo_root)
+        print(f"[Error] An issue with slug '{islug}' already exists: {rel_existing}", file=sys.stderr)
+        sys.exit(1)
 
-    if subcmd == "create":
-        if len(args) < 3:
-            print("[Error] Usage: along_exec.py issue create <type> <slug> --title \"Title\" [--priority high|medium|low] [--tags \"tag1,tag2\"] [--agent <name>] [--milestone <name>]", file=sys.stderr)
-            sys.exit(1)
-        itype = args[1].lower()
-        if itype not in entities.ISSUE_TYPES:
-            print(f"[Error] Invalid issue type '{itype}'. Allowed types: {', '.join(entities.ISSUE_TYPES)}", file=sys.stderr)
-            sys.exit(1)
+    title = islug.replace("-", " ").capitalize()
+    priority = "medium"
+    tags = []
+    explicit_agent = None
+    explicit_milestone = None
+    no_milestone = False
 
-        islug = args[2].lower()
-        if not entities.is_valid_slug(islug):
-            print(f"[Error] Invalid issue slug '{islug}'. Slug must be 2-5 lowercase kebab-case words (e.g. my-feature-name).", file=sys.stderr)
-            sys.exit(1)
-
-        existing_issue = entities.find_issue_by_slug(repo_root, islug)
-        if existing_issue:
-            rel_existing = os.path.relpath(existing_issue["file_path"], repo_root)
-            print(f"[Error] An issue with slug '{islug}' already exists: {rel_existing}", file=sys.stderr)
-            sys.exit(1)
-
-        title = islug.replace("-", " ").capitalize()
-        priority = "medium"
-        tags = []
-        explicit_agent = None
-        explicit_milestone = None
-        no_milestone = False
-
-        i = 3
-        while i < len(args):
-            if args[i] in ("--title", "-t") and i + 1 < len(args):
-                title = args[i + 1]
-                i += 2
-            elif args[i] in ("--priority", "-p") and i + 1 < len(args):
-                priority = args[i + 1].lower()
-                i += 2
-            elif args[i] in ("--tags",) and i + 1 < len(args):
-                tags = [t.strip() for t in args[i + 1].split(",") if t.strip()]
-                i += 2
-            elif args[i] in ("--agent", "-a") and i + 1 < len(args):
-                explicit_agent = args[i + 1]
-                i += 2
-            elif args[i] in ("--milestone", "-m") and i + 1 < len(args):
-                explicit_milestone = args[i + 1]
-                i += 2
-            elif args[i] in ("--no-milestone",):
-                no_milestone = True
-                i += 1
-            else:
-                i += 1
-
-        if priority not in entities.PRIORITIES:
-            print(f"[Error] Invalid priority '{priority}'. Allowed priorities: {', '.join(entities.PRIORITIES)}", file=sys.stderr)
-            sys.exit(1)
-
-        agent = entities.detect_agent(explicit_agent)
-
-        milestone = None
-        if no_milestone:
-            milestone = None
-        elif explicit_milestone:
-            if explicit_milestone.lower() in ("none", "null", "~", ""):
-                milestone = None
-            else:
-                clean_m = explicit_milestone[:-3] if explicit_milestone.endswith(".md") else explicit_milestone
-                m_path = os.path.join(repo_root, ".along", "MILESTONES", f"{clean_m}.md")
-                if not os.path.exists(m_path):
-                    print(f"[Error] Milestone '{explicit_milestone}' does not exist in .along/MILESTONES/.", file=sys.stderr)
-                    sys.exit(1)
-                milestone = clean_m
+    i = 3
+    while i < len(args):
+        if args[i] in ("--title", "-t") and i + 1 < len(args):
+            title = args[i + 1]
+            i += 2
+        elif args[i] in ("--priority", "-p") and i + 1 < len(args):
+            priority = args[i + 1].lower()
+            i += 2
+        elif args[i] in ("--tags",) and i + 1 < len(args):
+            tags = [t.strip() for t in args[i + 1].split(",") if t.strip()]
+            i += 2
+        elif args[i] in ("--agent", "-a") and i + 1 < len(args):
+            explicit_agent = args[i + 1]
+            i += 2
+        elif args[i] in ("--milestone", "-m") and i + 1 < len(args):
+            explicit_milestone = args[i + 1]
+            i += 2
+        elif args[i] in ("--no-milestone",):
+            no_milestone = True
+            i += 1
         else:
-            milestone = entities.resolve_in_progress_milestone(repo_root)
+            i += 1
 
-        inferred = entities.infer_issue_type(f"{islug} {title}")
-        if itype == "feat" and inferred in ("bug", "debt"):
-            print(f"-> [Notice] Title/slug matches {inferred} keywords. Consider using type '{inferred}' instead of 'feat'.")
+    if priority not in entities.PRIORITIES:
+        print(f"[Error] Invalid priority '{priority}'. Allowed priorities: {', '.join(entities.PRIORITIES)}", file=sys.stderr)
+        sys.exit(1)
 
-        milestone_line = f"milestone: {milestone}\n" if milestone else ""
-        target_file = os.path.join(issues_dir, f"{itype}--{islug}.md")
-        tags_str = f"[{', '.join(tags)}]" if tags else "[]"
-        content = f"""---
+    agent = entities.detect_agent(explicit_agent)
+
+    milestone = None
+    if no_milestone:
+        milestone = None
+    elif explicit_milestone:
+        if explicit_milestone.lower() in ("none", "null", "~", ""):
+            milestone = None
+        else:
+            clean_m = explicit_milestone[:-3] if explicit_milestone.endswith(".md") else explicit_milestone
+            m_path = os.path.join(repo_root, ".along", "MILESTONES", f"{clean_m}.md")
+            if not os.path.exists(m_path):
+                print(f"[Error] Milestone '{explicit_milestone}' does not exist in .along/MILESTONES/.", file=sys.stderr)
+                sys.exit(1)
+            milestone = clean_m
+    else:
+        milestone = entities.resolve_in_progress_milestone(repo_root)
+
+    inferred = entities.infer_issue_type(f"{islug} {title}")
+    if itype == "feat" and inferred in ("bug", "debt"):
+        print(f"-> [Notice] Title/slug matches {inferred} keywords. Consider using type '{inferred}' instead of 'feat'.")
+
+    milestone_line = f"milestone: {milestone}\n" if milestone else ""
+    target_file = os.path.join(issues_dir, f"{itype}--{islug}.md")
+    tags_str = f"[{', '.join(tags)}]" if tags else "[]"
+    content = f"""---
 protocol: along
 protocol_version: "{CURRENT_PROTOCOL_VERSION}"
 slug: {islug}
@@ -286,249 +268,279 @@ Describe the feature, requirements, and background context here.
 - [ ] Task requirement 1
 - [ ] Automated tests passing
 """
-        textio.write_text(target_file, content, newline="\n", atomic=True)
-        print(f"-> Created issue: {target_file}")
+    textio.write_text(target_file, content, newline="\n", atomic=True)
+    print(f"-> Created issue: {target_file}")
 
-        # Update ISSUES.md
-        issues_board = os.path.join(repo_root, ".along", "ISSUES.md")
-        if os.path.exists(issues_board):
-            entities.sync_issues_board(repo_root, recent_done_limit=RECENT_DONE_LIMIT)
-            print("-> Updated .along/ISSUES.md")
-        sys.exit(0)
+    # Update ISSUES.md
+    issues_board = os.path.join(repo_root, ".along", "ISSUES.md")
+    if os.path.exists(issues_board):
+        entities.sync_issues_board(repo_root, recent_done_limit=RECENT_DONE_LIMIT)
+        print("-> Updated .along/ISSUES.md")
+    sys.exit(0)
 
 
-    elif subcmd in ("done", "close"):
-        if len(args) < 2:
-            print("[Error] Usage: along_exec.py issue done <slug> [--status done|superseded|cancelled|duplicate] [--superseded-by <key>] [--duplicate-of <key>]", file=sys.stderr)
-            sys.exit(1)
-        islug = args[1].lower()
-        target_status = "done"
-        superseded_by = None
-        duplicate_of = None
+def _issue_done(repo_root: str, args: List[str], issues_dir: str, done_dir: str, today: str):
+    if len(args) < 2:
+        print("[Error] Usage: along_exec.py issue done <slug> [--status done|superseded|cancelled|duplicate] [--superseded-by <key>] [--duplicate-of <key>]", file=sys.stderr)
+        sys.exit(1)
+    islug = args[1].lower()
+    target_status = "done"
+    superseded_by = None
+    duplicate_of = None
 
-        i = 2
-        while i < len(args):
-            if args[i] in ("--status", "-s") and i + 1 < len(args):
-                target_status = args[i + 1].lower()
-                i += 2
-            elif args[i] in ("--superseded-by",) and i + 1 < len(args):
-                superseded_by = args[i + 1].strip()
-                i += 2
-            elif args[i] in ("--duplicate-of",) and i + 1 < len(args):
-                duplicate_of = args[i + 1].strip()
-                i += 2
-            else:
-                i += 1
+    i = 2
+    while i < len(args):
+        if args[i] in ("--status", "-s") and i + 1 < len(args):
+            target_status = args[i + 1].lower()
+            i += 2
+        elif args[i] in ("--superseded-by",) and i + 1 < len(args):
+            superseded_by = args[i + 1].strip()
+            i += 2
+        elif args[i] in ("--duplicate-of",) and i + 1 < len(args):
+            duplicate_of = args[i + 1].strip()
+            i += 2
+        else:
+            i += 1
 
-        if target_status not in entities.CLOSED_ISSUE_STATUSES:
-            print(f"[Error] Invalid closing status '{target_status}'. Allowed statuses: {', '.join(entities.CLOSED_ISSUE_STATUSES)}", file=sys.stderr)
-            sys.exit(1)
-        
-        # Locate issue file
-        found_file = None
-        for f in os.listdir(issues_dir):
-            if f.endswith(f"--{islug}.md") and os.path.isfile(os.path.join(issues_dir, f)):
-                found_file = os.path.join(issues_dir, f)
-                break
+    if target_status not in entities.CLOSED_ISSUE_STATUSES:
+        print(f"[Error] Invalid closing status '{target_status}'. Allowed statuses: {', '.join(entities.CLOSED_ISSUE_STATUSES)}", file=sys.stderr)
+        sys.exit(1)
 
-        if not found_file:
-            print(f"[Error] Issue '{islug}' not found in {issues_dir}", file=sys.stderr)
-            sys.exit(1)
+    # Locate issue file
+    found_file = None
+    for f in os.listdir(issues_dir):
+        if f.endswith(f"--{islug}.md") and os.path.isfile(os.path.join(issues_dir, f)):
+            found_file = os.path.join(issues_dir, f)
+            break
 
-        filename = os.path.basename(found_file)
-        dest_file = os.path.join(done_dir, filename)
+    if not found_file:
+        print(f"[Error] Issue '{islug}' not found in {issues_dir}", file=sys.stderr)
+        sys.exit(1)
 
-        content = textio.read_text(found_file)
+    filename = os.path.basename(found_file)
+    dest_file = os.path.join(done_dir, filename)
 
-        if not has_frontmatter(content):
-            print(
-                f"[Error] {filename} has no parseable YAML front-matter. "
-                "Refusing to close it silently: fix the entity header, then retry.",
-                file=sys.stderr,
-            )
-            sys.exit(1)
+    content = textio.read_text(found_file)
 
-        if content.startswith("\ufeff"):
-            content = content.lstrip("\ufeff")
-            print(
-                f"-> [Notice] Normalized a UTF-8 BOM in {filename}. "
-                "The protocol requires BOM-free UTF-8. To avoid producing one: PowerShell 7+ "
-                "has -Encoding utf8NoBOM; Windows PowerShell 5.1 has no such value, so use "
-                "[IO.File]::WriteAllText(path, text, (New-Object System.Text.UTF8Encoding($false)))."
-            )
+    if not has_frontmatter(content):
+        print(
+            f"[Error] {filename} has no parseable YAML front-matter. "
+            "Refusing to close it silently: fix the entity header, then retry.",
+            file=sys.stderr,
+        )
+        sys.exit(1)
 
-        updates = {"status": target_status, "updated": today, "completed": today}
-        if superseded_by:
-            updates["superseded_by"] = superseded_by
-        if duplicate_of:
-            updates["duplicate_of"] = duplicate_of
-
-        content = update_frontmatter_fields(
-            content,
-            updates,
-            place_after={"completed": "status"},
+    if content.startswith("\ufeff"):
+        content = content.lstrip("\ufeff")
+        print(
+            f"-> [Notice] Normalized a UTF-8 BOM in {filename}. "
+            "The protocol requires BOM-free UTF-8. To avoid producing one: PowerShell 7+ "
+            "has -Encoding utf8NoBOM; Windows PowerShell 5.1 has no such value, so use "
+            "[IO.File]::WriteAllText(path, text, (New-Object System.Text.UTF8Encoding($false)))."
         )
 
-        # Adjust sibling issue links in the markdown body:
-        # [Text](feat--foo.md) or [Text](./feat--foo.md) becomes [Text](../feat--foo.md)
-        block = frontmatter.split(content)
-        if block:
-            sibling_link_re = re.compile(
-                r'(\[[^\]]+\]\()(?:\./)?(?<!\.\./)((?:feat|bug|debt|task|docs)--[a-z0-9-]+\.md\b)'
-            )
-            body_lines = block.body.splitlines(keepends=True)
-            adjusted_body_lines = []
-            in_fence = False
-            for line in body_lines:
-                stripped = line.strip()
-                if stripped.startswith("```") or stripped.startswith("~~~"):
-                    in_fence = not in_fence
-                    adjusted_body_lines.append(line)
-                    continue
-                if in_fence:
-                    adjusted_body_lines.append(line)
-                    continue
-                adjusted_body_lines.append(sibling_link_re.sub(r'\1../\2', line))
-            content = block.open_delim + block.raw + block.close_delim + "".join(adjusted_body_lines)
+    updates = {"status": target_status, "updated": today, "completed": today}
+    if superseded_by:
+        updates["superseded_by"] = superseded_by
+    if duplicate_of:
+        updates["duplicate_of"] = duplicate_of
 
-        textio.write_text(dest_file, content, newline="\n", atomic=True)
-        os.remove(found_file)
-        print(f"-> Moved issue to done: {dest_file}")
+    content = update_frontmatter_fields(
+        content,
+        updates,
+        place_after={"completed": "status"},
+    )
 
-        # Update ISSUES.md projection with sliding window
-        issues_board = os.path.join(repo_root, ".along", "ISSUES.md")
-        if os.path.exists(issues_board):
-            entities.sync_issues_board(repo_root, recent_done_limit=RECENT_DONE_LIMIT)
-            print(f"-> Updated .along/ISSUES.md")
-        sys.exit(0)
+    # Adjust sibling issue links in the markdown body:
+    # [Text](feat--foo.md) or [Text](./feat--foo.md) becomes [Text](../feat--foo.md)
+    block = frontmatter.split(content)
+    if block:
+        sibling_link_re = re.compile(
+            r'(\[[^\]]+\]\()(?:\./)?(?<!\.\./)((?:feat|bug|debt|task|docs)--[a-z0-9-]+\.md\b)'
+        )
+        body_lines = block.body.splitlines(keepends=True)
+        adjusted_body_lines = []
+        in_fence = False
+        for line in body_lines:
+            stripped = line.strip()
+            if stripped.startswith("```") or stripped.startswith("~~~"):
+                in_fence = not in_fence
+                adjusted_body_lines.append(line)
+                continue
+            if in_fence:
+                adjusted_body_lines.append(line)
+                continue
+            adjusted_body_lines.append(sibling_link_re.sub(r'\1../\2', line))
+        content = block.open_delim + block.raw + block.close_delim + "".join(adjusted_body_lines)
 
-    elif subcmd == "sync":
+    textio.write_text(dest_file, content, newline="\n", atomic=True)
+    os.remove(found_file)
+    print(f"-> Moved issue to done: {dest_file}")
+
+    # Update ISSUES.md projection with sliding window
+    issues_board = os.path.join(repo_root, ".along", "ISSUES.md")
+    if os.path.exists(issues_board):
         entities.sync_issues_board(repo_root, recent_done_limit=RECENT_DONE_LIMIT)
-        print(f"-> Recompiled .along/ISSUES.md projection (capped to {RECENT_DONE_LIMIT} recent completed issues).")
-        sys.exit(0)
+        print("-> Updated .along/ISSUES.md")
+    sys.exit(0)
 
 
-    elif subcmd == "list":
-        print(f"-> Active issues in {issues_dir}:")
-        count = 0
-        for f in os.listdir(issues_dir):
-            if f.endswith(".md") and os.path.isfile(os.path.join(issues_dir, f)):
-                print(f"   - {f}")
-                count += 1
-        print(f"Total active issues: {count}")
-        sys.exit(0)
+def _issue_sync(repo_root: str):
+    entities.sync_issues_board(repo_root, recent_done_limit=RECENT_DONE_LIMIT)
+    print(f"-> Recompiled .along/ISSUES.md projection (capped to {RECENT_DONE_LIMIT} recent completed issues).")
+    sys.exit(0)
 
-    elif subcmd in ("update", "edit"):
-        if len(args) < 2:
-            print("[Error] Usage: along issue update <slug> [--milestone <name>] [--priority <high|medium|low>] [--status <status>] [--tags <t1,t2>] [--title <title>]", file=sys.stderr)
-            sys.exit(1)
-        raw_slug = args[1].lower()
-        issue = entities.find_issue_by_slug(repo_root, raw_slug)
-        if not issue:
-            print(f"[Error] Issue '{raw_slug}' not found in .along/ISSUES/.", file=sys.stderr)
-            sys.exit(1)
 
-        updates: Dict[str, Any] = {"updated": today}
-        milestone_updated = False
-        target_milestone_slug = None
+def _issue_list(issues_dir: str):
+    print(f"-> Active issues in {issues_dir}:")
+    count = 0
+    for f in os.listdir(issues_dir):
+        if f.endswith(".md") and os.path.isfile(os.path.join(issues_dir, f)):
+            print(f"   - {f}")
+            count += 1
+    print(f"Total active issues: {count}")
+    sys.exit(0)
 
-        i = 2
-        while i < len(args):
-            flag = args[i]
-            val = args[i + 1] if i + 1 < len(args) else None
-            if flag in ("--milestone", "-m") and val:
-                if val in ("~", "none", "null", ""):
-                    updates["milestone"] = None
-                else:
-                    m_resolved = entities.resolve_milestone_by_query(repo_root, val)
-                    if not m_resolved:
-                        print(f"[Error] Milestone '{val}' not found or ambiguous in .along/MILESTONES/.", file=sys.stderr)
-                        sys.exit(1)
-                    updates["milestone"] = m_resolved["slug"]
-                    target_milestone_slug = m_resolved["slug"]
-                milestone_updated = True
-                i += 2
-            elif flag in ("--priority", "-p") and val:
-                pval = val.lower()
-                if pval not in entities.PRIORITIES:
-                    print(f"[Error] Invalid priority '{pval}'. Allowed: {', '.join(entities.PRIORITIES)}", file=sys.stderr)
-                    sys.exit(1)
-                updates["priority"] = pval
-                i += 2
-            elif flag in ("--status", "-s") and val:
-                sval = val.lower()
-                if sval not in entities.ISSUE_STATUSES:
-                    print(f"[Error] Invalid status '{sval}'. Allowed: {', '.join(entities.ISSUE_STATUSES)}", file=sys.stderr)
-                    sys.exit(1)
-                updates["status"] = sval
-                i += 2
-            elif flag in ("--tags",) and val:
-                updates["tags"] = [t.strip() for t in val.split(",") if t.strip()]
-                i += 2
-            elif flag in ("--title", "-t") and val:
-                updates["title"] = val
-                i += 2
+
+def _issue_update(repo_root: str, args: List[str], today: str):
+    if len(args) < 2:
+        print("[Error] Usage: along issue update <slug> [--milestone <name>] [--priority <high|medium|low>] [--status <status>] [--tags <t1,t2>] [--title <title>]", file=sys.stderr)
+        sys.exit(1)
+    raw_slug = args[1].lower()
+    issue = entities.find_issue_by_slug(repo_root, raw_slug)
+    if not issue:
+        print(f"[Error] Issue '{raw_slug}' not found in .along/ISSUES/.", file=sys.stderr)
+        sys.exit(1)
+
+    updates: Dict[str, Any] = {"updated": today}
+    milestone_updated = False
+    target_milestone_slug = None
+
+    i = 2
+    while i < len(args):
+        flag = args[i]
+        val = args[i + 1] if i + 1 < len(args) else None
+        if flag in ("--milestone", "-m") and val:
+            if val in ("~", "none", "null", ""):
+                updates["milestone"] = None
             else:
-                i += 1
-
-        fpath, new_fm = entities.update_issue_frontmatter(repo_root, issue["slug"], updates)
-        rel_path = repo.normalize_posix(repo.safe_relpath(fpath, repo_root))
-        print(f"-> Updated issue {issue['slug']}: {rel_path}")
-        for k, v in updates.items():
-            if k != "updated":
-                print(f"   {k}: {v}")
-
-        if milestone_updated:
-            old_m = issue["frontmatter"].get("milestone")
-            if old_m and old_m != target_milestone_slug:
-                try:
-                    entities.sync_milestones(repo_root, old_m)
-                except ValueError:
-                    pass
-            if target_milestone_slug:
-                try:
-                    entities.sync_milestones(repo_root, target_milestone_slug)
-                except ValueError:
-                    pass
-            print("-> Synchronized affected milestone(s).")
-
-        entities.sync_issues_board(repo_root, recent_done_limit=RECENT_DONE_LIMIT)
-        sys.exit(0)
-
-    elif subcmd in ("show", "get"):
-        if len(args) < 2:
-            print("[Error] Usage: along issue show <slug> [--json]", file=sys.stderr)
-            sys.exit(1)
-        raw_slug = args[1].lower()
-        summary = entities.get_issue_summary(repo_root, raw_slug)
-        if not summary:
-            print(f"[Error] Issue '{raw_slug}' not found in .along/ISSUES/.", file=sys.stderr)
-            sys.exit(1)
-
-        if "--json" in args:
-            import json
-            print(json.dumps(summary, indent=2))
+                m_resolved = entities.resolve_milestone_by_query(repo_root, val)
+                if not m_resolved:
+                    print(f"[Error] Milestone '{val}' not found or ambiguous in .along/MILESTONES/.", file=sys.stderr)
+                    sys.exit(1)
+                updates["milestone"] = m_resolved["slug"]
+                target_milestone_slug = m_resolved["slug"]
+            milestone_updated = True
+            i += 2
+        elif flag in ("--priority", "-p") and val:
+            pval = val.lower()
+            if pval not in entities.PRIORITIES:
+                print(f"[Error] Invalid priority '{pval}'. Allowed: {', '.join(entities.PRIORITIES)}", file=sys.stderr)
+                sys.exit(1)
+            updates["priority"] = pval
+            i += 2
+        elif flag in ("--status", "-s") and val:
+            sval = val.lower()
+            if sval not in entities.ISSUE_STATUSES:
+                print(f"[Error] Invalid status '{sval}'. Allowed: {', '.join(entities.ISSUE_STATUSES)}", file=sys.stderr)
+                sys.exit(1)
+            updates["status"] = sval
+            i += 2
+        elif flag in ("--tags",) and val:
+            updates["tags"] = [t.strip() for t in val.split(",") if t.strip()]
+            i += 2
+        elif flag in ("--title", "-t") and val:
+            updates["title"] = val
+            i += 2
         else:
-            print(f"=== Issue: {summary['slug']} ({summary['type']}) ===")
-            print(f"Title:     {summary['title']}")
-            print(f"Status:    {summary['status']}")
-            print(f"Priority:  {summary['priority']}")
-            print(f"Milestone: {summary.get('milestone') or 'none'}")
-            print(f"Agent:     {summary.get('agent') or 'unknown'}")
-            print(f"Tags:      {', '.join(summary.get('tags') or [])}")
-            print(f"Path:      {summary['file_path']}")
-            if summary.get("body"):
-                print("\n--- Summary / Body ---")
-                lines = summary["body"].splitlines()
-                preview = lines[:25]
-                print("\n".join(preview))
-                if len(lines) > 25:
-                    print(f"... ({len(lines) - 25} more lines)")
+            i += 1
+
+    fpath, new_fm = entities.update_issue_frontmatter(repo_root, issue["slug"], updates)
+    rel_path = repo.normalize_posix(repo.safe_relpath(fpath, repo_root))
+    print(f"-> Updated issue {issue['slug']}: {rel_path}")
+    for k, v in updates.items():
+        if k != "updated":
+            print(f"   {k}: {v}")
+
+    if milestone_updated:
+        old_m = issue["frontmatter"].get("milestone")
+        if old_m and old_m != target_milestone_slug:
+            try:
+                entities.sync_milestones(repo_root, old_m)
+            except ValueError:
+                pass
+        if target_milestone_slug:
+            try:
+                entities.sync_milestones(repo_root, target_milestone_slug)
+            except ValueError:
+                pass
+        print("-> Synchronized affected milestone(s).")
+
+    entities.sync_issues_board(repo_root, recent_done_limit=RECENT_DONE_LIMIT)
+    sys.exit(0)
+
+
+def _issue_show(repo_root: str, args: List[str]):
+    if len(args) < 2:
+        print("[Error] Usage: along issue show <slug> [--json]", file=sys.stderr)
+        sys.exit(1)
+    raw_slug = args[1].lower()
+    summary = entities.get_issue_summary(repo_root, raw_slug)
+    if not summary:
+        print(f"[Error] Issue '{raw_slug}' not found in .along/ISSUES/.", file=sys.stderr)
+        sys.exit(1)
+
+    if "--json" in args:
+        import json
+        print(json.dumps(summary, indent=2))
+    else:
+        print(f"=== Issue: {summary['slug']} ({summary['type']}) ===")
+        print(f"Title:     {summary['title']}")
+        print(f"Status:    {summary['status']}")
+        print(f"Priority:  {summary['priority']}")
+        print(f"Milestone: {summary.get('milestone') or 'none'}")
+        print(f"Agent:     {summary.get('agent') or 'unknown'}")
+        print(f"Tags:      {', '.join(summary.get('tags') or [])}")
+        print(f"Path:      {summary['file_path']}")
+        if summary.get("body"):
+            print("\n--- Summary / Body ---")
+            lines = summary["body"].splitlines()
+            preview = lines[:25]
+            print("\n".join(preview))
+            if len(lines) > 25:
+                print(f"... ({len(lines) - 25} more lines)")
+    sys.exit(0)
+
+
+def handle_issue_command(repo_root: str, args: List[str]):
+    if not args or args[0] in ("-h", "--help", "help"):
+        print("Usage: along_exec.py issue [create|update|done|sync|list|show] [args...]")
         sys.exit(0)
 
-    else:
+    subcmd = args[0].lower()
+    issues_dir = os.path.join(repo_root, ".along", "ISSUES")
+    done_dir = os.path.join(issues_dir, "done")
+    os.makedirs(issues_dir, exist_ok=True)
+    os.makedirs(done_dir, exist_ok=True)
+    today = datetime.now().strftime("%Y-%m-%d")
+
+    dispatch = {
+        "create": lambda: _issue_create(repo_root, args, issues_dir, today),
+        "done": lambda: _issue_done(repo_root, args, issues_dir, done_dir, today),
+        "close": lambda: _issue_done(repo_root, args, issues_dir, done_dir, today),
+        "sync": lambda: _issue_sync(repo_root),
+        "list": lambda: _issue_list(issues_dir),
+        "update": lambda: _issue_update(repo_root, args, today),
+        "edit": lambda: _issue_update(repo_root, args, today),
+        "show": lambda: _issue_show(repo_root, args),
+        "get": lambda: _issue_show(repo_root, args),
+    }
+
+    handler = dispatch.get(subcmd)
+    if not handler:
         print(f"[Error] Unknown issue subcommand '{subcmd}'. Run 'along issue --help'.", file=sys.stderr)
         sys.exit(1)
+    handler()
 
 
 def handle_milestone_command(repo_root: str, args: List[str]):

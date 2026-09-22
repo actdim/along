@@ -152,6 +152,62 @@ def main() -> int:
                 pass
         return proc.run_passthrough(exec_args, cwd=repo_root)
 
+    if len(sys.argv) > 1 and sys.argv[1] == "eval":
+        parser = argparse.ArgumentParser(
+            prog="along hook eval",
+            description="Evaluate declarative gates against an incoming event payload.",
+        )
+        parser.add_argument(
+            "event",
+            help="Lifecycle event trigger name (PreToolUse, PostToolUse, PreInvocation, PostInvocation, Stop)",
+        )
+        parser.add_argument(
+            "payload",
+            nargs="?",
+            default=None,
+            help="Event JSON or command payload (can also be passed via --payload or stdin)",
+        )
+        parser.add_argument(
+            "--payload",
+            "-p",
+            dest="payload_opt",
+            default=None,
+            help="Event JSON or command string payload",
+        )
+        parser.add_argument(
+            "--runtime",
+            default="generic",
+            help="Target agent runtime (antigravity, claude, codex, cursor, opencode, generic)",
+        )
+        parser.add_argument(
+            "--mode",
+            choices=["enforce", "shadow"],
+            default=None,
+            help="Override execution governance mode (enforce vs shadow)",
+        )
+        parser.add_argument(
+            "--repo-root",
+            default=None,
+            help="Path to repository root (auto-detected if omitted)",
+        )
+        args = parser.parse_args(sys.argv[2:])
+
+        raw_input = args.payload_opt if args.payload_opt is not None else args.payload
+        if raw_input is None:
+            try:
+                raw_input = sys.stdin.read()
+            except (OSError, UnicodeDecodeError) as exc:
+                sys.stderr.write(f"[Along Hook] Failed to read stdin: {exc}\n")
+                raw_input = ""
+
+        return _evaluate_and_respond(
+            raw_input=raw_input,
+            event_name=args.event,
+            runtime=args.runtime,
+            repo_root=args.repo_root,
+            mode=args.mode,
+        )
+
     parser = argparse.ArgumentParser(
         description="Along Protocol runtime hook dispatcher.",
         formatter_class=argparse.ArgumentDefaultsHelpFormatter,
@@ -180,30 +236,50 @@ def main() -> int:
     )
     args = parser.parse_args()
 
-    adapter = get_adapter(args.runtime)
-
     try:
         raw_input = sys.stdin.read()
     except (OSError, UnicodeDecodeError) as exc:
         sys.stderr.write(f"[Along Hook] Failed to read stdin: {exc}\n")
         raw_input = ""
 
-    event_type = HookEventType(args.event)
+    return _evaluate_and_respond(
+        raw_input=raw_input,
+        event_name=args.event,
+        runtime=args.runtime,
+        repo_root=args.repo_root,
+        mode=args.mode,
+    )
+
+
+def _evaluate_and_respond(
+    raw_input: str,
+    event_name: str,
+    runtime: str = "antigravity",
+    repo_root: str | None = None,
+    mode: str | None = None,
+) -> int:
+    raw_input = raw_input.lstrip("\ufeff")
+    adapter = get_adapter(runtime)
+
+    try:
+        event_type = HookEventType(event_name)
+    except (ValueError, KeyError):
+        event_type = HookEventType.PRE_TOOL_USE
+
     event = adapter.parse(raw_input, event_type=event_type)
 
-    if args.repo_root:
-        repo_root = args.repo_root
-    elif event.workspace_root:
-        repo_root = repo.find_repo_root(event.workspace_root) or event.workspace_root
-    else:
-        repo_root = repo.find_repo_root()
+    effective_root = repo_root
+    if not effective_root and event.workspace_root:
+        effective_root = repo.find_repo_root(event.workspace_root) or event.workspace_root
+    if not effective_root:
+        effective_root = repo.find_repo_root()
 
     # Fail-open check: if workspace does not carry Along protocol, do not block
     is_along_repo = bool(
-        repo_root and (
-            os.path.isdir(os.path.join(repo_root, ".along"))
-            or os.path.isdir(os.path.join(repo_root, ".agents"))
-            or os.path.isfile(os.path.join(repo_root, "AGENTS.md"))
+        effective_root and (
+            os.path.isdir(os.path.join(effective_root, ".along"))
+            or os.path.isdir(os.path.join(effective_root, ".agents"))
+            or os.path.isfile(os.path.join(effective_root, "AGENTS.md"))
         )
     )
     if not is_along_repo:
@@ -216,18 +292,17 @@ def main() -> int:
             sys.stdout.flush()
         return 0
 
-    if not event.workspace_root and repo_root:
-        event.workspace_root = repo_root
+    if not event.workspace_root and effective_root:
+        event.workspace_root = effective_root
 
-    config: HooksConfig = load_config(repo_root)
-    if args.mode:
-        config.mode = args.mode
+    config: HooksConfig = load_config(effective_root)
+    if mode:
+        config.mode = mode
         for k in config.gates:
-            config.gates[k] = args.mode
-
+            config.gates[k] = mode
 
     try:
-        result = evaluate_event(event, repo_root=repo_root, config=config)
+        result = evaluate_event(event, repo_root=effective_root, config=config)
     except (OSError, UnicodeDecodeError, ValueError, KeyError, AttributeError) as exc:
         sys.stderr.write(f"[Along Hook] Evaluation error: {exc}\n")
         from alongkit.hooks import GateDecision, GateResult
