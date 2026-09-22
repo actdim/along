@@ -1,9 +1,9 @@
 {
-  "openapi": "3.1.0",
+  "openapi": "3.0.3",
   "info": {
     "title": "Along Dashboard & Knowledge Base API",
     "description": "Type-safe OpenAPI REST & SSE service for Along Protocol entities, dependency DAGs, and Knowledge Base search.",
-    "version": "2.0.8"
+    "version": "3.9.4"
   },
   "paths": {
     "/api/metrics": {
@@ -80,16 +80,9 @@
             "in": "query",
             "required": false,
             "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
               "description": "Filter by status (open, in-progress, blocked, done)",
-              "title": "Status"
+              "type": "string",
+              "nullable": true
             },
             "description": "Filter by status (open, in-progress, blocked, done)"
           },
@@ -98,16 +91,9 @@
             "in": "query",
             "required": false,
             "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
               "description": "Filter by type (feat, bug, debt, task, docs)",
-              "title": "Type"
+              "type": "string",
+              "nullable": true
             },
             "description": "Filter by type (feat, bug, debt, task, docs)"
           },
@@ -116,16 +102,9 @@
             "in": "query",
             "required": false,
             "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
               "description": "Filter by priority (critical, high, medium, low)",
-              "title": "Priority"
+              "type": "string",
+              "nullable": true
             },
             "description": "Filter by priority (critical, high, medium, low)"
           },
@@ -134,16 +113,9 @@
             "in": "query",
             "required": false,
             "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
               "description": "Filter by milestone slug",
-              "title": "Milestone"
+              "type": "string",
+              "nullable": true
             },
             "description": "Filter by milestone slug"
           }
@@ -356,16 +328,9 @@
             "in": "query",
             "required": false,
             "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
               "description": "Filter by category type",
-              "title": "Type"
+              "type": "string",
+              "nullable": true
             },
             "description": "Filter by category type"
           },
@@ -374,16 +339,9 @@
             "in": "query",
             "required": false,
             "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
               "description": "Filter by tag",
-              "title": "Tag"
+              "type": "string",
+              "nullable": true
             },
             "description": "Filter by tag"
           }
@@ -441,16 +399,9 @@
             "in": "query",
             "required": false,
             "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
               "description": "Filter by tag",
-              "title": "Tag"
+              "type": "string",
+              "nullable": true
             },
             "description": "Filter by tag"
           },
@@ -459,16 +410,9 @@
             "in": "query",
             "required": false,
             "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
               "description": "Filter by entity type (kb, issue, decision, session)",
-              "title": "Type"
+              "type": "string",
+              "nullable": true
             },
             "description": "Filter by entity type (kb, issue, decision, session)"
           }
@@ -614,6 +558,11 @@
             "title": "Completion Pct",
             "default": 0
           },
+          "bug_debt_ratio": {
+            "type": "number",
+            "title": "Bug Debt Ratio",
+            "default": 0.0
+          },
           "active_risks": {
             "type": "integer",
             "title": "Active Risks",
@@ -652,11 +601,17 @@
             "type": "string",
             "title": "Scan Timestamp",
             "default": ""
+          },
+          "protocol_version": {
+            "type": "string",
+            "title": "Protocol Version",
+            "default": "3.9.4"
           }
         },
         "type": "object",
         "title": "DashboardMetricsSchema",
-        "description": "Aggregated project metrics."
+        "description": "Aggregated project metrics.",
+        "additionalProperties": false
       },
       "DecisionSchema": {
         "properties": {
@@ -665,17 +620,15 @@
             "title": "Id",
             "description": "Decision identifier, e.g. ADR-001"
           },
+          "slug": {
+            "description": "Decision slug",
+            "type": "string",
+            "nullable": true
+          },
           "number": {
-            "anyOf": [
-              {
-                "type": "integer"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Number",
-            "description": "Sequential ADR number"
+            "description": "Sequential ADR number",
+            "type": "integer",
+            "nullable": true
           },
           "title": {
             "type": "string",
@@ -683,16 +636,9 @@
             "description": "Decision title"
           },
           "date": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Date",
-            "description": "Date recorded YYYY-MM-DD"
+            "description": "Date recorded YYYY-MM-DD",
+            "type": "string",
+            "nullable": true
           },
           "status": {
             "type": "string",
@@ -701,64 +647,34 @@
             "default": "Accepted"
           },
           "context": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Context",
-            "description": "Context and problem description"
+            "description": "Context and problem description",
+            "type": "string",
+            "nullable": true
           },
           "decision": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Decision",
-            "description": "Decision made"
+            "description": "Decision made",
+            "type": "string",
+            "nullable": true
           },
           "consequences": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Consequences",
-            "description": "Consequences and trade-offs"
+            "description": "Consequences and trade-offs",
+            "type": "string",
+            "nullable": true
           },
           "superseded_by": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Superseded By",
-            "description": "ADR identifier that supersedes this"
+            "description": "ADR identifier that supersedes this",
+            "type": "string",
+            "nullable": true
+          },
+          "file_path": {
+            "description": "Relative path to ADR file",
+            "type": "string",
+            "nullable": true
           },
           "raw_markdown": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Raw Markdown",
-            "description": "Full raw markdown of the entry"
+            "description": "Full raw markdown of the entry",
+            "type": "string",
+            "nullable": true
           }
         },
         "type": "object",
@@ -767,7 +683,8 @@
           "title"
         ],
         "title": "DecisionSchema",
-        "description": "Schema for an ADR entry in .along/DECISIONS.md."
+        "description": "Schema for an ADR entry in .along/DECISIONS.md.",
+        "additionalProperties": false
       },
       "FullDashboardDataSchema": {
         "properties": {
@@ -849,7 +766,8 @@
           "metrics"
         ],
         "title": "FullDashboardDataSchema",
-        "description": "Complete dataset for dashboard SPA."
+        "description": "Complete dataset for dashboard SPA.",
+        "additionalProperties": false
       },
       "HTTPValidationError": {
         "properties": {
@@ -862,7 +780,8 @@
           }
         },
         "type": "object",
-        "title": "HTTPValidationError"
+        "title": "HTTPValidationError",
+        "additionalProperties": false
       },
       "IssueSchema": {
         "properties": {
@@ -883,40 +802,19 @@
             "description": "Canonical entity identifier, e.g. feat--login"
           },
           "title": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Title",
-            "description": "Human readable title"
+            "description": "Human readable title",
+            "type": "string",
+            "nullable": true
           },
           "body": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Body",
-            "description": "Markdown body content"
+            "description": "Markdown body content",
+            "type": "string",
+            "nullable": true
           },
           "file_path": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "File Path",
-            "description": "Relative file path in repository"
+            "description": "Relative file path in repository",
+            "type": "string",
+            "nullable": true
           },
           "type": {
             "type": "string",
@@ -937,7 +835,10 @@
               "open",
               "in-progress",
               "blocked",
-              "done"
+              "done",
+              "superseded",
+              "cancelled",
+              "duplicate"
             ],
             "title": "Status",
             "description": "Current lifecycle status",
@@ -956,52 +857,24 @@
             "default": "medium"
           },
           "created": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Created",
-            "description": "Creation date YYYY-MM-DD"
+            "description": "Creation date YYYY-MM-DD",
+            "type": "string",
+            "nullable": true
           },
           "updated": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Updated",
-            "description": "Last update date YYYY-MM-DD"
+            "description": "Last update date YYYY-MM-DD",
+            "type": "string",
+            "nullable": true
           },
           "completed": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Completed",
-            "description": "Completion date YYYY-MM-DD"
+            "description": "Completion date YYYY-MM-DD",
+            "type": "string",
+            "nullable": true
           },
           "agent": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Agent",
-            "description": "Agent or author that worked on the issue"
+            "description": "Agent or author that worked on the issue",
+            "type": "string",
+            "nullable": true
           },
           "tags": {
             "items": {
@@ -1012,16 +885,9 @@
             "description": "Array of topical tags"
           },
           "milestone": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Milestone",
-            "description": "Milestone slug this issue belongs to"
+            "description": "Milestone slug this issue belongs to",
+            "type": "string",
+            "nullable": true
           },
           "blocked_by": {
             "items": {
@@ -1040,16 +906,19 @@
             "description": "List of related entity keys"
           },
           "parent": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Parent",
-            "description": "Parent epic/entity key"
+            "description": "Parent epic/entity key",
+            "type": "string",
+            "nullable": true
+          },
+          "superseded_by": {
+            "description": "Canonical entity key that supersedes this issue",
+            "type": "string",
+            "nullable": true
+          },
+          "duplicate_of": {
+            "description": "Canonical entity key this issue duplicates",
+            "type": "string",
+            "nullable": true
           }
         },
         "type": "object",
@@ -1058,7 +927,8 @@
           "id"
         ],
         "title": "IssueSchema",
-        "description": "Schema for .along/ISSUES/<type>--<slug>.md."
+        "description": "Schema for .along/ISSUES/<type>--<slug>.md.",
+        "additionalProperties": false
       },
       "KBArticleSchema": {
         "properties": {
@@ -1092,28 +962,14 @@
             "default": "topic"
           },
           "created": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Created",
-            "description": "Creation date YYYY-MM-DD"
+            "description": "Creation date YYYY-MM-DD",
+            "type": "string",
+            "nullable": true
           },
           "updated": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Updated",
-            "description": "Last update date YYYY-MM-DD"
+            "description": "Last update date YYYY-MM-DD",
+            "type": "string",
+            "nullable": true
           },
           "tags": {
             "items": {
@@ -1167,7 +1023,8 @@
           "file_path"
         ],
         "title": "KBArticleSchema",
-        "description": "Schema for Knowledge Base article in .along/KB/ or docs/."
+        "description": "Schema for Knowledge Base article in .along/KB/ or docs/.",
+        "additionalProperties": false
       },
       "KBGraphEdge": {
         "properties": {
@@ -1184,15 +1041,8 @@
             "title": "Type"
           },
           "label": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Label"
+            "type": "string",
+            "nullable": true
           }
         },
         "type": "object",
@@ -1201,7 +1051,8 @@
           "target",
           "type"
         ],
-        "title": "KBGraphEdge"
+        "title": "KBGraphEdge",
+        "additionalProperties": false
       },
       "KBGraphNode": {
         "properties": {
@@ -1236,7 +1087,8 @@
           "type",
           "category"
         ],
-        "title": "KBGraphNode"
+        "title": "KBGraphNode",
+        "additionalProperties": false
       },
       "KBGraphSchema": {
         "properties": {
@@ -1257,7 +1109,8 @@
         },
         "type": "object",
         "title": "KBGraphSchema",
-        "description": "Bidirectional graph of Knowledge Base articles and related entities."
+        "description": "Bidirectional graph of Knowledge Base articles and related entities.",
+        "additionalProperties": false
       },
       "MilestoneSchema": {
         "properties": {
@@ -1278,40 +1131,19 @@
             "description": "Canonical entity identifier, e.g. feat--login"
           },
           "title": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Title",
-            "description": "Human readable title"
+            "description": "Human readable title",
+            "type": "string",
+            "nullable": true
           },
           "body": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Body",
-            "description": "Markdown body content"
+            "description": "Markdown body content",
+            "type": "string",
+            "nullable": true
           },
           "file_path": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "File Path",
-            "description": "Relative file path in repository"
+            "description": "Relative file path in repository",
+            "type": "string",
+            "nullable": true
           },
           "status": {
             "type": "string",
@@ -1325,28 +1157,14 @@
             "default": "open"
           },
           "due_date": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Due Date",
-            "description": "Target due date YYYY-MM-DD"
+            "description": "Target due date YYYY-MM-DD",
+            "type": "string",
+            "nullable": true
           },
           "created": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Created",
-            "description": "Creation date YYYY-MM-DD"
+            "description": "Creation date YYYY-MM-DD",
+            "type": "string",
+            "nullable": true
           },
           "target_issues": {
             "items": {
@@ -1371,7 +1189,8 @@
           "id"
         ],
         "title": "MilestoneSchema",
-        "description": "Schema for .along/MILESTONES/<slug>.md."
+        "description": "Schema for .along/MILESTONES/<slug>.md.",
+        "additionalProperties": false
       },
       "PriorityBreakdown": {
         "properties": {
@@ -1397,7 +1216,8 @@
           }
         },
         "type": "object",
-        "title": "PriorityBreakdown"
+        "title": "PriorityBreakdown",
+        "additionalProperties": false
       },
       "RiskSchema": {
         "properties": {
@@ -1418,40 +1238,19 @@
             "description": "Canonical entity identifier, e.g. feat--login"
           },
           "title": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Title",
-            "description": "Human readable title"
+            "description": "Human readable title",
+            "type": "string",
+            "nullable": true
           },
           "body": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Body",
-            "description": "Markdown body content"
+            "description": "Markdown body content",
+            "type": "string",
+            "nullable": true
           },
           "file_path": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "File Path",
-            "description": "Relative file path in repository"
+            "description": "Relative file path in repository",
+            "type": "string",
+            "nullable": true
           },
           "severity": {
             "type": "string",
@@ -1477,53 +1276,25 @@
             "default": "active"
           },
           "owner": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Owner",
             "description": "Owner (agent or user)",
-            "default": "agent"
+            "default": "agent",
+            "type": "string",
+            "nullable": true
           },
           "mitigation": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Mitigation",
-            "description": "Mitigation strategy summary"
+            "description": "Mitigation strategy summary",
+            "type": "string",
+            "nullable": true
           },
           "created": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Created",
-            "description": "Creation date YYYY-MM-DD"
+            "description": "Creation date YYYY-MM-DD",
+            "type": "string",
+            "nullable": true
           },
           "updated": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Updated",
-            "description": "Update date YYYY-MM-DD"
+            "description": "Update date YYYY-MM-DD",
+            "type": "string",
+            "nullable": true
           }
         },
         "type": "object",
@@ -1532,7 +1303,8 @@
           "id"
         ],
         "title": "RiskSchema",
-        "description": "Schema for .along/RISKS/<slug>.md."
+        "description": "Schema for .along/RISKS/<slug>.md.",
+        "additionalProperties": false
       },
       "SearchResponse": {
         "properties": {
@@ -1557,7 +1329,8 @@
           "query",
           "total"
         ],
-        "title": "SearchResponse"
+        "title": "SearchResponse",
+        "additionalProperties": false
       },
       "SearchResultItem": {
         "properties": {
@@ -1602,7 +1375,8 @@
           "snippet",
           "file_path"
         ],
-        "title": "SearchResultItem"
+        "title": "SearchResultItem",
+        "additionalProperties": false
       },
       "SessionSchema": {
         "properties": {
@@ -1623,40 +1397,19 @@
             "description": "Canonical entity identifier, e.g. feat--login"
           },
           "title": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Title",
-            "description": "Human readable title"
+            "description": "Human readable title",
+            "type": "string",
+            "nullable": true
           },
           "body": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Body",
-            "description": "Markdown body content"
+            "description": "Markdown body content",
+            "type": "string",
+            "nullable": true
           },
           "file_path": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "File Path",
-            "description": "Relative file path in repository"
+            "description": "Relative file path in repository",
+            "type": "string",
+            "nullable": true
           },
           "date": {
             "type": "string",
@@ -1664,64 +1417,29 @@
             "description": "Session date YYYY-MM-DD"
           },
           "agent": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Agent",
-            "description": "Agent model/tool name"
+            "description": "Agent model/tool name",
+            "type": "string",
+            "nullable": true
           },
           "branch": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Branch",
-            "description": "Git branch name"
+            "description": "Git branch name",
+            "type": "string",
+            "nullable": true
           },
           "commit": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Commit",
-            "description": "Git commit hash"
+            "description": "Git commit hash",
+            "type": "string",
+            "nullable": true
           },
           "summary": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Summary",
-            "description": "Summary of work completed"
+            "description": "Summary of work completed",
+            "type": "string",
+            "nullable": true
           },
           "milestone": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Milestone",
-            "description": "Associated milestone"
+            "description": "Associated milestone",
+            "type": "string",
+            "nullable": true
           },
           "issues_advanced": {
             "items": {
@@ -1771,7 +1489,8 @@
           "date"
         ],
         "title": "SessionSchema",
-        "description": "Schema for .along/SESSIONS/<YYYY>/<YYYY-MM-DD>--<slug>.md."
+        "description": "Schema for .along/SESSIONS/<YYYY>/<YYYY-MM-DD>--<slug>.md.",
+        "additionalProperties": false
       },
       "SpikeSchema": {
         "properties": {
@@ -1792,40 +1511,19 @@
             "description": "Canonical entity identifier, e.g. feat--login"
           },
           "title": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Title",
-            "description": "Human readable title"
+            "description": "Human readable title",
+            "type": "string",
+            "nullable": true
           },
           "body": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Body",
-            "description": "Markdown body content"
+            "description": "Markdown body content",
+            "type": "string",
+            "nullable": true
           },
           "file_path": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "File Path",
-            "description": "Relative file path in repository"
+            "description": "Relative file path in repository",
+            "type": "string",
+            "nullable": true
           },
           "status": {
             "type": "string",
@@ -1839,52 +1537,24 @@
             "default": "hypothesis"
           },
           "hypothesis": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Hypothesis",
-            "description": "Spike hypothesis statement"
+            "description": "Spike hypothesis statement",
+            "type": "string",
+            "nullable": true
           },
           "outcome": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Outcome",
-            "description": "Spike outcome and conclusion"
+            "description": "Spike outcome and conclusion",
+            "type": "string",
+            "nullable": true
           },
           "resulting_adr": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Resulting Adr",
-            "description": "Linked ADR in DECISIONS.md"
+            "description": "Linked ADR in DECISIONS.md",
+            "type": "string",
+            "nullable": true
           },
           "created": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Created",
-            "description": "Creation date YYYY-MM-DD"
+            "description": "Creation date YYYY-MM-DD",
+            "type": "string",
+            "nullable": true
           }
         },
         "type": "object",
@@ -1893,7 +1563,8 @@
           "id"
         ],
         "title": "SpikeSchema",
-        "description": "Schema for .along/SPIKES/<slug>.md."
+        "description": "Schema for .along/SPIKES/<slug>.md.",
+        "additionalProperties": false
       },
       "StatusBreakdown": {
         "properties": {
@@ -1916,10 +1587,26 @@
             "type": "integer",
             "title": "Done",
             "default": 0
+          },
+          "superseded": {
+            "type": "integer",
+            "title": "Superseded",
+            "default": 0
+          },
+          "cancelled": {
+            "type": "integer",
+            "title": "Cancelled",
+            "default": 0
+          },
+          "duplicate": {
+            "type": "integer",
+            "title": "Duplicate",
+            "default": 0
           }
         },
         "type": "object",
-        "title": "StatusBreakdown"
+        "title": "StatusBreakdown",
+        "additionalProperties": false
       },
       "TypeBreakdown": {
         "properties": {
@@ -1950,7 +1637,8 @@
           }
         },
         "type": "object",
-        "title": "TypeBreakdown"
+        "title": "TypeBreakdown",
+        "additionalProperties": false
       },
       "ValidationError": {
         "properties": {
@@ -1990,7 +1678,8 @@
           "msg",
           "type"
         ],
-        "title": "ValidationError"
+        "title": "ValidationError",
+        "additionalProperties": false
       }
     }
   }

@@ -1,4 +1,3 @@
-import React from 'react';
 import {
   type ComponentStruct,
   type ComponentDef,
@@ -74,6 +73,20 @@ export const useDashboardApp = (
   let c: Component<DashboardAppStruct>;
   let m: ComponentModel<DashboardAppStruct>;
 
+  const handleKeyDown = (e: KeyboardEvent) => {
+    if ((e.ctrlKey || e.metaKey) && e.key === 'k') {
+      e.preventDefault();
+      m.openSearch();
+    } else if (
+      e.key === '/' &&
+      (e.target as HTMLElement).tagName !== 'INPUT' &&
+      (e.target as HTMLElement).tagName !== 'TEXTAREA'
+    ) {
+      e.preventDefault();
+      m.openSearch();
+    }
+  };
+
   const def: ComponentDef<DashboardAppStruct> = {
     regType: 'DashboardApp',
     props: {
@@ -96,7 +109,7 @@ export const useDashboardApp = (
               abortSignal: new AbortController().signal,
             },
           });
-          m.data = (msgResp.payload as unknown as FullDashboardData) || null;
+          m.data = msgResp.payload || null;
           m.error = null;
         } catch (err: any) {
           console.error('Failed to load dashboard data:', err);
@@ -183,23 +196,14 @@ export const useDashboardApp = (
         DashboardApiService.start();
 
         // 2. Global keyboard shortcut (Ctrl+K or /)
-        const handleKeyDown = (e: KeyboardEvent) => {
-          if ((e.ctrlKey || e.metaKey) && e.key === 'k') {
-            e.preventDefault();
-            m.openSearch();
-          } else if (
-            e.key === '/' &&
-            (e.target as HTMLElement).tagName !== 'INPUT' &&
-            (e.target as HTMLElement).tagName !== 'TEXTAREA'
-          ) {
-            e.preventDefault();
-            m.openSearch();
-          }
-        };
         window.addEventListener('keydown', handleKeyDown);
 
         // 3. Initial data load via c.msgBus
         await m.loadData();
+      },
+      onDestroy: () => {
+        window.removeEventListener('keydown', handleKeyDown);
+        DashboardApiService.stop();
       },
     },
     children: {
@@ -207,6 +211,7 @@ export const useDashboardApp = (
         repoName: bind(() => m.data?.repo_name || 'Along'),
         scanTimestamp: bind(() => m.data?.metrics.scan_timestamp || ''),
         sseConnected: bind(() => m.sseConnected),
+        protocolVersion: bind(() => m.data?.metrics.protocol_version || '3.9.4'),
         onSearchClick: () => m.openSearch(),
       }),
       tabs: useTabs({

@@ -15,6 +15,7 @@ sys.path.insert(0, os.path.join(
     os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))), "scripts"))
 
 from alongkit import frontmatter as _frontmatter
+from alongkit.version import CURRENT_PROTOCOL_VERSION
 
 from ..schemas.entities import (
     IssueSchema,
@@ -491,6 +492,7 @@ class EntityCollector:
             by_type=by_type,
             by_priority=by_priority,
             scan_timestamp=datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+            protocol_version=CURRENT_PROTOCOL_VERSION,
         )
 
     def to_full_data(self) -> FullDashboardDataSchema:

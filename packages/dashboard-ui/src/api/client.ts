@@ -35,7 +35,7 @@ export interface IDashboardApiClient {
      * @param milestone (optional) Filter by milestone slug
      * @return Successful Response
      */
-    listIssues(status?: Status | undefined, type?: Type | undefined, priority?: Priority | undefined, milestone?: Milestone | undefined): Promise<IssueSchema[]>;
+    listIssues(status?: string | null | undefined, type?: string | null | undefined, priority?: string | null | undefined, milestone?: string | null | undefined): Promise<IssueSchema[]>;
 
     /**
      * Get issue details
@@ -79,7 +79,7 @@ export interface IDashboardApiClient {
      * @param tag (optional) Filter by tag
      * @return Successful Response
      */
-    listArticles(type?: Anonymous | undefined, tag?: Tag | undefined): Promise<KBArticleSchema[]>;
+    listArticles(type?: string | null | undefined, tag?: string | null | undefined): Promise<KBArticleSchema[]>;
 
     /**
      * Search Knowledge Base and entities
@@ -88,7 +88,7 @@ export interface IDashboardApiClient {
      * @param type (optional) Filter by entity type (kb, issue, decision, session)
      * @return Successful Response
      */
-    searchKb(q?: string | undefined, tag?: Anonymous2 | undefined, type?: Anonymous3 | undefined): Promise<SearchResponse>;
+    searchKb(q?: string | undefined, tag?: string | null | undefined, type?: string | null | undefined): Promise<SearchResponse>;
 
     /**
      * Get Knowledge Base cross-link graph
@@ -238,23 +238,15 @@ export class DashboardApiClient implements IDashboardApiClient {
      * @param milestone (optional) Filter by milestone slug
      * @return Successful Response
      */
-    listIssues(status?: Status | undefined, type?: Type | undefined, priority?: Priority | undefined, milestone?: Milestone | undefined): Promise<IssueSchema[]> {
+    listIssues(status?: string | null | undefined, type?: string | null | undefined, priority?: string | null | undefined, milestone?: string | null | undefined): Promise<IssueSchema[]> {
         let url_ = this.baseUrl + "/api/entities/issues?";
-        if (status === null)
-            throw new globalThis.Error("The parameter 'status' cannot be null.");
-        else if (status !== undefined)
+        if (status !== undefined && status !== null)
             url_ += "status=" + encodeURIComponent("" + status) + "&";
-        if (type === null)
-            throw new globalThis.Error("The parameter 'type' cannot be null.");
-        else if (type !== undefined)
+        if (type !== undefined && type !== null)
             url_ += "type=" + encodeURIComponent("" + type) + "&";
-        if (priority === null)
-            throw new globalThis.Error("The parameter 'priority' cannot be null.");
-        else if (priority !== undefined)
+        if (priority !== undefined && priority !== null)
             url_ += "priority=" + encodeURIComponent("" + priority) + "&";
-        if (milestone === null)
-            throw new globalThis.Error("The parameter 'milestone' cannot be null.");
-        else if (milestone !== undefined)
+        if (milestone !== undefined && milestone !== null)
             url_ += "milestone=" + encodeURIComponent("" + milestone) + "&";
         url_ = url_.replace(/[?&]$/, "");
 
@@ -530,15 +522,11 @@ export class DashboardApiClient implements IDashboardApiClient {
      * @param tag (optional) Filter by tag
      * @return Successful Response
      */
-    listArticles(type?: Anonymous | undefined, tag?: Tag | undefined): Promise<KBArticleSchema[]> {
+    listArticles(type?: string | null | undefined, tag?: string | null | undefined): Promise<KBArticleSchema[]> {
         let url_ = this.baseUrl + "/api/kb?";
-        if (type === null)
-            throw new globalThis.Error("The parameter 'type' cannot be null.");
-        else if (type !== undefined)
+        if (type !== undefined && type !== null)
             url_ += "type=" + encodeURIComponent("" + type) + "&";
-        if (tag === null)
-            throw new globalThis.Error("The parameter 'tag' cannot be null.");
-        else if (tag !== undefined)
+        if (tag !== undefined && tag !== null)
             url_ += "tag=" + encodeURIComponent("" + tag) + "&";
         url_ = url_.replace(/[?&]$/, "");
 
@@ -584,19 +572,15 @@ export class DashboardApiClient implements IDashboardApiClient {
      * @param type (optional) Filter by entity type (kb, issue, decision, session)
      * @return Successful Response
      */
-    searchKb(q?: string | undefined, tag?: Anonymous2 | undefined, type?: Anonymous3 | undefined): Promise<SearchResponse> {
+    searchKb(q?: string | undefined, tag?: string | null | undefined, type?: string | null | undefined): Promise<SearchResponse> {
         let url_ = this.baseUrl + "/api/kb/search?";
         if (q === null)
             throw new globalThis.Error("The parameter 'q' cannot be null.");
         else if (q !== undefined)
             url_ += "q=" + encodeURIComponent("" + q) + "&";
-        if (tag === null)
-            throw new globalThis.Error("The parameter 'tag' cannot be null.");
-        else if (tag !== undefined)
+        if (tag !== undefined && tag !== null)
             url_ += "tag=" + encodeURIComponent("" + tag) + "&";
-        if (type === null)
-            throw new globalThis.Error("The parameter 'type' cannot be null.");
-        else if (type !== undefined)
+        if (type !== undefined && type !== null)
             url_ += "type=" + encodeURIComponent("" + type) + "&";
         url_ = url_.replace(/[?&]$/, "");
 
@@ -764,6 +748,7 @@ export interface DashboardMetricsSchema {
     blocked_issues: number;
     done_issues: number;
     completion_pct: number;
+    bug_debt_ratio: number;
     active_risks: number;
     active_milestones: number;
     total_kb_articles: number;
@@ -773,34 +758,35 @@ export interface DashboardMetricsSchema {
     by_type: TypeBreakdown;
     by_priority: PriorityBreakdown;
     scan_timestamp: string;
-
-    [key: string]: any;
+    protocol_version: string;
 }
 
 /** Schema for an ADR entry in .along/DECISIONS.md. */
 export interface DecisionSchema {
     /** Decision identifier, e.g. ADR-001 */
     id: string;
+    /** Decision slug */
+    slug: string | undefined;
     /** Sequential ADR number */
-    number: Number;
+    number: number | undefined;
     /** Decision title */
     title: string;
     /** Date recorded YYYY-MM-DD */
-    date: Date;
+    date: string | undefined;
     /** ADR status (Accepted, Superseded, etc.) */
     status: string;
     /** Context and problem description */
-    context: Context;
+    context: string | undefined;
     /** Decision made */
-    decision: Decision;
+    decision: string | undefined;
     /** Consequences and trade-offs */
-    consequences: Consequences;
+    consequences: string | undefined;
     /** ADR identifier that supersedes this */
-    superseded_by: Superseded_by;
+    superseded_by: string | undefined;
+    /** Relative path to ADR file */
+    file_path: string | undefined;
     /** Full raw markdown of the entry */
-    raw_markdown: Raw_markdown;
-
-    [key: string]: any;
+    raw_markdown: string | undefined;
 }
 
 /** Complete dataset for dashboard SPA. */
@@ -817,14 +803,10 @@ export interface FullDashboardDataSchema {
     graph: any;
     context_text: string;
     issues_board_text: string;
-
-    [key: string]: any;
 }
 
 export interface HTTPValidationError {
     detail: ValidationError[];
-
-    [key: string]: any;
 }
 
 /** Schema for .along/ISSUES/<type>--<slug>.md. */
@@ -836,11 +818,11 @@ export interface IssueSchema {
     /** Canonical entity identifier, e.g. feat--login */
     id: string;
     /** Human readable title */
-    title: Title;
+    title: string | undefined;
     /** Markdown body content */
-    body: Body;
+    body: string | undefined;
     /** Relative file path in repository */
-    file_path: File_path;
+    file_path: string | undefined;
     /** Issue type */
     type: IssueSchemaType;
     /** Current lifecycle status */
@@ -848,25 +830,27 @@ export interface IssueSchema {
     /** Priority level */
     priority: IssueSchemaPriority;
     /** Creation date YYYY-MM-DD */
-    created: Created;
+    created: string | undefined;
     /** Last update date YYYY-MM-DD */
-    updated: Updated;
+    updated: string | undefined;
     /** Completion date YYYY-MM-DD */
-    completed: Completed;
+    completed: string | undefined;
     /** Agent or author that worked on the issue */
-    agent: Agent;
+    agent: string | undefined;
     /** Array of topical tags */
     tags: string[];
     /** Milestone slug this issue belongs to */
-    milestone: Milestone2;
+    milestone: string | undefined;
     /** List of blocking entity keys */
     blocked_by: string[];
     /** List of related entity keys */
     related: string[];
     /** Parent epic/entity key */
-    parent: Parent;
-
-    [key: string]: any;
+    parent: string | undefined;
+    /** Canonical entity key that supersedes this issue */
+    superseded_by: string | undefined;
+    /** Canonical entity key this issue duplicates */
+    duplicate_of: string | undefined;
 }
 
 /** Schema for Knowledge Base article in .along/KB/ or docs/. */
@@ -880,9 +864,9 @@ export interface KBArticleSchema {
     /** Article topic category */
     type: KBArticleSchemaType;
     /** Creation date YYYY-MM-DD */
-    created: Created2;
+    created: string | undefined;
     /** Last update date YYYY-MM-DD */
-    updated: Updated2;
+    updated: string | undefined;
     /** List of topic tags */
     tags: string[];
     /** Relative path in repository */
@@ -895,17 +879,13 @@ export interface KBArticleSchema {
     outgoing_links: string[];
     /** Incoming links referencing this article */
     incoming_links: string[];
-
-    [key: string]: any;
 }
 
 export interface KBGraphEdge {
     source: string;
     target: string;
     type: string;
-    label: Label;
-
-    [key: string]: any;
+    label: string | undefined;
 }
 
 export interface KBGraphNode {
@@ -914,16 +894,12 @@ export interface KBGraphNode {
     type: string;
     category: string;
     tags: string[];
-
-    [key: string]: any;
 }
 
 /** Bidirectional graph of Knowledge Base articles and related entities. */
 export interface KBGraphSchema {
     nodes: KBGraphNode[];
     edges: KBGraphEdge[];
-
-    [key: string]: any;
 }
 
 /** Schema for .along/MILESTONES/<slug>.md. */
@@ -935,23 +911,21 @@ export interface MilestoneSchema {
     /** Canonical entity identifier, e.g. feat--login */
     id: string;
     /** Human readable title */
-    title: Title2;
+    title: string | undefined;
     /** Markdown body content */
-    body: Body2;
+    body: string | undefined;
     /** Relative file path in repository */
-    file_path: File_path2;
+    file_path: string | undefined;
     /** Milestone status */
     status: MilestoneSchemaStatus;
     /** Target due date YYYY-MM-DD */
-    due_date: Due_date;
+    due_date: string | undefined;
     /** Creation date YYYY-MM-DD */
-    created: Created3;
+    created: string | undefined;
     /** Target issue slugs or keys */
     target_issues: string[];
     /** Completion percentage */
     progress_pct: number;
-
-    [key: string]: any;
 }
 
 export interface PriorityBreakdown {
@@ -959,8 +933,6 @@ export interface PriorityBreakdown {
     high: number;
     medium: number;
     low: number;
-
-    [key: string]: any;
 }
 
 /** Schema for .along/RISKS/<slug>.md. */
@@ -972,33 +944,29 @@ export interface RiskSchema {
     /** Canonical entity identifier, e.g. feat--login */
     id: string;
     /** Human readable title */
-    title: Title3;
+    title: string | undefined;
     /** Markdown body content */
-    body: Body3;
+    body: string | undefined;
     /** Relative file path in repository */
-    file_path: File_path3;
+    file_path: string | undefined;
     /** Risk severity level */
     severity: RiskSchemaSeverity;
     /** Risk status */
     status: RiskSchemaStatus;
     /** Owner (agent or user) */
-    owner: Owner;
+    owner: string | undefined;
     /** Mitigation strategy summary */
-    mitigation: Mitigation;
+    mitigation: string | undefined;
     /** Creation date YYYY-MM-DD */
-    created: Created4;
+    created: string | undefined;
     /** Update date YYYY-MM-DD */
-    updated: Updated3;
-
-    [key: string]: any;
+    updated: string | undefined;
 }
 
 export interface SearchResponse {
     query: string;
     total: number;
     results: SearchResultItem[];
-
-    [key: string]: any;
 }
 
 export interface SearchResultItem {
@@ -1009,8 +977,6 @@ export interface SearchResultItem {
     file_path: string;
     score: number;
     tags: string[];
-
-    [key: string]: any;
 }
 
 /** Schema for .along/SESSIONS/<YYYY>/<YYYY-MM-DD>--<slug>.md. */
@@ -1022,23 +988,23 @@ export interface SessionSchema {
     /** Canonical entity identifier, e.g. feat--login */
     id: string;
     /** Human readable title */
-    title: Title4;
+    title: string | undefined;
     /** Markdown body content */
-    body: Body4;
+    body: string | undefined;
     /** Relative file path in repository */
-    file_path: File_path4;
+    file_path: string | undefined;
     /** Session date YYYY-MM-DD */
     date: string;
     /** Agent model/tool name */
-    agent: Agent2;
+    agent: string | undefined;
     /** Git branch name */
-    branch: Branch;
+    branch: string | undefined;
     /** Git commit hash */
-    commit: Commit;
+    commit: string | undefined;
     /** Summary of work completed */
-    summary: Summary;
+    summary: string | undefined;
     /** Associated milestone */
-    milestone: Milestone3;
+    milestone: string | undefined;
     /** Advanced issue keys */
     issues_advanced: string[];
     /** Completed issue keys */
@@ -1049,8 +1015,6 @@ export interface SessionSchema {
     risks_logged: string[];
     /** Conducted spike keys */
     spikes_conducted: string[];
-
-    [key: string]: any;
 }
 
 /** Schema for .along/SPIKES/<slug>.md. */
@@ -1062,23 +1026,21 @@ export interface SpikeSchema {
     /** Canonical entity identifier, e.g. feat--login */
     id: string;
     /** Human readable title */
-    title: Title5;
+    title: string | undefined;
     /** Markdown body content */
-    body: Body5;
+    body: string | undefined;
     /** Relative file path in repository */
-    file_path: File_path5;
+    file_path: string | undefined;
     /** Spike state */
     status: SpikeSchemaStatus;
     /** Spike hypothesis statement */
-    hypothesis: Hypothesis;
+    hypothesis: string | undefined;
     /** Spike outcome and conclusion */
-    outcome: Outcome;
+    outcome: string | undefined;
     /** Linked ADR in DECISIONS.md */
-    resulting_adr: Resulting_adr;
+    resulting_adr: string | undefined;
     /** Creation date YYYY-MM-DD */
-    created: Created5;
-
-    [key: string]: any;
+    created: string | undefined;
 }
 
 export interface StatusBreakdown {
@@ -1086,8 +1048,9 @@ export interface StatusBreakdown {
     in_progress: number;
     blocked: number;
     done: number;
-
-    [key: string]: any;
+    superseded: number;
+    cancelled: number;
+    duplicate: number;
 }
 
 export interface TypeBreakdown {
@@ -1096,8 +1059,6 @@ export interface TypeBreakdown {
     debt: number;
     task: number;
     docs: number;
-
-    [key: string]: any;
 }
 
 export interface ValidationError {
@@ -1106,343 +1067,23 @@ export interface ValidationError {
     type: string;
     input: any;
     ctx: any;
-
-    [key: string]: any;
 }
 
-/** Filter by status (open, in-progress, blocked, done) */
-export interface Status {
+export type IssueSchemaType = "feat" | "bug" | "debt" | "task" | "docs";
 
-    [key: string]: any;
-}
+export type IssueSchemaStatus = "open" | "in-progress" | "blocked" | "done" | "superseded" | "cancelled" | "duplicate";
 
-/** Filter by type (feat, bug, debt, task, docs) */
-export interface Type {
+export type IssueSchemaPriority = "critical" | "high" | "medium" | "low";
 
-    [key: string]: any;
-}
+export type KBArticleSchemaType = "topic" | "architecture" | "domain-model" | "setup-workflow" | "index" | "doc";
 
-/** Filter by priority (critical, high, medium, low) */
-export interface Priority {
+export type MilestoneSchemaStatus = "open" | "in-progress" | "completed";
 
-    [key: string]: any;
-}
+export type RiskSchemaSeverity = "critical" | "high" | "medium" | "low";
 
-/** Filter by milestone slug */
-export interface Milestone {
+export type RiskSchemaStatus = "active" | "mitigated" | "resolved";
 
-    [key: string]: any;
-}
-
-/** Filter by category type */
-export interface Anonymous {
-
-    [key: string]: any;
-}
-
-/** Filter by tag */
-export interface Tag {
-
-    [key: string]: any;
-}
-
-/** Filter by tag */
-export interface Anonymous2 {
-
-    [key: string]: any;
-}
-
-/** Filter by entity type (kb, issue, decision, session) */
-export interface Anonymous3 {
-
-    [key: string]: any;
-}
-
-export interface Number {
-
-    [key: string]: any;
-}
-
-export interface Date {
-
-    [key: string]: any;
-}
-
-export interface Context {
-
-    [key: string]: any;
-}
-
-export interface Decision {
-
-    [key: string]: any;
-}
-
-export interface Consequences {
-
-    [key: string]: any;
-}
-
-export interface Superseded_by {
-
-    [key: string]: any;
-}
-
-export interface Raw_markdown {
-
-    [key: string]: any;
-}
-
-export interface Title {
-
-    [key: string]: any;
-}
-
-export interface Body {
-
-    [key: string]: any;
-}
-
-export interface File_path {
-
-    [key: string]: any;
-}
-
-export enum IssueSchemaType {
-    Feat = "feat",
-    Bug = "bug",
-    Debt = "debt",
-    Task = "task",
-    Docs = "docs",
-}
-
-export enum IssueSchemaStatus {
-    Open = "open",
-    InProgress = "in-progress",
-    Blocked = "blocked",
-    Done = "done",
-}
-
-export enum IssueSchemaPriority {
-    Critical = "critical",
-    High = "high",
-    Medium = "medium",
-    Low = "low",
-}
-
-export interface Created {
-
-    [key: string]: any;
-}
-
-export interface Updated {
-
-    [key: string]: any;
-}
-
-export interface Completed {
-
-    [key: string]: any;
-}
-
-export interface Agent {
-
-    [key: string]: any;
-}
-
-export interface Milestone2 {
-
-    [key: string]: any;
-}
-
-export interface Parent {
-
-    [key: string]: any;
-}
-
-export enum KBArticleSchemaType {
-    Topic = "topic",
-    Architecture = "architecture",
-    DomainModel = "domain-model",
-    SetupWorkflow = "setup-workflow",
-    Index = "index",
-    Doc = "doc",
-}
-
-export interface Created2 {
-
-    [key: string]: any;
-}
-
-export interface Updated2 {
-
-    [key: string]: any;
-}
-
-export interface Label {
-
-    [key: string]: any;
-}
-
-export interface Title2 {
-
-    [key: string]: any;
-}
-
-export interface Body2 {
-
-    [key: string]: any;
-}
-
-export interface File_path2 {
-
-    [key: string]: any;
-}
-
-export enum MilestoneSchemaStatus {
-    Open = "open",
-    InProgress = "in-progress",
-    Completed = "completed",
-}
-
-export interface Due_date {
-
-    [key: string]: any;
-}
-
-export interface Created3 {
-
-    [key: string]: any;
-}
-
-export interface Title3 {
-
-    [key: string]: any;
-}
-
-export interface Body3 {
-
-    [key: string]: any;
-}
-
-export interface File_path3 {
-
-    [key: string]: any;
-}
-
-export enum RiskSchemaSeverity {
-    Critical = "critical",
-    High = "high",
-    Medium = "medium",
-    Low = "low",
-}
-
-export enum RiskSchemaStatus {
-    Active = "active",
-    Mitigated = "mitigated",
-    Resolved = "resolved",
-}
-
-export interface Owner {
-
-    [key: string]: any;
-}
-
-export interface Mitigation {
-
-    [key: string]: any;
-}
-
-export interface Created4 {
-
-    [key: string]: any;
-}
-
-export interface Updated3 {
-
-    [key: string]: any;
-}
-
-export interface Title4 {
-
-    [key: string]: any;
-}
-
-export interface Body4 {
-
-    [key: string]: any;
-}
-
-export interface File_path4 {
-
-    [key: string]: any;
-}
-
-export interface Agent2 {
-
-    [key: string]: any;
-}
-
-export interface Branch {
-
-    [key: string]: any;
-}
-
-export interface Commit {
-
-    [key: string]: any;
-}
-
-export interface Summary {
-
-    [key: string]: any;
-}
-
-export interface Milestone3 {
-
-    [key: string]: any;
-}
-
-export interface Title5 {
-
-    [key: string]: any;
-}
-
-export interface Body5 {
-
-    [key: string]: any;
-}
-
-export interface File_path5 {
-
-    [key: string]: any;
-}
-
-export enum SpikeSchemaStatus {
-    Hypothesis = "hypothesis",
-    Evaluating = "evaluating",
-    Concluded = "concluded",
-}
-
-export interface Hypothesis {
-
-    [key: string]: any;
-}
-
-export interface Outcome {
-
-    [key: string]: any;
-}
-
-export interface Resulting_adr {
-
-    [key: string]: any;
-}
-
-export interface Created5 {
-
-    [key: string]: any;
-}
+export type SpikeSchemaStatus = "hypothesis" | "evaluating" | "concluded";
 
 export interface Loc {
 

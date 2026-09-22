@@ -2,6 +2,7 @@
 
 from typing import List, Optional, Dict, Any
 from pydantic import BaseModel, Field, ConfigDict
+from alongkit.version import CURRENT_PROTOCOL_VERSION
 from .entities import IssueSchema, MilestoneSchema, RiskSchema, SpikeSchema, SessionSchema, DecisionSchema
 from .kb import KBArticleSchema, KBGraphSchema
 
@@ -49,6 +50,7 @@ class DashboardMetricsSchema(BaseModel):
     by_type: TypeBreakdown = Field(default_factory=TypeBreakdown)
     by_priority: PriorityBreakdown = Field(default_factory=PriorityBreakdown)
     scan_timestamp: str = ""
+    protocol_version: str = CURRENT_PROTOCOL_VERSION
 
 
 class FullDashboardDataSchema(BaseModel):

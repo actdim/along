@@ -1,4 +1,3 @@
-import React from 'react';
 import {
   type ComponentStruct,
   type ComponentDef,
@@ -9,6 +8,7 @@ import {
 import { useComponent, toReact } from '@actdim/dynstruct/componentModel/react/hooks';
 import { Icon } from '@iconify/react';
 import { marked } from 'marked';
+import DOMPurify from 'dompurify';
 import { KBArticle } from '../types';
 import { DashboardAppMsgStruct, DashboardMsgChannels } from '../bus';
 
@@ -69,9 +69,10 @@ export const useKBView = (params?: ComponentParams<KBViewStruct>): Component<KBV
         const art = m.activeArticle;
         if (!art || !art.body) return '';
         try {
-          return marked.parse(art.body) as string;
+          const parsed = marked.parse(art.body);
+          return DOMPurify.sanitize(typeof parsed === 'string' ? parsed : String(parsed));
         } catch {
-          return art.body;
+          return DOMPurify.sanitize(art.body);
         }
       },
     },
