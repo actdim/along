@@ -39,7 +39,7 @@ Also, when relevant: `.along/VISION.md`, `.along/GLOSSARY.md`. These reflect the
 - **Stable Entry Point Rule**: Files outside `.along/` (`README.md`, `docs/`, manifests) MUST NOT link into `.along/`. Route references through `docs/INDEX.md` or `docs/topic--<slug>.md`.
 - **Portable Links**: All cross-references MUST use relative Markdown links (`[Title](./target.md)`), never `file://` or backslashes.
 - **Fact Grounding**: Agents MUST extract facts from actual code, `README.md`, `docs/`, and `package.json`. Generic LLM placeholders are strictly prohibited.
-- **Fast Retrieval**: Agents MUST query `/along-kb-search` before reading whole documentation files.
+- **Fast Retrieval** [gate: fast-retrieval]: Agents MUST query `/along-kb-search` before reading whole documentation files.
 - **Doc Blast Radius**: After non-trivial code changes, agents MUST map affected symbols to `docs/topic--*.md` articles and update them before completing the task.
 
 ## While working

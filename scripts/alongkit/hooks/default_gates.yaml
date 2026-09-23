@@ -161,5 +161,15 @@ gates:
       handler: alongkit.hooks.predicates.check_mutation_authorization
       error: "Mutation rejected by [gate: require-plan-approval]: Plan approval required before repository mutations."
 
+  - id: fast_retrieval
+    title: "Fast Knowledge Base & Memory Retrieval"
+    description: "Blocks manual directory search across docs/ and .along/ directories, enforcing along kb-search"
+    event: PreToolUse
+    tools: [grep_search, grep, find_by_name, find_files, file_search]
+    rule:
+      type: predicate
+      handler: alongkit.hooks.predicates.check_fast_retrieval
+      error: "Manual directory search across docs/ or .along/ rejected by [gate: fast-retrieval]."
+
 
 

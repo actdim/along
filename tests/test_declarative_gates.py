@@ -35,6 +35,7 @@ from alongkit.hooks.declarative import (
 from alongkit.hooks.predicates import (
     check_active_issue,
     check_cli_safety,
+    check_fast_retrieval,
     check_projection_protection,
     check_test_before_stop,
     check_typography,
@@ -130,6 +131,12 @@ class TestDeclarativeGateEngine(unittest.TestCase):
         res = gate.evaluate(good_event)
         self.assertEqual(res.decision, GateDecision.ALLOW)
 
+    def test_default_gates_includes_fast_retrieval(self):
+        from alongkit.hooks.declarative import DEFAULT_GATES_FILE, load_gate_definitions
+        defns = load_gate_definitions(DEFAULT_GATES_FILE)
+        gate_ids = [d.id for d in defns]
+        self.assertIn("fast_retrieval", gate_ids)
+
 
 class TestStatefulPredicates(unittest.TestCase):
     """Hermetic tests for stateful gate predicates using isolated tempfiles."""
@@ -205,6 +212,80 @@ class TestStatefulPredicates(unittest.TestCase):
 
         # Stop event after tests ran -> allowed
         err = check_test_before_stop(stop_event, repo_root=self.tmp)
+        self.assertIsNone(err)
+
+    def test_check_fast_retrieval_blocks_docs_and_along_directories(self):
+        # grep_search targeting docs/ directory
+        event_grep_docs = HookEvent(
+            event_type=HookEventType.PRE_TOOL_USE,
+            tool_name="grep_search",
+            tool_args={"SearchPath": os.path.join(self.tmp, "docs"), "Query": "architecture"},
+            workspace_root=self.tmp,
+        )
+        err = check_fast_retrieval(event_grep_docs, repo_root=self.tmp)
+        self.assertIsNotNone(err)
+        self.assertIn("fast-retrieval", err or "")
+        self.assertIn("along kb-search", err or "")
+
+        # grep_search targeting .along/ISSUES directory
+        event_grep_along = HookEvent(
+            event_type=HookEventType.PRE_TOOL_USE,
+            tool_name="grep_search",
+            tool_args={"SearchPath": os.path.join(self.along_dir, "ISSUES"), "Query": "token"},
+            workspace_root=self.tmp,
+        )
+        err = check_fast_retrieval(event_grep_along, repo_root=self.tmp)
+        self.assertIsNotNone(err)
+        self.assertIn("fast-retrieval", err or "")
+
+        # find_by_name targeting docs/ directory
+        event_find_docs = HookEvent(
+            event_type=HookEventType.PRE_TOOL_USE,
+            tool_name="find_by_name",
+            tool_args={"SearchDirectory": "docs", "Pattern": "*.md"},
+            workspace_root=self.tmp,
+        )
+        err = check_fast_retrieval(event_find_docs, repo_root=self.tmp)
+        self.assertIsNotNone(err)
+        self.assertIn("fast-retrieval", err or "")
+
+    def test_check_fast_retrieval_allows_single_file_and_repo_root(self):
+        docs_dir = os.path.join(self.tmp, "docs")
+        os.makedirs(docs_dir, exist_ok=True)
+        doc_file = os.path.join(docs_dir, "topic--architecture.md")
+        with open(doc_file, "w", encoding="utf-8") as f:
+            f.write("# Architecture\n")
+
+        # Single file grep_search in docs/ -> allowed
+        event_single_file = HookEvent(
+            event_type=HookEventType.PRE_TOOL_USE,
+            tool_name="grep_search",
+            tool_args={"SearchPath": doc_file, "Query": "Architecture"},
+            workspace_root=self.tmp,
+        )
+        err = check_fast_retrieval(event_single_file, repo_root=self.tmp)
+        self.assertIsNone(err)
+
+        # Whole repository search -> allowed
+        event_repo_search = HookEvent(
+            event_type=HookEventType.PRE_TOOL_USE,
+            tool_name="grep_search",
+            tool_args={"SearchPath": self.tmp, "Query": "def foo"},
+            workspace_root=self.tmp,
+        )
+        err = check_fast_retrieval(event_repo_search, repo_root=self.tmp)
+        self.assertIsNone(err)
+
+        # Non-docs directory search -> allowed
+        scripts_dir = os.path.join(self.tmp, "scripts")
+        os.makedirs(scripts_dir, exist_ok=True)
+        event_scripts_search = HookEvent(
+            event_type=HookEventType.PRE_TOOL_USE,
+            tool_name="grep_search",
+            tool_args={"SearchPath": scripts_dir, "Query": "import os"},
+            workspace_root=self.tmp,
+        )
+        err = check_fast_retrieval(event_scripts_search, repo_root=self.tmp)
         self.assertIsNone(err)
 
 
