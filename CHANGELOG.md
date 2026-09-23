@@ -2,6 +2,10 @@
 
 All notable changes to this project, newest first.
 
+## v4.0.2 - 2026-09-23
+
+- docs(readme): enhance dual-tier memory architecture and zero-vector retrieval (refs #readme-wiki-unified-search)
+
 ## v4.0.1 - 2026-09-23
 
 - fix(ci): install uv and use uv run for dashboard export in pages workflow (refs #pages-workflow-uv-dependencies)
