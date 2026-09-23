@@ -106,3 +106,4 @@ _Index of sessions (newest last). One line per session:_
 
 2026-09-22 - dashboard-architecture-graph-and-pages-publish - antigravity - Add aggregated code architecture graph to Dashboard and automate GitHub Pages deployment - [feat](./ISSUES/done/feat--dashboard-architecture-graph-and-pages-publish.md)
 2026-09-22 - entity-lifecycle-cli-documentation - antigravity - Documented entity lifecycle CLI commands (along start, along issue, along milestone) and dynamic milestone synchronization engine (1 issue closed, milestone v4.0.0 completed, suite 520 tests clean) - [Session Log](./SESSIONS/2026/2026-09-22--entity-lifecycle-cli-documentation.md)
+2026-09-23 - readme-wiki-unified-search - antigravity - Enhanced README with Dual-Tier Memory Architecture, zero-vector unified retrieval, and established roadmap milestones v5.0.0-v7.0.0 - [Session Log](./SESSIONS/2026/2026-09-23--readme-wiki-unified-search.md)
