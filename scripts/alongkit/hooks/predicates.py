@@ -648,3 +648,65 @@ def check_circuit_breaker(event: HookEvent, repo_root: str, **kwargs: Any) -> Op
     return None
 
 
+def check_fast_retrieval(event: HookEvent, repo_root: str, **kwargs: Any) -> Optional[str]:
+    """
+    Block manual directory searches (grep_search, find_by_name) targeting docs/ or .along/ directories.
+    Directs agents to use 'along kb-search <query>' for fast, sub-100ms indexed retrieval.
+    """
+    tool = (event.tool_name or "").lower()
+    args = event.tool_args or {}
+
+    target_path = ""
+    if tool in ("grep_search", "grep"):
+        target_path = (
+            args.get("SearchPath")
+            or args.get("search_path")
+            or args.get("path")
+            or ""
+        )
+        if target_path:
+            # If target_path points to an existing regular file, allow targeted inspection
+            norm_abs = target_path
+            if repo_root and not os.path.isabs(norm_abs):
+                norm_abs = os.path.join(repo_root, norm_abs)
+            if os.path.isfile(norm_abs):
+                return None
+
+    elif tool in ("find_by_name", "find_files", "file_search"):
+        target_path = (
+            args.get("SearchDirectory")
+            or args.get("search_directory")
+            or args.get("directory")
+            or args.get("path")
+            or ""
+        )
+
+    if not target_path:
+        return None
+
+    norm = repo.normalize_posix(target_path).strip().lower()
+    if repo_root:
+        root_norm = repo.normalize_posix(repo_root).rstrip("/").lower()
+        if norm.startswith(root_norm + "/"):
+            norm = norm[len(root_norm) + 1:]
+        elif norm == root_norm:
+            # Whole repo search - permitted
+            return None
+
+    while norm.startswith("./"):
+        norm = norm[2:]
+    norm = norm.lstrip("/")
+
+    if (
+        norm == "docs" or norm.startswith("docs/")
+        or norm == ".along" or norm.startswith(".along/")
+    ):
+        return (
+            f"Manual Search Rejected [gate: fast-retrieval]: Manual directory search across '{target_path}' "
+            "is forbidden to prevent latency and LLM token exhaustion. "
+            "Execute 'along kb-search \"<query>\"' instead for sub-100ms indexed retrieval."
+        )
+
+    return None
+
+
