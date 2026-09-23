@@ -13,6 +13,7 @@ on:
       - 'packages/dashboard-ui/**'
       - 'dashboard/**'
       - '.along/**'
+      - '.github/workflows/pages.yml'
   workflow_dispatch:
 
 permissions:
@@ -33,6 +34,9 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
 
       - name: Install pnpm
         uses: pnpm/action-setup@v3
@@ -58,7 +62,7 @@ jobs:
         run: mkdocs build
 
       - name: Export Dashboard static bundle
-        run: python scripts/along_dash.py --export site/dashboard
+        run: uv run scripts/along_dash.py --export site/dashboard
 
       - name: Copy extra static files
         run: |
