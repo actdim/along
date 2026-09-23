@@ -2,6 +2,10 @@
 
 All notable changes to this project, newest first.
 
+## v4.0.1 - 2026-09-23
+
+- fix(ci): install uv and use uv run for dashboard export in pages workflow (refs #pages-workflow-uv-dependencies)
+
 ## v4.0.0 - 2026-09-22
 
 - docs(cli): document entity lifecycle and milestone synchronization (refs #entity-lifecycle-cli-documentation)
