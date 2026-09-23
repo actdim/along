@@ -27,7 +27,7 @@ AI coding agents are exceptionally capable, but they start every session blind:
 - **Workspace Pollution & Contamination**: Parallel or autonomous agents executing directly in developer working directories corrupt uncommitted work-in-progress, disrupt IDE language servers, or fail abruptly on bare worktrees lacking dependencies.
 - **Soft Prompt Decay & Hallucinated Compliance**: Natural language instructions in markdown rules or system prompts decay as context grows, lacking hard mechanical execution guardrails.
 
-**Along fixes this by embedding a durable, machine-parseable memory layer (`.along/`), an Andrej Karpathy-style LLM-Wiki (`docs/`), and a unified lifecycle contract (`.along/scripts/`) directly into your repository.** Agents read past decisions, track issues in a DAG, plan autonomously, and verify their own work before committing.
+**Along fixes this by embedding a Dual-Tier Memory Architecture into your repository: an Andrej Karpathy-style LLM-Wiki (`docs/`) for evergreen architectural consensus, and a machine-parseable living memory layer (`.along/`) for transactional project governance.** Agents read past decisions, track issues in a DAG, plan autonomously, search across all project memory in milliseconds via zero-vector unified retrieval, and verify their own work before committing.
 
 ---
 
@@ -35,6 +35,8 @@ AI coding agents are exceptionally capable, but they start every session blind:
 
 | Pillar | How Along Delivers It |
 | :--- | :--- |
+| **Zero-Vector In-Repo Intelligence** | Sub-50ms TF-IDF multi-scope retrieval engine (`along-kb-search`) unifying docs, ADR constraints, active issues, and session logs into word-boundary aligned snippets (< 150 tokens), cutting token exploration costs by 85-95% without external vector DBs or daemon processes. |
+| **Dual-Tier Memory Architecture** | Clean architectural separation: Evergreen LLM-Wiki (`docs/`) with AST code symbol grounding and SHA-256 drift detection vs. Living Transactional Governance (`.along/`) with DAG issues, immutable session history, and atomic projections. |
 | **Persistent In-Repo Memory** | Durable, git-tracked memory (`.along/`): DAG issues, append-only ADR logs, milestones, risks, and session records that travel with the codebase. |
 | **Autonomous Multi-Agent Teams** | Sequential living-plan state machine (`along-team`): Supervisor -> Scout -> Architect -> Implementer -> Reviewer with session blackboards, hard retry limits, and single-agent degradation. |
 | **Runtime Worktree Workspace Isolation** | Ephemeral Git worktree isolation (`along worktree`, `/along-team --worktree`) satisfying the 3-part Environment Readiness Contract: NTFS junctions / symlinks for dependencies (`node_modules`, `.venv`), `.env` configuration copying, real-time session blackboard sharing, and Windows file lock resilient teardown. |
@@ -49,6 +51,53 @@ AI coding agents are exceptionally capable, but they start every session blind:
 
 ---
 
+### Dual-Tier Memory Architecture: Evergreen Wiki vs. Living Governance
+
+Along divides repository intelligence into two specialized, complementary tiers to keep agent context scalable and predictable:
+
+```mermaid
+flowchart TD
+    subgraph Tier1["Tier 1: Evergreen Architecture Wiki (docs/)"]
+        WIKI["Curated Knowledge Base (docs/topic--*.md)"]
+        AST["AST Code Symbol Grounding (zero ghost symbols)"]
+        PROV["Source Provenance (SHA-256 drift gate)"]
+        LLMS["Deterministic llms.txt & llms-full.txt"]
+    end
+
+    subgraph Tier2["Tier 2: Living Governance Memory (.along/)"]
+        ISSUES["Machine-Parseable DAG Issues (open -> done)"]
+        ADRS["Decentralized ADRs & CONSTRAINTS.md"]
+        SESSIONS["Immutable Session Logs & Engineering Provenance"]
+        PROJ["Auto-Compiled Projections (ISSUES.md)"]
+    end
+
+    subgraph Retrieval["Zero-Vector In-Repo Retrieval Engine (along kb-search)"]
+        SEARCH["Sub-50ms TF-IDF Multi-Scope Search"]
+        SNIPPETS["Targeted Bounded Snippets (< 150 Tokens)"]
+        SAVINGS["85-95% Token Savings (No External Vector DB)"]
+    end
+
+    WIKI --- SEARCH
+    ISSUES --- SEARCH
+    ADRS --- SEARCH
+    SESSIONS --- SEARCH
+    SEARCH --> SNIPPETS --> SAVINGS
+```
+
+- **Tier 1: Evergreen Architecture Wiki (`docs/`)**:
+  - **Purpose**: Curated, cumulative knowledge base representing the current factual state of system design.
+  - **Mechanisms**: In-place source provenance (`sources: [{path, hash}]`), AST code symbol verification to prevent hallucinated interfaces, and deterministic compilation into `docs/INDEX.md` and `llms.txt`.
+  - **Lifecycle**: Evolves with the codebase. Never transactional; updated only when public contracts, workflows, or architecture change.
+- **Tier 2: Living Governance Memory (`.along/`)**:
+  - **Purpose**: Transactional project memory, active task execution state, and historical audit trails.
+  - **Mechanisms**: Machine-parseable DAG issues with lifecycle states, modular ADRs (`ADR-YYYY-MM-DD--<slug>.md`), compiled constraints projection (`CONSTRAINTS.md`), and append-only session history.
+  - **Lifecycle**: Transactional and stateful. Closed issues and session logs are permanent and immutable.
+- **Unified Retrieval Engine (`along kb-search`)**:
+  - Unifies both tiers in a single fast local query without vector embeddings, cloud dependencies, or background daemon processes.
+  - Returns word-boundary aligned snippets (< 150 tokens) directly to agent prompts, slashing exploration context costs by 85-95%.
+
+---
+
 ## Using Along in Your Projects? (Drop-In Blurb)
 
 Add this badge and blurb to the `README.md` of any repository powered by Along:
@@ -57,8 +106,8 @@ Add this badge and blurb to the `README.md` of any repository powered by Along:
 ### AI Development: Powered by [ActDim Along](https://github.com/actdim/along)
 
 This repository follows the **ActDim Along Protocol** for AI agent context, persistent memory, and autonomous workflows:
-- **Persistent In-Repo Memory**: Past architectural decisions (`.along/DECISIONS.md`), active constraints (`.along/CONSTRAINTS.md`), active issues, and session history survive across all AI sessions.
-- **Token-Efficient Knowledge Base**: Structured LLM-Wiki documentation in `docs/` minimizes context overhead and eliminates architectural drift.
+- **Dual-Tier Memory**: Evergreen LLM-Wiki in `docs/` and living governance memory in `.along/` survive across all AI sessions.
+- **Zero-Vector Unified Retrieval**: Fast local snippet search across architecture, decisions, and issues with 85-95% token reduction and zero external database dependencies.
 - **Runtime Worktree Isolation**: Autonomous agent tasks execute in isolated Git worktrees with automatic dependency linking, preserving clean developer checkouts.
 - **Mechanical Quality Gates**: Protocol rules, clean typography, and issue bindings are mechanically enforced at runtime before tools execute.
 - **Standardized Lifecycle Contract**: Unified commands for build, test, dev, release, and dependency discovery via pluggable `.along/scripts/` hooks.
@@ -154,8 +203,8 @@ Along provides **19 singular automation skills** structured across 6 core lifecy
 ### 5. Knowledge Base & LLM-Wiki Intelligence
 | Skill / Command | Purpose |
 | :--- | :--- |
-| **`along-kb-sync`** (`/along-kb-sync`) | Idempotent LLM-Wiki Knowledge Base compiler and link integrity gate in `docs/`. |
-| **`along-kb-search`** (`/along-kb-search`) | Fast targeted snippet search across `docs/` and project memory. |
+| **`along-kb-sync`** (`/along-kb-sync`) | Idempotent LLM-Wiki Knowledge Base compiler, AST symbol grounding, and link integrity gate in `docs/`. |
+| **`along-kb-search`** (`/along-kb-search`) | Zero-vector, sub-50ms multi-scope snippet search across `docs/`, ADRs, issues, and session logs (< 150 tokens/match). |
 
 ### 6. Visual Analytics, History & Diagnostics
 | Skill / Command | Purpose |
