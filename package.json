@@ -1,6 +1,6 @@
 {
   "name": "along",
-  "version": "4.0.0",
+  "version": "4.0.1",
   "private": true,
   "scripts": {
     "test": "python .along/scripts/test.py",
