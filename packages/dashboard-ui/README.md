@@ -1,53 +1,40 @@
----
-protocol: along
-slug: frontend-frameworks
-title: Frontend Architecture, Dynstruct, MsgMesh & NSwag Integration
-type: topic
-created: 2026-08-27
-updated: 2026-09-22
-tags: [dynstruct, dynstruct-mui, msgmesh, utico, react, mui, nswag, openapi, architecture, security, vitest]
-sources:
-  - path: packages/dashboard-ui/package.json
-    hash: "c757eb626c337c468c3afb3c3be936adc61e42147ffafcafe39f059d6f6a815e"
----
+# Along Dashboard UI (`@along/dashboard-ui`)
 
-# Frontend Architecture, Dynstruct, MsgMesh & NSwag Integration
-
-The Along Dashboard UI (`packages/dashboard-ui/`) is built strictly on the ActDim component and messaging ecosystem, following the architecture outlined below:
+The Along Dashboard UI is the internal web interface for inspecting repository entities, dependency DAGs, issues, decisions, and system diagnostics. It is served by `/along-dash` (FastAPI backend).
 
 ---
 
-## 1. Core Ecosystem Components
+## Architecture & Ecosystem Standards
+
+The dashboard frontend is built strictly on the ActDim component and messaging ecosystem:
+
+### 1. Core Ecosystem Components
 
 1. **`@actdim/dynstruct`**
-   - **Guide**: [dynstruct/AGENTS.md](../../dynstruct/AGENTS.md) | [dynstruct/README.md](../../dynstruct/README.md)
    - **Pattern**: Structure-first component definition via `ComponentStruct<AppMsgStruct, ...>` with explicit `props`, `actions`, `children`, `events`, and `effects`.
    - **Zero React Boilerplate**: All component state lives in observable `c.model` (MobX under the hood). No raw React `useState`, `useMemo`, `useCallback`, or hook spaghetti.
 
 2. **`@actdim/dynstruct-mui`**
-   - **Guide**: [dynstruct-mui/README.md](../../dynstruct-mui/README.md)
    - **Pattern**: Material UI components adapted as Dynstruct hook-constructors (`useButton`, `useDrawer`, `useCard`, `useTabs`, `useChip`, `useTextField`, `useDialog`, `useTable`, etc.).
 
 3. **`@actdim/msgmesh`**
-   - **Guide**: [msgmesh/AGENTS.md](../../msgmesh/AGENTS.md) | [msgmesh/README.md](../../msgmesh/README.md)
    - **Pattern**: Type-safe async messaging mesh for API communication and inter-component signaling.
 
 4. **`@actdim/utico`**
-   - **Guide**: [utico/README.md](../../utico/README.md)
    - **Pattern**: Foundation type utilities (`KeysOf`, `ToMsgChannelPrefix`, `ToMsgStruct`).
 
 ---
 
-## 2. Mandatory Architectural Rules & Invariants
+## Mandatory Architectural Rules & Invariants
 
 ### 1. Zero Manual API Channels & No Manual `fetch` Handlers
 - **NEVER** write manual `MsgStruct` channel maps (`{ in: ..., out: ... }`) for backend REST/OpenAPI endpoints.
-- **NEVER** write manual `fetch` / `axios` handlers inside `provide()`.
+- **NEVER** write manual `fetch` or `axios` handlers inside `provide()`.
 - All backend API clients are generated automatically from FastAPI OpenAPI schemas via NSwag:
   ```bash
   pnpm run generate:api
   ```
-  This creates [src/api/client.ts](../packages/dashboard-ui/src/api/client.ts) containing `DashboardApiClient`.
+  This creates [src/api/client.ts](./src/api/client.ts) containing `DashboardApiClient`.
 
 ### 2. Dynamic Bus Struct via `@actdim/msgmesh/adapters`
 - Use `ToMsgChannelPrefix` and `ToMsgStruct` to generate typed channels at compile-time directly from `DashboardApiClient`:
@@ -102,22 +89,31 @@ The Along Dashboard UI (`packages/dashboard-ui/`) is built strictly on the ActDi
         subscribe: DashboardMsgChannels<'APP.DATA.UPDATED' | 'APP.SSE.STATUS'>;
         publish: DashboardMsgChannels<'API.DASHBOARD.GETFULLDATA' | 'APP.ENTITY.SELECT'>;
       };
-      ...
+      // ...
     }
   >;
   ```
-  Glancing at the `ComponentStruct` immediately shows what data the component consumes and what events it produces.
 
 ### 6. 100% Strict Type Safety (Zero `any` & Zero `window` State Hacks)
 - No `any` type casting.
 - No `as ...` type assertions.
 - No storing state on `window` (`window.__ALONG_DATA__`).
-- All payloads are strictly typed through the channel definitions and NSwag DTO interfaces.
+- All payloads are strictly typed through channel definitions and NSwag DTO interfaces.
 
 ### 7. Content Security & Markdown Sanitization
 - Markdown rendering (e.g. in `EntityDrawer.tsx`) must always be sanitized via `DOMPurify.sanitize(marked.parse(...))` to prevent XSS vulnerabilities.
 - Mermaid diagrams must be configured with `securityLevel: 'strict'` under Content Security Policy (CSP).
 
 ### 8. Testing & Quality Gates
-- Component and unit tests use `vitest` with `happy-dom` (`pnpm test` or `npm test`).
-- Type checking is enforced via `tsc --noEmit` (`pnpm run typecheck` or `npm run typecheck`).
+- Component and unit tests use `vitest` with `happy-dom`:
+  ```bash
+  pnpm test
+  ```
+- Type checking is enforced via `tsc --noEmit`:
+  ```bash
+  pnpm run typecheck
+  ```
+- Production build:
+  ```bash
+  pnpm run build
+  ```
