@@ -21,6 +21,8 @@ Dispatches:
    - graph-check  -> runs along_graph_check.py (doctor preflight check)
    - graph-sync   -> runs along_graph_sync.py (build or update AST code graph)
    - graph-build  -> alias for graph-sync
+   - graph-impact -> runs along_graph_impact.py (semantic blast radius)
+   - graph-arch   -> runs along_graph_arch.py (architectural overview)
 """
 
 import sys
@@ -73,6 +75,10 @@ TOOL_MAPPINGS = {
     "graphsync": "along_graph_sync.py",
     "graph-build": "along_graph_sync.py",
     "graphbuild": "along_graph_sync.py",
+    "graph-impact": "along_graph_impact.py",
+    "graphimpact": "along_graph_impact.py",
+    "graph-arch": "along_graph_arch.py",
+    "grapharch": "along_graph_arch.py",
     "wrap": "along_wrap.py",
     "hook": "along_hook.py",
     "hooks": "along_hook.py",
@@ -159,6 +165,8 @@ Along Protocol Tools:
   graph-check    Check code-review-graph MCP server and repository filters
   graph-sync     Build or incrementally update code-review-graph AST database
   graph-build    Alias for graph-sync (supports --full, --status)
+  graph-impact   Determine blast radius and affected flows for symbol or file
+  graph-arch     Architectural overview, coupling hotspots, and bridge nodes
   patch          Deterministic AST code patching (replace-func)
 """)
 
@@ -1628,6 +1636,22 @@ def main():
         script_path = resolve_tool_script(mapped, repo_root)
         if script_path:
             code = proc.run_passthrough([sys.executable, script_path] + extra_args[1:], cwd=repo_root)
+            sys.exit(code)
+    elif cmd == "graph":
+        sub = extra_args[0].lower() if extra_args else "check"
+        sub_map = {
+            "check": "along_graph_check.py",
+            "sync": "along_graph_sync.py",
+            "build": "along_graph_sync.py",
+            "impact": "along_graph_impact.py",
+            "arch": "along_graph_arch.py",
+            "architecture": "along_graph_arch.py",
+        }
+        mapped = sub_map.get(sub, "along_graph_check.py")
+        args_tail = extra_args[1:] if sub in sub_map else extra_args
+        script_path = resolve_tool_script(mapped, repo_root)
+        if script_path:
+            code = proc.run_passthrough([sys.executable, script_path] + args_tail, cwd=repo_root)
             sys.exit(code)
 
     # 2. Check if command is an Along Protocol Tool

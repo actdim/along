@@ -164,7 +164,7 @@ The repository's complete technical specification is maintained as a living LLM-
 
 ## Automation Skills Reference (Grouped by Workflow Phase)
 
-Along provides **19 singular automation skills** structured across 6 core lifecycle phases:
+Along provides **21 singular automation skills** structured across 6 core lifecycle phases:
 
 ### 1. Bootstrap & Repository Protocol Management
 | Skill / Command | Purpose |
@@ -197,6 +197,8 @@ Along provides **19 singular automation skills** structured across 6 core lifecy
 | **`along hook verify`** (`along hook`) | Verify bi-directional traceability between prose badges and YAML gates. |
 | **`along-graph-check`** (`/along-graph-check`) | Preflight health check and verification for `code-review-graph` MCP server. |
 | **`along-graph-sync`** (`/along-graph-sync`) | Build or incrementally update `code-review-graph` AST code intelligence database. |
+| **`along-graph-impact`** (`/along-graph-impact`) | Determine blast radius, affected flows, and candidate tests for changed symbols or files. |
+| **`along-graph-arch`** (`/along-graph-arch`) | Architectural overview, community structure, coupling hotspots, and bridge nodes. |
 | **`along-dep-scan`** (`/along-dep-scan`) | Scan declared dependencies for AI instructions into `docs/topic--dependencies.md`. |
 | **`along context-budget`** (`along budget`) | Context budget measurement and regression gate (`--check`, `--json`). |
 
@@ -265,7 +267,7 @@ Also, when relevant: `.along/VISION.md`, `.along/GLOSSARY.md`. These reflect the
 - **Stable Entry Point Rule**: Files outside `.along/` (`README.md`, `docs/`, manifests) MUST NOT link into `.along/`. Route references through `docs/INDEX.md` or `docs/topic--<slug>.md`.
 - **Portable Links**: All cross-references MUST use relative Markdown links (`[Title](./target.md)`), never `file://` or backslashes.
 - **Fact Grounding**: Agents MUST extract facts from actual code, `README.md`, `docs/`, and `package.json`. Generic LLM placeholders are strictly prohibited.
-- **Fast Retrieval**: Agents MUST query `/along-kb-search` before reading whole documentation files.
+- **Fast Retrieval** [gate: fast-retrieval]: Agents MUST query `/along-kb-search` before reading whole documentation files.
 - **Doc Blast Radius**: After non-trivial code changes, agents MUST map affected symbols to `docs/topic--*.md` articles and update them before completing the task.
 
 ## While working
@@ -326,15 +328,14 @@ See the following engineering guidelines:
 
 This repository is **ActDim Along** (`actdim-along`) - the provider-agnostic agent-context protocol and skills suite.
 
-- **Skills Source**: `skills/` (`along-init`, `along-update`, `along-dash`, `along-wrap`, `along-commit`, `along-build`, `along-test`, `along-dev`, `along-team`, `along-kb-sync`, `along-kb-search`, `along-issue-sync`, `along-decision-sync`, `along-history-sync`, `along-graph-check`, `along-graph-sync`, `along-dep-scan`, `along-version-bump`, `along-feedback`).
+- **Skills Source**: `skills/` (`along-init`, `along-update`, `along-dash`, `along-wrap`, `along-commit`, `along-build`, `along-test`, `along-dev`, `along-team`, `along-kb-sync`, `along-kb-search`, `along-issue-sync`, `along-decision-sync`, `along-history-sync`, `along-graph-check`, `along-graph-sync`, `along-graph-impact`, `along-graph-arch`, `along-dep-scan`, `along-version-bump`, `along-feedback`).
 - **Engines**: `scripts/` (one per skill) on shared `scripts/alongkit/` package. Helpers defined there only; `tests/test_alongkit.py` enforces no duplicates. Runtime dep: `ruamel.yaml`.
 - **Typography**: `along sanitize` checks (writes with `--write`). `/along-commit` and `/along-version-bump` verify and abort (rewrite with `--fix-typography`). Scope: `.md`, `.py`, `.sh`, `.ps1`, `.bat`.
 - **Release**: `/along-version-bump` runs pre-mutation gates, transactional rollback via `alongkit.transaction.FileTransaction`.
 - **Migration**: `migrate_protocol.py` preserves destinations, union-merges append-only files, backs up to `.along/.migration-backup/`.
 - **Install**: Windows: `install.ps1 -Target all` (or `install.bat`). Unix: `bash install.sh`. Uninstall: `-Uninstall` / `--uninstall`. Manifest: `~/.along/install-manifest.json`.
 - **Lifecycle**: Tests: `python .along/scripts/test.py`. Dev: `npm run dev`. Build: `npm run build`.
-- **Tests**: Plain `unittest` on throwaway fixtures (`tests/hermetic.py`), never repo root. Live access read-only. See `[docs/topic--setup-and-workflow.md](./docs/topic--setup-and-workflow.md)`.
-- **Frontend** (`packages/dashboard-ui/`): Strict `@actdim/dynstruct` + MobX (zero `useState`/`useEffect`). NSwag-generated API client via `@actdim/msgmesh/adapters`. 100% typed (zero `any`/`as`). Full rules: `[docs/topic--frontend-frameworks.md](./docs/topic--frontend-frameworks.md)`.
+- **Frontend** (`packages/dashboard-ui/`): Internal dashboard package. Strict `@actdim/dynstruct` + MobX (zero `useState`/`useEffect`), NSwag client via `@actdim/msgmesh/adapters`. 100% typed (zero `any`/`as`). Full rules: `[packages/dashboard-ui/README.md](./packages/dashboard-ui/README.md)`.
 
 ---
 
@@ -1867,121 +1868,6 @@ To ensure zero administrative overhead for developers, Along host agents automat
 
 ---
 
-## Document: docs/topic--frontend-frameworks.md (Frontend Architecture, Dynstruct, MsgMesh & NSwag Integration)
-
-# Frontend Architecture, Dynstruct, MsgMesh & NSwag Integration
-
-The Along Dashboard UI (`packages/dashboard-ui/`) is built strictly on the ActDim component and messaging ecosystem, following the architecture outlined below:
-
----
-
-## 1. Core Ecosystem Components
-
-1. **`@actdim/dynstruct`**
-   - **Guide**: [dynstruct/AGENTS.md](../../dynstruct/AGENTS.md) | [dynstruct/README.md](../../dynstruct/README.md)
-   - **Pattern**: Structure-first component definition via `ComponentStruct<AppMsgStruct, ...>` with explicit `props`, `actions`, `children`, `events`, and `effects`.
-   - **Zero React Boilerplate**: All component state lives in observable `c.model` (MobX under the hood). No raw React `useState`, `useMemo`, `useCallback`, or hook spaghetti.
-
-2. **`@actdim/dynstruct-mui`**
-   - **Guide**: [dynstruct-mui/README.md](../../dynstruct-mui/README.md)
-   - **Pattern**: Material UI components adapted as Dynstruct hook-constructors (`useButton`, `useDrawer`, `useCard`, `useTabs`, `useChip`, `useTextField`, `useDialog`, `useTable`, etc.).
-
-3. **`@actdim/msgmesh`**
-   - **Guide**: [msgmesh/AGENTS.md](../../msgmesh/AGENTS.md) | [msgmesh/README.md](../../msgmesh/README.md)
-   - **Pattern**: Type-safe async messaging mesh for API communication and inter-component signaling.
-
-4. **`@actdim/utico`**
-   - **Guide**: [utico/README.md](../../utico/README.md)
-   - **Pattern**: Foundation type utilities (`KeysOf`, `ToMsgChannelPrefix`, `ToMsgStruct`).
-
----
-
-## 2. Mandatory Architectural Rules & Invariants
-
-### 1. Zero Manual API Channels & No Manual `fetch` Handlers
-- **NEVER** write manual `MsgStruct` channel maps (`{ in: ..., out: ... }`) for backend REST/OpenAPI endpoints.
-- **NEVER** write manual `fetch` / `axios` handlers inside `provide()`.
-- All backend API clients are generated automatically from FastAPI OpenAPI schemas via NSwag:
-  ```bash
-  pnpm run generate:api
-  ```
-  This creates [src/api/client.ts](../packages/dashboard-ui/src/api/client.ts) containing `DashboardApiClient`.
-
-### 2. Dynamic Bus Struct via `@actdim/msgmesh/adapters`
-- Use `ToMsgChannelPrefix` and `ToMsgStruct` to generate typed channels at compile-time directly from `DashboardApiClient`:
-  ```typescript
-  export type ApiPrefix = 'API';
-  export type DashboardApiClientName = 'DashboardApiClient';
-
-  export type DashboardChannelPrefix = ToMsgChannelPrefix<
-    DashboardApiClientName,
-    ApiPrefix,
-    BaseServiceSuffix
-  >; // 'API.DASHBOARD.'
-
-  export type DashboardApiStruct = ToMsgStruct<
-    DashboardApiClient,
-    DashboardChannelPrefix
-  >;
-  ```
-- Resulting channels are compile-time verified:
-  - `getFullData()` -> `"API.DASHBOARD.GETFULLDATA"`
-  - `searchKb(q, tag, type)` -> `"API.DASHBOARD.SEARCHKB"`
-  - `listIssues(status, ...)` -> `"API.DASHBOARD.LISTISSUES"`
-
-### 3. Automated Runtime Registration via `registerAdapters`
-- Use `getMsgChannelSelector(services)` and `registerAdapters`:
-  ```typescript
-  const services: Record<DashboardChannelPrefix, any> = {
-    'API.DASHBOARD.': new DashboardApiClient(),
-  };
-
-  const adapters = Object.entries(services).map(([_, service]) => ({
-    service,
-    channelSelector: getMsgChannelSelector(services),
-  })) as MsgProviderAdapter[];
-
-  registerAdapters(dashboardBus, adapters);
-  ```
-
-### 4. Implicit Bus Injection via React Context & Component Proxies
-- Create the bus once in `src/bus.ts` (`dashboardBus`).
-- Inject it at the application root via `<ComponentContextProvider value={{ msgBus: dashboardBus }}>`.
-- Components **never** create local buses or accept buses via manual props. Components access the bus implicitly via `c.msgBus`.
-- `c.msgBus` inside a Dynstruct component is a specialized proxy that integrates with the component lifecycle, handles error scoping, and manages `msgScope` permissions.
-
-### 5. Clear Interaction Points & Observability
-- All published and subscribed channels of a component must be declared in its `msgScope`:
-  ```typescript
-  export type MyViewStruct = ComponentStruct<
-    DashboardAppMsgStruct,
-    {
-      msgScope: {
-        subscribe: DashboardMsgChannels<'APP.DATA.UPDATED' | 'APP.SSE.STATUS'>;
-        publish: DashboardMsgChannels<'API.DASHBOARD.GETFULLDATA' | 'APP.ENTITY.SELECT'>;
-      };
-      ...
-    }
-  >;
-  ```
-  Glancing at the `ComponentStruct` immediately shows what data the component consumes and what events it produces.
-
-### 6. 100% Strict Type Safety (Zero `any` & Zero `window` State Hacks)
-- No `any` type casting.
-- No `as ...` type assertions.
-- No storing state on `window` (`window.__ALONG_DATA__`).
-- All payloads are strictly typed through the channel definitions and NSwag DTO interfaces.
-
-### 7. Content Security & Markdown Sanitization
-- Markdown rendering (e.g. in `EntityDrawer.tsx`) must always be sanitized via `DOMPurify.sanitize(marked.parse(...))` to prevent XSS vulnerabilities.
-- Mermaid diagrams must be configured with `securityLevel: 'strict'` under Content Security Policy (CSP).
-
-### 8. Testing & Quality Gates
-- Component and unit tests use `vitest` with `happy-dom` (`pnpm test` or `npm test`).
-- Type checking is enforced via `tsc --noEmit` (`pnpm run typecheck` or `npm run typecheck`).
-
----
-
 ## Document: docs/topic--license.md (License)
 
 # License
@@ -2928,7 +2814,7 @@ when the interpreter lacks it) or `uv run python -m unittest discover tests -q`.
 
 # Skills & Slash Commands Technical Reference
 
-Along provides an integrated suite of **19 singular automation skills** operating across Claude Code, OpenAI Codex, OpenCode, and Google Antigravity.
+Along provides an integrated suite of **21 singular automation skills** operating across Claude Code, OpenAI Codex, OpenCode, and Google Antigravity.
 
 Each skill is built on a domain-first naming pattern (`along-<entity>-<action>`), guarantees clean ASCII output, operates on strongly typed repository entities, and can be invoked either explicitly via slash commands/CLI or automatically via semantic intent recognition.
 
@@ -2960,6 +2846,8 @@ flowchart TD
         COMMIT["along-commit"]
         GRAPH["along-graph-check"]
         GRAPH_SYNC["along-graph-sync"]
+        GRAPH_IMPACT["along-graph-impact"]
+        GRAPH_ARCH["along-graph-arch"]
         DEP["along-dep-scan"]
     end
 
@@ -3151,6 +3039,35 @@ flowchart TD
 
 ---
 
+### `along-graph-impact`
+- **What it is**: Semantic blast radius and affected execution flow analyzer. Queries the `code-review-graph` AST database to evaluate the downstream impact of planned or executed modifications.
+- **Architectural Rationale**:
+  - *Comprehensive Downstream Tracing*: Traces direct callers, callees, and impacted execution paths, eliminating blind spots when refactoring shared functions.
+  - *Candidate Test Selection*: Pinpoints covering automated test files to guide targeted pre-commit verification.
+  - *Documentation Mapping*: Directly maps affected symbols to Knowledge Base articles in `docs/topic--*.md`.
+  - *Resilient Degradation*: Automatically degrades to static search if the MCP server or `uvx` is offline, ensuring review gates are never skipped.
+- **Invocation Triggers**:
+  - *Explicit*: `/along-graph-impact <symbol|file>`, `along graph-impact <symbol|file>`, `along graph impact <symbol|file>`.
+  - *Semantic / Automatic*: Invoked during `along-team` Phase 2 (Architect) and Phase 4 (Reviewer), and during `along-wrap` before session finalization.
+- **Entities Operated On**: AST symbol graph, source files, `tests/`, `docs/topic--*.md`.
+- **Ecosystem Chaining**: Uses the AST database built by `along-graph-sync` and provides input to `along-test` and `along-wrap`.
+
+---
+
+### `along-graph-arch`
+- **What it is**: High-level architectural overview, modular community structure, and coupling hotspot analyzer using `code-review-graph`.
+- **Architectural Rationale**:
+  - *Community Boundary Analysis*: Groups codebase symbols into cohesive functional communities and evaluates cross-boundary dependency coupling.
+  - *Hub Hotspot Detection*: Identifies high fan-in / high fan-out symbols carrying high architectural and refactoring risk.
+  - *Bottleneck Bridge Identification*: Detects critical bridge nodes sitting on shortest execution paths across subsystems.
+- **Invocation Triggers**:
+  - *Explicit*: `/along-graph-arch`, `along graph-arch`, `along graph arch`.
+  - *Semantic / Automatic*: Triggered before large refactorings or during architectural review gates in `along-team`.
+- **Entities Operated On**: AST graph database, package structure, cross-community dependency graph.
+- **Ecosystem Chaining**: Informs architectural decision-making in `.along/DECISIONS/` and `along-decision-sync`.
+
+---
+
 ### `along-dep-scan`
 - **What it is**: Hierarchical multi-project and submodule dependency scanner. Scans package manifests (`package.json`, `pyproject.toml`, `Cargo.toml`, `*.csproj`), custom hooks (`.along/scripts/dep_scan.py`), submodules, and symlinks for declared AI instructions and vendor rules.
 - **Architectural Rationale**:
@@ -3186,6 +3103,7 @@ flowchart TD
 - **Architectural Rationale**:
   - *Targeted Snippet Window Extraction*: Instead of reading whole multi-kilobyte documents into prompt context, retrieves concise word-boundary aligned snippet windows (typically under 150 tokens), verifiable via `--stats`.
   - *Multi-Tier Relevance Scoring & IDF Weighting*: Ranks results using word-boundary token matching, lightweight stemming, smoothed inverse document frequency (IDF), and exact phrase matching with AND semantics by default (`--any` for OR).
+  - *Deterministic Fast-Retrieval Gate (`[gate: fast-retrieval]`)*: Programmatically blocks agents from executing manual directory `grep_search` or `find_by_name` across `docs/` and `.along/`, enforcing sub-100ms single-shot query execution to prevent token exhaustion and inspection loop latency.
 - **Invocation Triggers**:
   - *Explicit*: `/along-kb-search "<query>" [--category <cat>] [--any] [--prefix] [--stats]`, `along kb-search` (fallback: `python ~/.along/bin/along_exec.py kb-search`).
   - *Semantic / Automatic*: Mandatory first step for agents when researching domain architecture, investigating existing decisions, or mapping blast radius.

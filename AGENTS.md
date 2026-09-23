@@ -39,7 +39,7 @@ Also, when relevant: `.along/VISION.md`, `.along/GLOSSARY.md`. These reflect the
 - **Stable Entry Point Rule**: Files outside `.along/` (`README.md`, `docs/`, manifests) MUST NOT link into `.along/`. Route references through `docs/INDEX.md` or `docs/topic--<slug>.md`.
 - **Portable Links**: All cross-references MUST use relative Markdown links (`[Title](./target.md)`), never `file://` or backslashes.
 - **Fact Grounding**: Agents MUST extract facts from actual code, `README.md`, `docs/`, and `package.json`. Generic LLM placeholders are strictly prohibited.
-- **Fast Retrieval**: Agents MUST query `/along-kb-search` before reading whole documentation files.
+- **Fast Retrieval** [gate: fast-retrieval]: Agents MUST query `/along-kb-search` before reading whole documentation files.
 - **Doc Blast Radius**: After non-trivial code changes, agents MUST map affected symbols to `docs/topic--*.md` articles and update them before completing the task.
 
 ## While working
@@ -100,12 +100,11 @@ See the following engineering guidelines:
 
 This repository is **ActDim Along** (`actdim-along`) - the provider-agnostic agent-context protocol and skills suite.
 
-- **Skills Source**: `skills/` (`along-init`, `along-update`, `along-dash`, `along-wrap`, `along-commit`, `along-build`, `along-test`, `along-dev`, `along-team`, `along-kb-sync`, `along-kb-search`, `along-issue-sync`, `along-decision-sync`, `along-history-sync`, `along-graph-check`, `along-graph-sync`, `along-dep-scan`, `along-version-bump`, `along-feedback`).
+- **Skills Source**: `skills/` (`along-init`, `along-update`, `along-dash`, `along-wrap`, `along-commit`, `along-build`, `along-test`, `along-dev`, `along-team`, `along-kb-sync`, `along-kb-search`, `along-issue-sync`, `along-decision-sync`, `along-history-sync`, `along-graph-check`, `along-graph-sync`, `along-graph-impact`, `along-graph-arch`, `along-dep-scan`, `along-version-bump`, `along-feedback`).
 - **Engines**: `scripts/` (one per skill) on shared `scripts/alongkit/` package. Helpers defined there only; `tests/test_alongkit.py` enforces no duplicates. Runtime dep: `ruamel.yaml`.
 - **Typography**: `along sanitize` checks (writes with `--write`). `/along-commit` and `/along-version-bump` verify and abort (rewrite with `--fix-typography`). Scope: `.md`, `.py`, `.sh`, `.ps1`, `.bat`.
 - **Release**: `/along-version-bump` runs pre-mutation gates, transactional rollback via `alongkit.transaction.FileTransaction`.
 - **Migration**: `migrate_protocol.py` preserves destinations, union-merges append-only files, backs up to `.along/.migration-backup/`.
 - **Install**: Windows: `install.ps1 -Target all` (or `install.bat`). Unix: `bash install.sh`. Uninstall: `-Uninstall` / `--uninstall`. Manifest: `~/.along/install-manifest.json`.
 - **Lifecycle**: Tests: `python .along/scripts/test.py`. Dev: `npm run dev`. Build: `npm run build`.
-- **Tests**: Plain `unittest` on throwaway fixtures (`tests/hermetic.py`), never repo root. Live access read-only. See `[docs/topic--setup-and-workflow.md](./docs/topic--setup-and-workflow.md)`.
-- **Frontend** (`packages/dashboard-ui/`): Strict `@actdim/dynstruct` + MobX (zero `useState`/`useEffect`). NSwag-generated API client via `@actdim/msgmesh/adapters`. 100% typed (zero `any`/`as`). Full rules: `[docs/topic--frontend-frameworks.md](./docs/topic--frontend-frameworks.md)`.
+- **Frontend** (`packages/dashboard-ui/`): Internal dashboard package. Strict `@actdim/dynstruct` + MobX (zero `useState`/`useEffect`), NSwag client via `@actdim/msgmesh/adapters`. 100% typed (zero `any`/`as`). Full rules: `[packages/dashboard-ui/README.md](./packages/dashboard-ui/README.md)`.

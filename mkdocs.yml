@@ -58,7 +58,6 @@ nav:
   - Skills Reference: topic--skills-reference.md
   - Setup & Workflow: topic--setup-and-workflow.md
   - LLM-Wiki Architecture: topic--llm-wiki-architecture.md
-  - Frontend Frameworks: topic--frontend-frameworks.md
   - Migrations: topic--migrations.md
   - Dependencies: topic--dependencies.md
   - License: topic--license.md

@@ -17,7 +17,7 @@ sources:
 
 # Skills & Slash Commands Technical Reference
 
-Along provides an integrated suite of **19 singular automation skills** operating across Claude Code, OpenAI Codex, OpenCode, and Google Antigravity.
+Along provides an integrated suite of **21 singular automation skills** operating across Claude Code, OpenAI Codex, OpenCode, and Google Antigravity.
 
 Each skill is built on a domain-first naming pattern (`along-<entity>-<action>`), guarantees clean ASCII output, operates on strongly typed repository entities, and can be invoked either explicitly via slash commands/CLI or automatically via semantic intent recognition.
 
@@ -49,6 +49,8 @@ flowchart TD
         COMMIT["along-commit"]
         GRAPH["along-graph-check"]
         GRAPH_SYNC["along-graph-sync"]
+        GRAPH_IMPACT["along-graph-impact"]
+        GRAPH_ARCH["along-graph-arch"]
         DEP["along-dep-scan"]
     end
 
@@ -240,6 +242,35 @@ flowchart TD
 
 ---
 
+### `along-graph-impact`
+- **What it is**: Semantic blast radius and affected execution flow analyzer. Queries the `code-review-graph` AST database to evaluate the downstream impact of planned or executed modifications.
+- **Architectural Rationale**:
+  - *Comprehensive Downstream Tracing*: Traces direct callers, callees, and impacted execution paths, eliminating blind spots when refactoring shared functions.
+  - *Candidate Test Selection*: Pinpoints covering automated test files to guide targeted pre-commit verification.
+  - *Documentation Mapping*: Directly maps affected symbols to Knowledge Base articles in `docs/topic--*.md`.
+  - *Resilient Degradation*: Automatically degrades to static search if the MCP server or `uvx` is offline, ensuring review gates are never skipped.
+- **Invocation Triggers**:
+  - *Explicit*: `/along-graph-impact <symbol|file>`, `along graph-impact <symbol|file>`, `along graph impact <symbol|file>`.
+  - *Semantic / Automatic*: Invoked during `along-team` Phase 2 (Architect) and Phase 4 (Reviewer), and during `along-wrap` before session finalization.
+- **Entities Operated On**: AST symbol graph, source files, `tests/`, `docs/topic--*.md`.
+- **Ecosystem Chaining**: Uses the AST database built by `along-graph-sync` and provides input to `along-test` and `along-wrap`.
+
+---
+
+### `along-graph-arch`
+- **What it is**: High-level architectural overview, modular community structure, and coupling hotspot analyzer using `code-review-graph`.
+- **Architectural Rationale**:
+  - *Community Boundary Analysis*: Groups codebase symbols into cohesive functional communities and evaluates cross-boundary dependency coupling.
+  - *Hub Hotspot Detection*: Identifies high fan-in / high fan-out symbols carrying high architectural and refactoring risk.
+  - *Bottleneck Bridge Identification*: Detects critical bridge nodes sitting on shortest execution paths across subsystems.
+- **Invocation Triggers**:
+  - *Explicit*: `/along-graph-arch`, `along graph-arch`, `along graph arch`.
+  - *Semantic / Automatic*: Triggered before large refactorings or during architectural review gates in `along-team`.
+- **Entities Operated On**: AST graph database, package structure, cross-community dependency graph.
+- **Ecosystem Chaining**: Informs architectural decision-making in `.along/DECISIONS/` and `along-decision-sync`.
+
+---
+
 ### `along-dep-scan`
 - **What it is**: Hierarchical multi-project and submodule dependency scanner. Scans package manifests (`package.json`, `pyproject.toml`, `Cargo.toml`, `*.csproj`), custom hooks (`.along/scripts/dep_scan.py`), submodules, and symlinks for declared AI instructions and vendor rules.
 - **Architectural Rationale**:
@@ -275,6 +306,7 @@ flowchart TD
 - **Architectural Rationale**:
   - *Targeted Snippet Window Extraction*: Instead of reading whole multi-kilobyte documents into prompt context, retrieves concise word-boundary aligned snippet windows (typically under 150 tokens), verifiable via `--stats`.
   - *Multi-Tier Relevance Scoring & IDF Weighting*: Ranks results using word-boundary token matching, lightweight stemming, smoothed inverse document frequency (IDF), and exact phrase matching with AND semantics by default (`--any` for OR).
+  - *Deterministic Fast-Retrieval Gate (`[gate: fast-retrieval]`)*: Programmatically blocks agents from executing manual directory `grep_search` or `find_by_name` across `docs/` and `.along/`, enforcing sub-100ms single-shot query execution to prevent token exhaustion and inspection loop latency.
 - **Invocation Triggers**:
   - *Explicit*: `/along-kb-search "<query>" [--category <cat>] [--any] [--prefix] [--stats]`, `along kb-search` (fallback: `python ~/.along/bin/along_exec.py kb-search`).
   - *Semantic / Automatic*: Mandatory first step for agents when researching domain architecture, investigating existing decisions, or mapping blast radius.

@@ -12,7 +12,7 @@ ActDim Along provides repositories with an isolated, durable, and human-readable
   - Interactive Directed Acyclic Graph (DAG) visualization of entity dependencies using Cytoscape.
   - Real-time file system change detection and live UI refresh via Server-Sent Events (SSE).
 - **Knowledge Base & Fast Search Engine (`/along-kb-search`, `/along-kb-sync`)**:
-  - Structured documentation articles in `docs/` (`topic--architecture.md`, `topic--domain-model.md`, `topic--setup-and-workflow.md`, `topic--frontend-frameworks.md`, `topic--dependencies.md`, `INDEX.md`).
+  - Structured documentation articles in `docs/` (`topic--architecture.md`, `topic--domain-model.md`, `topic--setup-and-workflow.md`, `topic--dependencies.md`, `INDEX.md`).
   - In-place source provenance tracking and drift detection across `docs/`.
   - Fast structured search across Knowledge Base topics, issues, ADR decisions, and session journals with filtering by entity type.
 - **AI Dependencies Discovery (`/along-dep-scan`)**:
@@ -35,7 +35,6 @@ ActDim Along provides repositories with an isolated, durable, and human-readable
 - [docs/topic--declarative-gates-and-traceability.md](docs/topic--declarative-gates-and-traceability.md): Declarative Gate Engine & Protocol Traceability Matrix.
 - [docs/topic--dependencies.md](docs/topic--dependencies.md): Dependencies & Submodules AI Documentation and Rules.
 - [docs/topic--domain-model.md](docs/topic--domain-model.md): Domain Model & Entity Ecosystem.
-- [docs/topic--frontend-frameworks.md](docs/topic--frontend-frameworks.md): Frontend Architecture, Dynstruct, MsgMesh & NSwag Integration.
 - [docs/topic--license.md](docs/topic--license.md): License.
 - [docs/topic--llm-wiki-architecture.md](docs/topic--llm-wiki-architecture.md): LLM-Wiki Knowledge Base Architecture & Paradigm.
 - [docs/topic--migrations.md](docs/topic--migrations.md): Protocol & Repository Migrations Guide.
