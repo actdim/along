@@ -1,5 +1,5 @@
 <!-- BEGIN ALONG-PROTOCOL root (managed by along-init - do not edit by hand) -->
-# ALONG-PROTOCOL v4.0.2
+# ALONG-PROTOCOL v4.1.0
 
 This repo carries its own agent context, provider-agnostically. Follow it every session, whatever tool you are.
 

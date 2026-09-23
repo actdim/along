@@ -2,6 +2,12 @@
 
 All notable changes to this project, newest first.
 
+## v4.1.0 - 2026-09-23
+
+- feat(skills): add along-graph-impact and along-graph-arch user skills with lifecycle enforcement (refs #code-review-graph-user-skills)
+- feat(kb): add deterministic fast-retrieval gate and harden kb-search skill (refs #kb-search-deterministic-gate-and-skill-hardening)
+- refactor(dashboard): relocate dashboard ui architecture to standalone package (refs #relocate-dashboard-ui-frontend-architecture-to-package)
+
 ## v4.0.2 - 2026-09-23
 
 - docs(readme): enhance dual-tier memory architecture and zero-vector retrieval (refs #readme-wiki-unified-search)
