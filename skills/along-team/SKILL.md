@@ -110,8 +110,9 @@ The Reviewer rubric gates every step. Every check is conditional, resilient, and
 3. **Diff & Scope Audit**: Mandatory. Inspects `git diff` for out-of-scope modifications, broken imports, or incomplete logic. Status: `EXECUTED`.
 4. **Requirement Traceability Gate**: Mandatory. Verifies the diff satisfies the atomic requirements (`REQ-N`) defined for Step N. Status: `EXECUTED`.
 5. **Blast Radius & Architecture**:
-   - If `code-review-graph` MCP tools are available: calls `get_impact_radius_tool` and `get_affected_flows_tool`. Status: `EXECUTED (code-review-graph)`.
-   - If `code-review-graph` MCP is unavailable/disconnected: falls back to static AST / text search (`grep_search` across callers, imports, and references). Status: `DEGRADED (static search, MCP unavailable)`.
+   - Mandatorily executes `/along-graph-impact` (or `along graph-impact <symbol|file>`) on all modified symbols and files.
+   - If `code-review-graph` is available: traces callers, callees, and affected flows. Status: `EXECUTED (code-review-graph)`.
+   - If `code-review-graph` is unavailable/disconnected: executes static search fallback with an explicit warning. Status: `DEGRADED (static search, MCP unavailable)`.
    - Verifies compliance with `.along/DECISIONS.md`.
 6. **Documentation & Public Surface Parity**: If public interfaces, commands, skills, or entities changed, verifies that BOTH `docs/topic--*.md` articles AND public entry points (`README.md`, `AGENTS.md`) reflect modifications. Status: `EXECUTED` | `SKIPPED (no public interface changes)`.
 7. **Typography & Clean ASCII**: Mandatory. Verifies clean UTF-8 ASCII without forbidden typographic characters (em-dash, curly quotes, non-breaking spaces). Status: `EXECUTED`.
@@ -197,7 +198,10 @@ TASK / GOAL
 3. Ingest findings into `.along/.session/<slug>/research.md` (and blackboard).
 
 ### Phase 2: Architecture & Public Surface Discovery (Architect)
-1. Execute **Public Surface Discovery**: Search (`grep`) for all occurrences of modified entities across public entry points (`README.md`, `AGENTS.md`, `docs/`, `package.json`).
+1. Execute **Public Surface Discovery & Blast Radius Pre-Check**:
+   - Search (`grep`) for all occurrences of modified entities across public entry points (`README.md`, `AGENTS.md`, `docs/`, `package.json`).
+   - Run `/along-graph-impact` (or `along graph-impact <target>`) on planned modifications to evaluate callers, affected flows, and candidate test suites before finalizing steps.
+   - Run `/along-graph-arch` (or `along graph-arch`) when refactoring core modules to detect coupling hotspots and avoid architectural regressions.
 2. Formulate a **Living Plan** with 2 to 5 ordered steps mapped to `REQ-N` (`Revision 1 - Baseline`).
 3. Each plan MUST declare an explicit `## Execution Mode` (`Direct` | `Role-Based (along-team)`) based on the Adaptive Complexity Escalation thresholds. Each step must define: target files/symbols, expected behavior mapped to `REQ-N`, and verifiable acceptance criteria.
 4. **Dual-Track UI & Artifact Projection**:
@@ -207,7 +211,7 @@ TASK / GOAL
 ### Phase 3 to 5: Step Loop (Step N)
 For each step in the Living Plan:
 1. **Implement**: Mark step active: `along scratch update <slug> --step <N> --step-status in-progress`. Invoke `spawn_worker` (or execute inline Phase 3) with step instructions and relevant context.
-2. **Review**: Invoke `spawn_reviewer` (or execute inline Phase 4) to run tests and audit diff. Save rubric verdict into `.along/.session/<slug>/reviews/step-<N>.md`. Output Gate Execution Manifest.
+2. **Review**: Invoke `spawn_reviewer` (or execute inline Phase 4) to run tests, audit diff, and execute `/along-graph-impact` across all modified files to confirm zero unexpected blast radius. Save rubric verdict into `.along/.session/<slug>/reviews/step-<N>.md`. Output Gate Execution Manifest.
 3. **Reassess & Loop Disambiguation**: Supervisor inspects reviewer verdict:
    - If `PASS`: mark passed (`along scratch update <slug> --step <N> --step-status passed`) and advance to Step N+1.
    - If `FAIL` on localized defects (broken tests, syntax errors, lint, null pointer):

@@ -1,6 +1,6 @@
 {
-  "last_edit_time": "2026-09-23T12:53:26.969520+00:00",
-  "last_test_time": "2026-09-23T12:30:05.893556+00:00",
+  "last_edit_time": "2026-09-23T13:54:47.006039+00:00",
+  "last_test_time": "2026-09-23T13:52:44.570642+00:00",
   "edited_files": [
     "d:\\Src\\my\\actdim\\public\\along\\scripts\\alongkit\\install.py",
     "d:\\Src\\my\\actdim\\public\\along\\scripts\\alongkit\\hooks\\predicates.py",
@@ -350,6 +350,28 @@
     "d:\\Src\\my\\actdim\\public\\along\\.along\\ISSUES\\feat--progressive-disclosure-and-context-scaling.md",
     "d:\\Src\\my\\actdim\\public\\along\\.along\\ISSUES\\docs--readme-wiki-unified-search.md",
     "C:\\Users\\Admin\\.gemini\\antigravity\\brain\\ebcfb81f-da86-4830-82bc-c87f6d80a9d3\\implementation_plan.md",
-    "d:\\Src\\my\\actdim\\public\\along\\.along\\SESSIONS\\2026\\2026-09-23--readme-wiki-unified-search.md"
+    "d:\\Src\\my\\actdim\\public\\along\\.along\\SESSIONS\\2026\\2026-09-23--readme-wiki-unified-search.md",
+    "d:/Src/my/actdim/public/along/.along/ISSUES/feat--kb-search-deterministic-gate-and-skill-hardening.md",
+    "d:/Src/my/actdim/public/along/.along/MILESTONES/v4.1.0-code-intelligence-and-mcp-ecosystem.md",
+    "C:\\Users\\Admin\\.gemini\\antigravity\\brain\\4f8d5e4f-5a5f-468f-a72a-b0e6ea5d0048/implementation_plan.md",
+    "d:/Src/my/actdim/public/along/skills/along-kb-search/SKILL.md",
+    "d:/Src/my/actdim/public/along/tests/test_declarative_gates.py",
+    "d:/Src/my/actdim/public/along/.along/SESSIONS/2026/2026-09-23--kb-search-deterministic-gate-and-skill-hardening.md",
+    "C:\\Users\\Admin\\.gemini\\antigravity\\brain\\ebcfb81f-da86-4830-82bc-c87f6d80a9d3\\walkthrough.md",
+    "d:\\Src\\my\\actdim\\public\\along\\.along\\ISSUES\\debt--relocate-dashboard-ui-frontend-architecture-to-package.md",
+    "d:\\Src\\my\\actdim\\public\\along\\packages\\dashboard-ui\\README.md",
+    "d:\\Src\\my\\actdim\\public\\along\\packages\\dashboard-ui\\AGENTS.md",
+    "C:\\Users\\Admin\\.gemini\\antigravity\\brain\\4f8d5e4f-5a5f-468f-a72a-b0e6ea5d0048/walkthrough.md",
+    "C:\\Users\\Admin\\.gemini\\antigravity\\brain\\85ea50c2-5d90-48fa-9475-b3b8cffa6a13\\implementation_plan.md",
+    "d:\\Src\\my\\actdim\\public\\along\\.along\\.session\\code-review-graph-user-skills\\plan.md",
+    "d:\\Src\\my\\actdim\\public\\along\\.along\\.session\\code-review-graph-user-skills\\research.md",
+    "d:\\Src\\my\\actdim\\public\\along\\.along\\DECISIONS\\ADR-2026-09-23--telegram-remote-operational-gateway-and-semi-autonomous-mode.md",
+    "d:\\Src\\my\\actdim\\public\\along\\skills\\along-graph-impact\\SKILL.md",
+    "d:\\Src\\my\\actdim\\public\\along\\scripts\\along_graph_impact.py",
+    "d:\\Src\\my\\actdim\\public\\along\\skills\\along-graph-arch\\SKILL.md",
+    "d:\\Src\\my\\actdim\\public\\along\\scripts\\along_graph_arch.py",
+    "d:\\Src\\my\\actdim\\public\\along\\tests\\test_graph_skills.py",
+    "C:\\Users\\Admin\\.gemini\\antigravity\\brain\\85ea50c2-5d90-48fa-9475-b3b8cffa6a13\\walkthrough.md",
+    "d:\\Src\\my\\actdim\\public\\along\\.along\\SESSIONS\\2026\\2026-09-23--code-review-graph-user-skills.md"
   ]
 }

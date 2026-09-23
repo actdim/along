@@ -156,7 +156,7 @@ The repository's complete technical specification is maintained as a living LLM-
 
 ## Automation Skills Reference (Grouped by Workflow Phase)
 
-Along provides **19 singular automation skills** structured across 6 core lifecycle phases:
+Along provides **21 singular automation skills** structured across 6 core lifecycle phases:
 
 ### 1. Bootstrap & Repository Protocol Management
 | Skill / Command | Purpose |
@@ -189,6 +189,8 @@ Along provides **19 singular automation skills** structured across 6 core lifecy
 | **`along hook verify`** (`along hook`) | Verify bi-directional traceability between prose badges and YAML gates. |
 | **`along-graph-check`** (`/along-graph-check`) | Preflight health check and verification for `code-review-graph` MCP server. |
 | **`along-graph-sync`** (`/along-graph-sync`) | Build or incrementally update `code-review-graph` AST code intelligence database. |
+| **`along-graph-impact`** (`/along-graph-impact`) | Determine blast radius, affected flows, and candidate tests for changed symbols or files. |
+| **`along-graph-arch`** (`/along-graph-arch`) | Architectural overview, community structure, coupling hotspots, and bridge nodes. |
 | **`along-dep-scan`** (`/along-dep-scan`) | Scan declared dependencies for AI instructions into `docs/topic--dependencies.md`. |
 | **`along context-budget`** (`along budget`) | Context budget measurement and regression gate (`--check`, `--json`). |
 

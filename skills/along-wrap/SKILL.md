@@ -39,8 +39,10 @@ along wrap <slug> -s superseded
 ### Phase A: Cognitive Review (Agent)
 1. **Code Review & Blast Radius Assessment**:
    - Inspect `git diff` for unintended side effects, unhandled nulls/errors, and edge cases.
-   - Synchronize the AST code graph (`along graph-sync`) to reflect recent modifications, then evaluate systemic blast radius on callers/dependents using `code-review-graph` (`get_impact_radius_tool`, `get_affected_flows_tool`) when available; otherwise fall back to static AST / text search.
-   - Factually update all affected `docs/topic--*.md` articles.
+   - Synchronize the AST code graph (`along graph-sync`) to reflect recent modifications.
+   - Mandatorily evaluate systemic blast radius by running `/along-graph-impact` (or `along graph-impact`) across all modified files and symbols. Inspect direct callers, affected execution flows, and verify candidate test coverage.
+   - Run `/along-graph-arch` (or `along graph-arch`) if module boundaries or subsystem imports were restructured to verify coupling invariants.
+   - Factually update all affected `docs/topic--*.md` articles identified in the impact report before proceeding to Phase B.
 2. **Session Log & Engineering Provenance**:
    - Write `.along/SESSIONS/<YYYY>/<YYYY-MM-DD>--<short-slug>.md` in the nearest `.along/`.
    - When orchestrating non-trivial multi-step tasks, compile the 3 Engineering Provenance sections: Baseline Plan, Execution Trace, and Verification Walkthrough.

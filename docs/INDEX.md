@@ -27,8 +27,6 @@ flowchart TD
     INDEX --> T_DEPENDENCIES
     T_DOMAIN_MODEL["Domain Model & Entity Ecosystem"]
     INDEX --> T_DOMAIN_MODEL
-    T_FRONTEND_FRAMEWORKS["Frontend Architecture, Dynstruct, MsgMesh & NSwag Integration"]
-    INDEX --> T_FRONTEND_FRAMEWORKS
     T_LICENSE["License"]
     INDEX --> T_LICENSE
     T_LLM_WIKI_ARCHITECTURE["LLM-Wiki Knowledge Base Architecture & Paradigm"]
@@ -60,7 +58,6 @@ flowchart TD
 - **[Declarative Gate Engine & Protocol Traceability Matrix](./topic--declarative-gates-and-traceability.md)** (architecture) `hooks`, `gates`, `declarative`, `traceability`, `verification`, `protocol`, `predicates`
 - **[Dependencies & Submodules AI Documentation and Rules](./topic--dependencies.md)** (topic) `dependencies`, `ai-context`, `submodules`, `vendor`, `rules`
 - **[Domain Model & Entity Ecosystem](./topic--domain-model.md)** (domain-model) `domain-model`, `entities`, `schemas`, `dag`, `metadata`, `issues`, `milestones`, `risks`, `spikes`, `checklists`, `sessions`
-- **[Frontend Architecture, Dynstruct, MsgMesh & NSwag Integration](./topic--frontend-frameworks.md)** (topic) `dynstruct`, `dynstruct-mui`, `msgmesh`, `utico`, `react`, `mui`, `nswag`, `openapi`, `architecture`, `security`, `vitest`
 - **[License](./topic--license.md)** (license) `license`, `mit`
 - **[LLM-Wiki Knowledge Base Architecture & Paradigm](./topic--llm-wiki-architecture.md)** (topic) `llm-wiki`, `architecture`, `knowledge-base`, `token-efficiency`, `indexing`, `methodology`, `search`, `karpathy`
 - **[Protocol & Repository Migrations Guide](./topic--migrations.md)** (topic) `migrations`, `upgrade`, `protocol`, `changelog`, `versioning`, `data-safety`
