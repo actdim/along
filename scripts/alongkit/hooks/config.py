@@ -169,7 +169,19 @@ def get_antigravity_hook_manifest(is_global: bool = False) -> Dict[str, Any]:
                         }
                     ],
                 }
-            ]
+            ],
+            "PostToolUse": [
+                {
+                    "matcher": "write_to_file|replace_file_content|run_command",
+                    "hooks": [
+                        {
+                            "type": "command",
+                            "command": get_hook_command("antigravity", "PostToolUse", is_global=is_global),
+                            "timeout": 15,
+                        }
+                    ],
+                }
+            ],
         }
     }
 

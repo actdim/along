@@ -4,24 +4,24 @@ description: Debug and inspect code-review-graph status, blast radius, and enfor
 ---
 
 # Along Graph Check
-Inspects and verifies `code-review-graph` MCP server health, graph database status, and exclusion filters.
+Inspects and verifies `code-review-graph` AST engine health, graph database status, and exclusion filters.
 
 ## Usage
 - Direct command: `/along-graph-check`
 - CLI command: `along graph-check` (or fallback: `python ~/.along/bin/along_exec.py graph-check`)
-- Doctor preflight: `along doctor` (includes MCP health check)
+- Doctor preflight: `along doctor` (includes code intelligence health check)
 - JSON report: `along graph-check --json` (or fallback: `python ~/.along/bin/along_exec.py graph-check --json`)
 
 ## Health Check Verification
-The check executes a preflight probe against the pinned MCP dependency (`code-review-graph==2.3.8`):
+The check executes a preflight probe against the pinned AST dependency (`code-review-graph==2.3.8`):
 1. **Runner Probe**: Verifies that `uvx` / `uv` is available in system `PATH`.
 2. **Package Probe**: Runs a non-destructive command probe (`--help`) with a 7-second timeout to verify package integrity without hanging.
 3. **Filter Audit**: Ensures `.code-review-graph-ignore` exists in the repository root and excludes `node_modules`, `dist`, and `build` to prevent graph database ballooning.
 
 ## Diagnostic Statuses
-- **`HEALTHY`**: MCP server starts cleanly, exclusion filters are in place, and graph stats are reported.
-- **`DEGRADED`**: MCP server starts, but `.code-review-graph-ignore` is missing or graph database is empty. Run `along graph-sync` to self-heal and index symbols.
-- **`OFFLINE`**: `uvx` is missing or the server failed to respond. The tool outputs actionable remediation instructions (install uv, check network, verify python environment).
+- **`HEALTHY`**: AST engine responds cleanly, exclusion filters are in place, and graph stats are reported.
+- **`DEGRADED`**: AST engine starts, but `.code-review-graph-ignore` is missing or graph database is empty. Run `along graph-sync` to self-heal and index symbols.
+- **`OFFLINE`**: `uvx` is missing or the CLI probe failed to respond. The tool outputs actionable remediation instructions (install uv, check network, verify python environment).
 
 ## Building and Updating the Graph
 To build or synchronize the code knowledge graph after passing the health check:
@@ -30,6 +30,6 @@ To build or synchronize the code knowledge graph after passing the health check:
 
 ## Fallback Blast-Radius Procedure (When Offline)
 If `code-review-graph` is offline during a code review gate, agents MUST NOT skip the gate silently. They must:
-1. Loudly report `[CRITICAL WARNING] code-review-graph MCP offline!`.
+1. Loudly report `[CRITICAL WARNING] code-review-graph offline!`.
 2. Fall back to static search (`grep_search` across symbol callers, imports, and interface usages).
 3. Record `Blast Radius: DEGRADED (static search, code-review-graph OFFLINE)` in the session log.

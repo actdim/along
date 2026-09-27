@@ -16,11 +16,11 @@ Provides high-level architectural intelligence, community clustering, and hotspo
 - Machine-readable JSON: `along graph-arch --json`
 
 ## Key Capabilities
-1. **Community Detection & Layering**: Groups source files and symbols into cohesion-based functional communities (`get_architecture_overview_tool`).
+1. **Community Detection & Layering**: Groups source files and symbols into cohesion-based functional communities (overview analysis).
 2. **Coupling Warning System**: Detects unhealthy cross-community coupling, leakages across module boundaries, and high fan-in dependencies.
-3. **Hub Node Hotspots**: Pinpoints the most heavily connected symbols in the codebase (high degree centrality via `get_hub_nodes_tool`). Modifying hub nodes introduces high regression risk.
-4. **Bridge Node Bottlenecks**: Identifies critical architectural chokepoints sitting on shortest execution paths between subsystems (betweenness centrality via `get_bridge_nodes_tool`).
-5. **Resilient Degradation**: If `code-review-graph` MCP or `uvx` is offline, automatically executes static structural analysis across directory modules and import hierarchies, flagging output as `[DEGRADED]`.
+3. **Hub Node Hotspots**: Pinpoints the most heavily connected symbols in the codebase (high degree centrality via AST analysis). Modifying hub nodes introduces high regression risk.
+4. **Bridge Node Bottlenecks**: Identifies critical architectural chokepoints sitting on shortest execution paths between subsystems (betweenness centrality via AST analysis).
+5. **Resilient Degradation**: If `code-review-graph` or `uvx` is offline, automatically executes static structural analysis across directory modules and import hierarchies, flagging output as `[DEGRADED]`.
 
 ## Output Report Sections
 - **Architectural Communities**: Subsystem names, dominant languages, node counts, and cohesion ratings.

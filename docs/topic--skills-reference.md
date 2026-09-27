@@ -217,7 +217,7 @@ flowchart TD
 ---
 
 ### `along-graph-check`
-- **What it is**: AST call graph and blast radius inspection engine. Uses `code-review-graph` MCP tools to map impacted functions, downstream callers, and interface breaks.
+- **What it is**: AST call graph and code intelligence preflight engine. Performs health check, binary validation, and `.code-review-graph-ignore` audit for the `code-review-graph` AST engine.
 - **Architectural Rationale**:
   - *Deterministic Blast Radius*: Prevents silent regression bugs by identifying all dependent callers across the codebase before code is merged.
   - *Graph-Ignore Filtering*: Enforces `.code-review-graph-ignore` to exclude `node_modules` and vendor directories, preventing graph database ballooning.
@@ -238,7 +238,7 @@ flowchart TD
   - *Explicit*: `/along-graph-sync`, `along graph-sync` (or `along graph-build`), `along graph-sync --full`.
   - *Semantic / Automatic*: Invoked during `along-init` (initial index), `along-update` (symbol refresh), and before blast-radius review in `along-wrap`.
 - **Entities Operated On**: `.code-review-graph-ignore`, AST graph database.
-- **Ecosystem Chaining**: Feeds the AST call graph used by `code-review-graph` MCP tools (`get_impact_radius_tool`, `get_affected_flows_tool`) during `along-wrap` and `along-team`.
+- **Ecosystem Chaining**: Feeds the AST call graph used by `along-graph-impact` during `along-wrap` and `along-team`.
 
 ---
 
@@ -248,7 +248,7 @@ flowchart TD
   - *Comprehensive Downstream Tracing*: Traces direct callers, callees, and impacted execution paths, eliminating blind spots when refactoring shared functions.
   - *Candidate Test Selection*: Pinpoints covering automated test files to guide targeted pre-commit verification.
   - *Documentation Mapping*: Directly maps affected symbols to Knowledge Base articles in `docs/topic--*.md`.
-  - *Resilient Degradation*: Automatically degrades to static search if the MCP server or `uvx` is offline, ensuring review gates are never skipped.
+  - *Resilient Degradation*: Automatically degrades to static search if `code-review-graph` or `uvx` is offline, ensuring review gates are never skipped.
 - **Invocation Triggers**:
   - *Explicit*: `/along-graph-impact <symbol|file>`, `along graph-impact <symbol|file>`, `along graph impact <symbol|file>`.
   - *Semantic / Automatic*: Invoked during `along-team` Phase 2 (Architect) and Phase 4 (Reviewer), and during `along-wrap` before session finalization.

@@ -154,7 +154,7 @@ In the LLM-Wiki paradigm, documentation is a living asset that evolves alongside
 
 ```mermaid
 flowchart LR
-    DIFF["Code Modifications (git diff)"] --> CRG["code-review-graph (get_impact_radius_tool)"]
+    DIFF["Code Modifications (git diff)"] --> CRG["along graph-impact (code-review-graph AST)"]
     CRG --> IMPACT["Impacted Symbols & Downstream Callers"]
     IMPACT --> SEARCH["along-kb-search (Topic Query)"]
     SEARCH --> TOPICS["Targeted docs/topic--*.md Files"]
@@ -163,7 +163,7 @@ flowchart LR
     KBSYNC --> INDEX["docs/INDEX.md & Verified Links"]
 ```
 
-1. **AST Blast Radius Discovery**: During task review, agents invoke `code-review-graph` MCP tools (`get_impact_radius_tool`, `get_affected_flows_tool`) to identify modified symbols and dependent modules.
+1. **AST Blast Radius Discovery**: During task review, agents invoke `along graph-impact` (powered directly by `code-review-graph` CLI) to trace caller hierarchies, caller depth, and affected execution flows.
 2. **Topic Mapping**: Agents query `along-kb-search` with the modified symbol names to pinpoint the exact `docs/topic--*.md` files documenting those interfaces.
 3. **Factual Updating**: Agents update the affected topic articles with concrete code facts (zero placeholders).
 4. **Compilation & Link Gate**: Running `python scripts/along_kb_sync.py --strict` validates relative links across the repository and recompiles `docs/INDEX.md`.
@@ -192,7 +192,7 @@ To guarantee factual precision and cross-reference coherence without human micro
   - Inspects backticked spans (`` `symbol` ``) across all `docs/topic--*.md` articles.
   - Identifies identifier signatures (snake_case, PascalCase, UPPER_SNAKE, dotted member accesses) and checks them against the AST symbol inventory.
   - Flags ungrounded "ghost symbols" (non-existent classes, phantom functions, obsolete identifiers) that hallucinate codebase capabilities.
-  - Builtin filter whitelists Python keywords, standard library modules/attributes (`sys.path`, `os.remove`), Win32 platform APIs, Dynstruct framework symbols, and MCP tools.
+  - Builtin filter whitelists Python keywords, standard library modules/attributes (`sys.path`, `os.remove`), Win32 platform APIs, Dynstruct framework symbols, and code intelligence tools.
   - Exits with non-zero status in strict mode (`--check-symbols --strict`) when ghost symbols exist.
 
 ### Structured Section Taxonomy Contracts

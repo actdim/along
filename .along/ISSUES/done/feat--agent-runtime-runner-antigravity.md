@@ -3,7 +3,8 @@ protocol: along
 protocol_version: "4.0.1"
 slug: agent-runtime-runner-antigravity
 type: feat
-status: in-progress
+status: done
+completed: 2026-09-27
 priority: high
 created: 2026-09-23
 updated: 2026-09-27
@@ -49,8 +50,8 @@ When running autonomous agent tasks, developers need a reliable mechanism to spa
   - `along.observability.sources = ["antigravity_hook", "stdout_stream"]`
 
 ## Acceptance Criteria
-- [ ] Process supervisor spawns Antigravity with configured workspace boundaries.
-- [ ] Native hooks (`PreToolUse`, `PostToolUse`) emit corresponding OpenInference tool spans.
-- [ ] Output stream buffer correctly chunks high-volume stdout without performance drops.
-- [ ] State, artifacts, and issue bindings reside strictly in the target repository `.along/`.
-- [ ] Unit and hermetic tests verify runner lifecycle handling and clean exit codes.
+- [x] Process supervisor spawns Antigravity with configured workspace boundaries.
+- [x] Native hooks (`PreToolUse`, `PostToolUse`) emit corresponding OpenInference tool spans.
+- [x] Output stream buffer correctly chunks high-volume stdout without performance drops.
+- [x] State, artifacts, and issue bindings reside strictly in the target repository `.along/`.
+- [x] Unit and hermetic tests verify runner lifecycle handling and clean exit codes.

@@ -20,6 +20,25 @@ class AntigravityAdapter(BaseAdapter):
 
     runtime_name: str = "antigravity"
 
+    def parse_post_tool_use(self, payload: Dict[str, Any]) -> Dict[str, Any]:
+        """Extract tool execution result data from PostToolUse payloads."""
+        tool_result = payload.get("toolResult", {})
+        extracted: Dict[str, Any] = {}
+        if isinstance(tool_result, dict):
+            if "output" in tool_result:
+                extracted["output"] = str(tool_result["output"])
+            if "exitCode" in tool_result:
+                try:
+                    extracted["exitCode"] = int(tool_result["exitCode"])
+                except (ValueError, TypeError):
+                    pass
+            if "durationMs" in tool_result:
+                try:
+                    extracted["durationMs"] = float(tool_result["durationMs"])
+                except (ValueError, TypeError):
+                    pass
+        return extracted
+
     def parse(self, raw_input: str, event_type: HookEventType = HookEventType.PRE_TOOL_USE) -> HookEvent:
         payload: Dict[str, Any] = {}
         if raw_input and raw_input.strip():
@@ -28,6 +47,9 @@ class AntigravityAdapter(BaseAdapter):
                 payload = json.loads(clean_text)
             except json.JSONDecodeError:
                 pass
+
+        if "toolResult" in payload:
+            payload["toolResult"] = self.parse_post_tool_use(payload)
 
         tool_name = ""
         tool_args: Dict[str, Any] = {}

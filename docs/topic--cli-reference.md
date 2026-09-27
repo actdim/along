@@ -435,11 +435,12 @@ System diagnostics and incident dispatch engine.
   ```
 
 ### `along graph-check`
-Preflight verification for `code-review-graph` MCP server.
+Preflight verification for `code-review-graph` AST engine.
 - Verifies graph indexing status, validates `.code-review-graph-ignore` configuration to prevent repository bloat, and checks tool accessibility.
 - **Usage**:
   ```bash
   along graph-check
+  along graph-check --json
   ```
 
 ### `along graph-sync` (alias `along graph-build`)
@@ -452,6 +453,39 @@ Code intelligence AST knowledge graph synchronization engine.
   along graph-sync --full       # Full graph rebuild from scratch
   along graph-sync --status     # Show current graph statistics
   along graph-build             # Alias for graph-sync
+  ```
+
+### `along graph-impact`
+Semantic blast radius and affected execution flow analyzer.
+- Traces direct callers, callees, and importers using `code-review-graph` AST queries with automatic fallback to static search.
+- Automatically maps impacted symbols to candidate tests and affected documentation articles in `docs/topic--*.md`.
+- **Options**:
+  - `TARGET`: Symbol name or file path (auto-detects changes from git if omitted).
+  - `--base REF`: Git base ref for change detection (default: `HEAD~1`).
+  - `--max-depth N`: Traversal depth in the call hierarchy (default: `2`).
+  - `--json`: Output machine-readable JSON report.
+  - `--optional`: Treat offline AST engine state as non-fatal warning.
+- **Usage**:
+  ```bash
+  along graph-impact                          # Auto-detect changed files from git
+  along graph-impact scripts/along_exec.py    # Target specific file
+  along graph-impact my_symbol --max-depth 3  # Trace symbol callers up to 3 hops
+  along graph-impact --json                   # Output machine-readable JSON report
+  ```
+
+### `along graph-arch`
+Architectural intelligence, community clustering, and coupling hotspot analyzer.
+- Analyzes repository modular structure, cohesion-based functional communities, hub hotspots, and critical bridge nodes.
+- **Options**:
+  - `--detail-level {standard,minimal}`: Output detail level (default: `standard`).
+  - `--top-hubs N`: Maximum number of hub nodes to display (default: `5`).
+  - `--top-bridges N`: Maximum number of bridge nodes to display (default: `5`).
+  - `--json`: Output machine-readable JSON report.
+- **Usage**:
+  ```bash
+  along graph-arch
+  along graph-arch --detail-level minimal
+  along graph-arch --json
   ```
 
 ### `along hook` (alias `along hooks`)
@@ -467,13 +501,30 @@ Runtime lifecycle hook interceptor and declarative gate evaluation harness.
   ```
 
 ### `along run`
-Executes a shell command behind the Along runtime lifecycle hook and declarative gate pipeline.
-- Intercepts shell commands, validating CLI safety, typography, and circuit breaker gates before executing.
-- **Usage**:
-  ```bash
-  along run pytest -q
-  along run npm test
-  ```
+Executes an agent runtime supervisor or runs a shell command behind the Along runtime lifecycle hook and declarative gate pipeline.
+
+#### 1. Agent Runtime Runner
+Supervises an autonomous agent runtime (such as Google Antigravity), enforcing workspace containment, active issue binding, and dual-channel OpenTelemetry tracing:
+
+```bash
+along run antigravity [--dry-run] [-i|--issue <slug>] [--run-id <id>] [-e|--endpoint <url>] [-b|--binary <path>] [-- <agent-args...>]
+along run agy [--dry-run] [-i|--issue <slug>] [--run-id <id>] [-e|--endpoint <url>] [-b|--binary <path>] [-- <agent-args...>]
+```
+
+Parameters:
+- `--dry-run`, `-n`: Preview configured environment variables, resolved binary, and active issue binding without spawning the process.
+- `-i`, `--issue <slug>`: Bind the run to an explicit active issue (defaults to the currently in-progress issue in `.along/ISSUES/`).
+- `--run-id <id>`: Set an explicit 32-character run ID for telemetry grouping.
+- `-e`, `--endpoint <url>`: Target OpenTelemetry OTLP/HTTP traces endpoint.
+- `-b`, `--binary <path>`: Explicit path to the Antigravity binary executable.
+
+#### 2. Lifecycle Command Proxy
+Intercepts shell commands, validating CLI safety, typography, and circuit breaker gates before executing:
+
+```bash
+along run pytest -q
+along run npm test
+```
 
 ---
 

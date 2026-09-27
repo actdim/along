@@ -1,6 +1,6 @@
 {
-  "last_edit_time": "2026-09-27T13:38:44.299855+00:00",
-  "last_test_time": "2026-09-27T13:34:10.732932+00:00",
+  "last_edit_time": "2026-09-27T19:57:17.367850+00:00",
+  "last_test_time": "2026-09-27T19:57:36.137320+00:00",
   "edited_files": [
     "d:\\Src\\my\\actdim\\public\\along\\scripts\\alongkit\\install.py",
     "d:\\Src\\my\\actdim\\public\\along\\scripts\\alongkit\\hooks\\predicates.py",
@@ -455,6 +455,26 @@
     "d:\\Src\\my\\actdim\\public\\along\\.along\\MILESTONES\\v4.5.0-structured-state-and-blackboard-engine.md",
     "d:\\Src\\my\\actdim\\public\\along\\.along\\ISSUES\\feat--clean-turn-context-isolation-in-along-team.md",
     "d:\\Src\\my\\actdim\\public\\along\\.along\\ISSUES\\feat--zero-step-state-recovery-and-drift-detection.md",
-    "d:\\Src\\my\\actdim\\public\\along\\.along\\MILESTONES\\v4.6.0-clean-turn-agent-loops-and-state-recovery.md"
+    "d:\\Src\\my\\actdim\\public\\along\\.along\\MILESTONES\\v4.6.0-clean-turn-agent-loops-and-state-recovery.md",
+    "C:\\Users\\Admin\\.gemini\\antigravity\\brain\\a6f30569-5fcb-493f-827e-61dbbda0269e\\implementation_plan.md",
+    "d:\\Src\\my\\actdim\\public\\along\\.along\\.session\\decouple-code-review-graph-from-mcp-to-direct-cli\\research.md",
+    "C:\\Users\\Admin\\.gemini\\antigravity\\brain\\2e35e38b-0319-4183-8753-80b0d9cc9f98\\implementation_plan.md",
+    "d:\\Src\\my\\actdim\\public\\along\\.along\\.session\\decouple-code-review-graph-from-mcp-to-direct-cli\\plan.md",
+    "C:\\Users\\Admin\\.gemini\\antigravity\\mcp_config.json",
+    "d:\\Src\\my\\actdim\\public\\along\\scripts\\configure_mcp.py",
+    "d:\\Src\\my\\actdim\\public\\along\\tests\\test_installers.py",
+    "d:\\Src\\my\\actdim\\public\\along\\skills\\along-init\\protocol.md",
+    "C:\\Users\\Admin\\.gemini\\antigravity\\brain\\2e35e38b-0319-4183-8753-80b0d9cc9f98\\walkthrough.md",
+    "d:\\Src\\my\\actdim\\public\\along\\.along\\ISSUES\\done\\feat--decouple-code-review-graph-from-mcp-to-direct-cli.md",
+    "d:\\Src\\my\\actdim\\public\\along\\.along\\SESSIONS\\2026\\2026-09-27--decouple-code-review-graph-from-mcp-to-direct-cli.md",
+    "d:\\Src\\my\\actdim\\public\\along\\.along\\ISSUES\\feat--empirical-benchmark-harness-and-metrics.md",
+    "d:\\Src\\my\\actdim\\public\\along\\.along\\ISSUES\\docs--arxiv-academic-paper-preprint.md",
+    "d:\\Src\\my\\actdim\\public\\along\\.along\\ISSUES\\docs--engineering-deepdive-medium-devto.md",
+    "d:\\Src\\my\\actdim\\public\\along\\.along\\MILESTONES\\v4.7.0-empirical-benchmarking-and-publications.md",
+    "d:\\Src\\my\\actdim\\public\\along\\scripts\\alongkit\\runner\\__init__.py",
+    "d:\\Src\\my\\actdim\\public\\along\\scripts\\alongkit\\runner\\stream.py",
+    "d:\\Src\\my\\actdim\\public\\along\\tests\\test_runner_antigravity.py",
+    "d:\\Src\\my\\actdim\\public\\along\\.along\\SESSIONS\\2026\\2026-09-27--agent-runtime-runner-antigravity.md",
+    "d:\\Src\\my\\actdim\\public\\along\\.along\\diagnostics\\circuit_breaker.json"
   ]
 }

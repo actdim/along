@@ -2,10 +2,11 @@
 protocol: along
 slug: decouple-code-review-graph-from-mcp-to-direct-cli
 type: feat
-status: in-progress
+status: done
 priority: high
 created: 2026-09-27
 updated: 2026-09-27
+completed: 2026-09-27
 agent: antigravity
 tags: [code-intelligence, ast, code-review-graph, mcp-decoupling, cli, documentation]
 milestone: v4.1.0-code-intelligence-and-mcp-ecosystem
@@ -51,8 +52,8 @@ Meanwhile, the Python engine itself (`code_review_graph` via `uvx`) performs qui
 
 ## 4. Acceptance Criteria
 
-- [ ] ADR `ADR-2026-09-27--decouple-code-review-graph-from-mcp-to-direct-cli.md` recorded and synced.
-- [ ] Active issue registered and compiled in `.along/ISSUES.md`.
-- [ ] No modal prompts when running graph impact or sync.
-- [ ] Documentation clearly explains that `code-review-graph` is powered by Python/Tree-sitter/uvx directly via CLI.
-- [ ] Full regression suite passes with 0 failures.
+- [x] ADR `ADR-2026-09-27--decouple-code-review-graph-from-mcp-to-direct-cli.md` recorded and synced.
+- [x] Active issue registered and compiled in `.along/ISSUES.md`.
+- [x] No modal prompts when running graph impact or sync.
+- [x] Documentation clearly explains that `code-review-graph` is powered by Python/Tree-sitter/uvx directly via CLI.
+- [x] Full regression suite passes with 0 failures.

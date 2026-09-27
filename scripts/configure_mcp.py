@@ -38,6 +38,7 @@ Targets (default: every provider):
   --provider NAME        claude | codex | opencode | antigravity (repeatable)
 
 Behaviour:
+  --clean, --unregister  remove code-review-graph from provider configurations
   --include-unverified   also write providers whose config contract is unconfirmed
   --dry-run              report what would be written, write nothing
   --json                 machine-readable report on stdout
@@ -55,6 +56,7 @@ def main():
     include_unverified = False
     dry_run = False
     as_json = False
+    clean = False
     homes = {}
     home_flags = {
         "--user-home": "user", "--claude-home": "claude", "--codex-home": "codex",
@@ -67,6 +69,8 @@ def main():
         if arg in ("-h", "--help"):
             sys.stderr.write(USAGE)
             return 0
+        elif arg in ("--clean", "--unregister"):
+            clean = True
         elif arg == "--provider":
             index += 1
             if index >= len(argv):
@@ -103,7 +107,8 @@ def main():
     resolved = install.Homes.defaults(user_home, **homes)
     report = install.configure_mcp(providers or list(install.PROVIDERS), resolved,
                                    include_unverified=include_unverified,
-                                   dry_run=dry_run)
+                                   dry_run=dry_run,
+                                   clean=clean)
 
     log = sys.stderr if as_json else sys.stdout
     for entry in report:

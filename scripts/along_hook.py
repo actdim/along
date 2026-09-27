@@ -312,6 +312,46 @@ def _evaluate_and_respond(
             exit_code=2,
         )
 
+    if getattr(result, "decision", None) and result.decision.value != "deny":
+        # After evaluate_event succeeds, record telemetry if in a runner session
+        run_id = os.environ.get("ALONG_RUN_ID")
+        if run_id and effective_root:
+            try:
+                from alongkit.telemetry.tracer import Tracer
+                active_tracer = Tracer.get_active()
+                if active_tracer is not None:
+                    if event_type == HookEventType.PRE_TOOL_USE and event.tool_name:
+                        span = active_tracer.active_span
+                        if span:
+                            span.add_event(
+                                f"hook.pre_tool.{event.tool_name}",
+                                attributes={
+                                    "tool.name": event.tool_name,
+                                    "hook.runtime": runtime,
+                                    "hook.decision": result.decision.value if hasattr(result, 'decision') else "allow",
+                                },
+                            )
+                    elif event_type == HookEventType.POST_TOOL_USE and event.tool_name:
+                        span = active_tracer.active_span
+                        if span:
+                            raw = event.raw_payload or {}
+                            tool_result = raw.get("toolResult", {})
+                            attrs = {
+                                "tool.name": event.tool_name,
+                                "hook.runtime": runtime,
+                            }
+                            if isinstance(tool_result, dict):
+                                if "exitCode" in tool_result:
+                                    attrs["process.exit.code"] = tool_result["exitCode"]
+                                if "durationMs" in tool_result:
+                                    attrs["tool.duration_ms"] = tool_result["durationMs"]
+                            span.add_event(
+                                f"hook.post_tool.{event.tool_name}",
+                                attributes=attrs,
+                            )
+            except (ImportError, OSError, RuntimeError, AttributeError, TypeError):
+                pass  # Fail-open: telemetry faults must never block the hook
+
     exit_code, response_str = adapter.format_response(result)
     if response_str:
         target_stream = sys.stderr if exit_code != 0 else sys.stdout

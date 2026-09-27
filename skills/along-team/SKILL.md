@@ -112,7 +112,7 @@ The Reviewer rubric gates every step. Every check is conditional, resilient, and
 5. **Blast Radius & Architecture**:
    - Mandatorily executes `/along-graph-impact` (or `along graph-impact <symbol|file>`) on all modified symbols and files.
    - If `code-review-graph` is available: traces callers, callees, and affected flows. Status: `EXECUTED (code-review-graph)`.
-   - If `code-review-graph` is unavailable/disconnected: executes static search fallback with an explicit warning. Status: `DEGRADED (static search, MCP unavailable)`.
+   - If `code-review-graph` is unavailable/disconnected: executes static search fallback with an explicit warning. Status: `DEGRADED (static search, code-review-graph unavailable)`.
    - Verifies compliance with `.along/DECISIONS.md`.
 6. **Documentation & Public Surface Parity**: If public interfaces, commands, skills, or entities changed, verifies that BOTH `docs/topic--*.md` articles AND public entry points (`README.md`, `AGENTS.md`) reflect modifications. Status: `EXECUTED` | `SKIPPED (no public interface changes)`.
 7. **Typography & Clean ASCII**: Mandatory. Verifies clean UTF-8 ASCII without forbidden typographic characters (em-dash, curly quotes, non-breaking spaces). Status: `EXECUTED`.

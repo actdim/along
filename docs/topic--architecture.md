@@ -5,7 +5,7 @@ title: System Architecture & Flow
 type: architecture
 created: 2026-08-30
 updated: 2026-09-22
-tags: [architecture, boundaries, multi-agent, blackboard, concurrency, mcp, flow]
+tags: [architecture, boundaries, multi-agent, blackboard, concurrency, ast, flow]
 sources:
   - path: README.md
     hash: "742705a98e1e98608b43a4f7421f9fb62471e304357adfffc96f29ebd2b7bbac"
@@ -47,8 +47,8 @@ flowchart TD
         LIFECYCLE["Lifecycle Suite (build, test, dev, commit, wrap)"]
     end
 
-    subgraph ToolingAndMCP["Tooling & MCP Integrations"]
-        CRG["code-review-graph MCP (AST Call Graph & Blast Radius)"]
+    subgraph ToolingAndAST["Tooling & Code Intelligence"]
+        CRG["along graph-* CLI (code-review-graph AST Engine)"]
         WIKI_SEARCH["along-kb-search (Fast Multi-Scope Retrieval)"]
         DASH["FastAPI Dashboard + Cytoscape DAG (/along-dash)"]
     end
@@ -77,10 +77,10 @@ Along avoids vendor lock-in by utilizing standard agent discovery paths without 
 
 | Host Agent | Discovery & Context Entry Point | Skills Installation Target | Execution Mechanism |
 | :--- | :--- | :--- | :--- |
-| **Claude Code** | Reads `CLAUDE.md`, which references `@AGENTS.md`. | `~/.claude/skills/along-*/` | Direct slash commands (`/along-*`) and MCP tools. |
+| **Claude Code** | Reads `CLAUDE.md`, which references `@AGENTS.md`. | `~/.claude/skills/along-*/` | Direct slash commands (`/along-*`) and CLI tools. |
 | **Codex** | Reads `AGENTS.md` natively on session initialization. | `~/.codex/skills/along-*/` | Native skill execution and prompt injection. |
 | **OpenCode** | Reads `AGENTS.md` and `CLAUDE.md` natively. | `~/.config/opencode/commands/along-*.md` | Flat markdown command declarations. |
-| **Google Antigravity** | Reads `AGENTS.md` (or `GEMINI.md`) natively. | `~/.gemini/config/skills/along-*/` | Slash commands, `/goal` autonomy, and MCP tools. |
+| **Google Antigravity** | Reads `AGENTS.md` (or `GEMINI.md`) natively. | `~/.gemini/config/skills/along-*/` | Slash commands, `/goal` autonomy, and CLI tools. |
 
 ---
 
@@ -223,9 +223,10 @@ what `-Uninstall` / `--uninstall` reads.
 
 The layout itself is described once, in `alongkit.install.planned_files`, and both
 installers are measured against it end to end, so `install.sh` cannot again ship without
-the rule packs the way it did for months. MCP registration moved to `configure_mcp.py`
-with a per-provider contract: the previous installers wrote five configuration files, four
-of which no provider reads, and printed a success line for each.
+the rule packs the way it did for months. Code intelligence tools (`code-review-graph`)
+execute directly via CLI (`along graph-*`), bypassing stdio IPC serialization overhead
+and IDE authorization dialogs, while legacy MCP registration is decoupled and managed
+via `configure_mcp.py --clean`.
 
 ### A migration merges; it does not choose a winner
 
@@ -308,7 +309,7 @@ sequenceDiagram
     participant Agent as Host AI Agent
     participant Memory as .along/ ISSUES & Blackboard
     participant Team as Multi-Agent Engine (along-team)
-    participant Verify as Reviewer & Code Graph MCP
+    participant Verify as Reviewer & Code Graph CLI
     participant Commit as along-commit & along-wrap
 
     Human->>Agent: "Implement JWT refresh token rotation"

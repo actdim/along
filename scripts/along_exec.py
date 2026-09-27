@@ -148,6 +148,7 @@ Entity Management Commands:
   telemetry status Check pending WAL telemetry spool and endpoint connectivity (--json)
   telemetry flush  Flush spooled telemetry spans to OTLP endpoint (--endpoint <url>)
   run            Execute command behind runtime gate pipeline (along run <cmd...>)
+                 Or launch Antigravity supervisor (along run antigravity [options])
 
 Along Protocol Tools:
   wrap           Transactional session and issue wrap engine
@@ -1796,13 +1797,79 @@ def handle_telemetry_command(repo_root: Optional[str], args: List[str]):
 
 def handle_run_command(repo_root: Optional[str], args: List[str]):
     if not args or args[0] in ("-h", "--help", "help"):
-        print("Usage: along run <command...>")
-        print("       python scripts/along_exec.py run <command...>")
+        print("Usage: along run [antigravity|agy] [options] | along run <command...>")
+        print("       python scripts/along_exec.py run [antigravity|agy] [options] | run <command...>")
         print("")
-        print("Execute a shell command behind the Along runtime lifecycle hook and gate pipeline.")
-        print("Commands violating active protocol gates (typography, CLI safety, commit guard)")
-        print("are blocked with exit code 2 and an error message on stderr.")
+        print("Agent Runtime Runner:")
+        print("  along run antigravity [--dry-run] [-i|--issue <slug>] [--run-id <id>] [--endpoint <url>] [--binary <path>]")
+        print("  Supervise Antigravity agent process, enforce workspace containment, and capture telemetry.")
+        print("")
+        print("Lifecycle Command Proxy:")
+        print("  Execute a shell command behind the Along runtime lifecycle hook and gate pipeline.")
+        print("  Commands violating active protocol gates (typography, CLI safety, commit guard)")
+        print("  are blocked with exit code 2 and an error message on stderr.")
         sys.exit(0)
+
+    # 1. Antigravity Agent Runtime Runner
+    if args[0].lower() in ("antigravity", "agy"):
+        sub_args = args[1:]
+        dry_run = False
+        issue_slug = None
+        run_id = None
+        endpoint = None
+        binary = None
+        pass_args: List[str] = []
+
+        i = 0
+        while i < len(sub_args):
+            arg = sub_args[i]
+            if arg in ("--dry-run", "-n"):
+                dry_run = True
+                i += 1
+            elif arg in ("--issue", "-i") and i + 1 < len(sub_args):
+                issue_slug = sub_args[i + 1]
+                i += 2
+            elif arg in ("--run-id",) and i + 1 < len(sub_args):
+                run_id = sub_args[i + 1]
+                i += 2
+            elif arg in ("--endpoint", "-e") and i + 1 < len(sub_args):
+                endpoint = sub_args[i + 1]
+                i += 2
+            elif arg in ("--binary", "-b") and i + 1 < len(sub_args):
+                binary = sub_args[i + 1]
+                i += 2
+            elif arg in ("-h", "--help", "help"):
+                print("Usage: along run antigravity [options] [-- <agent-args...>]")
+                print("Options:")
+                print("  --dry-run, -n          Preview configured environment and parameters without spawning")
+                print("  -i, --issue <slug>     Bind run to specific active issue (defaults to in-progress issue)")
+                print("  --run-id <id>          Explicit run ID for telemetry grouping")
+                print("  -e, --endpoint <url>   OTLP telemetry collector endpoint")
+                print("  -b, --binary <path>    Explicit path to Antigravity binary executable")
+                sys.exit(0)
+            elif arg == "--":
+                pass_args.extend(sub_args[i + 1:])
+                break
+            else:
+                pass_args.append(arg)
+                i += 1
+
+        from alongkit.runner import AntigravityRunner
+        runner = AntigravityRunner(
+            repo_root=repo_root,
+            issue_slug=issue_slug,
+            run_id=run_id,
+            otel_endpoint=endpoint,
+            binary_path=binary,
+            dry_run=dry_run,
+            extra_args=pass_args,
+        )
+        try:
+            code = runner.run()
+        except RuntimeError as exc:
+            sys.stderr.write(f"[Along Runner Error] {exc}\n")
+            sys.exit(1)
+        sys.exit(code)
 
     from alongkit.hooks import HookEvent, HookEventType, evaluate_event, load_config
     config = load_config(repo_root)

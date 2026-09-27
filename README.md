@@ -1,8 +1,8 @@
-# ActDim Along (v4.2.0)
+# ActDim Along (v4.2.1)
 
 **The Provider-Agnostic Context & Memory Operating System for AI Coding Agents.**
 
-One universal convention (`ALONG-PROTOCOL v4.2.0`) and automation skills suite honored natively across **Claude Code**, **Google Antigravity**, **OpenAI Codex**, and **OpenCode**.
+One universal convention (`ALONG-PROTOCOL v4.2.1`) and automation skills suite honored natively across **Claude Code**, **Google Antigravity**, **OpenAI Codex**, and **OpenCode**.
 
 ActDim Along eliminates **agent context amnesia**, prevents **architectural drift**, and stops **token bloat** by transforming any codebase into an AI-ready engineering workspace with durable in-repo memory, token-efficient LLM-Wiki intelligence, and autonomous multi-agent coordination.
 
@@ -146,7 +146,7 @@ The repository's complete technical specification is maintained as a living LLM-
 
 | Topic | Description | Link |
 | :--- | :--- | :--- |
-| **System Architecture** | Provider flow, context boundaries, MCP servers, and bridge layers. | [System Architecture & Flow](./docs/topic--architecture.md) |
+| **System Architecture** | Provider flow, context boundaries, code intelligence, and bridge layers. | [System Architecture & Flow](./docs/topic--architecture.md) |
 | **CLI Command Reference** | Unified console command dictionary, subcommands, flags, and exit codes. | [Along CLI Command Reference](./docs/topic--cli-reference.md) |
 | **Domain Model & Entities** | Machine-parseable schemas for Issues, ADRs, Milestones, and Risks. | [Domain Model & Entity Ecosystem](./docs/topic--domain-model.md) |
 | **Setup & Workflows** | Installation matrix, repository onboarding, and session lifecycle. | [Setup, Installation & Workflows](./docs/topic--setup-and-workflow.md) |
@@ -187,7 +187,7 @@ Along provides **21 singular automation skills** structured across 6 core lifecy
 | :--- | :--- |
 | **`along-commit`** (`/along-commit`) | Smart ASCII-clean Conventional Committer linked to active `.along/` issue. |
 | **`along hook verify`** (`along hook`) | Verify bi-directional traceability between prose badges and YAML gates. |
-| **`along-graph-check`** (`/along-graph-check`) | Preflight health check and verification for `code-review-graph` MCP server. |
+| **`along-graph-check`** (`/along-graph-check`) | Preflight health check and verification for `code-review-graph` AST engine. |
 | **`along-graph-sync`** (`/along-graph-sync`) | Build or incrementally update `code-review-graph` AST code intelligence database. |
 | **`along-graph-impact`** (`/along-graph-impact`) | Determine blast radius, affected flows, and candidate tests for changed symbols or files. |
 | **`along-graph-arch`** (`/along-graph-arch`) | Architectural overview, community structure, coupling hotspots, and bridge nodes. |

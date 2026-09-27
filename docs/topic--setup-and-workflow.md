@@ -98,18 +98,15 @@ configuration stay. The same manifest is what lets a re-install remove a file Al
 to ship without deleting the directory that holds it. See
 [ADR-2026-09-01--installers-never-delete-what-they-did-not-write](./decisions/ADR-2026-09-01--installers-never-delete-what-they-did-not-write.md).
 
-### MCP Registration Honesty
+### Code Intelligence & MCP Decoupling
 
-The installers register the `code-review-graph` MCP server only where the provider's
-configuration contract is verified. Today that is Claude Code, in the `mcpServers` map of
-`~/.claude.json`. Codex (`~/.codex/config.toml`), OpenCode (`opencode.json`) and
-Antigravity (the Gemini settings file) are reported with their path and the exact snippet
-to add by hand, and are written only when you pass `--include-unverified-mcp`
-(`-IncludeUnverifiedMcp`). Earlier versions wrote a `mcp_config.json` into four provider
-homes, which no provider reads, and printed a success line for each; if you have those
-files, they are inert and can be deleted.
+Code intelligence capabilities (`code-review-graph`) run on-demand directly via command-line execution (`along graph-impact`, `along graph-arch`, `along graph-sync`, `along graph-check`), eliminating background daemon requirements, JSON-RPC stdio pipe stalls, and IDE security approval dialogs.
 
-A configuration file that does not parse is reported and left untouched, never replaced.
+Historically, `code-review-graph` was registered as an MCP server. This registration is decoupled and deprecated. To remove legacy `code-review-graph` entries from existing provider configuration files (`~/.claude.json`, `~/.codex/config.toml`, `opencode.json`, `mcp_config.json`), run:
+```bash
+python scripts/configure_mcp.py --clean
+```
+If legacy configuration entries are present, they are inert and can be cleaned without impacting CLI code-intelligence workflows.
 
 ### Windows Git Concurrency & Index Handling
 
@@ -184,7 +181,7 @@ along-init
 *(Or invoke `/along-init` directly inside your AI agent prompt).*
 
 ### What `along-init` Configures:
-1. `AGENTS.md`: Generates the root protocol context with the managed `ALONG-PROTOCOL v4.2.0` block.
+1. `AGENTS.md`: Generates the root protocol context with the managed `ALONG-PROTOCOL v4.2.1` block.
 2. `CLAUDE.md`: Scaffolds the standard `@AGENTS.md` import line.
 3. `.gitattributes`: Configures `merge=union` for `.along/HISTORY.md` and `.along/DECISIONS.md` to prevent merge collisions across branches.
 4. `.along/`: Creates the persistent repository memory skeleton (`ISSUES/`, `DECISIONS.md`, `MILESTONES/`, `RISKS/`, `SPIKES/`, `CHECKLISTS/`, `SESSIONS/`, `docs/`).

@@ -2,6 +2,10 @@
 
 All notable changes to this project, newest first.
 
+## v4.2.1 - 2026-09-27
+
+- No commits recorded since the previous release tag.
+
 ## v4.2.0 - 2026-09-27
 
 - chore(sync): synchronize projections, documentation and milestone progress [docs--state-centric-execution-and-skill-state-comparison]

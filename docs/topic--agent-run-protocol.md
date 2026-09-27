@@ -14,6 +14,8 @@ sources:
   - path: scripts/alongkit/telemetry/spool.py
   - path: scripts/alongkit/telemetry/otlp.py
   - path: scripts/alongkit/telemetry/tracer.py
+  - path: scripts/alongkit/runner/stream.py
+  - path: scripts/alongkit/runner/antigravity.py
   - path: scripts/alongkit/proc.py
   - path: scripts/along_exec.py
 ---
@@ -270,3 +272,32 @@ Parameters and behavior:
 - Transmits spans via `OTLPExporter(endpoint=...)`.
 - On HTTP 2xx success: Clears the flushed `.wal` files and prints the total number of flushed spans.
 - On network failure: Retains the WAL files on disk, reports the error to `stderr`, and exits with code 1.
+
+## 6. Agent Runtime Runners & Antigravity Supervisor
+
+Along provides supervised process launchers for native AI agent environments under `alongkit.runner`.
+
+### 6.1 Antigravity Runtime Runner (`along run antigravity`)
+
+The Antigravity runner (`alongkit.runner.antigravity.AntigravityRunner`) supervises Google Antigravity processes, enforcing workspace containment, active issue binding, and dual-channel telemetry.
+
+```bash
+along run antigravity [--dry-run] [-i|--issue <slug>] [--run-id <id>] [-e|--endpoint <url>] [-b|--binary <path>] [-- <agent-args...>]
+along run agy [--dry-run] [-i|--issue <slug>] [--run-id <id>] [-e|--endpoint <url>] [-b|--binary <path>] [-- <agent-args...>]
+```
+
+#### Dual-Channel Observability Model
+1. **Hook Channel (`antigravity_hook`)**: The lifecycle gate hook (`along_hook.py --runtime antigravity`) intercepts `PreToolUse` and `PostToolUse` events from the Antigravity IDE, recording structured tool spans with parameter verification, execution duration, and exit codes.
+2. **Stream Channel (`stdout_stream`)**: The `ChunkedStreamSupervisor` captures child process stdout and stderr in binary mode, chunking output at 200 ms or 64 KB boundaries into `SpanEvent` records, while simultaneously teeing to the console and persisting logs to `.along/artifacts/<run_id>/stdout.log` and `stderr.log`.
+
+#### Environment Variable Contract
+When spawning the Antigravity runtime, the supervisor injects the following context variables:
+- `ALONG_RUN_ID`: Unique hexadecimal run ID (32 chars) linking all spans and artifacts.
+- `ALONG_ISSUE_SLUG`: Active issue key bound to the session (enforces `require-active-issue` gate).
+- `ALONG_REPO_ROOT`: Absolute path to repository root, enforcing workspace containment.
+- `ALONG_OBSERVABILITY_LEVEL`: Set to `complete` for full dual-channel tracing.
+- `ALONG_OBSERVABILITY_SOURCES`: Set to `antigravity_hook,stdout_stream`.
+- `ALONG_OTEL_ENDPOINT`: Optional OTLP trace collector endpoint.
+- `PYTHONIOENCODING`: Forced to `utf-8`.
+- `PYTHONUTF8`: Forced to `1`.
+

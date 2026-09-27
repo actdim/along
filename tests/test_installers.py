@@ -350,6 +350,24 @@ class TestMcpRegistrationContract(InstallerCase):
         with io.open(config, "r", encoding="utf-8") as handle:
             self.assertEqual(handle.read(), body, "a second run must change nothing")
 
+    def test_unregister_mcp_removes_configuration(self):
+        home = self.make_home()
+        homes = self.homes_for(home)
+        install.configure_mcp(["claude"], homes)
+        path = os.path.join(home, ".claude.json")
+        with io.open(path, "r", encoding="utf-8") as handle:
+            data = json.load(handle)
+        self.assertIn(install.MCP_SERVER_NAME, data["mcpServers"])
+
+        report = install.configure_mcp(["claude"], homes, clean=True)
+        self.assertEqual(report[0]["status"], "cleaned")
+        with io.open(path, "r", encoding="utf-8") as handle:
+            data = json.load(handle)
+        self.assertNotIn(install.MCP_SERVER_NAME, data["mcpServers"])
+
+        again = install.configure_mcp(["claude"], homes, clean=True)
+        self.assertEqual(again[0]["status"], "absent")
+
 
 class TestInstallerScriptsMatchThePlan(InstallerCase):
     """The end-to-end guarantee: run the real installers, compare disk to the plan."""

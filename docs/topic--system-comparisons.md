@@ -28,27 +28,35 @@ The purpose of this document is not a superficial feature race against specific 
 
 ---
 
-## 2. Paradigm 1: Continuous Conversational Chat Scraping
+## 2. Paradigm 1: Continuous Conversational Chat Scraping & Neural System-1 Controllers
 
 ### Core Mechanism of the Alternative
 Interception hooks (such as `Stop` hooks) spy on raw turn-by-turn chat transcripts between the developer and the AI assistant. An external cloud classification API (e.g. TypeSafe Jev) or a local BERT-sized neural model (e.g. Laya) evaluates each turn with probabilistic classifiers (nouls) to guess whether a sentence represents an architectural decision, constraint, or bug. Saved lines are appended to a flat markdown file (e.g. `JEVMEM.md`).
 
+More recent academic proposals extend this by arguing for a dual-process cognitive architecture (System-1 vs. System-2): a lightweight non-autoregressive neural model acts as a "System-1" controller that manages multi-relational memory graphs, decides edge insertion, allocates retrieval budgets, and determines adaptive stopping criteria, while leaving only final answer synthesis to the heavy "System-2" LLM. Such systems report impressive numbers on conversational benchmarks (e.g. LoCoMo).
+
 ### What Along Adopted / Evaluated
 - **Secret Scrubbing in Diagnostic Logs**: The practice of aggressively redacting sensitive credential shapes (API keys, tokens, connection passwords) before any diagnostic logs or audit trails are written to disk. Along adopted this pattern by connecting its `alongkit.telemetry.redactor` engine to lifecycle hook audit records.
+- **The Principle of Separating Reflexive Control from Deliberative Reasoning**: Offloading high-frequency checks and filtering away from expensive autoregressive LLM token generation. Along applies this principle rigorously, but through deterministic mechanical software gates rather than probabilistic neural models.
 
 ### What Along Critically Rejected and Why
 1. **Conversational Eavesdropping (High False-Positive Noise)**:
    - In real-world software engineering, developers frequently discuss throwaway debug workarounds, speculative ideas, and rejected prototypes. Treating raw chat text as long-term memory inevitably pollutes context with noise and half-truths.
-2. **Monolithic Flat Files (`JEVMEM.md`)**:
-   - Storing all memories in a single flat file creates chronic Git merge conflicts in team workflows and multi-agent branches.
+2. **Monolithic Flat Files (`JEVMEM.md`) and Mutable Dynamic Graphs**:
+   - Storing all memories in a single flat file or maintaining an evolving, consolidated graph database creates chronic Git merge conflicts in team workflows and multi-agent branches.
 3. **Heavy Runtimes and Cloud Vendor Lock-in**:
    - Forcing a hard dependency on a closed SaaS classification API, or requiring local deployment of heavy 421M parameter PyTorch models, introduces massive environment fragility, GPU/CUDA overhead, and high token costs.
+4. **The "Neural System-1" Latency and Drift Trap**:
+   - Academic architectures claim that ~0.93 seconds per query is "fast" compared to pure autoregressive LLM memory agents (which take 2-30 seconds). In real-world engineering, ~1 second per search is unacceptably slow compared to local deterministic indexes (20-40 ms). Furthermore, neural probabilistic memory consolidation causes memory drift, where critical constraints can be silently de-prioritized by neural link weights.
+5. **The Chatbot Benchmark Fallacy (LoCoMo vs. Software Engineering)**:
+   - Success on conversational QA benchmarks (such as LoCoMo) measures trivia recall across long character chats ("when did character X buy item Y?"). It completely fails to reflect the core constraints of software engineering: Git multi-branch concurrency, AST symbol call graphs, compilation invariants, and mechanical gate enforcement.
 
-### The Along Engineering Advantage: Conscious Project Governance
-Along replaces passive chat scraping with **intentional state capture**:
+### The Along Engineering Advantage: Conscious Project Governance & Mechanical System-1
+Along replaces passive chat scraping and neural controllers with **intentional state capture and mechanical deterministic control**:
 - Tasks are tracked in machine-parseable DAG files (`.along/ISSUES/<type>--<slug>.md`).
 - Architectural choices are deliberately recorded as modular ADRs (`.along/DECISIONS/ADR-*.md`).
 - Verified technical facts live in the LLM-Wiki (`docs/topic--*.md`).
+- **Mechanical System-1**: High-frequency reflexive decisions (link integrity, clean typography, test execution, compilation, AST boundary checks) are executed by sub-millisecond (< 1 ms) mechanical gates (`along_hook.py`) and zero-vector lexical search (`along-kb-search` in 20-40 ms), reserving the LLM strictly as System-2 for deep architectural reasoning and code generation.
 - Context remains 100% signal, zero noise, with full rationale and trade-offs preserved.
 
 ---
@@ -196,6 +204,7 @@ Along reconciles the tension between token efficiency and historical traceabilit
 | **Git Concurrency** | High conflict risk on shared flat files (`JEVMEM.md`). | Zero-conflict guarantee via modular date-slug files and union merges. |
 | **Offline Independence** | Requires network connection to cloud APIs or heavy local GPU. | 100% offline-first, hermetic, and provider-agnostic. |
 | **AST Symbol Verification** | None. Blind token chunking breaks code symbol boundaries. | AST-grounded via code-review-graph integration and link integrity gates. |
+| **Cognitive Control (System-1 / System-2)** | Neural System-1 (probabilistic encoder / cloud API, ~1s latency, graph weight drift). | Mechanical System-1 (< 1 ms deterministic gates, AST graph, 20-40 ms TF-IDF) + System-2 LLM. |
 | **Execution History & Memory Model** | Append-only chat bloat \(O(T^2)\) (ReAct) or blind state wiping (SKILL.state). | Dual-Tier: Clean-Turn Worker Loops + Ephemeral Blackboard + Git Provenance. |
 
 ---

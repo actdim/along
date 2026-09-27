@@ -1,4 +1,4 @@
-# ActDim Along (v4.2.0) - Full Documentation Context
+# ActDim Along (v4.2.1) - Full Documentation Context
 
 > **The Provider-Agnostic Context & Memory Operating System for AI Coding Agents.**
 
@@ -6,11 +6,11 @@
 
 ## Document: README.md (Overview)
 
-# ActDim Along (v4.2.0)
+# ActDim Along (v4.2.1)
 
 **The Provider-Agnostic Context & Memory Operating System for AI Coding Agents.**
 
-One universal convention (`ALONG-PROTOCOL v4.2.0`) and automation skills suite honored natively across **Claude Code**, **Google Antigravity**, **OpenAI Codex**, and **OpenCode**.
+One universal convention (`ALONG-PROTOCOL v4.2.1`) and automation skills suite honored natively across **Claude Code**, **Google Antigravity**, **OpenAI Codex**, and **OpenCode**.
 
 ActDim Along eliminates **agent context amnesia**, prevents **architectural drift**, and stops **token bloat** by transforming any codebase into an AI-ready engineering workspace with durable in-repo memory, token-efficient LLM-Wiki intelligence, and autonomous multi-agent coordination.
 
@@ -154,7 +154,7 @@ The repository's complete technical specification is maintained as a living LLM-
 
 | Topic | Description | Link |
 | :--- | :--- | :--- |
-| **System Architecture** | Provider flow, context boundaries, MCP servers, and bridge layers. | [System Architecture & Flow](./docs/topic--architecture.md) |
+| **System Architecture** | Provider flow, context boundaries, code intelligence, and bridge layers. | [System Architecture & Flow](./docs/topic--architecture.md) |
 | **CLI Command Reference** | Unified console command dictionary, subcommands, flags, and exit codes. | [Along CLI Command Reference](./docs/topic--cli-reference.md) |
 | **Domain Model & Entities** | Machine-parseable schemas for Issues, ADRs, Milestones, and Risks. | [Domain Model & Entity Ecosystem](./docs/topic--domain-model.md) |
 | **Setup & Workflows** | Installation matrix, repository onboarding, and session lifecycle. | [Setup, Installation & Workflows](./docs/topic--setup-and-workflow.md) |
@@ -195,7 +195,7 @@ Along provides **21 singular automation skills** structured across 6 core lifecy
 | :--- | :--- |
 | **`along-commit`** (`/along-commit`) | Smart ASCII-clean Conventional Committer linked to active `.along/` issue. |
 | **`along hook verify`** (`along hook`) | Verify bi-directional traceability between prose badges and YAML gates. |
-| **`along-graph-check`** (`/along-graph-check`) | Preflight health check and verification for `code-review-graph` MCP server. |
+| **`along-graph-check`** (`/along-graph-check`) | Preflight health check and verification for `code-review-graph` AST engine. |
 | **`along-graph-sync`** (`/along-graph-sync`) | Build or incrementally update `code-review-graph` AST code intelligence database. |
 | **`along-graph-impact`** (`/along-graph-impact`) | Determine blast radius, affected flows, and candidate tests for changed symbols or files. |
 | **`along-graph-arch`** (`/along-graph-arch`) | Architectural overview, community structure, coupling hotspots, and bridge nodes. |
@@ -227,7 +227,7 @@ MIT License. See [LICENSE](./LICENSE) for details.
 ## Document: AGENTS.md (Agent Conventions & Protocol)
 
 <!-- BEGIN ALONG-PROTOCOL root (managed by along-init - do not edit by hand) -->
-# ALONG-PROTOCOL v4.2.0
+# ALONG-PROTOCOL v4.2.1
 
 This repo carries its own agent context, provider-agnostically. Follow it every session, whatever tool you are.
 
@@ -281,13 +281,13 @@ Also, when relevant: `.along/VISION.md`, `.along/GLOSSARY.md`. These reflect the
 - **Decisions**: Create new ADRs via `/along-decision-sync` or `along decision create <slug> --title "..."`. Add terms to `.along/GLOSSARY.md`.
 - **Token hygiene**: Use quiet flags (`pytest -q`, `dotnet test -v q`), filter outputs, inspect targeted line ranges.
 - **Lifecycle hooks first**: Agents MUST use `/along-test`, `/along-build`, `/along-dev` (or `.along/scripts/*.py`) before raw shell commands.
-- **Post-change review**: Agents MUST inspect diffs and evaluate blast radius via `code-review-graph` MCP (or static search fallback). Silent skips are forbidden.
+- **Post-change review**: Agents MUST inspect diffs and evaluate blast radius via `along graph-impact` (or static search fallback). Silent skips are forbidden.
 
 ## Stage & Session Completion Checklist
 When a stage or session completes, agents MUST execute in this order:
 1. [ ] **Tests** [gate: test_before_stop]: Run via `/along-test` with quiet flags. Zero failures.
 2. [ ] **File Integrity**: `git status -u` - all new/modified files non-zero size, no empty placeholders.
-3. [ ] **Code Review**: Inspect diff for side effects, verify REQ-N coverage, evaluate blast radius via `code-review-graph` (or static search), verify architectural decision compliance.
+3. [ ] **Code Review**: Inspect diff for side effects, verify REQ-N coverage, evaluate blast radius via `along graph-impact` (or static search), verify architectural decision compliance.
 4. [ ] **Entity Reconciliation**: Close issues (`done` + move to `done/`), update milestones, resolve risks, conclude spikes.
 5. [ ] **Doc Blast Radius**: Update affected `docs/topic--*.md` and run `/along-kb-sync`.
 6. [ ] **Session Log** [gate: wrap_before_stop]: Write `.along/SESSIONS/<YYYY>/<date>--<slug>.md`.
@@ -601,6 +601,34 @@ Parameters and behavior:
 - On HTTP 2xx success: Clears the flushed `.wal` files and prints the total number of flushed spans.
 - On network failure: Retains the WAL files on disk, reports the error to `stderr`, and exits with code 1.
 
+## 6. Agent Runtime Runners & Antigravity Supervisor
+
+Along provides supervised process launchers for native AI agent environments under `alongkit.runner`.
+
+### 6.1 Antigravity Runtime Runner (`along run antigravity`)
+
+The Antigravity runner (`alongkit.runner.antigravity.AntigravityRunner`) supervises Google Antigravity processes, enforcing workspace containment, active issue binding, and dual-channel telemetry.
+
+```bash
+along run antigravity [--dry-run] [-i|--issue <slug>] [--run-id <id>] [-e|--endpoint <url>] [-b|--binary <path>] [-- <agent-args...>]
+along run agy [--dry-run] [-i|--issue <slug>] [--run-id <id>] [-e|--endpoint <url>] [-b|--binary <path>] [-- <agent-args...>]
+```
+
+#### Dual-Channel Observability Model
+1. **Hook Channel (`antigravity_hook`)**: The lifecycle gate hook (`along_hook.py --runtime antigravity`) intercepts `PreToolUse` and `PostToolUse` events from the Antigravity IDE, recording structured tool spans with parameter verification, execution duration, and exit codes.
+2. **Stream Channel (`stdout_stream`)**: The `ChunkedStreamSupervisor` captures child process stdout and stderr in binary mode, chunking output at 200 ms or 64 KB boundaries into `SpanEvent` records, while simultaneously teeing to the console and persisting logs to `.along/artifacts/<run_id>/stdout.log` and `stderr.log`.
+
+#### Environment Variable Contract
+When spawning the Antigravity runtime, the supervisor injects the following context variables:
+- `ALONG_RUN_ID`: Unique hexadecimal run ID (32 chars) linking all spans and artifacts.
+- `ALONG_ISSUE_SLUG`: Active issue key bound to the session (enforces `require-active-issue` gate).
+- `ALONG_REPO_ROOT`: Absolute path to repository root, enforcing workspace containment.
+- `ALONG_OBSERVABILITY_LEVEL`: Set to `complete` for full dual-channel tracing.
+- `ALONG_OBSERVABILITY_SOURCES`: Set to `antigravity_hook,stdout_stream`.
+- `ALONG_OTEL_ENDPOINT`: Optional OTLP trace collector endpoint.
+- `PYTHONIOENCODING`: Forced to `utf-8`.
+- `PYTHONUTF8`: Forced to `1`.
+
 ---
 
 ## Document: docs/topic--architecture.md (System Architecture & Flow)
@@ -637,8 +665,8 @@ flowchart TD
         LIFECYCLE["Lifecycle Suite (build, test, dev, commit, wrap)"]
     end
 
-    subgraph ToolingAndMCP["Tooling & MCP Integrations"]
-        CRG["code-review-graph MCP (AST Call Graph & Blast Radius)"]
+    subgraph ToolingAndAST["Tooling & Code Intelligence"]
+        CRG["along graph-* CLI (code-review-graph AST Engine)"]
         WIKI_SEARCH["along-kb-search (Fast Multi-Scope Retrieval)"]
         DASH["FastAPI Dashboard + Cytoscape DAG (/along-dash)"]
     end
@@ -667,10 +695,10 @@ Along avoids vendor lock-in by utilizing standard agent discovery paths without 
 
 | Host Agent | Discovery & Context Entry Point | Skills Installation Target | Execution Mechanism |
 | :--- | :--- | :--- | :--- |
-| **Claude Code** | Reads `CLAUDE.md`, which references `@AGENTS.md`. | `~/.claude/skills/along-*/` | Direct slash commands (`/along-*`) and MCP tools. |
+| **Claude Code** | Reads `CLAUDE.md`, which references `@AGENTS.md`. | `~/.claude/skills/along-*/` | Direct slash commands (`/along-*`) and CLI tools. |
 | **Codex** | Reads `AGENTS.md` natively on session initialization. | `~/.codex/skills/along-*/` | Native skill execution and prompt injection. |
 | **OpenCode** | Reads `AGENTS.md` and `CLAUDE.md` natively. | `~/.config/opencode/commands/along-*.md` | Flat markdown command declarations. |
-| **Google Antigravity** | Reads `AGENTS.md` (or `GEMINI.md`) natively. | `~/.gemini/config/skills/along-*/` | Slash commands, `/goal` autonomy, and MCP tools. |
+| **Google Antigravity** | Reads `AGENTS.md` (or `GEMINI.md`) natively. | `~/.gemini/config/skills/along-*/` | Slash commands, `/goal` autonomy, and CLI tools. |
 
 ---
 
@@ -813,9 +841,10 @@ what `-Uninstall` / `--uninstall` reads.
 
 The layout itself is described once, in `alongkit.install.planned_files`, and both
 installers are measured against it end to end, so `install.sh` cannot again ship without
-the rule packs the way it did for months. MCP registration moved to `configure_mcp.py`
-with a per-provider contract: the previous installers wrote five configuration files, four
-of which no provider reads, and printed a success line for each.
+the rule packs the way it did for months. Code intelligence tools (`code-review-graph`)
+execute directly via CLI (`along graph-*`), bypassing stdio IPC serialization overhead
+and IDE authorization dialogs, while legacy MCP registration is decoupled and managed
+via `configure_mcp.py --clean`.
 
 ### A migration merges; it does not choose a winner
 
@@ -898,7 +927,7 @@ sequenceDiagram
     participant Agent as Host AI Agent
     participant Memory as .along/ ISSUES & Blackboard
     participant Team as Multi-Agent Engine (along-team)
-    participant Verify as Reviewer & Code Graph MCP
+    participant Verify as Reviewer & Code Graph CLI
     participant Commit as along-commit & along-wrap
 
     Human->>Agent: "Implement JWT refresh token rotation"
@@ -1506,11 +1535,12 @@ System diagnostics and incident dispatch engine.
   ```
 
 ### `along graph-check`
-Preflight verification for `code-review-graph` MCP server.
+Preflight verification for `code-review-graph` AST engine.
 - Verifies graph indexing status, validates `.code-review-graph-ignore` configuration to prevent repository bloat, and checks tool accessibility.
 - **Usage**:
   ```bash
   along graph-check
+  along graph-check --json
   ```
 
 ### `along graph-sync` (alias `along graph-build`)
@@ -1523,6 +1553,39 @@ Code intelligence AST knowledge graph synchronization engine.
   along graph-sync --full       # Full graph rebuild from scratch
   along graph-sync --status     # Show current graph statistics
   along graph-build             # Alias for graph-sync
+  ```
+
+### `along graph-impact`
+Semantic blast radius and affected execution flow analyzer.
+- Traces direct callers, callees, and importers using `code-review-graph` AST queries with automatic fallback to static search.
+- Automatically maps impacted symbols to candidate tests and affected documentation articles in `docs/topic--*.md`.
+- **Options**:
+  - `TARGET`: Symbol name or file path (auto-detects changes from git if omitted).
+  - `--base REF`: Git base ref for change detection (default: `HEAD~1`).
+  - `--max-depth N`: Traversal depth in the call hierarchy (default: `2`).
+  - `--json`: Output machine-readable JSON report.
+  - `--optional`: Treat offline AST engine state as non-fatal warning.
+- **Usage**:
+  ```bash
+  along graph-impact                          # Auto-detect changed files from git
+  along graph-impact scripts/along_exec.py    # Target specific file
+  along graph-impact my_symbol --max-depth 3  # Trace symbol callers up to 3 hops
+  along graph-impact --json                   # Output machine-readable JSON report
+  ```
+
+### `along graph-arch`
+Architectural intelligence, community clustering, and coupling hotspot analyzer.
+- Analyzes repository modular structure, cohesion-based functional communities, hub hotspots, and critical bridge nodes.
+- **Options**:
+  - `--detail-level {standard,minimal}`: Output detail level (default: `standard`).
+  - `--top-hubs N`: Maximum number of hub nodes to display (default: `5`).
+  - `--top-bridges N`: Maximum number of bridge nodes to display (default: `5`).
+  - `--json`: Output machine-readable JSON report.
+- **Usage**:
+  ```bash
+  along graph-arch
+  along graph-arch --detail-level minimal
+  along graph-arch --json
   ```
 
 ### `along hook` (alias `along hooks`)
@@ -1538,13 +1601,30 @@ Runtime lifecycle hook interceptor and declarative gate evaluation harness.
   ```
 
 ### `along run`
-Executes a shell command behind the Along runtime lifecycle hook and declarative gate pipeline.
-- Intercepts shell commands, validating CLI safety, typography, and circuit breaker gates before executing.
-- **Usage**:
-  ```bash
-  along run pytest -q
-  along run npm test
-  ```
+Executes an agent runtime supervisor or runs a shell command behind the Along runtime lifecycle hook and declarative gate pipeline.
+
+#### 1. Agent Runtime Runner
+Supervises an autonomous agent runtime (such as Google Antigravity), enforcing workspace containment, active issue binding, and dual-channel OpenTelemetry tracing:
+
+```bash
+along run antigravity [--dry-run] [-i|--issue <slug>] [--run-id <id>] [-e|--endpoint <url>] [-b|--binary <path>] [-- <agent-args...>]
+along run agy [--dry-run] [-i|--issue <slug>] [--run-id <id>] [-e|--endpoint <url>] [-b|--binary <path>] [-- <agent-args...>]
+```
+
+Parameters:
+- `--dry-run`, `-n`: Preview configured environment variables, resolved binary, and active issue binding without spawning the process.
+- `-i`, `--issue <slug>`: Bind the run to an explicit active issue (defaults to the currently in-progress issue in `.along/ISSUES/`).
+- `--run-id <id>`: Set an explicit 32-character run ID for telemetry grouping.
+- `-e`, `--endpoint <url>`: Target OpenTelemetry OTLP/HTTP traces endpoint.
+- `-b`, `--binary <path>`: Explicit path to the Antigravity binary executable.
+
+#### 2. Lifecycle Command Proxy
+Intercepts shell commands, validating CLI safety, typography, and circuit breaker gates before executing:
+
+```bash
+along run pytest -q
+along run npm test
+```
 
 ---
 
@@ -2317,7 +2397,7 @@ In the LLM-Wiki paradigm, documentation is a living asset that evolves alongside
 
 ```mermaid
 flowchart LR
-    DIFF["Code Modifications (git diff)"] --> CRG["code-review-graph (get_impact_radius_tool)"]
+    DIFF["Code Modifications (git diff)"] --> CRG["along graph-impact (code-review-graph AST)"]
     CRG --> IMPACT["Impacted Symbols & Downstream Callers"]
     IMPACT --> SEARCH["along-kb-search (Topic Query)"]
     SEARCH --> TOPICS["Targeted docs/topic--*.md Files"]
@@ -2326,7 +2406,7 @@ flowchart LR
     KBSYNC --> INDEX["docs/INDEX.md & Verified Links"]
 ```
 
-1. **AST Blast Radius Discovery**: During task review, agents invoke `code-review-graph` MCP tools (`get_impact_radius_tool`, `get_affected_flows_tool`) to identify modified symbols and dependent modules.
+1. **AST Blast Radius Discovery**: During task review, agents invoke `along graph-impact` (powered directly by `code-review-graph` CLI) to trace caller hierarchies, caller depth, and affected execution flows.
 2. **Topic Mapping**: Agents query `along-kb-search` with the modified symbol names to pinpoint the exact `docs/topic--*.md` files documenting those interfaces.
 3. **Factual Updating**: Agents update the affected topic articles with concrete code facts (zero placeholders).
 4. **Compilation & Link Gate**: Running `python scripts/along_kb_sync.py --strict` validates relative links across the repository and recompiles `docs/INDEX.md`.
@@ -2355,7 +2435,7 @@ To guarantee factual precision and cross-reference coherence without human micro
   - Inspects backticked spans (`` `symbol` ``) across all `docs/topic--*.md` articles.
   - Identifies identifier signatures (snake_case, PascalCase, UPPER_SNAKE, dotted member accesses) and checks them against the AST symbol inventory.
   - Flags ungrounded "ghost symbols" (non-existent classes, phantom functions, obsolete identifiers) that hallucinate codebase capabilities.
-  - Builtin filter whitelists Python keywords, standard library modules/attributes (`sys.path`, `os.remove`), Win32 platform APIs, Dynstruct framework symbols, and MCP tools.
+  - Builtin filter whitelists Python keywords, standard library modules/attributes (`sys.path`, `os.remove`), Win32 platform APIs, Dynstruct framework symbols, and code intelligence tools.
   - Exits with non-zero status in strict mode (`--check-symbols --strict`) when ghost symbols exist.
 
 ### Structured Section Taxonomy Contracts
@@ -2768,18 +2848,15 @@ configuration stay. The same manifest is what lets a re-install remove a file Al
 to ship without deleting the directory that holds it. See
 [ADR-2026-09-01--installers-never-delete-what-they-did-not-write](./decisions/ADR-2026-09-01--installers-never-delete-what-they-did-not-write.md).
 
-### MCP Registration Honesty
+### Code Intelligence & MCP Decoupling
 
-The installers register the `code-review-graph` MCP server only where the provider's
-configuration contract is verified. Today that is Claude Code, in the `mcpServers` map of
-`~/.claude.json`. Codex (`~/.codex/config.toml`), OpenCode (`opencode.json`) and
-Antigravity (the Gemini settings file) are reported with their path and the exact snippet
-to add by hand, and are written only when you pass `--include-unverified-mcp`
-(`-IncludeUnverifiedMcp`). Earlier versions wrote a `mcp_config.json` into four provider
-homes, which no provider reads, and printed a success line for each; if you have those
-files, they are inert and can be deleted.
+Code intelligence capabilities (`code-review-graph`) run on-demand directly via command-line execution (`along graph-impact`, `along graph-arch`, `along graph-sync`, `along graph-check`), eliminating background daemon requirements, JSON-RPC stdio pipe stalls, and IDE security approval dialogs.
 
-A configuration file that does not parse is reported and left untouched, never replaced.
+Historically, `code-review-graph` was registered as an MCP server. This registration is decoupled and deprecated. To remove legacy `code-review-graph` entries from existing provider configuration files (`~/.claude.json`, `~/.codex/config.toml`, `opencode.json`, `mcp_config.json`), run:
+```bash
+python scripts/configure_mcp.py --clean
+```
+If legacy configuration entries are present, they are inert and can be cleaned without impacting CLI code-intelligence workflows.
 
 ### Windows Git Concurrency & Index Handling
 
@@ -2854,7 +2931,7 @@ along-init
 *(Or invoke `/along-init` directly inside your AI agent prompt).*
 
 ### What `along-init` Configures:
-1. `AGENTS.md`: Generates the root protocol context with the managed `ALONG-PROTOCOL v4.2.0` block.
+1. `AGENTS.md`: Generates the root protocol context with the managed `ALONG-PROTOCOL v4.2.1` block.
 2. `CLAUDE.md`: Scaffolds the standard `@AGENTS.md` import line.
 3. `.gitattributes`: Configures `merge=union` for `.along/HISTORY.md` and `.along/DECISIONS.md` to prevent merge collisions across branches.
 4. `.along/`: Creates the persistent repository memory skeleton (`ISSUES/`, `DECISIONS.md`, `MILESTONES/`, `RISKS/`, `SPIKES/`, `CHECKLISTS/`, `SESSIONS/`, `docs/`).
@@ -3311,7 +3388,7 @@ flowchart TD
 ---
 
 ### `along-graph-check`
-- **What it is**: AST call graph and blast radius inspection engine. Uses `code-review-graph` MCP tools to map impacted functions, downstream callers, and interface breaks.
+- **What it is**: AST call graph and code intelligence preflight engine. Performs health check, binary validation, and `.code-review-graph-ignore` audit for the `code-review-graph` AST engine.
 - **Architectural Rationale**:
   - *Deterministic Blast Radius*: Prevents silent regression bugs by identifying all dependent callers across the codebase before code is merged.
   - *Graph-Ignore Filtering*: Enforces `.code-review-graph-ignore` to exclude `node_modules` and vendor directories, preventing graph database ballooning.
@@ -3332,7 +3409,7 @@ flowchart TD
   - *Explicit*: `/along-graph-sync`, `along graph-sync` (or `along graph-build`), `along graph-sync --full`.
   - *Semantic / Automatic*: Invoked during `along-init` (initial index), `along-update` (symbol refresh), and before blast-radius review in `along-wrap`.
 - **Entities Operated On**: `.code-review-graph-ignore`, AST graph database.
-- **Ecosystem Chaining**: Feeds the AST call graph used by `code-review-graph` MCP tools (`get_impact_radius_tool`, `get_affected_flows_tool`) during `along-wrap` and `along-team`.
+- **Ecosystem Chaining**: Feeds the AST call graph used by `along-graph-impact` during `along-wrap` and `along-team`.
 
 ---
 
@@ -3342,7 +3419,7 @@ flowchart TD
   - *Comprehensive Downstream Tracing*: Traces direct callers, callees, and impacted execution paths, eliminating blind spots when refactoring shared functions.
   - *Candidate Test Selection*: Pinpoints covering automated test files to guide targeted pre-commit verification.
   - *Documentation Mapping*: Directly maps affected symbols to Knowledge Base articles in `docs/topic--*.md`.
-  - *Resilient Degradation*: Automatically degrades to static search if the MCP server or `uvx` is offline, ensuring review gates are never skipped.
+  - *Resilient Degradation*: Automatically degrades to static search if `code-review-graph` or `uvx` is offline, ensuring review gates are never skipped.
 - **Invocation Triggers**:
   - *Explicit*: `/along-graph-impact <symbol|file>`, `along graph-impact <symbol|file>`, `along graph impact <symbol|file>`.
   - *Semantic / Automatic*: Invoked during `along-team` Phase 2 (Architect) and Phase 4 (Reviewer), and during `along-wrap` before session finalization.
@@ -3479,27 +3556,35 @@ The purpose of this document is not a superficial feature race against specific 
 
 ---
 
-## 2. Paradigm 1: Continuous Conversational Chat Scraping
+## 2. Paradigm 1: Continuous Conversational Chat Scraping & Neural System-1 Controllers
 
 ### Core Mechanism of the Alternative
 Interception hooks (such as `Stop` hooks) spy on raw turn-by-turn chat transcripts between the developer and the AI assistant. An external cloud classification API (e.g. TypeSafe Jev) or a local BERT-sized neural model (e.g. Laya) evaluates each turn with probabilistic classifiers (nouls) to guess whether a sentence represents an architectural decision, constraint, or bug. Saved lines are appended to a flat markdown file (e.g. `JEVMEM.md`).
 
+More recent academic proposals extend this by arguing for a dual-process cognitive architecture (System-1 vs. System-2): a lightweight non-autoregressive neural model acts as a "System-1" controller that manages multi-relational memory graphs, decides edge insertion, allocates retrieval budgets, and determines adaptive stopping criteria, while leaving only final answer synthesis to the heavy "System-2" LLM. Such systems report impressive numbers on conversational benchmarks (e.g. LoCoMo).
+
 ### What Along Adopted / Evaluated
 - **Secret Scrubbing in Diagnostic Logs**: The practice of aggressively redacting sensitive credential shapes (API keys, tokens, connection passwords) before any diagnostic logs or audit trails are written to disk. Along adopted this pattern by connecting its `alongkit.telemetry.redactor` engine to lifecycle hook audit records.
+- **The Principle of Separating Reflexive Control from Deliberative Reasoning**: Offloading high-frequency checks and filtering away from expensive autoregressive LLM token generation. Along applies this principle rigorously, but through deterministic mechanical software gates rather than probabilistic neural models.
 
 ### What Along Critically Rejected and Why
 1. **Conversational Eavesdropping (High False-Positive Noise)**:
    - In real-world software engineering, developers frequently discuss throwaway debug workarounds, speculative ideas, and rejected prototypes. Treating raw chat text as long-term memory inevitably pollutes context with noise and half-truths.
-2. **Monolithic Flat Files (`JEVMEM.md`)**:
-   - Storing all memories in a single flat file creates chronic Git merge conflicts in team workflows and multi-agent branches.
+2. **Monolithic Flat Files (`JEVMEM.md`) and Mutable Dynamic Graphs**:
+   - Storing all memories in a single flat file or maintaining an evolving, consolidated graph database creates chronic Git merge conflicts in team workflows and multi-agent branches.
 3. **Heavy Runtimes and Cloud Vendor Lock-in**:
    - Forcing a hard dependency on a closed SaaS classification API, or requiring local deployment of heavy 421M parameter PyTorch models, introduces massive environment fragility, GPU/CUDA overhead, and high token costs.
+4. **The "Neural System-1" Latency and Drift Trap**:
+   - Academic architectures claim that ~0.93 seconds per query is "fast" compared to pure autoregressive LLM memory agents (which take 2-30 seconds). In real-world engineering, ~1 second per search is unacceptably slow compared to local deterministic indexes (20-40 ms). Furthermore, neural probabilistic memory consolidation causes memory drift, where critical constraints can be silently de-prioritized by neural link weights.
+5. **The Chatbot Benchmark Fallacy (LoCoMo vs. Software Engineering)**:
+   - Success on conversational QA benchmarks (such as LoCoMo) measures trivia recall across long character chats ("when did character X buy item Y?"). It completely fails to reflect the core constraints of software engineering: Git multi-branch concurrency, AST symbol call graphs, compilation invariants, and mechanical gate enforcement.
 
-### The Along Engineering Advantage: Conscious Project Governance
-Along replaces passive chat scraping with **intentional state capture**:
+### The Along Engineering Advantage: Conscious Project Governance & Mechanical System-1
+Along replaces passive chat scraping and neural controllers with **intentional state capture and mechanical deterministic control**:
 - Tasks are tracked in machine-parseable DAG files (`.along/ISSUES/<type>--<slug>.md`).
 - Architectural choices are deliberately recorded as modular ADRs (`.along/DECISIONS/ADR-*.md`).
 - Verified technical facts live in the LLM-Wiki (`docs/topic--*.md`).
+- **Mechanical System-1**: High-frequency reflexive decisions (link integrity, clean typography, test execution, compilation, AST boundary checks) are executed by sub-millisecond (< 1 ms) mechanical gates (`along_hook.py`) and zero-vector lexical search (`along-kb-search` in 20-40 ms), reserving the LLM strictly as System-2 for deep architectural reasoning and code generation.
 - Context remains 100% signal, zero noise, with full rationale and trade-offs preserved.
 
 ---
@@ -3647,6 +3732,7 @@ Along reconciles the tension between token efficiency and historical traceabilit
 | **Git Concurrency** | High conflict risk on shared flat files (`JEVMEM.md`). | Zero-conflict guarantee via modular date-slug files and union merges. |
 | **Offline Independence** | Requires network connection to cloud APIs or heavy local GPU. | 100% offline-first, hermetic, and provider-agnostic. |
 | **AST Symbol Verification** | None. Blind token chunking breaks code symbol boundaries. | AST-grounded via code-review-graph integration and link integrity gates. |
+| **Cognitive Control (System-1 / System-2)** | Neural System-1 (probabilistic encoder / cloud API, ~1s latency, graph weight drift). | Mechanical System-1 (< 1 ms deterministic gates, AST graph, 20-40 ms TF-IDF) + System-2 LLM. |
 | **Execution History & Memory Model** | Append-only chat bloat \(O(T^2)\) (ReAct) or blind state wiping (SKILL.state). | Dual-Tier: Clean-Turn Worker Loops + Ephemeral Blackboard + Git Provenance. |
 
 ---
