@@ -2,6 +2,13 @@
 
 All notable changes to this project, newest first.
 
+## v4.2.0 - 2026-09-27
+
+- chore(sync): synchronize projections, documentation and milestone progress [docs--state-centric-execution-and-skill-state-comparison]
+- feat(governance): add doc taxonomy write policy, milestone collision gate, and cli safety [feat--doc-taxonomy-and-write-policy]
+- feat(dep-scan): add subproject-scoped dependencies and internal monorepo dag [feat--subproject-scoped-dependencies]
+- feat(telemetry): implement agent run protocol core specification and otlp engine [feat--agent-run-protocol-core]
+
 ## v4.1.0 - 2026-09-23
 
 - feat(skills): add along-graph-impact and along-graph-arch user skills with lifecycle enforcement (refs #code-review-graph-user-skills)
