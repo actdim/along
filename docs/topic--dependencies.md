@@ -1,16 +1,12 @@
 ---
 protocol: along
+protocol_version: "4.1.0"
 slug: dependencies
 title: Dependencies & Submodules AI Documentation and Rules
 type: topic
-created: 2026-09-02
-updated: 2026-09-22
+created: 2026-09-27
+updated: 2026-09-27
 tags: [dependencies, ai-context, submodules, vendor, rules]
-sources:
-  - path: pyproject.toml
-    hash: "6f7a72d4e5eac4b4bb59b8d822e53e7b7dc61cca7abe98b387ff5a97a1505a95"
-  - path: package.json
-    hash: "269251e759fbddabc780d359725cd801cb90cbab3c5a36faa590887d61abf7bd"
 ---
 
 # Dependencies & Submodules AI Documentation and Rules
@@ -23,7 +19,11 @@ sources:
 
 | Subproject / Module | Path | Ecosystems | AI Documentation & Context |
 | :--- | :--- | :--- | :--- |
-| **`@along/dashboard-ui`** | `packages/dashboard-ui` | `npm` | - |
+| **`@along/dashboard-ui`** | `packages/dashboard-ui` | `npm` | [AGENTS.md](../packages/dashboard-ui/AGENTS.md) |
+
+## Internal Monorepo Dependency Graph
+
+No internal monorepo package inter-dependencies detected.
 
 ## Declared External Dependencies with AI Guidelines
 
@@ -34,6 +34,10 @@ sources:
 | **`@actdim/msgmesh`** | `packages/dashboard-ui` | `npm` | `1.5.13` | [docs/](../packages/dashboard-ui/node_modules/@actdim/msgmesh/docs) |
 | **`@actdim/utico`** | `packages/dashboard-ui` | `npm` | `1.5.13` | [AGENTS.md](../packages/dashboard-ui/node_modules/@actdim/utico/AGENTS.md) <br> [CLAUDE.md](../packages/dashboard-ui/node_modules/@actdim/utico/CLAUDE.md) <br> [docs/](../packages/dashboard-ui/node_modules/@actdim/utico/docs) <br> manifest metadata (`ai`) |
 | **`cytoscape`** | `packages/dashboard-ui` | `npm` | `3.34.2` | [AGENTS.md](../packages/dashboard-ui/node_modules/cytoscape/AGENTS.md) |
+
+## Transitive Dependency Guidelines & Invariants
+
+No exported invariants detected across repository dependencies.
 
 ## Custom Project Dependency Hooks (`.along/scripts/dep_scan.py`)
 

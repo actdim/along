@@ -19,22 +19,26 @@ Discovers AI documentation and guidelines shipped inside internal subprojects, G
    - Adaptive Project Hooks: `.along/scripts/dep_scan.py` support for custom or unknown ecosystems.
 3. **On-Disk AI Rules Discovery**:
    - Locates installed packages and submodules to discover `AGENTS.md`, `CLAUDE.md`, `llms.txt`, `llms-full.txt`, `docs/`, `.along/`, and package manifest metadata (`ai`, `llms`, `agents`, `along`).
-4. **Idempotent Knowledge Base Integration**:
-   - Generates/updates `docs/topic--dependencies.md` with:
-     * **Internal Subprojects, Modules & Submodules** registry.
-     * **Declared External Dependencies with AI Guidelines**, scoped by component.
-   - Reconciles links in `docs/INDEX.md`.
+4. **Internal Workspace DAG & Subproject-Scoped Projections**:
+   - Resolves internal monorepo package relationships across Node, Python, .NET, and Rust.
+   - Generates localized `docs/topic--dependencies.md` for initialized subprojects with accurate relative links.
+   - Extracts exported invariants (`<!-- EXPORT-INVARIANTS: ... -->`) into the Transitive Guidelines & Invariants section.
+   - Root `docs/topic--dependencies.md` maintains both the internal modules registry and the internal monorepo dependency graph.
+5. **Optional Safe Direct Linking**:
+   - `--link` safely maintains a managed block `<!-- BEGIN ALONG-DEPS --> ... <!-- END ALONG-DEPS -->` in subproject `AGENTS.md` strictly for internal workspace packages without polluting system prompts with external dependencies.
 
 ## Execution
 Run the dependency scanner via the canonical Along entry point:
 
 ```bash
-along dep-scan [--root <path>] [--check] [--json]
+along dep-scan [--root <path>] [--link] [--all-subprojects] [--check] [--json]
 ```
 *(Or fallback: `python ~/.along/bin/along_exec.py dep-scan` or `/along-dep-scan`)*
 
 ### CLI Flags
-- `--check`: Perform dry-run scan without modifying `docs/`.
-- `--json`: Output discovered dependencies and subprojects in structured JSON format.
+- `--all-subprojects`: Generate localized `docs/topic--dependencies.md` in all discovered subprojects.
+- `--check`: Perform dry-run scan without modifying files.
+- `--json`: Output discovered dependencies, internal DAG, and projects in structured JSON format.
+- `--link`: Safely synchronize managed dependency links into subproject `AGENTS.md` files.
 - `--quiet` / `-q`: Minimal console output.
 - `--root <path>`: Specify custom repository or submodule root directory.

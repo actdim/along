@@ -233,6 +233,161 @@ print(json.dumps([{
         self.assertEqual(results[0]["package"], "custom-elixir-dep")
         self.assertEqual(results[0]["ecosystem"], "hex")
 
+    def test_07_internal_monorepo_dag_and_subproject_scoped_kb(self):
+        """Test internal monorepo DAG resolution, invariant extraction, and subproject-scoped KB."""
+        # 1. Root package.json
+        with open(os.path.join(self.test_dir, "package.json"), "w", encoding="utf-8") as f:
+            json.dump({"name": "actdim-monorepo", "private": True}, f)
+
+        # 2. Internal package: packages/dynstruct
+        dyn_dir = os.path.join(self.test_dir, "packages", "dynstruct")
+        os.makedirs(dyn_dir, exist_ok=True)
+        with open(os.path.join(dyn_dir, "package.json"), "w", encoding="utf-8") as f:
+            json.dump({"name": "@actdim/dynstruct", "version": "1.0.0"}, f)
+        with open(os.path.join(dyn_dir, "AGENTS.md"), "w", encoding="utf-8") as f:
+            f.write("# Dynstruct Rules\n<!-- EXPORT-INVARIANTS: strict-component-model, no-react-hooks -->\nUse MobX models.")
+        with open(os.path.join(dyn_dir, "llms.txt"), "w", encoding="utf-8") as f:
+            f.write("# Dynstruct llms summary")
+
+        # 3. Consuming subproject: apps/webapp (initialized Along subproject)
+        app_dir = os.path.join(self.test_dir, "apps", "webapp")
+        os.makedirs(os.path.join(app_dir, ".along"), exist_ok=True)
+        os.makedirs(os.path.join(app_dir, "docs"), exist_ok=True)
+        with open(os.path.join(app_dir, "package.json"), "w", encoding="utf-8") as f:
+            json.dump({
+                "name": "webapp",
+                "dependencies": {
+                    "@actdim/dynstruct": "^1.0.0",
+                    "zod": "^3.22.0"
+                }
+            }, f)
+
+        # Mock external zod in apps/webapp/node_modules/zod
+        zod_dir = os.path.join(app_dir, "node_modules", "zod")
+        os.makedirs(zod_dir, exist_ok=True)
+        with open(os.path.join(zod_dir, "llms.txt"), "w", encoding="utf-8") as f:
+            f.write("# Zod llms instructions")
+
+        # Run scanner
+        res = along_scan_deps.run_scanner(self.test_dir, dry_run=False)
+
+        # Check internal dependencies detected
+        internal_deps = res.get("internal_dependencies", [])
+        self.assertEqual(len(internal_deps), 1)
+        self.assertEqual(internal_deps[0]["package"], "@actdim/dynstruct")
+        self.assertEqual(internal_deps[0]["target_project"], "@actdim/dynstruct")
+        self.assertIn("strict-component-model", internal_deps[0]["invariants"])
+        self.assertIn("no-react-hooks", internal_deps[0]["invariants"])
+
+        # Check root docs/topic--dependencies.md
+        root_kb = os.path.join(self.test_dir, "docs", "topic--dependencies.md")
+        self.assertTrue(os.path.isfile(root_kb))
+        with open(root_kb, "r", encoding="utf-8") as f:
+            root_content = f.read()
+        self.assertIn("## Internal Monorepo Dependency Graph", root_content)
+        self.assertIn("@actdim/dynstruct", root_content)
+        self.assertIn("apps/webapp", root_content)
+        self.assertIn("## Transitive Dependency Guidelines & Invariants", root_content)
+        self.assertIn("strict-component-model", root_content)
+
+        # Check subproject docs/topic--dependencies.md
+        sub_kb = os.path.join(app_dir, "docs", "topic--dependencies.md")
+        self.assertTrue(os.path.isfile(sub_kb), "Subproject topic--dependencies.md must be generated")
+        with open(sub_kb, "r", encoding="utf-8") as f:
+            sub_content = f.read()
+
+        self.assertIn("# Dependencies & AI Documentation for `webapp`", sub_content)
+        self.assertIn("## Internal Workspace Dependencies", sub_content)
+        self.assertIn("@actdim/dynstruct", sub_content)
+        # Relative link from apps/webapp/docs/ to packages/dynstruct/llms.txt
+        self.assertIn("../../packages/dynstruct/llms.txt", sub_content)
+        self.assertIn("../../packages/dynstruct/AGENTS.md", sub_content)
+        # External dependency zod included in subproject docs
+        self.assertIn("zod", sub_content)
+        # Invariants section in subproject docs
+        self.assertIn("## Transitive Dependency Guidelines & Invariants", sub_content)
+        self.assertIn("strict-component-model", sub_content)
+        self.assertIn("no-react-hooks", sub_content)
+
+    def test_08_subproject_linking_flag(self):
+        """Test --link flag updates managed block in subproject AGENTS.md."""
+        # Setup monorepo
+        with open(os.path.join(self.test_dir, "package.json"), "w", encoding="utf-8") as f:
+            json.dump({"name": "root-repo", "private": True}, f)
+
+        lib_dir = os.path.join(self.test_dir, "packages", "core-lib")
+        os.makedirs(lib_dir, exist_ok=True)
+        with open(os.path.join(lib_dir, "package.json"), "w", encoding="utf-8") as f:
+            json.dump({"name": "@monorepo/core", "version": "1.0.0"}, f)
+        with open(os.path.join(lib_dir, "AGENTS.md"), "w", encoding="utf-8") as f:
+            f.write("# Core Guidelines\nAlways use pure functions.")
+
+        app_dir = os.path.join(self.test_dir, "apps", "client")
+        os.makedirs(os.path.join(app_dir, ".along"), exist_ok=True)
+        with open(os.path.join(app_dir, "package.json"), "w", encoding="utf-8") as f:
+            json.dump({"name": "client-app", "dependencies": {"@monorepo/core": "workspace:*"}}, f)
+
+        agents_path = os.path.join(app_dir, "AGENTS.md")
+        with open(agents_path, "w", encoding="utf-8") as f:
+            f.write("# Client App Instructions\nDo not break UI.\n")
+
+        # 1. Run without --link: AGENTS.md must NOT be modified
+        along_scan_deps.run_scanner(self.test_dir, dry_run=False, link=False)
+        with open(agents_path, "r", encoding="utf-8") as f:
+            content_no_link = f.read()
+        self.assertNotIn("<!-- BEGIN ALONG-DEPS", content_no_link)
+
+        # 2. Run with --link: managed block must be injected
+        along_scan_deps.run_scanner(self.test_dir, dry_run=False, link=True)
+        with open(agents_path, "r", encoding="utf-8") as f:
+            content_with_link = f.read()
+
+        self.assertIn("<!-- BEGIN ALONG-DEPS (managed by along dep-scan - do not edit) -->", content_with_link)
+        self.assertIn("@monorepo/core", content_with_link)
+        self.assertIn("[AGENTS.md](../../packages/core-lib/AGENTS.md)", content_with_link)
+        self.assertIn("<!-- END ALONG-DEPS -->", content_with_link)
+        self.assertIn("Do not break UI.", content_with_link)
+
+        # 3. Idempotent re-run: block is updated cleanly without duplication
+        along_scan_deps.run_scanner(self.test_dir, dry_run=False, link=True)
+        with open(agents_path, "r", encoding="utf-8") as f:
+            content_rerun = f.read()
+        self.assertEqual(content_rerun.count("BEGIN ALONG-DEPS"), 1)
+
+    def test_09_subproject_boundary_preservation(self):
+        """Test uninitialized subprojects do not get spurious docs directories unless requested."""
+        with open(os.path.join(self.test_dir, "package.json"), "w", encoding="utf-8") as f:
+            json.dump({"name": "mono-root", "private": True}, f)
+
+        # Subproject without .along and without docs
+        uninit_dir = os.path.join(self.test_dir, "packages", "uninit-pkg")
+        os.makedirs(uninit_dir, exist_ok=True)
+        with open(os.path.join(uninit_dir, "package.json"), "w", encoding="utf-8") as f:
+            json.dump({"name": "@mono/uninit", "version": "1.0.0"}, f)
+
+        # Default run: uninit-pkg/docs must NOT exist
+        along_scan_deps.run_scanner(self.test_dir, dry_run=False, all_subprojects=False)
+        self.assertFalse(os.path.exists(os.path.join(uninit_dir, "docs")))
+
+        # With all_subprojects=True: uninit-pkg/docs IS created
+        along_scan_deps.run_scanner(self.test_dir, dry_run=False, all_subprojects=True)
+        self.assertTrue(os.path.isfile(os.path.join(uninit_dir, "docs", "topic--dependencies.md")))
+
+    def test_10_multiline_exported_invariants(self):
+        """Test parsing multi-line block exported invariants."""
+        pkg_dir = os.path.join(self.test_dir, "some-pkg")
+        os.makedirs(pkg_dir, exist_ok=True)
+        with open(os.path.join(pkg_dir, "AGENTS.md"), "w", encoding="utf-8") as f:
+            f.write("""# Some Pkg
+<!-- BEGIN-EXPORT-INVARIANTS -->
+- Use deterministic UUIDs only
+- Never import react-dom directly
+<!-- END-EXPORT-INVARIANTS -->
+""")
+        invariants = along_scan_deps.extract_exported_invariants(pkg_dir)
+        self.assertIn("Use deterministic UUIDs only", invariants)
+        self.assertIn("Never import react-dom directly", invariants)
+
 
 if __name__ == "__main__":
     unittest.main()

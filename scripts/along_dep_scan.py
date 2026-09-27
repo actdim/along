@@ -77,7 +77,7 @@ def find_ai_files_in_dir(dir_path: str, repo_root: str) -> List[Dict[str, str]]:
                 if r_canon not in seen_real:
                     seen_real.add(r_canon)
                     rel = normalize_posix(safe_relpath(full, repo_root))
-                    found.append({"filename": entry, "path": rel})
+                    found.append({"filename": entry, "path": rel, "full_path": full})
 
     well_known_dir = os.path.join(dir_path, ".well-known")
     if os.path.isdir(well_known_dir):
@@ -90,11 +90,58 @@ def find_ai_files_in_dir(dir_path: str, repo_root: str) -> List[Dict[str, str]]:
                         if r_canon not in seen_real:
                             seen_real.add(r_canon)
                             rel = normalize_posix(safe_relpath(full, repo_root))
-                            found.append({"filename": f".well-known/{entry}", "path": rel})
+                            found.append({"filename": f".well-known/{entry}", "path": rel, "full_path": full})
         except OSError:
             pass
 
     return found
+
+
+def extract_exported_invariants(dir_path: str) -> List[str]:
+    """Scan candidate files in directory for exported invariants and architectural rules."""
+    invariants = []
+    if not os.path.isdir(dir_path):
+        return invariants
+
+    candidate_files = [
+        "AGENTS.md",
+        "agents.md",
+        "CLAUDE.md",
+        "claude.md",
+        "llms.txt",
+        "llms-full.txt",
+        os.path.join(".along", "CONSTRAINTS.md"),
+    ]
+    seen = set()
+    for rel_f in candidate_files:
+        full_f = os.path.join(dir_path, rel_f)
+        if not os.path.isfile(full_f):
+            continue
+        try:
+            with open(full_f, "r", encoding="utf-8", errors="ignore") as f:
+                content = f.read()
+
+            # Single-line comment: <!-- EXPORT-INVARIANTS: rule1, rule2 -->
+            for m in re.finditer(r'<!--\s*EXPORT-INVARIANTS\s*:\s*(.*?)\s*-->', content, re.IGNORECASE):
+                raw = m.group(1).strip()
+                for rule in raw.split(","):
+                    r = rule.strip()
+                    if r and r not in seen:
+                        seen.add(r)
+                        invariants.append(r)
+
+            # Multi-line block: <!-- BEGIN-EXPORT-INVARIANTS --> ... <!-- END-EXPORT-INVARIANTS -->
+            for m in re.finditer(r'<!--\s*(?:BEGIN-)?EXPORT-INVARIANTS\s*-->([\s\S]*?)<!--\s*END-EXPORT-INVARIANTS\s*-->', content, re.IGNORECASE):
+                block = m.group(1).strip()
+                for line in block.splitlines():
+                    cleaned = line.strip().lstrip("-* ").strip()
+                    if cleaned and cleaned not in seen:
+                        seen.add(cleaned)
+                        invariants.append(cleaned)
+        except OSError:
+            pass
+
+    return invariants
 
 
 # ---------------------------------------------------------------------------
@@ -111,6 +158,9 @@ class ProjectScope:
         self.ai_files: List[Dict[str, str]] = []
         self.has_along_dir: bool = False
         self.has_docs_dir: bool = False
+        self.internal_deps: List[Dict[str, Any]] = []
+        self.external_deps: List[Dict[str, Any]] = []
+        self.invariants: List[str] = []
 
     def to_dict(self) -> Dict[str, Any]:
         return {
@@ -121,6 +171,9 @@ class ProjectScope:
             "ai_files": self.ai_files,
             "has_along_dir": self.has_along_dir,
             "has_docs_dir": self.has_docs_dir,
+            "internal_deps": self.internal_deps,
+            "external_deps": self.external_deps,
+            "invariants": self.invariants,
         }
 
 
@@ -186,6 +239,62 @@ def inspect_internal_ai_context(proj_dir: str, repo_root: str) -> Tuple[List[Dic
     return found_files, has_along, has_docs
 
 
+def extract_project_name(dir_path: str, default_name: str) -> str:
+    """Extract declared package or project name across ecosystems."""
+    pkg_json = os.path.join(dir_path, "package.json")
+    if os.path.isfile(pkg_json):
+        try:
+            with open(pkg_json, "r", encoding="utf-8") as f:
+                data = json.load(f)
+                if data.get("name"):
+                    return str(data["name"]).strip()
+        except (OSError, json.JSONDecodeError, UnicodeDecodeError):
+            pass
+
+    cargo_toml = os.path.join(dir_path, "Cargo.toml")
+    if os.path.isfile(cargo_toml):
+        try:
+            with open(cargo_toml, "r", encoding="utf-8", errors="ignore") as f:
+                content = f.read()
+            m = re.search(r'\[package\][\s\S]*?name\s*=\s*["\']([^"\']+)["\']', content)
+            if m:
+                return m.group(1).strip()
+        except OSError:
+            pass
+
+    pyproject = os.path.join(dir_path, "pyproject.toml")
+    if os.path.isfile(pyproject):
+        try:
+            with open(pyproject, "r", encoding="utf-8", errors="ignore") as f:
+                content = f.read()
+            m = re.search(r'\[project\][\s\S]*?name\s*=\s*["\']([^"\']+)["\']', content)
+            if m:
+                return m.group(1).strip()
+            m2 = re.search(r'\[tool\.poetry\][\s\S]*?name\s*=\s*["\']([^"\']+)["\']', content)
+            if m2:
+                return m2.group(1).strip()
+        except OSError:
+            pass
+
+    try:
+        for f in os.listdir(dir_path):
+            if f.endswith(".csproj") or f.endswith(".fsproj"):
+                xml_p = os.path.join(dir_path, f)
+                try:
+                    tree = ET.parse(xml_p)
+                    root = tree.getroot()
+                    pkg_id = root.find(".//PackageId")
+                    if pkg_id is not None and pkg_id.text:
+                        return pkg_id.text.strip()
+                except (ET.ParseError, OSError, UnicodeDecodeError):
+                    pass
+                return f[:-7] if f.endswith(".csproj") else f[:-7]
+    except OSError:
+        pass
+
+    return default_name
+
+
 def discover_all_projects(repo_root: str) -> List[ProjectScope]:
     """Recursively discover all project roots, subprojects, submodules, and symlinks."""
     projects: List[ProjectScope] = []
@@ -202,6 +311,7 @@ def discover_all_projects(repo_root: str) -> List[ProjectScope]:
     root_proj.ai_files = root_ai
     root_proj.has_along_dir = root_along
     root_proj.has_docs_dir = root_docs
+    root_proj.invariants = extract_exported_invariants(repo_root)
     projects.append(root_proj)
 
     # 2. Check explicit submodules
@@ -212,11 +322,13 @@ def discover_all_projects(repo_root: str) -> List[ProjectScope]:
             visited_realpaths.add(sub_canon)
             _, sub_ecos = is_project_directory(sub_full)
             sub_ai, sub_along, sub_docs = inspect_internal_ai_context(sub_full, repo_root)
-            p = ProjectScope(name=sub_rel, rel_path=sub_rel, full_path=sub_full)
+            proj_name = extract_project_name(sub_full, sub_rel)
+            p = ProjectScope(name=proj_name, rel_path=sub_rel, full_path=sub_full)
             p.ecosystems = sub_ecos
             p.ai_files = sub_ai
             p.has_along_dir = sub_along
             p.has_docs_dir = sub_docs
+            p.invariants = extract_exported_invariants(sub_full)
             projects.append(p)
 
     # 3. Recursive directory traversal
@@ -245,32 +357,107 @@ def discover_all_projects(repo_root: str) -> List[ProjectScope]:
         is_proj, ecos = is_project_directory(root)
         if is_proj:
             ai_files, has_along, has_docs = inspect_internal_ai_context(root, repo_root)
-            proj_name = rel_dir
-            pkg_json = os.path.join(root, "package.json")
-            if os.path.isfile(pkg_json):
-                try:
-                    with open(pkg_json, "r", encoding="utf-8") as f:
-                        data = json.load(f)
-                        if data.get("name"):
-                            proj_name = data["name"]
-                except (OSError, json.JSONDecodeError, UnicodeDecodeError):
-                    pass
-
+            proj_name = extract_project_name(root, rel_dir)
             p = ProjectScope(name=proj_name, rel_path=rel_dir, full_path=root)
             p.ecosystems = ecos
             p.ai_files = ai_files
             p.has_along_dir = has_along
             p.has_docs_dir = has_docs
+            p.invariants = extract_exported_invariants(root)
             projects.append(p)
 
     return projects
+
+
+def build_internal_project_map(projects: List[ProjectScope]) -> Dict[str, ProjectScope]:
+    """Map package names and normalized aliases to internal ProjectScope instances."""
+    pkg_map: Dict[str, ProjectScope] = {}
+    for p in projects:
+        if p.is_root:
+            continue
+        pkg_map[p.name] = p
+        pkg_map[p.name.lower()] = p
+        pkg_map[p.rel_path] = p
+        pkg_map[p.rel_path.lower()] = p
+        base = os.path.basename(p.rel_path)
+        if base and base not in pkg_map:
+            pkg_map[base] = p
+            pkg_map[base.lower()] = p
+        py_name = p.name.lower().replace("-", "_")
+        if py_name not in pkg_map:
+            pkg_map[py_name] = p
+    return pkg_map
+
+
+def resolve_internal_dependency(
+    pkg_name: str,
+    declared_ver: str,
+    ecosystem: str,
+    source_project: ProjectScope,
+    repo_root: str,
+    internal_map: Dict[str, ProjectScope]
+) -> Optional[Dict[str, Any]]:
+    """Check if declared dependency resolves to an internal workspace project."""
+    target_proj = internal_map.get(pkg_name) or internal_map.get(pkg_name.lower())
+    if not target_proj:
+        for prefix in ("file:", "workspace:", "link:"):
+            if declared_ver.startswith(prefix):
+                candidate_path = declared_ver[len(prefix):].strip()
+                if candidate_path in (".", "*", "^", "~"):
+                    continue
+                resolved_full = os.path.normpath(os.path.join(source_project.full_path, candidate_path))
+                for p in internal_map.values():
+                    if os.path.realpath(p.full_path) == os.path.realpath(resolved_full):
+                        target_proj = p
+                        break
+            if target_proj:
+                break
+
+    if not target_proj:
+        return None
+
+    if os.path.realpath(target_proj.full_path) == os.path.realpath(source_project.full_path):
+        return None
+
+    ai_files = find_ai_files_in_dir(target_proj.full_path, repo_root)
+    if target_proj.has_along_dir:
+        rel_along = normalize_posix(os.path.relpath(os.path.join(target_proj.full_path, ".along"), repo_root))
+        ai_files.append({
+            "filename": ".along/",
+            "path": rel_along,
+            "full_path": os.path.join(target_proj.full_path, ".along")
+        })
+    if target_proj.has_docs_dir:
+        rel_docs = normalize_posix(os.path.relpath(os.path.join(target_proj.full_path, "docs"), repo_root))
+        ai_files.append({
+            "filename": "docs/",
+            "path": rel_docs,
+            "full_path": os.path.join(target_proj.full_path, "docs")
+        })
+
+    invariants = target_proj.invariants or extract_exported_invariants(target_proj.full_path)
+    scope_label = "[root]" if source_project.is_root else source_project.rel_path
+
+    return {
+        "package": pkg_name,
+        "scope": scope_label,
+        "ecosystem": ecosystem,
+        "version": declared_ver or "workspace",
+        "is_internal": True,
+        "target_project": target_proj.name,
+        "target_path": target_proj.rel_path,
+        "target_full_path": target_proj.full_path,
+        "files": ai_files,
+        "invariants": invariants,
+        "metadata": None,
+    }
 
 
 # ---------------------------------------------------------------------------
 # Node.js (npm / pnpm / yarn / bun) Scanner
 # ---------------------------------------------------------------------------
 
-def scan_node_project_deps(project: ProjectScope, repo_root: str) -> List[Dict[str, Any]]:
+def scan_node_project_deps(project: ProjectScope, repo_root: str, internal_map: Optional[Dict[str, ProjectScope]] = None) -> List[Dict[str, Any]]:
     pkg_json_path = os.path.join(project.full_path, "package.json")
     if not os.path.isfile(pkg_json_path):
         return []
@@ -295,6 +482,13 @@ def scan_node_project_deps(project: ProjectScope, repo_root: str) -> List[Dict[s
     ]
 
     for pkg_name in sorted(deps.keys()):
+        raw_ver = str(deps[pkg_name])
+        if internal_map:
+            internal_match = resolve_internal_dependency(pkg_name, raw_ver, "npm", project, repo_root, internal_map)
+            if internal_match:
+                discovered.append(internal_match)
+                continue
+
         pkg_full_dir = None
         for nm_dir in lookup_node_modules:
             candidate = os.path.join(nm_dir, *pkg_name.split("/"))
@@ -311,17 +505,17 @@ def scan_node_project_deps(project: ProjectScope, repo_root: str) -> List[Dict[s
         along_dir = os.path.join(pkg_full_dir, ".along")
         if os.path.isdir(along_dir):
             rel_along = normalize_posix(os.path.relpath(along_dir, repo_root))
-            found_files.append({"filename": ".along/", "path": rel_along})
+            found_files.append({"filename": ".along/", "path": rel_along, "full_path": along_dir})
 
         docs_dir = os.path.join(pkg_full_dir, "docs")
         if os.path.isdir(docs_dir):
             rel_docs = normalize_posix(os.path.relpath(docs_dir, repo_root))
-            found_files.append({"filename": "docs/", "path": rel_docs})
+            found_files.append({"filename": "docs/", "path": rel_docs, "full_path": docs_dir})
 
         # Check inner package.json for metadata
         inner_pkg_path = os.path.join(pkg_full_dir, "package.json")
         ai_metadata = None
-        version = str(deps[pkg_name])
+        version = raw_ver
         if os.path.isfile(inner_pkg_path):
             try:
                 with open(inner_pkg_path, "r", encoding="utf-8") as pf:
@@ -335,14 +529,18 @@ def scan_node_project_deps(project: ProjectScope, repo_root: str) -> List[Dict[s
             except (OSError, json.JSONDecodeError, UnicodeDecodeError):
                 pass
 
-        if found_files or ai_metadata:
+        invariants = extract_exported_invariants(pkg_full_dir)
+
+        if found_files or ai_metadata or invariants:
             discovered.append({
                 "package": pkg_name,
                 "scope": scope_label,
                 "ecosystem": "npm",
                 "version": version,
+                "is_internal": False,
                 "files": found_files,
                 "metadata": ai_metadata,
+                "invariants": invariants,
             })
 
     return discovered
@@ -399,7 +597,7 @@ def parse_requirements_deps(req_path: str) -> List[str]:
     return list(set(deps))
 
 
-def scan_python_project_deps(project: ProjectScope, repo_root: str) -> List[Dict[str, Any]]:
+def scan_python_project_deps(project: ProjectScope, repo_root: str, internal_map: Optional[Dict[str, ProjectScope]] = None) -> List[Dict[str, Any]]:
     declared_pkgs = set()
     declared_pkgs.update(parse_pyproject_deps(os.path.join(project.full_path, "pyproject.toml")))
     declared_pkgs.update(parse_requirements_deps(os.path.join(project.full_path, "requirements.txt")))
@@ -437,6 +635,15 @@ def scan_python_project_deps(project: ProjectScope, repo_root: str) -> List[Dict
 
     for pkg_name in sorted(declared_pkgs):
         norm_name = pkg_name.lower().replace("-", "_")
+        if internal_map:
+            internal_match = (
+                resolve_internal_dependency(pkg_name, "workspace", "pypi", project, repo_root, internal_map)
+                or resolve_internal_dependency(norm_name, "workspace", "pypi", project, repo_root, internal_map)
+            )
+            if internal_match:
+                discovered.append(internal_match)
+                continue
+
         found_pkg_dir = None
         version = None
 
@@ -466,15 +673,18 @@ def scan_python_project_deps(project: ProjectScope, repo_root: str) -> List[Dict
             continue
 
         found_files = find_ai_files_in_dir(found_pkg_dir, repo_root)
+        invariants = extract_exported_invariants(found_pkg_dir)
 
-        if found_files:
+        if found_files or invariants:
             discovered.append({
                 "package": pkg_name,
                 "scope": scope_label,
                 "ecosystem": "pypi",
                 "version": version or "installed",
+                "is_internal": False,
                 "files": found_files,
                 "metadata": None,
+                "invariants": invariants,
             })
 
     return discovered
@@ -503,6 +713,10 @@ def parse_nuget_references(xml_path: str) -> Dict[str, str]:
                         version = ver_elem.text.strip()
                 if name:
                     pkgs[name] = version
+            elif tag == "ProjectReference":
+                inc = elem.attrib.get("Include")
+                if inc:
+                    pkgs[inc] = "project-ref"
             elif tag == "package":  # packages.config
                 name = elem.attrib.get("id")
                 version = elem.attrib.get("version") or "*"
@@ -537,7 +751,7 @@ def get_nuget_cache_dirs(repo_root: str) -> List[str]:
     return cache_dirs
 
 
-def scan_nuget_project_deps(project: ProjectScope, repo_root: str) -> List[Dict[str, Any]]:
+def scan_nuget_project_deps(project: ProjectScope, repo_root: str, internal_map: Optional[Dict[str, ProjectScope]] = None) -> List[Dict[str, Any]]:
     declared_pkgs = {}
     try:
         entries = os.listdir(project.full_path)
@@ -557,6 +771,18 @@ def scan_nuget_project_deps(project: ProjectScope, repo_root: str) -> List[Dict[
     discovered = []
 
     for pkg_name, ver in sorted(declared_pkgs.items()):
+        if internal_map:
+            clean_name = pkg_name
+            if ver == "project-ref":
+                clean_name = os.path.splitext(os.path.basename(pkg_name))[0]
+            internal_match = (
+                resolve_internal_dependency(clean_name, ver, "nuget", project, repo_root, internal_map)
+                or resolve_internal_dependency(pkg_name, ver, "nuget", project, repo_root, internal_map)
+            )
+            if internal_match:
+                discovered.append(internal_match)
+                continue
+
         pkg_lower = pkg_name.lower()
         found_pkg_dir = None
         actual_ver = ver
@@ -582,16 +808,20 @@ def scan_nuget_project_deps(project: ProjectScope, repo_root: str) -> List[Dict[
         docs_dir = os.path.join(found_pkg_dir, "docs")
         if os.path.isdir(docs_dir):
             rel_docs = normalize_posix(safe_relpath(docs_dir, repo_root))
-            found_files.append({"filename": "docs/", "path": rel_docs})
+            found_files.append({"filename": "docs/", "path": rel_docs, "full_path": docs_dir})
 
-        if found_files:
+        invariants = extract_exported_invariants(found_pkg_dir)
+
+        if found_files or invariants:
             discovered.append({
                 "package": pkg_name,
                 "scope": scope_label,
                 "ecosystem": "nuget",
                 "version": actual_ver,
+                "is_internal": False,
                 "files": found_files,
                 "metadata": None,
+                "invariants": invariants,
             })
 
     return discovered
@@ -601,7 +831,7 @@ def scan_nuget_project_deps(project: ProjectScope, repo_root: str) -> List[Dict[
 # Rust (Cargo) Scanner
 # ---------------------------------------------------------------------------
 
-def scan_rust_project_deps(project: ProjectScope, repo_root: str) -> List[Dict[str, Any]]:
+def scan_rust_project_deps(project: ProjectScope, repo_root: str, internal_map: Optional[Dict[str, ProjectScope]] = None) -> List[Dict[str, Any]]:
     cargo_path = os.path.join(project.full_path, "Cargo.toml")
     if not os.path.isfile(cargo_path):
         return []
@@ -635,6 +865,12 @@ def scan_rust_project_deps(project: ProjectScope, repo_root: str) -> List[Dict[s
     registry_src = os.path.join(cargo_home, "registry", "src")
 
     for pkg_name, ver in sorted(declared_deps.items()):
+        if internal_map:
+            internal_match = resolve_internal_dependency(pkg_name, ver, "cargo", project, repo_root, internal_map)
+            if internal_match:
+                discovered.append(internal_match)
+                continue
+
         pkg_dirs = []
         for vd in vendor_dirs:
             if os.path.isdir(vd):
@@ -652,15 +888,18 @@ def scan_rust_project_deps(project: ProjectScope, repo_root: str) -> List[Dict[s
 
         for p_dir in pkg_dirs:
             found_files = find_ai_files_in_dir(p_dir, repo_root)
+            invariants = extract_exported_invariants(p_dir)
 
-            if found_files:
+            if found_files or invariants:
                 discovered.append({
                     "package": pkg_name,
                     "scope": scope_label,
                     "ecosystem": "cargo",
                     "version": ver,
+                    "is_internal": False,
                     "files": found_files,
                     "metadata": None,
+                    "invariants": invariants,
                 })
                 break
 
@@ -740,7 +979,35 @@ def generate_dependencies_kb_content(projects: List[ProjectScope], external_deps
             lines.append(f"| **`{sub.name}`** | `{sub.rel_path}` | {ecos_str} | {links_str} |")
         lines.append("")
 
-    # Section 2: Declared External Dependencies with AI Context
+    # Section 2: Internal Monorepo Dependency Graph
+    lines.append("## Internal Monorepo Dependency Graph")
+    lines.append("")
+    projects_with_internal = [p for p in projects if p.internal_deps]
+    if not projects_with_internal:
+        lines.append("No internal monorepo package inter-dependencies detected.")
+        lines.append("")
+    else:
+        lines.append("| Consumer Subproject | Consumed Internal Packages | Context & Guidelines Links |")
+        lines.append("| :--- | :--- | :--- |")
+        for p in projects_with_internal:
+            cons_name = f"`{p.rel_path}`" if p.is_root else f"**`{p.name}`** (`{p.rel_path}`)"
+            consumed_pkgs = []
+            all_links = []
+            for idep in p.internal_deps:
+                tp_name = idep["target_project"]
+                consumed_pkgs.append(f"`{tp_name}`")
+                for f in idep.get("files", []):
+                    fn = f["filename"]
+                    fp = f.get("path")
+                    if fp:
+                        rel_from_docs = f"../{fp}"
+                        all_links.append(f"[{tp_name}: {fn}]({rel_from_docs})")
+            cons_pkgs_str = ", ".join(consumed_pkgs) if consumed_pkgs else "-"
+            links_str = " <br> ".join(all_links) if all_links else "-"
+            lines.append(f"| {cons_name} | {cons_pkgs_str} | {links_str} |")
+        lines.append("")
+
+    # Section 3: Declared External Dependencies with AI Guidelines
     lines.append("## Declared External Dependencies with AI Guidelines")
     lines.append("")
     if not external_deps:
@@ -768,12 +1035,231 @@ def generate_dependencies_kb_content(projects: List[ProjectScope], external_deps
             lines.append(f"| **`{pkg}`** | `{scope}` | `{eco}` | `{ver}` | {links_str} |")
         lines.append("")
 
+    # Section 4: Transitive Dependency Guidelines & Invariants
+    all_invariants = []
+    seen_invariants = set()
+    for p in projects:
+        for idep in p.internal_deps:
+            pkg = idep["package"]
+            for inv in idep.get("invariants", []):
+                key = (pkg, inv)
+                if key not in seen_invariants:
+                    seen_invariants.add(key)
+                    all_invariants.append((pkg, inv, idep.get("target_path", "")))
+        for edep in external_deps:
+            pkg = edep["package"]
+            for inv in edep.get("invariants", []):
+                key = (pkg, inv)
+                if key not in seen_invariants:
+                    seen_invariants.add(key)
+                    all_invariants.append((pkg, inv, edep.get("scope", "")))
+
+    lines.append("## Transitive Dependency Guidelines & Invariants")
+    lines.append("")
+    if not all_invariants:
+        lines.append("No exported invariants detected across repository dependencies.")
+        lines.append("")
+    else:
+        lines.append("> [!IMPORTANT]")
+        lines.append("> The following rules are exported by dependencies. Follow these patterns when integrating:")
+        lines.append("")
+        by_pkg: Dict[str, List[Tuple[str, str]]] = {}
+        for pkg, inv, src in all_invariants:
+            by_pkg.setdefault(pkg, []).append((inv, src))
+        for pkg, items in sorted(by_pkg.items()):
+            lines.append(f"### `{pkg}`")
+            for inv, src in items:
+                lines.append(f"- {inv}")
+            lines.append("")
+        lines.append("> [!TIP]")
+        lines.append("> To adopt any dependency invariant as a permanent subproject constraint, record a local ADR via `along decision create`.")
+        lines.append("")
+
+    lines.append("## Custom Project Dependency Hooks (`.along/scripts/dep_scan.py`)")
+    lines.append("")
+    lines.append("While Along natively auto-discovers dependencies across Node.js (`package.json`), Python (`pyproject.toml`, `requirements*.txt`), .NET NuGet (`*.csproj`), Rust (`Cargo.toml`), and Go (`go.mod`), repositories using other ecosystems or internal package managers can supply a custom discovery hook:")
+    lines.append("")
+    lines.append("- **Hook Path**: `.along/scripts/dep_scan.py` (or `scan_deps.py`).")
+    lines.append("- **Invocation**: `/along-dep-scan` or `along dep-scan` executes the script passing `--json` with working directory set to the project root.")
+    lines.append("- **Output Schema**: The script must write a JSON list to stdout:")
+    lines.append("  ```json")
+    lines.append("  [")
+    lines.append("    {")
+    lines.append('      "package": "custom-package",')
+    lines.append('      "ecosystem": "hex",')
+    lines.append('      "version": "1.0.0",')
+    lines.append('      "files": [')
+    lines.append("        {")
+    lines.append('          "filename": "AGENTS.md",')
+    lines.append('          "path": "deps/custom-package/AGENTS.md"')
+    lines.append("        }")
+    lines.append("      ]")
+    lines.append("    }")
+    lines.append("  ]")
+    lines.append("  ```")
+    lines.append("- **Monorepo Localization**: In multi-package repositories or submodules, subproject-specific hooks placed in `packages/<subproject>/.along/scripts/dep_scan.py` are executed automatically when scanning that subproject.")
+    lines.append("")
     lines.append("## Usage in Agent Sessions")
     lines.append("When working on features involving any of the modules or external libraries above:")
     lines.append("1. **Internal Submodules**: Follow conventions in the nearest `AGENTS.md` or subproject `docs/`.")
     lines.append("2. **Third-Party Libraries**: Read the linked instruction files directly for framework-specific patterns and best practices.")
     lines.append("")
     return "\n".join(lines)
+
+
+def generate_subproject_dependencies_kb_content(project: ProjectScope, repo_root: str) -> str:
+    """Generate localized docs/topic--dependencies.md for a specific subproject."""
+    today = get_today_iso()
+    proj_docs_dir = os.path.join(project.full_path, "docs")
+    lines = [
+        "---",
+        "protocol: along",
+        f'protocol_version: "{CURRENT_PROTOCOL_VERSION}"',
+        "slug: topic--dependencies",
+        f"title: Dependencies & AI Documentation for {project.name}",
+        "type: topic",
+        f"created: {today}",
+        f"updated: {today}",
+        "tags: [dependencies, subproject, ai-context, rules]",
+        "---",
+        "",
+        f"# Dependencies & AI Documentation for `{project.name}`",
+        "",
+        "> [!NOTE]",
+        f"> This document maintains a localized registry of internal workspace dependencies and third-party libraries for `{project.name}`.",
+        "> Consult linked guidelines when developing, refactoring, or integrating components.",
+        "",
+    ]
+
+    # Section 1: Internal Workspace Dependencies
+    lines.append("## Internal Workspace Dependencies")
+    lines.append("")
+    if not project.internal_deps:
+        lines.append("No internal workspace dependencies detected for this module.")
+        lines.append("")
+    else:
+        lines.append("| Internal Package | Relative Path | AI Documentation & Context |")
+        lines.append("| :--- | :--- | :--- |")
+        for dep in sorted(project.internal_deps, key=lambda d: d["package"]):
+            pkg = dep["package"]
+            target_full = dep.get("target_full_path") or os.path.join(repo_root, dep.get("target_path", ""))
+            rel_to_target = normalize_posix(safe_relpath(target_full, proj_docs_dir))
+            file_links = []
+            for f in dep.get("files", []):
+                fn = f["filename"]
+                f_full = f.get("full_path") or os.path.join(target_full, fn.rstrip("/"))
+                rel_f = normalize_posix(safe_relpath(f_full, proj_docs_dir))
+                file_links.append(f"[{fn}]({rel_f})")
+            links_str = " <br> ".join(file_links) if file_links else "-"
+            lines.append(f"| **`{pkg}`** | [`{rel_to_target}`]({rel_to_target}) | {links_str} |")
+        lines.append("")
+
+    # Section 2: Declared External Dependencies with AI Guidelines
+    lines.append("## Declared External Dependencies with AI Guidelines")
+    lines.append("")
+    if not project.external_deps:
+        lines.append("No active external dependencies with AI instructions were detected.")
+        lines.append("")
+    else:
+        lines.append("| Package | Ecosystem | Version | AI Guidelines / Instructions |")
+        lines.append("| :--- | :--- | :--- | :--- |")
+        for dep in sorted(project.external_deps, key=lambda d: d["package"]):
+            pkg = dep["package"]
+            eco = dep["ecosystem"]
+            ver = dep.get("version") or "unspecified"
+            file_links = []
+            for f in dep.get("files", []):
+                fn = f["filename"]
+                full_f = f.get("full_path") or os.path.join(repo_root, f.get("path", ""))
+                rel_from_docs = normalize_posix(safe_relpath(full_f, proj_docs_dir))
+                file_links.append(f"[{fn}]({rel_from_docs})")
+            if dep.get("metadata"):
+                meta_str = ", ".join(f"`{k}`" for k in dep["metadata"].keys())
+                file_links.append(f"manifest metadata ({meta_str})")
+            links_str = " <br> ".join(file_links) if file_links else "-"
+            lines.append(f"| **`{pkg}`** | `{eco}` | `{ver}` | {links_str} |")
+        lines.append("")
+
+    # Section 3: Transitive Guidelines & Invariants
+    dep_invariants = []
+    for dep in project.internal_deps + project.external_deps:
+        if dep.get("invariants"):
+            dep_invariants.append((dep["package"], dep["invariants"]))
+
+    lines.append("## Transitive Dependency Guidelines & Invariants")
+    lines.append("")
+    if not dep_invariants:
+        lines.append("No exported invariants detected across current dependencies.")
+        lines.append("")
+    else:
+        lines.append("> [!IMPORTANT]")
+        lines.append("> The following rules are exported by dependencies. Follow these patterns when integrating:")
+        lines.append("")
+        for pkg, rules in dep_invariants:
+            lines.append(f"### `{pkg}`")
+            for r in rules:
+                lines.append(f"- {r}")
+            lines.append("")
+        lines.append("> [!TIP]")
+        lines.append("> To adopt any dependency invariant as a permanent subproject constraint, record a local ADR via `along decision create`.")
+        lines.append("")
+
+    lines.append("## Usage in Agent Sessions")
+    lines.append("When working on features involving any of the modules or external libraries above:")
+    lines.append("1. **Internal Submodules**: Follow conventions in the linked package `AGENTS.md` or package `docs/`.")
+    lines.append("2. **Third-Party Libraries**: Read the linked instruction files directly for framework-specific patterns and best practices.")
+    lines.append("")
+    return "\n".join(lines)
+
+
+def sync_agents_md_dep_links(project: ProjectScope, repo_root: str) -> bool:
+    """Safely update managed dependencies block in project AGENTS.md."""
+    agents_file = os.path.join(project.full_path, "AGENTS.md")
+    if not os.path.isfile(agents_file):
+        return False
+
+    try:
+        with open(agents_file, "r", encoding="utf-8") as f:
+            content = f.read()
+
+        dep_lines = [
+            "<!-- BEGIN ALONG-DEPS (managed by along dep-scan - do not edit) -->",
+        ]
+        for dep in sorted(project.internal_deps, key=lambda d: d["package"]):
+            pkg = dep["package"]
+            target_full = dep.get("target_full_path") or os.path.join(repo_root, dep.get("target_path", ""))
+            links = []
+            for f_info in dep.get("files", []):
+                fn = f_info["filename"]
+                if fn in ("AGENTS.md", "llms.txt", "llms-full.txt", "docs/"):
+                    f_full = f_info.get("full_path") or os.path.join(target_full, fn.rstrip("/"))
+                    rel_p = normalize_posix(safe_relpath(f_full, project.full_path))
+                    label = "Docs" if fn == "docs/" else fn
+                    links.append(f"[{label}]({rel_p})")
+            if not links:
+                rel_dir = normalize_posix(safe_relpath(target_full, project.full_path))
+                links.append(f"[Path]({rel_dir})")
+            dep_lines.append(f"- `{pkg}`: " + " | ".join(links))
+
+        dep_lines.append("<!-- END ALONG-DEPS -->")
+        new_block = "\n".join(dep_lines)
+
+        block_pattern = re.compile(
+            r'<!-- BEGIN ALONG-DEPS.*?-->[\s\S]*?<!-- END ALONG-DEPS -->',
+            re.MULTILINE
+        )
+        if block_pattern.search(content):
+            updated_content = block_pattern.sub(new_block, content)
+        else:
+            updated_content = content.rstrip() + "\n\n" + new_block + "\n"
+
+        if updated_content != content:
+            with open(agents_file, "w", encoding="utf-8", newline="\n") as f:
+                f.write(updated_content)
+            return True
+    except OSError:
+        pass
+    return False
 
 
 def update_kb_index(repo_root: str):
@@ -807,28 +1293,40 @@ def update_kb_index(repo_root: str):
 # Runner Orchestration
 # ---------------------------------------------------------------------------
 
-def run_scanner(repo_root: str, dry_run: bool = False) -> Dict[str, Any]:
+def run_scanner(repo_root: str, dry_run: bool = False, link: bool = False, all_subprojects: bool = False) -> Dict[str, Any]:
     repo_root = os.path.abspath(repo_root)
     projects = discover_all_projects(repo_root)
+    internal_map = build_internal_project_map(projects)
     all_external_deps: List[Dict[str, Any]] = []
+    all_internal_deps: List[Dict[str, Any]] = []
 
     seen_dep_keys = set()
+    seen_internal_keys = set()
 
     for proj in projects:
         proj_deps: List[Dict[str, Any]] = []
-        proj_deps.extend(scan_node_project_deps(proj, repo_root))
-        proj_deps.extend(scan_python_project_deps(proj, repo_root))
-        proj_deps.extend(scan_nuget_project_deps(proj, repo_root))
-        proj_deps.extend(scan_rust_project_deps(proj, repo_root))
+        proj_deps.extend(scan_node_project_deps(proj, repo_root, internal_map))
+        proj_deps.extend(scan_python_project_deps(proj, repo_root, internal_map))
+        proj_deps.extend(scan_nuget_project_deps(proj, repo_root, internal_map))
+        proj_deps.extend(scan_rust_project_deps(proj, repo_root, internal_map))
         proj_deps.extend(run_custom_dep_scan_hook(proj.full_path, repo_root))
 
         for item in proj_deps:
-            key = (item["package"], item["ecosystem"], item.get("scope", proj.rel_path))
-            if key not in seen_dep_keys:
-                seen_dep_keys.add(key)
-                all_external_deps.append(item)
+            if item.get("is_internal"):
+                proj.internal_deps.append(item)
+                ikey = (item["package"], item["ecosystem"], proj.rel_path, item.get("target_path"))
+                if ikey not in seen_internal_keys:
+                    seen_internal_keys.add(ikey)
+                    all_internal_deps.append(item)
+            else:
+                proj.external_deps.append(item)
+                key = (item["package"], item["ecosystem"], item.get("scope", proj.rel_path))
+                if key not in seen_dep_keys:
+                    seen_dep_keys.add(key)
+                    all_external_deps.append(item)
 
     if not dry_run:
+        # 1. Root docs/topic--dependencies.md
         kb_dir = os.path.join(repo_root, "docs")
         os.makedirs(kb_dir, exist_ok=True)
         dep_kb_path = os.path.join(kb_dir, "topic--dependencies.md")
@@ -838,9 +1336,35 @@ def run_scanner(repo_root: str, dry_run: bool = False) -> Dict[str, Any]:
 
         update_kb_index(repo_root)
 
+        # 2. Subproject-scoped docs/topic--dependencies.md
+        for proj in projects:
+            if proj.is_root:
+                continue
+            should_generate_sub_doc = (
+                all_subprojects
+                or proj.has_along_dir
+                or proj.has_docs_dir
+                or os.path.realpath(proj.full_path) == os.path.realpath(repo_root)
+            )
+            if should_generate_sub_doc:
+                sub_docs_dir = os.path.join(proj.full_path, "docs")
+                os.makedirs(sub_docs_dir, exist_ok=True)
+                sub_dep_kb = os.path.join(sub_docs_dir, "topic--dependencies.md")
+                sub_content = generate_subproject_dependencies_kb_content(proj, repo_root)
+                with open(sub_dep_kb, "w", encoding="utf-8", newline="\n") as f:
+                    f.write(sub_content)
+                update_kb_index(proj.full_path)
+
+        # 3. Optional AGENTS.md link sync
+        if link:
+            for proj in projects:
+                if proj.internal_deps:
+                    sync_agents_md_dep_links(proj, repo_root)
+
     return {
         "projects": [p.to_dict() for p in projects],
         "dependencies": all_external_deps,
+        "internal_dependencies": all_internal_deps,
     }
 
 
@@ -853,6 +1377,8 @@ def main():
     parser.add_argument("--root", type=str, default=None, help="Root repository directory (auto-detected by default)")
     parser.add_argument("--json", action="store_true", help="Output discovered dependencies and projects in JSON format")
     parser.add_argument("--check", action="store_true", help="Dry run scan without modifying KB files")
+    parser.add_argument("--link", action="store_true", help="Safely sync managed dependency links into subproject AGENTS.md")
+    parser.add_argument("--all-subprojects", action="store_true", help="Generate localized docs in all discovered subprojects")
     parser.add_argument("--quiet", "-q", action="store_true", help="Quiet output")
     parser.add_argument("--verbose", "-v", action="store_true", help="Verbose output")
     parser.add_argument("--debug", action="store_true", help="Debug output with full tracebacks")
@@ -860,7 +1386,12 @@ def main():
     args = parser.parse_args()
     repo_root = find_repo_root(args.root)
 
-    results = run_scanner(repo_root, dry_run=args.check)
+    results = run_scanner(
+        repo_root,
+        dry_run=args.check,
+        link=args.link,
+        all_subprojects=args.all_subprojects
+    )
 
     if args.json:
         print(json.dumps(results, indent=2, ensure_ascii=False))
@@ -868,6 +1399,7 @@ def main():
 
     projects = results["projects"]
     deps = results["dependencies"]
+    internal_deps = results.get("internal_dependencies", [])
 
     if not args.quiet:
         print(f"-> [Along Hierarchical Dependencies Discovery] Scanned root: {repo_root}")
@@ -875,7 +1407,13 @@ def main():
         for p in projects:
             ecos = ", ".join(p["ecosystems"]) if p["ecosystems"] else "general"
             ai_count = len(p["ai_files"])
-            print(f"   * {p['name']} ({p['rel_path']}) [{ecos}] - {ai_count} AI context file(s)")
+            int_count = len(p.get("internal_deps", []))
+            print(f"   * {p['name']} ({p['rel_path']}) [{ecos}] - {ai_count} AI context file(s), {int_count} internal dep(s)")
+
+        if internal_deps:
+            print(f"\n-> Discovered {len(internal_deps)} internal monorepo package dependency connection(s):")
+            for idep in internal_deps:
+                print(f"   - {idep['scope']} -> {idep['package']} ({idep['target_path']})")
 
         if deps:
             print(f"\n-> Discovered {len(deps)} external dependencies with AI instructions:")
@@ -888,6 +1426,9 @@ def main():
                 print(f"\n-> Updated Knowledge Base registry: docs/topic--dependencies.md")
         else:
             print("\n-> No external dependencies with AI instructions detected.")
+
+        if args.link and not args.check:
+            print("-> Synchronized managed dependency links in subproject AGENTS.md files (--link)")
 
 
 if __name__ == "__main__":

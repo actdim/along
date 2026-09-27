@@ -1,3 +1,10 @@
+<!-- BEGIN ALONG-PROTOCOL ref=../../AGENTS.md (managed by along-init - do not edit by hand) -->
+This folder belongs to a repository that uses the ALONG structure. The full working
+guidance + agent-context protocol live once in the nearest ancestor `AGENTS.md` (`../../AGENTS.md`) -
+read it there. This folder keeps its OWN `.along/` state; use the nearest one.
+Only this folder's specifics follow.
+<!-- END ALONG-PROTOCOL -->
+
 # Agent Context: Along Dashboard UI (`@along/dashboard-ui`)
 
 This document defines the local agent context boundary and engineering rules for `packages/dashboard-ui/`.
@@ -20,3 +27,11 @@ pnpm run typecheck
 pnpm test
 pnpm run build
 ```
+
+## Project specifics
+
+<!-- BEGIN ALONG-RULES -->
+See the following engineering guidelines:
+- `[languages/typescript.md](.along/rules/languages/typescript.md)`
+- `[platforms/web.md](.along/rules/platforms/web.md)`
+<!-- END ALONG-RULES -->
