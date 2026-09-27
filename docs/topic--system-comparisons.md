@@ -154,7 +154,37 @@ Along standardizes on Python with automated PEP 723 dependency delivery:
 
 ---
 
-## 8. Master Architectural Advantage Matrix
+## 8. Paradigm 7: Conversational History Accumulation vs. Explicit Execution State (SKILL.state)
+
+### Core Mechanism of the Alternative
+Modern agent runtimes almost universally rely on conversational transcript accumulation (ReAct, LangGraph with message lists, MemGPT): every intermediate reasoning step, action, and environment observation is appended to an ever-growing prompt transcript. Over extended task horizons (T > 50-200 turns), this causes quadratic token consumption \(O(T^2)\), prompt bloating, context pollution, and attention drag.
+
+Recently, systems research (arXiv:2608.26263, "SKILL.state: Scalable Long-Horizon Agent Skills") proposed replacing conversational transcripts with explicit, mutable execution states \(\Sigma_t\). At each turn, the model receives only the immutable procedural specification \(P\), the current structured state \(\Sigma_t\), and the latest observation \(O_t\). Intermediate reasoning (Chain-of-Thought) and historical observations are discarded immediately after producing a validated state patch \(\Delta \Sigma_t\), achieving an \(O(1)\) prompt footprint and \(O(T)\) cumulative token complexity.
+
+### What Along Adopted / Evaluated
+- **Observation Distillation (Noise Reduction)**: Background telemetry, system chatter, and verbose passing test outputs cause severe attention drag (collapsing accuracy from 0.68 down to 0.53 under noise). Along integrates observation distillation into CLI runners (`along test`, `along build`, `alongkit.proc.run_capture`) to return bounded, high-signal results.
+- **Clean-Turn Step and Fix Loops**: In `along-team`, worker retries in `[Fix Loop]` discard intermediate failed reasoning traces and noisy error output, presenting a fresh snapshot of `(Step Spec, Structured Blackboard State, Clean Working Tree Diff, Distilled Reviewer Failure)`. This eliminates error inertia and hallucinated repetitive failures.
+- **Deterministic State Patching with Null-Deletion Semantics**: In `alongkit.session` (`along scratch patch`), Along adopts the mathematical merge operator \(\Sigma_{t+1} = \Sigma_t \oplus \Delta \Sigma_t\) where key deletion is expressed via `null` values, and schema validation runs deterministically in the Python runtime.
+
+### What Along Critically Rejected and Why
+1. **The "Sufficient Statistic" Fallacy (Lost History Trap)**:
+   - Discarding all prior reasoning and historical observations assumes that every piece of information relevant to future actions can be recognized and projected into a structured JSON state immediately upon receipt.
+   - In complex software engineering (compilation bugs, race conditions, edge-case debugging), an agent often notices an obscure detail whose critical relevance only becomes apparent 10 steps later. If intermediate reasoning and logs are wiped out, the agent is blinded and cannot trace the root cause.
+2. **High Fragility of Open Models on Direct State Patching**:
+   - The paper's empirical error taxonomy shows that even in constrained benchmarks, open-weight models suffer a 68% error rate from accidentally deleting or omitting existing state keys when generating state patches. Offloading state persistence to pure LLM generation without mechanical runtime gates is unsafe.
+3. **Destruction of Engineering Provenance**:
+   - Erasing Chain-of-Thought reasoning traces eliminates the audit trail. In Along, engineering provenance (`ADR-2026-09-06--engineering-provenance`) requires that the baseline plan, execution loop trace, and gate verification manifest survive into permanent repository memory (`.along/SESSIONS/`) for code reviews and post-mortems.
+4. **Single-Agent Simplification vs. Multi-Agent Concurrency**:
+   - A single mutable JSON state dictionary does not scale to multi-agent collaboration with parallel branches and worktrees without distributed concurrency control. Along anchors concurrency in Git worktrees and atomic issue files rather than a single in-memory state lock.
+
+### The Along Engineering Advantage: Dual-Tier State & Provenance Architecture
+Along reconciles the tension between token efficiency and historical traceability through a two-tier architecture:
+- **Operational Tier (Clean-Turn Ephemeral Execution)**: Subagents and worker loops operate with distilled observations and bounded state snapshots (`.along/.session/<slug>/state.json`), achieving flat token footprints and zero-step error recovery.
+- **Provenance Tier (Git-Grounded Repository Memory)**: High-level architectural decisions are committed to modular ADRs (`.along/DECISIONS/`), task requirements are tracked in DAG issues (`.along/ISSUES/`), and execution traces are compiled asynchronously into session records (`.along/SESSIONS/`).
+
+---
+
+## 9. Master Architectural Advantage Matrix
 
 | Core Architectural Metric | Alternative Paradigms (Scrapers, Vector DBs, Cloud Memories) | ActDim Along Engineering Model |
 | :--- | :--- | :--- |
@@ -166,10 +196,11 @@ Along standardizes on Python with automated PEP 723 dependency delivery:
 | **Git Concurrency** | High conflict risk on shared flat files (`JEVMEM.md`). | Zero-conflict guarantee via modular date-slug files and union merges. |
 | **Offline Independence** | Requires network connection to cloud APIs or heavy local GPU. | 100% offline-first, hermetic, and provider-agnostic. |
 | **AST Symbol Verification** | None. Blind token chunking breaks code symbol boundaries. | AST-grounded via code-review-graph integration and link integrity gates. |
+| **Execution History & Memory Model** | Append-only chat bloat \(O(T^2)\) (ReAct) or blind state wiping (SKILL.state). | Dual-Tier: Clean-Turn Worker Loops + Ephemeral Blackboard + Git Provenance. |
 
 ---
 
-## 9. Related Architectural Specifications
+## 10. Related Architectural Specifications
 
 - [LLM-Wiki Knowledge Base Architecture & Paradigm](./topic--llm-wiki-architecture.md): Mechanics of Along's token-efficient knowledge base.
 - [Runtime Lifecycle Hooks & Mechanical Gates](./topic--runtime-hooks-and-gates.md): Deterministic runtime interception vs. probabilistic rules.
