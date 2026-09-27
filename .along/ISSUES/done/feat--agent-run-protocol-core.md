@@ -3,10 +3,11 @@ protocol: along
 protocol_version: "4.0.1"
 slug: agent-run-protocol-core
 type: feat
-status: open
+status: done
+completed: 2026-09-25
 priority: high
 created: 2026-09-23
-updated: 2026-09-23
+updated: 2026-09-25
 agent: antigravity
 tags: [aep, arp, opentelemetry, openinference, genai, otlp, openobserve, clickhouse, core]
 milestone: v5.0.0-agent-run-protocol-and-observability
