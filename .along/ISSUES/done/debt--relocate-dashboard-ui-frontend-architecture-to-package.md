@@ -10,10 +10,9 @@ updated: 2026-09-23
 completed: 2026-09-23
 agent: antigravity
 tags: [debt, docs, dashboard-ui, architecture, subproject-boundary]
-milestone:
+milestone: v1.3.0-knowledge-base-and-graph
 blocked_by: []
 related: []
-parent:
 superseded_by:
 duplicate_of:
 ---

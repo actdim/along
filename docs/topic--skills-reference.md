@@ -2,7 +2,7 @@
 protocol: along
 slug: skills-reference
 title: Skills & Slash Commands Technical Reference
-type: topic
+type: reference
 created: 2026-08-30
 updated: 2026-09-19
 tags: [skills, commands, reference, runners, lifecycle, automation, multi-agent]

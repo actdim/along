@@ -9,7 +9,7 @@ created: 2026-09-21
 updated: 2026-09-21
 agent: antigravity
 tags: [runtime, gates, security, isolation, workspace-containment, hooks]
-milestone: v4.5.0-multi-user-merge-automation
+milestone: v4.4.0-multi-user-merge-automation
 blocked_by: []
 related: []
 ---

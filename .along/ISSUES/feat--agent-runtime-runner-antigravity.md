@@ -3,10 +3,10 @@ protocol: along
 protocol_version: "4.0.1"
 slug: agent-runtime-runner-antigravity
 type: feat
-status: open
+status: in-progress
 priority: high
 created: 2026-09-23
-updated: 2026-09-23
+updated: 2026-09-27
 agent: antigravity
 tags: [runtime, runner, antigravity, hooks, process-supervisor, repo-containment]
 milestone: v5.0.0-agent-run-protocol-and-observability

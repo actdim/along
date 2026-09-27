@@ -9,7 +9,7 @@ created: 2026-09-23
 updated: 2026-09-23
 agent: antigravity
 tags: [fleet-management, rbac, approval-matrix, compliance, soc2, iso27001, audit-pack]
-milestone: v7.0.0-enterprise-governance-and-cloud-infrastructure
+milestone: v6.0.0-enterprise-governance-and-cloud-infrastructure
 blocked_by: []
 related: []
 parent: feat--enterprise-governance-and-cloud-infrastructure

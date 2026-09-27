@@ -3,7 +3,7 @@ protocol: along
 protocol_version: "3.9.4"
 slug: cli-reference
 title: Along CLI Command Reference
-type: topic
+type: reference
 curated: true
 created: 2026-09-14
 updated: 2026-09-21

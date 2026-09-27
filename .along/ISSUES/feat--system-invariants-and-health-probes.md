@@ -7,15 +7,14 @@ status: open
 priority: high
 created: 2026-09-23
 updated: 2026-09-23
-completed: null
 agent: antigravity
 tags: [operations, verification, probes, health-checks, gates, invariants]
 milestone: v5.0.0-agent-run-protocol-and-observability
 blocked_by: [feat--operational-assets-and-playbooks]
 related: [feat--agent-execution-gate-telegram]
 parent: feat--agent-run-protocol-and-observability
-superseded_by: null
-duplicate_of: null
+superseded_by:
+duplicate_of:
 ---
 
 # System Invariants, Health Probes & Operational Verification Gates

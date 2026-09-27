@@ -34,6 +34,42 @@ STANDARD_ARTICLES = [
     ("topic--setup-and-workflow.md", "Setup, Installation & Agent Workflows", "setup-workflow", ["setup", "workflow", "installation", "lifecycle", "quality-gates"]),
 ]
 
+TOPIC_TYPES: Tuple[str, ...] = (
+    "architecture",
+    "domain-model",
+    "setup-workflow",
+    "reference",
+    "explanation",
+    "guide",
+    "comparison",
+    "topic",
+)
+
+GROUNDED_TOPIC_TYPES: Tuple[str, ...] = (
+    "architecture",
+    "domain-model",
+    "setup-workflow",
+    "reference",
+    "topic",
+)
+
+EXPLANATION_TOPIC_TYPES: Tuple[str, ...] = (
+    "explanation",
+    "comparison",
+)
+
+WRITE_POLICIES: Tuple[str, ...] = ("agent", "manual")
+
+
+def is_manual_write_policy(fm: Dict[str, Any]) -> bool:
+    """Determines if a document is governed by manual write policy."""
+    policy = str(fm.get("write_policy", "")).strip().lower()
+    if policy == "manual":
+        return True
+    if fm.get("locked") is True:
+        return True
+    return False
+
 LEGACY_FILE_MAPPING = {
     "01-architecture.md": "topic--architecture.md",
     "02-domain-model.md": "topic--domain-model.md",
@@ -186,6 +222,7 @@ class TopicEntry:
     title: str
     tags: List[str]
     topic_type: str
+    write_policy: str = "agent"
 
     @property
     def target(self) -> str:
@@ -214,6 +251,7 @@ class TopicDictionary:
         entry_or_term: Union[TopicEntry, str],
         target: Optional[str] = None,
         slug: Optional[str] = None,
+        write_policy: str = "agent",
     ) -> None:
         if isinstance(entry_or_term, TopicEntry):
             entry = entry_or_term
@@ -227,6 +265,7 @@ class TopicDictionary:
                 title=term,
                 tags=[],
                 topic_type="topic",
+                write_policy=write_policy,
             )
 
         self.entries[entry.slug] = entry
@@ -262,12 +301,14 @@ class TopicDictionary:
     def build_from_articles(cls, articles: List[Dict[str, Any]]) -> "TopicDictionary":
         d = cls()
         for art in articles:
+            wp = art.get("write_policy") or ("manual" if is_manual_write_policy(art) else "agent")
             d.add_entry(TopicEntry(
                 filename=art.get("filename", ""),
                 slug=art.get("slug", ""),
                 title=art.get("title", ""),
                 tags=art.get("tags") or [],
                 topic_type=art.get("type", "topic"),
+                write_policy=wp,
             ))
         return d
 
@@ -302,12 +343,14 @@ class TopicDictionary:
                 if not title:
                     h1_m = re.search(r"^#\s+(.*)$", body, re.MULTILINE)
                     title = h1_m.group(1).strip() if h1_m else slug.replace("topic--", "").replace("-", " ").title()
+                wp = "manual" if is_manual_write_policy(fm) else "agent"
                 entry = TopicEntry(
                     filename=fname,
                     slug=slug.replace("topic--", ""),
                     title=title,
                     tags=fm.get("tags") or [],
                     topic_type=fm.get("type", "topic"),
+                    write_policy=wp,
                 )
                 d.add_entry(entry)
             except (OSError, UnicodeDecodeError, ValueError, frontmatter.FrontmatterError):

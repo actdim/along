@@ -7,15 +7,14 @@ status: open
 priority: medium
 created: 2026-09-23
 updated: 2026-09-23
-completed: null
 agent: antigravity
 tags: [docs, operations, paradigm, domain-model, kb, runbooks]
 milestone: v5.0.0-agent-run-protocol-and-observability
 blocked_by: []
 related: [feat--operational-assets-and-playbooks, feat--system-invariants-and-health-probes]
 parent: feat--agent-run-protocol-and-observability
-superseded_by: null
-duplicate_of: null
+superseded_by:
+duplicate_of:
 ---
 
 # Operations & Autonomous Systems Paradigm Shift in Documentation

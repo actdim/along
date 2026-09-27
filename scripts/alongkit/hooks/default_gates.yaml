@@ -60,6 +60,16 @@ gates:
       handler: alongkit.hooks.predicates.check_projection_protection
       error: "Manual edit to compiled projection rejected by [gate: projection-protection]."
 
+  - id: doc_manual_lock
+    title: "Manual Document Lock Protection"
+    description: "Blocks automated agent edits to documentation marked with write_policy: manual"
+    event: PreToolUse
+    tools: [write_to_file, write_file, replace_file_content, edit_file, patch_file]
+    rule:
+      type: predicate
+      handler: alongkit.hooks.predicates.check_doc_manual_lock
+      error: "Manual Document Lock Violation [gate: doc-manual-lock]."
+
   - id: typography
     title: "Clean ASCII Typography"
     description: "Enforces clean ASCII characters and bans non-ASCII dashes, quotes, ellipsis, and invisible spaces"

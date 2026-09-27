@@ -41,6 +41,13 @@ Also, when relevant: `.along/VISION.md`, `.along/GLOSSARY.md`. These reflect the
 - **Fact Grounding**: Agents MUST extract facts from actual code, `README.md`, `docs/`, and `package.json`. Generic LLM placeholders are strictly prohibited.
 - **Fast Retrieval** [gate: fast-retrieval]: Agents MUST query `/along-kb-search` before reading whole documentation files.
 - **Doc Blast Radius**: After non-trivial code changes, agents MUST map affected symbols to `docs/topic--*.md` articles and update them before completing the task.
+- **Manual Document Lock** [gate: doc-manual-lock]: Documents marked with `write_policy: manual` (or `locked: true`) are protected from automated agent modification during blast radius sweeps. Modifications require an explicit documentation issue (`docs--<slug>`).
+- **Documentation Routing Tree**:
+  - Architectural choice / trade-off -> `.along/DECISIONS/` (ADR)
+  - Public overview / pitch / landing page -> `README.md`
+  - Technical interface contract / CLI spec -> `docs/topic--<slug>.md` (`type: reference`)
+  - Conceptual explanation / comparison / philosophy -> `docs/topic--<slug>.md` (`type: explanation`, `write_policy: manual`)
+  - Procedural walkthrough / runbook -> `docs/topic--<slug>.md` (`type: guide`)
 
 ## While working
 - **Decisions**: Create new ADRs via `/along-decision-sync` or `along decision create <slug> --title "..."`. Add terms to `.along/GLOSSARY.md`.

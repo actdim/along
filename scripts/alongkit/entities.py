@@ -1013,6 +1013,48 @@ def resolve_milestone_by_query(repo_root: str, query: str) -> Optional[Dict[str,
     if len(sub_candidates) == 1:
         return sub_candidates[0]
 
+def check_milestone_version_collision(
+    repo_root: str,
+    new_slug: str,
+    exclude_slug: Optional[str] = None
+) -> Optional[str]:
+    """Check if new_slug collides with any existing milestone SemVer version.
+
+    Returns:
+        Error message string if collision detected, otherwise None.
+    """
+    from . import semver
+
+    new_ver = semver.parse(new_slug)
+    if new_ver == (0, 0, 0):
+        return None
+
+    milestones = scan_milestones(repo_root)
+    for m in milestones:
+        mslug = m["slug"]
+        if exclude_slug and mslug == exclude_slug:
+            continue
+        m_ver = semver.parse(mslug)
+        if m_ver == (0, 0, 0):
+            continue
+
+        m_status = m["status"]
+        # 1. Exact collision on (major, minor, patch)
+        if new_ver == m_ver:
+            if m_status != "completed":
+                return (
+                    f"Milestone exact SemVer collision ({semver.to_str(new_ver)}) with "
+                    f"existing milestone '{mslug}'. Milestones cannot share the same release version."
+                )
+
+        # 2. Minor collision on (major, minor) with active milestones
+        if (new_ver[0], new_ver[1]) == (m_ver[0], m_ver[1]):
+            if m_status != "completed":
+                return (
+                    f"Milestone minor version collision ({new_ver[0]}.{new_ver[1]}) with "
+                    f"existing active milestone '{mslug}'. Active milestones must target distinct minor releases."
+                )
+
     return None
 
 
@@ -1177,7 +1219,7 @@ def validate_entities(repo_root: str) -> Dict[str, Any]:
     3. Risks, spikes, checklists: mandatory fields and enums.
     4. Sessions: mandatory fields, milestone resolution, issue resolutions.
     """
-    from . import frontmatter, repo, textio
+    from . import frontmatter, repo, semver, textio
 
     sdir = repo.state_dir(repo_root)
     errors: List[Tuple[str, str]] = []
@@ -1293,6 +1335,9 @@ def validate_entities(repo_root: str) -> Dict[str, Any]:
                 errors.append((rel, f"dangling duplicate_of reference: '{duplicate_of}'"))
 
     # 2. Validate Milestones
+    active_minor_versions: Dict[Tuple[int, int], str] = {}
+    exact_versions: Dict[Tuple[int, int, int], List[Dict[str, Any]]] = {}
+
     for m in all_milestones:
         scanned += 1
         fm = m["frontmatter"]
@@ -1306,7 +1351,8 @@ def validate_entities(repo_root: str) -> Dict[str, Any]:
         if fm.get("protocol") != "along":
             errors.append((rel, f"missing or invalid protocol: '{fm.get('protocol')}' (expected 'along')"))
 
-        if not fm.get("slug"):
+        mslug = fm.get("slug")
+        if not mslug:
             errors.append((rel, "missing mandatory field: 'slug'"))
 
         if not fm.get("title"):
@@ -1321,6 +1367,35 @@ def validate_entities(repo_root: str) -> Dict[str, Any]:
             for t in target_issues:
                 if t and not _resolve_ref(t, known_issue_keys):
                     errors.append((rel, f"dangling target_issues reference: '{t}'"))
+
+        # SemVer Collision Check
+        if mslug:
+            ver = semver.parse(mslug)
+            if ver != (0, 0, 0):
+                exact_versions.setdefault(ver, []).append({"rel": rel, "slug": mslug, "status": mstatus})
+                if mstatus != "completed":
+                    minor_key = (ver[0], ver[1])
+                    if minor_key in active_minor_versions:
+                        existing_rel = active_minor_versions[minor_key]
+                        errors.append((
+                            rel,
+                            f"milestone minor version collision ({ver[0]}.{ver[1]}) with '{existing_rel}'. "
+                            "Active milestones must target distinct minor releases."
+                        ))
+                    else:
+                        active_minor_versions[minor_key] = rel
+
+    # Check exact SemVer collision across all milestones (except legacy where all colliding records are completed)
+    for ver, group in exact_versions.items():
+        if len(group) > 1 and any(item["status"] != "completed" for item in group):
+            colliding = ", ".join(f"'{item['rel']}'" for item in group)
+            for item in group:
+                if item["status"] != "completed":
+                    errors.append((
+                        item["rel"],
+                        f"exact SemVer collision {ver[0]}.{ver[1]}.{ver[2]} with {colliding}. "
+                        "Milestones cannot share the same release version."
+                    ))
 
     # 3. Validate Auxiliary Entities (RISKS, SPIKES, CHECKLISTS)
     checklists_dir = os.path.join(sdir, "CHECKLISTS")

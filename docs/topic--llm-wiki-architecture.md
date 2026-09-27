@@ -29,6 +29,8 @@ AI coding agents face two common failure modes when navigating repository docume
 2. **Opaque & Fragile External Vector DBs**:
    - Heavy external vector databases introduce opaque embeddings, complex C-extension dependencies, and lack human-editable Markdown transparency.
 
+For an exhaustive architectural comparison against vector DBs, passive conversational scrapers (jevmem, Laya), and prompt stuffing, see [System Comparisons & Alternative Memory Architectures](./topic--system-comparisons.md).
+
 ### The Solution: The Living LLM-Wiki
 A structured, human-readable directory of interconnected Markdown files (`docs/topic--*.md`) with YAML front-matter, an auto-compiled catalog (`docs/INDEX.md`), in-place source provenance tracking, deterministic `llms.txt` and `llms-full.txt` context compilers, and an ultra-fast, local snippet search engine (`along-kb-search`).
 
@@ -205,12 +207,35 @@ To guarantee factual precision and cross-reference coherence without human micro
   - Automatically audited and logged as `[WARN]` during sync.
   - Strictly enforced via `along kb-sync --strict-sections`, exiting with code 1 on violations.
 
+### Topic Types Taxonomy & Write Policy Protection
+
+Along establishes a strict documentation classification to distinguish machine-critical interface contracts from human-centric conceptual models:
+
+| Topic Type | Classification | Validation & Grounding | Write Policy | Typical Scope |
+| :--- | :--- | :--- | :--- | :--- |
+| **`reference`** | Technical Contract | AST code symbols enforced (`--check-symbols`) | `agent` (default) | CLI commands, APIs, configuration schemas |
+| **`architecture`** | System Architecture | Section contracts + AST symbol grounding | `agent` (default) | Topology, core components, invariants |
+| **`domain-model`** | Domain Model | Section contracts + AST symbol grounding | `agent` (default) | Entity taxonomies, DAG relationships |
+| **`setup-workflow`** | Setup & Workflow | Section contracts + AST symbol grounding | `agent` (default) | Installation, lifecycle scripts, gates |
+| **`explanation`** | Concept & Rationale | Exempt from AST symbol grounding | `manual` (optional) | Architectural rationale, market fit, comparisons |
+| **`comparison`** | Comparative Analysis | Exempt from AST symbol grounding | `manual` (optional) | Alternative architectures, trade-off matrices |
+| **`guide`** | How-To Guide | AST symbol grounding if code references exist | `agent` (default) | Step-by-step procedures, runbooks |
+| **`topic`** | General Article | Standard fallback | `agent` (default) | Unclassified domain topics |
+
+#### Write Policy & Manual Lock Gate (`[gate: doc-manual-lock]`)
+- **`write_policy: agent`** (default): Living documentation maintained automatically. Agents update these files during code modifications (Doc Blast Radius).
+- **`write_policy: manual`** (or `locked: true`): Curated, human-governed content (such as product pitches, executive comparisons, or business rationale).
+  - Excluded from automated blast-radius candidate documentation (`along graph-impact`).
+  - Exempt from auto-crosslinking mutation during `along kb-sync --crosslink-apply`.
+  - Mechanically locked by runtime gate `[gate: doc-manual-lock]`: automated agent file edits are rejected unless an explicit documentation task (`docs--<slug>`) is active.
+
 ---
 
 ## 8. References & Useful Links
 
 - **Andrej Karpathy's LLM-Wiki Concept**: Conceptual foundation for repository-native, human-readable structured LLM documentation.
 - **[System Architecture & Flow](./topic--architecture.md)**: System topology, multi-branch concurrency, and multi-agent state machine.
+- **[System Comparisons & Alternative Memory Architectures](./topic--system-comparisons.md)**: Comparative analysis against jevmem, Laya, vector databases, and prompt stuffing.
 - **[Domain Model & Entity Ecosystem](./topic--domain-model.md)**: Taxonomy of issues, milestones, ADRs, and living memory.
 - **[Skills & Slash Commands Reference](./topic--skills-reference.md)**: Technical breakdown of all 18 automation skills.
 - **[Setup & Developer Workflow](./topic--setup-and-workflow.md)**: Installation, runner hooks, and day-in-the-life development flow.

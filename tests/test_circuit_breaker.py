@@ -248,6 +248,31 @@ class TestDeclarativeGateEnforcement(unittest.TestCase):
             )
             self.assertIsNone(check_cli_safety(event_test, root))
 
+    def test_cli_safety_blocks_inline_python_probes(self):
+        with repo_fixture() as root:
+            # Prohibited: ad-hoc inline python module probe
+            event_probe1 = HookEvent(
+                event_type=HookEventType.PRE_TOOL_USE,
+                tool_name="run_command",
+                tool_args={"CommandLine": 'python -c "from alongkit import entities; print(entities.sync_issues.__code__.co_filename)"'},
+            )
+            self.assertIsNotNone(check_cli_safety(event_probe1, root))
+
+            event_probe2 = HookEvent(
+                event_type=HookEventType.PRE_TOOL_USE,
+                tool_name="run_command",
+                tool_args={"CommandLine": 'python -c "import sys; sys.path.insert(0, \'scripts\'); import along_exec"'},
+            )
+            self.assertIsNotNone(check_cli_safety(event_probe2, root))
+
+            # Allowed: safe version check
+            event_ver = HookEvent(
+                event_type=HookEventType.PRE_TOOL_USE,
+                tool_name="run_command",
+                tool_args={"CommandLine": "python --version"},
+            )
+            self.assertIsNone(check_cli_safety(event_ver, root))
+
 
 class TestHealthProbeAndResumption(unittest.TestCase):
     """Verify health probe verification and reset behavior."""

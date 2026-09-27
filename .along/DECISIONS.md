@@ -3,7 +3,7 @@
 
 Compiled index of Architectural Decision Records stored in `.along/DECISIONS/`.
 
-## Active Decisions (38)
+## Active Decisions (39)
 
 - [Code Graph & Hybrid Knowledge Base Search MCP Integration](DECISIONS/ADR-2026-08-26--code-graph-mcp-and-hybrid-kb-search.md)
 - [Protocol v1.2.0 & Knowledge Base (KB) Architecture Standard](DECISIONS/ADR-2026-08-26--protocol-v120-knowledge-base-architecture.md)
@@ -43,6 +43,7 @@ Compiled index of Architectural Decision Records stored in `.along/DECISIONS/`.
 - [Runtime-Native Git Worktree Workspace Isolation and Environment Readiness](DECISIONS/ADR-2026-09-13--runtime-worktree-isolation-and-readiness.md)
 - [One-Liner Self-Bootstrapping Installer and Update Harmonization Over Binary Distribution](DECISIONS/ADR-2026-09-21--oneliner-installer-bootstrap-over-binary-dist.md)
 - [Telegram Remote Operational Gateway & Semi-Autonomous Mode vs Interactive IDE](DECISIONS/ADR-2026-09-23--telegram-remote-operational-gateway-and-semi-autonomous-mode.md)
+- [Decouple code-review-graph from MCP to Direct CLI Execution](DECISIONS/ADR-2026-09-27--decouple-code-review-graph-from-mcp-to-direct-cli.md)
 
 ## Superseded & Retired Decisions (2)
 

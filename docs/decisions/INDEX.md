@@ -11,7 +11,7 @@ tags: [adr, architecture, decisions, index]
 This directory contains the project's Architectural Decision Records.
 Decisions are authored and maintained in `.along/DECISIONS/` and published here as first-class documentation.
 
-## Active Decisions (38)
+## Active Decisions (39)
 
 - **[code-graph-mcp-and-hybrid-kb-search](./ADR-2026-08-26--code-graph-mcp-and-hybrid-kb-search.md)** - Code Graph & Hybrid Knowledge Base Search MCP Integration
 - **[protocol-v120-knowledge-base-architecture](./ADR-2026-08-26--protocol-v120-knowledge-base-architecture.md)** - Protocol v1.2.0 & Knowledge Base (KB) Architecture Standard
@@ -51,6 +51,7 @@ Decisions are authored and maintained in `.along/DECISIONS/` and published here 
 - **[runtime-worktree-isolation-and-readiness](./ADR-2026-09-13--runtime-worktree-isolation-and-readiness.md)** - Runtime-Native Git Worktree Workspace Isolation and Environment Readiness
 - **[oneliner-installer-bootstrap-over-binary-dist](./ADR-2026-09-21--oneliner-installer-bootstrap-over-binary-dist.md)** - One-Liner Self-Bootstrapping Installer and Update Harmonization Over Binary Distribution
 - **[telegram-remote-operational-gateway-and-semi-autonomous-mode](./ADR-2026-09-23--telegram-remote-operational-gateway-and-semi-autonomous-mode.md)** - Telegram Remote Operational Gateway & Semi-Autonomous Mode vs Interactive IDE
+- **[decouple-code-review-graph-from-mcp-to-direct-cli](./ADR-2026-09-27--decouple-code-review-graph-from-mcp-to-direct-cli.md)** - Decouple code-review-graph from MCP to Direct CLI Execution
 
 ## Superseded & Retired Decisions (2)
 

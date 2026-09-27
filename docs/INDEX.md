@@ -4,7 +4,7 @@ slug: INDEX
 title: ActDim Along - Knowledge Base Topic Index
 type: index
 created: 2026-09-10
-updated: 2026-09-23
+updated: 2026-09-27
 tags: [index, kb, topics, map]
 ---
 
@@ -17,6 +17,8 @@ Central entry point and cross-linked topic catalog for project documentation:
 ```mermaid
 flowchart TD
     INDEX["Knowledge Base (INDEX)"]
+    T_AGENT_RUN_PROTOCOL["Agent Run Protocol (ARP/AEP) & OpenTelemetry Engine"]
+    INDEX --> T_AGENT_RUN_PROTOCOL
     T_ARCHITECTURE["System Architecture & Flow"]
     INDEX --> T_ARCHITECTURE
     T_CLI_REFERENCE["Along CLI Command Reference"]
@@ -39,31 +41,40 @@ flowchart TD
     INDEX --> T_SETUP_AND_WORKFLOW
     T_SKILLS_REFERENCE["Skills & Slash Commands Technical Reference"]
     INDEX --> T_SKILLS_REFERENCE
+    T_SYSTEM_COMPARISONS["System Comparisons & Alternative Architectural Paradigms"]
+    INDEX --> T_SYSTEM_COMPARISONS
     T_ARCHITECTURE -.->|references| T_CLI_REFERENCE
     T_ARCHITECTURE -.->|references| T_SETUP_AND_WORKFLOW
+    T_LLM_WIKI_ARCHITECTURE -.->|references| T_SYSTEM_COMPARISONS
     T_LLM_WIKI_ARCHITECTURE -.->|references| T_ARCHITECTURE
     T_LLM_WIKI_ARCHITECTURE -.->|references| T_DOMAIN_MODEL
     T_LLM_WIKI_ARCHITECTURE -.->|references| T_SKILLS_REFERENCE
     T_LLM_WIKI_ARCHITECTURE -.->|references| T_SETUP_AND_WORKFLOW
     T_RUNTIME_HOOKS_AND_GATES -.->|references| T_DECLARATIVE_GATES_AND_TRACEABILITY
     T_SETUP_AND_WORKFLOW -.->|references| T_CLI_REFERENCE
+    T_SYSTEM_COMPARISONS -.->|references| T_LLM_WIKI_ARCHITECTURE
+    T_SYSTEM_COMPARISONS -.->|references| T_RUNTIME_HOOKS_AND_GATES
+    T_SYSTEM_COMPARISONS -.->|references| T_AGENT_RUN_PROTOCOL
+    T_SYSTEM_COMPARISONS -.->|references| T_ARCHITECTURE
 ```
 
 ---
 
 ## Articles
 
+- **[Agent Run Protocol (ARP/AEP) & OpenTelemetry Engine](./topic--agent-run-protocol.md)** (architecture) `telemetry`, `opentelemetry`, `openinference`, `tracing`, `arp`, `aep`, `redactor`, `offloader`, `spool`
 - **[System Architecture & Flow](./topic--architecture.md)** (architecture) `architecture`, `boundaries`, `multi-agent`, `blackboard`, `concurrency`, `mcp`, `flow`
-- **[Along CLI Command Reference](./topic--cli-reference.md)** (topic) `cli`, `commands`, `router`, `lifecycle`, `tools`, `reference`
+- **[Along CLI Command Reference](./topic--cli-reference.md)** (reference) `cli`, `commands`, `router`, `lifecycle`, `tools`, `reference`
 - **[Declarative Gate Engine & Protocol Traceability Matrix](./topic--declarative-gates-and-traceability.md)** (architecture) `hooks`, `gates`, `declarative`, `traceability`, `verification`, `protocol`, `predicates`
 - **[Dependencies & Submodules AI Documentation and Rules](./topic--dependencies.md)** (topic) `dependencies`, `ai-context`, `submodules`, `vendor`, `rules`
 - **[Domain Model & Entity Ecosystem](./topic--domain-model.md)** (domain-model) `domain-model`, `entities`, `schemas`, `dag`, `metadata`, `issues`, `milestones`, `risks`, `spikes`, `checklists`, `sessions`
 - **[License](./topic--license.md)** (license) `license`, `mit`
 - **[LLM-Wiki Knowledge Base Architecture & Paradigm](./topic--llm-wiki-architecture.md)** (topic) `llm-wiki`, `architecture`, `knowledge-base`, `token-efficiency`, `indexing`, `methodology`, `search`, `karpathy`
-- **[Protocol & Repository Migrations Guide](./topic--migrations.md)** (topic) `migrations`, `upgrade`, `protocol`, `changelog`, `versioning`, `data-safety`
+- **[Protocol & Repository Migrations Guide](./topic--migrations.md)** (guide) `migrations`, `upgrade`, `protocol`, `changelog`, `versioning`, `data-safety`
 - **[Runtime Lifecycle Hooks & Mechanical Gates](./topic--runtime-hooks-and-gates.md)** (architecture) `hooks`, `gates`, `runtime`, `enforcement`, `antigravity`, `claude`, `codex`, `typography`, `cli-safety`, `circuit-breaker`
 - **[Setup & Developer Workflow](./topic--setup-and-workflow.md)** (setup-workflow) `setup-workflow`, `installation`, `lifecycle`, `runners`, `developer-workflow`, `testing`
-- **[Skills & Slash Commands Technical Reference](./topic--skills-reference.md)** (topic) `skills`, `commands`, `reference`, `runners`, `lifecycle`, `automation`, `multi-agent`
+- **[Skills & Slash Commands Technical Reference](./topic--skills-reference.md)** (reference) `skills`, `commands`, `reference`, `runners`, `lifecycle`, `automation`, `multi-agent`
+- **[System Comparisons & Alternative Architectural Paradigms](./topic--system-comparisons.md)** (explanation) `comparisons`, `architecture`, `paradigms`, `memory`, `zero-vector`, `mechanical-gates`, `governance`, `engineering-decisions`
 
 ---
 

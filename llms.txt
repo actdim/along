@@ -30,6 +30,7 @@ ActDim Along provides repositories with an isolated, durable, and human-readable
 - [README.md](README.md): Overview, quick installation, and full skill list.
 - [AGENTS.md](AGENTS.md): Active ALONG-PROTOCOL conventions and instructions.
 - [docs/INDEX.md](docs/INDEX.md): Central Knowledge Base topic catalog.
+- [docs/topic--agent-run-protocol.md](docs/topic--agent-run-protocol.md): Agent Run Protocol (ARP/AEP) & OpenTelemetry Engine.
 - [docs/topic--architecture.md](docs/topic--architecture.md): System Architecture & Flow.
 - [docs/topic--cli-reference.md](docs/topic--cli-reference.md): Along CLI Command Reference.
 - [docs/topic--declarative-gates-and-traceability.md](docs/topic--declarative-gates-and-traceability.md): Declarative Gate Engine & Protocol Traceability Matrix.
@@ -41,3 +42,4 @@ ActDim Along provides repositories with an isolated, durable, and human-readable
 - [docs/topic--runtime-hooks-and-gates.md](docs/topic--runtime-hooks-and-gates.md): Runtime Lifecycle Hooks & Mechanical Gates.
 - [docs/topic--setup-and-workflow.md](docs/topic--setup-and-workflow.md): Setup & Developer Workflow.
 - [docs/topic--skills-reference.md](docs/topic--skills-reference.md): Skills & Slash Commands Technical Reference.
+- [docs/topic--system-comparisons.md](docs/topic--system-comparisons.md): System Comparisons & Alternative Architectural Paradigms.

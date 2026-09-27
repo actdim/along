@@ -9,10 +9,9 @@ created: 2026-09-23
 updated: 2026-09-23
 agent: antigravity
 tags: [enterprise, governance, compliance, k8s, byoc, gpu-pool, cloud, monetization, epic]
-milestone: v7.0.0-enterprise-governance-and-cloud-infrastructure
+milestone: v6.0.0-enterprise-governance-and-cloud-infrastructure
 blocked_by: [feat--multi-runtime-and-omnichannel-expansion]
 related: []
-parent: null
 ---
 
 # Enterprise Governance, Fleet Management & Cloud Infrastructure (Epic)

@@ -9,7 +9,7 @@ created: 2026-09-18
 updated: 2026-09-18
 agent: antigravity
 tags: [pi, providers, installer, runtime, hooks, documentation]
-milestone: v5.0.0-external-harness-expansion
+milestone: v5.2.0-external-harness-expansion
 blocked_by: []
 related: [feat--runtime-enforcement-of-prose-rules, feat--deepseek-harness-bridge]
 ---

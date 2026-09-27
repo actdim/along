@@ -6,13 +6,13 @@ type: feat
 status: open
 priority: medium
 created: 2026-09-23
-updated: 2026-09-23
+updated: 2026-09-27
 agent: antigravity
 tags: [runtime, claude-code, codex, opencode, adapters, local-models, ollama]
-milestone: v6.0.0-multi-runtime-and-omnichannel-expansion
+milestone: v5.0.0-agent-run-protocol-and-observability
 blocked_by: [feat--agent-run-protocol-core]
 related: [feat--agent-runtime-runner-antigravity]
-parent: feat--multi-runtime-and-omnichannel-expansion
+parent: feat--agent-run-protocol-and-observability
 ---
 
 # Multi-Runtime Adapters: Claude Code, OpenAI Codex & OpenCode

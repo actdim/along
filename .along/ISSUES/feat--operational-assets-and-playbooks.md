@@ -7,15 +7,14 @@ status: open
 priority: high
 created: 2026-09-23
 updated: 2026-09-23
-completed: null
 agent: antigravity
 tags: [operations, assets, playbooks, topology, runbooks, schemas]
 milestone: v5.0.0-agent-run-protocol-and-observability
 blocked_by: [feat--agent-run-protocol-core]
 related: [feat--system-invariants-and-health-probes, docs--operations-and-autonomous-systems-paradigm]
 parent: feat--agent-run-protocol-and-observability
-superseded_by: null
-duplicate_of: null
+superseded_by:
+duplicate_of:
 ---
 
 # Operational Assets, Dependency Topology & Executable Playbooks

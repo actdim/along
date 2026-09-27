@@ -1108,7 +1108,7 @@ def _kb_ingest_articles(
                     textio.write_text(file_path, new_content)
                     raw_content = new_content
 
-            if crosslink_apply and not check_only:
+            if crosslink_apply and not check_only and not kb.is_manual_write_policy(fm):
                 new_raw, applied = kb.apply_crosslinks(f, raw_content, topic_dict, current_slug=slug)
                 if applied > 0:
                     raw_content = new_raw
@@ -1141,6 +1141,7 @@ def _kb_ingest_articles(
                     if target_full.startswith(docs_dir) and target_no_hash.endswith(".md"):
                         doc_cross_links[f].append(os.path.basename(target_full))
 
+            write_policy = "manual" if kb.is_manual_write_policy(fm) else "agent"
             articles.append({
                 "filename": f,
                 "slug": slug,
@@ -1148,6 +1149,7 @@ def _kb_ingest_articles(
                 "type": fm.get("type", "topic"),
                 "tags": fm.get("tags", []),
                 "curated": fm.get("curated", True),
+                "write_policy": write_policy,
                 "sources": sources or [],
             })
         except (OSError, ValueError, frontmatter.FrontmatterError) as e:
@@ -1430,6 +1432,9 @@ def _kb_validate_taxonomy_and_symbols(repo_root: str, docs_dir: str, articles, c
         print("-> Executing AST Code Symbol Grounding Gate...")
         symbol_inventory = kb.extract_code_symbols(repo_root)
         for art in articles:
+            # Skip AST symbol grounding on explanation/comparison documents or manual policy docs
+            if art.get("type") in kb.EXPLANATION_TOPIC_TYPES or art.get("write_policy") == "manual":
+                continue
             f = art["filename"]
             f_path = os.path.join(docs_dir, f)
             if not os.path.isfile(f_path):

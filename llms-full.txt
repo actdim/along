@@ -269,6 +269,13 @@ Also, when relevant: `.along/VISION.md`, `.along/GLOSSARY.md`. These reflect the
 - **Fact Grounding**: Agents MUST extract facts from actual code, `README.md`, `docs/`, and `package.json`. Generic LLM placeholders are strictly prohibited.
 - **Fast Retrieval** [gate: fast-retrieval]: Agents MUST query `/along-kb-search` before reading whole documentation files.
 - **Doc Blast Radius**: After non-trivial code changes, agents MUST map affected symbols to `docs/topic--*.md` articles and update them before completing the task.
+- **Manual Document Lock** [gate: doc-manual-lock]: Documents marked with `write_policy: manual` (or `locked: true`) are protected from automated agent modification during blast radius sweeps. Modifications require an explicit documentation issue (`docs--<slug>`).
+- **Documentation Routing Tree**:
+  - Architectural choice / trade-off -> `.along/DECISIONS/` (ADR)
+  - Public overview / pitch / landing page -> `README.md`
+  - Technical interface contract / CLI spec -> `docs/topic--<slug>.md` (`type: reference`)
+  - Conceptual explanation / comparison / philosophy -> `docs/topic--<slug>.md` (`type: explanation`, `write_policy: manual`)
+  - Procedural walkthrough / runbook -> `docs/topic--<slug>.md` (`type: guide`)
 
 ## While working
 - **Decisions**: Create new ADRs via `/along-decision-sync` or `along decision create <slug> --title "..."`. Add terms to `.along/GLOSSARY.md`.
@@ -336,6 +343,263 @@ This repository is **ActDim Along** (`actdim-along`) - the provider-agnostic age
 - **Install**: Windows: `install.ps1 -Target all` (or `install.bat`). Unix: `bash install.sh`. Uninstall: `-Uninstall` / `--uninstall`. Manifest: `~/.along/install-manifest.json`.
 - **Lifecycle**: Tests: `python .along/scripts/test.py`. Dev: `npm run dev`. Build: `npm run build`.
 - **Frontend** (`packages/dashboard-ui/`): Internal dashboard package. Strict `@actdim/dynstruct` + MobX (zero `useState`/`useEffect`), NSwag client via `@actdim/msgmesh/adapters`. 100% typed (zero `any`/`as`). Full rules: `[packages/dashboard-ui/README.md](./packages/dashboard-ui/README.md)`.
+
+---
+
+## Document: docs/topic--agent-run-protocol.md (Agent Run Protocol (ARP/AEP) & OpenTelemetry Engine)
+
+# Agent Run Protocol (ARP/AEP) & OpenTelemetry Engine
+
+## 1. System Topology & Architecture Overview
+
+The Along Agent Run Protocol (ARP), also referred to as the Agent Execution Protocol (AEP), defines a standardized observability, telemetry, and execution tracking engine for autonomous agent workflows. Modern AI agent operations execute non-deterministic cycles of LLM inference, multi-step chain reasoning, external tool usage, and subprocess execution. Without rigorous runtime tracing, debugging multi-agent swarms, identifying token bottlenecks, and investigating protocol violations becomes intractable.
+
+The ARP engine bridges semantic OpenInference standards and OpenTelemetry (OTel) GenAI semantic conventions into Along. It provides real-time, vendor-neutral telemetry with local disk buffering and offline survivability.
+
+```
++-----------------------------------------------------------------------------------+
+|                            Along Agent Runtime (Harness)                          |
+|                                                                                   |
+|  +-----------------------------------------------------------------------------+  |
+|  |                        Root Span: SpanKind.AGENT                            |  |
+|  |    along.run.id, along.issue.slug, along.agent.name, along.observability    |  |
+|  +-----------------------------------------------------------------------------+  |
+|          |                                              |                         |
+|          v                                              v                         |
+|  +-----------------------------+              +--------------------------------+  |
+|  |    SpanKind.CHAIN (Step)    |              |     SpanKind.TOOL (Execution)  |  |
+|  |   turn_seq, phase, retries  |              |    tool.name, process.cmd      |  |
+|  +-----------------------------+              +--------------------------------+  |
+|          |                                              |                         |
+|          v                                              v                         |
+|  +-----------------------------+              +--------------------------------+  |
+|  |     SpanKind.LLM (Model)    |              |    Subprocess: run_capture     |  |
+|  |   gen_ai.usage, prompt/resp |              |   pid, exit_code, stdout/err   |  |
+|  +-----------------------------+              +--------------------------------+  |
++-----------------------------------------------------------------------------------+
+                                         |
+                       +-----------------+-----------------+
+                       |                                   |
+                       v                                   v
+        +-----------------------------+     +-----------------------------+
+        |     Sensitive Data Scrub    |     |      Payload Offloading     |
+        |        class Redactor       |     |   class ArtifactOffloader   |
+        |  API keys, tokens, paths    |     |   >10 KB or >50 lines to    |
+        +-----------------------------+     |  .along/artifacts/<run_id>/ |
+                       |                    +-----------------------------+
+                       +-----------------+-----------------+
+                                         |
+                                         v
+                         +-------------------------------+
+                         |     Export & Failover Engine  |
+                         |      class OTLPExporter       |
+                         +-------------------------------+
+                                         |
+                    +--------------------+--------------------+
+                    | (HTTP 2xx Success)                      | (Connection Error / Timeout)
+                    v                                         v
+     +-----------------------------+          +-----------------------------------+
+     |   OTel / OTLP Collector     |          |  Local Write-Ahead Log (WAL)      |
+     |   http://localhost:4318     |          |  class Spooler                    |
+     |   /v1/traces                |          |  .along/telemetry/spool/<run>.wal |
+     +-----------------------------+          +-----------------------------------+
+                                                              |
+                                                              | along telemetry flush
+                                                              v
+                                              +-----------------------------------+
+                                              | Flushed to Collector on Reconnect |
+                                              +-----------------------------------+
+```
+
+Telemetry is instrumented non-intrusively across the core Along architecture:
+- Session Blackboards and Agent Lifecycle: Tracks execution turns, plan revisions, and autonomous task completions.
+- Subprocess Execution via `run_capture`: Captures terminal process invocations, exit codes, process IDs, and outputs.
+- Declarative Gate Enforcements: Hooks report gate validations and circuit breaker trip events directly into active spans.
+- Offline-First Durability: Telemetry never disrupts agent runs if the network is absent or the OTel collector is offline.
+
+---
+
+## 2. Core Components & Span Hierarchy
+
+The telemetry architecture centers on six core modules under `scripts/alongkit/telemetry/`:
+
+### 2.1 Span Taxonomy & Semantic Hierarchy (`SpanKind`)
+The engine categorizes execution scopes into four distinct `SpanKind` classifications:
+1. `SpanKind.AGENT`: The root span representing the end-to-end agent run. Carries run metadata including `along.run.id`, `along.issue.slug`, `along.agent.name`, and `along.observability.level`.
+2. `SpanKind.CHAIN`: Represents sequential reasoning chains, workflow steps, or multi-turn loops. Carries turn sequences (`along.turn.seq`), step titles (`along.turn.title`), phases (`along.turn.phase`), and retry counters (`along.turn.retries`).
+3. `SpanKind.TOOL`: Encompasses external tool executions, file system operations, and shell executions. Carries `tool.name`, `tool.parameters`, and process execution details.
+4. `SpanKind.LLM`: Encapsulates prompt evaluations, model inference calls, and token generation. Carries OpenInference model metadata (`llm.model_name`), standard OTel GenAI system identifiers (`gen_ai.system`), and token usage counters (`gen_ai.usage.input_tokens`, `gen_ai.usage.output_tokens`).
+
+### 2.2 Trace Coordinator (`Tracer`)
+`Tracer` coordinates trace context across nested execution scopes. It manages:
+- 128-bit W3C-compliant Trace IDs (`trace_id` as a 32-character hexadecimal string) and 64-bit Span IDs (`span_id` as a 16-character hexadecimal string).
+- Stack-based active span scoping via `start_span(...)`, context managers, and `end_span(...)`.
+- Automatic linkage of child spans to their `parent_span_id`.
+- Global ambient registration via `Tracer.set_active(tracer)` and `Tracer.get_active()`, allowing detached subroutines such as subprocess execution to attach telemetry to active turns without manual dependency plumbing.
+
+### 2.3 Secret Redactor (`Redactor`)
+Prior to buffering or exporting any span attributes, span events, or payload text, `Redactor` scrubs confidential credentials:
+- Private Cryptographic Keys: Scans for PEM blocks (`-----BEGIN RSA/EC/OPENSSH/DSA PRIVATE KEY-----`) and replaces them with `[REDACTED_PRIVATE_KEY]`.
+- Anthropic API Keys: Detects `sk-ant-(api03-)?...` keys and replaces them with `sk-ant-[REDACTED]`.
+- OpenAI API Keys: Detects `sk-...` and `sk-proj-...` keys and replaces them with `sk-[REDACTED]`.
+- GitHub Access Tokens: Detects `ghp_`, `gho_`, `ghu_`, `ghs_`, `ghr_`, and fine-grained `github_pat_` tokens, replacing them with `[REDACTED_GITHUB_TOKEN]`.
+- AWS Access Keys: Detects `AKIA...` and `ASIA...` 20-character keys, replacing them with `[REDACTED_AWS_KEY]`.
+- Bearer Authorization Headers: Detects `Bearer <token>` HTTP headers and masks values.
+- Generic Password & Secret Assignments: Matches `api_key = "..."`, `password: "..."`, and `client_secret: "..."`, masking the literal values.
+- Home Directory Paths: Normalizes absolute user directory paths across Windows (`C:\Users\<user>`), macOS (`/Users/<user>`), and Linux (`/home/<user>`) to prevent leaking local developer usernames.
+
+### 2.4 Artifact Offloader (`ArtifactOffloader`)
+Large terminal outputs, build logs, and multi-megabyte tool payloads degrade OTel collector performance and exceed message limits. The `ArtifactOffloader` applies deterministic size threshold rules:
+- Offload Trigger: Any text payload exceeding 10 KB (10,240 bytes) OR exceeding 50 lines of text.
+- Storage Location: Persisted atomically under `.along/artifacts/<run_id>/<sha256>.<ext>`.
+- Truncated Inline Preview: The span attribute retains a 20-line, 1,000-character preview ending with an explicit reference marker: `... [Output offloaded to .along/artifacts/<run_id>/<sha256>.<ext> (<bytes> bytes, <lines> lines)]`.
+- Metadata Annotation: Generates an `ArtifactRef` data structure recording the file path, SHA-256 digest, exact byte count, line count, and MIME type.
+
+### 2.5 Fail-Open Write-Ahead Log Spooler (`Spooler`)
+If network export fails or the OTel collector endpoint is unreachable, the engine never crashes or interrupts agent workflows:
+- Disk WAL Spool: Records spans immediately as newline-delimited JSON (JSON lines) into `.along/telemetry/spool/<run_id>.wal`.
+- Durability: Flushes and executes `os.fsync` after writing each span line.
+- Re-read & Clearance: Supports atomic extraction (`read_spool()`) and safe deletion (`clear()`) once exported.
+
+### 2.6 OTLP Exporter (`OTLPExporter`)
+`OTLPExporter` formats spans into the official OpenTelemetry `v1/traces` JSON schema via `build_otlp_payload(...)` and transmits batches via HTTP POST:
+- Default Endpoint: `http://localhost:4318/v1/traces`.
+- Fallback & Spooling: If an HTTP connection error or timeout occurs, `OTLPExporter` automatically offloads the failed batch to the local `Spooler`.
+- Deferred Flushing: Provides `flush_spool(...)` to replay stored WAL records once connectivity resumes.
+
+---
+
+## 3. Data Flow & Telemetry Execution Workflows
+
+Telemetry generation flows hierarchically throughout an agent session:
+
+```
+Agent Harness           Tracer / Stack             Redactor / Offloader         OTLP / Spooler
+     |                         |                            |                          |
+     |--- start_run() -------->|                            |                          |
+     |                         |-- create AGENT span ------>|                          |
+     |                         |<-- sanitized root span ----|                          |
+     |                         |                                                       |
+     |--- step / turn -------->|                                                       |
+     |                         |-- create CHAIN span ------>|                          |
+     |                         |<-- sanitized turn span ----|                          |
+     |                         |                                                       |
+     |--- run_capture(cmd) --->|                                                       |
+     |        |                |-- create TOOL span ------->|                          |
+     |        v                |                            |-- maybe_offload() ------>| (if >10KB / >50 lines)
+     |    subprocess.Popen     |                            |   write to .along/art..  |
+     |    proc.communicate()   |                            |<-- preview + ArtifactRef |
+     |        |                |-- record_command_result -->|                          |
+     |        |                |                            |-- sanitize_text() ------>|
+     |        |<---------------|                            |<-- clean stdout/stderr --|
+     |                         |                                                       |
+     |--- end_span() --------->|                                                       |
+     |                         |-- buffer span -------------+                          |
+     |                         |                            |                          |
+     |--- end_run() ---------->|                            |                          |
+     |                         |-- flush_buffered_spans --->+------------------------->|
+     |                         |                                                       |-- HTTP POST to OTLP
+     |                         |                                                       |   (on fail: write WAL)
+```
+
+### 3.1 Subprocess Telemetry Integration (`proc.run_capture`)
+All text-capturing subprocess calls in Along execute via `alongkit.proc.run_capture`. Telemetry is linked automatically:
+1. Active Tracer Discovery: When `run_capture` is invoked, it queries `Tracer.get_active()`. If an active tracer and span exist, subprocess execution attaches directly to that span context.
+2. Anomaly & Circuit Interception: If a prohibited command violates runtime gates (e.g. global package manager execution), `run_capture` intercepts execution, trips the circuit breaker, and logs a command failure span event with exit code 126 before any process spawns.
+3. Execution Metrics: On process completion, `run_capture` captures process ID (`process.pid`), complete command line (`process.command_line`), and process return code (`process.exit.code`).
+4. Output Scrubbing & Offloading: The command stdout and stderr are scrubbed through `Redactor.sanitize_text(...)`. If the output exceeds 10 KB or 50 lines, `ArtifactOffloader` saves the raw stream to `.along/artifacts/<run_id>/` and returns a truncated preview with the artifact digest.
+
+---
+
+## 4. Invariants, Failure Modes & Redaction Guarantees
+
+The telemetry subsystem adheres to four non-negotiable architectural guarantees:
+
+### 4.1 Fail-Open Telemetry Invariance
+Telemetry is strictly auxiliary. An agent run MUST NEVER fail due to telemetry network failures, collector downtime, disk serialization errors, or OTel schema changes:
+- Network Outages: When HTTP requests to the collector fail or time out, spans are routed to `.along/telemetry/spool/<run_id>.wal`.
+- Spool Failures: If disk write permissions fail, exceptions are suppressed, and the primary agent execution proceeds unaffected.
+- Zero Execution Blocking: Telemetry calls utilize non-blocking routines or strict timeouts (default exporter timeout: 3.0s, connectivity probe timeout: 1.5s).
+
+### 4.2 Credential Redaction Invariance
+Under no circumstances may plaintext API tokens or developer credentials appear in exported OTel payloads, local WAL logs, or offloaded artifacts. Redaction rules are evaluated in deterministic precedence (e.g. `sk-ant-` evaluated before generic `sk-` tokens) to ensure complete masking.
+
+### 4.3 Clean ASCII Storage Standard
+All emitted JSON files, WAL records, artifacts, and documentation follow strict Clean ASCII encoding:
+- Prohibited Characters: Unicode em-dashes, typographic curly quotes, unicode ellipses, non-breaking spaces, and BOM markers are strictly barred.
+- Deterministic Serialization: `json.dumps(..., ensure_ascii=True)` guarantees transport compatibility across heterogeneous platforms and terminals.
+
+### 4.4 Idempotent Spool Flushes
+Flushing buffered WAL logs is atomic:
+- Span payloads are transmitted to the OTLP collector.
+- Upon receiving HTTP 2xx confirmation from the endpoint, the corresponding `.wal` files are cleared.
+- If export fails, the WAL files remain intact on disk, allowing subsequent retry via `along telemetry flush`.
+
+---
+
+## 5. CLI Reference & Telemetry Administration
+
+Along provides dedicated administrative CLI subcommands under `along telemetry`:
+
+### 5.1 Telemetry Status (`along telemetry status`)
+Inspects the local telemetry buffer, pending WAL spool files, and collector connectivity:
+
+```bash
+along telemetry status [--json] [--endpoint <url>]
+```
+
+Parameters and behavior:
+- `--json`: Emits structured machine-readable JSON containing `wal_count`, `total_bytes`, `endpoint`, `connected`, `endpoint_status`, and `wal_files`.
+- `--endpoint <url>`: Overrides the target OTLP endpoint to test (defaults to `OTEL_EXPORTER_OTLP_TRACES_ENDPOINT`, `ALONG_TELEMETRY_ENDPOINT`, `OTEL_EXPORTER_OTLP_ENDPOINT`, or `http://localhost:4318/v1/traces`).
+- Connectivity Probe: Sends an empty OTLP test payload with a fast 1.5s timeout. Reports connection status without blocking.
+
+Terminal output example:
+```
+Along Telemetry Status:
+  Endpoint:      http://localhost:4318/v1/traces [unreachable (timed out)]
+  Spool Dir:     /path/to/repo/.along/telemetry/spool
+  Pending WALs:  2 file(s)
+  Spooled Size:  4820 bytes
+  WAL Files:
+    - 372d529afe5e4c5392e396b08d799b5a.wal (2410 bytes)
+    - 8a91b2c3d4e5f60718293a4b5c6d7e8f.wal (2410 bytes)
+```
+
+JSON output example:
+```json
+{
+  "wal_count": 2,
+  "total_bytes": 4820,
+  "endpoint": "http://localhost:4318/v1/traces",
+  "connected": false,
+  "endpoint_status": "timed out",
+  "spool_dir": "/path/to/repo/.along/telemetry/spool",
+  "wal_files": [
+    {
+      "name": "372d529afe5e4c5392e396b08d799b5a.wal",
+      "size_bytes": 2410
+    },
+    {
+      "name": "8a91b2c3d4e5f60718293a4b5c6d7e8f.wal",
+      "size_bytes": 2410
+    }
+  ]
+}
+```
+
+### 5.2 Telemetry Flush (`along telemetry flush`)
+Replays and exports all spooled spans to the active OTLP collector:
+
+```bash
+along telemetry flush [--endpoint <url>]
+```
+
+Parameters and behavior:
+- `--endpoint <url>`: Overrides the target endpoint.
+- Reads all `.wal` files under `.along/telemetry/spool/`.
+- Transmits spans via `OTLPExporter(endpoint=...)`.
+- On HTTP 2xx success: Clears the flushed `.wal` files and prints the total number of flushed spans.
+- On network failure: Retains the WAL files on disk, reports the error to `stderr`, and exits with code 1.
 
 ---
 
@@ -1502,7 +1766,11 @@ Exit Code: 0                  Exit Code: 1 (lists missing/dangling)
 
 | Subproject / Module | Path | Ecosystems | AI Documentation & Context |
 | :--- | :--- | :--- | :--- |
-| **`@along/dashboard-ui`** | `packages/dashboard-ui` | `npm` | - |
+| **`@along/dashboard-ui`** | `packages/dashboard-ui` | `npm` | [AGENTS.md](../packages/dashboard-ui/AGENTS.md) |
+
+## Internal Monorepo Dependency Graph
+
+No internal monorepo package inter-dependencies detected.
 
 ## Declared External Dependencies with AI Guidelines
 
@@ -1513,6 +1781,10 @@ Exit Code: 0                  Exit Code: 1 (lists missing/dangling)
 | **`@actdim/msgmesh`** | `packages/dashboard-ui` | `npm` | `1.5.13` | [docs/](../packages/dashboard-ui/node_modules/@actdim/msgmesh/docs) |
 | **`@actdim/utico`** | `packages/dashboard-ui` | `npm` | `1.5.13` | [AGENTS.md](../packages/dashboard-ui/node_modules/@actdim/utico/AGENTS.md) <br> [CLAUDE.md](../packages/dashboard-ui/node_modules/@actdim/utico/CLAUDE.md) <br> [docs/](../packages/dashboard-ui/node_modules/@actdim/utico/docs) <br> manifest metadata (`ai`) |
 | **`cytoscape`** | `packages/dashboard-ui` | `npm` | `3.34.2` | [AGENTS.md](../packages/dashboard-ui/node_modules/cytoscape/AGENTS.md) |
+
+## Transitive Dependency Guidelines & Invariants
+
+No exported invariants detected across repository dependencies.
 
 ## Custom Project Dependency Hooks (`.along/scripts/dep_scan.py`)
 
@@ -1920,6 +2192,8 @@ AI coding agents face two common failure modes when navigating repository docume
 2. **Opaque & Fragile External Vector DBs**:
    - Heavy external vector databases introduce opaque embeddings, complex C-extension dependencies, and lack human-editable Markdown transparency.
 
+For an exhaustive architectural comparison against vector DBs, passive conversational scrapers (jevmem, Laya), and prompt stuffing, see [System Comparisons & Alternative Memory Architectures](./topic--system-comparisons.md).
+
 ### The Solution: The Living LLM-Wiki
 A structured, human-readable directory of interconnected Markdown files (`docs/topic--*.md`) with YAML front-matter, an auto-compiled catalog (`docs/INDEX.md`), in-place source provenance tracking, deterministic `llms.txt` and `llms-full.txt` context compilers, and an ultra-fast, local snippet search engine (`along-kb-search`).
 
@@ -2096,12 +2370,35 @@ To guarantee factual precision and cross-reference coherence without human micro
   - Automatically audited and logged as `[WARN]` during sync.
   - Strictly enforced via `along kb-sync --strict-sections`, exiting with code 1 on violations.
 
+### Topic Types Taxonomy & Write Policy Protection
+
+Along establishes a strict documentation classification to distinguish machine-critical interface contracts from human-centric conceptual models:
+
+| Topic Type | Classification | Validation & Grounding | Write Policy | Typical Scope |
+| :--- | :--- | :--- | :--- | :--- |
+| **`reference`** | Technical Contract | AST code symbols enforced (`--check-symbols`) | `agent` (default) | CLI commands, APIs, configuration schemas |
+| **`architecture`** | System Architecture | Section contracts + AST symbol grounding | `agent` (default) | Topology, core components, invariants |
+| **`domain-model`** | Domain Model | Section contracts + AST symbol grounding | `agent` (default) | Entity taxonomies, DAG relationships |
+| **`setup-workflow`** | Setup & Workflow | Section contracts + AST symbol grounding | `agent` (default) | Installation, lifecycle scripts, gates |
+| **`explanation`** | Concept & Rationale | Exempt from AST symbol grounding | `manual` (optional) | Architectural rationale, market fit, comparisons |
+| **`comparison`** | Comparative Analysis | Exempt from AST symbol grounding | `manual` (optional) | Alternative architectures, trade-off matrices |
+| **`guide`** | How-To Guide | AST symbol grounding if code references exist | `agent` (default) | Step-by-step procedures, runbooks |
+| **`topic`** | General Article | Standard fallback | `agent` (default) | Unclassified domain topics |
+
+#### Write Policy & Manual Lock Gate (`[gate: doc-manual-lock]`)
+- **`write_policy: agent`** (default): Living documentation maintained automatically. Agents update these files during code modifications (Doc Blast Radius).
+- **`write_policy: manual`** (or `locked: true`): Curated, human-governed content (such as product pitches, executive comparisons, or business rationale).
+  - Excluded from automated blast-radius candidate documentation (`along graph-impact`).
+  - Exempt from auto-crosslinking mutation during `along kb-sync --crosslink-apply`.
+  - Mechanically locked by runtime gate `[gate: doc-manual-lock]`: automated agent file edits are rejected unless an explicit documentation task (`docs--<slug>`) is active.
+
 ---
 
 ## 8. References & Useful Links
 
 - **Andrej Karpathy's LLM-Wiki Concept**: Conceptual foundation for repository-native, human-readable structured LLM documentation.
 - **[System Architecture & Flow](./topic--architecture.md)**: System topology, multi-branch concurrency, and multi-agent state machine.
+- **[System Comparisons & Alternative Memory Architectures](./topic--system-comparisons.md)**: Comparative analysis against jevmem, Laya, vector databases, and prompt stuffing.
 - **[Domain Model & Entity Ecosystem](./topic--domain-model.md)**: Taxonomy of issues, milestones, ADRs, and living memory.
 - **[Skills & Slash Commands Reference](./topic--skills-reference.md)**: Technical breakdown of all 18 automation skills.
 - **[Setup & Developer Workflow](./topic--setup-and-workflow.md)**: Installation, runner hooks, and day-in-the-life development flow.
@@ -3162,3 +3459,170 @@ flowchart TD
   - *Semantic / Automatic*: Triggered whenever a developer says *"I'm done for today"*, *"Wrap up session"*, or upon completing all steps in an issue.
 - **Entities Operated On**: `.along/ISSUES/`, `.along/ISSUES/done/`, `.along/ISSUES.md`, `.along/SESSIONS/`, `.along/HISTORY.md`, `.along/.session/`.
 - **Ecosystem Chaining**: Finalizes work executed by `along-team` and triggers `along-kb-sync` and `along-issue-sync`.
+
+---
+
+## Document: docs/topic--system-comparisons.md (System Comparisons & Alternative Architectural Paradigms)
+
+# System Comparisons & Alternative Architectural Paradigms
+
+## 1. Executive Context: The Absence of Direct Monolithic Equivalents
+
+ActDim Along has no direct monolithic counterparts in the AI engineering ecosystem. Most existing tools address isolated fragments of agent interaction:
+- Some offer standalone command interceptors for a single editor.
+- Some provide conversational scrapers that tail chat transcripts.
+- Others implement opaque vector embeddings or external cloud memory databases.
+
+Along approached the problem from a comprehensive systems engineering perspective: building a **provider-agnostic context and memory operating system** that embeds a Dual-Tier Memory Architecture into any repository, coupled with mechanical runtime gates, autonomous multi-agent worktree isolation, and zero-vector retrieval.
+
+The purpose of this document is not a superficial feature race against specific tools, but a rigorous architectural analysis of alternative paradigms. It articulates what Along intentionally adopted, what it critically rejected, and why Along's lightweight, offline-first design provides superior stability and token efficiency.
+
+---
+
+## 2. Paradigm 1: Continuous Conversational Chat Scraping
+
+### Core Mechanism of the Alternative
+Interception hooks (such as `Stop` hooks) spy on raw turn-by-turn chat transcripts between the developer and the AI assistant. An external cloud classification API (e.g. TypeSafe Jev) or a local BERT-sized neural model (e.g. Laya) evaluates each turn with probabilistic classifiers (nouls) to guess whether a sentence represents an architectural decision, constraint, or bug. Saved lines are appended to a flat markdown file (e.g. `JEVMEM.md`).
+
+### What Along Adopted / Evaluated
+- **Secret Scrubbing in Diagnostic Logs**: The practice of aggressively redacting sensitive credential shapes (API keys, tokens, connection passwords) before any diagnostic logs or audit trails are written to disk. Along adopted this pattern by connecting its `alongkit.telemetry.redactor` engine to lifecycle hook audit records.
+
+### What Along Critically Rejected and Why
+1. **Conversational Eavesdropping (High False-Positive Noise)**:
+   - In real-world software engineering, developers frequently discuss throwaway debug workarounds, speculative ideas, and rejected prototypes. Treating raw chat text as long-term memory inevitably pollutes context with noise and half-truths.
+2. **Monolithic Flat Files (`JEVMEM.md`)**:
+   - Storing all memories in a single flat file creates chronic Git merge conflicts in team workflows and multi-agent branches.
+3. **Heavy Runtimes and Cloud Vendor Lock-in**:
+   - Forcing a hard dependency on a closed SaaS classification API, or requiring local deployment of heavy 421M parameter PyTorch models, introduces massive environment fragility, GPU/CUDA overhead, and high token costs.
+
+### The Along Engineering Advantage: Conscious Project Governance
+Along replaces passive chat scraping with **intentional state capture**:
+- Tasks are tracked in machine-parseable DAG files (`.along/ISSUES/<type>--<slug>.md`).
+- Architectural choices are deliberately recorded as modular ADRs (`.along/DECISIONS/ADR-*.md`).
+- Verified technical facts live in the LLM-Wiki (`docs/topic--*.md`).
+- Context remains 100% signal, zero noise, with full rationale and trade-offs preserved.
+
+---
+
+## 3. Paradigm 2: External Vector Databases & Opaque RAG
+
+### Core Mechanism of the Alternative
+Repository documentation and code are processed through blind token chunkers (e.g. 512 tokens with 50-token overlap), passed through embedding models, and stored in vector databases (Chroma, Pinecone, Weaviate, FAISS). Agents query these indexes via cosine similarity.
+
+### What Along Adopted / Evaluated
+- **The LLM-Wiki Paradigm**: Along fully embraced Andrej Karpathy's vision of an interconnected, human-readable repository wiki (`docs/`) tailored for AI consumption, complemented by deterministic `llms.txt` and `llms-full.txt` catalogs.
+
+### What Along Critically Rejected and Why
+1. **Destruction of Syntax and AST Boundaries**:
+   - Arbitrary token chunking slices functions in half, severs method signatures from docstrings, and breaks YAML front-matter headers, causing models to hallucinate corrupt API interfaces.
+2. **Opaque and Non-Versioned State**:
+   - Vector databases cannot be inspected in a Git diff, cannot be reviewed in Pull Requests, and drift out of sync when developers switch Git branches.
+3. **Heavy Native C++ / Rust Dependencies**:
+   - Vector libraries require compilation of native binary extensions (`hnswlib`, `onnxruntime`, C++ build tools), causing constant installation failures on developer machines (especially Windows).
+
+### The Along Engineering Advantage: Zero-Vector In-Repo Intelligence
+Along implemented **Zero-Vector Retrieval** (`along-kb-search`):
+- Operates on pure standard library Python with smoothed TF-IDF scoring and word-boundary token matching.
+- Delivers bounded snippets (< 150 tokens) in 20-40 ms directly to agent prompts.
+- Reduces token exploration costs by 85-95% with zero vector DBs, zero cloud dependencies, and zero background daemon processes.
+- Maintains in-place SHA-256 provenance hashes (`sources: [{path, hash}]`) in markdown headers to detect source drift.
+
+---
+
+## 4. Paradigm 3: Editor-Locked Runtime Interceptors
+
+### Core Mechanism of the Alternative
+Standalone extension scripts or proxy daemons (e.g. Harmonist-style) that intercept tool calls specifically within a single IDE or editor (such as Cursor).
+
+### What Along Adopted / Evaluated
+- **Mechanical Runtime Interception**: The insight that passive prose instructions in markdown files inevitably suffer from "soft prompt decay" as context expands. Deterministic programmatic gates must intercept agent tool execution at the harness boundary.
+
+### What Along Critically Rejected and Why
+1. **Single-Editor Confinement**:
+   - Building tooling tied to a single IDE isolates team members who use different tools.
+2. **Probabilistic Guardrail Checks**:
+   - Running tool arguments through an LLM during `PreToolUse` introduces 300 ms to 4,000 ms of latency per step, risks network failure, and produces probabilistic false blocks on valid refactors.
+
+### The Along Engineering Advantage: Universal Multi-Runtime Dispatcher
+Along engineered an open, provider-agnostic lifecycle engine:
+- A universal CLI dispatcher (`along_hook.py`) with native adapters for Google Antigravity, Claude Code, OpenAI Codex, and OpenCode (`GenericCliAdapter`).
+- Deterministic, sub-millisecond (< 1 ms) mechanical gates (`TypographyGate`, `ProjectionProtectionGate`, `CliSafetyGate`, `CircuitBreaker`).
+- A declarative YAML gate engine (`default_gates.yaml`) backed by machine-checked bi-directional traceability (`along hook verify`).
+
+---
+
+## 5. Paradigm 4: External Agentic Telemetry & Logging Servers
+
+### Core Mechanism of the Alternative
+Sending agent execution logs, prompt histories, and tool invocation traces to closed, proprietary cloud monitoring services (e.g. Atlas-style external loggers).
+
+### What Along Adopted / Evaluated
+- **Structured Agent Execution Observability**: The necessity of capturing rich diagnostic traces, execution latencies, token consumption, and failure loops for post-run analysis.
+
+### What Along Critically Rejected and Why
+- Sending internal proprietary source code, shell execution commands, and tool payloads to closed cloud logging servers poses severe intellectual property and security risks.
+
+### The Along Engineering Advantage: Standardized Local Agent Run Protocol (ARP/AEP)
+Along established an open, in-repo observability standard:
+- Built strictly on OpenTelemetry and OpenInference standards (`scripts/alongkit/telemetry/`).
+- Local Write-Ahead Log (WAL) spooling (`spool.py`) with offline buffering in `.along/telemetry/`.
+- Automatic PII and credential scrubbing (`redactor.py`) ensuring no API keys or secrets leak into traces.
+- Optional asynchronous offloading to any standard OTLP-compatible backend.
+
+---
+
+## 6. Paradigm 5: External Graph Orchestration Frameworks
+
+### Core Mechanism of the Alternative
+Using external DAG workflow engines or heavy graph coordination libraries (e.g. Knot-style frameworks) to manage agent task states.
+
+### What Along Critically Rejected and Why
+- External workflow engines impose proprietary serialization formats, database requirements, and execution runtimes that live outside Git version control.
+
+### The Along Engineering Advantage: Git-Native Decentralized Entities
+Along anchors all coordination directly in the repository filesystem:
+- Tasks are plain markdown files with YAML front-matter (`.along/ISSUES/`) linked via explicit keys (`blocked_by: [type--slug]`).
+- Decisions are modular date-slug ADRs (`.along/DECISIONS/ADR-YYYY-MM-DD--<slug>.md`).
+- Multi-branch concurrency is guaranteed by Git union merge drivers (`merge=union`) on append-only files and atomic single-file mutations.
+- Multi-agent coordination uses an ephemeral session blackboard (`.along/.session/<slug>/`) and Git worktree isolation (`along worktree`).
+
+---
+
+## 7. Paradigm 6: TypeScript / Bun Heavy Runtimes for Protocol Tooling
+
+### Core Mechanism of the Alternative
+Implementing repository automation, hooks, and CLI tools in TypeScript powered by modern JavaScript runtimes like Bun (e.g. Oh-My-OpenAgent-style).
+
+### What Along Evaluated and Rejected
+- While TypeScript provides excellent typing, requiring developers to install Node.js, Bun, or NPM in non-JavaScript repositories (Python, .NET, Go, Rust, C++) introduces immediate environment friction.
+- Furthermore, runtime execution of alternative engines on Windows environments frequently presents stability and subprocess piping challenges.
+
+### The Along Engineering Advantage: Zero-Install Hermetic Python
+Along standardizes on Python with automated PEP 723 dependency delivery:
+- Standard library core with `alongkit`.
+- Dependency bootstrapping via `uv` runs in milliseconds in isolated cache directories without system-wide package installations.
+- Universal polyglot lifecycle hooks (`.along/scripts/` in Python, PowerShell, Bash, or Batch).
+
+---
+
+## 8. Master Architectural Advantage Matrix
+
+| Core Architectural Metric | Alternative Paradigms (Scrapers, Vector DBs, Cloud Memories) | ActDim Along Engineering Model |
+| :--- | :--- | :--- |
+| **System Scope** | Point solutions (isolated chat scrapers or vector wrappers). | Unified Context & Governance OS (Wiki + Issues + ADRs + Gates + Worktrees). |
+| **Memory Signal Quality** | Low. Conversational noise, temporary hacks, speculative chat. | High. Vetted architectural ADRs, active DAG issues, and curated Wiki topics. |
+| **Retrieval Footprint** | Heavy. External vector DBs, dense embeddings, cloud RPCs. | Zero-Vector. Pure Python TF-IDF snippet retrieval (< 50 ms, < 150 tokens). |
+| **Runtime Dependencies** | PyTorch, CUDA, Docker, C++ extensions, or proprietary SaaS. | Standard Python standard library + uv. Zero external services. |
+| **Lifecycle Guardrails** | Soft prompts or slow probabilistic neural scoring (300ms - 4s). | Sub-millisecond (< 1 ms) mechanical deterministic gates. |
+| **Git Concurrency** | High conflict risk on shared flat files (`JEVMEM.md`). | Zero-conflict guarantee via modular date-slug files and union merges. |
+| **Offline Independence** | Requires network connection to cloud APIs or heavy local GPU. | 100% offline-first, hermetic, and provider-agnostic. |
+| **AST Symbol Verification** | None. Blind token chunking breaks code symbol boundaries. | AST-grounded via code-review-graph integration and link integrity gates. |
+
+---
+
+## 9. Related Architectural Specifications
+
+- [LLM-Wiki Knowledge Base Architecture & Paradigm](./topic--llm-wiki-architecture.md): Mechanics of Along's token-efficient knowledge base.
+- [Runtime Lifecycle Hooks & Mechanical Gates](./topic--runtime-hooks-and-gates.md): Deterministic runtime interception vs. probabilistic rules.
+- [Agent Run Protocol (ARP/AEP) & OpenTelemetry Engine](./topic--agent-run-protocol.md): Local observability and sensitive data redaction.
+- [System Architecture & Flow](./topic--architecture.md): Topological overview of provider flow and context boundaries.

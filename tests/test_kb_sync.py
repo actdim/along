@@ -323,6 +323,122 @@ class TestKbSyncCliIntegration(unittest.TestCase):
             self.assertIn("Grounding Gate detected", res.stdout)
             self.assertIn("ghost symbol(s)", res.stdout)
 
+    def test_explanation_and_manual_policy_exempt_from_ghost_symbols(self):
+        with hermetic.repo_fixture() as root:
+            docs_dir = os.path.join(root, "docs")
+            # 1. Explanation doc with imaginary symbol
+            exp_doc = os.path.join(docs_dir, "topic--market-comparison.md")
+            textio.write_text(exp_doc, (
+                "---\n"
+                "protocol: along\n"
+                "slug: topic--market-comparison\n"
+                "title: Market Comparison\n"
+                "type: explanation\n"
+                "tags: [market]\n"
+                "---\n\n"
+                "# Market Comparison\n\n"
+                "Discusses external architecture `external_vendor_class_xyz`.\n"
+            ))
+
+            # 2. Manual doc with imaginary symbol
+            man_doc = os.path.join(docs_dir, "topic--manual-notes.md")
+            textio.write_text(man_doc, (
+                "---\n"
+                "protocol: along\n"
+                "slug: topic--manual-notes\n"
+                "title: Manual Notes\n"
+                "type: topic\n"
+                "write_policy: manual\n"
+                "tags: [notes]\n"
+                "---\n\n"
+                "# Manual Notes\n\n"
+                "Notes with `human_specified_dummy_var`.\n"
+            ))
+
+            res = proc.run_python([
+                os.path.join(SCRIPTS_DIR, "along_kb_sync.py"),
+                root,
+                "--check",
+                "--check-symbols",
+                "--strict",
+            ], cwd=root)
+            self.assertEqual(res.returncode, 0, f"Failed:\n{res.stdout}\n{res.stderr}")
+            self.assertIn("All documented code symbols verified", res.stdout)
+
+    def test_write_policy_manual_exempt_from_crosslink_apply(self):
+        with hermetic.repo_fixture() as root:
+            docs_dir = os.path.join(root, "docs")
+            man_doc = os.path.join(docs_dir, "topic--manual-doc.md")
+            textio.write_text(man_doc, (
+                "---\n"
+                "protocol: along\n"
+                "slug: topic--manual-doc\n"
+                "title: Manual Document\n"
+                "type: topic\n"
+                "write_policy: manual\n"
+                "tags: []\n"
+                "---\n\n"
+                "# Manual Document\n\n"
+                "## Section One\n\n"
+                "Refers to Architecture but should not be auto-linked.\n"
+            ))
+
+            res_apply = proc.run_python([
+                os.path.join(SCRIPTS_DIR, "along_kb_sync.py"),
+                root,
+                "--crosslink-apply",
+            ], cwd=root)
+            self.assertEqual(res_apply.returncode, 0, res_apply.stderr)
+            c_after = textio.read_text(man_doc)
+            self.assertNotIn("[Architecture](./topic--architecture.md)", c_after)
+            self.assertIn("Refers to Architecture but should not be auto-linked.", c_after)
+
+    def test_doc_manual_lock_gate_predicate(self):
+        from alongkit.hooks.predicates import check_doc_manual_lock
+        from alongkit.hooks.models import HookEvent, HookEventType
+
+        with hermetic.repo_fixture() as root:
+            docs_dir = os.path.join(root, "docs")
+            man_doc = os.path.join(docs_dir, "topic--locked-policy.md")
+            textio.write_text(man_doc, (
+                "---\n"
+                "protocol: along\n"
+                "slug: locked-policy\n"
+                "title: Locked Document\n"
+                "type: explanation\n"
+                "write_policy: manual\n"
+                "---\n\n"
+                "# Locked Document\n"
+            ))
+
+            event = HookEvent(
+                event_type=HookEventType.PRE_TOOL_USE,
+                tool_name="replace_file_content",
+                tool_args={"TargetFile": man_doc, "TargetContent": "Locked", "ReplacementContent": "Unlocked"},
+            )
+
+            # 1. Without active docs--locked-policy issue -> blocked
+            violation = check_doc_manual_lock(event, root)
+            self.assertIsNotNone(violation)
+            self.assertIn("Manual Document Lock Violation", violation)
+            self.assertIn("write_policy: manual", violation)
+
+            # 2. With active docs--locked-policy issue -> allowed
+            issues_dir = os.path.join(root, ".along", "ISSUES")
+            os.makedirs(issues_dir, exist_ok=True)
+            doc_issue = os.path.join(issues_dir, "docs--locked-policy.md")
+            textio.write_text(doc_issue, (
+                "---\n"
+                "protocol: along\n"
+                "slug: locked-policy\n"
+                "type: docs\n"
+                "status: in-progress\n"
+                "---\n"
+            ))
+
+            violation_allowed = check_doc_manual_lock(event, root)
+            self.assertIsNone(violation_allowed)
+
 
 if __name__ == "__main__":
     unittest.main()

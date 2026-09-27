@@ -9,7 +9,7 @@ created: 2026-09-21
 updated: 2026-09-21
 agent: antigravity
 tags: [git, merge, drivers, concurrency, projections, frontmatter, cli]
-milestone: v4.5.0-multi-user-merge-automation
+milestone: v4.4.0-multi-user-merge-automation
 blocked_by: []
 blocks: [feat--docs-semantic-conflict-resolution]
 related: [concurrency-projections-and-context-deprecation]

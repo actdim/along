@@ -2,7 +2,7 @@
 protocol: along
 slug: migrations
 title: Protocol & Repository Migrations Guide
-type: topic
+type: guide
 created: 2026-08-30
 updated: 2026-09-22
 tags: [migrations, upgrade, protocol, changelog, versioning, data-safety]

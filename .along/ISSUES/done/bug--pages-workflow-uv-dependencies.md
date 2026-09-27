@@ -12,6 +12,7 @@ agent: antigravity
 tags: []
 blocked_by: []
 related: []
+milestone: v1.3.0-knowledge-base-and-graph
 ---
 
 # Fix GitHub Pages workflow dependencies and uv runner setup

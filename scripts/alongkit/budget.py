@@ -26,9 +26,9 @@ CHARS_PER_TOKEN = 3.8
 
 DEFAULT_BUDGET_LIMITS = {
     "agents_md_bytes": 14336,          # 14 KB (measured: ~10.6 KB)
-    "issues_md_bytes": 4096,           # 4 KB (measured: ~3.2 KB)
+    "issues_md_bytes": 6144,           # 6 KB (measured: ~4.2 KB)
     "constraints_md_bytes": 16384,      # 16 KB (measured: ~12.3 KB)
-    "mandatory_session_bytes": 32768,  # 32 KB (measured: ~26 KB, down from 48 KB)
+    "mandatory_session_bytes": 36864,  # 36 KB (measured: ~29 KB)
 }
 
 

@@ -38,7 +38,7 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from alongkit import bootstrap
 bootstrap.ensure_deps()
 
-from alongkit import install, repo
+from alongkit import frontmatter, install, kb, repo
 
 
 def get_git_changed_files(repo_root: str, base: str = "HEAD~1") -> List[str]:
@@ -138,6 +138,10 @@ def find_affected_docs_static(repo_root: str, target: str) -> List[str]:
             try:
                 with open(fpath, "r", encoding="utf-8", errors="ignore") as fh:
                     content = fh.read()
+                fm, _ = frontmatter.parse_tolerant(content, path=fpath)
+                if fm and kb.is_manual_write_policy(fm):
+                    # Manual write policy: exempt from automated blast radius mapping
+                    continue
                 if target in content or (target_clean and target_clean in content):
                     docs_found.append(rel)
             except OSError:

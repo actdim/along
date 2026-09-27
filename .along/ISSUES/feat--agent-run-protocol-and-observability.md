@@ -12,7 +12,6 @@ tags: [aep, arp, protocol, observability, runtime, opentelemetry, telegram, epic
 milestone: v5.0.0-agent-run-protocol-and-observability
 blocked_by: []
 related: []
-parent: null
 ---
 
 # Agent Run Protocol (AEP/ARP) & Observability Engine (Epic)
@@ -49,7 +48,10 @@ Establish Along as an execution control plane and observability layer for autono
 ## Child Issues
 - `[feat--agent-run-protocol-core]`: Protocol specification, OpenTelemetry engine, and pluggable OTLP sinks.
 - `[feat--agent-runtime-runner-antigravity]`: Process supervisor, Antigravity runtime adapter, and hook-based observation.
+- `[feat--agent-runtime-adapters-claude-codex-opencode]`: Multi-runtime adapters for Claude Code, Codex, and OpenCode.
 - `[feat--agent-execution-gate-telegram]`: Bidirectional Telegram remote operational gateway, task dispatch, project room routing, issue explorer (Mini App/Cards), and in-place Live Status Card execution gates.
+- `[feat--vps-runner-daemon]`: Headless VPS runner host daemon, long-polling / webhook listener, worker management, and worktree isolation.
+- `[feat--agent-interactive-stdin-bridge]`: Interactive Telegram clarification bridge routing operator answers to agent stdin / question prompts.
 - `[feat--operational-assets-and-playbooks]`: Operational assets, dependency topology, and executable playbooks.
 - `[feat--system-invariants-and-health-probes]`: System invariant assertions, health probes, and generalized verification gates.
 - `[docs--operations-and-autonomous-systems-paradigm]`: Documentation paradigm shift to dual-mode software engineering and autonomous operations.

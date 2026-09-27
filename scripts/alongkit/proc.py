@@ -29,7 +29,7 @@ import subprocess
 import sys
 import time
 from dataclasses import dataclass
-from typing import Dict, List, Optional, Sequence, Union
+from typing import Any, Dict, List, Optional, Sequence, Union
 
 Command = Union[str, Sequence[str]]
 
@@ -120,7 +120,9 @@ def run_capture(cmd: Command,
                 env: Optional[Dict[str, str]] = None,
                 stdin_text: Optional[str] = None,
                 shell: bool = False,
-                trip_on_anomaly: bool = True) -> Result:
+                trip_on_anomaly: bool = True,
+                telemetry_span: Optional[Any] = None,
+                tracer: Optional[Any] = None) -> Result:
     """Run `cmd`, capture stdout and stderr as UTF-8 text, never raise on decode.
 
     Decoding uses `errors="replace"`, so undecodable bytes surface as replacement
@@ -128,6 +130,18 @@ def run_capture(cmd: Command,
     or that exceeds `timeout`, is reported as a Result with a non-zero returncode
     and the reason in `stderr`; only `check=True` turns a failure into an exception.
     """
+    active_tracer = tracer
+    if active_tracer is None:
+        try:
+            from .telemetry.tracer import Tracer
+            active_tracer = Tracer.get_active()
+        except ImportError:
+            active_tracer = None
+
+    active_span = telemetry_span
+    if active_span is None and active_tracer is not None:
+        active_span = active_tracer.active_span
+
     target_cmd = _resolve_cmd(cmd, shell)
 
     # Intercept prohibited global package manager and system commands before execution
@@ -141,31 +155,76 @@ def run_capture(cmd: Command,
         except (OSError, UnicodeDecodeError):
             pass
         res = Result(cmd, 126, "", f"Execution blocked by circuit breaker: {prohibited.signature}")
+        if active_span is not None and active_tracer is not None:
+            active_tracer.record_command_result(
+                span=active_span,
+                cmd=cmd,
+                exit_code=126,
+                stdout="",
+                stderr=res.stderr,
+                pid=None,
+            )
         if check:
             raise ProcessError(res)
         return res
 
+    pid: Optional[int] = None
     try:
-        completed = subprocess.run(
+        proc = subprocess.Popen(
             target_cmd,
             cwd=cwd,
             shell=shell,
-            input=stdin_text,
-            capture_output=True,
+            stdin=subprocess.PIPE if stdin_text is not None else None,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
             text=True,
             encoding="utf-8",
             errors="replace",
-            timeout=timeout,
             env=child_env(base=env) if env is not None else child_env(),
         )
-        result = Result(cmd, completed.returncode,
-                       completed.stdout or "", completed.stderr or "")
+        pid = proc.pid
+        stdout_data, stderr_data = proc.communicate(input=stdin_text, timeout=timeout)
+        result = Result(cmd, proc.returncode, stdout_data or "", stderr_data or "")
     except subprocess.TimeoutExpired as exc:
-        result = Result(cmd, 124, _as_text(exc.stdout),
-                        _as_text(exc.stderr) or f"timed out after {timeout}s")
+        if "proc" in locals():
+            try:
+                proc.kill()
+                stdout_data, stderr_data = proc.communicate()
+            except (OSError, subprocess.SubprocessError):
+                stdout_data, stderr_data = "", ""
+            result = Result(cmd, 124, _as_text(stdout_data),
+                            _as_text(stderr_data) or f"timed out after {timeout}s")
+        else:
+            result = Result(cmd, 124, _as_text(exc.stdout),
+                            _as_text(exc.stderr) or f"timed out after {timeout}s")
     except (OSError, ValueError) as exc:
         # Missing executable, bad arguments: a normal outcome for optional tooling.
         result = Result(cmd, 127, "", str(exc))
+
+    if active_span is not None:
+        if active_tracer is not None:
+            active_tracer.record_command_result(
+                span=active_span,
+                cmd=cmd,
+                exit_code=result.returncode,
+                stdout=result.stdout,
+                stderr=result.stderr,
+                pid=pid,
+            )
+        else:
+            try:
+                from .telemetry.tracer import Tracer
+                temp_tracer = Tracer(cwd or os.getcwd())
+                temp_tracer.record_command_result(
+                    span=active_span,
+                    cmd=cmd,
+                    exit_code=result.returncode,
+                    stdout=result.stdout,
+                    stderr=result.stderr,
+                    pid=pid,
+                )
+            except (OSError, RuntimeError, ValueError, TypeError, AttributeError):
+                pass
 
     if not result.ok and trip_on_anomaly:
         anomaly = circuit.classify_anomaly(

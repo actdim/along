@@ -9,7 +9,7 @@ created: 2026-09-23
 updated: 2026-09-23
 agent: antigravity
 tags: [chat-adapters, discord, slack, mattermost, matrix, omnichannel, on-prem, semi-autonomous]
-milestone: v6.0.0-multi-runtime-and-omnichannel-expansion
+milestone: v5.3.0-omnichannel-chat-expansion
 blocked_by: [feat--agent-execution-gate-telegram]
 related: []
 parent: feat--multi-runtime-and-omnichannel-expansion

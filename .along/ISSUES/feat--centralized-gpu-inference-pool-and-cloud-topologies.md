@@ -9,7 +9,7 @@ created: 2026-09-23
 updated: 2026-09-23
 agent: antigravity
 tags: [gpu-pool, vllm, scaleway, nebius, aws, azure, vpc, private-inference, topology]
-milestone: v7.0.0-enterprise-governance-and-cloud-infrastructure
+milestone: v6.0.0-enterprise-governance-and-cloud-infrastructure
 blocked_by: []
 related: [feat--byoc-kubernetes-operator-and-private-sandboxes]
 parent: feat--enterprise-governance-and-cloud-infrastructure

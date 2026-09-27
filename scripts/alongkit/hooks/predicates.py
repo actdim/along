@@ -15,7 +15,7 @@ import os
 import re
 from typing import Any, Dict, List, Optional, Tuple
 
-from .. import frontmatter, repo, sanitizer, session, textio, typography
+from .. import frontmatter, kb, repo, sanitizer, session, textio, typography
 from .models import GateDecision, GateResult, HookEvent, HookEventType
 
 
@@ -39,7 +39,8 @@ PROTECTED_PROJECTIONS: Tuple[str, ...] = (
 
 DANGEROUS_CLI_PATTERNS: List[Tuple[re.Pattern, str]] = [
     (re.compile(r"<<\s*['\"]?EOF['\"]?", re.IGNORECASE), "Heredoc syntax (<<EOF)"),
-    (re.compile(r"python\d*\s+-c\s+.*open\(.*['\"][wa]['\"].*\)", re.DOTALL), "Inline Python file writer"),
+    (re.compile(r"python\d*(?:\.exe)?\s+-c\s+.*open\(.*['\"][wa]['\"].*\)", re.DOTALL | re.IGNORECASE), "Inline Python file writer"),
+    (re.compile(r"python\d*(?:\.exe)?\s+-c\s+['\"].*(?:import\s+(?:alongkit|along_exec)|from\s+(?:alongkit|along_exec)|sys\.path\.insert).*", re.DOTALL | re.IGNORECASE), "Ad-hoc internal module probe via python -c [gate: cli_safety] (use Along CLI, code search tools, or a scratch/ script)"),
     (re.compile(r"git\s+reset\s+--hard", re.IGNORECASE), "Destructive unstaged Git wipe (git reset --hard)"),
     (re.compile(r"git\s+clean\s+-[a-zA-Z]*f", re.IGNORECASE), "Destructive Git clean (git clean -f)"),
     (re.compile(r"npm\s+install\s+(-g|--global)", re.IGNORECASE), "Global package manager mutation (npm -g)"),
@@ -258,6 +259,66 @@ def check_projection_protection(event: HookEvent, repo_root: str, **kwargs: Any)
             "Modify atomic files and run 'along issue sync' or 'along kb sync' to recompile."
         )
     return None
+
+
+def check_doc_manual_lock(event: HookEvent, repo_root: str, **kwargs: Any) -> Optional[str]:
+    """Disallows modifying documentation marked with write_policy: manual without explicit intent."""
+    target = _extract_target_file(event)
+    if not target:
+        return None
+
+    if os.path.isabs(target):
+        try:
+            rel_target = os.path.relpath(target, repo_root)
+            if rel_target.startswith("..") or os.path.isabs(rel_target):
+                return None
+        except ValueError:
+            return None
+    else:
+        rel_target = target
+
+    norm_rel = repo.normalize_posix(rel_target).lstrip("/")
+    if not (norm_rel.startswith("docs/") or norm_rel.startswith(".along/")):
+        return None
+
+    abs_target = os.path.normpath(os.path.join(repo_root, rel_target))
+    if not os.path.isfile(abs_target):
+        return None
+
+    try:
+        content = textio.read_text(abs_target, strict=False)
+        fm, _, _ = frontmatter.try_parse(content)
+        if not fm or not kb.is_manual_write_policy(fm):
+            return None
+    except (OSError, UnicodeDecodeError, ValueError):
+        return None
+
+    # Target has write_policy: manual (or locked: true).
+    # Check if there is an active session or in-progress issue specifically targeting this doc.
+    slug = fm.get("slug") or os.path.splitext(os.path.basename(rel_target))[0].replace("topic--", "")
+    active_slug = session.get_active_session_slug(repo_root)
+    if active_slug and (active_slug == slug or active_slug == f"docs--{slug}" or active_slug == f"topic--{slug}"):
+        return None
+
+    issues_dir = _issues_dir(repo_root)
+    if os.path.isdir(issues_dir):
+        doc_issue_cand = os.path.join(issues_dir, f"docs--{slug}.md")
+        if os.path.isfile(doc_issue_cand):
+            try:
+                i_raw = textio.read_text(doc_issue_cand, strict=False)
+                i_fm, _, _ = frontmatter.try_parse(i_raw)
+                if i_fm and i_fm.get("status") == "in-progress":
+                    return None
+            except (OSError, UnicodeDecodeError, ValueError):
+                pass
+
+    return (
+        f"Manual Document Lock Violation [gate: doc-manual-lock]: "
+        f"Document '{rel_target}' is governed by 'write_policy: manual'. "
+        f"Automated modifications during code refactoring or blast radius sync are prohibited. "
+        f"To edit this file, activate an explicit documentation issue (.along/ISSUES/docs--{slug}.md) "
+        f"or modify the frontmatter write_policy."
+    )
 
 
 def check_cli_safety(event: HookEvent, repo_root: str, **kwargs: Any) -> Optional[str]:
