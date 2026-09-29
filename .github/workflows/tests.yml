@@ -1,0 +1,86 @@
+name: Tests
+
+# Runs the canonical test entry point on every supported Python and OS, plus the
+# typography gate, the Markdown link report, and the dashboard type check.
+# See [task--ci-test-matrix-workflow].
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: tests-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  python:
+    name: Python ${{ matrix.python }} / ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+        python: ['3.10', '3.11', '3.12', '3.13']
+    env:
+      PYTHONUTF8: '1'
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+
+      - name: Syntax gate
+        run: uv run --python ${{ matrix.python }} --no-project python -m compileall -q scripts tests dashboard .along/scripts
+
+      - name: Test suite (.along/scripts/test.py)
+        run: >-
+          uv run --python ${{ matrix.python }} --no-project
+          --with "ruamel.yaml>=0.18" --with "fastapi>=0.110.0" --with "uvicorn>=0.28.0"
+          --with "pydantic>=2.0.0" --with "rich>=13.0.0"
+          python .along/scripts/test.py -q
+
+  gates:
+    name: Typography and links
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+
+      - name: Typography gate (check mode)
+        run: uv run --python 3.12 --no-project --with "ruamel.yaml>=0.18" python scripts/sanitize_typography.py . --check
+
+      - name: Markdown link report
+        # Report-only until docs/topic--dependencies.md stops linking into node_modules.
+        continue-on-error: true
+        run: uv run --python 3.12 --no-project --with "ruamel.yaml>=0.18" python scripts/along_kb_sync.py --check --strict
+
+  dashboard-ui:
+    name: Dashboard UI type check
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install pnpm
+        uses: pnpm/action-setup@v3
+        with:
+          version: 10
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'pnpm'
+          cache-dependency-path: 'packages/dashboard-ui/pnpm-lock.yaml'
+
+      - name: Install
+        run: pnpm --prefix packages/dashboard-ui install --frozen-lockfile
+
+      - name: Type check
+        run: pnpm --prefix packages/dashboard-ui run typecheck

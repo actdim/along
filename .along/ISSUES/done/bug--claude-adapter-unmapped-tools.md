@@ -3,7 +3,8 @@ protocol: along
 protocol_version: "4.2.0"
 slug: claude-adapter-unmapped-tools
 type: bug
-status: open
+status: done
+completed: 2026-09-27
 priority: high
 created: 2026-09-27
 updated: 2026-09-27
@@ -42,7 +43,14 @@ MultiEdit src/a.py -> ALLOW
 
 ## Acceptance Criteria
 
-- [ ] `MultiEdit` and `NotebookEdit` on `src/` without an active issue are denied
-- [ ] `Grep` over `docs/` triggers `fast_retrieval`
-- [ ] Contract test for tool coverage exists for all adapters
-- [ ] Automated tests passing
+- [x] `MultiEdit` and `NotebookEdit` on `src/` without an active issue are denied
+- [x] `Grep` over `docs/` triggers `fast_retrieval`
+- [x] Contract test for tool coverage exists for all adapters
+- [x] Automated tests passing
+
+## Resolution
+
+- REQ-1/REQ-2: `adapters/claude.py` maps `MultiEdit`, `NotebookEdit` (to `replace_file_content`, with `edits[].new_string` / `new_source` / `notebook_path` normalized into `ReplacementContent` / `TargetFile`), `Grep` (`grep_search`) and `Glob` (`find_by_name`), plus the read-only tools (`Read`, `LS`, `WebFetch`, `WebSearch`, `TodoWrite`, `Task`, `Agent`, `ExitPlanMode`, `AskUserQuestion`). `EXEMPT_TOOLS` lists the rest.
+- REQ-3/REQ-4: new `alongkit/hooks/adapters/normalize.py`; `HookEngine.evaluate` runs `normalize.fail_closed()` on every event from every adapter. Unknown tools that look like writes (name or path+content arguments) become `replace_file_content`; other unknown tools are allowed and written to `hooks_audit.jsonl` as `unmapped_tool`.
+- REQ-5: `tests/test_hooks_tool_coverage.py` - documented Claude Code tools are mapped or exempt, every adapter map points at canonical names, and end-to-end DENY/ALLOW checks for MultiEdit, NotebookEdit, Grep, unknown writer and unknown reader.
+- Verified: full suite via `.along/scripts/test.py -q` on Python 3.12, 686 tests OK (3 skipped); hook modules also on 3.10.

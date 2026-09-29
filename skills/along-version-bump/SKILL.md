@@ -12,6 +12,7 @@ Universal project version bumper and release pipeline engine for repositories ad
 - Verifying clean ASCII typography and preparing the release git commit.
 
 ## What a Release Does, In Order
+0. **Precondition (this repository)**: the `Tests` workflow (`.github/workflows/tests.yml`, Python 3.10-3.13 on Linux and Windows) is green on the commit being released. The local gates below cannot see the other interpreters and operating systems.
 1. **Gates, on the untouched tree**: the repository's tests, the typography check, and the Markdown link integrity check (`along_kb_sync.py --check --strict`). All three run on every invocation, not only with `--commit`. A failing gate aborts before anything is written.
 2. **Version**: `.along/scripts/bump_version.py` if the project has one, otherwise the detected manifest (`package.json`, `pyproject.toml`, `Cargo.toml`, `VERSION`, or the Along protocol files).
 3. **Milestone**: the milestone in `.along/MILESTONES/` whose front-matter `slug` names the released version is set to `status: completed`, `progress_pct: 100`. Front-matter only; the body is never rewritten.

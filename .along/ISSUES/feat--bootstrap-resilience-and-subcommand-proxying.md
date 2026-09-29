@@ -9,7 +9,7 @@ created: 2026-09-27
 updated: 2026-09-27
 agent: antigravity
 tags: [bootstrap, uv, python, resilience, cli]
-milestone: v4.3.0-developer-experience-and-runtime-resilience
+milestone: v4.4.0-multi-user-merge-automation
 blocked_by: []
 blocks: []
 related: [feat--dev-environment-setup-and-editable-install]

@@ -1,6 +1,6 @@
 {
-  "last_edit_time": "2026-09-27T19:57:17.367850+00:00",
-  "last_test_time": "2026-09-27T19:57:36.137320+00:00",
+  "last_edit_time": "2026-09-29T09:03:23.196760+00:00",
+  "last_test_time": "2026-09-29T08:59:11.652941+00:00",
   "edited_files": [
     "d:\\Src\\my\\actdim\\public\\along\\scripts\\alongkit\\install.py",
     "d:\\Src\\my\\actdim\\public\\along\\scripts\\alongkit\\hooks\\predicates.py",
@@ -475,6 +475,12 @@
     "d:\\Src\\my\\actdim\\public\\along\\scripts\\alongkit\\runner\\stream.py",
     "d:\\Src\\my\\actdim\\public\\along\\tests\\test_runner_antigravity.py",
     "d:\\Src\\my\\actdim\\public\\along\\.along\\SESSIONS\\2026\\2026-09-27--agent-runtime-runner-antigravity.md",
-    "d:\\Src\\my\\actdim\\public\\along\\.along\\diagnostics\\circuit_breaker.json"
+    "d:\\Src\\my\\actdim\\public\\along\\.along\\diagnostics\\circuit_breaker.json",
+    "d:\\Src\\my\\actdim\\public\\along\\.along\\ISSUES\\task--ci-test-matrix-workflow.md",
+    "d:\\Src\\my\\actdim\\public\\along\\.along\\SESSIONS\\2026\\2026-09-29--review-of-cowork-fixes.md",
+    "d:\\Src\\my\\actdim\\public\\along\\.along\\MILESTONES\\v4.3.0-developer-experience-and-runtime-resilience.md",
+    "d:\\Src\\my\\actdim\\public\\along\\.along\\ISSUES\\docs--anti-pattern-shell-code-probing.md",
+    "d:\\Src\\my\\actdim\\public\\along\\.along\\ISSUES\\feat--bootstrap-resilience-and-subcommand-proxying.md",
+    "d:\\Src\\my\\actdim\\public\\along\\.along\\ISSUES\\feat--dev-environment-setup-and-editable-install.md"
   ]
 }

@@ -31,11 +31,30 @@ TOOL_NAME_MAP: Dict[str, str] = {
     "Edit": "replace_file_content",
     "EditFile": "replace_file_content",
     "edit_file": "replace_file_content",
+    "MultiEdit": "replace_file_content",
+    "NotebookEdit": "replace_file_content",
     "Bash": "run_command",
     "bash": "run_command",
     "PowerShell": "run_command",
     "powershell": "run_command",
+    "Grep": "grep_search",
+    "Glob": "find_by_name",
+    # Read-only tools, mapped so they are recognized rather than audited as unmapped.
+    "Read": "view_file",
+    "LS": "list_dir",
+    "WebFetch": "read_url_content",
+    "WebSearch": "search_web",
+    "TodoWrite": "manage_task",
+    "Task": "manage_task",
+    "Agent": "manage_task",
+    "ExitPlanMode": "ask_question",
+    "AskUserQuestion": "ask_question",
 }
+
+#: Claude Code tools that the gates deliberately do not inspect: they neither write
+#: repository files nor run commands. `tests/test_hooks_tool_coverage.py` asserts that
+#: every documented Claude Code tool is either in TOOL_NAME_MAP or listed here.
+EXEMPT_TOOLS: Tuple[str, ...] = ("BashOutput", "KillShell", "SlashCommand", "Skill", "ToolSearch")
 
 
 class ClaudeCodeAdapter(BaseAdapter):
@@ -78,8 +97,24 @@ class ClaudeCodeAdapter(BaseAdapter):
 
         if "file_path" in tool_args:
             tool_args.setdefault("TargetFile", tool_args["file_path"])
-        elif "path" in tool_args:
+        elif "notebook_path" in tool_args:
+            tool_args.setdefault("TargetFile", tool_args["notebook_path"])
+        elif "path" in tool_args and tool_name not in ("grep_search", "find_by_name"):
             tool_args.setdefault("TargetFile", tool_args["path"])
+
+        # MultiEdit carries a list of edits; the gates inspect the combined new text.
+        edits = tool_args.get("edits")
+        if raw_tool_name == "MultiEdit" and isinstance(edits, list):
+            combined = "\n".join(
+                str(e.get("new_string", "")) for e in edits if isinstance(e, dict)
+            )
+            tool_args.setdefault("ReplacementContent", combined)
+            tool_args.setdefault("content", combined)
+
+        # NotebookEdit carries the new cell source.
+        if "new_source" in tool_args:
+            tool_args.setdefault("ReplacementContent", tool_args["new_source"])
+            tool_args.setdefault("content", tool_args["new_source"])
 
         if "content" in tool_args and tool_name == "write_to_file":
             tool_args.setdefault("CodeContent", tool_args["content"])

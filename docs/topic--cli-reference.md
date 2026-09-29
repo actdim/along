@@ -6,7 +6,7 @@ title: Along CLI Command Reference
 type: reference
 curated: true
 created: 2026-09-14
-updated: 2026-09-21
+updated: 2026-09-27
 tags: [cli, commands, router, lifecycle, tools, reference]
 ---
 
@@ -97,6 +97,7 @@ Displays an instant terminal summary of repository health, active in-flight issu
 
 ### `along doctor`
 Validates repository compliance with the Along protocol. Audits `.along/` directory layout, `.gitattributes` merge drivers, and ADR header formatting.
+- **Runtime section**: names the runtime (`claude-code`, `cowork`, `antigravity`, `codex`, ...), the gate enforcement level (`mechanical` only when Along hooks are registered for that runtime, otherwise `advisory`), the Python floor (3.10), a stale `.git/index.lock`, and a cross-OS or VM-mounted repository (worktrees unsafe). See the capability matrix in [Runtime Lifecycle Hooks & Mechanical Gates](./topic--runtime-hooks-and-gates.md).
 - **Options**:
   - `--entities`: Performs deep validation of the entity DAG graph, verifying parent/child relationships, `blocked_by` dependencies, and detecting circular references.
 - **Usage**:
@@ -164,7 +165,8 @@ Tracks progress across high-level milestones and sprints in `.along/MILESTONES/`
 Manages session logs in `.along/SESSIONS/` and records engineering provenance.
 - **Subcommands**:
   - `along session create <slug> --summary "Summary" [options...]`: Initializes a new session log.
-    - Options: `--issues "slug1,slug2"`, `--decisions "ADR-slug"`, `--agent <name>`, `--milestone <name>`.
+    - Options: `--issues "slug1,slug2"`, `--decisions "ADR-slug"`, `--agent <name>`, `--milestone <name>`, `--commit <sha>`.
+    - Front-matter is emitted through `ruamel.yaml`; `branch` and `commit` come from git (omitted outside a repository), and the body records test evidence only when the runtime hooks recorded a run.
   - `along session wrap <slug> [options...]`: Finalizes a session, updates linked issue states, and recompiles projections.
     - Options: `--status {done,superseded}`, `--summary "Summary"`, `--dry-run`, `-n`.
 - **Usage**:

@@ -867,6 +867,8 @@ def detect_agent(explicit: Optional[str] = None) -> str:
     1. Explicit value passed by caller (--agent <name>).
     2. ALONG_AGENT environment variable.
     3. Provider-specific runtime environment markers:
+       - Claude Cowork: ALONG_RUNTIME=cowork, or CLAUDE_CODE_HOST_HTTP_PROXY_PORT with a
+         /sessions/ home (`alongkit.runtime.is_cowork_env`) -> 'cowork'
        - Claude Code: CLAUDE_CODE, CLAUDE_PROJECT_DIR, CLAUDE_CONVERSATION_ID, ANTHROPIC_CLI -> 'claude-code'
        - Antigravity: ANTIGRAVITY_AGENT, ANTIGRAVITY_CONVERSATION_ID, ANTIGRAVITY_PROJECT_ID -> 'antigravity'
        - Codex: CODEX_CLI, OPENAI_CODEX -> 'codex'
@@ -883,6 +885,11 @@ def detect_agent(explicit: Optional[str] = None) -> str:
         val = env["AGENT"].strip()
         if val:
             return val
+
+    # Claude Cowork (checked before Claude Code: its VM also carries CLAUDE_* variables)
+    from . import runtime
+    if runtime.is_cowork_env(env):
+        return "cowork"
 
     # Claude Code
     if any(k in env for k in ("CLAUDE_CODE", "CLAUDE_PROJECT_DIR", "CLAUDE_CONVERSATION_ID", "ANTHROPIC_CLI")):

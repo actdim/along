@@ -74,6 +74,7 @@ When a stage or session completes, agents MUST execute in this order:
   - In submodules, execute the hook from that subproject's own `.along/scripts/`.
 - **Environment Isolation**:
   - Agents MUST NOT install system-wide or global packages when a script fails. Fix the architecture (missing `bootstrap.ensure_deps()`, incorrect `uv` wrapper), not the environment.
+- **Runtimes Without Along Hooks** (Claude Cowork, Cursor, OpenCode, plain shells): gates are advisory there. Agents MUST self-apply every gate-tagged rule and use the `along` CLI for tests, commits, entity changes, and wrap instead of raw tools. `along doctor` reports the enforcement level.
 - **File Modification & Anti-Deletion**:
   - Never delete, truncate, or overwrite existing documentation, comments, or code unless explicitly instructed.
   - After batch edits or migrations, agents MUST run `git diff --stat` and inspect unexpected size reductions.

@@ -4,7 +4,7 @@ slug: declarative-gates-and-traceability
 title: Declarative Gate Engine & Protocol Traceability Matrix
 type: architecture
 created: 2026-09-13
-updated: 2026-09-13
+updated: 2026-09-27
 tags: [hooks, gates, declarative, traceability, verification, protocol, predicates]
 sources:
   - path: scripts/alongkit/hooks/default_gates.yaml
@@ -76,7 +76,7 @@ Gates are declared in YAML format with standard schema fields:
 
 The 14 canonical gates defined in the catalogue:
 1. `commit_issue_binding`: Intercepts `git commit` to require issue binding (`--issue` or `(<type>--<slug>)`).
-2. `commit_no_conflict_markers`: Intercepts `git commit` to reject unresolved merge conflict markers (`<<<<<<<`, `=======`, `>>>>>>>`).
+2. `commit_no_conflict_markers`: Intercepts `git commit` and inspects the lines the commit would add (`git diff --cached`, or `git diff HEAD` for `commit -a`) for unresolved merge conflict markers at line start (`<<<<<<< `, `=======`, `>>>>>>> `). The commit message itself is not inspected, so a Markdown rule of `=======` in a message is allowed. No file class is exempt: `merge=union` files never receive markers from git, so a marker there is a real conflict too.
 3. `anti_stub_injection`: Intercepts file mutation tools to forbid stub markers and lazy truncation skeletons.
 4. `cli_safety`: Intercepts shell commands to block heredocs (`<<EOF`), inline python file writers, destructive wipes (`git reset --hard`), and global installs.
 5. `projection_protection`: Intercepts file writes to derived projections (`.along/ISSUES.md`, `docs/INDEX.md`, `DECISIONS.md`).

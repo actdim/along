@@ -3,7 +3,8 @@ protocol: along
 protocol_version: "4.2.0"
 slug: test-quiet-script-guard-conflict
 type: bug
-status: open
+status: done
+completed: 2026-09-27
 priority: low
 created: 2026-09-27
 updated: 2026-09-27
@@ -33,6 +34,13 @@ Three places disagree on what the supported test entry point is.
 
 ## Acceptance Criteria
 
-- [ ] `pnpm run test:quiet` / `npm run test:quiet` runs the suite
-- [ ] Allowlist and guard agree
-- [ ] Automated tests passing
+- [x] `pnpm run test:quiet` / `npm run test:quiet` runs the suite
+- [x] Allowlist and guard agree
+- [x] Automated tests passing
+
+## Resolution
+
+- REQ-1: `.along/scripts/test.py` accepts `-q` / `--quiet` (unittest verbosity 1); `package.json` `test:quiet` is now `python .along/scripts/test.py -q`.
+- REQ-2: decision documented in `docs/topic--setup-and-workflow.md`: the runner is the only supported entry point for this repository's suite, so the guard in `tests/__init__.py` stays. The generic test-runner patterns in the `require-plan-approval` allowlist stay too, because they describe consumer repositories (pytest, npm test, ...), not this one. The two stale `uv run python -m unittest discover tests -q` instructions in that article now point at the runner.
+- REQ-3: the guard message already names `python .along/scripts/test.py`; the runner docstring explains why.
+- Verified: `.along/scripts/test.py -q` on Python 3.12, 666 tests OK (3 skipped), dot output.

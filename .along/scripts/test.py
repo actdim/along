@@ -3,6 +3,11 @@
 """
 test.py - Automated Test Runner Hook for along repository.
 Executes the comprehensive unit test suite via Python standard unittest.
+
+This is the only supported entry point for this repository's suite: the tests refuse
+raw `python -m unittest` / `pytest` because they need `ALONG_TEST_RUNNER`, the syntax
+gate, and the resolved dependencies set up here. Pass `-q` / `--quiet` for dot output
+(`npm run test:quiet`). See [bug--test-quiet-script-guard-conflict].
 """
 
 import sys
@@ -33,7 +38,8 @@ def main():
     
     loader = unittest.TestLoader()
     suite = loader.discover(start_dir=tests_dir, pattern="test_*.py")
-    runner = unittest.TextTestRunner(verbosity=2)
+    quiet = any(arg in ("-q", "--quiet") for arg in sys.argv[1:])
+    runner = unittest.TextTestRunner(verbosity=1 if quiet else 2)
     result = runner.run(suite)
     
     sys.exit(0 if result.wasSuccessful() else 1)

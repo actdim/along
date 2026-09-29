@@ -3,7 +3,8 @@ protocol: along
 protocol_version: "4.2.0"
 slug: safe-command-prefix-bypass
 type: bug
-status: open
+status: done
+completed: 2026-09-27
 priority: high
 created: 2026-09-27
 updated: 2026-09-27
@@ -41,6 +42,13 @@ echo hi > src/a.py    -> ALLOW
 
 ## Acceptance Criteria
 
-- [ ] All four evidence commands except `ls` alone are denied or routed through `cli_safety`
-- [ ] Benign read-only commands stay allowed (no regression in `test_hooks_*`)
-- [ ] Automated tests passing
+- [x] All four evidence commands except `ls` alone are denied or routed through `cli_safety`
+- [x] Benign read-only commands stay allowed (no regression in `test_hooks_*`)
+- [x] Automated tests passing
+
+## Resolution
+
+- New `alongkit/hooks/shellparse.py`: `is_read_only_command()` splits on `;`, `&&`, `||`, `|` and newlines outside quotes (REQ-1), treats command substitution as non-read-only, treats `>`/`>>` to anything but a null device as a write (REQ-2), strips runner wrappers (`uv run ...`, `poetry run`, `npx`, env assignments) and anchors test runners to the segment start (REQ-3). Quote-aware splitting uses a small scanner plus `shlex` (posix=False, so Windows paths survive).
+- `check_mutation_authorization` uses it; the prefix/substring `SAFE_READ_COMMAND_PATTERNS` list is removed. `cli_safety` is a separate gate with its own pattern search over the whole command and was never behind the read-only shortcut, so REQ-4 already held.
+- REQ-5: `tests/test_shell_classification.py` - 26 read-only and 20 mutating cases (POSIX and PowerShell) plus end-to-end Claude adapter checks for the review evidence.
+- Verified: full suite on Python 3.12, 686 tests OK (3 skipped).

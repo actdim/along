@@ -126,7 +126,7 @@ Entity Management Commands:
   milestone sync [<slug>] Recompute target_issues, progress_pct, and status across milestones
   milestone list [--status open|in-progress|completed] [--json]
   milestone show <slug> [--json]
-  session create <slug> --summary "Summary" [--issues "slug1,slug2"] [--decisions "ADR-slug"] [--agent <name>] [--milestone <name>]
+  session create <slug> --summary "Summary" [--issues "slug1,slug2"] [--decisions "ADR-slug"] [--agent <name>] [--milestone <name>] [--commit <sha>]
   session wrap   <slug> [--status done|superseded] [--summary "Summary"] [--dry-run] [-n]
   decision create <slug> --title "Title" --context "Why" --decision "What" --consequences "Tradeoffs"
   decision sync   Recompile .along/CONSTRAINTS.md projection from active ADRs
@@ -761,6 +761,75 @@ def handle_start_command(repo_root: str, args: List[str]):
     sys.exit(0)
 
 
+def _git_head_facts(repo_root: str) -> Tuple[Optional[str], Optional[str]]:
+    """(branch, short commit) of the repository or worktree, or None where unknown."""
+    branch = None
+    commit = None
+    res = proc.git(["rev-parse", "--abbrev-ref", "HEAD"], cwd=repo_root)
+    if res.ok and res.stdout.strip():
+        branch = res.stdout.strip()
+    res = proc.git(["rev-parse", "--short", "HEAD"], cwd=repo_root)
+    if res.ok and res.stdout.strip():
+        commit = res.stdout.strip()
+    return branch, commit
+
+
+def _tests_evidence_line(repo_root: str) -> str:
+    """What the session log may truthfully say about tests.
+
+    The CLI does not run tests, so it never claims they passed. When the runtime hooks
+    recorded a test run after the last edit, the log says so and leaves the result to the
+    author. See [bug--session-create-unsafe-yaml].
+    """
+    try:
+        from alongkit.hooks.predicates import load_activity_trace
+        trace = load_activity_trace(repo_root)
+    except (ImportError, OSError, ValueError):
+        trace = {}
+    test_time = trace.get("last_test_time")
+    edit_time = trace.get("last_edit_time")
+    if test_time and (not edit_time or test_time >= edit_time):
+        return (f"- Tests: a test run was recorded by the runtime hooks at {test_time}, "
+                "after the last recorded edit; state the command and its result here.")
+    return "- Tests: no test run recorded for this session; state the command and its result here."
+
+
+def _render_session_log(repo_root: str, *, today: str, slug: str, agent: str, summary: str,
+                        milestone: Optional[str], issues: List[str], decisions: List[str],
+                        commit: Optional[str] = None) -> str:
+    """Session log document with front-matter emitted by ruamel, never by string formatting."""
+    branch, head = _git_head_facts(repo_root)
+    fm: Dict[str, Any] = {
+        "protocol": "along",
+        "protocol_version": frontmatter.quoted(CURRENT_PROTOCOL_VERSION),
+        "date": today,
+        "slug": slug,
+        "agent": agent,
+    }
+    if branch:
+        fm["branch"] = branch
+    if commit or head:
+        fm["commit"] = commit or head
+    fm["summary"] = summary
+    if milestone:
+        fm["milestone"] = milestone
+    fm.update({
+        "issues_advanced": [],
+        "issues_completed": list(issues),
+        "decisions": list(decisions),
+        "risks_logged": [],
+        "spikes_conducted": [],
+    })
+    body = (
+        f"# Session: {slug.replace('-', ' ').capitalize()}\n\n"
+        f"## Summary\n{summary}\n\n"
+        "## Work Completed\n- Document key tasks and achievements.\n\n"
+        "## Code Review & Blast Radius\n"
+        f"{_tests_evidence_line(repo_root)}\n"
+    )
+    return frontmatter.render(fm, body)
+
+
 def handle_session_command(repo_root: str, args: List[str]):
     if not args or args[0] in ("-h", "--help", "help"):
         print("Usage: along_exec.py session create <slug> --summary \"Summary text\" [--issues \"slug1,slug2\"] [--decisions \"ADR-slug\"]")
@@ -783,11 +852,15 @@ def handle_session_command(repo_root: str, args: List[str]):
         decisions = []
         explicit_agent = None
         explicit_milestone = None
+        explicit_commit = None
 
         i = 2
         while i < len(args):
             if args[i] in ("--summary", "-s") and i + 1 < len(args):
                 summary = args[i + 1]
+                i += 2
+            elif args[i] == "--commit" and i + 1 < len(args):
+                explicit_commit = args[i + 1]
                 i += 2
             elif args[i] in ("--issues", "-i") and i + 1 < len(args):
                 issues = [iss.strip() for iss in args[i + 1].split(",") if iss.strip()]
@@ -817,38 +890,11 @@ def handle_session_command(repo_root: str, args: List[str]):
         else:
             milestone = entities.resolve_in_progress_milestone(repo_root)
 
-        milestone_line = f"milestone: {milestone}\n" if milestone else ""
         target_file = os.path.join(sessions_dir, f"{today}--{slug}.md")
-        issues_str = f"[{', '.join(issues)}]" if issues else "[]"
-        decisions_str = f"[{', '.join([f'\"{d}\"' for d in decisions])}]" if decisions else "[]"
-
-        content = f"""---
-protocol: along
-protocol_version: "{CURRENT_PROTOCOL_VERSION}"
-date: {today}
-slug: {slug}
-agent: {agent}
-branch: main
-commit: pending
-summary: {summary}
-{milestone_line}issues_advanced: []
-issues_completed: {issues_str}
-decisions: {decisions_str}
-risks_logged: []
-spikes_conducted: []
----
-
-# Session: {slug.replace('-', ' ').capitalize()}
-
-## Summary
-{summary}
-
-## Work Completed
-- Document key tasks and achievements.
-
-## Code Review & Blast Radius
-- Automated tests verified and passing.
-"""
+        content = _render_session_log(
+            repo_root, today=today, slug=slug, agent=agent, summary=summary,
+            milestone=milestone, issues=issues, decisions=decisions, commit=explicit_commit,
+        )
         textio.write_text(target_file, content, newline="\n", atomic=True)
         print(f"-> Created session log: {target_file}")
 
@@ -1047,6 +1093,44 @@ def handle_status_command(repo_root: str, args: List[str]):
     sys.exit(0)
 
 
+def _doctor_runtime_checks(repo_root: str, errors: int, warnings: int) -> Tuple[int, int]:
+    """Runtime section of `along doctor`: who runs, what is enforced, environment hazards.
+
+    See [feat--cowork-runtime-support] and the capability matrix in
+    docs/topic--runtime-hooks-and-gates.md.
+    """
+    from alongkit import runtime
+
+    agent = entities.detect_agent()
+    report = runtime.runtime_report(repo_root, agent)
+    print(f"\n--- Runtime: {agent} ---")
+    tag = "[OK]" if report["enforcement"] == runtime.MECHANICAL else "[WARN]"
+    print(f"{tag} Gate enforcement: {report['enforcement']}. {report['explanation']}")
+    if report["enforcement"] != runtime.MECHANICAL:
+        warnings += 1
+
+    if report["python_supported"]:
+        print(f"[OK] Python {report['python']} is supported (>= 3.10).")
+    else:
+        print(f"[FAIL] Python {report['python']} is below the supported minimum 3.10.")
+        errors += 1
+
+    if report["stale_index_lock"]:
+        print("[WARN] .git/index.lock exists: git writes will fail. If no git process is running, the "
+              "folder likely forbids deletes (Claude Cowork without delete permission): grant delete "
+              "permission for the folder, then remove the lock.")
+        warnings += 1
+
+    symlinks = proc.git(["config", "--get", "core.symlinks"], cwd=repo_root)
+    core_symlinks = symlinks.stdout.strip() if symlinks.ok else None
+    if runtime.is_cross_os_mount(repo_root, fs_type=report["fs_type"], core_symlinks=core_symlinks):
+        fs = report["fs_type"] or "unknown fs"
+        print(f"[WARN] Repository is on a cross-OS or VM-mounted filesystem ({fs}, core.symlinks="
+              f"{core_symlinks or 'unset'}): do not run 'along worktree' from this environment.")
+        warnings += 1
+    return errors, warnings
+
+
 def handle_doctor_command(repo_root: str, args: List[str]):
     check_entities = "--entities" in args or (bool(args) and args[0].lower() == "entities")
     if check_entities:
@@ -1165,6 +1249,8 @@ def handle_doctor_command(repo_root: str, args: List[str]):
     except (OSError, UnicodeDecodeError, ValueError) as exc:
         print(f"[WARN] Could not check circuit breaker status: {exc}")
         warnings += 1
+
+    errors, warnings = _doctor_runtime_checks(repo_root, errors, warnings)
 
     print(f"\nDoctor Summary: {errors} errors, {warnings} warnings.")
     sys.exit(1 if errors > 0 else 0)

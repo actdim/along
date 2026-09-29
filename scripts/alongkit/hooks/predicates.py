@@ -15,7 +15,8 @@ import os
 import re
 from typing import Any, Dict, List, Optional, Tuple
 
-from .. import frontmatter, kb, repo, sanitizer, session, textio, typography
+from .. import frontmatter, kb, proc, repo, sanitizer, session, textio, typography
+from . import shellparse
 from .models import GateDecision, GateResult, HookEvent, HookEventType
 
 
@@ -58,21 +59,9 @@ TEST_COMMAND_PATTERNS: List[re.Pattern] = [
     re.compile(r"unittest\s+discover", re.IGNORECASE),
 ]
 
-SAFE_READ_COMMAND_PATTERNS: List[re.Pattern] = [
-    re.compile(r"^git\s+(status|diff|log|branch|show|rev-parse|describe)", re.IGNORECASE),
-    re.compile(r"^along\s+(test|status|doctor|budget|context-budget|kb-search|scratch\s+state|worktree\s+list|worktree\s+status|hook\s+verify)", re.IGNORECASE),
-    re.compile(r"^python\s+scripts[/\\]along_exec\.py\s+(test|status|doctor|budget|context-budget|kb-search|scratch\s+state|worktree\s+list|worktree\s+status|hook\s+verify)", re.IGNORECASE),
-    re.compile(r"^\s*(echo|printf|cat|dir|ls|type|head|tail|grep|which|where)\b", re.IGNORECASE),
-    re.compile(r"(?:^|[/\\])python(?:\d*(?:\.exe)?)?\s+(-V|--version|-c\s+['\"]?print\b)", re.IGNORECASE),
-    re.compile(r"\balong(\s+|[-_])test\b", re.IGNORECASE),
-    re.compile(r"\.along[/\\]scripts[/\\]test\.py", re.IGNORECASE),
-    re.compile(r"\bpytest\b", re.IGNORECASE),
-    re.compile(r"\bnpm\s+test\b", re.IGNORECASE),
-    re.compile(r"\bcargo\s+test\b", re.IGNORECASE),
-    re.compile(r"\bdotnet\s+test\b", re.IGNORECASE),
-    re.compile(r"\bpython\s+-m\s+unittest\b", re.IGNORECASE),
-    re.compile(r"\bunittest\s+discover\b", re.IGNORECASE),
-]
+# Read-only shell commands are classified segment by segment in `shellparse`; the former
+# prefix/substring allowlist let `ls && rm -rf src` through. See
+# [bug--safe-command-prefix-bypass].
 
 
 MUTATION_WHITELIST_PATTERNS: Tuple[str, ...] = (
@@ -336,6 +325,52 @@ def check_cli_safety(event: HookEvent, repo_root: str, **kwargs: Any) -> Optiona
     return None
 
 
+_CONFLICT_MARKER_LINE = re.compile(r"^(<{7} |={7}$|>{7} |<{7}$|>{7}$)")
+_COMMIT_ALL_FLAG = re.compile(r"(?:^|\s)(?:-[a-zA-Z]*a[a-zA-Z]*|--all)(?:\s|$)")
+
+
+def find_added_conflict_markers(diff_text: str) -> List[str]:
+    """Return `path:marker` for every conflict marker a unified diff adds."""
+    hits: List[str] = []
+    current = ""
+    for line in diff_text.splitlines():
+        if line.startswith("+++ "):
+            current = line[4:].strip()
+            if current.startswith("b/"):
+                current = current[2:]
+            continue
+        if line.startswith("+") and not line.startswith("+++"):
+            added = line[1:]
+            if _CONFLICT_MARKER_LINE.match(added):
+                hits.append(f"{current}: {added.strip()[:20]}")
+    return hits
+
+
+def check_staged_conflict_markers(event: HookEvent, repo_root: str, **kwargs: Any) -> Optional[str]:
+    """Block `git commit` when the content it would record adds conflict markers.
+
+    Inspects `git diff --cached` (or `git diff HEAD` when the command commits all tracked
+    changes with `-a` / `--all`), not the command line. See
+    [bug--conflict-marker-gate-wrong-target].
+    """
+    cmd = _extract_command(event).strip()
+    if not repo_root or not re.match(r"^git\s+commit\b", cmd):
+        return None
+    commit_all = bool(_COMMIT_ALL_FLAG.search(cmd[len("git commit"):]))
+    diff_cmd = ["git", "diff", "HEAD" if commit_all else "--cached", "-U0", "--no-color", "--no-ext-diff"]
+    result = proc.run_capture(diff_cmd, cwd=repo_root, trip_on_anomaly=False)
+    if result.returncode != 0:
+        return None
+    hits = find_added_conflict_markers(result.stdout or "")
+    if not hits:
+        return None
+    shown = "; ".join(hits[:5]) + (" ..." if len(hits) > 5 else "")
+    return (
+        "Git commit rejected by [gate: commit-no-conflict-markers]: unresolved merge conflict "
+        f"markers in staged content ({shown}). Resolve the conflicts and stage the files again."
+    )
+
+
 def check_mutation_authorization(event: HookEvent, repo_root: str, **kwargs: Any) -> Optional[Any]:
     """Intercept file mutations and shell commands outside execution phase without plan approval."""
     if event.event_type != HookEventType.PRE_TOOL_USE:
@@ -350,7 +385,7 @@ def check_mutation_authorization(event: HookEvent, repo_root: str, **kwargs: Any
         cmd = _extract_command(event).strip()
         if not cmd:
             return None
-        if any(p.search(cmd) for p in SAFE_READ_COMMAND_PATTERNS):
+        if shellparse.is_read_only_command(cmd):
             return None
 
     # Check file modification tools

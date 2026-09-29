@@ -4,7 +4,7 @@ slug: runtime-hooks-and-gates
 title: Runtime Lifecycle Hooks & Mechanical Gates
 type: architecture
 created: 2026-09-11
-updated: 2026-09-15
+updated: 2026-09-27
 tags: [hooks, gates, runtime, enforcement, antigravity, claude, codex, typography, cli-safety, circuit-breaker]
 sources:
   - path: scripts/alongkit/circuit.py
@@ -177,3 +177,27 @@ When an agent emits a tool call, the execution loop flows through the hook harne
    - Since Along v3.9.2, runtime hooks are installed globally in user home configurations (`~/.gemini/config/hooks.json`, `~/.claude/settings.json`, `~/.codex/hooks.json`).
    - Consumer repositories and all nested subprojects are recursively purged of legacy local hooks during `along update`.
    - Out-of-band execution via `along update` in an external OS terminal serves as the canonical disaster recovery path if runtime hooks are ever damaged.
+
+## 5. Runtime Capability Matrix
+
+Gates are mechanical only where the runtime loads Along's `PreToolUse`/`Stop` hooks. Everywhere else the protocol in `AGENTS.md` is advisory: the agent must self-apply every gate-tagged rule and route tests, commits, entity changes, and wrap through the `along` CLI. `along doctor` prints the level for the runtime it runs in (`alongkit.runtime`).
+
+| Runtime | Along skills | Along runtime hooks | Enforcement |
+| :--- | :--- | :--- | :--- |
+| Claude Code | auto (`~/.claude/skills`) | yes (`~/.claude/settings.json`) | mechanical once `along hook install` ran |
+| Google Antigravity | auto (`~/.gemini`) | yes (`~/.gemini/config/hooks.json`) | mechanical once installed |
+| OpenAI Codex | auto (`~/.codex`) | yes (`~/.codex/hooks.json`) | mechanical once installed |
+| Claude Cowork | not loaded (Cowork reads plugins from the claude.ai account, not `~/.claude`) | no (Cowork ignores `settings.json`; plugin hooks are tracked in `feat--cowork-plugin-skill-packaging`) | advisory |
+| OpenCode, Cursor, plain shell, human | rules only | no | advisory |
+
+Runtime detection (`entities.detect_agent`) honours `--agent` and `ALONG_AGENT` first; Claude Cowork is recognised by `ALONG_RUNTIME=cowork`, or by `CLAUDE_CODE_HOST_HTTP_PROXY_PORT` together with a `/sessions/` home (markers observed 2026-09-27, heuristic).
+
+### Working from Claude Cowork
+
+Cowork runs the agent in a cloud container plus a Linux VM on the user's machine, with connected folders mounted under `$HOME/mnt/<folder>`:
+
+1. Connect the repository folder in the Claude desktop app.
+2. Grant delete permission for the folder before any git write. Without it the mount allows create and rename but not unlink, so `git status`, `git add`, and `git commit` leave a stale `.git/index.lock` and `along wrap` cannot move an issue into `done/`. `along doctor` warns when the lock exists.
+3. Run the CLI with a supported interpreter, for example `uv run --python 3.12 --with ruamel.yaml python scripts/along_exec.py <command>` (Python 3.10 is supported from v4.3.0; see `bug--py310-fstring-syntax-error`).
+4. Do not run `along worktree` from the VM: the repository is on the host filesystem (`core.symlinks=false`), so worktree metadata would record VM paths. `along doctor` warns on a cross-OS mount.
+5. Pass `--agent cowork` only when detection reports `unknown`.

@@ -13,7 +13,8 @@ from typing import List, Optional
 from .config import HooksConfig, load_config, record_audit_entry
 from .declarative import get_all_declarative_gates
 from .gates import BaseGate, CliSafetyGate, ProjectionProtectionGate, TypographyGate
-from .models import GateDecision, GateResult, HookEvent
+from .adapters import normalize
+from .models import GateDecision, GateResult, HookEvent, HookEventType
 from .predicates import record_tool_activity
 
 
@@ -45,6 +46,22 @@ class HookEngine:
     def evaluate(self, event: HookEvent, repo_root: Optional[str] = None) -> GateResult:
         """Run all registered gates against the event."""
         effective_root = repo_root or self.repo_root or event.workspace_root
+
+        # Fail closed on tool names no adapter maps: infer writes, audit the rest.
+        # See [bug--claude-adapter-unmapped-tools].
+        event = normalize.fail_closed(event)
+        unmapped = event.tool_args.get(normalize.UNMAPPED_MARKER)
+        if unmapped and event.event_type == HookEventType.PRE_TOOL_USE:
+            record_audit_entry(
+                effective_root,
+                event,
+                GateResult(
+                    decision=GateDecision.ALLOW,
+                    reason=f"unmapped_tool: '{unmapped}' is not mapped by the {event.runtime} adapter",
+                    gate_name="unmapped_tool",
+                ),
+                "audit",
+            )
 
         # Track session activity (edits and test runs)
         if effective_root:

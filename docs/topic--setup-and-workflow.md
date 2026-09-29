@@ -4,7 +4,7 @@ slug: setup-and-workflow
 title: Setup & Developer Workflow
 type: setup-workflow
 created: 2026-08-30
-updated: 2026-09-22
+updated: 2026-09-27
 tags: [setup-workflow, installation, lifecycle, runners, developer-workflow, testing]
 sources:
   - path: README.md
@@ -152,7 +152,7 @@ write entity front-matter. Everything else is standard library.
 uv tool install actdim-along
 
 # Working inside this repository: uv resolves the environment from pyproject.toml
-uv run python -m unittest discover tests -q
+uv run python .along/scripts/test.py -q
 
 # No uv, no install: add the dependency to the active interpreter
 python -m pip install "ruamel.yaml>=0.18"
@@ -286,6 +286,19 @@ into repairing the findings from step 1 and is itself covered by the rollback. `
 
 A release writes nothing outside the repository. Installing skills for your providers is
 `/along-update` or `install.ps1` / `install.sh`, run deliberately.
+
+### Continuous Integration
+
+`.github/workflows/tests.yml` runs on every push to `main` and every pull request:
+
+| Job | What it checks |
+| :--- | :--- |
+| `python` | Syntax gate (`compileall`) and `python .along/scripts/test.py -q` on Python 3.10, 3.11, 3.12, 3.13 x `ubuntu-latest`, `windows-latest`. |
+| `gates` | Typography gate (`sanitize_typography.py --check`, blocking) and the Markdown link report (`along_kb_sync.py --check --strict`, report-only until the links into `node_modules` in `docs/topic--dependencies.md` are fixed). |
+| `dashboard-ui` | `pnpm install --frozen-lockfile` and `typecheck` for `packages/dashboard-ui`. |
+
+A green `Tests` run on the release commit is the precondition for `/along-version-bump`: the
+local gates see only one interpreter and one operating system.
 
 ---
 
@@ -430,4 +443,10 @@ holds two gates:
 | `test_02_no_test_targets_the_repository_root` | Parses every `tests/*.py` and fails on a command-shaped list literal built with `REPO_ROOT` as an argument, so a regression is caught when it is written rather than when it happens to do damage. |
 
 Run the suite with `python .along/scripts/test.py` (it resolves `ruamel.yaml` through `uv`
-when the interpreter lacks it) or `uv run python -m unittest discover tests -q`.
+when the interpreter lacks it), `uv run python .along/scripts/test.py`, or `npm run test:quiet`
+(`-q` / `--quiet` switches to dot output). This runner is the only supported entry point for
+this repository: `tests/__init__.py` refuses raw `python -m unittest` and `pytest`, because the
+suite needs `ALONG_TEST_RUNNER`, the pre-flight syntax gate, and the resolved dependencies.
+The generic test-runner patterns in the `require-plan-approval` gate allowlist (`pytest`,
+`python -m unittest`, `npm test`, ...) stay, because they describe consumer repositories, not
+this one.

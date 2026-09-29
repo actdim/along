@@ -4,13 +4,6 @@
 <!-- No active issues -->
 
 ## Backlog
-- [ ] `(bug)` [claude-adapter-unmapped-tools](ISSUES/bug--claude-adapter-unmapped-tools.md)
-- [ ] `(bug)` [conflict-marker-gate-wrong-target](ISSUES/bug--conflict-marker-gate-wrong-target.md)
-- [ ] `(bug)` [non-hermetic-global-skill-tests](ISSUES/bug--non-hermetic-global-skill-tests.md)
-- [ ] `(bug)` [py310-fstring-syntax-error](ISSUES/bug--py310-fstring-syntax-error.md)
-- [ ] `(bug)` [safe-command-prefix-bypass](ISSUES/bug--safe-command-prefix-bypass.md)
-- [ ] `(bug)` [session-create-unsafe-yaml](ISSUES/bug--session-create-unsafe-yaml.md)
-- [ ] `(bug)` [test-quiet-script-guard-conflict](ISSUES/bug--test-quiet-script-guard-conflict.md)
 - [ ] `(bug)` [worktree-cross-os-mount-guard](ISSUES/bug--worktree-cross-os-mount-guard.md)
 - [ ] `(debt)` [along-core-extras-split](ISSUES/debt--along-core-extras-split.md)
 - [ ] `(debt)` [along-exec-argparse-migration](ISSUES/debt--along-exec-argparse-migration.md)
@@ -34,7 +27,6 @@
 - [ ] `(feat)` [centralized-gpu-inference-pool-and-cloud-topologies](ISSUES/feat--centralized-gpu-inference-pool-and-cloud-topologies.md)
 - [ ] `(feat)` [clean-turn-context-isolation-in-along-team](ISSUES/feat--clean-turn-context-isolation-in-along-team.md)
 - [ ] `(feat)` [cowork-plugin-skill-packaging](ISSUES/feat--cowork-plugin-skill-packaging.md)
-- [ ] `(feat)` [cowork-runtime-support](ISSUES/feat--cowork-runtime-support.md)
 - [ ] `(feat)` [cpp-ecosystem-support](ISSUES/feat--cpp-ecosystem-support.md)
 - [ ] `(feat)` [cursor-agent-and-rules-integration](ISSUES/feat--cursor-agent-and-rules-integration.md)
 - [ ] `(feat)` [dart-flutter-ecosystem-support](ISSUES/feat--dart-flutter-ecosystem-support.md)
@@ -64,12 +56,11 @@
 - [ ] `(feat)` [vps-runner-daemon](ISSUES/feat--vps-runner-daemon.md)
 - [ ] `(feat)` [workspace-containment-and-path-scoping](ISSUES/feat--workspace-containment-and-path-scoping.md)
 - [ ] `(feat)` [zero-step-state-recovery-and-drift-detection](ISSUES/feat--zero-step-state-recovery-and-drift-detection.md)
-- [ ] `(task)` [ci-test-matrix-workflow](ISSUES/task--ci-test-matrix-workflow.md)
 
 ## Done (recent)
+- [x] `(task)` [ci-test-matrix-workflow](ISSUES/done/task--ci-test-matrix-workflow.md)
+- [x] `(bug)` [shell-classifier-residual-bypasses](ISSUES/done/bug--shell-classifier-residual-bypasses.md)
 - [x] `(feat)` [subproject-scoped-dependencies](ISSUES/done/feat--subproject-scoped-dependencies.md)
 - [x] `(feat)` [milestone-version-uniqueness-gate](ISSUES/done/feat--milestone-version-uniqueness-gate.md)
 - [x] `(feat)` [doc-taxonomy-and-write-policy](ISSUES/done/feat--doc-taxonomy-and-write-policy.md)
-- [x] `(feat)` [decouple-code-review-graph-from-mcp-to-direct-cli](ISSUES/done/feat--decouple-code-review-graph-from-mcp-to-direct-cli.md)
-- [x] `(feat)` [agent-runtime-runner-antigravity](ISSUES/done/feat--agent-runtime-runner-antigravity.md)
-<!-- 132 older completed issue(s) archived in .along/ISSUES/done/ -->
+<!-- 142 older completed issue(s) archived in .along/ISSUES/done/ -->

@@ -3,7 +3,8 @@ protocol: along
 protocol_version: "4.2.0"
 slug: py310-fstring-syntax-error
 type: bug
-status: open
+status: done
+completed: 2026-09-27
 priority: high
 created: 2026-09-27
 updated: 2026-09-27
@@ -38,6 +39,13 @@ Reproduced on Python 3.10.12: `python3 -m py_compile scripts/along_exec.py` fail
 
 ## Acceptance Criteria
 
-- [ ] `python3.10 -m compileall -q scripts tests dashboard .along/scripts` exits 0
-- [ ] `python3.10 .along/scripts/test.py` reaches test discovery
-- [ ] Automated tests passing
+- [x] `python3.10 -m compileall -q scripts tests dashboard .along/scripts` exits 0
+- [x] `python3.10 .along/scripts/test.py` reaches test discovery
+- [x] Automated tests passing
+
+## Resolution
+
+- `scripts/along_exec.py` (`session create`): the quoted decision list is built outside the f-string, so the module compiles on Python 3.10+.
+- REQ-2: every tracked `.py` file compiles with Python 3.10.12 (`py_compile` loop); no other PEP 701 construct found.
+- REQ-3: the regression guard is the Python 3.10 cell of the CI matrix (`task--ci-test-matrix-workflow`).
+- Verified: `.along/scripts/test.py` on Python 3.10.12 and 3.12, 666 tests OK (3 skipped), together with `bug--non-hermetic-global-skill-tests`.

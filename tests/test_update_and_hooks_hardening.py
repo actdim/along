@@ -64,6 +64,7 @@ class TestUpdateAndHooksHardening(unittest.TestCase):
         if sys.platform == "win32" and " " not in expanded_path:
             self.assertNotIn(f'"{expanded_path}"', pre_tool_cmd)
 
+    @unittest.skipUnless(sys.platform == "win32", "patches ctypes.windll, which exists only on Windows")
     def test_format_hook_script_path_windows_safety(self):
         """_format_hook_script_path must omit quotes on Windows when no whitespace exists."""
         from alongkit.hooks.config import _format_hook_script_path

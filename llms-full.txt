@@ -1,12 +1,14 @@
 # ActDim Along (v4.2.1) - Full Documentation Context
 
-> **The Provider-Agnostic Context & Memory Operating System for AI Coding Agents.**
+> [![Tests](https://github.com/actdim/along/actions/workflows/tests.yml/badge.svg)](https://github.com/actdim/along/actions/workflows/tests.yml) - Python 3.10-3.13 on Linux and Windows.
 
 ---
 
 ## Document: README.md (Overview)
 
 # ActDim Along (v4.2.1)
+
+[![Tests](https://github.com/actdim/along/actions/workflows/tests.yml/badge.svg)](https://github.com/actdim/along/actions/workflows/tests.yml) - Python 3.10-3.13 on Linux and Windows.
 
 **The Provider-Agnostic Context & Memory Operating System for AI Coding Agents.**
 
@@ -159,7 +161,7 @@ The repository's complete technical specification is maintained as a living LLM-
 | **Domain Model & Entities** | Machine-parseable schemas for Issues, ADRs, Milestones, and Risks. | [Domain Model & Entity Ecosystem](./docs/topic--domain-model.md) |
 | **Setup & Workflows** | Installation matrix, repository onboarding, and session lifecycle. | [Setup, Installation & Workflows](./docs/topic--setup-and-workflow.md) |
 | **LLM-Wiki Architecture** | Andrej Karpathy paradigm, source isolation, and token efficiency. | [LLM-Wiki Architecture & Paradigm](./docs/topic--llm-wiki-architecture.md) |
-| **Runtime Hooks & Gates** | Agent lifecycle interception harness across Antigravity, Claude, and Codex. | [Runtime Lifecycle Hooks & Mechanical Gates](./docs/topic--runtime-hooks-and-gates.md) |
+| **Runtime Hooks & Gates** | Agent lifecycle interception harness across Antigravity, Claude, and Codex, plus the runtime capability matrix: where gates are mechanical and where (Claude Cowork, Cursor, OpenCode) they are advisory. | [Runtime Lifecycle Hooks & Mechanical Gates](./docs/topic--runtime-hooks-and-gates.md) |
 | **Declarative Gates & Traceability** | Extensible YAML gate engine and bi-directional machine-checked matrix. | [Declarative Gate Engine & Traceability Matrix](./docs/topic--declarative-gates-and-traceability.md) |
 
 ## Automation Skills Reference (Grouped by Workflow Phase)
@@ -302,6 +304,7 @@ When a stage or session completes, agents MUST execute in this order:
   - In submodules, execute the hook from that subproject's own `.along/scripts/`.
 - **Environment Isolation**:
   - Agents MUST NOT install system-wide or global packages when a script fails. Fix the architecture (missing `bootstrap.ensure_deps()`, incorrect `uv` wrapper), not the environment.
+- **Runtimes Without Along Hooks** (Claude Cowork, Cursor, OpenCode, plain shells): gates are advisory there. Agents MUST self-apply every gate-tagged rule and use the `along` CLI for tests, commits, entity changes, and wrap instead of raw tools. `along doctor` reports the enforcement level.
 - **File Modification & Anti-Deletion**:
   - Never delete, truncate, or overwrite existing documentation, comments, or code unless explicitly instructed.
   - After batch edits or migrations, agents MUST run `git diff --stat` and inspect unexpected size reductions.
@@ -1723,7 +1726,7 @@ Gates are declared in YAML format with standard schema fields:
 
 The 14 canonical gates defined in the catalogue:
 1. `commit_issue_binding`: Intercepts `git commit` to require issue binding (`--issue` or `(<type>--<slug>)`).
-2. `commit_no_conflict_markers`: Intercepts `git commit` to reject unresolved merge conflict markers (`<<<<<<<`, `=======`, `>>>>>>>`).
+2. `commit_no_conflict_markers`: Intercepts `git commit` and inspects the lines the commit would add (`git diff --cached`, or `git diff HEAD` for `commit -a`) for unresolved merge conflict markers at line start (`<<<<<<< `, `=======`, `>>>>>>> `). The commit message itself is not inspected, so a Markdown rule of `=======` in a message is allowed. No file class is exempt: `merge=union` files never receive markers from git, so a marker there is a real conflict too.
 3. `anti_stub_injection`: Intercepts file mutation tools to forbid stub markers and lazy truncation skeletons.
 4. `cli_safety`: Intercepts shell commands to block heredocs (`<<EOF`), inline python file writers, destructive wipes (`git reset --hard`), and global installs.
 5. `projection_protection`: Intercepts file writes to derived projections (`.along/ISSUES.md`, `docs/INDEX.md`, `DECISIONS.md`).
@@ -2759,6 +2762,30 @@ When an agent emits a tool call, the execution loop flows through the hook harne
    - Consumer repositories and all nested subprojects are recursively purged of legacy local hooks during `along update`.
    - Out-of-band execution via `along update` in an external OS terminal serves as the canonical disaster recovery path if runtime hooks are ever damaged.
 
+## 5. Runtime Capability Matrix
+
+Gates are mechanical only where the runtime loads Along's `PreToolUse`/`Stop` hooks. Everywhere else the protocol in `AGENTS.md` is advisory: the agent must self-apply every gate-tagged rule and route tests, commits, entity changes, and wrap through the `along` CLI. `along doctor` prints the level for the runtime it runs in (`alongkit.runtime`).
+
+| Runtime | Along skills | Along runtime hooks | Enforcement |
+| :--- | :--- | :--- | :--- |
+| Claude Code | auto (`~/.claude/skills`) | yes (`~/.claude/settings.json`) | mechanical once `along hook install` ran |
+| Google Antigravity | auto (`~/.gemini`) | yes (`~/.gemini/config/hooks.json`) | mechanical once installed |
+| OpenAI Codex | auto (`~/.codex`) | yes (`~/.codex/hooks.json`) | mechanical once installed |
+| Claude Cowork | not loaded (Cowork reads plugins from the claude.ai account, not `~/.claude`) | no (Cowork ignores `settings.json`; plugin hooks are tracked in `feat--cowork-plugin-skill-packaging`) | advisory |
+| OpenCode, Cursor, plain shell, human | rules only | no | advisory |
+
+Runtime detection (`entities.detect_agent`) honours `--agent` and `ALONG_AGENT` first; Claude Cowork is recognised by `ALONG_RUNTIME=cowork`, or by `CLAUDE_CODE_HOST_HTTP_PROXY_PORT` together with a `/sessions/` home (markers observed 2026-09-27, heuristic).
+
+### Working from Claude Cowork
+
+Cowork runs the agent in a cloud container plus a Linux VM on the user's machine, with connected folders mounted under `$HOME/mnt/<folder>`:
+
+1. Connect the repository folder in the Claude desktop app.
+2. Grant delete permission for the folder before any git write. Without it the mount allows create and rename but not unlink, so `git status`, `git add`, and `git commit` leave a stale `.git/index.lock` and `along wrap` cannot move an issue into `done/`. `along doctor` warns when the lock exists.
+3. Run the CLI with a supported interpreter, for example `uv run --python 3.12 --with ruamel.yaml python scripts/along_exec.py <command>` (Python 3.10 is supported from v4.3.0; see `bug--py310-fstring-syntax-error`).
+4. Do not run `along worktree` from the VM: the repository is on the host filesystem (`core.symlinks=false`), so worktree metadata would record VM paths. `along doctor` warns on a cross-OS mount.
+5. Pass `--agent cowork` only when detection reports `unknown`.
+
 ---
 
 ## Document: docs/topic--setup-and-workflow.md (Setup & Developer Workflow)
@@ -2902,7 +2929,7 @@ write entity front-matter. Everything else is standard library.
 uv tool install actdim-along
 
 # Working inside this repository: uv resolves the environment from pyproject.toml
-uv run python -m unittest discover tests -q
+uv run python .along/scripts/test.py -q
 
 # No uv, no install: add the dependency to the active interpreter
 python -m pip install "ruamel.yaml>=0.18"
@@ -3036,6 +3063,19 @@ into repairing the findings from step 1 and is itself covered by the rollback. `
 
 A release writes nothing outside the repository. Installing skills for your providers is
 `/along-update` or `install.ps1` / `install.sh`, run deliberately.
+
+### Continuous Integration
+
+`.github/workflows/tests.yml` runs on every push to `main` and every pull request:
+
+| Job | What it checks |
+| :--- | :--- |
+| `python` | Syntax gate (`compileall`) and `python .along/scripts/test.py -q` on Python 3.10, 3.11, 3.12, 3.13 x `ubuntu-latest`, `windows-latest`. |
+| `gates` | Typography gate (`sanitize_typography.py --check`, blocking) and the Markdown link report (`along_kb_sync.py --check --strict`, report-only until the links into `node_modules` in `docs/topic--dependencies.md` are fixed). |
+| `dashboard-ui` | `pnpm install --frozen-lockfile` and `typecheck` for `packages/dashboard-ui`. |
+
+A green `Tests` run on the release commit is the precondition for `/along-version-bump`: the
+local gates see only one interpreter and one operating system.
 
 ---
 
@@ -3180,7 +3220,13 @@ holds two gates:
 | `test_02_no_test_targets_the_repository_root` | Parses every `tests/*.py` and fails on a command-shaped list literal built with `REPO_ROOT` as an argument, so a regression is caught when it is written rather than when it happens to do damage. |
 
 Run the suite with `python .along/scripts/test.py` (it resolves `ruamel.yaml` through `uv`
-when the interpreter lacks it) or `uv run python -m unittest discover tests -q`.
+when the interpreter lacks it), `uv run python .along/scripts/test.py`, or `npm run test:quiet`
+(`-q` / `--quiet` switches to dot output). This runner is the only supported entry point for
+this repository: `tests/__init__.py` refuses raw `python -m unittest` and `pytest`, because the
+suite needs `ALONG_TEST_RUNNER`, the pre-flight syntax gate, and the resolved dependencies.
+The generic test-runner patterns in the `require-plan-approval` gate allowlist (`pytest`,
+`python -m unittest`, `npm test`, ...) stay, because they describe consumer repositories, not
+this one.
 
 ---
 

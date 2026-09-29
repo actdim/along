@@ -9,7 +9,7 @@ created: 2026-09-27
 updated: 2026-09-27
 agent: antigravity
 tags: [dev-environment, venv, packaging, editable, alongkit]
-milestone: v4.3.0-developer-experience-and-runtime-resilience
+milestone: v4.4.0-multi-user-merge-automation
 blocked_by: []
 blocks: []
 related: [feat--bootstrap-resilience-and-subcommand-proxying]

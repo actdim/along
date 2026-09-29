@@ -18,16 +18,15 @@ gates:
 
   - id: commit_no_conflict_markers
     title: "Git Commit Merge Conflict Protection"
-    description: "Blocks commits with unresolved git conflict markers"
+    description: "Blocks commits whose staged content adds unresolved git conflict markers"
     event: PreToolUse
     tools: [run_command, execute_command, bash, shell]
     match_args:
       CommandLine: '^git\s+commit'
     rule:
-      type: regex_forbidden
-      field: CommandLine
-      pattern: '<<<<<<<|=======|>>>>>>>'
-      error: "Git commit rejected by [gate: commit-no-conflict-markers]: Unresolved git merge conflict markers detected in commit arguments."
+      type: predicate
+      handler: alongkit.hooks.predicates.check_staged_conflict_markers
+      error: "Git commit rejected by [gate: commit-no-conflict-markers]: Unresolved git merge conflict markers detected in staged content."
 
   - id: anti_stub_injection
     title: "Anti-Stub Truncation Protection"

@@ -4,7 +4,7 @@
   "private": true,
   "scripts": {
     "test": "python .along/scripts/test.py",
-    "test:quiet": "python -m unittest discover tests -q",
+    "test:quiet": "python .along/scripts/test.py -q",
     "build": "pnpm run build:ui",
     "dev": "uv run scripts/along_dash.py --dev",
     "dash": "uv run scripts/along_dash.py --web",

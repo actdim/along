@@ -31,6 +31,7 @@ if not os.environ.get("ALONG_TEST_RUNNER"):
         "    python .along/scripts/test.py"
     )
 
+import atexit
 import contextlib
 import os
 import shutil
@@ -160,6 +161,39 @@ def repo_fixture(prefix: str = "along-fixture-",
         yield root
     finally:
         shutil.rmtree(root, ignore_errors=True)
+
+
+#: Provider-specific overrides that would point an engine back at real user state.
+PROVIDER_HOME_VARS = ("CODEX_HOME", "CLAUDE_CONFIG_DIR", "OPENCODE_HOME", "GEMINI_HOME")
+
+_ISOLATED_HOME: str | None = None
+
+
+def isolated_home() -> str:
+    """One empty throwaway home directory per test process, removed at exit."""
+    global _ISOLATED_HOME
+    if _ISOLATED_HOME is None or not os.path.isdir(_ISOLATED_HOME):
+        _ISOLATED_HOME = tempfile.mkdtemp(prefix="along-home-")
+        atexit.register(shutil.rmtree, _ISOLATED_HOME, True)
+    return _ISOLATED_HOME
+
+
+def isolated_home_env(base: dict | None = None) -> dict:
+    """A child environment whose home directory is an empty throwaway directory.
+
+    Engines resolve global skills, manifests, and diagnostics through `~`; a child started
+    with this environment cannot read or write the developer's real `~/.claude`,
+    `~/.codex`, `~/.gemini`, or `~/.along`, so a result never depends on whether Along is
+    installed on the machine running the suite. See [bug--non-hermetic-global-skill-tests].
+    """
+    env = dict(os.environ if base is None else base)
+    home = isolated_home()
+    env["HOME"] = home
+    env["USERPROFILE"] = home
+    env["XDG_CONFIG_HOME"] = os.path.join(home, ".config")
+    for var in PROVIDER_HOME_VARS:
+        env.pop(var, None)
+    return env
 
 
 #: What an installer needs from a checkout, and nothing else: no `.along/`, no `.git`,

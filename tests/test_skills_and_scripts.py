@@ -54,7 +54,13 @@ def run_engine(cmd, **kwargs):
     UnicodeDecodeError inside the reader thread, `run` returned `stdout=None`, and the
     assertion below failed with a confusing `TypeError: argument of type 'NoneType'`
     instead of the real cause. See [bug--subprocess-encoding-breaks-on-non-utf8-locale].
+
+    Unless the caller passes its own `env`, the child runs with an empty throwaway home
+    directory, so no engine result depends on a global Along install on this machine.
+    See [bug--non-hermetic-global-skill-tests].
     """
+    if kwargs.get("env") is None:
+        kwargs["env"] = hermetic.isolated_home_env()
     return proc.run_capture(cmd, **kwargs)
 
 
@@ -2506,6 +2512,25 @@ class TestAlongSkillsAndScripts(unittest.TestCase):
             res_fixture = run_engine([sys.executable, update_script, fixture, "--dry-run", "--local-only"])
             self.assertEqual(res_fixture.returncode, 0)
             self.assertIn("Isolated Mode", res_fixture.stdout)
+
+    def test_36_engines_never_read_the_real_home(self):
+        """run_engine children see an empty throwaway home, and the updater still finds
+        its protocol without any global install (REQ-2, REQ-4 of
+        [bug--non-hermetic-global-skill-tests])."""
+        env = hermetic.isolated_home_env()
+        real_home = os.path.realpath(os.path.expanduser("~"))
+        self.assertNotEqual(os.path.realpath(env["HOME"]), real_home)
+        self.assertEqual(env["HOME"], env["USERPROFILE"])
+        self.assertFalse(os.path.exists(os.path.join(env["HOME"], ".claude", "skills")))
+
+        probe = run_engine([sys.executable, "-c", "import os; print(os.path.expanduser('~'))"])
+        self.assertEqual(os.path.realpath(probe.stdout.strip()), os.path.realpath(env["HOME"]))
+
+        update_script = os.path.join(REPO_ROOT, "scripts", "along_update.py")
+        with hermetic.repo_fixture(prefix="along-no-global-") as fixture:
+            res = run_engine([sys.executable, update_script, fixture, "--dry-run", "--local-only"])
+            self.assertEqual(res.returncode, 0, f"{res.stderr}\n{res.stdout}")
+            self.assertNotIn("Could not locate protocol.md", res.stderr)
 
 
 if __name__ == "__main__":

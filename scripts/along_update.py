@@ -77,6 +77,22 @@ def detect_repo_version(repo_root, verbose=False):
                 print(f"[Warning] cannot read {agents_md}: {exc}", file=sys.stderr)
     return None
 
+def get_source_protocol_paths():
+    """Protocol sources that do not depend on the user's home directory.
+
+    Checked after the target repository's own `skills/` and before global skills, so an
+    updater run from a checkout (or with `ALONG_PROTOCOL_SOURCE` set) applies the protocol
+    it ships with, and a machine without a global Along install still works. Tests rely on
+    this to stay hermetic. See [bug--non-hermetic-global-skill-tests].
+    """
+    paths = []
+    explicit = os.environ.get("ALONG_PROTOCOL_SOURCE")
+    if explicit:
+        paths.append(os.path.abspath(explicit))
+    engine_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    paths.append(os.path.join(engine_root, "skills", "along-init", "protocol.md"))
+    return paths
+
 def get_global_skill_paths():
     user_home = os.path.expanduser("~")
     paths = [
@@ -523,13 +539,13 @@ def run_update(repo_root, check_only=False, dry_run=False, force=False, local_on
     if os.path.exists(local_proto):
         protocol_src = local_proto
     else:
-        for p in get_global_skill_paths():
+        for p in get_source_protocol_paths() + get_global_skill_paths():
             if os.path.exists(p):
                 protocol_src = p
                 break
 
     if not protocol_src:
-        print("   [ERROR] Could not locate protocol.md in local repo or global skills.", file=sys.stderr)
+        print("   [ERROR] Could not locate protocol.md in local repo, ALONG_PROTOCOL_SOURCE, the updater checkout, or global skills.", file=sys.stderr)
         return False
 
     with open(protocol_src, "r", encoding="utf-8") as f:
