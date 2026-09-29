@@ -40,6 +40,7 @@ class AntigravityAdapter(BaseAdapter):
         return extracted
 
     def parse(self, raw_input: str, event_type: HookEventType = HookEventType.PRE_TOOL_USE) -> HookEvent:
+        self._last_event_type = event_type
         payload: Dict[str, Any] = {}
         if raw_input and raw_input.strip():
             clean_text = raw_input.lstrip("\ufeff").strip()
@@ -79,6 +80,9 @@ class AntigravityAdapter(BaseAdapter):
 
     def format_response(self, result: GateResult) -> Tuple[int, str]:
         """Format GateResult as Antigravity JSON payload on stdout with returncode 0."""
+        if getattr(self, "_last_event_type", None) == HookEventType.POST_TOOL_USE:
+            return 0, "{}"
+
         response: Dict[str, Any] = {}
 
         if result.decision == GateDecision.DENY:

@@ -36,6 +36,7 @@
 - [ ] `(feat)` [empirical-benchmark-harness-and-metrics](ISSUES/feat--empirical-benchmark-harness-and-metrics.md)
 - [ ] `(feat)` [enterprise-governance-and-cloud-infrastructure](ISSUES/feat--enterprise-governance-and-cloud-infrastructure.md)
 - [ ] `(feat)` [enterprise-governance-and-compliance-pack](ISSUES/feat--enterprise-governance-and-compliance-pack.md)
+- [ ] `(feat)` [entity-reference-integrity-gate](ISSUES/feat--entity-reference-integrity-gate.md)
 - [ ] `(feat)` [external-issue-trackers-sync-and-import](ISSUES/feat--external-issue-trackers-sync-and-import.md)
 - [ ] `(feat)` [git-level-gate-enforcement](ISSUES/feat--git-level-gate-enforcement.md)
 - [ ] `(feat)` [git-merge-drivers-and-setup](ISSUES/feat--git-merge-drivers-and-setup.md)

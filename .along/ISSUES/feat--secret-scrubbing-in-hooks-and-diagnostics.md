@@ -3,7 +3,7 @@ protocol: along
 slug: secret-scrubbing-in-hooks-and-diagnostics
 type: feat
 status: open
-priority: normal
+priority: medium
 created: 2026-09-27
 updated: 2026-09-27
 agent: antigravity

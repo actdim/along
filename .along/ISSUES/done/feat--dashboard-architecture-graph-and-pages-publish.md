@@ -10,7 +10,7 @@ created: 2026-09-22
 updated: 2026-09-22
 agent: antigravity
 tags: [dashboard, architecture, github-pages, vite, cytoscape]
-milestone: v4.0.0-dashboard-and-knowledge-base
+milestone: v4.0.0-runtime-gates-and-worktree-isolation
 blocked_by: []
 related: [debt--dashboard-ui-type-safety-and-security]
 ---

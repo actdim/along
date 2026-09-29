@@ -12,7 +12,7 @@ agent: antigravity
 tags: [code-review-graph, mcp, skills, blast-radius, architecture]
 milestone: v4.1.0-code-intelligence-and-mcp-ecosystem
 blocked_by: []
-related: [feat--kb-search-mcp-tool-and-skill-hardening, bug--code-review-graph-resilience-and-windows-mcp-optimization]
+related: [feat--kb-search-deterministic-gate-and-skill-hardening, bug--code-review-graph-resilience-and-windows-mcp-optimization]
 ---
 
 # User-Facing Skills and Lifecycle Integration for code-review-graph MCP
