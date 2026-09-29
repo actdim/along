@@ -6,10 +6,10 @@ type: feat
 status: open
 priority: high
 created: 2026-09-27
-updated: 2026-09-27
+updated: 2026-09-29
 agent: cowork
 tags: [gates, git-hooks, ci, cross-runtime]
-milestone: v4.4.0-multi-user-merge-automation
+milestone: v4.5.0-multi-user-merge-automation
 blocked_by: []
 related: [task--ci-test-matrix-workflow, feat--cowork-runtime-support, bug--conflict-marker-gate-wrong-target, feat--test-gated-code-merge-pipeline]
 ---

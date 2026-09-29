@@ -6,10 +6,10 @@ type: feat
 status: open
 priority: high
 created: 2026-09-27
-updated: 2026-09-27
+updated: 2026-09-29
 agent: antigravity
 tags: [telemetry, runners, noise-reduction, token-efficiency, context, skill-state]
-milestone: v4.4.0-multi-user-merge-automation
+milestone: v4.5.0-multi-user-merge-automation
 blocked_by: []
 related: [docs--state-centric-execution-and-skill-state-comparison, feat--structured-blackboard-state-machine]
 ---

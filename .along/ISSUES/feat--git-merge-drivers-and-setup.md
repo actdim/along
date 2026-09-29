@@ -3,13 +3,13 @@ protocol: along
 protocol_version: "3.8.0"
 slug: git-merge-drivers-and-setup
 type: feat
-status: open
+status: in-progress
 priority: high
 created: 2026-09-21
-updated: 2026-09-21
+updated: 2026-09-29
 agent: antigravity
 tags: [git, merge, drivers, concurrency, projections, frontmatter, cli]
-milestone: v4.4.0-multi-user-merge-automation
+milestone: v4.5.0-multi-user-merge-automation
 blocked_by: []
 blocks: [feat--docs-semantic-conflict-resolution]
 related: [concurrency-projections-and-context-deprecation]

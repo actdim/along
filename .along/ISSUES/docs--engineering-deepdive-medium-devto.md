@@ -9,7 +9,7 @@ created: 2026-09-27
 updated: 2026-09-27
 agent: antigravity
 tags: [medium, devto, habr, blog, technical-writing, community, open-source]
-milestone: v4.7.0-empirical-benchmarking-and-publications
+milestone: v4.8.0-empirical-benchmarking-and-publications
 blocked_by: [feat--empirical-benchmark-harness-and-metrics]
 related: [docs--arxiv-academic-paper-preprint]
 ---

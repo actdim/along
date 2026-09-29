@@ -6,10 +6,10 @@ type: debt
 status: open
 priority: medium
 created: 2026-09-27
-updated: 2026-09-27
+updated: 2026-09-29
 agent: cowork
 tags: [cli, refactor, dx]
-milestone: v4.4.0-multi-user-merge-automation
+milestone: v4.5.0-multi-user-merge-automation
 blocked_by: [bug--py310-fstring-syntax-error]
 related: [bug--session-create-unsafe-yaml]
 ---

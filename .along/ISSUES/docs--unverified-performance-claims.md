@@ -6,10 +6,10 @@ type: docs
 status: open
 priority: medium
 created: 2026-09-27
-updated: 2026-09-27
+updated: 2026-09-29
 agent: cowork
 tags: [docs, readme, claims, benchmark]
-milestone: v4.4.0-multi-user-merge-automation
+milestone: v4.5.0-multi-user-merge-automation
 blocked_by: []
 related: [feat--empirical-benchmark-harness-and-metrics, feat--git-level-gate-enforcement]
 ---

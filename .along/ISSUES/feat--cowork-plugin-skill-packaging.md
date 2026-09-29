@@ -9,7 +9,7 @@ created: 2026-09-27
 updated: 2026-09-27
 agent: cowork
 tags: [cowork, plugin, skills, install]
-milestone: v4.5.0-structured-state-and-blackboard-engine
+milestone: v4.6.0-structured-state-and-blackboard-engine
 blocked_by: [bug--py310-fstring-syntax-error]
 related: [feat--cowork-runtime-support, feat--git-level-gate-enforcement]
 ---

@@ -9,7 +9,7 @@ created: 2026-09-27
 updated: 2026-09-27
 agent: antigravity
 tags: [blackboard, state-machine, delta-patch, session, alongkit, skill-state]
-milestone: v4.5.0-structured-state-and-blackboard-engine
+milestone: v4.6.0-structured-state-and-blackboard-engine
 blocked_by: [feat--observation-and-telemetry-distillation]
 related: [feat--bounded-prompt-footprint-gate, feat--clean-turn-context-isolation-in-along-team]
 ---

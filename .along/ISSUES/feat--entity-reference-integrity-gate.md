@@ -9,7 +9,7 @@ created: 2026-09-29
 updated: 2026-09-29
 agent: claude-code
 tags: [entities, integrity, gates, wrap, issue-sync]
-milestone: v4.4.0-multi-user-merge-automation
+milestone: v4.5.0-multi-user-merge-automation
 blocked_by: []
 related: [feat--kb-search-deterministic-gate-and-skill-hardening, feat--entity-lifecycle-cli-orchestration]
 ---
@@ -61,6 +61,12 @@ All three were fixed by hand. The root cause is systemic:
   `target_issues` in sync: add the key on create/assign and remove it from the previous milestone on reassignment.
   Observed on 2026-09-29: creating this issue with `--milestone v4.4.0-multi-user-merge-automation` set
   `milestone:` in the issue but did not add it to the milestone's `target_issues`, which had to be patched by hand.
+- `REQ-8`: `along bump` milestone reconciliation must not mark a milestone `completed` / `progress_pct: 100` while any
+  of its `target_issues` is not in a terminal status (`done`, `superseded`, `cancelled`, `duplicate`). It aborts the
+  release (inside the transaction) and lists the open issues, with an explicit flag to carry them over to a named
+  milestone instead. `progress_pct` is computed from target issue status, not set to 100 from the version alone.
+  Observed on 2026-09-29: the `v4.4.0` release set `v4.4.0-multi-user-merge-automation` to `completed` / 100% with
+  19 of 20 target issues open; the open issues had to be moved to a new milestone by hand.
 
 ## Acceptance Criteria
 - [ ] Wrap / issue-sync gate reports and (in enforce mode) blocks dangling references and enum violations
@@ -68,6 +74,7 @@ All three were fixed by hand. The root cause is systemic:
 - [ ] `along issue rename` and `along issue supersede` rewrite all inbound references
 - [ ] Migration engine uses the shared validator; no duplicated logic
 - [ ] Issue create/update keeps milestone `target_issues` in sync
+- [ ] `along bump` refuses to complete a milestone with open target issues; `progress_pct` derived from issue status
 - [ ] Protocol rule anchored and `along hook verify --strict` passes
 - [ ] `along doctor --entities` is clean on the live repo
 - [ ] Automated tests passing

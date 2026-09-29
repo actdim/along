@@ -9,7 +9,7 @@ created: 2026-09-27
 updated: 2026-09-27
 agent: antigravity
 tags: [benchmark, metrics, evaluation, tokens, latency, noise-robustness, arxiv, swe-bench, repobench, intercode]
-milestone: v4.7.0-empirical-benchmarking-and-publications
+milestone: v4.8.0-empirical-benchmarking-and-publications
 blocked_by: []
 related: [docs--arxiv-academic-paper-preprint, docs--engineering-deepdive-medium-devto]
 ---

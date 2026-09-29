@@ -9,7 +9,7 @@ created: 2026-09-27
 updated: 2026-09-27
 agent: antigravity
 tags: [gates, context-budget, tokens, prompt-size, skill-state]
-milestone: v4.5.0-structured-state-and-blackboard-engine
+milestone: v4.6.0-structured-state-and-blackboard-engine
 blocked_by: [feat--structured-blackboard-state-machine]
 related: [feat--progressive-disclosure-and-context-scaling, feat--clean-turn-context-isolation-in-along-team]
 ---

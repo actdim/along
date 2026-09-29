@@ -9,7 +9,7 @@ created: 2026-09-27
 updated: 2026-09-27
 agent: antigravity
 tags: [along-team, subagents, clean-turn, context-isolation, fix-loop, skill-state]
-milestone: v4.6.0-clean-turn-agent-loops-and-state-recovery
+milestone: v4.7.0-clean-turn-agent-loops-and-state-recovery
 blocked_by: [feat--structured-blackboard-state-machine, feat--bounded-prompt-footprint-gate]
 related: [feat--zero-step-state-recovery-and-drift-detection]
 ---

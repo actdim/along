@@ -5,9 +5,9 @@ type: feat
 status: open
 priority: medium
 created: 2026-09-27
-updated: 2026-09-27
+updated: 2026-09-29
 agent: antigravity
-milestone: v4.4.0-multi-user-merge-automation
+milestone: v4.5.0-multi-user-merge-automation
 tags: [security, redaction, hooks, diagnostics, gitignore, secret-scrubbing]
 blocked_by: []
 related: [feat--system-invariants-and-health-probes]

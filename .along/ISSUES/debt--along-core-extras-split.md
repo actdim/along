@@ -11,7 +11,7 @@ agent: cowork
 tags: [architecture, scope, packaging, versioning]
 blocked_by: []
 related: [debt--session-start-context-budget, docs--vision-md-refresh]
-milestone: v4.5.0-structured-state-and-blackboard-engine
+milestone: v4.6.0-structured-state-and-blackboard-engine
 ---
 
 # Split Along into a minimal core and optional extras

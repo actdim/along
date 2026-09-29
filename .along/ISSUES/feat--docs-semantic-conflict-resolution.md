@@ -6,10 +6,10 @@ type: feat
 status: open
 priority: medium
 created: 2026-09-21
-updated: 2026-09-21
+updated: 2026-09-29
 agent: antigravity
 tags: [git, merge, docs, wiki, kb, markdown, llm]
-milestone: v4.4.0-multi-user-merge-automation
+milestone: v4.5.0-multi-user-merge-automation
 blocked_by: [feat--git-merge-drivers-and-setup]
 blocks: [feat--test-gated-code-merge-pipeline]
 related: [feat--git-merge-drivers-and-setup]

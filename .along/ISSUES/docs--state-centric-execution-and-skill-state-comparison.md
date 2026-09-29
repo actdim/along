@@ -6,10 +6,10 @@ type: docs
 status: open
 priority: medium
 created: 2026-09-27
-updated: 2026-09-27
+updated: 2026-09-29
 agent: antigravity
 tags: [comparisons, architecture, skill-state, execution-state, provenance, memory]
-milestone: v4.4.0-multi-user-merge-automation
+milestone: v4.5.0-multi-user-merge-automation
 blocked_by: []
 related: [feat--observation-and-telemetry-distillation, feat--structured-blackboard-state-machine]
 ---

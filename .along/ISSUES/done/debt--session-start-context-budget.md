@@ -10,7 +10,7 @@ created: 2026-09-27
 updated: 2026-09-27
 agent: cowork
 tags: [context, tokens, agents-md]
-milestone: v4.5.0-structured-state-and-blackboard-engine
+milestone: v4.6.0-structured-state-and-blackboard-engine
 blocked_by: []
 related: [feat--progressive-disclosure-and-context-scaling, feat--bounded-prompt-footprint-gate, debt--constraints-superseded-adr-filtering, debt--along-core-extras-split]
 ---

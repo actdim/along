@@ -1,18 +1,21 @@
 # Active Issues
 
 ## Active
-<!-- No active issues -->
+- [ ] `(feat)` [git-merge-drivers-and-setup](ISSUES/feat--git-merge-drivers-and-setup.md)
 
 ## Backlog
 - [ ] `(bug)` [worktree-cross-os-mount-guard](ISSUES/bug--worktree-cross-os-mount-guard.md)
+- [ ] `(debt)` [agents-md-core-slimming](ISSUES/debt--agents-md-core-slimming.md)
 - [ ] `(debt)` [along-core-extras-split](ISSUES/debt--along-core-extras-split.md)
 - [ ] `(debt)` [along-exec-argparse-migration](ISSUES/debt--along-exec-argparse-migration.md)
 - [ ] `(debt)` [constraints-superseded-adr-filtering](ISSUES/debt--constraints-superseded-adr-filtering.md)
+- [ ] `(debt)` [prose-rules-to-deterministic-checks](ISSUES/debt--prose-rules-to-deterministic-checks.md)
 - [ ] `(docs)` [anti-pattern-shell-code-probing](ISSUES/docs--anti-pattern-shell-code-probing.md)
 - [ ] `(docs)` [arxiv-academic-paper-preprint](ISSUES/docs--arxiv-academic-paper-preprint.md)
 - [ ] `(docs)` [engineering-deepdive-medium-devto](ISSUES/docs--engineering-deepdive-medium-devto.md)
 - [ ] `(docs)` [operations-and-autonomous-systems-paradigm](ISSUES/docs--operations-and-autonomous-systems-paradigm.md)
 - [ ] `(docs)` [state-centric-execution-and-skill-state-comparison](ISSUES/docs--state-centric-execution-and-skill-state-comparison.md)
+- [ ] `(docs)` [tiered-model-workflow-guide](ISSUES/docs--tiered-model-workflow-guide.md)
 - [ ] `(docs)` [unverified-performance-claims](ISSUES/docs--unverified-performance-claims.md)
 - [ ] `(docs)` [vision-md-refresh](ISSUES/docs--vision-md-refresh.md)
 - [ ] `(feat)` [agent-chat-adapters-discord-slack-mattermost-matrix](ISSUES/feat--agent-chat-adapters-discord-slack-mattermost-matrix.md)
@@ -38,8 +41,8 @@
 - [ ] `(feat)` [enterprise-governance-and-compliance-pack](ISSUES/feat--enterprise-governance-and-compliance-pack.md)
 - [ ] `(feat)` [entity-reference-integrity-gate](ISSUES/feat--entity-reference-integrity-gate.md)
 - [ ] `(feat)` [external-issue-trackers-sync-and-import](ISSUES/feat--external-issue-trackers-sync-and-import.md)
+- [ ] `(feat)` [gate-strictness-profiles](ISSUES/feat--gate-strictness-profiles.md)
 - [ ] `(feat)` [git-level-gate-enforcement](ISSUES/feat--git-level-gate-enforcement.md)
-- [ ] `(feat)` [git-merge-drivers-and-setup](ISSUES/feat--git-merge-drivers-and-setup.md)
 - [ ] `(feat)` [golang-ecosystem-support](ISSUES/feat--golang-ecosystem-support.md)
 - [ ] `(feat)` [jvm-ecosystem-support](ISSUES/feat--jvm-ecosystem-support.md)
 - [ ] `(feat)` [kb-search-archive-scope-default](ISSUES/feat--kb-search-archive-scope-default.md)
@@ -48,6 +51,7 @@
 - [ ] `(feat)` [observation-and-telemetry-distillation](ISSUES/feat--observation-and-telemetry-distillation.md)
 - [ ] `(feat)` [openclaw-and-hermes-agent-integration](ISSUES/feat--openclaw-and-hermes-agent-integration.md)
 - [ ] `(feat)` [operational-assets-and-playbooks](ISSUES/feat--operational-assets-and-playbooks.md)
+- [ ] `(feat)` [per-model-rework-metrics](ISSUES/feat--per-model-rework-metrics.md)
 - [ ] `(feat)` [pi-harness-support](ISSUES/feat--pi-harness-support.md)
 - [ ] `(feat)` [progressive-disclosure-and-context-scaling](ISSUES/feat--progressive-disclosure-and-context-scaling.md)
 - [ ] `(feat)` [secret-scrubbing-in-hooks-and-diagnostics](ISSUES/feat--secret-scrubbing-in-hooks-and-diagnostics.md)
@@ -59,9 +63,9 @@
 - [ ] `(feat)` [zero-step-state-recovery-and-drift-detection](ISSUES/feat--zero-step-state-recovery-and-drift-detection.md)
 
 ## Done (recent)
+- [x] `(task)` [roadmap-shift-after-v440-release](ISSUES/done/task--roadmap-shift-after-v440-release.md)
 - [x] `(task)` [ci-test-matrix-workflow](ISSUES/done/task--ci-test-matrix-workflow.md)
 - [x] `(feat)` [suppress-ai-coauthor-attribution](ISSUES/done/feat--suppress-ai-coauthor-attribution.md)
 - [x] `(bug)` [shell-classifier-residual-bypasses](ISSUES/done/bug--shell-classifier-residual-bypasses.md)
 - [x] `(feat)` [subproject-scoped-dependencies](ISSUES/done/feat--subproject-scoped-dependencies.md)
-- [x] `(feat)` [milestone-version-uniqueness-gate](ISSUES/done/feat--milestone-version-uniqueness-gate.md)
-<!-- 143 older completed issue(s) archived in .along/ISSUES/done/ -->
+<!-- 144 older completed issue(s) archived in .along/ISSUES/done/ -->

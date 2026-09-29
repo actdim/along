@@ -6,10 +6,10 @@ type: docs
 status: open
 priority: low
 created: 2026-09-27
-updated: 2026-09-27
+updated: 2026-09-29
 agent: antigravity
 tags: [protocol, agents-md, anti-pattern, documentation, rules]
-milestone: v4.4.0-multi-user-merge-automation
+milestone: v4.5.0-multi-user-merge-automation
 blocked_by: []
 blocks: []
 related: [feat--dev-environment-setup-and-editable-install]
