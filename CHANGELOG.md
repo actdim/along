@@ -2,6 +2,10 @@
 
 All notable changes to this project, newest first.
 
+## v4.4.1 - 2026-09-29
+
+- chore(entities): add milestone target_issues sync requirement and log global update session (refs #entity-reference-integrity-gate)
+
 ## v4.4.0 - 2026-09-29
 
 - chore(entities): reconcile entity references, schema priority, and Antigravity post-tool hook
