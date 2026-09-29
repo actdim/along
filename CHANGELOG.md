@@ -2,6 +2,11 @@
 
 All notable changes to this project, newest first.
 
+## v4.4.0 - 2026-09-29
+
+- chore(entities): reconcile entity references, schema priority, and Antigravity post-tool hook
+- feat: suppress AI co-author attribution in agent runtimes and add commit gate (refs #suppress-ai-coauthor-attribution)
+
 ## v4.3.0 - 2026-09-29
 
 - fix: resolve v4.3.0 review issues, CI matrix workflow, and Cowork support (refs #ci-test-matrix-workflow)
