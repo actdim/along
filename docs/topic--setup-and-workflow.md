@@ -83,7 +83,13 @@ in `alongkit.install.planned_files`.
 
 Every root is overridable, which is how the tests run a real installer without touching
 your own home: `--along-home=DIR --claude-home=DIR --codex-home=DIR --opencode-home=DIR
---antigravity-home=DIR` (`-AlongHome DIR`, `-ClaudeHome DIR`, ... in PowerShell).
+--antigravity-home=DIR --cursor-home=DIR` (`-AlongHome DIR`, `-ClaudeHome DIR`, ... in PowerShell).
+
+The install also turns off AI commit attribution (`Co-Authored-By:` trailers) in Claude Code
+`settings.json` and, when a Cursor home exists, in Cursor `cli-config.json`.
+`/along-update` repeats this on every run, including when the install is already up to date;
+`python ~/.along/bin/along_hook.py attribution` does it on demand. See
+[Runtime Hooks & Gates](./topic--runtime-hooks-and-gates.md).
 
 ### Removing an Install
 

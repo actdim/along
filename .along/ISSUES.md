@@ -59,8 +59,8 @@
 
 ## Done (recent)
 - [x] `(task)` [ci-test-matrix-workflow](ISSUES/done/task--ci-test-matrix-workflow.md)
+- [x] `(feat)` [suppress-ai-coauthor-attribution](ISSUES/done/feat--suppress-ai-coauthor-attribution.md)
 - [x] `(bug)` [shell-classifier-residual-bypasses](ISSUES/done/bug--shell-classifier-residual-bypasses.md)
 - [x] `(feat)` [subproject-scoped-dependencies](ISSUES/done/feat--subproject-scoped-dependencies.md)
 - [x] `(feat)` [milestone-version-uniqueness-gate](ISSUES/done/feat--milestone-version-uniqueness-gate.md)
-- [x] `(feat)` [doc-taxonomy-and-write-policy](ISSUES/done/feat--doc-taxonomy-and-write-policy.md)
-<!-- 142 older completed issue(s) archived in .along/ISSUES/done/ -->
+<!-- 143 older completed issue(s) archived in .along/ISSUES/done/ -->

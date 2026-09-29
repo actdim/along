@@ -135,7 +135,7 @@ Found while converting, neither of which had an issue:
   `\s*` swallows the marker's own line ending, so every run over an already-current CRLF
   `AGENTS.md` rewrote two line endings as LF and reported a migration. Now `{2,}`, so they
   fire only on genuine duplication, and the replacement uses the file's own newline. Same
-  family as the legacy renames guarded in `eb9fea7`; reading the dry-run plan of a
+  family as the legacy renames guarded in `66017fa`; reading the dry-run plan of a
   repository with nothing to migrate is what exposed it, which is the plan earning its
   keep on its first use.
 

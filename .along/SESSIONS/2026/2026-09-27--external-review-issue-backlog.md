@@ -5,7 +5,7 @@ date: 2026-09-27
 slug: external-review-issue-backlog
 agent: cowork
 branch: main
-commit: 86fee5b
+commit: 8c2d1e0
 summary: "External review of v4.2.0 converted into 19 issues across milestones v4.3.0-v4.5.0 including Cowork runtime support"
 milestone: v4.3.0-developer-experience-and-runtime-resilience
 issues_advanced: []

@@ -5,7 +5,7 @@ date: 2026-09-27
 slug: v430-review-fixes
 agent: cowork
 branch: main
-commit: 7b2a3e7
+commit: a94d382
 summary: 'v4.3.0: 8 review issues closed (py3.10, hermetic tests, test:quiet, gate bypasses, conflict-marker gate, session YAML, Cowork runtime); CI workflow pending manual add'
 milestone: v4.3.0-developer-experience-and-runtime-resilience
 issues_advanced: []

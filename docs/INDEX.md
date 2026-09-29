@@ -4,7 +4,7 @@ slug: INDEX
 title: ActDim Along - Knowledge Base Topic Index
 type: index
 created: 2026-09-10
-updated: 2026-09-27
+updated: 2026-09-29
 tags: [index, kb, topics, map]
 ---
 
@@ -45,12 +45,15 @@ flowchart TD
     INDEX --> T_SYSTEM_COMPARISONS
     T_ARCHITECTURE -.->|references| T_CLI_REFERENCE
     T_ARCHITECTURE -.->|references| T_SETUP_AND_WORKFLOW
+    T_CLI_REFERENCE -.->|references| T_RUNTIME_HOOKS_AND_GATES
+    T_DECLARATIVE_GATES_AND_TRACEABILITY -.->|references| T_RUNTIME_HOOKS_AND_GATES
     T_LLM_WIKI_ARCHITECTURE -.->|references| T_SYSTEM_COMPARISONS
     T_LLM_WIKI_ARCHITECTURE -.->|references| T_ARCHITECTURE
     T_LLM_WIKI_ARCHITECTURE -.->|references| T_DOMAIN_MODEL
     T_LLM_WIKI_ARCHITECTURE -.->|references| T_SKILLS_REFERENCE
     T_LLM_WIKI_ARCHITECTURE -.->|references| T_SETUP_AND_WORKFLOW
     T_RUNTIME_HOOKS_AND_GATES -.->|references| T_DECLARATIVE_GATES_AND_TRACEABILITY
+    T_SETUP_AND_WORKFLOW -.->|references| T_RUNTIME_HOOKS_AND_GATES
     T_SETUP_AND_WORKFLOW -.->|references| T_CLI_REFERENCE
     T_SYSTEM_COMPARISONS -.->|references| T_LLM_WIKI_ARCHITECTURE
     T_SYSTEM_COMPARISONS -.->|references| T_RUNTIME_HOOKS_AND_GATES
@@ -71,7 +74,7 @@ flowchart TD
 - **[License](./topic--license.md)** (license) `license`, `mit`
 - **[LLM-Wiki Knowledge Base Architecture & Paradigm](./topic--llm-wiki-architecture.md)** (topic) `llm-wiki`, `architecture`, `knowledge-base`, `token-efficiency`, `indexing`, `methodology`, `search`, `karpathy`
 - **[Protocol & Repository Migrations Guide](./topic--migrations.md)** (guide) `migrations`, `upgrade`, `protocol`, `changelog`, `versioning`, `data-safety`
-- **[Runtime Lifecycle Hooks & Mechanical Gates](./topic--runtime-hooks-and-gates.md)** (architecture) `hooks`, `gates`, `runtime`, `enforcement`, `antigravity`, `claude`, `codex`, `typography`, `cli-safety`, `circuit-breaker`
+- **[Runtime Lifecycle Hooks & Mechanical Gates](./topic--runtime-hooks-and-gates.md)** (architecture) `hooks`, `gates`, `runtime`, `enforcement`, `antigravity`, `claude`, `codex`, `typography`, `cli-safety`, `circuit-breaker`, `attribution`
 - **[Setup & Developer Workflow](./topic--setup-and-workflow.md)** (setup-workflow) `setup-workflow`, `installation`, `lifecycle`, `runners`, `developer-workflow`, `testing`
 - **[Skills & Slash Commands Technical Reference](./topic--skills-reference.md)** (reference) `skills`, `commands`, `reference`, `runners`, `lifecycle`, `automation`, `multi-agent`
 - **[System Comparisons & Alternative Architectural Paradigms](./topic--system-comparisons.md)** (explanation) `comparisons`, `architecture`, `paradigms`, `memory`, `zero-vector`, `mechanical-gates`, `governance`, `engineering-decisions`

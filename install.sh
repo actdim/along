@@ -13,7 +13,7 @@
 #   ./install.sh --symlink              # symlink skill folders (claude/codex/antigravity); opencode commands are always generated
 #   ./install.sh --migrate              # also migrate this repository's .along/ structure
 #   ./install.sh --uninstall            # remove exactly what the install manifest records
-#   ./install.sh --claude-home=DIR --codex-home=DIR --opencode-home=DIR --antigravity-home=DIR
+#   ./install.sh --claude-home=DIR --codex-home=DIR --opencode-home=DIR --antigravity-home=DIR --cursor-home=DIR
 set -euo pipefail
 
 TARGET=all
@@ -27,6 +27,7 @@ CLAUDE_HOME="${CLAUDE_HOME:-$HOME/.claude}"
 CODEX_HOME="${CODEX_HOME:-$HOME/.codex}"
 OPENCODE_HOME="${OPENCODE_HOME:-$HOME/.config/opencode}"
 ANTIGRAVITY_HOME="${ANTIGRAVITY_HOME:-$HOME/.gemini/config}"
+CURSOR_HOME="${CURSOR_HOME:-$HOME/.cursor}"
 CACHE_DIR="${ALONG_CACHE_DIR:-$HOME/.cache/actdim-along/repo}"
 
 # Un-namespaced OpenCode commands from before the /along-* prefix. Kept at parity with
@@ -62,6 +63,7 @@ for arg in "$@"; do
     --codex-home=*)       CODEX_HOME="${arg#*=}" ;;
     --opencode-home=*)    OPENCODE_HOME="${arg#*=}" ;;
     --antigravity-home=*) ANTIGRAVITY_HOME="${arg#*=}" ;;
+    --cursor-home=*)      CURSOR_HOME="${arg#*=}" ;;
     --cache-dir=*)        CACHE_DIR="${arg#*=}" ;;
     *) echo "unknown arg: $arg" >&2; exit 1 ;;
   esac
@@ -349,6 +351,9 @@ if [ -n "$PYTHON" ] && [ -f "$SCRIPT_DIR/scripts/along_hook.py" ]; then
       "$PYTHON" "$SCRIPT_DIR/scripts/along_hook.py" install --runtime "$provider" --global --target-home "$target_home" || true
     fi
   done
+  # Cursor is not a skill target, but it adds its own commit attribution. Only an
+  # existing Cursor home is touched, and only the attribution key is written.
+  "$PYTHON" "$SCRIPT_DIR/scripts/along_hook.py" attribution --runtime cursor --cursor-home "$CURSOR_HOME" || true
 fi
 
 # --- Install manifest: what was written, and what a previous install left behind ---

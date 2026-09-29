@@ -5,13 +5,14 @@ date: 2026-09-29
 slug: review-of-cowork-fixes
 agent: claude-code
 branch: main
-commit: 7b2a3e7
+commit: a94d382
 summary: Audited the 8 Cowork-closed v4.3.0 issues; fixed residual shell-classifier bypasses; added .github/workflows/tests.yml and closed CI matrix task
 issues_advanced: []
 issues_completed: [bug--shell-classifier-residual-bypasses, task--ci-test-matrix-workflow]
 decisions: []
 risks_logged: []
 spikes_conducted: []
+milestone: v2.0.0-along-transition
 ---
 
 # Session: Review of cowork fixes

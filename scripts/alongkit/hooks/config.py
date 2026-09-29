@@ -15,9 +15,9 @@ from datetime import datetime, timezone
 import json
 import os
 import sys
-from typing import Any, Dict, Optional, Tuple
+from typing import Any, Callable, Dict, List, Optional, Tuple
 
-from .. import repo, textio
+from .. import attribution, repo, textio
 from .models import GateResult, HookEvent
 
 
@@ -308,6 +308,10 @@ def install_claude_hooks(
                 cur_list.append(expected_hook)
                 changed = True
 
+    # Keep AI co-author trailers out of commits [gate: commit-no-ai-coauthor].
+    if not attribution.allow_ai_coauthor(repo_root):
+        changed = attribution.apply_claude_attribution(existing) or changed
+
     if not changed:
         return "present", f"{settings_file}: already up to date"
 
@@ -510,6 +514,12 @@ def install_cursor_hooks(
                 cur_list.append(expected_hook)
                 changed = True
 
+    # Cursor reads commit attribution from the user-level cli-config.json only.
+    if is_global and not attribution.allow_ai_coauthor(repo_root):
+        attr_status, attr_msg = _install_cursor_attribution(cursor_dir, dry_run=dry_run)
+        if attr_status == "failed":
+            return attr_status, attr_msg
+
     if not changed:
         return "present", f"{hooks_file}: already up to date"
 
@@ -519,6 +529,66 @@ def install_cursor_hooks(
     os.makedirs(cursor_dir, exist_ok=True)
     textio.write_text(hooks_file, json.dumps(existing, indent=2) + "\n", newline="\n")
     return "installed", f"updated {hooks_file} with Along hooks"
+
+
+def _apply_json_settings(
+    config_file: str,
+    apply: Callable[[Dict[str, Any]], bool],
+    dry_run: bool = False,
+) -> Tuple[str, str]:
+    """Merge settings into a JSON object file through `apply`, keeping every other key."""
+    existing: Dict[str, Any] = {}
+    if os.path.isfile(config_file):
+        try:
+            content = textio.read_text(config_file, strict=False)
+            if content.strip():
+                existing = json.loads(content)
+                if not isinstance(existing, dict):
+                    return "failed", f"left {config_file} alone: top-level is not a JSON object"
+        except (OSError, ValueError) as exc:
+            return "failed", f"left {config_file} alone: cannot parse JSON ({exc})"
+
+    if not apply(existing):
+        return "present", f"{config_file}: attribution already up to date"
+    if dry_run:
+        return "dry-run", f"would update {config_file} with attribution settings"
+    os.makedirs(os.path.dirname(config_file), exist_ok=True)
+    textio.write_text(config_file, json.dumps(existing, indent=2) + "\n", newline="\n")
+    return "installed", f"updated {config_file} with attribution settings"
+
+
+def _install_cursor_attribution(cursor_dir: str, dry_run: bool = False) -> Tuple[str, str]:
+    """Turn off agent commit attribution in Cursor `cli-config.json` [gate: commit-no-ai-coauthor]."""
+    return _apply_json_settings(
+        os.path.join(cursor_dir, "cli-config.json"), attribution.apply_cursor_attribution, dry_run
+    )
+
+
+def reconcile_attribution(
+    claude_home: Optional[str] = None,
+    cursor_home: Optional[str] = None,
+    dry_run: bool = False,
+    repo_root: Optional[str] = None,
+    runtimes: Tuple[str, ...] = ("claude", "cursor"),
+) -> List[Tuple[str, str]]:
+    """Turn off AI commit attribution in every installed runtime's user-level config.
+
+    Only touches a runtime whose home directory already exists, so nothing is created
+    for a runtime the user does not have. Writes only the attribution keys, never hooks.
+    Called by `along-update` and the installers [gate: commit-no-ai-coauthor].
+    """
+    if attribution.allow_ai_coauthor(repo_root):
+        return [("present", "attribution left alone: commits.allow_ai_coauthor is true")]
+    claude_home = claude_home or os.path.expanduser("~/.claude")
+    cursor_home = cursor_home or os.path.expanduser("~/.cursor")
+    results: List[Tuple[str, str]] = []
+    if "claude" in runtimes and os.path.isdir(claude_home):
+        results.append(_apply_json_settings(
+            os.path.join(claude_home, "settings.json"), attribution.apply_claude_attribution, dry_run
+        ))
+    if "cursor" in runtimes and os.path.isdir(cursor_home):
+        results.append(_install_cursor_attribution(cursor_home, dry_run=dry_run))
+    return results
 
 
 def purge_local_along_hooks(repo_root: str, recursive: bool = True, dry_run: bool = False) -> List[str]:

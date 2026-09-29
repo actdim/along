@@ -257,6 +257,7 @@ Also, when relevant: `.along/VISION.md`, `.along/GLOSSARY.md`. These reflect the
 - **No Code Without Issue** [gate: require-active-issue]: Before modifying source code, agents MUST identify or create an issue in `.along/ISSUES/<type>--<slug>.md` and set `status: in-progress`.
 - **Exemptions**: Read-only Q&A and 1-line micro-edits (typo fixes, comments) do not require issues.
 - **Commit Binding** [gate: commit-issue-binding]: Every commit via `/along-commit` MUST bind to the active issue slug.
+- **No AI Co-Authors** [gate: commit-no-ai-coauthor]: Commit messages MUST NOT carry `Co-Authored-By:` trailers naming an AI agent (GitHub lists the vendor as a contributor). `along hook install` turns runtime attribution off; opt out via `.along/config.json` `commits.allow_ai_coauthor: true`.
 
 ## Entity Ecosystem
 - **Entity types**: Issues (`feat`, `bug`, `debt`, `task`, `docs`), Decisions (ADRs), Milestones, Risks, Spikes, Checklists, Sessions. Full YAML schemas: `docs/topic--domain-model.md`.
@@ -1200,6 +1201,7 @@ Displays an instant terminal summary of repository health, active in-flight issu
 
 ### `along doctor`
 Validates repository compliance with the Along protocol. Audits `.along/` directory layout, `.gitattributes` merge drivers, and ADR header formatting.
+- **Runtime section**: names the runtime (`claude-code`, `cowork`, `antigravity`, `codex`, ...), the gate enforcement level (`mechanical` only when Along hooks are registered for that runtime, otherwise `advisory`), the Python floor (3.10), a stale `.git/index.lock`, and a cross-OS or VM-mounted repository (worktrees unsafe). See the capability matrix in [Runtime Lifecycle Hooks & Mechanical Gates](./topic--runtime-hooks-and-gates.md).
 - **Options**:
   - `--entities`: Performs deep validation of the entity DAG graph, verifying parent/child relationships, `blocked_by` dependencies, and detecting circular references.
 - **Usage**:
@@ -1267,7 +1269,8 @@ Tracks progress across high-level milestones and sprints in `.along/MILESTONES/`
 Manages session logs in `.along/SESSIONS/` and records engineering provenance.
 - **Subcommands**:
   - `along session create <slug> --summary "Summary" [options...]`: Initializes a new session log.
-    - Options: `--issues "slug1,slug2"`, `--decisions "ADR-slug"`, `--agent <name>`, `--milestone <name>`.
+    - Options: `--issues "slug1,slug2"`, `--decisions "ADR-slug"`, `--agent <name>`, `--milestone <name>`, `--commit <sha>`.
+    - Front-matter is emitted through `ruamel.yaml`; `branch` and `commit` come from git (omitted outside a repository), and the body records test evidence only when the runtime hooks recorded a run.
   - `along session wrap <slug> [options...]`: Finalizes a session, updates linked issue states, and recompiles projections.
     - Options: `--status {done,superseded}`, `--summary "Summary"`, `--dry-run`, `-n`.
 - **Usage**:
@@ -1596,6 +1599,7 @@ Runtime lifecycle hook interceptor and declarative gate evaluation harness.
 - **Subcommands**:
   - `along hook eval <event> [--runtime {antigravity,claude,codex,generic}]`: Evaluates declarative gates against an incoming event payload passed via stdin or argument.
   - `along hook install [--runtime {antigravity,claude,codex,all}]`: Scaffolds or updates runtime hook configuration manifests (`.agents/hooks.json`, `.claude/settings.json`, `.codex/hooks.json`).
+  - `along hook attribution [--runtime {claude,cursor,all}] [--claude-home DIR] [--cursor-home DIR] [--dry-run]`: Turns off AI commit attribution (`Co-Authored-By:` trailers) in existing runtime homes: `attribution.commit = ""` + `includeCoAuthoredBy = false` in Claude Code `settings.json`, `attribution.attributeCommitsToAgent = false` in Cursor `cli-config.json`. Writes no hooks. Also run by the installers and every `/along-update`.
   - `along hook verify [--strict]`: Audits bi-directional traceability between prose badges (`[gate: <id>]`) across documentation/skills and declarative YAML gate rules in `default_gates.yaml`.
 - **Usage**:
   ```bash
@@ -1724,7 +1728,7 @@ Gates are declared in YAML format with standard schema fields:
 - `predicate`: Name of python predicate handler in `alongkit.hooks.predicates`.
 - `remediation`: Explicit remediation message returned to the agent on violation.
 
-The 14 canonical gates defined in the catalogue:
+The 15 canonical gates defined in the catalogue:
 1. `commit_issue_binding`: Intercepts `git commit` to require issue binding (`--issue` or `(<type>--<slug>)`).
 2. `commit_no_conflict_markers`: Intercepts `git commit` and inspects the lines the commit would add (`git diff --cached`, or `git diff HEAD` for `commit -a`) for unresolved merge conflict markers at line start (`<<<<<<< `, `=======`, `>>>>>>> `). The commit message itself is not inspected, so a Markdown rule of `=======` in a message is allowed. No file class is exempt: `merge=union` files never receive markers from git, so a marker there is a real conflict too.
 3. `anti_stub_injection`: Intercepts file mutation tools to forbid stub markers and lazy truncation skeletons.
@@ -1739,6 +1743,7 @@ The 14 canonical gates defined in the catalogue:
 12. `worktree_env_readiness`: Verifies dependency junctions and environment config propagation before worktree tool execution.
 13. `circuit_breaker`: Hard stop that halts mutating commands and edits upon systemic environment anomalies.
 14. `require_plan_approval`: Blocks repository file mutations and mutating shell commands in inquiry mode without an approved plan.
+15. `commit_no_ai_coauthor`: Intercepts `git commit` and denies a message (command line or `-F` file) carrying a `Co-Authored-By:` trailer that names an AI agent. Human co-authors pass. Opt-out: `.along/config.json` `commits.allow_ai_coauthor: true`. See [Runtime Hooks & Gates](./topic--runtime-hooks-and-gates.md).
 
 
 ### 2.2 Stateful Predicate Handlers (`alongkit.hooks.predicates`)
@@ -2667,7 +2672,7 @@ The Along Runtime Hook and Gate System establishes deterministic, programmatic i
    - Scans command strings for forbidden patterns: heredocs (`<<EOF`), inline Python file writers (`python -c "open('...', 'w')"`), destructive unstaged Git wipes (`git reset --hard`, `git clean -f`), and unauthorized global package managers (`npm install -g`).
 
 ### 2.3 Declarative Extension & Traceability Matrix
-Beyond hardcoded Python gates, Along provides an extensible, declarative YAML gate catalogue (`default_gates.yaml` and `.along/rules/gates.yaml`) enforcing 14 canonical gates (including `require_plan_approval` for inquiry read-only locks, `circuit_breaker`, and `worktree_env_readiness`), verified bi-directionally against prose badges (`[gate: <id>]`) via `along hook verify`.
+Beyond hardcoded Python gates, Along provides an extensible, declarative YAML gate catalogue (`default_gates.yaml` and `.along/rules/gates.yaml`) enforcing 15 canonical gates (including `require_plan_approval` for inquiry read-only locks, `circuit_breaker`, and `worktree_env_readiness`), verified bi-directionally against prose badges (`[gate: <id>]`) via `along hook verify`.
 For full specification and architecture, see [Declarative Gate Engine & Traceability Matrix](./topic--declarative-gates-and-traceability.md).
 
 
@@ -2680,7 +2685,7 @@ For full specification and architecture, see [Declarative Gate Engine & Traceabi
 ### 2.5 Execution Pipeline & Dispatcher (`alongkit.hooks.engine` & `scripts/along_hook.py`)
 - `HookEngine`: Evaluates incoming events sequentially against all registered gates (both built-in and declarative).
 - `along_hook.py`: Universal CLI driver handling process I/O, error recovery, adapter dispatch, and `verify` audit.
-- Subcommand `along hook install`: Scaffolds runtime hook configurations (`.agents/hooks.json` for Antigravity, `.claude/settings.json` for Claude Code, `.codex/hooks.json` for OpenAI Codex, `.cursor/hooks.json` for Cursor). Accepts `--runtime {antigravity,claude,codex,cursor,all}`.
+- Subcommand `along hook install`: Scaffolds runtime hook configurations (`.agents/hooks.json` for Antigravity, `.claude/settings.json` for Claude Code, `.codex/hooks.json` for OpenAI Codex, `.cursor/hooks.json` for Cursor). Accepts `--runtime {antigravity,claude,codex,cursor,all}`. Also turns off AI commit attribution where the runtime documents a key for it (see 2.7).
 - Subcommand `along run <cmd...>` (and `along_hook.py run <cmd...>`): Command proxy wrapper evaluating `run_command` through `HookEngine` prior to execution. Provides mechanical gate enforcement in environments without native PreToolUse lifecycle hooks (OpenCode, CI, and external terminals).
 - Subcommand `along hook verify`: Audits bi-directional traceability between prose badges and YAML gates.
 
@@ -2696,6 +2701,23 @@ The Circuit Breaker (`[gate: circuit-breaker]`) acts as a programmatic hard stop
   - Class 5: Syntax Churn & Self-Destructive Edit Loops (consecutive syntax compilation failures on the same file >= 2 times).
 - **Zero-Retry Tripping**: Trips immediately to `TRIPPED` state in `.along/diagnostics/circuit_breaker.json`, prints a standardized high-visibility human escalation banner, and blocks modifying tool calls via `PreToolUse`.
 - **Pre-Flight Health Probe & Resumption Gate**: Requires human remediation and execution of `along circuit reset`, which executes `run_health_probe()` (verifying `.git/index` integrity, absence of stale locks, and clean AST syntax) before unlocking agent tools.
+
+### 2.7 Commit Attribution Policy (`alongkit.attribution`)
+Agent runtimes append `Co-Authored-By:` trailers naming themselves (for example `Claude ... <noreply@anthropic.com>`). GitHub resolves the trailer email to an account and lists the vendor as a repository contributor; undoing it later needs a history rewrite and a force-push. `[gate: commit-no-ai-coauthor]` keeps the trailers out in three layers:
+
+| Layer | Where | What it does |
+| :--- | :--- | :--- |
+| Runtime config | `along hook install --runtime claude` | Sets `attribution.commit = ""` and legacy `includeCoAuthoredBy = false` in `settings.json`; other keys are kept. |
+| Runtime config | `along hook install --runtime cursor --global` | Sets `attribution.attributeCommitsToAgent = false` in `~/.cursor/cli-config.json`. |
+| Reconcile | `along hook attribution [--runtime claude\|cursor\|all]`, `install.ps1` / `install.sh`, every `/along-update` run | `reconcile_attribution` writes only the attribution keys above, only for runtime homes that already exist, even when the install is up to date. `--no-hooks` skips it in `/along-update`. |
+| Gate | `commit_no_ai_coauthor` (`predicates.check_ai_coauthor`) | Denies `git commit` whose command line or `-F` message file carries an AI co-author trailer. Human co-authors pass. |
+| Commit engine | `/along-commit` | Strips AI co-author trailers from the message before committing. |
+
+Codex and Antigravity document no attribution key; for them the gate and `/along-commit` are the only layers. Opt out per repository with `.along/config.json`:
+
+```json
+{ "commits": { "allow_ai_coauthor": true } }
+```
 
 ---
 
@@ -2860,7 +2882,13 @@ in `alongkit.install.planned_files`.
 
 Every root is overridable, which is how the tests run a real installer without touching
 your own home: `--along-home=DIR --claude-home=DIR --codex-home=DIR --opencode-home=DIR
---antigravity-home=DIR` (`-AlongHome DIR`, `-ClaudeHome DIR`, ... in PowerShell).
+--antigravity-home=DIR --cursor-home=DIR` (`-AlongHome DIR`, `-ClaudeHome DIR`, ... in PowerShell).
+
+The install also turns off AI commit attribution (`Co-Authored-By:` trailers) in Claude Code
+`settings.json` and, when a Cursor home exists, in Cursor `cli-config.json`.
+`/along-update` repeats this on every run, including when the install is already up to date;
+`python ~/.along/bin/along_hook.py attribution` does it on demand. See
+[Runtime Hooks & Gates](./topic--runtime-hooks-and-gates.md).
 
 ### Removing an Install
 

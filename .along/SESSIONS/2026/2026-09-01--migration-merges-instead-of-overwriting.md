@@ -5,7 +5,7 @@ date: 2026-09-01
 slug: migration-merges-instead-of-overwriting
 agent: claude-code
 branch: main
-commit: 4fd4573
+commit: 1c326b4
 summary: The migration engine can no longer delete a destination, migrate unasked, or run without a plan and a backup.
 milestone: v3.0.0-global-quality-revision
 issues_advanced: [protocol-quality-audit-remediation]

@@ -82,12 +82,13 @@ class InstallerCase(unittest.TestCase):
                  ("claude-home", os.path.join(home, ".claude")),
                  ("codex-home", os.path.join(home, ".codex")),
                  ("opencode-home", os.path.join(home, ".config", "opencode")),
-                 ("antigravity-home", os.path.join(home, ".gemini", "config"))]
+                 ("antigravity-home", os.path.join(home, ".gemini", "config")),
+                 ("cursor-home", os.path.join(home, ".cursor"))]
         if style == "sh":
             return [f"--{name}={value}" for name, value in pairs]
         flags = {"along-home": "-AlongHome", "claude-home": "-ClaudeHome",
                  "codex-home": "-CodexHome", "opencode-home": "-OpencodeHome",
-                 "antigravity-home": "-AntigravityHome"}
+                 "antigravity-home": "-AntigravityHome", "cursor-home": "-CursorHome"}
         arguments = []
         for name, value in pairs:
             arguments.extend([flags[name], value])

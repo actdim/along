@@ -27,7 +27,7 @@ from alongkit import bootstrap
 bootstrap.ensure_deps()
 
 
-from alongkit import entities, gates, proc, repo
+from alongkit import attribution, entities, gates, proc, repo
 
 
 # Both gates live in alongkit.gates, shared with the release engine, which used to
@@ -136,6 +136,13 @@ def main(argv=None):
 
     for warn in warnings:
         print(f"[Warning] {warn}", file=sys.stderr)
+
+    # AI co-author trailers make GitHub list the vendor as a contributor.
+    if not attribution.allow_ai_coauthor(repo_root):
+        cleaned = attribution.strip_ai_coauthor_trailers(raw_msg).strip()
+        if cleaned != raw_msg:
+            print("-> Removed AI Co-Authored-By trailer(s) from the message.")
+            raw_msg = cleaned
 
     final_msg = format_commit_message(raw_msg, active_issue)
     print(f"-> Commit message: \"{final_msg}\"")

@@ -101,6 +101,33 @@ def main() -> int:
         return 0 if all(s in ("installed", "present", "dry-run") for s in statuses) else 1
 
 
+    if len(sys.argv) > 1 and sys.argv[1] == "attribution":
+        parser = argparse.ArgumentParser(
+            prog="along hook attribution",
+            description="Turn off AI commit attribution (Co-Authored-By) in installed runtimes "
+                        "(Claude Code settings.json, Cursor cli-config.json). Hooks are not touched.",
+        )
+        parser.add_argument("--runtime", default="all", choices=["claude", "cursor", "all"],
+                            help="Runtime(s) to reconcile")
+        parser.add_argument("--claude-home", default=None, help="Claude Code home (default: ~/.claude)")
+        parser.add_argument("--cursor-home", default=None, help="Cursor home (default: ~/.cursor)")
+        parser.add_argument("--dry-run", action="store_true", help="Preview changes without writing")
+        parser.add_argument("--repo-root", default=None, help="Repository whose .along/config.json may opt out")
+        args = parser.parse_args(sys.argv[2:])
+
+        from alongkit.hooks.config import reconcile_attribution
+        results = reconcile_attribution(
+            claude_home=args.claude_home, cursor_home=args.cursor_home,
+            dry_run=args.dry_run, repo_root=args.repo_root or repo.find_repo_root(),
+            runtimes=("claude", "cursor") if args.runtime == "all" else (args.runtime,),
+        )
+        for _, msg in results:
+            print(f"-> [Along Attribution] {msg}")
+        if not results:
+            print("-> [Along Attribution] no Claude Code or Cursor home found; nothing to do")
+        return 0 if all(s != "failed" for s, _ in results) else 1
+
+
     if len(sys.argv) > 1 and sys.argv[1] == "verify":
         parser = argparse.ArgumentParser(
             prog="along hook verify",

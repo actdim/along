@@ -25,6 +25,7 @@ param(
     [string]$CodexHome       = (Join-Path $env:USERPROFILE '.codex'),
     [string]$OpencodeHome    = (Join-Path $env:USERPROFILE '.config\opencode'),
     [string]$AntigravityHome = (Join-Path $env:USERPROFILE '.gemini\config'),
+    [string]$CursorHome      = (Join-Path $env:USERPROFILE '.cursor'),
     [string]$CacheDir        = (Join-Path (Join-Path $env:USERPROFILE '.cache') 'actdim-along\repo')
 )
 
@@ -483,6 +484,9 @@ if ($hookTool) {
             & (Get-PythonExe) $hookTool install --runtime $t --global --target-home $homeDir
         }
     }
+    # Cursor is not a skill target, but it adds its own commit attribution. Only an
+    # existing Cursor home is touched, and only the attribution key is written.
+    & (Get-PythonExe) $hookTool attribution --runtime cursor --cursor-home $CursorHome
 }
 
 # --- Install manifest: what was written, and what a previous install left behind ---

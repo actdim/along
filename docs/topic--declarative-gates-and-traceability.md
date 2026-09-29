@@ -74,7 +74,7 @@ Gates are declared in YAML format with standard schema fields:
 - `predicate`: Name of python predicate handler in `alongkit.hooks.predicates`.
 - `remediation`: Explicit remediation message returned to the agent on violation.
 
-The 14 canonical gates defined in the catalogue:
+The 15 canonical gates defined in the catalogue:
 1. `commit_issue_binding`: Intercepts `git commit` to require issue binding (`--issue` or `(<type>--<slug>)`).
 2. `commit_no_conflict_markers`: Intercepts `git commit` and inspects the lines the commit would add (`git diff --cached`, or `git diff HEAD` for `commit -a`) for unresolved merge conflict markers at line start (`<<<<<<< `, `=======`, `>>>>>>> `). The commit message itself is not inspected, so a Markdown rule of `=======` in a message is allowed. No file class is exempt: `merge=union` files never receive markers from git, so a marker there is a real conflict too.
 3. `anti_stub_injection`: Intercepts file mutation tools to forbid stub markers and lazy truncation skeletons.
@@ -89,6 +89,7 @@ The 14 canonical gates defined in the catalogue:
 12. `worktree_env_readiness`: Verifies dependency junctions and environment config propagation before worktree tool execution.
 13. `circuit_breaker`: Hard stop that halts mutating commands and edits upon systemic environment anomalies.
 14. `require_plan_approval`: Blocks repository file mutations and mutating shell commands in inquiry mode without an approved plan.
+15. `commit_no_ai_coauthor`: Intercepts `git commit` and denies a message (command line or `-F` file) carrying a `Co-Authored-By:` trailer that names an AI agent. Human co-authors pass. Opt-out: `.along/config.json` `commits.allow_ai_coauthor: true`. See [Runtime Hooks & Gates](./topic--runtime-hooks-and-gates.md).
 
 
 ### 2.2 Stateful Predicate Handlers (`alongkit.hooks.predicates`)

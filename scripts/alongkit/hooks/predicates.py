@@ -15,7 +15,7 @@ import os
 import re
 from typing import Any, Dict, List, Optional, Tuple
 
-from .. import frontmatter, kb, proc, repo, sanitizer, session, textio, typography
+from .. import attribution, frontmatter, kb, proc, repo, sanitizer, session, textio, typography
 from . import shellparse
 from .models import GateDecision, GateResult, HookEvent, HookEventType
 
@@ -368,6 +368,39 @@ def check_staged_conflict_markers(event: HookEvent, repo_root: str, **kwargs: An
     return (
         "Git commit rejected by [gate: commit-no-conflict-markers]: unresolved merge conflict "
         f"markers in staged content ({shown}). Resolve the conflicts and stage the files again."
+    )
+
+
+_GIT_COMMIT_RE = re.compile(r"\bgit\s+(?:-C\s+\S+\s+)?commit\b")
+_COMMIT_MSG_FILE_RE = re.compile(r"(?:\s-F\s*|\s--file[=\s]\s*)(['\"]?)([^\s'\"]+)\1")
+
+
+def check_ai_coauthor(event: HookEvent, repo_root: str, **kwargs: Any) -> Optional[str]:
+    """Block `git commit` whose message carries an AI `Co-Authored-By:` trailer.
+
+    Looks at the command line (`-m`, heredoc) and at a message file passed with
+    `-F` / `--file`. Human co-authors pass. See [feat--suppress-ai-coauthor-attribution].
+    """
+    cmd = _extract_command(event)
+    if not _GIT_COMMIT_RE.search(cmd) or attribution.allow_ai_coauthor(repo_root):
+        return None
+    trailer = attribution.find_ai_coauthor(cmd)
+    if trailer is None:
+        file_match = _COMMIT_MSG_FILE_RE.search(cmd)
+        if file_match and file_match.group(2) != "-":
+            msg_path = file_match.group(2)
+            if not os.path.isabs(msg_path) and repo_root:
+                msg_path = os.path.join(repo_root, msg_path)
+            if os.path.isfile(msg_path):
+                try:
+                    trailer = attribution.find_ai_coauthor(textio.read_text(msg_path, strict=False))
+                except OSError:
+                    trailer = None
+    if trailer is None:
+        return None
+    return (
+        f"Git commit rejected by [gate: commit-no-ai-coauthor]: '{trailer[:80]}' names an AI "
+        "agent as co-author. Remove the trailer; GitHub would list the vendor as a contributor."
     )
 
 

@@ -531,6 +531,17 @@ def run_update(repo_root, check_only=False, dry_run=False, force=False, local_on
         else:
             print("-> [Isolated Mode] Updating repository context (pass --global to synchronize host skills).")
 
+    # Runs on every update, not only when a newer release is installed: an up-to-date
+    # install still has to keep AI co-author trailers off [gate: commit-no-ai-coauthor].
+    if not no_hooks:
+        try:
+            from alongkit.hooks.config import reconcile_attribution
+            for status, msg in reconcile_attribution(dry_run=dry_run, repo_root=repo_root):
+                if status != "present" or verbose:
+                    print(f"-> [Attribution] {msg}")
+        except (ImportError, OSError, ValueError) as exc:
+            print(f"   [Warning] Attribution reconcile skipped: {exc}", file=sys.stderr)
+
     protocol_src = None
     local_proto = os.path.join(repo_root, "skills", "along-init", "protocol.md")
     if not os.path.exists(local_proto):

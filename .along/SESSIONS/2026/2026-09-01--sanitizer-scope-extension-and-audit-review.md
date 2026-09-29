@@ -4,7 +4,7 @@ date: 2026-09-01
 slug: sanitizer-scope-extension-and-audit-review
 agent: antigravity
 branch: main
-commit: b5da793
+commit: 7b132cd
 summary: "Extended migration Step 5 typography sanitizer scope to docs/ and AGENTS.md/README.md; reviewed post-audit fixes"
 milestone: v3.0.0-global-quality-revision
 issues_advanced: [protocol-quality-audit-remediation]
@@ -18,13 +18,13 @@ spikes_conducted: []
 
 ## Summary
 
-Reviewed the post-audit quality fixes (commits e9cca29..b5da793) and implemented
+Reviewed the post-audit quality fixes (commits 3253605..7b132cd) and implemented
 one additional mitigation: extending the typography sanitizer scope in the migration
 engine to cover docs/ and the root agent context files.
 
 ## Work Completed
 
-- **Analysis**: Reviewed commit e9cca29 (the quality audit commit that created 28
+- **Analysis**: Reviewed commit 3253605 (the quality audit commit that created 28
   issues and fixed 2 P0/P1 defects) and the 9 subsequent commits that closed
   additional bugs.
 - **`scripts/migrate_protocol.py`**: `sanitize_markdown_typography()` now accepts an

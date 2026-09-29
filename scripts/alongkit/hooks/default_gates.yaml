@@ -28,6 +28,18 @@ gates:
       handler: alongkit.hooks.predicates.check_staged_conflict_markers
       error: "Git commit rejected by [gate: commit-no-conflict-markers]: Unresolved git merge conflict markers detected in staged content."
 
+  - id: commit_no_ai_coauthor
+    title: "Git Commit AI Co-Author Protection"
+    description: "Blocks commits whose message names an AI agent in a Co-Authored-By trailer"
+    event: PreToolUse
+    tools: [run_command, execute_command, bash, shell]
+    match_args:
+      CommandLine: '\bgit\s+(?:-C\s+\S+\s+)?commit\b'
+    rule:
+      type: predicate
+      handler: alongkit.hooks.predicates.check_ai_coauthor
+      error: "Git commit rejected by [gate: commit-no-ai-coauthor]: AI co-author trailer in commit message."
+
   - id: anti_stub_injection
     title: "Anti-Stub Truncation Protection"
     description: "Blocks lazy truncation skeletons and placeholder comments"
