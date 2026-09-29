@@ -57,12 +57,17 @@ All three were fixed by hand. The root cause is systemic:
 - `REQ-5`: Anchor the rule in `skills/along-init/protocol.md` / `AGENTS.md` ("never delete an entity
   that other entities reference; use supersede") with a `[gate: ...]` tag for traceability.
 - `REQ-6`: Hermetic tests on `tempfile.mkdtemp()` fixtures for the gate, commit check, rename and supersede.
+- `REQ-7`: `along issue create --milestone <m>` (and `along issue update --milestone`) keep the milestone's
+  `target_issues` in sync: add the key on create/assign and remove it from the previous milestone on reassignment.
+  Observed on 2026-09-29: creating this issue with `--milestone v4.4.0-multi-user-merge-automation` set
+  `milestone:` in the issue but did not add it to the milestone's `target_issues`, which had to be patched by hand.
 
 ## Acceptance Criteria
 - [ ] Wrap / issue-sync gate reports and (in enforce mode) blocks dangling references and enum violations
 - [ ] `along commit` rejects newly introduced dangling references in staged entities
 - [ ] `along issue rename` and `along issue supersede` rewrite all inbound references
 - [ ] Migration engine uses the shared validator; no duplicated logic
+- [ ] Issue create/update keeps milestone `target_issues` in sync
 - [ ] Protocol rule anchored and `along hook verify --strict` passes
 - [ ] `along doctor --entities` is clean on the live repo
 - [ ] Automated tests passing
