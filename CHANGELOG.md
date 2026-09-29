@@ -2,6 +2,11 @@
 
 All notable changes to this project, newest first.
 
+## v4.3.0 - 2026-09-29
+
+- fix: resolve v4.3.0 review issues, CI matrix workflow, and Cowork support (refs #ci-test-matrix-workflow)
+- feat: implement Antigravity runtime runner and bump v4.2.1 (refs #agent-runtime-runner-antigravity)
+
 ## v4.2.1 - 2026-09-27
 
 - No commits recorded since the previous release tag.
