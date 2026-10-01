@@ -2,6 +2,11 @@
 
 All notable changes to this project, newest first.
 
+## v4.4.2 - 2026-10-01
+
+- feat(gates): merge drivers, git-level and repo-state gates, containment, distillation, entity integrity, rule pack integrity (refs #rule-packs-local-extensions)
+- chore(milestones): carry open v4.4.0 scope to new v4.5.0 and shift v4.5-v4.7 roadmap to v4.6-v4.8 (refs #roadmap-shift-after-v440-release)
+
 ## v4.4.1 - 2026-09-29
 
 - chore(entities): add milestone target_issues sync requirement and log global update session (refs #entity-reference-integrity-gate)
