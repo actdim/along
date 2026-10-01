@@ -3,7 +3,8 @@ protocol: along
 protocol_version: "3.8.0"
 slug: git-merge-drivers-and-setup
 type: feat
-status: in-progress
+status: done
+completed: 2026-09-29
 priority: high
 created: 2026-09-21
 updated: 2026-09-29
@@ -73,8 +74,8 @@ This issue implements deterministic Custom Git Merge Drivers:
 - Verify fallback behavior when external dependencies are missing.
 
 ## Acceptance Criteria
-- [ ] `scripts/along_merge_driver.py` implemented and supports `projection` and `frontmatter` modes.
-- [ ] `along git setup` registers merge drivers in `.git/config` and updates `.gitattributes`.
-- [ ] Parallel branch merges modifying `.along/ISSUES.md` resolve automatically with zero Git conflict markers.
-- [ ] Front-matter 3-way merge successfully resolves concurrent tag additions and status updates.
-- [ ] Hermetic unit tests in `tests/test_merge_driver.py` pass cleanly.
+- [x] `scripts/along_merge_driver.py` implemented and supports `projection` and `frontmatter` modes.
+- [x] `along git setup` registers merge drivers in `.git/config` and updates `.gitattributes`.
+- [x] Parallel branch merges modifying `.along/ISSUES.md` resolve automatically with zero Git conflict markers.
+- [x] Front-matter 3-way merge successfully resolves concurrent tag additions and status updates.
+- [x] Hermetic unit tests in `tests/test_merge_driver.py` pass cleanly.

@@ -1,3 +1,6 @@
+<!-- managed by along: do not edit. Project guidelines belong in docs/ and AGENTS.md -->
+<!-- template: platforms/web.md sha256:71bfed6b4ef6fdba63dc3faf510edd4c380f7ed5f51f48ad51b3ab072cad9985 -->
+
 # Web Application Engineering Guidelines & Best Practices
 
 Strict architectural and engineering standards for browser-based and SSR web applications.

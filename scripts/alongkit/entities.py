@@ -24,7 +24,7 @@ if __name__ == "__main__":
 import os
 import re
 from datetime import date, datetime
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Optional, Sequence, Tuple
 
 from .markdown import github_heading_anchor
 
@@ -1216,7 +1216,54 @@ def _resolve_ref(ref: Any, known: set) -> bool:
     return slug in known
 
 
-def validate_entities(repo_root: str) -> Dict[str, Any]:
+def is_integrity_error(message: str) -> bool:
+    """A `validate_entities` error the reference-integrity gate blocks on.
+
+    Dangling references ("dangling ...") and enum violations ("invalid <field>: ...").
+    """
+    return message.startswith("dangling ") or message.startswith("invalid ")
+
+
+_ANCESTOR_ENTITY_DIRS = ("ISSUES", "RISKS", "SPIKES", "MILESTONES", "DECISIONS")
+_PROJECTION_FILES = ("ISSUES.md", "README.md", "CONSTRAINTS.md", "DECISIONS.md")
+
+
+def ancestor_entity_keys(repo_root: str) -> set:
+    """Entity keys of every enclosing `.along/` context up to the git boundary.
+
+    A subproject entity may reference an issue, milestone or ADR of the monorepo root.
+    The walk stops at the first directory holding `.git`; a `repo_root` that is itself
+    a git root has no ancestors.
+    """
+    import glob
+
+    keys: set = set()
+    root = os.path.abspath(repo_root)
+    if os.path.exists(os.path.join(root, ".git")):
+        return keys
+    current = os.path.dirname(root)
+    while current and current != os.path.dirname(current):
+        candidate = os.path.join(current, ".along")
+        if os.path.isdir(candidate):
+            for dirname in _ANCESTOR_ENTITY_DIRS:
+                pattern = os.path.join(candidate, dirname, "**", "*.md")
+                for fpath in glob.glob(pattern, recursive=True):
+                    fname = os.path.basename(fpath)
+                    if fname in _PROJECTION_FILES:
+                        continue
+                    stem = fname[:-3]
+                    keys.add(stem)
+                    if "--" in stem:
+                        bare = stem.split("--", 1)[1]
+                        keys.add(bare)
+                        keys.add(f"decision--{bare}")
+        if os.path.exists(os.path.join(current, ".git")):
+            break
+        current = os.path.dirname(current)
+    return keys
+
+
+def validate_entities(repo_root: str, ancestors: bool = True) -> Dict[str, Any]:
     """Validate entity schemas, enums, mandatory fields, and graph references.
 
     Checks:
@@ -1225,6 +1272,9 @@ def validate_entities(repo_root: str) -> Dict[str, Any]:
     2. Milestones: mandatory fields, status enum, dangling target_issues.
     3. Risks, spikes, checklists: mandatory fields and enums.
     4. Sessions: mandatory fields, milestone resolution, issue resolutions.
+
+    References also resolve against enclosing `.along/` contexts (`ancestor_entity_keys`)
+    unless `ancestors` is False. Every dangling reference message starts with "dangling ".
     """
     from . import frontmatter, repo, semver, textio
 
@@ -1232,15 +1282,18 @@ def validate_entities(repo_root: str) -> Dict[str, Any]:
     errors: List[Tuple[str, str]] = []
     warnings: List[Tuple[str, str]] = []
     scanned = 0
+    external = ancestor_entity_keys(repo_root) if ancestors else set()
 
     all_issues = scan_issues(repo_root, include_done=True)
     known_issue_slugs = {iss["slug"] for iss in all_issues}
-    known_issue_keys = {canonical_key(iss["type"], iss["slug"]) for iss in all_issues} | known_issue_slugs
+    known_issue_keys = ({canonical_key(iss["type"], iss["slug"]) for iss in all_issues}
+                        | known_issue_slugs | external)
 
     all_milestones = scan_milestones(repo_root)
     known_milestone_slugs = (
         {m["slug"] for m in all_milestones} |
-        {os.path.basename(m["file_path"])[:-3] for m in all_milestones}
+        {os.path.basename(m["file_path"])[:-3] for m in all_milestones} |
+        external
     )
 
     known_entity_keys = set(known_issue_keys)
@@ -1565,5 +1618,209 @@ def validate_entities(repo_root: str) -> Dict[str, Any]:
         "warnings": warnings,
         "scanned": scanned,
     }
+
+
+# ---------------------------------------------------------------------------
+# Reference rewriting: rename and supersede ([gate: entity-reference-integrity])
+# ---------------------------------------------------------------------------
+
+# Front-matter fields holding a reference (or a list of references) to another entity.
+REFERENCE_FIELDS: Tuple[str, ...] = ("related", "blocked_by", "parent", "superseded_by", "duplicate_of")
+MILESTONE_REFERENCE_FIELDS: Tuple[str, ...] = ("target_issues",)
+SESSION_REFERENCE_FIELDS: Tuple[str, ...] = ("issues_advanced", "issues_completed")
+_REFERENCING_DIRS: Tuple[str, ...] = ("ISSUES", "RISKS", "SPIKES", "CHECKLISTS", "DECISIONS")
+
+
+def _rewrite_ref(ref: Any, old_key: str, old_slug: str, new_key: str) -> Optional[str]:
+    """`ref` rewritten to `new_key` when it points at the old entity, else None.
+
+    Accepts the forms `_resolve_ref` accepts: a key, a bare slug, `[key]` and `kind:key`.
+    """
+    if not ref:
+        return None
+    raw = str(ref).strip()
+    bracketed = raw.startswith("[") and raw.endswith("]")
+    core = raw.strip("[]")
+    prefix = ""
+    if ":" in core:
+        prefix, core = core.split(":", 1)
+        prefix += ":"
+    if core not in (old_key, old_slug):
+        return None
+    out = prefix + new_key
+    return f"[{out}]" if bracketed else out
+
+
+def _rewrite_fields(fm: Dict[str, Any], fields: Sequence[str], old_key: str, old_slug: str,
+                    new_key: str) -> Dict[str, Any]:
+    updates: Dict[str, Any] = {}
+    for field_name in fields:
+        value = fm.get(field_name)
+        if isinstance(value, list):
+            changed = False
+            rewritten = []
+            for item in value:
+                new = _rewrite_ref(item, old_key, old_slug, new_key)
+                changed = changed or new is not None
+                if new is None:
+                    rewritten.append(item)
+                elif new not in rewritten:
+                    rewritten.append(new)
+            if changed:
+                updates[field_name] = rewritten
+        else:
+            new = _rewrite_ref(value, old_key, old_slug, new_key)
+            if new is not None:
+                updates[field_name] = new
+    return updates
+
+
+def _entity_files(sdir: str, dirname: str) -> List[str]:
+    import glob
+
+    return sorted(p for p in glob.glob(os.path.join(sdir, dirname, "**", "*.md"), recursive=True)
+                  if os.path.basename(p) not in _PROJECTION_FILES)
+
+
+def rewrite_inbound_references(repo_root: str, old_key: str, new_key: str,
+                               skip: Sequence[str] = (), history: bool = True) -> List[str]:
+    """Point every reference to `old_key` at `new_key`; return the rewritten files.
+
+    Covers `REFERENCE_FIELDS` in issues, risks, spikes, checklists and ADRs, milestone
+    `target_issues`, and - when `history` is True - session `issues_advanced` /
+    `issues_completed`. Files in `skip` are left alone. Front-matter only.
+    """
+    from . import frontmatter, repo, textio
+
+    _, old_slug = parse_key(old_key)
+    sdir = repo.state_dir(repo_root)
+    skipped = {os.path.normcase(os.path.abspath(p)) for p in skip}
+    plan: List[Tuple[str, Sequence[str]]] = []
+    for dirname in _REFERENCING_DIRS:
+        plan += [(p, REFERENCE_FIELDS) for p in _entity_files(sdir, dirname)]
+    plan += [(p, MILESTONE_REFERENCE_FIELDS) for p in _entity_files(sdir, "MILESTONES")]
+    if history:
+        plan += [(p, SESSION_REFERENCE_FIELDS) for p in _entity_files(sdir, "SESSIONS")]
+
+    changed: List[str] = []
+    for fpath, fields in plan:
+        if os.path.normcase(os.path.abspath(fpath)) in skipped:
+            continue
+        try:
+            content = textio.read_text(fpath)
+        except OSError:
+            continue
+        fm, _, _ = frontmatter.try_parse(content, path=fpath)
+        if not fm:
+            continue
+        updates = _rewrite_fields(fm, fields, old_key, old_slug, new_key)
+        if updates:
+            textio.write_text(fpath, frontmatter.update(content, updates, path=fpath), newline="\n")
+            changed.append(fpath)
+    return changed
+
+
+def _require_issue(repo_root: str, key: str) -> Dict[str, Any]:
+    issue = find_issue_by_slug(repo_root, key)
+    if not issue:
+        raise ValueError(f"Issue '{key}' not found in .along/ISSUES/.")
+    return issue
+
+
+def rename_issue(repo_root: str, old: str, new: str) -> Dict[str, Any]:
+    """Rename issue `old` to key `new` and rewrite every inbound reference.
+
+    `new` is `<type>--<slug>` or a bare slug (keeps the type). The file keeps its folder
+    (active or `done/`); milestones and the ISSUES.md board are recompiled.
+    """
+    from . import frontmatter, textio
+
+    issue = _require_issue(repo_root, old)
+    new_type, new_slug = parse_key(new)
+    new_type = new_type or issue["type"]
+    if new_type not in ISSUE_TYPES:
+        raise ValueError(f"Invalid issue type '{new_type}'. Allowed: {', '.join(ISSUE_TYPES)}")
+    if not is_valid_slug(new_slug):
+        raise ValueError(f"Invalid issue slug '{new_slug}': 2-5 lowercase kebab-case words.")
+    old_key = canonical_key(issue["type"], issue["slug"])
+    new_key = canonical_key(new_type, new_slug)
+    if new_key == old_key:
+        raise ValueError(f"'{new_key}' is already the key of this issue.")
+    clash = find_issue_by_slug(repo_root, new_slug)
+    if clash and os.path.abspath(clash["file_path"]) != os.path.abspath(issue["file_path"]):
+        raise ValueError(f"An issue with slug '{new_slug}' already exists.")
+
+    src = issue["file_path"]
+    dest = os.path.join(os.path.dirname(src), issue_filename(new_type, new_slug))
+    content = textio.read_text(src)
+    updated = frontmatter.update(content, {"slug": new_slug, "type": new_type, "updated": today_iso()},
+                                 path=src)
+    textio.write_text(dest, updated, newline="\n", atomic=True)
+    os.remove(src)
+
+    changed = rewrite_inbound_references(repo_root, old_key, new_key, skip=[dest])
+    sync_milestones(repo_root)
+    sync_issues_board(repo_root)
+    return {"old_key": old_key, "new_key": new_key, "file_path": dest, "rewritten": changed}
+
+
+def supersede_issue(repo_root: str, old: str, by: str) -> Dict[str, Any]:
+    """Close `old` as superseded by `by` and move live references over to `by`.
+
+    The old file is kept (`status: superseded`, `superseded_by`, moved to `done/`), so
+    session history that names it stays valid; dependency fields (`related`,
+    `blocked_by`, `parent`, ...) in other entities are rewritten to the successor.
+    """
+    from . import frontmatter, repo, textio
+
+    issue = _require_issue(repo_root, old)
+    successor = _require_issue(repo_root, by)
+    old_key = canonical_key(issue["type"], issue["slug"])
+    new_key = canonical_key(successor["type"], successor["slug"])
+    if old_key == new_key:
+        raise ValueError("An issue cannot supersede itself.")
+
+    changed = rewrite_inbound_references(
+        repo_root, old_key, new_key,
+        skip=[issue["file_path"], successor["file_path"]], history=False)
+
+    src = issue["file_path"]
+    done_dir = os.path.join(repo.state_dir(repo_root), "ISSUES", "done")
+    dest = os.path.join(done_dir, os.path.basename(src))
+    today = today_iso()
+    content = textio.read_text(src)
+    updated = frontmatter.update(
+        content,
+        {"status": "superseded", "superseded_by": new_key, "updated": today, "completed": today},
+        place_after={"completed": "status", "superseded_by": "completed"},
+        path=src)
+    os.makedirs(done_dir, exist_ok=True)
+    textio.write_text(dest, updated, newline="\n", atomic=True)
+    if os.path.normcase(os.path.abspath(src)) != os.path.normcase(os.path.abspath(dest)):
+        os.remove(src)
+
+    sync_milestones(repo_root)
+    sync_issues_board(repo_root)
+    return {"old_key": old_key, "new_key": new_key, "file_path": dest, "rewritten": changed}
+
+
+def milestone_open_issues(repo_root: str, milestone: Dict[str, Any]) -> Tuple[List[str], int]:
+    """(open issue keys, total) over a milestone's issues.
+
+    An issue belongs to the milestone when its `milestone` field names it or the
+    milestone's `target_issues` lists it. Open means not in `CLOSED_ISSUE_STATUSES`.
+    A listed key with no issue file is a dangling reference, reported by
+    `validate_entities`, and is not counted here.
+    """
+    names = {milestone["slug"], os.path.basename(milestone["file_path"])[:-3]}
+    listed = milestone.get("frontmatter", {}).get("target_issues") or []
+    keys: Dict[str, bool] = {}
+    for iss in scan_issues(repo_root, include_done=True):
+        key = canonical_key(iss["type"], iss["slug"])
+        in_field = str(iss["frontmatter"].get("milestone") or "").strip() in names
+        in_list = key in listed or iss["slug"] in listed
+        if in_field or in_list:
+            keys[key] = iss["status"] in CLOSED_ISSUE_STATUSES
+    return sorted(k for k, closed in keys.items() if not closed), len(keys)
 
 

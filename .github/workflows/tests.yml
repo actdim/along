@@ -49,9 +49,23 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          # Full history: `along gates check --ci` inspects every commit in the range.
+          fetch-depth: 0
 
       - name: Install uv
         uses: astral-sh/setup-uv@v5
+
+      - name: Along commit-time gates (along gates check --ci)
+        # Same gates as the opt-in git hooks: issue binding, AI co-author trailers,
+        # typography / conflict markers / anti-stub on added lines, projection freshness,
+        # repository-state gates over every tracked file (filenames, exports, code fences,
+        # portable links, stable entry point, issue placement, secrets).
+        # PRs: range origin/<base>...HEAD (GITHUB_BASE_REF); pushes: <before>..HEAD.
+        # Links are checked by the report-only step below. See [feat--git-level-gate-enforcement].
+        env:
+          ALONG_CI_BEFORE: ${{ github.event.before }}
+        run: uv run --python 3.12 --no-project --with "ruamel.yaml>=0.18" python scripts/along_exec.py gates check --ci --no-links
 
       - name: Typography gate (check mode)
         run: uv run --python 3.12 --no-project --with "ruamel.yaml>=0.18" python scripts/sanitize_typography.py . --check

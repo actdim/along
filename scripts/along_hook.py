@@ -37,6 +37,41 @@ from alongkit.hooks import (
 )
 
 
+_GIT_HOOK_STATUS_TEXT = {
+    "installed": "installed",
+    "installed-chained-previous": "installed; existing hook kept as <hook>.pre-along and run first",
+    "updated": "updated",
+    "present": "already up to date",
+    "removed": "removed",
+    "removed-restored-previous": "removed; previous hook restored",
+    "absent": "not installed",
+}
+
+
+def _install_git_hooks(args) -> int:
+    repo_root = args.repo_root or repo.find_repo_root()
+    if not repo_root:
+        sys.stderr.write("[Along Hook] Error: cannot locate repository root.\n")
+        return 1
+    from alongkit import gitgates
+
+    report = gitgates.install_hooks(repo_root, uninstall=args.uninstall, dry_run=args.dry_run)
+    statuses = set(report.values())
+    if statuses == {"not-a-git-repo"}:
+        sys.stderr.write(f"[Along Hook] Error: not a git repository: {repo_root}\n")
+        return 1
+    if statuses == {"skipped-core-hooksPath"}:
+        print("-> [Along Hook] core.hooksPath is set (husky, lefthook, ...); nothing was written.")
+        print("   Add these commands to your hook manager instead:")
+        print("     pre-commit: along gates check --hook pre-commit")
+        print('     commit-msg: along gates check --hook commit-msg "$1"')
+        return 0
+    prefix = "[DRY-RUN] " if args.dry_run else ""
+    for name, status in report.items():
+        print(f"-> [Along Hook] {prefix}git {name}: {_GIT_HOOK_STATUS_TEXT.get(status, status)}")
+    return 0
+
+
 def main() -> int:
     if len(sys.argv) > 1 and sys.argv[1] == "install":
         parser = argparse.ArgumentParser(
@@ -53,7 +88,13 @@ def main() -> int:
         parser.add_argument("--target-home", default=None, help="Target home directory for global installation")
         parser.add_argument("--dry-run", action="store_true", help="Preview changes without writing")
         parser.add_argument("--repo-root", default=None, help="Path to repository root (for local install)")
+        parser.add_argument("--git", action="store_true",
+                            help="Install git pre-commit/commit-msg hooks (opt-in; runtime-agnostic gates)")
+        parser.add_argument("--uninstall", action="store_true", help="With --git: remove the Along git hooks")
         args = parser.parse_args(sys.argv[2:])
+
+        if args.git:
+            return _install_git_hooks(args)
 
         repo_root = None
         if not args.is_global:

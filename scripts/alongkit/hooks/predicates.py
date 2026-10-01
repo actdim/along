@@ -655,6 +655,44 @@ def check_projection_sync_before_stop(event: HookEvent, repo_root: str, **kwargs
     return None
 
 
+_ENTITY_DIRS = ("ISSUES/", "MILESTONES/", "RISKS/", "SPIKES/", "CHECKLISTS/", "DECISIONS/", "SESSIONS/")
+
+
+def _entity_files_changed(repo_root: str) -> bool:
+    """True when git reports a changed entity file under the state dir (or git cannot say)."""
+    sdir = repo.state_dir(repo_root)
+    rel = repo.normalize_posix(os.path.relpath(sdir, repo_root))
+    result = proc.run_capture(["git", "status", "--porcelain", "-uall", "--", rel], cwd=repo_root,
+                              check=False, trip_on_anomaly=False)
+    if not result.ok:
+        return True
+    prefix = rel.rstrip("/") + "/"
+    for line in result.stdout.splitlines():
+        path = line[3:].split(" -> ")[-1].strip().strip('"')
+        if path.startswith(prefix) and path[len(prefix):].startswith(_ENTITY_DIRS):
+            return True
+    return False
+
+
+def check_entity_reference_integrity(event: HookEvent, repo_root: str, **kwargs: Any) -> Optional[str]:
+    """Entity graph stays valid once entity files changed: no dangling references or enum violations."""
+    if not repo_root or not os.path.isdir(repo.state_dir(repo_root)):
+        return None
+    if not _entity_files_changed(repo_root):
+        return None
+    from .. import gates
+    problems = gates.entity_integrity_errors(repo_root)
+    if not problems:
+        return None
+    shown = "; ".join(problems[:5]) + (f"; ... {len(problems) - 5} more" if len(problems) > 5 else "")
+    return (
+        "Turn Completion Rejected [gate: entity-reference-integrity]: "
+        f"{len(problems)} entity graph problem(s): {shown}. "
+        "Fix them (see `along doctor --entities`); rename or retire referenced entities with "
+        "`along issue rename` / `along issue supersede` instead of deleting them."
+    )
+
+
 def check_subproject_boundary(event: HookEvent, repo_root: str, **kwargs: Any) -> Optional[str]:
     """Enforce subproject localization: entities must be in nearest .along/."""
     target = _extract_target_file(event)
@@ -688,6 +726,38 @@ def check_subproject_boundary(event: HookEvent, repo_root: str, **kwargs: Any) -
                     f"Entities must be created in nearest '{subpath}/.along/'."
                 )
     return None
+
+
+def check_workspace_containment(event: HookEvent, repo_root: str, options: Optional[Dict[str, Any]] = None,
+                                **kwargs: Any) -> Optional[Any]:
+    """Keep file, search and shell-cwd paths inside the workspace scope [gate: workspace-containment].
+
+    Writes outside scope are denied; reads outside scope ask interactively and are denied in
+    autonomous runs. Policy details: alongkit.hooks.containment.
+    """
+    if not repo_root:
+        return None
+    from . import containment
+    policy = containment.build_policy(repo_root, options, conversation_id=event.conversation_id)
+    base = event.workspace_root or repo_root
+    bad = containment.violations(event, policy, base=base)
+    if not bad:
+        return None
+    access, path = bad[0]
+    what = {"write": "Write", "read": "Read", "cwd": "Shell working directory"}[access]
+    hint = ("declare it in allowed_roots (.along/rules/gates.yaml, issue frontmatter, "
+            "or 'along start <slug> --allow-root <path>')")
+    if access == "write":
+        hint = ("writes are limited to the workspace (and its write_scope), the temp dir and "
+                "runtime artifact dirs")
+    reason = (f"Workspace containment violation [gate: workspace-containment]: {what} outside the "
+              f"allowed scope: '{path}'. To allow it, {hint}.")
+    if policy.is_secret(path):
+        reason = (f"Workspace containment violation [gate: workspace-containment]: '{path}' is a "
+                  f"credential store and is never accessible to agents.")
+    if access == "write" or policy.is_secret(path) or containment.is_autonomous(event, policy):
+        return GateResult(decision=GateDecision.DENY, reason=reason, exit_code=2)
+    return GateResult(decision=GateDecision.ASK, reason=reason, exit_code=2)
 
 
 def _is_reparse_or_link(path: str) -> bool:

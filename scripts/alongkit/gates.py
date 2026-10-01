@@ -185,6 +185,44 @@ class ExceptionViolation:
     message: str
 
 
+ENTITY_INTEGRITY_GATE = "entity_reference_integrity"
+
+
+def entity_integrity_errors(repo_root: str) -> List[str]:
+    """Dangling references and enum violations as "path: message" lines (empty when clean).
+
+    The other `validate_entities` findings (missing dates, slug/filename drift) stay with
+    `along doctor --entities`; this gate owns what the graph and the enums need.
+    """
+    from . import entities
+    report = entities.validate_entities(repo_root)
+    return [f"{repo.normalize_posix(rel)}: {msg}" for rel, msg in report["errors"]
+            if entities.is_integrity_error(msg)]
+
+
+def entity_integrity_gate(repo_root: str, label: str = "Quality Gate") -> bool:
+    """[gate: entity-reference-integrity] for the wrap and projection-sync stages.
+
+    Dangling references and schema / enum violations fail the gate in `enforce` mode;
+    in `shadow` mode (`.along/config.json` hooks mode or gate override) they are
+    reported and the caller proceeds. True when the caller may proceed.
+    """
+    from .hooks import config as hook_config
+
+    problems = entity_integrity_errors(repo_root)
+    if not problems:
+        return True
+    enforcing = hook_config.load_config(repo_root).is_enforcing(ENTITY_INTEGRITY_GATE)
+    level = "Error" if enforcing else "Warning"
+    print(f"[{level}] {label}: entity graph has {len(problems)} problem(s) "
+          "[gate: entity-reference-integrity]:", file=sys.stderr)
+    for line in problems:
+        print(f"   - {line}", file=sys.stderr)
+    print("   Fix the references, or use `along issue rename` / `along issue supersede` "
+          "instead of deleting a referenced entity.", file=sys.stderr)
+    return not enforcing
+
+
 def _catches_generic_exception(node_type: Optional[ast.AST]) -> bool:
     if node_type is None:
         return False

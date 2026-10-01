@@ -1,7 +1,20 @@
 {
   "state": "closed",
   "anomaly": null,
-  "history": [],
-  "tripped_at": "2026-09-29T10:06:44.424544+00:00",
-  "resolved_at": "2026-09-29T10:08:49.898794+00:00"
+  "history": [
+    {
+      "anomaly_class": "Class 1 (VCS / Repository State Corruption)",
+      "signature": "fatal: .git/index: bad signature",
+      "detail": "test_install_restores_removed_attribution (test_ai_coauthor_attribution.TestClaudeSettings.test_install_restores_removed_attribution) ... ok\ntest_install_writes_attribution_and_keeps_foreign_keys (test_ai_coauthor_attribution.TestClaudeSettings.test_install_writes_attribution_and_keeps_foreign_keys)",
+      "impact": "Continued automated modifications risk destroying working tree and Git index state.",
+      "remediation": [
+        "Reload IDE Window: In VS Code, press Ctrl+Shift+P -> 'Developer: Reload Window'.",
+        "Reset Git Index: In PowerShell or Bash, run: Remove-Item .git/index -ErrorAction SilentlyContinue; git reset",
+        "Verify Git Status: Confirm 'git status' returns exit code 0 before resuming."
+      ],
+      "timestamp": "2026-09-29T10:28:48.541748+00:00"
+    }
+  ],
+  "tripped_at": "2026-09-29T14:54:13.724851+00:00",
+  "resolved_at": "2026-09-29T14:54:45.021239+00:00"
 }

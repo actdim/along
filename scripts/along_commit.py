@@ -27,7 +27,7 @@ from alongkit import bootstrap
 bootstrap.ensure_deps()
 
 
-from alongkit import attribution, entities, gates, proc, repo
+from alongkit import attribution, entities, gates, gitgates, proc, repo
 
 
 # Both gates live in alongkit.gates, shared with the release engine, which used to
@@ -168,6 +168,17 @@ def main(argv=None):
         print("[Error] No staged changes to commit.", file=sys.stderr)
         print("Stage files with 'git add <files>', pass '--paths <file>...', or pass '--all' / '-a' to stage all changes.", file=sys.stderr)
         sys.exit(1)
+
+    # 5. Entity reference integrity of the staged .along/ entities: block only the
+    # dangling references / enum violations this commit introduces.
+    if not parsed.skip_tests and gitgates.touches_entities(staged_files):
+        head = "HEAD" if proc.git(["rev-parse", "--verify", "-q", "HEAD"], cwd=repo_root).ok else None
+        broken = gitgates.check_entity_references(repo_root, staged_files, "git", "index", head)
+        if broken:
+            print(gitgates.format_report(broken, "Pre-Commit Quality Gate"), file=sys.stderr)
+            print("Commit aborted. Fix the entity references before committing.", file=sys.stderr)
+            sys.exit(1)
+        print("-> [Pre-Commit Quality Gate] Entity references intact.")
 
     print(f"-> Committing {len(staged_files)} staged file(s):")
     for f in staged_files[:10]:

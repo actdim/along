@@ -608,34 +608,19 @@ def validate_and_build_entity_graph(along_dir):
             if clean_slug != key:
                 nodes[clean_slug] = node_data
 
-    # Collect known external keys from ancestor and monorepo contexts
-    external_keys = set()
-    parent_ctx = os.path.dirname(os.path.abspath(along_dir))
-    current = os.path.dirname(parent_ctx)
-    while current and current != os.path.dirname(current):
-        candidate_along = os.path.join(current, ".along")
-        if os.path.isdir(candidate_along) and os.path.abspath(candidate_along) != os.path.abspath(along_dir):
-            for p in (
-                os.path.join(candidate_along, "ISSUES", "**", "*.md"),
-                os.path.join(candidate_along, "RISKS", "*.md"),
-                os.path.join(candidate_along, "SPIKES", "*.md"),
-                os.path.join(candidate_along, "MILESTONES", "*.md"),
-                os.path.join(candidate_along, "DECISIONS", "*.md"),
-            ):
-                for fp in glob.glob(p, recursive=True):
-                    fn = os.path.basename(fp)
-                    if fn not in ("ISSUES.md", "README.md", "CONSTRAINTS.md", "DECISIONS.md") and fn.endswith(".md"):
-                        ek = fn[:-3]
-                        external_keys.add(ek)
-                        if "--" in ek:
-                            slug_part = ek.split("--", 1)[1]
-                            external_keys.add(slug_part)
-                            external_keys.add(f"decision--{slug_part}")
-        if os.path.exists(os.path.join(current, ".git")):
-            break
-        current = os.path.dirname(current)
+    # Dangling references come from the shared validator (ancestor contexts included);
+    # the migration reports them as warnings, not errors.
+    from alongkit import entities
+    try:
+        report = entities.validate_entities(os.path.dirname(os.path.abspath(along_dir)))
+    except (UnicodeDecodeError, ValueError) as exc:
+        report = {"errors": []}
+        warnings.append(f"Entity reference validation skipped: {exc}")
+    for rel, message in report["errors"]:
+        if message.startswith("dangling "):
+            warnings.append(f"Dangling link in {repo.normalize_posix(rel)}: {message}")
 
-    # Collect edges and validate dangling references
+    # Collect edges for the blocked_by cycle check
     adj_blocked = {}
     visited_keys = set()
     for key, data in nodes.items():
@@ -655,26 +640,19 @@ def validate_and_build_entity_graph(along_dir):
                 continue
             edges.append({"source": b, "target": k, "type": "blocks"})
             adj_blocked[k].append(b)
-            if b not in nodes and b not in external_keys:
-                warnings.append(f"Dangling link in {k}: blocked_by '{b}' not found.")
 
         # related
         related = fm.get("related") or []
         if isinstance(related, str):
             related = [related]
         for r in related:
-            if not r:
-                continue
-            edges.append({"source": k, "target": r, "type": "related"})
-            if r not in nodes and r not in external_keys:
-                warnings.append(f"Dangling link in {k}: related '{r}' not found.")
+            if r:
+                edges.append({"source": k, "target": r, "type": "related"})
 
         # parent
         parent = fm.get("parent")
         if parent:
             edges.append({"source": parent, "target": k, "type": "parent_of"})
-            if parent not in nodes and parent not in external_keys:
-                warnings.append(f"Dangling link in {k}: parent '{parent}' not found.")
 
 
     # Cycle detection in blocked_by DAG

@@ -387,6 +387,17 @@ def apply_migration_to_context(ctx_dir, protocol_text, migrate_script, is_root=T
         except (OSError, ValueError) as e:
             print(f"   [WARN] Could not attach rule packs for {ctx_dir}: {e}")
 
+    # Register Along merge drivers (idempotent). Root context only: the managed
+    # `**/` patterns in the root .gitattributes already cover subproject .along/ folders.
+    if is_root and not dry_run:
+        try:
+            from alongkit import merge as along_merge
+            report = along_merge.setup(ctx_dir)
+            if report["git"] and (report["config_changed"] or report["gitattributes_changed"]):
+                print("   [OK] Registered Along merge drivers (along git setup)")
+        except (OSError, ValueError) as e:
+            print(f"   [WARN] Could not register Along merge drivers: {e}")
+
     # Purge any legacy spurious local hooks or workaround scripts from consumer context
     if not dry_run:
         try:

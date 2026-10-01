@@ -4,8 +4,9 @@ version: 1
 
 gates:
   - id: commit_issue_binding
+    enforcement: [runtime, git, ci]
     title: "Git Commit Issue Slug Binding"
-    description: "Enforces issue slug binding [type--slug] in commit messages"
+    description: "Enforces issue slug binding ([type--slug] or /along-commit's (refs #slug)) in commit messages"
     event: PreToolUse
     tools: [run_command, execute_command, bash, shell]
     match_args:
@@ -13,10 +14,11 @@ gates:
     rule:
       type: regex_match
       field: CommandLine
-      pattern: '\[[a-z]+--[a-z0-9-]+\]'
-      error: "Git commit rejected by [gate: commit-issue-binding]: Commit message must include an active issue slug in brackets (e.g. '[feat--my-feature]'). Use /along-commit."
+      pattern: '\[[a-z]+--[a-z0-9-]+\]|\(refs #[a-z0-9-]+\)'
+      error: "Git commit rejected by [gate: commit-issue-binding]: Commit message must bind an issue slug, '[feat--my-feature]' or '(refs #my-feature)'. Use /along-commit."
 
   - id: commit_no_conflict_markers
+    enforcement: [runtime, git, ci]
     title: "Git Commit Merge Conflict Protection"
     description: "Blocks commits whose staged content adds unresolved git conflict markers"
     event: PreToolUse
@@ -29,6 +31,7 @@ gates:
       error: "Git commit rejected by [gate: commit-no-conflict-markers]: Unresolved git merge conflict markers detected in staged content."
 
   - id: commit_no_ai_coauthor
+    enforcement: [runtime, git, ci]
     title: "Git Commit AI Co-Author Protection"
     description: "Blocks commits whose message names an AI agent in a Co-Authored-By trailer"
     event: PreToolUse
@@ -41,6 +44,7 @@ gates:
       error: "Git commit rejected by [gate: commit-no-ai-coauthor]: AI co-author trailer in commit message."
 
   - id: anti_stub_injection
+    enforcement: [runtime, git, ci]
     title: "Anti-Stub Truncation Protection"
     description: "Blocks lazy truncation skeletons and placeholder comments"
     event: PreToolUse
@@ -62,6 +66,7 @@ gates:
       error: "CLI Safety Gate Violation [gate: cli-safety]."
 
   - id: projection_protection
+    enforcement: [runtime, git, ci]
     title: "Projection View Protection"
     description: "Blocks direct edits to compiled projections (.along/ISSUES.md, docs/INDEX.md)"
     event: PreToolUse
@@ -82,6 +87,7 @@ gates:
       error: "Manual Document Lock Violation [gate: doc-manual-lock]."
 
   - id: typography
+    enforcement: [runtime, git, ci]
     title: "Clean ASCII Typography"
     description: "Enforces clean ASCII characters and bans non-ASCII dashes, quotes, ellipsis, and invisible spaces"
     event: PreToolUse
@@ -142,6 +148,19 @@ gates:
       handler: alongkit.hooks.predicates.check_projection_sync_before_stop
       error: "Turn completion rejected by [gate: projection-sync-before-stop]: Atomic issues or docs were modified without recompiling projections. Run 'along issue sync' or 'along kb sync'."
 
+  - id: entity_reference_integrity
+    # runtime: Stop once entity files changed; also run by `along wrap` and
+    # `along issue sync` (alongkit.gates.entity_integrity_gate). git / ci: `along gates
+    # check` and `along commit` block references the staged or pushed change newly breaks.
+    enforcement: [runtime, git, ci]
+    title: "Entity Reference Integrity"
+    description: "Entity graph has no dangling references (related, blocked_by, parent, superseded_by, duplicate_of, milestone, target_issues) and no schema or enum violations"
+    event: Stop
+    rule:
+      type: predicate
+      handler: alongkit.hooks.predicates.check_entity_reference_integrity
+      error: "Turn completion rejected by [gate: entity-reference-integrity]: The entity graph has dangling references or schema violations. Run 'along doctor --entities'; use 'along issue rename' / 'along issue supersede' instead of deleting referenced entities."
+
   - id: subproject_boundary
     title: "Subproject Localization Boundary"
     description: "Blocks creating .along entities at workspace root when working inside subproject"
@@ -151,6 +170,89 @@ gates:
       type: predicate
       handler: alongkit.hooks.predicates.check_subproject_boundary
       error: "Subproject boundary violation detected by [gate: subproject-boundary]: Entities must be localized in the nearest subproject .along/ directory, not root."
+
+  - id: workspace_containment
+    title: "Workspace Containment"
+    description: "Keeps file, search and shell-cwd paths inside the workspace; writes outside are denied, reads outside undeclared roots ask (interactive) or are denied (autonomous)"
+    event: PreToolUse
+    tools: [write_to_file, write_file, replace_file_content, edit_file, patch_file, create_file, view_file, read_file, view_image, list_dir, list_directory, grep_search, grep, find_by_name, find_files, file_search, run_command, execute_command, bash, shell]
+    # Options (overridable in .along/rules/gates.yaml): allowed_roots, write_scope,
+    # on_violation (auto | ask | deny). See alongkit.hooks.containment.
+    allowed_roots: []
+    write_scope: []
+    on_violation: auto
+    rule:
+      type: predicate
+      handler: alongkit.hooks.predicates.check_workspace_containment
+      error: "Workspace containment violation detected by [gate: workspace-containment]."
+
+  # Repository-state gates (alongkit.repochecks): no runtime layer, run by
+  # `along gates check` (pre-commit on staged files, --ci on every tracked file).
+  # Options: exclude_paths (fnmatch globs); stable_entry_point also takes scope.
+  - id: windows_safe_filenames
+    enforcement: [git, ci]
+    title: "Windows-Safe Filenames"
+    description: "Tracked paths carry no Windows-forbidden characters, trailing dots/spaces or reserved device names"
+    rule:
+      type: predicate
+      handler: alongkit.repochecks.check_windows_safe_filenames
+      error: "Filename rejected by [gate: windows-safe-filenames]."
+
+  - id: untracked_exports
+    enforcement: [git, ci]
+    title: "Untracked Dashboard Exports"
+    description: ".along/dashboard.html and .along/DASHBOARD.md are local exports and never tracked"
+    rule:
+      type: predicate
+      handler: alongkit.repochecks.check_untracked_exports
+      error: "Tracked export rejected by [gate: untracked-exports]."
+
+  - id: code_fence_language
+    enforcement: [git, ci]
+    title: "Explicit Code Fence Languages"
+    description: "Every opening Markdown code fence names a language"
+    exclude_paths: ["node_modules/*", "*/node_modules/*"]
+    rule:
+      type: predicate
+      handler: alongkit.repochecks.check_code_fence_language
+      error: "Markdown rejected by [gate: code-fence-language]."
+
+  - id: portable_links
+    enforcement: [git, ci]
+    title: "Portable Markdown Links"
+    description: "Markdown link targets use relative paths: no file:// scheme, no backslashes"
+    rule:
+      type: predicate
+      handler: alongkit.repochecks.check_portable_links
+      error: "Link rejected by [gate: portable-links]."
+
+  - id: stable_entry_point
+    enforcement: [git, ci]
+    title: "Stable Entry Point"
+    description: "README.md and docs/ never link into .along/; route through docs/INDEX.md or docs/topic--*.md"
+    scope: ["README.md", "docs/*"]
+    rule:
+      type: predicate
+      handler: alongkit.repochecks.check_stable_entry_point
+      error: "Link rejected by [gate: stable-entry-point]."
+
+  - id: issue_lifecycle
+    enforcement: [git, ci]
+    title: "Issue Lifecycle Placement"
+    description: "Closed issues (done, cancelled, superseded) live in .along/ISSUES/done/; open ones never do"
+    rule:
+      type: predicate
+      handler: alongkit.repochecks.check_issue_lifecycle
+      error: "Issue placement rejected by [gate: issue-lifecycle]."
+
+  - id: no_tracked_secrets
+    enforcement: [git, ci]
+    title: "No Secrets In Tracked Files"
+    description: "Tracked content carries no private keys or well-known API token shapes"
+    rule:
+      type: predicate
+      handler: alongkit.repochecks.check_no_tracked_secrets
+      error: "Content rejected by [gate: no-tracked-secrets]."
 
   - id: worktree_env_readiness
     title: "Worktree Environment Readiness"

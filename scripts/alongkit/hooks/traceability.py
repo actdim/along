@@ -46,6 +46,8 @@ class TraceabilityReport:
     dangling_references: List[ProseAnchor] = field(default_factory=list)
     undocumented_gates: List[str] = field(default_factory=list)
     schema_errors: List[str] = field(default_factory=list)
+    #: `{gate id: [runtime, git, ci]}` from each definition's `enforcement` list.
+    enforcement: Dict[str, List[str]] = field(default_factory=dict)
 
     @property
     def is_clean(self) -> bool:
@@ -163,6 +165,7 @@ def audit_traceability(repo_root: Optional[str] = None) -> TraceabilityReport:
         dangling_references=dangling,
         undocumented_gates=sorted(undocumented),
         schema_errors=schema_errors,
+        enforcement={defn.id: list(defn.enforcement) for defn in gates_by_canon.values()},
     )
 
 
@@ -179,6 +182,14 @@ def format_traceability_report(report: TraceabilityReport) -> str:
         lines.append("\n[Active & Traceable Gates]:")
         for gid in report.mapped_gates:
             lines.append(f"  + [gate: {gid}]")
+
+    if report.enforcement:
+        lines.append("\n[Enforcement Matrix] (runtime = agent hooks, git = `along hooks install --git`, ci = `along gates check --ci`):")
+        width = max(len(gid) for gid in report.enforcement)
+        for gid in sorted(report.enforcement):
+            layers = report.enforcement[gid]
+            cells = "  ".join(f"{layer}:{'yes' if layer in layers else '-  '}" for layer in ("runtime", "git", "ci"))
+            lines.append(f"  {gid.ljust(width)}  {cells}".rstrip())
 
     if report.undocumented_gates:
         lines.append(f"\n[Undocumented Gates ({len(report.undocumented_gates)})]:")

@@ -1,3 +1,6 @@
+<!-- managed by along: do not edit. Project guidelines belong in docs/ and AGENTS.md -->
+<!-- template: languages/typescript.md sha256:1ee034239cddda035a603f2f0cd17615b61a96ddfdb54047bc1ff42b8826f44d -->
+
 # TypeScript Coding Standards & Best Practices
 
 Strict TypeScript conventions for production-grade, maintainable codebases and monorepos.

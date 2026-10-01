@@ -111,7 +111,7 @@ This repository follows the **ActDim Along Protocol** for AI agent context, pers
 - **Dual-Tier Memory**: Evergreen LLM-Wiki in `docs/` and living governance memory in `.along/` survive across all AI sessions.
 - **Zero-Vector Unified Retrieval**: Fast local snippet search across architecture, decisions, and issues with 85-95% token reduction and zero external database dependencies.
 - **Runtime Worktree Isolation**: Autonomous agent tasks execute in isolated Git worktrees with automatic dependency linking, preserving clean developer checkouts.
-- **Mechanical Quality Gates**: Protocol rules, clean typography, and issue bindings are mechanically enforced at runtime before tools execute.
+- **Mechanical Quality Gates**: Protocol rules, clean typography, and issue bindings are mechanically enforced before tools execute in runtimes that load Along's hooks (Claude Code, Antigravity, Codex); elsewhere they are advisory. The portable baseline for every committer is the CI job `along gates check --ci` plus opt-in git hooks (`along hooks install --git`).
 - **Standardized Lifecycle Contract**: Unified commands for build, test, dev, release, and dependency discovery via pluggable `.along/scripts/` hooks.
 - **Provider-Agnostic**: Compatible out of the box with **Claude Code**, **Google Antigravity**, **OpenAI Codex**, and **OpenCode**.
 ````
@@ -196,7 +196,9 @@ Along provides **21 singular automation skills** structured across 6 core lifecy
 | Skill / Command | Purpose |
 | :--- | :--- |
 | **`along-commit`** (`/along-commit`) | Smart ASCII-clean Conventional Committer linked to active `.along/` issue. |
-| **`along hook verify`** (`along hook`) | Verify bi-directional traceability between prose badges and YAML gates. |
+| **`along hook verify`** (`along hook`) | Verify bi-directional traceability between prose badges and YAML gates, and print which layer (runtime, git, ci) enforces each gate. |
+| **`along gates check`** | Commit-time gates outside agent runtimes: `--hook pre-commit` / `--hook commit-msg` (opt-in via `along hooks install --git`) or `--ci` over a commit range. |
+| **`along git setup`** | Register merge drivers for projections and entity front-matter (`along git sync` after a merge). |
 | **`along-graph-check`** (`/along-graph-check`) | Preflight health check and verification for `code-review-graph` AST engine. |
 | **`along-graph-sync`** (`/along-graph-sync`) | Build or incrementally update `code-review-graph` AST code intelligence database. |
 | **`along-graph-impact`** (`/along-graph-impact`) | Determine blast radius, affected flows, and candidate tests for changed symbols or files. |
@@ -248,9 +250,9 @@ Use the NEAREST `.along/` for the area you're working in (fall back to a higher-
 Also, when relevant: `.along/VISION.md`, `.along/GLOSSARY.md`. These reflect the state WHEN WRITTEN - verify any named file/API/flag against the real code first.
 
 ## Multi-Agent & Multi-Branch Concurrency
-- **Zero-Manual-Merge Rule** [gate: projection-protection]: On merge conflicts in derived projections (`ISSUES.md`, `INDEX.md`, `DECISIONS.md`), accept either side and run `/along-issue-sync`, `/along-kb-sync`, or `/along-decision-sync` to recompile.
+- **Zero-Manual-Merge Rule** [gate: projection-protection]: On merge conflicts in derived projections (`ISSUES.md`, `INDEX.md`, `DECISIONS.md`), accept either side and run `/along-issue-sync`, `/along-kb-sync`, or `/along-decision-sync` to recompile. `along git setup` registers merge drivers that do this automatically; afterwards run `along git sync`.
 - **Append-Only Merge Driver**: `.along/HISTORY.md` and legacy monolithic `.along/DECISIONS.md` are append-only. Configure `.gitattributes` with `merge=union`. Modular ADR files in `.along/DECISIONS/` are isolated per-file to eliminate merge collisions.
-- **Untracked Exports**: `.along/dashboard.html`, `.along/DASHBOARD.md` MUST NOT be tracked in Git.
+- **Untracked Exports** [gate: untracked-exports]: `.along/dashboard.html`, `.along/DASHBOARD.md` stay out of Git.
 - **Context Isolation**: Context is localized to the target issue file, session-scoped blackboard (`.along/.session/<slug>/`), and completed session logs.
 
 ## Mandatory Issue Anchoring
@@ -263,12 +265,13 @@ Also, when relevant: `.along/VISION.md`, `.along/GLOSSARY.md`. These reflect the
 - **Entity types**: Issues (`feat`, `bug`, `debt`, `task`, `docs`), Decisions (ADRs), Milestones, Risks, Spikes, Checklists, Sessions. Full YAML schemas: `docs/topic--domain-model.md`.
 - **Canonical keys**: `<type>--<slug>` (e.g. `feat--token-refresh`). Reference by key, NEVER by file path.
 - **ADRs**: Modular records in `.along/DECISIONS/ADR-YYYY-MM-DD--<slug>.md` (with legacy fallback to monolithic `DECISIONS.md`). Never edit past entries - mark superseded. Recompile projections (`.along/DECISIONS.md` board and `.along/CONSTRAINTS.md`) via `/along-decision-sync` or `along decision sync`.
-- **Issue lifecycle**: On completion set `status: done`, `completed: YYYY-MM-DD`, MOVE to `.along/ISSUES/done/`.
+- **Issue lifecycle** [gate: issue-lifecycle]: Close with `along issue done <slug>` (`status: done`, `completed`, moved to `.along/ISSUES/done/`).
+- **Entity references** [gate: entity-reference-integrity]: Never delete an entity other entities reference; use `along issue rename` / `along issue supersede`.
 - **Auto-entity creation**: Agents MUST automatically detect user intent (build/fix/refactor -> Issue, blocked/rate-limit -> Risk, compare/benchmark -> Spike, release/sprint -> Milestone) and create entities without prompting the user.
 
 ## Knowledge Base & Documentation
-- **Stable Entry Point Rule**: Files outside `.along/` (`README.md`, `docs/`, manifests) MUST NOT link into `.along/`. Route references through `docs/INDEX.md` or `docs/topic--<slug>.md`.
-- **Portable Links**: All cross-references MUST use relative Markdown links (`[Title](./target.md)`), never `file://` or backslashes.
+- **Stable Entry Point** [gate: stable-entry-point]: `README.md` and `docs/` never link into `.along/`; route through `docs/INDEX.md` or `docs/topic--<slug>.md`.
+- **Portable Links** [gate: portable-links]: Relative Markdown links only.
 - **Fact Grounding**: Agents MUST extract facts from actual code, `README.md`, `docs/`, and `package.json`. Generic LLM placeholders are strictly prohibited.
 - **Fast Retrieval** [gate: fast-retrieval]: Agents MUST query `/along-kb-search` before reading whole documentation files.
 - **Doc Blast Radius**: After non-trivial code changes, agents MUST map affected symbols to `docs/topic--*.md` articles and update them before completing the task.
@@ -305,27 +308,23 @@ When a stage or session completes, agents MUST execute in this order:
   - In submodules, execute the hook from that subproject's own `.along/scripts/`.
 - **Environment Isolation**:
   - Agents MUST NOT install system-wide or global packages when a script fails. Fix the architecture (missing `bootstrap.ensure_deps()`, incorrect `uv` wrapper), not the environment.
+- **Workspace Containment** [gate: workspace-containment]: Read and write only inside the workspace. Writes elsewhere are limited to the temp dir and runtime artifact dirs. Other repos need `allowed_roots` (`.along/rules/gates.yaml`, issue frontmatter, `along start --allow-root`). Never touch credential stores (`~/.ssh`, `~/.aws`).
 - **Runtimes Without Along Hooks** (Claude Cowork, Cursor, OpenCode, plain shells): gates are advisory there. Agents MUST self-apply every gate-tagged rule and use the `along` CLI for tests, commits, entity changes, and wrap instead of raw tools. `along doctor` reports the enforcement level.
 - **File Modification & Anti-Deletion**:
   - Never delete, truncate, or overwrite existing documentation, comments, or code unless explicitly instructed.
   - After batch edits or migrations, agents MUST run `git diff --stat` and inspect unexpected size reductions.
-  - It is strictly forbidden to replace populated files with stubs or skeletons (`// ... rest of code`) [gate: anti_stub_injection].
+  - No stubs or skeletons in place of populated code [gate: anti_stub_injection].
   - Anchor edits on minimal unique chunks. Restore unintended deletions immediately.
-- **Clean ASCII & Forbidden Characters** [gate: typography]:
-  - NEVER use em-dash (U+2014), en-dash (U+2013), math minus (U+2212) - use ASCII hyphen `-`.
-  - NEVER use typographic quotes or guillemets - use ASCII `"` or `'`.
-  - NEVER use unicode ellipsis (U+2026) - use `...`.
-  - NEVER use NBSP, ZWSP, ZWNJ, ZWJ, BOM - use ASCII spaces.
-  - NEVER use bullet glyphs (U+2022, U+2023, U+2043) - use `-`.
-- **Markdown Standards**: Explicit code fence languages. Relative links only. UTF-8 without BOM.
+- **Clean ASCII** [gate: typography]: ASCII punctuation only (no typographic dashes, quotes, ellipsis, bullets, NBSP/zero-width chars or BOM); `along sanitize --write` fixes them.
+- **Markdown** [gate: code-fence-language]: Every code fence names a language.
 - **File Content Via Tools Only** [gate: cli_safety]: Create/edit files with the agent's file tools. NEVER carry content in heredocs, `python -c`, or inline shell. Write scripts to a file first.
 - **Verify Written Files**: After writing/patching, confirm parsing (`python -m compileall -q`, `bash -n`, etc.) before moving on.
 - **Hermetic Tests**: Tests MUST target throwaway fixtures (`tempfile.mkdtemp()`), never the live repository. Read-only access to live state is allowed. Keep a meta-test that verifies `git status --porcelain -u` stays clean.
 - **Inquiry Read-Only Invariance (Zero-Mutation Rule on Questions)** [gate: require-plan-approval]: On interrogative prompts ("is X done?", "why did Y fail?"), write/modify tools are STRICTLY PROHIBITED. Return a read-only audit report and ask for confirmation before modifying anything.
 - **Mandatory Adaptive Complexity Escalation & Execution Mode Routing**: When scope touches > 3 files, crosses subsystems, or refactors core engines: single-agent execution is forbidden - route to `along-team`. Plans MUST declare `Execution Mode: Direct` or `Role-Based`.
-- Windows-safe filenames: dates `YYYY-MM-DD` (no `:`), date first.
-- Keep `ISSUES.md` compact - it costs context every session.
-- Never write secrets/credentials/tokens/keys into tracked files.
+- Windows-safe filenames [gate: windows-safe-filenames]: dates `YYYY-MM-DD`, date first.
+- Keep `ISSUES.md` compact: `along context-budget --check` enforces the limit.
+- Never write secrets into tracked files [gate: no-tracked-secrets].
 <!-- END ALONG-PROTOCOL -->
 
 ## Project specifics
@@ -360,7 +359,7 @@ The Along Agent Run Protocol (ARP), also referred to as the Agent Execution Prot
 
 The ARP engine bridges semantic OpenInference standards and OpenTelemetry (OTel) GenAI semantic conventions into Along. It provides real-time, vendor-neutral telemetry with local disk buffering and offline survivability.
 
-```
+```text
 +-----------------------------------------------------------------------------------+
 |                            Along Agent Runtime (Harness)                          |
 |                                                                                   |
@@ -458,6 +457,7 @@ Large terminal outputs, build logs, and multi-megabyte tool payloads degrade OTe
 - Storage Location: Persisted atomically under `.along/artifacts/<run_id>/<sha256>.<ext>`.
 - Truncated Inline Preview: The span attribute retains a 20-line, 1,000-character preview ending with an explicit reference marker: `... [Output offloaded to .along/artifacts/<run_id>/<sha256>.<ext> (<bytes> bytes, <lines> lines)]`.
 - Metadata Annotation: Generates an `ArtifactRef` data structure recording the file path, SHA-256 digest, exact byte count, line count, and MIME type.
+- Distilled Observations: When a command runs through `proc.run_capture(distill=True)`, `Tracer.record_command_result(observation=...)` sets the span output to the distilled observation (`alongkit.distill`, at most 50 lines / 2 KB) and force-offloads the raw stdout and stderr to the artifact whatever their size (`maybe_offload(force=True)`). The active execution span stays small, and the raw text remains reachable through `along.artifact.ref`.
 
 ### 2.5 Fail-Open Write-Ahead Log Spooler (`Spooler`)
 If network export fails or the OTel collector endpoint is unreachable, the engine never crashes or interrupts agent workflows:
@@ -477,7 +477,7 @@ If network export fails or the OTel collector endpoint is unreachable, the engin
 
 Telemetry generation flows hierarchically throughout an agent session:
 
-```
+```text
 Agent Harness           Tracer / Stack             Redactor / Offloader         OTLP / Spooler
      |                         |                            |                          |
      |--- start_run() -------->|                            |                          |
@@ -558,7 +558,7 @@ Parameters and behavior:
 - Connectivity Probe: Sends an empty OTLP test payload with a fast 1.5s timeout. Reports connection status without blocking.
 
 Terminal output example:
-```
+```text
 Along Telemetry Status:
   Endpoint:      http://localhost:4318/v1/traces [unreachable (timed out)]
   Spool Dir:     /path/to/repo/.along/telemetry/spool
@@ -740,7 +740,7 @@ flowchart LR
 ```
 
 1. **Atomic SSOT Files**: Each issue (`.along/ISSUES/<type>--<slug>.md`) and session journal (`.along/SESSIONS/<YYYY>/<date>--<slug>.md`) is an isolated Markdown file with YAML front-matter. Parallel branches create distinct files, resulting in zero Git merge collisions.
-2. **Derived Projections & Export Artifacts**: `.along/ISSUES.md` and `docs/INDEX.md` are dynamically compiled views tracked in Git as entry points. Under the **Zero-Manual-Merge Rule**, developers and agents never resolve Git conflicts in projection files manually: accept either version and run `/along-issue-sync` or `/along-kb-sync` to recompile cleanly from source. Generated dashboards (`.along/dashboard.html`, `.along/DASHBOARD.md`) are untracked export artifacts kept out of Git via `.gitignore`.
+2. **Derived Projections & Export Artifacts**: `.along/ISSUES.md` and `docs/INDEX.md` are dynamically compiled views tracked in Git as entry points. Under the **Zero-Manual-Merge Rule**, developers and agents never resolve Git conflicts in projection files manually: accept either version and run `/along-issue-sync` or `/along-kb-sync` to recompile cleanly from source. `along git setup` automates this with custom merge drivers: projections merge as "ours" and `along git sync` recompiles them, and entity files get a 3-way front-matter merge (see [CLI Reference](./topic--cli-reference.md)). Generated dashboards (`.along/dashboard.html`, `.along/DASHBOARD.md`) are untracked export artifacts kept out of Git via `.gitignore`.
 3. **Append-Only Linear Merge Driver**: `.along/HISTORY.md` and `.along/DECISIONS.md` are append-only. `.gitattributes` configures `merge=union` for these files, enabling Git to automatically combine appended entries from concurrent branches without conflicts.
 
 ---
@@ -1164,9 +1164,12 @@ Executes the project build lifecycle hook.
 Executes automated test suites using quiet, token-efficient flags.
 - **Engine Script**: `.along/scripts/test.py`
 - **Auto-Detection Fallback**: Detects `pytest` (`pytest -q`), `npm` (`npm test -- --silent`), `dotnet` (`dotnet test -v q`), `cargo` (`cargo test -q`).
+- **Distilled Output** (`along test`, `along build`): When stdout is not a terminal (an agent or a pipe reads it), the output is distilled by `alongkit.distill`. A pass becomes `PASS: <cmd> completed successfully (code 0, <s>s)` plus the runner summary (`Ran N tests`, `OK`). A failure keeps the failure blocks: tracebacks, unittest `FAIL:` / `ERROR:` sections, pytest `E` lines, compiler `error:` lines, panics. Resolver chatter, deprecation notices, progress redraws and passing-test lines are dropped. The result is capped at 50 lines / 2 KB, with the runner summary always kept. The raw output is written to `.along/artifacts/lifecycle/<action>.log` (gitignored, overwritten per run). In a terminal the output streams as before.
+  - `--raw` streams the full output, `--distill` forces distillation. Both flags are consumed by Along and not passed on; `--verbose` is left alone because pytest and cargo use it. `ALONG_OUTPUT=raw|distill` sets the mode for a whole session. `along dev` / `along debug` always stream.
 - **Usage**:
   ```bash
   along test [args...]
+  along test --raw -q
   ```
 
 ### `along dev`
@@ -1227,8 +1230,11 @@ Manages atomic issue files in `.along/ISSUES/` and recompiles the active board p
     - Options: `--json` outputs structured JSON payload.
   - `along issue done <slug> [options...]`: Marks the issue as completed, records `completed: YYYY-MM-DD`, and moves the file into `.along/ISSUES/done/`.
     - Options: `--status {done,superseded,cancelled,duplicate}`, `--superseded-by <slug>`, `--duplicate-of <slug>`.
-  - `along issue sync`: Recompiles `.along/ISSUES.md` deterministically from atomic files in `.along/ISSUES/` and `.along/ISSUES/done/`.
+  - `along issue sync`: Recompiles `.along/ISSUES.md` deterministically from atomic files in `.along/ISSUES/` and `.along/ISSUES/done/`, then runs the entity reference integrity gate (`validate_entities`): dangling references or schema / enum violations exit `1` in `enforce` mode and only warn in `shadow` mode.
   - `along issue list`: Lists all active in-progress and open issues in the terminal.
+  - `along issue rename <old-key> <new-key>`: Renames an issue (type and/or slug; a bare slug keeps the type). Rewrites the file name and `slug`/`type`, then every inbound reference in the nearest `.along/`: `related`, `blocked_by`, `parent`, `superseded_by`, `duplicate_of` in issues, risks, spikes, checklists and ADRs, milestone `target_issues`, and session `issues_advanced` / `issues_completed`.
+  - `along issue supersede <old-key> --by <new-key>`: Closes the old issue as `superseded` with `superseded_by: <new-key>` and moves it to `done/` (the file is kept, so session history stays valid). Dependency fields of other entities (`related`, `blocked_by`, `parent`, ...) are rewritten to the successor; session logs are left as they are.
+  - `along issue create ... --milestone <m>` and `along issue update --milestone <m>` keep the milestone `target_issues` in sync (added on assignment, removed from the previous milestone on reassignment).
 - **Usage**:
   ```bash
   along issue create feat token-refresh --title "Add OAuth token refresh" --priority high
@@ -1236,6 +1242,8 @@ Manages atomic issue files in `.along/ISSUES/` and recompiles the active board p
   along issue show token-refresh
   along issue list
   along issue done token-refresh
+  along issue rename feat--token-refresh feat--oauth-token-refresh
+  along issue supersede feat--oauth-token-refresh --by feat--session-auth-rework
   along issue sync
   ```
 
@@ -1243,10 +1251,13 @@ Manages atomic issue files in `.along/ISSUES/` and recompiles the active board p
 Atomically marks an issue as `in-progress`, updates `updated: YYYY-MM-DD`, recompiles the active board projection (`.along/ISSUES.md`), initializes the session blackboard (`.along/.session/<slug>/`), marks the living plan as approved (`phase: execution`, `plan_approved: true`), and binds the active issue for agent execution.
 - **Options**:
   - `--worktree`: Enforces git worktree workspace isolation. Verifies environment readiness, provisions an isolated worktree at `.along/worktrees/<slug>` on branch `along/<slug>`, links heavy dependencies (`node_modules`, `.venv`) via NTFS junctions on Windows or symlinks on POSIX, copies untracked configuration (`.env*`), and points agent execution to the worktree path.
+  - `--allow-root <path>` (repeatable): Adds `path` to the issue's `allowed_roots` frontmatter: extra read-only roots for `[gate: workspace-containment]` (for example a sibling contracts repository).
+  - `--write-scope <path>` (repeatable): Adds `path` to the issue's `write_scope` frontmatter: once set, workspace writes are limited to these subfolders plus `.along/`.
 - **Usage**:
   ```bash
   along start token-refresh
   along start token-refresh --worktree
+  along start token-refresh --allow-root ../contracts --write-scope packages/auth
   ```
 
 ### `along milestone`
@@ -1257,8 +1268,10 @@ Tracks progress across high-level milestones and sprints in `.along/MILESTONES/`
     - Options: `--status` filters by status (`open`, `in-progress`, `completed`), `--json` outputs machine-readable JSON array.
   - `along milestone show <slug> [--json]`: Displays detailed milestone status, due date, progress percentage, and checklist of all target issues with individual completion states. Supports fuzzy query resolution (exact slug, version prefix such as `4.0`, or substring).
     - Options: `--json` emits structured JSON payload.
+  - `along milestone create <slug> --title "Title" [--due YYYY-MM-DD]`: Creates `.along/MILESTONES/<slug>.md` with standard front-matter (`status: open`, empty `target_issues`, `progress_pct: 0`). Refuses to overwrite an existing file and rejects a slug whose version collides with an existing milestone.
 - **Usage**:
   ```bash
+  along milestone create v5.5.0-priority-aware-planning --title "v5.5.0: Priority-Aware Planning" --due 2027-09-30
   along milestone sync
   along milestone list --status in-progress
   along milestone show v4.0.0-runtime-gates-and-worktree-isolation
@@ -1295,6 +1308,8 @@ Manages ephemeral multi-agent session blackboard memory (`.along/.session/<slug>
 - **Subcommands**:
   - `along scratch init <slug> [--title "Title"] [--steps N] [--restart]`: Initializes session scratchpad directory, `state.json`, and `plan.md`.
   - `along scratch state <slug> [--json]`: Displays current step progress, status, and retry counters.
+  - `along scratch phase <slug> <inquiry|planning|execution> [--approve]`: Sets the session phase; `--approve` also marks the plan as approved.
+  - `along scratch approve <slug>` (alias: `plan-approve`): Grants plan approval and moves the session to the `execution` phase.
   - `along scratch update <slug> [--step N] [--step-status {pending,in-progress,passed,failed}] [--inc-retry] [--status {in-progress,completed,failed}]`: Updates execution state.
   - `along scratch purge <slug>`: Deletes ephemeral session blackboard upon completion.
 - **Usage**:
@@ -1321,6 +1336,22 @@ Manages runtime Git worktree workspace isolation for parallel or multi-agent exe
   along worktree merge worker-auth --squash
   along worktree remove worker-auth --force
   along worktree gc
+  ```
+
+### `along git`
+Registers Along's custom git merge drivers so concurrent branches merge projections and entity files without conflict markers. Drivers live in the local `.git/config` (per clone, never tracked); the file bindings live in a managed block of the tracked `.gitattributes`. No git hooks are installed. `along update` runs `setup` on the root context automatically.
+- **Drivers**:
+  - `along-projection` (`**/.along/ISSUES.md`, `**/.along/CONSTRAINTS.md`, `**/docs/INDEX.md`, plus `**/.along/DECISIONS.md` when modular `.along/DECISIONS/` exists): keeps "ours", exits 0, and records the path in `$GIT_DIR/along-projection-resync`. Git runs drivers before the merged entity files reach the working tree, so recompiling inside the driver would only rebuild the pre-merge board. A file that is not an Along projection falls back to a standard 3-way merge.
+  - `along-frontmatter` (`**/.along/ISSUES/**/*.md`, `**/.along/DECISIONS/**/*.md`): 3-way YAML merge. A key changed on one side takes that side; if both sides changed it, lists get a 3-way set merge, `status` takes the most advanced lifecycle state, `updated`/`completed` take the later date, and other scalars take the side with the newer `updated` (ours on a tie). Bodies merge through `git merge-file`; overlapping body edits still leave conflict markers and a non-zero exit.
+- **Subcommands**:
+  - `along git setup [--uninstall] [--dry-run]`: Idempotently writes `merge.along-projection.*` / `merge.along-frontmatter.*` (absolute paths to the interpreter and `along_merge_driver.py`) and refreshes the `.gitattributes` block. `--uninstall` removes both.
+  - `along git status [--json]`: Reports driver registration, the `.gitattributes` bindings, and projections awaiting a resync. `along doctor` reports the same.
+  - `along git sync`: Recompiles `ISSUES.md`, `DECISIONS.md`, `CONSTRAINTS.md` (root and subprojects named in the marker) and `docs/INDEX.md`, then clears the marker. Run it after a merge.
+- **Usage**:
+  ```bash
+  along git setup
+  git merge feature/x
+  along git sync
   ```
 
 ### `along circuit`
@@ -1462,9 +1493,12 @@ Multi-stack project version incrementer and release packager.
   - `-p`, `--push`: Pushes release commit and tag to remote.
   - `--fix-typography`: Automatically repairs typography before releasing.
   - `-n`, `--no-verify`: Bypasses pre-mutation quality gates.
+  - `--carry-over <milestone>`: Moves still-open issues of the released milestone to `<milestone>` (issue `milestone` field and both `target_issues` lists) instead of aborting.
+- **Milestone reconciliation**: The milestone whose slug names the new version is set to `completed` only when all its issues (by `milestone` field or `target_issues`) are closed (`done`, `superseded`, `cancelled`, `duplicate`). Otherwise the release aborts inside the transaction and lists the open issues. `progress_pct` is closed / total.
 - **Usage**:
   ```bash
   along bump patch
+  along bump minor --carry-over v4.6.0-next-release
   along bump minor --commit
   ```
 
@@ -1600,11 +1634,25 @@ Runtime lifecycle hook interceptor and declarative gate evaluation harness.
   - `along hook eval <event> [--runtime {antigravity,claude,codex,generic}]`: Evaluates declarative gates against an incoming event payload passed via stdin or argument.
   - `along hook install [--runtime {antigravity,claude,codex,all}]`: Scaffolds or updates runtime hook configuration manifests (`.agents/hooks.json`, `.claude/settings.json`, `.codex/hooks.json`).
   - `along hook attribution [--runtime {claude,cursor,all}] [--claude-home DIR] [--cursor-home DIR] [--dry-run]`: Turns off AI commit attribution (`Co-Authored-By:` trailers) in existing runtime homes: `attribution.commit = ""` + `includeCoAuthoredBy = false` in Claude Code `settings.json`, `attribution.attributeCommitsToAgent = false` in Cursor `cli-config.json`. Writes no hooks. Also run by the installers and every `/along-update`.
-  - `along hook verify [--strict]`: Audits bi-directional traceability between prose badges (`[gate: <id>]`) across documentation/skills and declarative YAML gate rules in `default_gates.yaml`.
+  - `along hook install --git [--uninstall] [--dry-run]`: Opt-in, never run by init/update. Writes `pre-commit` and `commit-msg` shims into the repository's hooks directory that run `along gates check --hook <name>`. A foreign hook already there is kept as `<hook>.pre-along` and run first (restored on `--uninstall`); with `core.hooksPath` set (husky, lefthook) nothing is written and the commands to add to the manager are printed.
+  - `along hook verify [--strict]`: Audits bi-directional traceability between prose badges (`[gate: <id>]`) across documentation/skills and declarative YAML gate rules in `default_gates.yaml`, and prints the enforcement matrix (`runtime` / `git` / `ci` per gate).
 - **Usage**:
   ```bash
   along hook verify --strict
   along hook install --runtime all
+  along hooks install --git
+  ```
+
+### `along gates`
+Runs the commit-time gate subset (catalogue entries with `git` or `ci` in `enforcement`) outside agent runtimes. Read-only: projection freshness is checked by recompiling in a temp snapshot. Exit `0` clean, `1` violations, `2` usage error.
+- **Subcommands**:
+  - `along gates check`: Staged changes (same as `--hook pre-commit`).
+  - `along gates check --hook pre-commit`: Added lines of the staged diff (typography in `.md`/`.py`/`.sh`/`.ps1`/`.bat`, conflict markers, anti-stub) and freshness of staged `.along/` boards (`ISSUES.md`, `DECISIONS.md`, `CONSTRAINTS.md`). Only added lines count, so existing debt elsewhere never blocks a commit.
+  - `along gates check --hook commit-msg <file>`: Issue binding and AI co-author trailers in the message.
+  - `along gates check --ci [--range R] [--no-links] [--json]`: Every non-merge commit message in the range, the range diff, projection freshness of the checkout, and link integrity (`along kb-sync --check`). The range defaults to `origin/$GITHUB_BASE_REF...HEAD` for PRs, `$ALONG_CI_BEFORE..HEAD` for pushes, else `HEAD^..HEAD`. Used by `.github/workflows/tests.yml`.
+- **Usage**:
+  ```bash
+  along gates check --ci --range origin/main...HEAD
   ```
 
 ### `along run`
@@ -1676,7 +1724,7 @@ Natural language guidelines and prose instructions in `AGENTS.md` and `skills/*/
 
 The Along Declarative Gate Engine and Bi-Directional Traceability Matrix bridges this gap. It replaces opaque programmatic gates with an extensible, metadata-driven YAML gate catalogue (`scripts/alongkit/hooks/default_gates.yaml` and repository-level `.along/rules/gates.yaml`), paired with explicit inline prose badges (`[gate: <id>]`) embedded across protocol specifications and skill manifests.
 
-```
+```text
 +-------------------------------------------------------------------------+
 |                  Prose Specifications & Skill Manifests                 |
 |  AGENTS.md, skills/along-init/protocol.md, skills/along-commit/SKILL.md |
@@ -1727,9 +1775,10 @@ Gates are declared in YAML format with standard schema fields:
 - `patterns`: Regex patterns for argument matching (for `regex` matchers).
 - `predicate`: Name of python predicate handler in `alongkit.hooks.predicates`.
 - `remediation`: Explicit remediation message returned to the agent on violation.
+- `enforcement`: Layers that enforce the gate, any of `runtime` (agent hooks, the default), `git` (opt-in `along hooks install --git`), `ci` (`along gates check --ci`). An unknown layer is a schema error. `alongkit.gitgates` reads its patterns (issue binding, anti-stub) from the same entries, so the layers cannot disagree. `along hook verify` prints the resulting matrix.
 
-The 15 canonical gates defined in the catalogue:
-1. `commit_issue_binding`: Intercepts `git commit` to require issue binding (`--issue` or `(<type>--<slug>)`).
+The 24 canonical gates defined in the catalogue:
+1. `commit_issue_binding`: Intercepts `git commit` to require issue binding: `[<type>--<slug>]` or `(refs #<slug>)`, the form `/along-commit` appends. In git/CI mode, subjects starting with `release: `, `Merge `, `Revert "`, `fixup! `, `squash! ` are exempt.
 2. `commit_no_conflict_markers`: Intercepts `git commit` and inspects the lines the commit would add (`git diff --cached`, or `git diff HEAD` for `commit -a`) for unresolved merge conflict markers at line start (`<<<<<<< `, `=======`, `>>>>>>> `). The commit message itself is not inspected, so a Markdown rule of `=======` in a message is allowed. No file class is exempt: `merge=union` files never receive markers from git, so a marker there is a real conflict too.
 3. `anti_stub_injection`: Intercepts file mutation tools to forbid stub markers and lazy truncation skeletons.
 4. `cli_safety`: Intercepts shell commands to block heredocs (`<<EOF`), inline python file writers, destructive wipes (`git reset --hard`), and global installs.
@@ -1744,6 +1793,31 @@ The 15 canonical gates defined in the catalogue:
 13. `circuit_breaker`: Hard stop that halts mutating commands and edits upon systemic environment anomalies.
 14. `require_plan_approval`: Blocks repository file mutations and mutating shell commands in inquiry mode without an approved plan.
 15. `commit_no_ai_coauthor`: Intercepts `git commit` and denies a message (command line or `-F` file) carrying a `Co-Authored-By:` trailer that names an AI agent. Human co-authors pass. Opt-out: `.along/config.json` `commits.allow_ai_coauthor: true`. See [Runtime Hooks & Gates](./topic--runtime-hooks-and-gates.md).
+16. `workspace_containment`: Keeps file, search and shell `Cwd` paths inside the workspace (`alongkit.hooks.containment`). Paths are canonicalized with `os.path.realpath`, so `..` and symlinks cannot escape. Writes are allowed in the workspace (limited to `write_scope` plus `.along/` when declared), the system temp dir, the runtime brain dir of the current conversation and `~/.claude/projects/`. Reads are also allowed in declared `allowed_roots`, a worktree's main checkout, and the read-only global dirs `~/.gemini`, `~/.claude`, `~/.codex`, `~/.along`. Credential stores (`~/.ssh`, `~/.aws`, ...) are never accessible. A write outside scope is denied. A read outside scope returns `ask` in interactive mode and `deny` in autonomous mode (Claude Code `bypassPermissions`, `ALONG_AUTONOMOUS=1`, or `on_violation: deny`). Runtimes without an ask channel receive `deny` (the engine converts `ask` for every runtime except Antigravity). Scopes come from the gate options, the in-progress issue frontmatter (`allowed_roots`, `write_scope`) and `along start --allow-root/--write-scope`.
+
+Repository-state gates (17-23) declare `enforcement: [git, ci]` and no runtime layer, so the runtime pipeline skips them. `along gates check` runs their `alongkit.repochecks` handlers over the staged blobs (pre-commit) or every tracked file (`--ci`). A line containing `along: allow-<gate-id>` is exempt (for fixtures), and `exclude_paths` (fnmatch globs) exempts whole files:
+
+17. `windows_safe_filenames`: No `<>:"|?*`, control characters, trailing dot/space or reserved device names (`CON`, `NUL`, `COM1`, ...) in any path component.
+18. `untracked_exports`: `.along/dashboard.html` and `.along/DASHBOARD.md` are never tracked.
+19. `code_fence_language`: Every opening Markdown code fence names a language (`text` for plain output).
+20. `portable_links`: Markdown link targets use no `file://` scheme and no backslashes. Inline code and fenced blocks are ignored.
+21. `stable_entry_point`: Files in `scope` (default `README.md`, `docs/*`) never link into `.along/`.
+22. `issue_lifecycle`: Closed issues (`done`, `cancelled`, `superseded`, ...) live in `.along/ISSUES/done/`; open, in-progress or blocked ones never do.
+23. `no_tracked_secrets`: No private key headers or well-known token shapes (AWS, GitHub, Anthropic, OpenAI, Slack, Google).
+
+The entity graph gate spans all three layers:
+
+24. `entity_reference_integrity`: `alongkit.entities.validate_entities` finds no dangling reference (`related`, `blocked_by`, `parent`, `superseded_by`, `duplicate_of`, `milestone`, `target_issues`, session `issues_*`) and no schema or enum violation. References resolve in the nearest `.along/` and in enclosing contexts up to the git root. Runtime: a `Stop` predicate once git reports a changed entity file; `along wrap` (rolls back) and `along issue sync` (exit `1`) call `alongkit.gates.entity_integrity_gate`, which only warns in `shadow` mode. Git/CI: `along gates check` and `along commit` validate a snapshot of the staged (or checked-out) `.along/` against HEAD (or the range base) and block only problems the change introduces; pre-existing ones are printed as a notice. Renaming or retiring a referenced issue goes through `along issue rename` / `along issue supersede`, which rewrite the inbound references.
+
+Gate options: keys of a gate entry other than the definition keys (`id`, `title`, `description`, `event`, `tools`, `match_args`, `rule(s)`, `enforcement`, `enabled`) are passed to predicate handlers as `options=`. A `.along/rules/gates.yaml` entry whose `id` names a built-in gate is merged into it: keys it sets win and the rest is inherited, so an entry can just add options or set `enabled: false`:
+
+```yaml
+gates:
+  - id: workspace_containment
+    allowed_roots: ["../contracts", "../shared-lib"]
+    write_scope: ["packages/auth"]
+    on_violation: deny      # auto (default) | ask | deny
+```
 
 
 ### 2.2 Stateful Predicate Handlers (`alongkit.hooks.predicates`)
@@ -1769,7 +1843,7 @@ The traceability engine guarantees zero drift between written instructions and a
 
 ### 3.1 Declarative Gate Evaluation Flow
 
-```
+```text
 [Tool Invocation Event]
           |
           v
@@ -1802,7 +1876,7 @@ The traceability engine guarantees zero drift between written instructions and a
 
 ### 3.2 Machine-Checked Traceability Verification Flow
 
-```
+```text
 [Developer / Agent invokes: along hook verify]
                        |
                        v
@@ -2006,7 +2080,7 @@ Detailed problem statement, constraints, and verifiable acceptance criteria.
 - **`in-progress`**: Actively being developed by an agent or human. Initiated atomically via `along start <slug> [--worktree]`. Non-trivial code edits require an active issue.
 - **`blocked`**: Waiting on an external dependency (`blocked_by`), API key, or active risk.
 - **`done`**: Delivered terminal state. Fully implemented, verified by tests and code review. Closed via `along issue done <slug>` or `/along-wrap`. Mandatory field `completed: YYYY-MM-DD` is set, and the file is moved to `.along/ISSUES/done/<type>--<slug>.md`. Only `done` issues count towards milestone and sprint completion metrics.
-- **`superseded`**: Non-delivered terminal state. Replaced by another issue or architectural decision. Closed via `along issue done <slug> --status superseded --superseded-by <slug>`. Mandatory field `completed: YYYY-MM-DD` is set, `superseded_by: <target-slug>` references the replacement entity, and the file is moved to `.along/ISSUES/done/`.
+- **`superseded`**: Non-delivered terminal state. Replaced by another issue or architectural decision. Closed via `along issue supersede <old-key> --by <new-key>` (rewrites inbound references) or `along issue done <slug> --status superseded --superseded-by <slug>`. Mandatory field `completed: YYYY-MM-DD` is set, `superseded_by: <target-slug>` references the replacement entity, and the file is moved to `.along/ISSUES/done/`.
 - **`cancelled`**: Non-delivered terminal state. Abandoned or intentionally dropped requirements. Closed via `along issue done <slug> --status cancelled`. Mandatory field `completed: YYYY-MM-DD` is set, and the file is moved to `.along/ISSUES/done/`.
 - **`duplicate`**: Non-delivered terminal state. Redundant issue covered by another entity. Closed via `along issue done <slug> --status duplicate --duplicate-of <slug>`. Mandatory field `completed: YYYY-MM-DD` is set, `duplicate_of: <primary-slug>` references the primary entity, and the file is moved to `.along/ISSUES/done/`.
 
@@ -2611,7 +2685,7 @@ Passive prose instructions in `AGENTS.md` and `skills/*/SKILL.md` decay as agent
 
 The Along Runtime Hook and Gate System establishes deterministic, programmatic interception at the agent harness boundary. Rather than relying on fragile in-process monkey-patching or invasive Git-level hooks (`.git/hooks/*`), Along hooks directly into host agent runtime lifecycle events (`PreToolUse`, `PostToolUse`, `Stop`) supported natively by Google Antigravity, Claude Code, and OpenAI Codex.
 
-```
+```text
 +-------------------------------------------------------------------------+
 |                         Agent Runtime Harness                           |
 |       Google Antigravity (.agents/hooks.json)                           |
@@ -2672,7 +2746,7 @@ The Along Runtime Hook and Gate System establishes deterministic, programmatic i
    - Scans command strings for forbidden patterns: heredocs (`<<EOF`), inline Python file writers (`python -c "open('...', 'w')"`), destructive unstaged Git wipes (`git reset --hard`, `git clean -f`), and unauthorized global package managers (`npm install -g`).
 
 ### 2.3 Declarative Extension & Traceability Matrix
-Beyond hardcoded Python gates, Along provides an extensible, declarative YAML gate catalogue (`default_gates.yaml` and `.along/rules/gates.yaml`) enforcing 15 canonical gates (including `require_plan_approval` for inquiry read-only locks, `circuit_breaker`, and `worktree_env_readiness`), verified bi-directionally against prose badges (`[gate: <id>]`) via `along hook verify`.
+Beyond hardcoded Python gates, Along provides an extensible, declarative YAML gate catalogue (`default_gates.yaml` and `.along/rules/gates.yaml`) enforcing 24 canonical gates, 7 of them git/CI-only repository-state checks (including `require_plan_approval` for inquiry read-only locks, `circuit_breaker`, `worktree_env_readiness`, and `workspace_containment`, which keeps file, search and shell-cwd paths inside the workspace; see [Declarative Gates](./topic--declarative-gates-and-traceability.md)), verified bi-directionally against prose badges (`[gate: <id>]`) via `along hook verify`.
 For full specification and architecture, see [Declarative Gate Engine & Traceability Matrix](./topic--declarative-gates-and-traceability.md).
 
 
@@ -2725,7 +2799,7 @@ Codex and Antigravity document no attribution key; for them the gate and `/along
 
 When an agent emits a tool call, the execution loop flows through the hook harness:
 
-```
+```text
 [Agent Emits Tool Call]
           |
           v
@@ -2764,9 +2838,11 @@ When an agent emits a tool call, the execution loop flows through the hook harne
 
 ## 4. Invariants & Failure Modes
 
-1. **Zero Git Hooks Invariant**:
-   - Along strictly forbids `.git/hooks/*` and custom Git merge drivers.
-   - All protocol enforcement occurs strictly in the agent runtime harness layer (`PreToolUse`, `Stop`). Standard Git commands executed by developers remain untouched.
+1. **No Git Hooks by Default Invariant** (supersedes "Zero Git Hooks", see ADR `opt-in-git-hooks-supersede-zero-git-hooks`):
+   - Nothing Along installs by default (`along-init`, `along update`, `install.*`) writes `.git/hooks/*`. Standard Git commands stay untouched until the user opts in.
+   - Opt-in: `along hooks install --git` writes `pre-commit` and `commit-msg` shims that run `along gates check --hook <name>`. A foreign hook already in place is moved to `<hook>.pre-along` and run first; with `core.hooksPath` (husky, lefthook) nothing is written and the command to add to the manager is printed. `--uninstall` removes the shims and restores the previous hooks. The checks are read-only.
+   - Merge drivers (`along git setup`) are per-clone `.git/config` entries, not hooks. See ADR `projection-merge-driver-defers-recompile`.
+   - Runtime gates (`PreToolUse`, `Stop`) remain the primary layer, but they exist only where the host runtime loads Along's hooks. The portable baseline is the CI job `along gates check --ci`, plus the opt-in git hooks. Each gate declares its layers in `enforcement: [runtime, git, ci]`; `along hook verify` prints the matrix.
 2. **Deterministic Rejection over Silent Overwrites**:
    - In `enforce` mode, gate violations result in an immediate `deny` decision with actionable remediation text. Silent auto-replacement is avoided so LLMs receive explicit negative feedback and learn rule adherence.
 3. **Dual-Mode Governance (Shadow vs Enforce)**:
@@ -2784,6 +2860,52 @@ When an agent emits a tool call, the execution loop flows through the hook harne
    - Consumer repositories and all nested subprojects are recursively purged of legacy local hooks during `along update`.
    - Out-of-band execution via `along update` in an external OS terminal serves as the canonical disaster recovery path if runtime hooks are ever damaged.
 
+## 4a. Protocol Rule Enforcement Audit
+
+Every rule of the managed `AGENTS.md` block, classified: **a** enforced by a gate or test, **b** mechanically checkable but not yet enforced, **c** judgment-only. Layers come from the catalogue `enforcement` field (`along hook verify` prints the full matrix). Class-a rules are one line in `AGENTS.md` with a gate tag; the gate's error message carries the detail.
+
+| Rule | Class | Enforced by | Layer |
+| :--- | :--- | :--- | :--- |
+| Nearest context boundary, precedence, session-start reading | c | - | - |
+| Subproject localization | a | `subproject_boundary` | runtime |
+| Uninitialized subprojects need `/along-init` | c | - | - |
+| Zero-manual-merge of projections | a | `projection_protection`, merge drivers (`along git setup`) | runtime, git, ci |
+| Append-only `HISTORY.md` merge | a | `along git setup` writes `merge=union` | git |
+| Untracked exports | a | `untracked_exports` | git, ci |
+| Context isolation | c | - | - |
+| No code without issue | a | `require_active_issue` | runtime |
+| Commit binding | a | `commit_issue_binding` | runtime, git, ci |
+| No AI co-authors | a | `commit_no_ai_coauthor` | runtime, git, ci |
+| Canonical keys, reference by key (front-matter reference fields) | a | `entity_reference_integrity` (a path or unknown key is dangling) | runtime, git, ci |
+| Never delete a referenced entity; rename / supersede | a | `entity_reference_integrity`, `along issue rename` / `supersede` | runtime, git, ci |
+| ADRs never edited, only superseded | c | - | - |
+| Issue lifecycle (`done/` placement) | a | `issue_lifecycle` | git, ci |
+| Auto-entity creation | c | - | - |
+| Stable entry point | a | `stable_entry_point` (also `along kb-sync --check`) | git, ci |
+| Portable links | a | `portable_links` (also `along kb-sync --check`) | git, ci |
+| Fact grounding, doc blast radius, routing tree | c | - | - |
+| Fast retrieval | a | `fast_retrieval` | runtime |
+| Manual document lock | a | `doc_manual_lock` | runtime, git, ci |
+| Lifecycle hooks first, token hygiene, post-change review | c | - | - |
+| Checklist: tests | a | `test_before_stop` | runtime |
+| Checklist: session log | a | `wrap_before_stop` | runtime |
+| Checklist: projections | a | `projection_sync_before_stop`, projection freshness in `along gates check` | runtime, git, ci |
+| Checklist: file integrity, review, reconciliation, HISTORY, compaction | c | - | - |
+| Environment isolation (no global installs) | a | `cli_safety` | runtime |
+| Workspace containment | a | `workspace_containment` | runtime |
+| Anti-deletion, anchored edits | c | - | - |
+| No stubs or skeletons | a | `anti_stub_injection` | runtime, git, ci |
+| Clean ASCII (incl. BOM) | a | `typography`, `along sanitize` | runtime, git, ci |
+| Code fence languages | a | `code_fence_language` | git, ci |
+| File content via tools only | a | `cli_safety` | runtime |
+| Verify written files | c | - | - |
+| Hermetic tests | a | `tests/test_zz_hermetic_suite.py` (this repo) | ci |
+| Inquiry read-only | a | `require_plan_approval` | runtime |
+| Complexity escalation to `along-team` | c | - | - |
+| Windows-safe filenames | a | `windows_safe_filenames` | git, ci |
+| `ISSUES.md` compact | a | `along context-budget --check`, `tests/test_context_budget.py` | ci |
+| No secrets in tracked files | a | `no_tracked_secrets` | git, ci |
+
 ## 5. Runtime Capability Matrix
 
 Gates are mechanical only where the runtime loads Along's `PreToolUse`/`Stop` hooks. Everywhere else the protocol in `AGENTS.md` is advisory: the agent must self-apply every gate-tagged rule and route tests, commits, entity changes, and wrap through the `along` CLI. `along doctor` prints the level for the runtime it runs in (`alongkit.runtime`).
@@ -2795,6 +2917,8 @@ Gates are mechanical only where the runtime loads Along's `PreToolUse`/`Stop` ho
 | OpenAI Codex | auto (`~/.codex`) | yes (`~/.codex/hooks.json`) | mechanical once installed |
 | Claude Cowork | not loaded (Cowork reads plugins from the claude.ai account, not `~/.claude`) | no (Cowork ignores `settings.json`; plugin hooks are tracked in `feat--cowork-plugin-skill-packaging`) | advisory |
 | OpenCode, Cursor, plain shell, human | rules only | no | advisory |
+
+Advisory runtimes are still covered at commit time by the portable layer: `along hooks install --git` (opt-in, local) and the CI job `along gates check --ci` enforce the gates whose catalogue entry lists `git` / `ci` (typography, conflict markers, anti-stub on added lines, issue binding, AI co-author trailers, projection freshness), regardless of which agent or human made the commit.
 
 Runtime detection (`entities.detect_agent`) honours `--agent` and `ALONG_AGENT` first; Claude Cowork is recognised by `ALONG_RUNTIME=cowork`, or by `CLAUDE_CODE_HOST_HTTP_PROXY_PORT` together with a `/sessions/` home (markers observed 2026-09-27, heuristic).
 
@@ -3357,7 +3481,7 @@ flowchart TD
   - *Transactional Release*: Every mutation is recorded by `alongkit.transaction.FileTransaction`. A failure anywhere up to the git commit restores each file byte for byte and reports what it put back, so an aborted release leaves no half-released tree. The transaction closes once the commit exists.
   - *No Global Side Effects*: A version bump never reinstalls the machine's agent configuration. Installing globally is `/along-update` or the installer.
 - **Invocation Triggers**:
-  - *Explicit*: `/along-version-bump [patch|minor|major|<version>] [-c|--commit] [-p|--push] [--fix-typography] [-n|--no-verify]`, `along bump` (fallback: `python ~/.along/bin/along_exec.py bump`).
+  - *Explicit*: `/along-version-bump [patch|minor|major|<version>] [-c|--commit] [-p|--push] [--fix-typography] [-n|--no-verify] [--carry-over <milestone>]`, `along bump` (fallback: `python ~/.along/bin/along_exec.py bump`).
   - *Semantic / Automatic*: Triggered when preparing a release, completing a milestone sprint, or prompted with *"Release version 2.3.0"*, *"Bump patch version"*.
 - **Entities Operated On**: `package.json`, `pyproject.toml`, `Cargo.toml`, `*.csproj`, `VERSION`, `AGENTS.md`, `CHANGELOG.md`, the milestone in `.along/MILESTONES/` whose front-matter `slug` names the released version.
 - **Ecosystem Chaining**: Chains with `/along-test` for pre-release validation, `/along-kb-sync --check --strict` for the link gate, and creates the release commit plus the annotated `v<version>` tag itself.

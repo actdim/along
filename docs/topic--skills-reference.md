@@ -112,7 +112,7 @@ flowchart TD
   - *Transactional Release*: Every mutation is recorded by `alongkit.transaction.FileTransaction`. A failure anywhere up to the git commit restores each file byte for byte and reports what it put back, so an aborted release leaves no half-released tree. The transaction closes once the commit exists.
   - *No Global Side Effects*: A version bump never reinstalls the machine's agent configuration. Installing globally is `/along-update` or the installer.
 - **Invocation Triggers**:
-  - *Explicit*: `/along-version-bump [patch|minor|major|<version>] [-c|--commit] [-p|--push] [--fix-typography] [-n|--no-verify]`, `along bump` (fallback: `python ~/.along/bin/along_exec.py bump`).
+  - *Explicit*: `/along-version-bump [patch|minor|major|<version>] [-c|--commit] [-p|--push] [--fix-typography] [-n|--no-verify] [--carry-over <milestone>]`, `along bump` (fallback: `python ~/.along/bin/along_exec.py bump`).
   - *Semantic / Automatic*: Triggered when preparing a release, completing a milestone sprint, or prompted with *"Release version 2.3.0"*, *"Bump patch version"*.
 - **Entities Operated On**: `package.json`, `pyproject.toml`, `Cargo.toml`, `*.csproj`, `VERSION`, `AGENTS.md`, `CHANGELOG.md`, the milestone in `.along/MILESTONES/` whose front-matter `slug` names the released version.
 - **Ecosystem Chaining**: Chains with `/along-test` for pre-release validation, `/along-kb-sync --check --strict` for the link gate, and creates the release commit plus the annotated `v<version>` tag itself.

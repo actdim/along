@@ -326,7 +326,14 @@ class Tracer:
         stdout: str,
         stderr: str = "",
         pid: Optional[int] = None,
+        observation: Optional[str] = None,
     ) -> None:
+        """Attach a command's outcome to `span`.
+
+        With `observation` (distilled output, see alongkit.distill) the span carries only
+        the observation and the raw output is always offloaded to an artifact, so the
+        active execution span stays small while nothing is lost.
+        """
         if isinstance(cmd, (list, tuple)):
             raw_cmd = " ".join(str(c) for c in cmd)
         else:
@@ -343,6 +350,18 @@ class Tracer:
             combined = f"{raw_stdout}\n{raw_stderr}"
         else:
             combined = raw_stdout or raw_stderr
+
+        if observation is not None:
+            _, artifact_ref = self.offloader.maybe_offload(combined, force=bool(combined))
+            if artifact_ref is not None:
+                span.set_attribute(conventions.ALONG_ARTIFACT_OFFLOADED, True)
+                span.set_attribute(conventions.ALONG_ARTIFACT_REF, artifact_ref.path)
+                span.set_attribute(conventions.ALONG_ARTIFACT_SHA256, artifact_ref.sha256)
+            span.set_attribute(conventions.OUTPUT_VALUE, self.redactor.sanitize_text(observation))
+            if exit_code != 0 and span.status_code == StatusCode.UNSET:
+                span.status_code = StatusCode.ERROR
+                span.status_message = f"command failed with exit code {exit_code}"
+            return
 
         preview_text, artifact_ref = self.offloader.maybe_offload(combined)
         if artifact_ref is not None:

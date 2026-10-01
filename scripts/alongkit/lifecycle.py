@@ -72,6 +72,67 @@ def get_lifecycle_script_path(repo_root: str, action: str) -> str:
     return os.path.join(scripts_dir, f"{action}.py")
 
 
+#: Lifecycle actions whose output is distilled for non-interactive callers. `dev` and
+#: `debug` run servers / debuggers and always stream.
+DISTILLED_ACTIONS = ("test", "build")
+OUTPUT_MODE_ENV = "ALONG_OUTPUT"
+
+
+def resolve_output_mode(action: str, args: Sequence[str],
+                        stdout_isatty: Optional[bool] = None) -> Tuple[str, List[str]]:
+    """Return ("raw" | "distill", args without Along's own flags).
+
+    Precedence: `--raw` / `--distill` flag, then `ALONG_OUTPUT=raw|distill`, then the
+    default: distill `test`/`build` when stdout is not a terminal (an agent or a pipe is
+    reading it), stream otherwise so humans keep live progress. `--raw` is used rather
+    than `--verbose` because `--verbose` belongs to the wrapped runners (pytest, cargo).
+    """
+    rest = [a for a in args if a not in ("--raw", "--distill")]
+    if "--raw" in args:
+        return "raw", rest
+    if "--distill" in args:
+        return "distill", rest
+    env = os.environ.get(OUTPUT_MODE_ENV, "").strip().lower()
+    if env in ("raw", "distill"):
+        return env, rest
+    if action not in DISTILLED_ACTIONS:
+        return "raw", rest
+    if stdout_isatty is None:
+        try:
+            stdout_isatty = sys.stdout.isatty()
+        except (AttributeError, ValueError):
+            stdout_isatty = False
+    return ("raw" if stdout_isatty else "distill"), rest
+
+
+def raw_log_path(repo_root: str, action: str) -> str:
+    return os.path.join(repo_root, ".along", "artifacts", "lifecycle", f"{action}.log")
+
+
+def run_lifecycle_command(action: str, cmd: Sequence[str], repo_root: str, mode: str) -> int:
+    """Run a lifecycle command; in distill mode print the observation and keep the raw
+    output in `.along/artifacts/lifecycle/<action>.log` (overwritten per run)."""
+    if mode != "distill":
+        return proc.run_passthrough(list(cmd), cwd=repo_root)
+
+    log_path = raw_log_path(repo_root, action)
+    rel_log = repo.safe_relpath(log_path, repo_root).replace("\\", "/")
+    # No anomaly classification: test output legitimately contains strings such as
+    # "bad signature" from fixtures, and passthrough mode never classified it either.
+    result = proc.run_capture(list(cmd), cwd=repo_root, distill=True, trip_on_anomaly=False)
+    raw = result.stdout + ("\n" if result.stdout and result.stderr else "") + result.stderr
+    try:
+        os.makedirs(os.path.dirname(log_path), exist_ok=True)
+        textio.write_text(log_path, raw, newline="\n")
+        saved = True
+    except OSError:
+        saved = False
+    print(result.observation or "")
+    if saved:
+        print(f"(raw output: {rel_log}; rerun with --raw to stream it)")
+    return result.returncode
+
+
 def synthesize_lifecycle_script(script_path: str, content: str) -> None:
     """Write synthesized lifecycle hook to disk with executable permissions."""
     os.makedirs(os.path.dirname(script_path), exist_ok=True)
@@ -359,6 +420,10 @@ def execute_wrap(
         board_content = entities.compile_issues_board(repo_root)
         textio.write_text(board_file, board_content, newline="\n")
         print(f"-> Updated {repo.safe_relpath(board_file, repo_root)}")
+
+        # [gate: entity-reference-integrity]: enforce mode rolls the wrap back.
+        if not gates.entity_integrity_gate(repo_root, "Wrap Quality Gate"):
+            raise RuntimeError("entity graph has dangling references or schema violations")
 
         # Synchronize Knowledge Base
         kb_script = repo.resolve_tool_script("along_kb_sync.py", repo_root)

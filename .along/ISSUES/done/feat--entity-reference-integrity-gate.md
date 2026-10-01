@@ -3,10 +3,11 @@ protocol: along
 protocol_version: "4.3.0"
 slug: entity-reference-integrity-gate
 type: feat
-status: open
+status: done
+completed: 2026-09-30
 priority: high
 created: 2026-09-29
-updated: 2026-09-29
+updated: 2026-09-30
 agent: claude-code
 tags: [entities, integrity, gates, wrap, issue-sync]
 milestone: v4.5.0-multi-user-merge-automation
@@ -69,12 +70,12 @@ All three were fixed by hand. The root cause is systemic:
   19 of 20 target issues open; the open issues had to be moved to a new milestone by hand.
 
 ## Acceptance Criteria
-- [ ] Wrap / issue-sync gate reports and (in enforce mode) blocks dangling references and enum violations
-- [ ] `along commit` rejects newly introduced dangling references in staged entities
-- [ ] `along issue rename` and `along issue supersede` rewrite all inbound references
-- [ ] Migration engine uses the shared validator; no duplicated logic
-- [ ] Issue create/update keeps milestone `target_issues` in sync
-- [ ] `along bump` refuses to complete a milestone with open target issues; `progress_pct` derived from issue status
-- [ ] Protocol rule anchored and `along hook verify --strict` passes
-- [ ] `along doctor --entities` is clean on the live repo
-- [ ] Automated tests passing
+- [x] Wrap / issue-sync gate reports and (in enforce mode) blocks dangling references and enum violations
+- [x] `along commit` rejects newly introduced dangling references in staged entities
+- [x] `along issue rename` and `along issue supersede` rewrite all inbound references
+- [x] Migration engine uses the shared validator; no duplicated logic
+- [x] Issue create/update keeps milestone `target_issues` in sync
+- [x] `along bump` refuses to complete a milestone with open target issues; `progress_pct` derived from issue status
+- [x] Protocol rule anchored and `along hook verify --strict` passes
+- [x] `along doctor --entities` is clean on the live repo
+- [x] Automated tests passing

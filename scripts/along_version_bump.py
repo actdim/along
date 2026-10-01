@@ -49,7 +49,7 @@ from alongkit import bootstrap
 bootstrap.ensure_deps()
 
 
-from alongkit import (frontmatter, gates, proc, repo, sanitizer, semver, textio,
+from alongkit import (entities, frontmatter, gates, proc, repo, sanitizer, semver, textio,
                       transaction)
 
 #: Label every gate and abort message carries, so the source of a failure is unambiguous.
@@ -425,8 +425,39 @@ def milestone_matches_version(slug, version):
     return any(part in wanted for part in str(slug).split("-"))
 
 
-def update_along_milestones(repo_root, new_version, tx):
+def carry_over_open_issues(repo_root, milestone, open_keys, carry_over, tx):
+    """Reassign `open_keys` from `milestone` to the `carry_over` milestone (transactional)."""
+    target = entities.resolve_milestone_by_query(repo_root, carry_over)
+    if not target:
+        raise ReleaseAborted(f"carry-over milestone '{carry_over}' not found in .along/MILESTONES/")
+    if target["file_path"] == milestone["file_path"]:
+        raise ReleaseAborted("the carry-over milestone is the milestone being released")
+    for key in open_keys:
+        issue = entities.find_issue_by_slug(repo_root, key)
+        if not issue:
+            continue
+        content = textio.read_text(issue["file_path"])
+        tx.write(issue["file_path"],
+                 frontmatter.update(content, {"milestone": target["slug"],
+                                              "updated": entities.today_iso()},
+                                    path=issue["file_path"]),
+                 newline="\n")
+    listed = list(target["frontmatter"].get("target_issues") or [])
+    merged = sorted(set(listed) | set(open_keys))
+    if merged != listed:
+        content = textio.read_text(target["file_path"])
+        tx.write(target["file_path"],
+                 frontmatter.update(content, {"target_issues": merged}, path=target["file_path"]),
+                 newline="\n")
+    print(f"-> Carried {len(open_keys)} open issue(s) over to milestone {target['slug']}.")
+
+
+def update_along_milestones(repo_root, new_version, tx, carry_over=None):
     """Mark the milestone whose own slug carries `new_version` as completed.
+
+    Refused (ReleaseAborted, so the transaction rolls back) while any of its issues is
+    not closed, unless `carry_over` names a milestone to move the open ones to.
+    `progress_pct` is closed / total over its issues, not 100 by assumption.
 
     Front-matter only, through `frontmatter.update`. The previous implementation ran two
     unanchored `re.sub` calls over the whole file, so a `status: open` or `progress_pct: 40`
@@ -453,13 +484,31 @@ def update_along_milestones(repo_root, new_version, tx):
         if content.startswith(frontmatter.BOM):
             print(f"-> Milestone {name}: dropping a UTF-8 BOM while updating front-matter.")
 
-        rewritten = frontmatter.update(
-            content, {"status": "completed", "progress_pct": 100}, path=path)
+        milestone = {"slug": fields.get("slug"), "file_path": path, "frontmatter": fields}
+        open_keys, total = entities.milestone_open_issues(repo_root, milestone)
+        closed = total - len(open_keys)
+        updates = {"status": "completed"}
+        if open_keys:
+            if not carry_over:
+                raise ReleaseAborted(
+                    f"milestone {name} has {len(open_keys)} of {total} issue(s) still open: "
+                    + ", ".join(open_keys)
+                    + ". Close them, or pass --carry-over <milestone> to move them.")
+            carry_over_open_issues(repo_root, milestone, open_keys, carry_over, tx)
+            listed = fields.get("target_issues") or []
+            updates["target_issues"] = [
+                k for k in listed
+                if str(k) not in open_keys and not any(o.endswith(f"--{k}") for o in open_keys)]
+            total = closed
+        pct = 100 if total == 0 else round(100 * closed / total)
+        updates["progress_pct"] = pct
+
+        rewritten = frontmatter.update(content, updates, path=path)
         if rewritten == content:
             continue
         tx.write(path, rewritten)
         updated.append(path)
-        print(f"-> Reconciled milestone {name} to completed (100%).")
+        print(f"-> Reconciled milestone {name} to completed ({pct}%).")
 
     if not updated:
         print(f"-> No milestone slug names v{new_version}; nothing to reconcile.")
@@ -594,8 +643,21 @@ def main():
 
     if bump_arg in ["-h", "--help"]:
         print("Usage: python along_version_bump.py [patch|minor|major|<version>] "
-              "[-c|--commit] [-p|--push] [--fix-typography] [-n|--no-verify]")
+              "[-c|--commit] [-p|--push] [--fix-typography] [-n|--no-verify] "
+              "[--carry-over <milestone>]")
         sys.exit(0)
+
+    argv = list(sys.argv[1:])
+    carry_over = None
+    if "--carry-over" in argv:
+        idx = argv.index("--carry-over")
+        if idx + 1 >= len(argv) or argv[idx + 1].startswith("-"):
+            print("[Error] --carry-over needs a milestone slug.", file=sys.stderr)
+            sys.exit(2)
+        carry_over = argv[idx + 1]
+        del argv[idx:idx + 2]
+    sys.argv[1:] = argv
+    bump_arg = sys.argv[1] if len(sys.argv) > 1 else "patch"
 
     flags = [a for a in sys.argv[1:] if a.startswith("-")]
     fix_typography = "--fix-typography" in flags
@@ -627,7 +689,7 @@ def main():
             raise ReleaseAborted("no version change recorded")
 
         print("-> Reconciling .along/ milestones...")
-        update_along_milestones(repo_root, new_version, tx)
+        update_along_milestones(repo_root, new_version, tx, carry_over=carry_over)
         update_changelog(repo_root, new_version, tx)
 
         written = [repo.normalize_posix(p) for p in tx.changed()]

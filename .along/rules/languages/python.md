@@ -1,3 +1,6 @@
+<!-- managed by along: do not edit. Project guidelines belong in docs/ and AGENTS.md -->
+<!-- template: languages/python.md sha256:99c9bbb4ad79fbe6f594e3932cb762e5d6889e14c4c12cf81546c6f8ed016d77 -->
+
 # Python Coding Standards & Best Practices
 
 Modern Python 3.11+ engineering conventions based on PEP 8, Google Python Style Guide, UV workspaces, and strict static type analysis.

@@ -28,7 +28,7 @@ The Along Agent Run Protocol (ARP), also referred to as the Agent Execution Prot
 
 The ARP engine bridges semantic OpenInference standards and OpenTelemetry (OTel) GenAI semantic conventions into Along. It provides real-time, vendor-neutral telemetry with local disk buffering and offline survivability.
 
-```
+```text
 +-----------------------------------------------------------------------------------+
 |                            Along Agent Runtime (Harness)                          |
 |                                                                                   |
@@ -126,6 +126,7 @@ Large terminal outputs, build logs, and multi-megabyte tool payloads degrade OTe
 - Storage Location: Persisted atomically under `.along/artifacts/<run_id>/<sha256>.<ext>`.
 - Truncated Inline Preview: The span attribute retains a 20-line, 1,000-character preview ending with an explicit reference marker: `... [Output offloaded to .along/artifacts/<run_id>/<sha256>.<ext> (<bytes> bytes, <lines> lines)]`.
 - Metadata Annotation: Generates an `ArtifactRef` data structure recording the file path, SHA-256 digest, exact byte count, line count, and MIME type.
+- Distilled Observations: When a command runs through `proc.run_capture(distill=True)`, `Tracer.record_command_result(observation=...)` sets the span output to the distilled observation (`alongkit.distill`, at most 50 lines / 2 KB) and force-offloads the raw stdout and stderr to the artifact whatever their size (`maybe_offload(force=True)`). The active execution span stays small, and the raw text remains reachable through `along.artifact.ref`.
 
 ### 2.5 Fail-Open Write-Ahead Log Spooler (`Spooler`)
 If network export fails or the OTel collector endpoint is unreachable, the engine never crashes or interrupts agent workflows:
@@ -145,7 +146,7 @@ If network export fails or the OTel collector endpoint is unreachable, the engin
 
 Telemetry generation flows hierarchically throughout an agent session:
 
-```
+```text
 Agent Harness           Tracer / Stack             Redactor / Offloader         OTLP / Spooler
      |                         |                            |                          |
      |--- start_run() -------->|                            |                          |
@@ -226,7 +227,7 @@ Parameters and behavior:
 - Connectivity Probe: Sends an empty OTLP test payload with a fast 1.5s timeout. Reports connection status without blocking.
 
 Terminal output example:
-```
+```text
 Along Telemetry Status:
   Endpoint:      http://localhost:4318/v1/traces [unreachable (timed out)]
   Spool Dir:     /path/to/repo/.along/telemetry/spool

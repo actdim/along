@@ -58,7 +58,7 @@ Prose instructions are suggestions; runtime hooks are deterministic mechanical b
 
 To avoid code duplication across IDEs, Along implements a unified core engine with thin runtime adapters:
 
-```
+```text
 +-------------------------------------------------------------------------+
 |                          Runtime Hook Layers                            |
 |  Antigravity (.agents/hooks.json)   | Claude Code (.claude/settings.json)|
@@ -253,7 +253,7 @@ To support deep offline analysis, post-run diagnostics, and debugging without bl
 
 Testing must be split into three distinct levels to ensure speed, determinism, and real runtime verification:
 
-```
+```text
 +-------------------------------------------------------------------------+
 | Level 3: E2E Runtime Tests (Claude Code / Codex + Ollama Local Model)   |
 | - Runs real agent CLI with ANTHROPIC_BASE_URL / OPENAI_BASE_URL         |

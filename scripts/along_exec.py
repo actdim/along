@@ -44,7 +44,7 @@ from alongkit import bootstrap
 # installers and the documented skill commands invoke it.
 bootstrap.ensure_deps()
 
-from alongkit import circuit, entities, frontmatter, lifecycle, proc, repo, session, textio
+from alongkit import circuit, entities, frontmatter, gates, lifecycle, proc, repo, session, textio
 from alongkit.version import CURRENT_PROTOCOL_VERSION
 
 TOOL_MAPPINGS = {
@@ -97,6 +97,8 @@ update_frontmatter_fields = frontmatter.update
 get_lifecycle_script_path = lifecycle.get_lifecycle_script_path
 synthesize_lifecycle_script = lifecycle.synthesize_lifecycle_script
 detect_lifecycle_action = lifecycle.detect_lifecycle_action
+resolve_output_mode = lifecycle.resolve_output_mode
+run_lifecycle_command = lifecycle.run_lifecycle_command
 
 
 def print_help():
@@ -123,16 +125,20 @@ Entity Management Commands:
   issue sync     Recompile .along/ISSUES.md projection deterministically from entity files
   issue done     <slug>
   issue list     List active issues in terminal
+  issue rename   <old-key> <new-key>  Rename an issue and rewrite every inbound reference
+  issue supersede <old-key> --by <new-key>  Close as superseded (file kept) and move references to the successor
   milestone sync [<slug>] Recompute target_issues, progress_pct, and status across milestones
   milestone list [--status open|in-progress|completed] [--json]
   milestone show <slug> [--json]
+  milestone create <slug> --title "Title" [--due YYYY-MM-DD]
   session create <slug> --summary "Summary" [--issues "slug1,slug2"] [--decisions "ADR-slug"] [--agent <name>] [--milestone <name>] [--commit <sha>]
   session wrap   <slug> [--status done|superseded] [--summary "Summary"] [--dry-run] [-n]
   decision create <slug> --title "Title" --context "Why" --decision "What" --consequences "Tradeoffs"
   decision sync   Recompile .along/CONSTRAINTS.md projection from active ADRs
-  scratch init   <slug>
   scratch init   <slug> [--title "Title"] [--steps N] [--restart]
   scratch state  <slug> [--json]
+  scratch phase  <slug> <inquiry|planning|execution> [--approve]
+  scratch approve <slug>  Grant plan approval (phase: execution)
   scratch update <slug> [--step N] [--step-status status] [--inc-retry] [--status status]
   scratch purge  <slug>
   worktree create <slug> [--branch <name>] [--base-ref <ref>]
@@ -141,7 +147,11 @@ Entity Management Commands:
   worktree list   [--json]
   worktree status [--json]
   worktree gc
-  rules attach   Detect project stack and attach relevant engineering rule packs
+  git setup      Register Along merge drivers in .git/config and bind .gitattributes [--uninstall] [--dry-run]
+  git status     Report merge driver registration and pending projection resync [--json]
+  git sync       Recompile projections after a merge handled by the projection driver
+  gates check    Commit-time gates outside agent runtimes [--hook pre-commit|commit-msg] [--ci [--range R] [--no-links]] [--json]
+  rules          Rule packs management (attach, status, diff, restore)
   budget         Measure context footprint and check token budgets (--json, --check)
   context-budget Measure context footprint and check token budgets (--json, --check)
   circuit        Systemic anomaly circuit breaker (status, trip, reset, verify)
@@ -281,6 +291,14 @@ Describe the feature, requirements, and background context here.
     textio.write_text(target_file, content, newline="\n", atomic=True)
     print(f"-> Created issue: {target_file}")
 
+    # Keep the milestone's target_issues in sync with the new assignment.
+    if milestone:
+        try:
+            entities.sync_milestones(repo_root, milestone)
+            print(f"-> Synchronized milestone {milestone}.")
+        except ValueError:
+            pass
+
     # Update ISSUES.md
     issues_board = os.path.join(repo_root, ".along", "ISSUES.md")
     if os.path.exists(issues_board):
@@ -398,7 +416,52 @@ def _issue_done(repo_root: str, args: List[str], issues_dir: str, done_dir: str,
 def _issue_sync(repo_root: str):
     entities.sync_issues_board(repo_root, recent_done_limit=RECENT_DONE_LIMIT)
     print(f"-> Recompiled .along/ISSUES.md projection (capped to {RECENT_DONE_LIMIT} recent completed issues).")
+    if not gates.entity_integrity_gate(repo_root, "Issue Sync"):
+        sys.exit(1)
     sys.exit(0)
+
+
+def _issue_rename(repo_root: str, args: List[str]):
+    if len(args) < 3:
+        print("[Error] Usage: along issue rename <old-key> <new-key>", file=sys.stderr)
+        sys.exit(1)
+    try:
+        result = entities.rename_issue(repo_root, args[1].lower(), args[2].lower())
+    except ValueError as exc:
+        print(f"[Error] {exc}", file=sys.stderr)
+        sys.exit(1)
+    print(f"-> Renamed {result['old_key']} -> {result['new_key']}: "
+          f"{repo.normalize_posix(repo.safe_relpath(result['file_path'], repo_root))}")
+    _report_rewritten(repo_root, result["rewritten"])
+    sys.exit(0)
+
+
+def _issue_supersede(repo_root: str, args: List[str]):
+    by = None
+    for i, arg in enumerate(args):
+        if arg == "--by" and i + 1 < len(args):
+            by = args[i + 1].lower()
+    if len(args) < 2 or args[1].startswith("-") or not by:
+        print("[Error] Usage: along issue supersede <old-key> --by <new-key>", file=sys.stderr)
+        sys.exit(1)
+    try:
+        result = entities.supersede_issue(repo_root, args[1].lower(), by)
+    except ValueError as exc:
+        print(f"[Error] {exc}", file=sys.stderr)
+        sys.exit(1)
+    print(f"-> Superseded {result['old_key']} by {result['new_key']}: "
+          f"{repo.normalize_posix(repo.safe_relpath(result['file_path'], repo_root))}")
+    _report_rewritten(repo_root, result["rewritten"])
+    sys.exit(0)
+
+
+def _report_rewritten(repo_root: str, paths: List[str]):
+    if not paths:
+        print("-> No inbound references to rewrite.")
+        return
+    print(f"-> Rewrote inbound references in {len(paths)} file(s):")
+    for path in paths:
+        print(f"   - {repo.normalize_posix(repo.safe_relpath(path, repo_root))}")
 
 
 def _issue_list(issues_dir: str):
@@ -524,7 +587,7 @@ def _issue_show(repo_root: str, args: List[str]):
 
 def handle_issue_command(repo_root: str, args: List[str]):
     if not args or args[0] in ("-h", "--help", "help"):
-        print("Usage: along_exec.py issue [create|update|done|sync|list|show] [args...]")
+        print("Usage: along_exec.py issue [create|update|done|sync|list|show|rename|supersede] [args...]")
         sys.exit(0)
 
     subcmd = args[0].lower()
@@ -544,6 +607,8 @@ def handle_issue_command(repo_root: str, args: List[str]):
         "edit": lambda: _issue_update(repo_root, args, today),
         "show": lambda: _issue_show(repo_root, args),
         "get": lambda: _issue_show(repo_root, args),
+        "rename": lambda: _issue_rename(repo_root, args),
+        "supersede": lambda: _issue_supersede(repo_root, args),
     }
 
     handler = dispatch.get(subcmd)
@@ -723,13 +788,27 @@ def handle_milestone_command(repo_root: str, args: List[str]):
 
 def handle_start_command(repo_root: str, args: List[str]):
     if not args or args[0] in ("-h", "--help", "help"):
-        print("Usage: along start <slug> [--worktree]")
+        print("Usage: along start <slug> [--worktree] [--allow-root <path>]... [--write-scope <path>]...")
         print("  Atomically marks issue in-progress, initializes session blackboard,")
         print("  and optionally creates an isolated worktree.")
+        print("  --allow-root / --write-scope add to the issue's allowed_roots / write_scope")
+        print("  frontmatter, read by [gate: workspace-containment].")
         sys.exit(0)
 
     from datetime import datetime
     today = datetime.now().strftime("%Y-%m-%d")
+
+    scope_flags: Dict[str, List[str]] = {"--allow-root": [], "--write-scope": []}
+    i = 1
+    while i < len(args):
+        if args[i] in scope_flags:
+            if i + 1 >= len(args) or args[i + 1].startswith("--"):
+                print(f"[Error] {args[i]} requires a path.", file=sys.stderr)
+                sys.exit(2)
+            scope_flags[args[i]].append(args[i + 1])
+            i += 2
+            continue
+        i += 1
 
     slug = args[0].lower()
     issue = entities.find_issue_by_slug(repo_root, slug)
@@ -737,7 +816,12 @@ def handle_start_command(repo_root: str, args: List[str]):
         print(f"[Error] Issue '{slug}' not found in .along/ISSUES/.", file=sys.stderr)
         sys.exit(1)
 
-    updates = {"status": "in-progress", "updated": today}
+    updates: Dict[str, Any] = {"status": "in-progress", "updated": today}
+    for flag, key in (("--allow-root", "allowed_roots"), ("--write-scope", "write_scope")):
+        if scope_flags[flag]:
+            current = (issue.get("frontmatter") or {}).get(key) or []
+            current = [current] if isinstance(current, str) else [str(p) for p in current]
+            updates[key] = current + [p for p in scope_flags[flag] if p not in current]
     fpath, new_fm = entities.update_issue_frontmatter(repo_root, issue["slug"], updates)
     rel_path = repo.normalize_posix(repo.safe_relpath(fpath, repo_root))
     print(f"-> Marked issue in-progress: {rel_path}")
@@ -1178,6 +1262,20 @@ def handle_doctor_command(repo_root: str, args: List[str]):
             print("[WARN] .gitattributes exists but lacks merge=union for .along/ files.")
             warnings += 1
 
+    # Check Along merge drivers (along git setup)
+    from alongkit import merge as along_merge
+    driver_info = along_merge.status(repo_root)
+    if driver_info["git"]:
+        if along_merge.is_configured(driver_info):
+            print("[OK] Along merge drivers registered (projection, frontmatter).")
+        else:
+            print("[WARN] Along merge drivers not fully registered. Run `along git setup`.")
+            warnings += 1
+        if driver_info["pending_resync"]:
+            print("[WARN] Projections kept as 'ours' in a merge; run `along git sync`: "
+                  + ", ".join(driver_info["pending_resync"]))
+            warnings += 1
+
     # Check DECISIONS
     dec_dir = os.path.join(along_dir, "DECISIONS")
     dec_file = os.path.join(along_dir, "DECISIONS.md")
@@ -1407,6 +1505,111 @@ def handle_scratch_command(repo_root: str, args: List[str]):
         sys.exit(1)
 
 
+def handle_git_command(repo_root: str, args: List[str]):
+    from alongkit import merge
+
+    if not args or args[0] in ("-h", "--help", "help"):
+        print("Usage: along git [setup|status|sync] [args...]")
+        print("  setup  [--uninstall] [--dry-run]  Register merge drivers and .gitattributes bindings")
+        print("  status [--json]                   Report driver registration and pending resync")
+        print("  sync                              Recompile projections after a driver-handled merge")
+        sys.exit(0)
+
+    subcmd = args[0].lower()
+    flags = set(args[1:])
+    if not merge.git_dir(repo_root):
+        print(f"[Error] Not a git repository: {repo_root}", file=sys.stderr)
+        sys.exit(1)
+
+    if subcmd == "setup":
+        report = merge.setup(repo_root, uninstall="--uninstall" in flags, dry_run="--dry-run" in flags)
+        verb = "Would change" if report["dry_run"] else "Changed"
+        action = "removal" if report["uninstall"] else "registration"
+        changed = report["config_changed"]
+        if not changed and not report["gitattributes_changed"]:
+            print(f"-> Merge driver {action}: already up to date.")
+        else:
+            for key in changed:
+                print(f"   {verb} .git/config: {key}")
+            if report["gitattributes_changed"]:
+                print(f"   {verb} .gitattributes (managed merge driver block)")
+            print(f"-> Merge driver {action} " + ("planned (dry run, nothing written)." if report["dry_run"] else "complete."))
+        sys.exit(0)
+
+    if subcmd == "status":
+        info = merge.status(repo_root)
+        if "--json" in flags:
+            print(json.dumps(info, indent=2))
+            sys.exit(0)
+        for key, state in info["config"].items():
+            print(f"[{'OK' if state == 'ok' else 'WARN'}] {key}: {state}")
+        print(f"[{'OK' if info['gitattributes'] else 'WARN'}] .gitattributes bindings: "
+              f"{'present' if info['gitattributes'] else 'missing'}")
+        if info["pending_resync"]:
+            print("[WARN] Projections kept as 'ours' during a merge; run `along git sync`: "
+                  + ", ".join(info["pending_resync"]))
+        if not merge.is_configured(info):
+            print("-> Run `along git setup` to register the merge drivers.")
+        sys.exit(0)
+
+    if subcmd == "sync":
+        kb_script = resolve_tool_script("along_kb_sync.py", repo_root)
+        done = merge.resync(repo_root, kb_script=kb_script)
+        for path in done:
+            print(f"   -> Recompiled {path}")
+        print("-> Projections synchronized.")
+        sys.exit(0)
+
+    print(f"[Error] Unknown git subcommand: {subcmd}. Use setup, status, or sync.", file=sys.stderr)
+    sys.exit(1)
+
+
+def handle_gates_command(repo_root: str, args: List[str]):
+    import argparse
+    from alongkit import gitgates
+
+    parser = argparse.ArgumentParser(
+        prog="along gates check",
+        description="Run the commit-time gate subset outside agent runtimes (git hooks, CI).")
+    parser.add_argument("subcommand", choices=["check"])
+    parser.add_argument("--hook", choices=list(gitgates.HOOK_NAMES),
+                        help="Run as the named git hook (installed by `along hooks install --git`)")
+    parser.add_argument("hook_args", nargs="*", help="Arguments git passes to the hook")
+    parser.add_argument("--ci", action="store_true", help="Check a commit range, projections and links")
+    parser.add_argument("--range", dest="commit_range", default=None,
+                        help="Commit range for --ci (default: from GITHUB_BASE_REF / ALONG_CI_BEFORE, else HEAD^..HEAD)")
+    parser.add_argument("--no-links", action="store_true", help="Skip the link integrity check in --ci")
+    parser.add_argument("--json", action="store_true", help="Emit violations as JSON")
+    opts = parser.parse_args(args)
+
+    if not repo_root:
+        print("[Error] Cannot locate repository root.", file=sys.stderr)
+        sys.exit(2)
+
+    if opts.hook == "pre-commit":
+        context, violations = "pre-commit", gitgates.check_pre_commit(repo_root)
+    elif opts.hook == "commit-msg":
+        if not opts.hook_args:
+            print("[Error] commit-msg hook needs the message file argument.", file=sys.stderr)
+            sys.exit(2)
+        context, violations = "commit-msg", gitgates.check_commit_msg(repo_root, opts.hook_args[0])
+    elif opts.ci:
+        kb_script = None if opts.no_links else resolve_tool_script("along_kb_sync.py", repo_root)
+        context = f"ci {opts.commit_range or gitgates.default_ci_range() or 'HEAD^..HEAD'}"
+        violations = gitgates.check_ci(repo_root, opts.commit_range, links=not opts.no_links,
+                                       kb_script=kb_script)
+    else:
+        context = "staged changes"
+        violations = gitgates.check_pre_commit(repo_root)
+
+    if opts.json:
+        print(json.dumps([v.__dict__ for v in violations], indent=2))
+    else:
+        stream = sys.stderr if violations else sys.stdout
+        print(gitgates.format_report(violations, context), file=stream)
+    sys.exit(1 if violations else 0)
+
+
 def handle_worktree_command(repo_root: str, args: List[str]):
     if not args or args[0] in ("-h", "--help", "help"):
         print("Usage: along worktree [create|remove|merge|list|status|gc] [args...]")
@@ -1517,20 +1720,85 @@ def handle_worktree_command(repo_root: str, args: List[str]):
 
 def handle_rules_command(repo_root: str, args: List[str]):
     if not args or args[0] in ("-h", "--help", "help"):
-        print("Usage: along_exec.py rules attach")
+        print("Usage: along rules [attach|status|diff|restore]")
+        print("Subcommands:")
+        print("  attach [--on-conflict preserve|overwrite|diff] [--force]")
+        print("                  Detect project stack and attach relevant engineering rule packs")
+        print("  status [--json] Audit installed rule packs against Along global templates")
+        print("  diff [rule]     Display unified diff of local rule modifications against template")
+        print("  restore [rule]  Restore pristine Along template for rule (backs up modified copy)")
         sys.exit(0)
     
     subcmd = args[0].lower()
+    try:
+        from alongkit import rules
+    except ImportError:
+        print("[Error] alongkit.rules not found.", file=sys.stderr)
+        sys.exit(1)
+
     if subcmd == "attach":
-        try:
-            from alongkit import rules
-            rules.attach_rules(repo_root)
-        except ImportError:
-            print("[Error] alongkit.rules not found. Cannot attach rules.", file=sys.stderr)
-            sys.exit(1)
+        on_conflict = "preserve"
+        if "--overwrite" in args or "--force" in args:
+            on_conflict = "overwrite"
+        elif "--diff" in args:
+            on_conflict = "diff"
+        elif "--strategy" in args:
+            idx = args.index("--strategy")
+            if idx + 1 < len(args):
+                on_conflict = args[idx + 1].lower()
+        elif "--on-conflict" in args:
+            idx = args.index("--on-conflict")
+            if idx + 1 < len(args):
+                on_conflict = args[idx + 1].lower()
+
+        rules.attach_rules(repo_root, on_conflict=on_conflict)
+        sys.exit(0)
+    elif subcmd == "status":
+        as_json = "--json" in args
+        results = rules.audit_rules(repo_root)
+        if as_json:
+            import json
+            print(json.dumps(results, indent=2))
+        else:
+            if not results:
+                print("No rule packs configured or required.")
+            else:
+                print(f"Along Rule Packs Audit ({len(results)} rules):")
+                for r in results:
+                    status_tag = f"[{r['status'].upper()}]"
+                    print(f"  {status_tag:<14} {r['rule']:<28} - {r['detail']}")
+        sys.exit(0)
+    elif subcmd == "diff":
+        target_rule = args[1] if len(args) > 1 and not args[1].startswith("-") else None
+        if not target_rule:
+            audits = rules.audit_rules(repo_root)
+            modified = [a["rule"] for a in audits if "modified" in a["status"]]
+            if not modified:
+                print("No modified rule packs found.")
+                sys.exit(0)
+            for r in modified:
+                d = rules.diff_rule(repo_root, r)
+                if d:
+                    print(f"\n--- Diff: {r} ---")
+                    print(d)
+            sys.exit(0)
+        else:
+            d = rules.diff_rule(repo_root, target_rule)
+            if d:
+                print(d)
+            else:
+                print(f"No differences found for '{target_rule}'.")
+            sys.exit(0)
+    elif subcmd == "restore":
+        target_rule = args[1] if len(args) > 1 and not args[1].startswith("-") else None
+        restored = rules.restore_rule(repo_root, target_rule)
+        if not restored:
+            print("No rules restored (already pristine or template not found).")
+        else:
+            print(f"Successfully restored {len(restored)} rule pack(s): {', '.join(restored)}")
         sys.exit(0)
     else:
-        print(f"[Error] Unknown rules subcommand: {subcmd}", file=sys.stderr)
+        print(f"[Error] Unknown rules subcommand: {subcmd}. Available: attach, status, diff, restore.", file=sys.stderr)
         sys.exit(1)
 
 
@@ -2021,6 +2289,10 @@ def main():
         handle_scratch_command(repo_root, extra_args)
     elif cmd == "worktree":
         handle_worktree_command(repo_root, extra_args)
+    elif cmd == "git":
+        handle_git_command(repo_root, extra_args)
+    elif cmd == "gates":
+        handle_gates_command(repo_root, extra_args)
     elif cmd == "rules":
         handle_rules_command(repo_root, extra_args)
     elif cmd in ("budget", "context-budget"):
@@ -2076,6 +2348,7 @@ def main():
 
     # 3. Check if command is a Lifecycle Hook (build / test / dev / debug)
     if cmd in LIFECYCLE_ACTIONS:
+        output_mode, extra_args = resolve_output_mode(cmd, extra_args)
         script_file = get_lifecycle_script_path(repo_root, cmd)
 
         if os.path.exists(script_file):
@@ -2085,8 +2358,7 @@ def main():
 
             print(f"-> Executing .along/scripts/{os.path.basename(script_file)}...")
             full_cmd = lifecycle.build_interpreter_cmd(script_file, extra_args)
-            code = proc.run_passthrough(full_cmd, cwd=repo_root)
-            sys.exit(code)
+            sys.exit(run_lifecycle_command(cmd, full_cmd, repo_root, output_mode))
 
         # Auto-Detection and Non-Destructive Synthesis
         detected_cmd, verified = detect_lifecycle_action(repo_root, cmd)
@@ -2096,8 +2368,8 @@ def main():
             py_content = lifecycle.render_lifecycle_script(cmd, base_cmd=shlex.split(detected_cmd), status_tag=status_tag)
             synthesize_lifecycle_script(script_file, py_content)
             print(f"-> Running: {detected_cmd}")
-            code = proc.run_passthrough(shlex.split(detected_cmd) + extra_args, cwd=repo_root)
-            sys.exit(code)
+            sys.exit(run_lifecycle_command(cmd, shlex.split(detected_cmd) + extra_args,
+                                           repo_root, output_mode))
         else:
             status_tag = "unconfigured"
             py_content = lifecycle.render_lifecycle_script(cmd, base_cmd=None, status_tag=status_tag)

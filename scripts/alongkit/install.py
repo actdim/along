@@ -432,6 +432,19 @@ def engine_files(source_root: str) -> Dict[str, str]:
     return pairs
 
 
+def engine_script(name: str) -> str:
+    """Absolute path of the engine `name` (e.g. `along_exec.py`) for THIS alongkit copy.
+
+    Source checkout and `~/.along/bin`: the engines sit beside `alongkit/`. Installed
+    wheel: pyproject force-includes them as `alongkit/engines/<name>`. Used to write
+    absolute commands into `.git/config` and git hooks, which run outside any PATH.
+    """
+    pkg_dir = os.path.dirname(os.path.abspath(__file__))
+    candidates = (os.path.join(os.path.dirname(pkg_dir), name),
+                  os.path.join(pkg_dir, "engines", name))
+    return next((c for c in candidates if os.path.isfile(c)), candidates[0])
+
+
 def planned_files(source_root: str, homes: Homes,
                   providers: Sequence[str] = PROVIDERS) -> Dict[str, str]:
     """Every path an install of `providers` writes, mapped to what it came from.

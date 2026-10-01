@@ -60,6 +60,9 @@ class Result:
     returncode: int
     stdout: str
     stderr: str
+    #: Distilled high-signal summary, set only by `run_capture(distill=True)`.
+    #: `stdout` / `stderr` always stay raw.
+    observation: Optional[str] = None
 
     @property
     def ok(self) -> bool:
@@ -122,14 +125,22 @@ def run_capture(cmd: Command,
                 shell: bool = False,
                 trip_on_anomaly: bool = True,
                 telemetry_span: Optional[Any] = None,
-                tracer: Optional[Any] = None) -> Result:
+                tracer: Optional[Any] = None,
+                distill: bool = False,
+                distill_max_lines: Optional[int] = None,
+                distill_max_bytes: Optional[int] = None) -> Result:
     """Run `cmd`, capture stdout and stderr as UTF-8 text, never raise on decode.
 
     Decoding uses `errors="replace"`, so undecodable bytes surface as replacement
     characters instead of destroying the result. A command that cannot be started,
     or that exceeds `timeout`, is reported as a Result with a non-zero returncode
     and the reason in `stderr`; only `check=True` turns a failure into an exception.
+
+    `distill=True` also fills `Result.observation` with `alongkit.distill.distill()`
+    (bounded by `distill_max_lines` / `distill_max_bytes`). A telemetry span then
+    records the observation and the raw output goes to an offloaded artifact.
     """
+    started = time.monotonic()
     active_tracer = tracer
     if active_tracer is None:
         try:
@@ -201,6 +212,17 @@ def run_capture(cmd: Command,
         # Missing executable, bad arguments: a normal outcome for optional tooling.
         result = Result(cmd, 127, "", str(exc))
 
+    if distill:
+        from . import distill as distill_mod
+        limits = {}
+        if distill_max_lines is not None:
+            limits["max_lines"] = distill_max_lines
+        if distill_max_bytes is not None:
+            limits["max_bytes"] = distill_max_bytes
+        obs = distill_mod.distill(result.stdout, result.stderr, result.returncode, cmd,
+                                  duration=time.monotonic() - started, **limits)
+        result = Result(result.cmd, result.returncode, result.stdout, result.stderr, obs.text)
+
     if active_span is not None:
         if active_tracer is not None:
             active_tracer.record_command_result(
@@ -210,6 +232,7 @@ def run_capture(cmd: Command,
                 stdout=result.stdout,
                 stderr=result.stderr,
                 pid=pid,
+                observation=result.observation,
             )
         else:
             try:
@@ -222,6 +245,7 @@ def run_capture(cmd: Command,
                     stdout=result.stdout,
                     stderr=result.stderr,
                     pid=pid,
+                    observation=result.observation,
                 )
             except (OSError, RuntimeError, ValueError, TypeError, AttributeError):
                 pass

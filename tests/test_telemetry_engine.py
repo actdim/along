@@ -195,12 +195,12 @@ class TestSecretMaskingInTelemetry(unittest.TestCase):
 
     def test_tool_parameters_redaction(self) -> None:
         raw_params = {
-            "api_key": "sk-ant-api03-123456789012345678901234567890",
+            "api_key": "sk-ant-api03-123456789012345678901234567890",  # along: allow-no-tracked-secrets
             "token": "ghp_123456789012345678901234",
             "password": "super_secret_password",
             "command": "git push origin main",
             "home": "/home/developer/repo",
-            "prompt": "Here is the key: sk-ant-api03-123456789012345678901234567890 in text",
+            "prompt": "Here is the key: sk-ant-api03-123456789012345678901234567890 in text",  # along: allow-no-tracked-secrets
         }
         with self.tracer.tool_span("bash", raw_params) as span:
             params_str = span.attributes[conventions.TOOL_PARAMETERS]

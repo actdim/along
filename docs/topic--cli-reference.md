@@ -60,9 +60,12 @@ Executes the project build lifecycle hook.
 Executes automated test suites using quiet, token-efficient flags.
 - **Engine Script**: `.along/scripts/test.py`
 - **Auto-Detection Fallback**: Detects `pytest` (`pytest -q`), `npm` (`npm test -- --silent`), `dotnet` (`dotnet test -v q`), `cargo` (`cargo test -q`).
+- **Distilled Output** (`along test`, `along build`): When stdout is not a terminal (an agent or a pipe reads it), the output is distilled by `alongkit.distill`. A pass becomes `PASS: <cmd> completed successfully (code 0, <s>s)` plus the runner summary (`Ran N tests`, `OK`). A failure keeps the failure blocks: tracebacks, unittest `FAIL:` / `ERROR:` sections, pytest `E` lines, compiler `error:` lines, panics. Resolver chatter, deprecation notices, progress redraws and passing-test lines are dropped. The result is capped at 50 lines / 2 KB, with the runner summary always kept. The raw output is written to `.along/artifacts/lifecycle/<action>.log` (gitignored, overwritten per run). In a terminal the output streams as before.
+  - `--raw` streams the full output, `--distill` forces distillation. Both flags are consumed by Along and not passed on; `--verbose` is left alone because pytest and cargo use it. `ALONG_OUTPUT=raw|distill` sets the mode for a whole session. `along dev` / `along debug` always stream.
 - **Usage**:
   ```bash
   along test [args...]
+  along test --raw -q
   ```
 
 ### `along dev`
@@ -123,8 +126,11 @@ Manages atomic issue files in `.along/ISSUES/` and recompiles the active board p
     - Options: `--json` outputs structured JSON payload.
   - `along issue done <slug> [options...]`: Marks the issue as completed, records `completed: YYYY-MM-DD`, and moves the file into `.along/ISSUES/done/`.
     - Options: `--status {done,superseded,cancelled,duplicate}`, `--superseded-by <slug>`, `--duplicate-of <slug>`.
-  - `along issue sync`: Recompiles `.along/ISSUES.md` deterministically from atomic files in `.along/ISSUES/` and `.along/ISSUES/done/`.
+  - `along issue sync`: Recompiles `.along/ISSUES.md` deterministically from atomic files in `.along/ISSUES/` and `.along/ISSUES/done/`, then runs the entity reference integrity gate (`validate_entities`): dangling references or schema / enum violations exit `1` in `enforce` mode and only warn in `shadow` mode.
   - `along issue list`: Lists all active in-progress and open issues in the terminal.
+  - `along issue rename <old-key> <new-key>`: Renames an issue (type and/or slug; a bare slug keeps the type). Rewrites the file name and `slug`/`type`, then every inbound reference in the nearest `.along/`: `related`, `blocked_by`, `parent`, `superseded_by`, `duplicate_of` in issues, risks, spikes, checklists and ADRs, milestone `target_issues`, and session `issues_advanced` / `issues_completed`.
+  - `along issue supersede <old-key> --by <new-key>`: Closes the old issue as `superseded` with `superseded_by: <new-key>` and moves it to `done/` (the file is kept, so session history stays valid). Dependency fields of other entities (`related`, `blocked_by`, `parent`, ...) are rewritten to the successor; session logs are left as they are.
+  - `along issue create ... --milestone <m>` and `along issue update --milestone <m>` keep the milestone `target_issues` in sync (added on assignment, removed from the previous milestone on reassignment).
 - **Usage**:
   ```bash
   along issue create feat token-refresh --title "Add OAuth token refresh" --priority high
@@ -132,6 +138,8 @@ Manages atomic issue files in `.along/ISSUES/` and recompiles the active board p
   along issue show token-refresh
   along issue list
   along issue done token-refresh
+  along issue rename feat--token-refresh feat--oauth-token-refresh
+  along issue supersede feat--oauth-token-refresh --by feat--session-auth-rework
   along issue sync
   ```
 
@@ -139,10 +147,13 @@ Manages atomic issue files in `.along/ISSUES/` and recompiles the active board p
 Atomically marks an issue as `in-progress`, updates `updated: YYYY-MM-DD`, recompiles the active board projection (`.along/ISSUES.md`), initializes the session blackboard (`.along/.session/<slug>/`), marks the living plan as approved (`phase: execution`, `plan_approved: true`), and binds the active issue for agent execution.
 - **Options**:
   - `--worktree`: Enforces git worktree workspace isolation. Verifies environment readiness, provisions an isolated worktree at `.along/worktrees/<slug>` on branch `along/<slug>`, links heavy dependencies (`node_modules`, `.venv`) via NTFS junctions on Windows or symlinks on POSIX, copies untracked configuration (`.env*`), and points agent execution to the worktree path.
+  - `--allow-root <path>` (repeatable): Adds `path` to the issue's `allowed_roots` frontmatter: extra read-only roots for `[gate: workspace-containment]` (for example a sibling contracts repository).
+  - `--write-scope <path>` (repeatable): Adds `path` to the issue's `write_scope` frontmatter: once set, workspace writes are limited to these subfolders plus `.along/`.
 - **Usage**:
   ```bash
   along start token-refresh
   along start token-refresh --worktree
+  along start token-refresh --allow-root ../contracts --write-scope packages/auth
   ```
 
 ### `along milestone`
@@ -153,8 +164,10 @@ Tracks progress across high-level milestones and sprints in `.along/MILESTONES/`
     - Options: `--status` filters by status (`open`, `in-progress`, `completed`), `--json` outputs machine-readable JSON array.
   - `along milestone show <slug> [--json]`: Displays detailed milestone status, due date, progress percentage, and checklist of all target issues with individual completion states. Supports fuzzy query resolution (exact slug, version prefix such as `4.0`, or substring).
     - Options: `--json` emits structured JSON payload.
+  - `along milestone create <slug> --title "Title" [--due YYYY-MM-DD]`: Creates `.along/MILESTONES/<slug>.md` with standard front-matter (`status: open`, empty `target_issues`, `progress_pct: 0`). Refuses to overwrite an existing file and rejects a slug whose version collides with an existing milestone.
 - **Usage**:
   ```bash
+  along milestone create v5.5.0-priority-aware-planning --title "v5.5.0: Priority-Aware Planning" --due 2027-09-30
   along milestone sync
   along milestone list --status in-progress
   along milestone show v4.0.0-runtime-gates-and-worktree-isolation
@@ -191,6 +204,8 @@ Manages ephemeral multi-agent session blackboard memory (`.along/.session/<slug>
 - **Subcommands**:
   - `along scratch init <slug> [--title "Title"] [--steps N] [--restart]`: Initializes session scratchpad directory, `state.json`, and `plan.md`.
   - `along scratch state <slug> [--json]`: Displays current step progress, status, and retry counters.
+  - `along scratch phase <slug> <inquiry|planning|execution> [--approve]`: Sets the session phase; `--approve` also marks the plan as approved.
+  - `along scratch approve <slug>` (alias: `plan-approve`): Grants plan approval and moves the session to the `execution` phase.
   - `along scratch update <slug> [--step N] [--step-status {pending,in-progress,passed,failed}] [--inc-retry] [--status {in-progress,completed,failed}]`: Updates execution state.
   - `along scratch purge <slug>`: Deletes ephemeral session blackboard upon completion.
 - **Usage**:
@@ -217,6 +232,22 @@ Manages runtime Git worktree workspace isolation for parallel or multi-agent exe
   along worktree merge worker-auth --squash
   along worktree remove worker-auth --force
   along worktree gc
+  ```
+
+### `along git`
+Registers Along's custom git merge drivers so concurrent branches merge projections and entity files without conflict markers. Drivers live in the local `.git/config` (per clone, never tracked); the file bindings live in a managed block of the tracked `.gitattributes`. No git hooks are installed. `along update` runs `setup` on the root context automatically.
+- **Drivers**:
+  - `along-projection` (`**/.along/ISSUES.md`, `**/.along/CONSTRAINTS.md`, `**/docs/INDEX.md`, plus `**/.along/DECISIONS.md` when modular `.along/DECISIONS/` exists): keeps "ours", exits 0, and records the path in `$GIT_DIR/along-projection-resync`. Git runs drivers before the merged entity files reach the working tree, so recompiling inside the driver would only rebuild the pre-merge board. A file that is not an Along projection falls back to a standard 3-way merge.
+  - `along-frontmatter` (`**/.along/ISSUES/**/*.md`, `**/.along/DECISIONS/**/*.md`): 3-way YAML merge. A key changed on one side takes that side; if both sides changed it, lists get a 3-way set merge, `status` takes the most advanced lifecycle state, `updated`/`completed` take the later date, and other scalars take the side with the newer `updated` (ours on a tie). Bodies merge through `git merge-file`; overlapping body edits still leave conflict markers and a non-zero exit.
+- **Subcommands**:
+  - `along git setup [--uninstall] [--dry-run]`: Idempotently writes `merge.along-projection.*` / `merge.along-frontmatter.*` (absolute paths to the interpreter and `along_merge_driver.py`) and refreshes the `.gitattributes` block. `--uninstall` removes both.
+  - `along git status [--json]`: Reports driver registration, the `.gitattributes` bindings, and projections awaiting a resync. `along doctor` reports the same.
+  - `along git sync`: Recompiles `ISSUES.md`, `DECISIONS.md`, `CONSTRAINTS.md` (root and subprojects named in the marker) and `docs/INDEX.md`, then clears the marker. Run it after a merge.
+- **Usage**:
+  ```bash
+  along git setup
+  git merge feature/x
+  along git sync
   ```
 
 ### `along circuit`
@@ -358,9 +389,12 @@ Multi-stack project version incrementer and release packager.
   - `-p`, `--push`: Pushes release commit and tag to remote.
   - `--fix-typography`: Automatically repairs typography before releasing.
   - `-n`, `--no-verify`: Bypasses pre-mutation quality gates.
+  - `--carry-over <milestone>`: Moves still-open issues of the released milestone to `<milestone>` (issue `milestone` field and both `target_issues` lists) instead of aborting.
+- **Milestone reconciliation**: The milestone whose slug names the new version is set to `completed` only when all its issues (by `milestone` field or `target_issues`) are closed (`done`, `superseded`, `cancelled`, `duplicate`). Otherwise the release aborts inside the transaction and lists the open issues. `progress_pct` is closed / total.
 - **Usage**:
   ```bash
   along bump patch
+  along bump minor --carry-over v4.6.0-next-release
   along bump minor --commit
   ```
 
@@ -496,11 +530,25 @@ Runtime lifecycle hook interceptor and declarative gate evaluation harness.
   - `along hook eval <event> [--runtime {antigravity,claude,codex,generic}]`: Evaluates declarative gates against an incoming event payload passed via stdin or argument.
   - `along hook install [--runtime {antigravity,claude,codex,all}]`: Scaffolds or updates runtime hook configuration manifests (`.agents/hooks.json`, `.claude/settings.json`, `.codex/hooks.json`).
   - `along hook attribution [--runtime {claude,cursor,all}] [--claude-home DIR] [--cursor-home DIR] [--dry-run]`: Turns off AI commit attribution (`Co-Authored-By:` trailers) in existing runtime homes: `attribution.commit = ""` + `includeCoAuthoredBy = false` in Claude Code `settings.json`, `attribution.attributeCommitsToAgent = false` in Cursor `cli-config.json`. Writes no hooks. Also run by the installers and every `/along-update`.
-  - `along hook verify [--strict]`: Audits bi-directional traceability between prose badges (`[gate: <id>]`) across documentation/skills and declarative YAML gate rules in `default_gates.yaml`.
+  - `along hook install --git [--uninstall] [--dry-run]`: Opt-in, never run by init/update. Writes `pre-commit` and `commit-msg` shims into the repository's hooks directory that run `along gates check --hook <name>`. A foreign hook already there is kept as `<hook>.pre-along` and run first (restored on `--uninstall`); with `core.hooksPath` set (husky, lefthook) nothing is written and the commands to add to the manager are printed.
+  - `along hook verify [--strict]`: Audits bi-directional traceability between prose badges (`[gate: <id>]`) across documentation/skills and declarative YAML gate rules in `default_gates.yaml`, and prints the enforcement matrix (`runtime` / `git` / `ci` per gate).
 - **Usage**:
   ```bash
   along hook verify --strict
   along hook install --runtime all
+  along hooks install --git
+  ```
+
+### `along gates`
+Runs the commit-time gate subset (catalogue entries with `git` or `ci` in `enforcement`) outside agent runtimes. Read-only: projection freshness is checked by recompiling in a temp snapshot. Exit `0` clean, `1` violations, `2` usage error.
+- **Subcommands**:
+  - `along gates check`: Staged changes (same as `--hook pre-commit`).
+  - `along gates check --hook pre-commit`: Added lines of the staged diff (typography in `.md`/`.py`/`.sh`/`.ps1`/`.bat`, conflict markers, anti-stub) and freshness of staged `.along/` boards (`ISSUES.md`, `DECISIONS.md`, `CONSTRAINTS.md`). Only added lines count, so existing debt elsewhere never blocks a commit.
+  - `along gates check --hook commit-msg <file>`: Issue binding and AI co-author trailers in the message.
+  - `along gates check --ci [--range R] [--no-links] [--json]`: Every non-merge commit message in the range, the range diff, projection freshness of the checkout, and link integrity (`along kb-sync --check`). The range defaults to `origin/$GITHUB_BASE_REF...HEAD` for PRs, `$ALONG_CI_BEFORE..HEAD` for pushes, else `HEAD^..HEAD`. Used by `.github/workflows/tests.yml`.
+- **Usage**:
+  ```bash
+  along gates check --ci --range origin/main...HEAD
   ```
 
 ### `along run`

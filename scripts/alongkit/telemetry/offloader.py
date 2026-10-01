@@ -59,9 +59,11 @@ class ArtifactOffloader:
         ext: str = "txt",
         preview_lines: int = 20,
         preview_chars: int = 1000,
+        force: bool = False,
     ) -> tuple[str, Optional[ArtifactRef]]:
         """
         Conditionally offloads content to disk if it exceeds byte or line limits.
+        `force=True` offloads regardless of size (raw output behind a distilled span).
 
         Returns (preview_text, artifact_ref) if offloaded, or (content, None) otherwise.
         """
@@ -73,7 +75,7 @@ class ArtifactOffloader:
         line_count = content.count("\n") + 1 if content else 0
 
         # Check thresholds
-        if size_bytes > self.max_bytes or (content.count("\n") + 1) > self.max_lines:
+        if force or size_bytes > self.max_bytes or (content.count("\n") + 1) > self.max_lines:
             sha256 = hashlib.sha256(content_bytes).hexdigest()
             ext_clean = ext.lstrip(".") if ext else "txt"
             filename = f"{sha256}.{ext_clean}"

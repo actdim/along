@@ -33,6 +33,7 @@ Scaffold or refresh the provider-agnostic agent-context structure in a repositor
   .along/HISTORY.md merge=union
   .along/DECISIONS.md merge=union
   ```
+- In a git repository, run `along git setup` (or fallback: `python ~/.along/bin/along_exec.py git setup`) to register the Along merge drivers in `.git/config` and append the managed `merge=along-projection` / `merge=along-frontmatter` block to `.gitattributes`. Idempotent; `--uninstall` removes both.
 - Ensure `.code-review-graph-ignore` exists at repository root (or run `along graph-sync --status`) to exclude `node_modules/`, `dist/`, `build/`, and `.venv/` from AST parsing.
 
 ### Step 4: Scaffold `.along/` Directory Skeleton (Create only if missing)

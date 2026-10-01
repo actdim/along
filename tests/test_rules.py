@@ -142,6 +142,176 @@ class TestRulesEngine(unittest.TestCase):
         self.assertEqual(res.returncode, 0)
         self.assertIn("along ", res.stdout)
 
+    def test_rule_header_and_hashing(self):
+        content = "# My Standards\nSome guidelines here.\n"
+        h = rules.compute_rule_hash(content)
+        self.assertEqual(len(h), 64)
+        
+        header = rules.format_rule_header("languages/python.md", h)
+        full = header + content
+        
+        tmpl, parsed_h, body = rules.parse_rule_header(full)
+        self.assertEqual(tmpl, "languages/python.md")
+        self.assertEqual(parsed_h, h)
+        self.assertEqual(rules.compute_rule_hash(body), h)
+
+    def test_attach_rules_preserves_modified_rule(self):
+        with hermetic.repo_fixture() as repo:
+            with tempfile.TemporaryDirectory() as global_rules:
+                py_rule = os.path.join(global_rules, "languages", "python.md")
+                os.makedirs(os.path.dirname(py_rule), exist_ok=True)
+                textio.write_text(py_rule, "# Python Standards\n")
+
+                textio.write_text(os.path.join(repo, "pyproject.toml"), "[project]\n")
+
+                # First attach: writes pristine template with header
+                orig_get_global = rules.get_global_rules_dir
+                try:
+                    rules.get_global_rules_dir = lambda: global_rules
+                    rules.attach_rules(repo)
+                finally:
+                    rules.get_global_rules_dir = orig_get_global
+
+                local_py = os.path.join(repo, ".along", "rules", "languages", "python.md")
+                self.assertTrue(os.path.isfile(local_py))
+                
+                # Now user/agent modifies the local rule file
+                modified_text = "# Python Standards with Custom Local Changes\n"
+                textio.write_text(local_py, rules.format_rule_header("languages/python.md", "oldhash") + modified_text)
+
+                # Re-run attach: must NOT overwrite modified file!
+                try:
+                    rules.get_global_rules_dir = lambda: global_rules
+                    rules.attach_rules(repo)
+                finally:
+                    rules.get_global_rules_dir = orig_get_global
+
+                after_text = textio.read_text(local_py)
+                self.assertIn("Custom Local Changes", after_text)
+
+    def test_attach_rules_preserves_gates_yaml_during_prune(self):
+        with hermetic.repo_fixture() as repo:
+            with tempfile.TemporaryDirectory() as global_rules:
+                py_rule = os.path.join(global_rules, "languages", "python.md")
+                os.makedirs(os.path.dirname(py_rule), exist_ok=True)
+                textio.write_text(py_rule, "# Python Standards\n")
+
+                textio.write_text(os.path.join(repo, "pyproject.toml"), "[project]\n")
+
+                # Put a repository gates.yaml in .along/rules/
+                gates_path = os.path.join(repo, ".along", "rules", "gates.yaml")
+                os.makedirs(os.path.dirname(gates_path), exist_ok=True)
+                textio.write_text(gates_path, "gates: []\n")
+
+                orig_get_global = rules.get_global_rules_dir
+                try:
+                    rules.get_global_rules_dir = lambda: global_rules
+                    rules.attach_rules(repo)
+                finally:
+                    rules.get_global_rules_dir = orig_get_global
+
+                # gates.yaml must survive pruning
+                self.assertTrue(os.path.isfile(gates_path))
+
+    def test_rules_audit_status_diff_restore(self):
+        with hermetic.repo_fixture() as repo:
+            with tempfile.TemporaryDirectory() as global_rules:
+                py_rule = os.path.join(global_rules, "languages", "python.md")
+                os.makedirs(os.path.dirname(py_rule), exist_ok=True)
+                textio.write_text(py_rule, "# Python Standards\nLine 2\n")
+
+                textio.write_text(os.path.join(repo, "pyproject.toml"), "[project]\n")
+
+                orig_get_global = rules.get_global_rules_dir
+                try:
+                    rules.get_global_rules_dir = lambda: global_rules
+                    
+                    # 1. Audit before attach: reports missing
+                    audits = rules.audit_rules(repo)
+                    self.assertEqual(len(audits), 1)
+                    self.assertEqual(audits[0]["status"], "missing")
+
+                    # 2. Attach
+                    rules.attach_rules(repo)
+                    audits = rules.audit_rules(repo)
+                    self.assertEqual(audits[0]["status"], "pristine")
+
+                    # 3. Modify local file
+                    local_py = os.path.join(repo, ".along", "rules", "languages", "python.md")
+                    textio.write_text(local_py, "# Custom Python\nLine 2\n")
+                    
+                    audits = rules.audit_rules(repo)
+                    self.assertEqual(audits[0]["status"], "modified")
+
+                    # 4. Diff
+                    diff = rules.diff_rule(repo, "languages/python.md")
+                    self.assertIn("Custom Python", diff)
+
+                    # 5. Restore
+                    restored = rules.restore_rule(repo, "languages/python.md")
+                    self.assertEqual(restored, ["languages/python.md"])
+                    
+                    audits_after = rules.audit_rules(repo)
+                    self.assertEqual(audits_after[0]["status"], "pristine")
+                    
+                    # Verify backup exists
+                    backup_dir = os.path.join(repo, ".along", ".migration-backup")
+                    self.assertTrue(os.path.isdir(backup_dir))
+                finally:
+                    rules.get_global_rules_dir = orig_get_global
+
+    def test_cli_rules_subcommands(self):
+        exec_script = os.path.join(REPO_ROOT, "scripts", "along_exec.py")
+        with hermetic.repo_fixture() as repo:
+            textio.write_text(os.path.join(repo, "requirements.txt"), "pytest\n")
+            
+            # Status CLI
+            cmd = [sys.executable, exec_script, "rules", "status", "--json"]
+            res = subprocess.run(cmd, cwd=repo, capture_output=True, text=True)
+            self.assertEqual(res.returncode, 0, res.stderr + res.stdout)
+            data = json.loads(res.stdout[res.stdout.find("["):])
+            self.assertTrue(any(d["rule"] == "languages/python.md" for d in data))
+
+    def test_attach_rules_conflict_strategies(self):
+        with hermetic.repo_fixture() as repo:
+            with tempfile.TemporaryDirectory() as global_rules:
+                py_rule = os.path.join(global_rules, "languages", "python.md")
+                os.makedirs(os.path.dirname(py_rule), exist_ok=True)
+                textio.write_text(py_rule, "# Python Standards\nCanonical\n")
+
+                textio.write_text(os.path.join(repo, "requirements.txt"), "pytest\n")
+
+                orig_get_global = rules.get_global_rules_dir
+                try:
+                    rules.get_global_rules_dir = lambda: global_rules
+
+                    # Attach first time
+                    rules.attach_rules(repo)
+                    local_py = os.path.join(repo, ".along", "rules", "languages", "python.md")
+                    
+                    # Modify locally
+                    textio.write_text(local_py, "# Python Standards\nLocal Mod\n")
+
+                    # Strategy 1: preserve (default)
+                    rules.attach_rules(repo, on_conflict="preserve")
+                    self.assertIn("Local Mod", textio.read_text(local_py))
+
+                    # Strategy 2: diff
+                    rules.attach_rules(repo, on_conflict="diff")
+                    self.assertIn("Local Mod", textio.read_text(local_py))
+
+                    # Strategy 3: overwrite
+                    rules.attach_rules(repo, on_conflict="overwrite")
+                    after_text = textio.read_text(local_py)
+                    self.assertIn("Canonical", after_text)
+                    self.assertNotIn("Local Mod", after_text)
+                    
+                    # Verify backup created
+                    backup_dir = os.path.join(repo, ".along", ".migration-backup")
+                    self.assertTrue(os.path.isdir(backup_dir))
+                finally:
+                    rules.get_global_rules_dir = orig_get_global
+
 
 if __name__ == "__main__":
     unittest.main()

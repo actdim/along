@@ -1,6 +1,6 @@
 {
-  "last_edit_time": "2026-09-29T09:03:23.196760+00:00",
-  "last_test_time": "2026-09-29T08:59:11.652941+00:00",
+  "last_edit_time": "2026-10-01T09:38:56.568811+00:00",
+  "last_test_time": "2026-10-01T09:42:03.748386+00:00",
   "edited_files": [
     "d:\\Src\\my\\actdim\\public\\along\\scripts\\alongkit\\install.py",
     "d:\\Src\\my\\actdim\\public\\along\\scripts\\alongkit\\hooks\\predicates.py",
@@ -481,6 +481,14 @@
     "d:\\Src\\my\\actdim\\public\\along\\.along\\MILESTONES\\v4.3.0-developer-experience-and-runtime-resilience.md",
     "d:\\Src\\my\\actdim\\public\\along\\.along\\ISSUES\\docs--anti-pattern-shell-code-probing.md",
     "d:\\Src\\my\\actdim\\public\\along\\.along\\ISSUES\\feat--bootstrap-resilience-and-subcommand-proxying.md",
-    "d:\\Src\\my\\actdim\\public\\along\\.along\\ISSUES\\feat--dev-environment-setup-and-editable-install.md"
+    "d:\\Src\\my\\actdim\\public\\along\\.along\\ISSUES\\feat--dev-environment-setup-and-editable-install.md",
+    "d:\\Src\\my\\actdim\\public\\along\\.along\\.session\\rule-packs-local-extensions\\research.md",
+    "C:\\Users\\Admin\\.gemini\\antigravity\\brain\\639b0338-4079-4d29-877e-1767931fa698\\implementation_plan.md",
+    "d:\\Src\\my\\actdim\\public\\along\\.along\\.session\\rule-packs-local-extensions\\plan.md",
+    "d:\\Src\\my\\actdim\\public\\along\\.along\\ISSUES\\feat--rule-packs-local-extensions.md",
+    "d:\\Src\\my\\actdim\\public\\along\\scripts\\alongkit\\rules.py",
+    "d:\\Src\\my\\actdim\\public\\along\\tests\\test_rules.py",
+    "C:\\Users\\Admin\\.gemini\\antigravity\\brain\\639b0338-4079-4d29-877e-1767931fa698\\walkthrough.md",
+    "d:\\Src\\my\\actdim\\public\\along\\.along\\SESSIONS\\2026\\2026-10-01--rule-packs-local-extensions.md"
   ]
 }

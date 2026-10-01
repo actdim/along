@@ -3,7 +3,8 @@ protocol: along
 protocol_version: "4.2.0"
 slug: git-level-gate-enforcement
 type: feat
-status: open
+status: done
+completed: 2026-09-29
 priority: high
 created: 2026-09-27
 updated: 2026-09-29
@@ -32,6 +33,6 @@ All mechanical gates run only inside agent runtimes that load Along's PreToolUse
 
 ## Acceptance Criteria
 
-- [ ] A commit with banned typography or without an issue slug is blocked by the git hook regardless of which agent made it
-- [ ] CI job fails on the same violations
-- [ ] Automated tests passing
+- [x] A commit with banned typography or without an issue slug is blocked by the git hook regardless of which agent made it
+- [x] CI job fails on the same violations
+- [x] Automated tests passing

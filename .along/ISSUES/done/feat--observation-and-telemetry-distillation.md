@@ -3,7 +3,8 @@ protocol: along
 protocol_version: "4.1.0"
 slug: observation-and-telemetry-distillation
 type: feat
-status: open
+status: done
+completed: 2026-09-29
 priority: high
 created: 2026-09-27
 updated: 2026-09-29
@@ -48,7 +49,7 @@ When raw terminal output is injected directly into an agent's context:
 
 ## Acceptance Criteria
 
-- [ ] `alongkit.proc.run_capture` supports distilled execution mode with configurable token ceilings.
-- [ ] `along test` and `along build` filter out background telemetry and isolate failing lines.
-- [ ] Hermetic tests verify that noisy mock command outputs are reduced by at least 70% in token volume.
-- [ ] Clean ASCII formatting with zero forbidden typography characters.
+- [x] `alongkit.proc.run_capture` supports distilled execution mode with configurable token ceilings.
+- [x] `along test` and `along build` filter out background telemetry and isolate failing lines.
+- [x] Hermetic tests verify that noisy mock command outputs are reduced by at least 70% in token volume.
+- [x] Clean ASCII formatting with zero forbidden typography characters.

@@ -9,6 +9,7 @@ tags: [hooks, gates, runtime, enforcement, antigravity, claude, codex, typograph
 sources:
   - path: scripts/alongkit/attribution.py
   - path: scripts/alongkit/circuit.py
+  - path: scripts/alongkit/repochecks.py
   - path: scripts/alongkit/hooks/engine.py
   - path: scripts/along_hook.py
   - path: scripts/alongkit/hooks/adapters/claude.py
@@ -23,7 +24,7 @@ Passive prose instructions in `AGENTS.md` and `skills/*/SKILL.md` decay as agent
 
 The Along Runtime Hook and Gate System establishes deterministic, programmatic interception at the agent harness boundary. Rather than relying on fragile in-process monkey-patching or invasive Git-level hooks (`.git/hooks/*`), Along hooks directly into host agent runtime lifecycle events (`PreToolUse`, `PostToolUse`, `Stop`) supported natively by Google Antigravity, Claude Code, and OpenAI Codex.
 
-```
+```text
 +-------------------------------------------------------------------------+
 |                         Agent Runtime Harness                           |
 |       Google Antigravity (.agents/hooks.json)                           |
@@ -84,7 +85,7 @@ The Along Runtime Hook and Gate System establishes deterministic, programmatic i
    - Scans command strings for forbidden patterns: heredocs (`<<EOF`), inline Python file writers (`python -c "open('...', 'w')"`), destructive unstaged Git wipes (`git reset --hard`, `git clean -f`), and unauthorized global package managers (`npm install -g`).
 
 ### 2.3 Declarative Extension & Traceability Matrix
-Beyond hardcoded Python gates, Along provides an extensible, declarative YAML gate catalogue (`default_gates.yaml` and `.along/rules/gates.yaml`) enforcing 15 canonical gates (including `require_plan_approval` for inquiry read-only locks, `circuit_breaker`, and `worktree_env_readiness`), verified bi-directionally against prose badges (`[gate: <id>]`) via `along hook verify`.
+Beyond hardcoded Python gates, Along provides an extensible, declarative YAML gate catalogue (`default_gates.yaml` and `.along/rules/gates.yaml`) enforcing 24 canonical gates, 7 of them git/CI-only repository-state checks (including `require_plan_approval` for inquiry read-only locks, `circuit_breaker`, `worktree_env_readiness`, and `workspace_containment`, which keeps file, search and shell-cwd paths inside the workspace; see [Declarative Gates](./topic--declarative-gates-and-traceability.md)), verified bi-directionally against prose badges (`[gate: <id>]`) via `along hook verify`.
 For full specification and architecture, see [Declarative Gate Engine & Traceability Matrix](./topic--declarative-gates-and-traceability.md).
 
 
@@ -137,7 +138,7 @@ Codex and Antigravity document no attribution key; for them the gate and `/along
 
 When an agent emits a tool call, the execution loop flows through the hook harness:
 
-```
+```text
 [Agent Emits Tool Call]
           |
           v
@@ -176,9 +177,11 @@ When an agent emits a tool call, the execution loop flows through the hook harne
 
 ## 4. Invariants & Failure Modes
 
-1. **Zero Git Hooks Invariant**:
-   - Along strictly forbids `.git/hooks/*` and custom Git merge drivers.
-   - All protocol enforcement occurs strictly in the agent runtime harness layer (`PreToolUse`, `Stop`). Standard Git commands executed by developers remain untouched.
+1. **No Git Hooks by Default Invariant** (supersedes "Zero Git Hooks", see ADR `opt-in-git-hooks-supersede-zero-git-hooks`):
+   - Nothing Along installs by default (`along-init`, `along update`, `install.*`) writes `.git/hooks/*`. Standard Git commands stay untouched until the user opts in.
+   - Opt-in: `along hooks install --git` writes `pre-commit` and `commit-msg` shims that run `along gates check --hook <name>`. A foreign hook already in place is moved to `<hook>.pre-along` and run first; with `core.hooksPath` (husky, lefthook) nothing is written and the command to add to the manager is printed. `--uninstall` removes the shims and restores the previous hooks. The checks are read-only.
+   - Merge drivers (`along git setup`) are per-clone `.git/config` entries, not hooks. See ADR `projection-merge-driver-defers-recompile`.
+   - Runtime gates (`PreToolUse`, `Stop`) remain the primary layer, but they exist only where the host runtime loads Along's hooks. The portable baseline is the CI job `along gates check --ci`, plus the opt-in git hooks. Each gate declares its layers in `enforcement: [runtime, git, ci]`; `along hook verify` prints the matrix.
 2. **Deterministic Rejection over Silent Overwrites**:
    - In `enforce` mode, gate violations result in an immediate `deny` decision with actionable remediation text. Silent auto-replacement is avoided so LLMs receive explicit negative feedback and learn rule adherence.
 3. **Dual-Mode Governance (Shadow vs Enforce)**:
@@ -196,6 +199,52 @@ When an agent emits a tool call, the execution loop flows through the hook harne
    - Consumer repositories and all nested subprojects are recursively purged of legacy local hooks during `along update`.
    - Out-of-band execution via `along update` in an external OS terminal serves as the canonical disaster recovery path if runtime hooks are ever damaged.
 
+## 4a. Protocol Rule Enforcement Audit
+
+Every rule of the managed `AGENTS.md` block, classified: **a** enforced by a gate or test, **b** mechanically checkable but not yet enforced, **c** judgment-only. Layers come from the catalogue `enforcement` field (`along hook verify` prints the full matrix). Class-a rules are one line in `AGENTS.md` with a gate tag; the gate's error message carries the detail.
+
+| Rule | Class | Enforced by | Layer |
+| :--- | :--- | :--- | :--- |
+| Nearest context boundary, precedence, session-start reading | c | - | - |
+| Subproject localization | a | `subproject_boundary` | runtime |
+| Uninitialized subprojects need `/along-init` | c | - | - |
+| Zero-manual-merge of projections | a | `projection_protection`, merge drivers (`along git setup`) | runtime, git, ci |
+| Append-only `HISTORY.md` merge | a | `along git setup` writes `merge=union` | git |
+| Untracked exports | a | `untracked_exports` | git, ci |
+| Context isolation | c | - | - |
+| No code without issue | a | `require_active_issue` | runtime |
+| Commit binding | a | `commit_issue_binding` | runtime, git, ci |
+| No AI co-authors | a | `commit_no_ai_coauthor` | runtime, git, ci |
+| Canonical keys, reference by key (front-matter reference fields) | a | `entity_reference_integrity` (a path or unknown key is dangling) | runtime, git, ci |
+| Never delete a referenced entity; rename / supersede | a | `entity_reference_integrity`, `along issue rename` / `supersede` | runtime, git, ci |
+| ADRs never edited, only superseded | c | - | - |
+| Issue lifecycle (`done/` placement) | a | `issue_lifecycle` | git, ci |
+| Auto-entity creation | c | - | - |
+| Stable entry point | a | `stable_entry_point` (also `along kb-sync --check`) | git, ci |
+| Portable links | a | `portable_links` (also `along kb-sync --check`) | git, ci |
+| Fact grounding, doc blast radius, routing tree | c | - | - |
+| Fast retrieval | a | `fast_retrieval` | runtime |
+| Manual document lock | a | `doc_manual_lock` | runtime, git, ci |
+| Lifecycle hooks first, token hygiene, post-change review | c | - | - |
+| Checklist: tests | a | `test_before_stop` | runtime |
+| Checklist: session log | a | `wrap_before_stop` | runtime |
+| Checklist: projections | a | `projection_sync_before_stop`, projection freshness in `along gates check` | runtime, git, ci |
+| Checklist: file integrity, review, reconciliation, HISTORY, compaction | c | - | - |
+| Environment isolation (no global installs) | a | `cli_safety` | runtime |
+| Workspace containment | a | `workspace_containment` | runtime |
+| Anti-deletion, anchored edits | c | - | - |
+| No stubs or skeletons | a | `anti_stub_injection` | runtime, git, ci |
+| Clean ASCII (incl. BOM) | a | `typography`, `along sanitize` | runtime, git, ci |
+| Code fence languages | a | `code_fence_language` | git, ci |
+| File content via tools only | a | `cli_safety` | runtime |
+| Verify written files | c | - | - |
+| Hermetic tests | a | `tests/test_zz_hermetic_suite.py` (this repo) | ci |
+| Inquiry read-only | a | `require_plan_approval` | runtime |
+| Complexity escalation to `along-team` | c | - | - |
+| Windows-safe filenames | a | `windows_safe_filenames` | git, ci |
+| `ISSUES.md` compact | a | `along context-budget --check`, `tests/test_context_budget.py` | ci |
+| No secrets in tracked files | a | `no_tracked_secrets` | git, ci |
+
 ## 5. Runtime Capability Matrix
 
 Gates are mechanical only where the runtime loads Along's `PreToolUse`/`Stop` hooks. Everywhere else the protocol in `AGENTS.md` is advisory: the agent must self-apply every gate-tagged rule and route tests, commits, entity changes, and wrap through the `along` CLI. `along doctor` prints the level for the runtime it runs in (`alongkit.runtime`).
@@ -207,6 +256,8 @@ Gates are mechanical only where the runtime loads Along's `PreToolUse`/`Stop` ho
 | OpenAI Codex | auto (`~/.codex`) | yes (`~/.codex/hooks.json`) | mechanical once installed |
 | Claude Cowork | not loaded (Cowork reads plugins from the claude.ai account, not `~/.claude`) | no (Cowork ignores `settings.json`; plugin hooks are tracked in `feat--cowork-plugin-skill-packaging`) | advisory |
 | OpenCode, Cursor, plain shell, human | rules only | no | advisory |
+
+Advisory runtimes are still covered at commit time by the portable layer: `along hooks install --git` (opt-in, local) and the CI job `along gates check --ci` enforce the gates whose catalogue entry lists `git` / `ci` (typography, conflict markers, anti-stub on added lines, issue binding, AI co-author trailers, projection freshness), regardless of which agent or human made the commit.
 
 Runtime detection (`entities.detect_agent`) honours `--agent` and `ALONG_AGENT` first; Claude Cowork is recognised by `ALONG_RUNTIME=cowork`, or by `CLAUDE_CODE_HOST_HTTP_PROXY_PORT` together with a `/sessions/` home (markers observed 2026-09-27, heuristic).
 

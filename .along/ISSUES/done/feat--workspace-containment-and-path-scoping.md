@@ -3,7 +3,8 @@ protocol: along
 protocol_version: "3.9.0"
 slug: workspace-containment-and-path-scoping
 type: feat
-status: open
+status: done
+completed: 2026-09-29
 priority: high
 created: 2026-09-21
 updated: 2026-09-29
@@ -79,10 +80,10 @@ Support explicit declaration of multiple allowed roots:
 - **Autonomous / YOLO Mode**: Return `GateDecision.DENY` immediately to prevent runaway path traversal.
 
 ## Acceptance Criteria
-- [ ] Gate `workspace_containment` defined in `default_gates.yaml` and verified by `along hook verify`.
-- [ ] Canonical path resolution (`os.path.realpath`) eliminates `..` traversal and symlink bypasses.
-- [ ] Built-in whitelist allows brain artifacts, temp dir, and global skills without manual configuration.
-- [ ] Multi-root lists in `.along/rules/gates.yaml` and issue frontmatter correctly expand allowed read/write scopes.
-- [ ] Write attempts outside workspace root (and outside brain/temp) are strictly blocked.
-- [ ] Read attempts outside declared roots trigger `deny` in autonomous mode.
-- [ ] Comprehensive hermetic unit tests in `tests/test_workspace_containment.py` pass cleanly.
+- [x] Gate `workspace_containment` defined in `default_gates.yaml` and verified by `along hook verify`.
+- [x] Canonical path resolution (`os.path.realpath`) eliminates `..` traversal and symlink bypasses.
+- [x] Built-in whitelist allows brain artifacts, temp dir, and global skills without manual configuration.
+- [x] Multi-root lists in `.along/rules/gates.yaml` and issue frontmatter correctly expand allowed read/write scopes.
+- [x] Write attempts outside workspace root (and outside brain/temp) are strictly blocked.
+- [x] Read attempts outside declared roots trigger `deny` in autonomous mode.
+- [x] Comprehensive hermetic unit tests in `tests/test_workspace_containment.py` pass cleanly.

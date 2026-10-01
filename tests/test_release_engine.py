@@ -171,6 +171,16 @@ class ReleaseEngineFixtureCase(unittest.TestCase):
         textio.write_text(self.decoy, DECOY_MILESTONE.format(version=version))
         textio.write_text(self.neighbour, NEIGHBOUR_MILESTONE.format(version=version))
 
+        # The target milestone lists the fixture issue; a release refuses to complete a
+        # milestone with open issues ([feat--entity-reference-integrity-gate] REQ-8), so
+        # the fixture issue is closed here.
+        issues = os.path.join(self.root, ".along", "ISSUES")
+        sample = os.path.join(issues, "task--fixture-sample-task.md")
+        closed = textio.read_text(sample).replace(
+            "status: open\n", "status: done\ncompleted: 2026-09-02\n", 1)
+        textio.write_text(os.path.join(issues, "done", "task--fixture-sample-task.md"), closed)
+        os.remove(sample)
+
         self.install_test_hook(0)
 
     def tearDown(self):

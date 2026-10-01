@@ -1,7 +1,7 @@
 # Active Issues
 
 ## Active
-- [ ] `(feat)` [git-merge-drivers-and-setup](ISSUES/feat--git-merge-drivers-and-setup.md)
+<!-- No active issues -->
 
 ## Backlog
 - [ ] `(bug)` [worktree-cross-os-mount-guard](ISSUES/bug--worktree-cross-os-mount-guard.md)
@@ -9,7 +9,6 @@
 - [ ] `(debt)` [along-core-extras-split](ISSUES/debt--along-core-extras-split.md)
 - [ ] `(debt)` [along-exec-argparse-migration](ISSUES/debt--along-exec-argparse-migration.md)
 - [ ] `(debt)` [constraints-superseded-adr-filtering](ISSUES/debt--constraints-superseded-adr-filtering.md)
-- [ ] `(debt)` [prose-rules-to-deterministic-checks](ISSUES/debt--prose-rules-to-deterministic-checks.md)
 - [ ] `(docs)` [anti-pattern-shell-code-probing](ISSUES/docs--anti-pattern-shell-code-probing.md)
 - [ ] `(docs)` [arxiv-academic-paper-preprint](ISSUES/docs--arxiv-academic-paper-preprint.md)
 - [ ] `(docs)` [engineering-deepdive-medium-devto](ISSUES/docs--engineering-deepdive-medium-devto.md)
@@ -23,6 +22,7 @@
 - [ ] `(feat)` [agent-interactive-stdin-bridge](ISSUES/feat--agent-interactive-stdin-bridge.md)
 - [ ] `(feat)` [agent-run-protocol-and-observability](ISSUES/feat--agent-run-protocol-and-observability.md)
 - [ ] `(feat)` [agent-runtime-adapters-claude-codex-opencode](ISSUES/feat--agent-runtime-adapters-claude-codex-opencode.md)
+- [ ] `(feat)` [along-plan-strategies](ISSUES/feat--along-plan-strategies.md)
 - [ ] `(feat)` [automated-ui-screenshots-and-visual-verification](ISSUES/feat--automated-ui-screenshots-and-visual-verification.md)
 - [ ] `(feat)` [bootstrap-resilience-and-subcommand-proxying](ISSUES/feat--bootstrap-resilience-and-subcommand-proxying.md)
 - [ ] `(feat)` [bounded-prompt-footprint-gate](ISSUES/feat--bounded-prompt-footprint-gate.md)
@@ -39,33 +39,30 @@
 - [ ] `(feat)` [empirical-benchmark-harness-and-metrics](ISSUES/feat--empirical-benchmark-harness-and-metrics.md)
 - [ ] `(feat)` [enterprise-governance-and-cloud-infrastructure](ISSUES/feat--enterprise-governance-and-cloud-infrastructure.md)
 - [ ] `(feat)` [enterprise-governance-and-compliance-pack](ISSUES/feat--enterprise-governance-and-compliance-pack.md)
-- [ ] `(feat)` [entity-reference-integrity-gate](ISSUES/feat--entity-reference-integrity-gate.md)
 - [ ] `(feat)` [external-issue-trackers-sync-and-import](ISSUES/feat--external-issue-trackers-sync-and-import.md)
 - [ ] `(feat)` [gate-strictness-profiles](ISSUES/feat--gate-strictness-profiles.md)
-- [ ] `(feat)` [git-level-gate-enforcement](ISSUES/feat--git-level-gate-enforcement.md)
 - [ ] `(feat)` [golang-ecosystem-support](ISSUES/feat--golang-ecosystem-support.md)
 - [ ] `(feat)` [jvm-ecosystem-support](ISSUES/feat--jvm-ecosystem-support.md)
 - [ ] `(feat)` [kb-search-archive-scope-default](ISSUES/feat--kb-search-archive-scope-default.md)
 - [ ] `(feat)` [multi-runtime-and-omnichannel-expansion](ISSUES/feat--multi-runtime-and-omnichannel-expansion.md)
 - [ ] `(feat)` [native-ast-blast-radius-analyzer](ISSUES/feat--native-ast-blast-radius-analyzer.md)
-- [ ] `(feat)` [observation-and-telemetry-distillation](ISSUES/feat--observation-and-telemetry-distillation.md)
 - [ ] `(feat)` [openclaw-and-hermes-agent-integration](ISSUES/feat--openclaw-and-hermes-agent-integration.md)
 - [ ] `(feat)` [operational-assets-and-playbooks](ISSUES/feat--operational-assets-and-playbooks.md)
 - [ ] `(feat)` [per-model-rework-metrics](ISSUES/feat--per-model-rework-metrics.md)
 - [ ] `(feat)` [pi-harness-support](ISSUES/feat--pi-harness-support.md)
+- [ ] `(feat)` [planning-fields-and-ordering-gates](ISSUES/feat--planning-fields-and-ordering-gates.md)
 - [ ] `(feat)` [progressive-disclosure-and-context-scaling](ISSUES/feat--progressive-disclosure-and-context-scaling.md)
 - [ ] `(feat)` [secret-scrubbing-in-hooks-and-diagnostics](ISSUES/feat--secret-scrubbing-in-hooks-and-diagnostics.md)
 - [ ] `(feat)` [structured-blackboard-state-machine](ISSUES/feat--structured-blackboard-state-machine.md)
 - [ ] `(feat)` [system-invariants-and-health-probes](ISSUES/feat--system-invariants-and-health-probes.md)
 - [ ] `(feat)` [test-gated-code-merge-pipeline](ISSUES/feat--test-gated-code-merge-pipeline.md)
 - [ ] `(feat)` [vps-runner-daemon](ISSUES/feat--vps-runner-daemon.md)
-- [ ] `(feat)` [workspace-containment-and-path-scoping](ISSUES/feat--workspace-containment-and-path-scoping.md)
 - [ ] `(feat)` [zero-step-state-recovery-and-drift-detection](ISSUES/feat--zero-step-state-recovery-and-drift-detection.md)
 
 ## Done (recent)
+- [x] `(feat)` [rule-packs-local-extensions](ISSUES/done/feat--rule-packs-local-extensions.md)
+- [x] `(feat)` [entity-reference-integrity-gate](ISSUES/done/feat--entity-reference-integrity-gate.md)
+- [x] `(debt)` [prose-rules-to-deterministic-checks](ISSUES/done/debt--prose-rules-to-deterministic-checks.md)
+- [x] `(bug)` [cli-help-missing-subcommands](ISSUES/done/bug--cli-help-missing-subcommands.md)
 - [x] `(task)` [roadmap-shift-after-v440-release](ISSUES/done/task--roadmap-shift-after-v440-release.md)
-- [x] `(task)` [ci-test-matrix-workflow](ISSUES/done/task--ci-test-matrix-workflow.md)
-- [x] `(feat)` [suppress-ai-coauthor-attribution](ISSUES/done/feat--suppress-ai-coauthor-attribution.md)
-- [x] `(bug)` [shell-classifier-residual-bypasses](ISSUES/done/bug--shell-classifier-residual-bypasses.md)
-- [x] `(feat)` [subproject-scoped-dependencies](ISSUES/done/feat--subproject-scoped-dependencies.md)
-<!-- 144 older completed issue(s) archived in .along/ISSUES/done/ -->
+<!-- 152 older completed issue(s) archived in .along/ISSUES/done/ -->

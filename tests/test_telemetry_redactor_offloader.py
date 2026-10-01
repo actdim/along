@@ -60,19 +60,19 @@ class TestRedactorTokensAndKeys(unittest.TestCase):
         key1 = "sk-ant-123456789012345678901234"
         self.assertEqual(self.redactor.sanitize_text(f"KEY={key1}"), "KEY=sk-ant-[REDACTED]")
 
-        key2 = "sk-ant-api03-123456789012345678901234567890"
+        key2 = "sk-ant-api03-123456789012345678901234567890"  # along: allow-no-tracked-secrets
         self.assertEqual(self.redactor.sanitize_text(f"Key: {key2}"), "Key: sk-ant-[REDACTED]")
 
     def test_anthropic_key_not_clobbered_by_openai_pattern(self) -> None:
-        text = "Anthropic key is sk-ant-api03-abcdefghijklmnopqrstuvwxyz1234"
+        text = "Anthropic key is sk-ant-api03-abcdefghijklmnopqrstuvwxyz1234"  # along: allow-no-tracked-secrets
         sanitized = self.redactor.sanitize_text(text)
         self.assertIn("sk-ant-[REDACTED]", sanitized)
         self.assertNotIn("sk-[REDACTED]", sanitized.replace("sk-ant-[REDACTED]", ""))
 
     def test_aws_access_key_redaction(self) -> None:
         keys = [
-            ("AKIAIOSFODNN7EXAMPLE", "[REDACTED_AWS_KEY]"),
-            ("ASIAIOSFODNN7EXAMPLE", "[REDACTED_AWS_KEY]"),
+            ("AKIAIOSFODNN7EXAMPLE", "[REDACTED_AWS_KEY]"),  # along: allow-no-tracked-secrets
+            ("ASIAIOSFODNN7EXAMPLE", "[REDACTED_AWS_KEY]"),  # along: allow-no-tracked-secrets
         ]
         for key, expected in keys:
             with self.subTest(key=key):
@@ -81,11 +81,11 @@ class TestRedactorTokensAndKeys(unittest.TestCase):
 
     def test_private_key_redaction(self) -> None:
         private_keys = [
-            "-----BEGIN RSA PRIVATE KEY-----\nMIIEowIBAAKCAQEA0m...\n-----END RSA PRIVATE KEY-----",
-            "-----BEGIN EC PRIVATE KEY-----\nMHcCAQEEI...\n-----END EC PRIVATE KEY-----",
-            "-----BEGIN OPENSSH PRIVATE KEY-----\nb3BlbnNzaC1rZXktdjEAAAAA...\n-----END OPENSSH PRIVATE KEY-----",
-            "-----BEGIN DSA PRIVATE KEY-----\nMIIBvAIBAAKCAQEA...\n-----END DSA PRIVATE KEY-----",
-            "-----BEGIN PRIVATE KEY-----\nMIIEvgIBADANBgkqhkiG9w0BAQEFAASCBKgwggSkAgEAAoIBAQC7...\n-----END PRIVATE KEY-----",
+            "-----BEGIN RSA PRIVATE KEY-----\nMIIEowIBAAKCAQEA0m...\n-----END RSA PRIVATE KEY-----",  # along: allow-no-tracked-secrets
+            "-----BEGIN EC PRIVATE KEY-----\nMHcCAQEEI...\n-----END EC PRIVATE KEY-----",  # along: allow-no-tracked-secrets
+            "-----BEGIN OPENSSH PRIVATE KEY-----\nb3BlbnNzaC1rZXktdjEAAAAA...\n-----END OPENSSH PRIVATE KEY-----",  # along: allow-no-tracked-secrets
+            "-----BEGIN DSA PRIVATE KEY-----\nMIIBvAIBAAKCAQEA...\n-----END DSA PRIVATE KEY-----",  # along: allow-no-tracked-secrets
+            "-----BEGIN PRIVATE KEY-----\nMIIEvgIBADANBgkqhkiG9w0BAQEFAASCBKgwggSkAgEAAoIBAQC7...\n-----END PRIVATE KEY-----",  # along: allow-no-tracked-secrets
         ]
         for pk in private_keys:
             with self.subTest(pk=pk[:30]):
@@ -181,7 +181,7 @@ class TestRedactorDictAndValue(unittest.TestCase):
             },
             "tokens": [
                 "sk-proj-123456789012345678901234",
-                "AKIAIOSFODNN7EXAMPLE",
+                "AKIAIOSFODNN7EXAMPLE",  # along: allow-no-tracked-secrets
                 "normal_string",
             ],
         }

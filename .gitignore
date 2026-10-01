@@ -47,4 +47,7 @@ site/
 .along/worktrees/
 .along/.pending_worktrees.json
 
+# Raw command output offloaded by telemetry and distilled lifecycle runs
+.along/artifacts/
+
 
