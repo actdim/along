@@ -59,7 +59,7 @@ All roles map to abstract orchestration primitives rather than provider-specific
 
 ## Single-Agent Degradation Path (Ralph-Style Execution)
 
-When subagent spawning is unavailable (OpenAI Codex, OpenCode) or disabled/throttled (Google Antigravity, Claude Code), the state machine executes in **Single-Agent Sequential Mode** (Ralph Loop pattern):
+When subagent spawning is unavailable (OpenAI Codex, OpenCode) or disabled/throttled (Google Antigravity, Claude Code), the state machine executes in **Single-Agent Sequential Mode** (Ralph Loop pattern). The blackboard stays `role-based` and the step gates still apply. Dropping the loop entirely (no steps, no reviews) is allowed only with a recorded reason: `along scratch fallback <slug> --reason "..."` (written to `execution_trace.md`):
 
 1. **Deterministic Phase Boundaries**: The single agent explicitly announces each phase in output:
    - `=== PHASE 0: SUPERVISOR (REQUIREMENT EXTRACTION) ===`
@@ -186,7 +186,7 @@ TASK / GOAL
 ## Mandatory Execution Protocol (Step-by-Step)
 
 ### Phase 0: Analyze & Requirement Extraction (Supervisor)
-1. Initialize or resume blackboard: run `along scratch init <slug> [--title <title>] [--steps <N>]`. Inspect status with `along scratch state <slug>`. If `.along/.session/<slug>/state.json` already exists and `--restart` is not passed, resume from `current_step` with recorded step status and retry counters intact.
+1. Bind and initialize: `along start <slug>` (binds this agent session to the issue; parallel sessions keep their own bindings), then `along scratch init <slug> [--title <title>] [--steps <N>]`, which makes the blackboard `role-based`. Inspect status with `along scratch state <slug>` and `along plan status`. If `.along/.session/<slug>/state.json` already exists and `--restart` is not passed, resume from `current_step` with recorded step status and retry counters intact.
 2. Read target `.along/ISSUES/<type>--<slug>.md` (or user prompt) and `.along/DECISIONS.md`.
 3. Construct an explicit **Requirement Traceability Matrix** decomposing the user request into atomic requirements (`REQ-1`, `REQ-2`, `REQ-3`).
 4. Classify task size (`S`, `M`, or `L/XL`). Announce routing decision and requirement matrix.
@@ -207,11 +207,12 @@ TASK / GOAL
 4. **Dual-Track UI & Artifact Projection**:
    - **Track 1 (Host IDE UI Projection)**: When running under Google Antigravity, project the Living Plan to `<appDataDir>/brain/<id>/implementation_plan.md` with `ArtifactMetadata` (`RequestFeedback: true`, `UserFacing: true`). This triggers Antigravity's native interactive design doc card with user checkboxes and the "Proceed" button.
    - **Track 2 (Permanent Along Memory)**: In all environments (Antigravity, Claude Code, OpenAI Codex, OpenCode), write the plan to disk at `.along/.session/<slug>/plan.md` (and `living_plan.md`) and present in chat for confirmation.
+5. **Plan Approval Gate** [gate: require-plan-approval]: source edits stay blocked until the user approves the plan. In Claude Code present it through plan mode (`ExitPlanMode`); the user's acceptance is recorded for this session automatically. Elsewhere, run `along plan approve <slug>` only after the user's explicit yes in chat. Never approve on your own judgment.
 
 ### Phase 3 to 5: Step Loop (Step N)
 For each step in the Living Plan:
-1. **Implement**: Mark step active: `along scratch update <slug> --step <N> --step-status in-progress`. Invoke `spawn_worker` (or execute inline Phase 3) with step instructions and relevant context.
-2. **Review**: Invoke `spawn_reviewer` (or execute inline Phase 4) to run tests, audit diff, and execute `/along-graph-impact` across all modified files to confirm zero unexpected blast radius. Save rubric verdict into `.along/.session/<slug>/reviews/step-<N>.md`. Output Gate Execution Manifest.
+1. **Implement**: Mark step active: `along scratch update <slug> --step <N> --step-status in-progress`. [gate: team-step-active] denies source edits while no step is in progress. Invoke `spawn_worker` (or execute inline Phase 3) with step instructions and relevant context.
+2. **Review**: Invoke `spawn_reviewer` (or execute inline Phase 4) to run tests, audit diff, and execute `/along-graph-impact` across all modified files to confirm zero unexpected blast radius. Save rubric verdict into `.along/.session/<slug>/reviews/step-<N>.md` before marking the step passed; [gate: team-reviews-before-stop] blocks the turn end while a passed step has no review file. Output Gate Execution Manifest.
 3. **Reassess & Loop Disambiguation**: Supervisor inspects reviewer verdict:
    - If `PASS`: mark passed (`along scratch update <slug> --step <N> --step-status passed`) and advance to Step N+1.
    - If `FAIL` on localized defects (broken tests, syntax errors, lint, null pointer):
@@ -241,7 +242,7 @@ When running in autonomous `/goal` mode:
      1. `## Initial Implementation Plan (Baseline)`
      2. `## Execution & Loop Trace (Fixes & Re-plans)`
      3. `## Verification Walkthrough & Gate Manifest`
-   - Clean up session blackboard via `along scratch purge <slug>` upon successful wrap-up. (On failure, retain blackboard for diagnosis).
+   - Run `along wrap <slug> --decisions <ADR...> | --no-decisions -m "..."`: it writes the blackboard record (plan, step table, trace, reviews) into the session log and then purges the blackboard and this session's binding. It refuses while steps are open or reviews are missing (`--force-reason "..."` records why). A manual `along scratch purge <slug>` follows the same rule (`--force --reason "..."`) and loses the record, so prefer `along wrap`. On failure, the blackboard is retained for diagnosis.
 4. Present a single concise completion summary.
 
 ---

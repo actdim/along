@@ -144,8 +144,9 @@ Manages atomic issue files in `.along/ISSUES/` and recompiles the active board p
   ```
 
 ### `along start`
-Atomically marks an issue as `in-progress`, updates `updated: YYYY-MM-DD`, recompiles the active board projection (`.along/ISSUES.md`), initializes the session blackboard (`.along/.session/<slug>/`), marks the living plan as approved (`phase: execution`, `plan_approved: true`), and binds the active issue for agent execution.
+Atomically marks an issue as `in-progress`, updates `updated: YYYY-MM-DD`, recompiles the active board projection (`.along/ISSUES.md`), initializes the session blackboard (`.along/.session/<slug>/`) and binds this agent session to the issue (`.along/.session/bindings/<runtime>--<session_id>.json`). The plan is not approved by starting: the blackboard is in `phase: planning` until the user approves (Claude Code `ExitPlanMode`, or `along plan approve` after an explicit yes). An approval recorded earlier in the same session carries over.
 - **Options**:
+  - `--approved`: Mark the plan approved at once (scripted and runner use only).
   - `--worktree`: Enforces git worktree workspace isolation. Verifies environment readiness, provisions an isolated worktree at `.along/worktrees/<slug>` on branch `along/<slug>`, links heavy dependencies (`node_modules`, `.venv`) via NTFS junctions on Windows or symlinks on POSIX, copies untracked configuration (`.env*`), and points agent execution to the worktree path.
   - `--allow-root <path>` (repeatable): Adds `path` to the issue's `allowed_roots` frontmatter: extra read-only roots for `[gate: workspace-containment]` (for example a sibling contracts repository).
   - `--write-scope <path>` (repeatable): Adds `path` to the issue's `write_scope` frontmatter: once set, workspace writes are limited to these subfolders plus `.along/`.
@@ -180,12 +181,26 @@ Manages session logs in `.along/SESSIONS/` and records engineering provenance.
   - `along session create <slug> --summary "Summary" [options...]`: Initializes a new session log.
     - Options: `--issues "slug1,slug2"`, `--decisions "ADR-slug"`, `--agent <name>`, `--milestone <name>`, `--commit <sha>`.
     - Front-matter is emitted through `ruamel.yaml`; `branch` and `commit` come from git (omitted outside a repository), and the body records test evidence only when the runtime hooks recorded a run.
-  - `along session wrap <slug> [options...]`: Finalizes a session, updates linked issue states, and recompiles projections.
-    - Options: `--status {done,superseded}`, `--summary "Summary"`, `--dry-run`, `-n`.
+  - `along session wrap <slug> [options...]`: Same as `along wrap` (see below), including the required `--decisions` / `--no-decisions` answer.
+    - Options: `--status {done,superseded,cancelled,duplicate}`, `--summary "Summary"`, `--decisions "ADR-a,ADR-b"` or `--no-decisions`, `--force-reason "..."`, `--dry-run`, `-n`.
+  - `along session bindings`: Lists agent-session bindings (session key, issue, approval, last update).
+  - `along session gc [--dry-run]`: Removes bindings older than 72 hours or pointing at a purged blackboard.
 - **Usage**:
   ```bash
   along session create token-refresh --summary "Implementing OAuth token refresh logic"
-  along session wrap token-refresh --status done --summary "Completed implementation and hermetic tests"
+  along session wrap token-refresh --status done --no-decisions --summary "Completed implementation and hermetic tests"
+  along session gc --dry-run
+  ```
+
+### `along plan`
+Plan approval for this agent session ([gate: require-plan-approval]).
+- **Subcommands**:
+  - `along plan approve [<slug>]`: Records the user's approval of the presented plan for the bound issue (or for the next `along start` when none is bound). Run it only after the user's explicit yes; in Claude Code accepting a plan via `ExitPlanMode` records it automatically.
+  - `along plan status`: Prints the session key, the resolved issue (`binding`, `single`, `ambiguous`, `elsewhere`, `none`), the phase and the approval.
+- **Usage**:
+  ```bash
+  along plan status
+  along plan approve token-refresh
   ```
 
 ### `along decision`
@@ -202,17 +217,20 @@ Manages Architectural Decision Records (ADRs) and architectural constraints.
 ### `along scratch`
 Manages ephemeral multi-agent session blackboard memory (`.along/.session/<slug>/`) used by `along-team`.
 - **Subcommands**:
-  - `along scratch init <slug> [--title "Title"] [--steps N] [--restart]`: Initializes session scratchpad directory, `state.json`, and `plan.md`.
+  - `along scratch init <slug> [--title "Title"] [--steps N] [--restart] [--mode direct]`: Initializes session scratchpad directory, `state.json`, and `plan.md`. The blackboard is `role-based` (held to the along-team step loop by `[gate: team-step-active]` and `[gate: team-reviews-before-stop]`) unless `--mode direct` is given.
   - `along scratch state <slug> [--json]`: Displays current step progress, status, and retry counters.
   - `along scratch phase <slug> <inquiry|planning|execution> [--approve]`: Sets the session phase; `--approve` also marks the plan as approved.
   - `along scratch approve <slug>` (alias: `plan-approve`): Grants plan approval and moves the session to the `execution` phase.
   - `along scratch update <slug> [--step N] [--step-status {pending,in-progress,passed,failed}] [--inc-retry] [--status {in-progress,completed,failed}]`: Updates execution state.
-  - `along scratch purge <slug>`: Deletes ephemeral session blackboard upon completion.
+  - `along scratch fallback <slug> --reason "..."`: Switches the blackboard to single-agent (`direct`) execution and records the reason in `execution_trace.md`.
+  - `along scratch purge <slug> [--force --reason "..."]`: Deletes the blackboard and the bindings to it. Refuses (exit 2) while a role-based blackboard has steps that are not `passed` or passed steps without `reviews/step-N.md`, unless forced with a reason.
 - **Usage**:
   ```bash
   along scratch init token-refresh --title "Token Refresh Step Loop" --steps 4
   along scratch state token-refresh
+  along scratch update token-refresh --step 1 --step-status in-progress
   along scratch update token-refresh --step 1 --step-status passed
+  along scratch fallback token-refresh --reason "single file change, no parallel roles"
   along scratch purge token-refresh
   ```
 
@@ -269,10 +287,14 @@ Manages the Systemic Anomaly Circuit Breaker and Human Escalation Gate.
 ### `along rules`
 Attaches engineering guidelines and rule packs to the project.
 - **Subcommands**:
-  - `along rules attach`: Automatically inspects repository dependencies and project manifests, attaching appropriate language and platform rule packs into `.along/rules/`.
+  - `along rules attach`: Automatically inspects repository dependencies and project manifests, attaching appropriate language and platform rule packs into `.along/rules/`. A pack whose body differs from its managed header hash is kept (`--on-conflict preserve|diff|overwrite`); an obsolete pack is pruned only when it is unmodified (a headerless legacy pack must match the current template).
+  - `along rules status [--json]`, `along rules diff <rule>`, `along rules restore [<rule>]`: audit, diff and restore packs against the Along templates (restore backs up to `.along/.migration-backup/`).
+- Agents never edit `.along/rules/**/*.md` directly: [gate: rule-pack-protection] denies it at runtime and `along gates check` flags an edited pack.
 - **Usage**:
   ```bash
   along rules attach
+  along rules status
+  along rules restore platforms/web.md
   ```
 
 ### `along budget` (alias `along context-budget`)
@@ -311,10 +333,13 @@ Transactional end-of-stage wrap engine.
   - `--dry-run`: Simulate wrap-up operations without writing or moving files.
   - `-n, --no-verify`: Skip pre-flight automated tests.
   - `-a, --agent "<name>"`: Explicit agent name.
+  - `-d, --decisions "ADR-a,ADR-b"` or `--no-decisions` (one is required): The answer to "were architectural decisions made?". The session log for today is written or extended with `issues_completed: [<type>--<slug>]`, the decisions, and the blackboard record (plan, step table, research, execution trace, reviews) before the blackboard is purged.
+  - `--force-reason "<text>"`: Wrap a role-based blackboard with open steps or missing reviews; the reason is recorded in the trace.
 - **Usage**:
   ```bash
-  along wrap <slug> -m "Summary of work"
-  along wrap <slug> -s superseded
+  along wrap <slug> --no-decisions -m "Summary of work"
+  along wrap <slug> --decisions ADR-2026-10-01--session-bindings -m "Summary of work"
+  along wrap <slug> -s superseded --no-decisions
   ```
 
 ### `along kb-sync` (alias `along kb sync`)

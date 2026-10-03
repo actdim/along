@@ -195,6 +195,18 @@ class TestAlongCommitResolution(unittest.TestCase):
         msg_conv_no_issue = along_commit.format_commit_message("docs: update readme", None)
         self.assertEqual(msg_conv_no_issue, "docs: update readme")
 
+    def test_09_slug_in_prose_still_gets_binding(self):
+        """A slug named in prose is not a binding [bug--along-commit-drops-issue-binding]."""
+        iss = {"type": "feat", "slug": "rule-packs"}
+        msg = along_commit.format_commit_message("feat: finish feat--rule-packs and rule-packs docs", iss)
+        self.assertTrue(msg.endswith("(refs #rule-packs)"))
+
+        bound = along_commit.format_commit_message("feat: finish it (refs #rule-packs)", iss)
+        self.assertEqual(bound, "feat: finish it (refs #rule-packs)")
+
+        bracket = along_commit.format_commit_message("feat: finish it [feat--rule-packs]", iss)
+        self.assertEqual(bracket, "feat: finish it [feat--rule-packs]")
+
 
 class TestAlongCommitStaging(unittest.TestCase):
     """Tests for selective staging, --all, --paths, and push failure."""

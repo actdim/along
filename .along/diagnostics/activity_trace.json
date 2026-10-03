@@ -1,6 +1,6 @@
 {
-  "last_edit_time": "2026-10-01T09:38:56.568811+00:00",
-  "last_test_time": "2026-10-01T09:42:03.748386+00:00",
+  "last_edit_time": "2026-10-03T21:45:18.404529+00:00",
+  "last_test_time": "2026-10-03T21:47:44.173592+00:00",
   "edited_files": [
     "d:\\Src\\my\\actdim\\public\\along\\scripts\\alongkit\\install.py",
     "d:\\Src\\my\\actdim\\public\\along\\scripts\\alongkit\\hooks\\predicates.py",
@@ -489,6 +489,7 @@
     "d:\\Src\\my\\actdim\\public\\along\\scripts\\alongkit\\rules.py",
     "d:\\Src\\my\\actdim\\public\\along\\tests\\test_rules.py",
     "C:\\Users\\Admin\\.gemini\\antigravity\\brain\\639b0338-4079-4d29-877e-1767931fa698\\walkthrough.md",
-    "d:\\Src\\my\\actdim\\public\\along\\.along\\SESSIONS\\2026\\2026-10-01--rule-packs-local-extensions.md"
+    "d:\\Src\\my\\actdim\\public\\along\\.along\\SESSIONS\\2026\\2026-10-01--rule-packs-local-extensions.md",
+    "d:\\Src\\my\\actdim\\public\\along\\.along\\SESSIONS\\2026\\2026-10-01--agent-session-bindings-and-gate-hardening.md"
   ]
 }

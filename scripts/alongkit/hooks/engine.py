@@ -18,6 +18,10 @@ from .models import GateDecision, GateResult, HookEvent, HookEventType
 from .predicates import record_tool_activity
 
 
+#: Runtimes whose hook protocol can hand an ASK decision to the user
+#: (Claude Code: `permissionDecision: "ask"`). See [bug--claude-stop-loop-ask-mapping].
+ASK_CAPABLE_RUNTIMES = ("antigravity", "claude")
+
 FALLBACK_GATES: List[BaseGate] = [
     TypographyGate(),
     ProjectionProtectionGate(),
@@ -79,7 +83,8 @@ class HookEngine:
 
                 if self.config.is_enforcing(gate.name):
                     if result.decision in (GateDecision.ASK, GateDecision.FORCE_ASK):
-                        if event.runtime != "antigravity":
+                        # Runtimes with a native ask keep it; the rest cannot prompt.
+                        if event.runtime not in ASK_CAPABLE_RUNTIMES:
                             return GateResult(
                                 decision=GateDecision.DENY,
                                 reason=result.reason or "Operation rejected: plan approval required before code mutations.",

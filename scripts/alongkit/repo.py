@@ -112,6 +112,26 @@ def state_dir(repo_root: str) -> str:
     return primary
 
 
+def ensure_diagnostics_dir(repo_root: str) -> str:
+    """Create `<state>/diagnostics/` with a `*` .gitignore and return its path.
+
+    Diagnostics are per-machine runtime state (hook audit, activity traces, heartbeat,
+    circuit breaker); tracking them dirties every session and conflicts across branches.
+    The directory ignores itself so the user's `.gitignore` is never edited.
+    See [bug--activity-trace-shared-across-sessions].
+    """
+    path = os.path.join(state_dir(repo_root), "diagnostics")
+    os.makedirs(path, exist_ok=True)
+    marker = os.path.join(path, ".gitignore")
+    if not os.path.isfile(marker):
+        try:
+            with open(marker, "w", encoding="utf-8", newline="\n") as handle:
+                handle.write("*\n")
+        except OSError:
+            pass
+    return path
+
+
 def bundled_engines_dir() -> str:
     """Directory of engines shipped inside an installed wheel (`alongkit/engines/`).
 

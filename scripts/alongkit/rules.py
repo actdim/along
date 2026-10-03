@@ -65,6 +65,22 @@ def parse_rule_header(content: str) -> Tuple[Optional[str], Optional[str], str]:
     return None, None, content
 
 
+def _is_locally_modified(content: str, global_rules_dir: str, rule: str) -> bool:
+    """True when a rule pack differs from what Along installed.
+
+    With a managed header the body is compared to the header hash. A headerless (legacy)
+    file is pristine only when it matches the current Along template; without a template
+    to compare against it counts as modified, so it is never deleted unseen.
+    """
+    _, f_hash, f_body = parse_rule_header(content)
+    if f_hash:
+        return compute_rule_hash(f_body) != f_hash
+    src = os.path.join(global_rules_dir, rule) if global_rules_dir else ""
+    if not src or not os.path.isfile(src):
+        return True
+    return compute_rule_hash(content) != compute_rule_hash(textio.read_text(src))
+
+
 def detect_required_rules(repo_root: str) -> Set[str]:
     required = set()
     ignored_dirs = {'.git', 'node_modules', 'dist', 'build', '.venv', 'venv', 'bin', 'obj', 'vendor', '.along', '.agents'}
@@ -207,16 +223,13 @@ def attach_rules(repo_root: str, on_conflict: str = "preserve"):
                     continue
                 
                 if p not in installed_files:
-                    # Check if file has local user modifications
-                    is_modified = False
+                    rel_rule = os.path.relpath(p, local_rules_dir).replace("\\", "/")
                     try:
-                        f_content = textio.read_text(p)
-                        _, f_hash, f_body = parse_rule_header(f_content)
-                        if f_hash and compute_rule_hash(f_body) != f_hash:
-                            is_modified = True
+                        is_modified = _is_locally_modified(textio.read_text(p), global_rules_dir, rel_rule)
                     except (OSError, UnicodeDecodeError, ValueError):
-                        pass
-                    
+                        # Unreadable: keep it rather than delete what we cannot inspect.
+                        is_modified = True
+
                     if is_modified:
                         print(f"   [WARN] Retaining modified unlisted rule: {os.path.relpath(p, repo_root)}")
                         continue
@@ -349,9 +362,7 @@ def audit_rules(repo_root: str) -> List[Dict[str, Any]]:
                     })
                     continue
                 if rel_rule not in seen_rules:
-                    f_content = textio.read_text(p)
-                    _, f_hash, f_body = parse_rule_header(f_content)
-                    is_modified = bool(f_hash and compute_rule_hash(f_body) != f_hash)
+                    is_modified = _is_locally_modified(textio.read_text(p), global_rules_dir, rel_rule)
                     results.append({
                         "rule": rel_rule,
                         "status": "modified_obsolete" if is_modified else "obsolete",

@@ -79,8 +79,11 @@ class TestRulesEngine(unittest.TestCase):
                 py_rule = os.path.join(global_rules, "languages", "python.md")
                 os.makedirs(os.path.dirname(py_rule), exist_ok=True)
                 textio.write_text(py_rule, "# Python Standards\n")
+                mobile_tmpl = os.path.join(global_rules, "platforms", "mobile.md")
+                os.makedirs(os.path.dirname(mobile_tmpl), exist_ok=True)
+                textio.write_text(mobile_tmpl, "# Mobile Standards\n")
 
-                # Pre-populate an obsolete rule that should be pruned
+                # Pre-populate an obsolete legacy (headerless) rule matching its template: pruned
                 obsolete_rule = os.path.join(repo, ".along", "rules", "platforms", "mobile.md")
                 os.makedirs(os.path.dirname(obsolete_rule), exist_ok=True)
                 textio.write_text(obsolete_rule, "# Mobile Standards\n")
@@ -311,6 +314,38 @@ class TestRulesEngine(unittest.TestCase):
                     self.assertTrue(os.path.isdir(backup_dir))
                 finally:
                     rules.get_global_rules_dir = orig_get_global
+
+    def test_attach_rules_retains_modified_headerless_obsolete_rule(self):
+        """A legacy (headerless) obsolete rule with local edits survives pruning
+        [feat--rule-pack-protection-gate]."""
+        with hermetic.repo_fixture() as repo:
+            with tempfile.TemporaryDirectory() as global_rules:
+                for rel, text in (("languages/python.md", "# Python Standards\n"),
+                                  ("platforms/mobile.md", "# Mobile Standards\n")):
+                    path = os.path.join(global_rules, *rel.split("/"))
+                    os.makedirs(os.path.dirname(path), exist_ok=True)
+                    textio.write_text(path, text)
+                textio.write_text(os.path.join(repo, "pyproject.toml"), "[project]\n")
+
+                rules_dir = os.path.join(repo, ".along", "rules")
+                edited = os.path.join(rules_dir, "platforms", "mobile.md")
+                custom = os.path.join(rules_dir, "custom", "house-style.md")
+                for path, text in ((edited, "# Mobile Standards\nLocal edit\n"), (custom, "# House\n")):
+                    os.makedirs(os.path.dirname(path), exist_ok=True)
+                    textio.write_text(path, text)
+
+                orig_get_global = rules.get_global_rules_dir
+                try:
+                    rules.get_global_rules_dir = lambda: global_rules
+                    statuses = {a["rule"]: a["status"] for a in rules.audit_rules(repo)}
+                    rules.attach_rules(repo)
+                finally:
+                    rules.get_global_rules_dir = orig_get_global
+
+                self.assertEqual(statuses["platforms/mobile.md"], "modified_obsolete")
+                self.assertEqual(statuses["custom/house-style.md"], "modified_obsolete")
+                self.assertIn("Local edit", textio.read_text(edited))
+                self.assertTrue(os.path.isfile(custom))
 
 
 if __name__ == "__main__":

@@ -12,7 +12,7 @@ import json
 from typing import Any, Dict, Optional, Tuple
 
 from .base import BaseAdapter
-from ..models import GateResult, HookEvent, HookEventType
+from ..models import GateDecision, GateResult, HookEvent, HookEventType
 
 
 EVENT_TYPE_MAP: Dict[str, HookEventType] = {
@@ -61,6 +61,10 @@ class ClaudeCodeAdapter(BaseAdapter):
     """Adapter for Anthropic Claude Code CLI lifecycle hooks."""
 
     runtime_name: str = "claude"
+
+    def __init__(self) -> None:
+        self._event_type: Optional[HookEventType] = None
+        self._stop_hook_active: bool = False
 
     def parse(self, raw_input: str, event_type: HookEventType = HookEventType.PRE_TOOL_USE) -> HookEvent:
         payload: Dict[str, Any] = {}
@@ -129,6 +133,8 @@ class ClaudeCodeAdapter(BaseAdapter):
         workspace_root = str(payload.get("cwd") or "")
         session_id = payload.get("session_id")
         conversation_id = str(session_id) if session_id else None
+        self._event_type = effective_event_type
+        self._stop_hook_active = bool(payload.get("stop_hook_active"))
 
         return HookEvent(
             event_type=effective_event_type,
@@ -141,7 +147,24 @@ class ClaudeCodeAdapter(BaseAdapter):
         )
 
     def format_response(self, result: GateResult) -> Tuple[int, str]:
-        """Format GateResult into Claude Code exit code and message."""
+        """Format GateResult into Claude Code exit code and message.
+
+        - DENY: exit 2, reason on stderr (Claude sees it and the tool call is blocked).
+        - ASK on PreToolUse: exit 0 with `permissionDecision: "ask"`, so the user decides.
+        - DENY on Stop while `stop_hook_active`: Claude already continued once for this
+          gate; report the reason to the user instead of forcing another continuation.
+        See [bug--claude-stop-loop-ask-mapping].
+        """
+        reason = result.reason or "Operation rejected by Along protocol gate."
+        if result.decision in (GateDecision.ASK, GateDecision.FORCE_ASK) \
+                and self._event_type == HookEventType.PRE_TOOL_USE:
+            return 0, json.dumps({"hookSpecificOutput": {
+                "hookEventName": "PreToolUse",
+                "permissionDecision": "ask",
+                "permissionDecisionReason": reason,
+            }})
         if result.is_denied:
-            return 2, result.reason or "Operation rejected by Along protocol gate."
+            if self._event_type == HookEventType.STOP and self._stop_hook_active:
+                return 0, json.dumps({"systemMessage": f"[Along] Not enforced again this turn: {reason}"})
+            return 2, reason
         return 0, ""

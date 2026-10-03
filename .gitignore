@@ -4,6 +4,10 @@ Thumbs.db
 *.swp
 *.swo
 
+# Environment / Secrets
+.env
+*.env
+
 # Node / JS / TS artifacts
 node_modules/
 **/node_modules/

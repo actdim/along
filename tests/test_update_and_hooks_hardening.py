@@ -43,9 +43,11 @@ class TestUpdateAndHooksHardening(unittest.TestCase):
         # Claude
         claude_manifest = hook_config.get_claude_hook_manifest(is_global=True)
         self.assertIn("PreToolUse", claude_manifest)
-        self.assertIn("--runtime claude", claude_manifest["PreToolUse"][0]["command"])
-        self.assertIn(expanded_path, claude_manifest["PreToolUse"][0]["command"])
-        self.assertNotIn("python -c", claude_manifest["PreToolUse"][0]["command"])
+        claude_pre = claude_manifest["PreToolUse"][0]["hooks"][0]
+        self.assertEqual(claude_pre["type"], "command")
+        self.assertIn("--runtime claude", claude_pre["command"])
+        self.assertIn(expanded_path, claude_pre["command"])
+        self.assertNotIn("python -c", claude_pre["command"])
 
         # Codex
         codex_manifest = hook_config.get_codex_hook_manifest(is_global=True)

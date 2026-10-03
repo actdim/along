@@ -54,10 +54,13 @@ def format_commit_message(raw_msg, active_issue):
         ctype = type_map.get(itype, "chore")
         msg = f"{ctype}: {msg}"
 
-    # Append issue reference if available and not already present
+    # Append the binding unless the message already carries one of the two forms the
+    # commit_issue_binding gate accepts; a slug named in prose is not a binding.
+    # See [bug--along-commit-drops-issue-binding].
     if active_issue:
         slug = active_issue["slug"]
-        if slug not in msg:
+        bindings = (f"(refs #{slug})", f"[{active_issue.get('type', '')}--{slug}]")
+        if not any(b in msg for b in bindings):
             msg = f"{msg} (refs #{slug})"
 
     return msg

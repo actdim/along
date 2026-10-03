@@ -60,9 +60,9 @@
 - [ ] `(feat)` [zero-step-state-recovery-and-drift-detection](ISSUES/feat--zero-step-state-recovery-and-drift-detection.md)
 
 ## Done (recent)
+- [x] `(feat)` [wrap-session-log-from-blackboard](ISSUES/done/feat--wrap-session-log-from-blackboard.md)
+- [x] `(feat)` [test-gate-lifecycle-hook-only](ISSUES/done/feat--test-gate-lifecycle-hook-only.md)
+- [x] `(feat)` [subproject-boundary-by-active-issue](ISSUES/done/feat--subproject-boundary-by-active-issue.md)
 - [x] `(feat)` [rule-packs-local-extensions](ISSUES/done/feat--rule-packs-local-extensions.md)
-- [x] `(feat)` [entity-reference-integrity-gate](ISSUES/done/feat--entity-reference-integrity-gate.md)
-- [x] `(debt)` [prose-rules-to-deterministic-checks](ISSUES/done/debt--prose-rules-to-deterministic-checks.md)
-- [x] `(bug)` [cli-help-missing-subcommands](ISSUES/done/bug--cli-help-missing-subcommands.md)
-- [x] `(task)` [roadmap-shift-after-v440-release](ISSUES/done/task--roadmap-shift-after-v440-release.md)
-<!-- 152 older completed issue(s) archived in .along/ISSUES/done/ -->
+- [x] `(feat)` [rule-pack-protection-gate](ISSUES/done/feat--rule-pack-protection-gate.md)
+<!-- 165 older completed issue(s) archived in .along/ISSUES/done/ -->

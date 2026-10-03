@@ -146,9 +146,19 @@ class TestSessionBlackboard(unittest.TestCase):
         self.assertEqual(res_fail.returncode, 2, "Should exit with code 2 on retry exhaustion")
         self.assertIn("exceeded the retry budget", res_fail.stderr)
 
-        # 5. scratch purge
+        # 5. scratch purge: refused while role-based steps are open
+        # [feat--along-team-step-enforcement], then forced with a reason
         res = proc.run_capture([
             sys.executable, script_path, "scratch", "purge", slug
+        ], cwd=self.repo)
+        self.assertEqual(res.returncode, 2)
+        self.assertIn("Refusing to purge", res.stderr)
+        res = proc.run_capture([
+            sys.executable, script_path, "scratch", "purge", slug, "--force"
+        ], cwd=self.repo)
+        self.assertEqual(res.returncode, 2, "--force without --reason is refused")
+        res = proc.run_capture([
+            sys.executable, script_path, "scratch", "purge", slug, "--force", "--reason", "test teardown"
         ], cwd=self.repo)
         self.assertEqual(res.returncode, 0)
         self.assertIn("Purged session blackboard", res.stdout)

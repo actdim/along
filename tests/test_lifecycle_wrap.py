@@ -234,7 +234,7 @@ class TestLifecycleWrap(unittest.TestCase):
         dest_issue = os.path.join(self.root, ".along", "ISSUES", "done", "task--fixture-sample-task.md")
 
         res = proc.run_python(
-            [along_exec, "wrap", "fixture-sample-task", "-n"],
+            [along_exec, "wrap", "fixture-sample-task", "-n", "--no-decisions"],
             cwd=self.root,
         )
         self.assertTrue(res.ok, f"STDOUT: {res.stdout}\nSTDERR: {res.stderr}")
@@ -246,7 +246,7 @@ class TestLifecycleWrap(unittest.TestCase):
         dest_issue = os.path.join(self.root, ".along", "ISSUES", "done", "task--fixture-sample-task.md")
 
         res = proc.run_python(
-            [along_exec, "session", "wrap", "fixture-sample-task", "-n"],
+            [along_exec, "session", "wrap", "fixture-sample-task", "-n", "--no-decisions"],
             cwd=self.root,
         )
         self.assertTrue(res.ok, f"STDOUT: {res.stdout}\nSTDERR: {res.stderr}")
@@ -260,7 +260,7 @@ class TestLifecycleWrap(unittest.TestCase):
 
         dest_issue = os.path.join(self.root, ".along", "ISSUES", "done", "task--fixture-sample-task.md")
         res = proc.run_python(
-            [along_wrap, "fixture-sample-task", "-s", "superseded", "-m", "Direct wrap summary", "-n"],
+            [along_wrap, "fixture-sample-task", "-s", "superseded", "-m", "Direct wrap summary", "-n", "--no-decisions"],
             cwd=self.root,
         )
         self.assertTrue(res.ok, f"STDOUT: {res.stdout}\nSTDERR: {res.stderr}")
@@ -278,7 +278,8 @@ class TestLifecycleWrap(unittest.TestCase):
 
         dest_issue = os.path.join(self.root, ".along", "ISSUES", "done", "task--fixture-sample-task.md")
         res = proc.run_python(
-            [along_exec, "session", "wrap", "fixture-sample-task", "-s", "cancelled", "-m", "Cancelled summary", "-n"],
+            [along_exec, "session", "wrap", "fixture-sample-task", "-s", "cancelled", "-m", "Cancelled summary", "-n",
+             "--no-decisions"],
             cwd=self.root,
         )
         self.assertTrue(res.ok, f"STDOUT: {res.stdout}\nSTDERR: {res.stderr}")
@@ -287,6 +288,45 @@ class TestLifecycleWrap(unittest.TestCase):
         self.assertEqual(fm["status"], "cancelled")
         history = textio.read_text(history_file)
         self.assertIn("Cancelled summary", history)
+
+    def test_13_wrap_writes_session_log_from_blackboard(self):
+        """[feat--wrap-session-log-from-blackboard] REQ-1, REQ-2."""
+        sdir = session.get_session_dir(self.root, "fixture-sample-task")
+        textio.write_text(os.path.join(sdir, "plan.md"), "# Living Plan\n\n- [x] Step 1: do it\n")
+        session.append_trace(self.root, "fixture-sample-task", "Implementer finished step 1")
+        code = lifecycle.execute_wrap(self.root, "fixture-sample-task", status="done", no_verify=True,
+                                      summary="Wrapped fixture", decisions=[])
+        self.assertEqual(code, 0)
+        today = entities.today_iso()
+        log = os.path.join(self.root, ".along", "SESSIONS", today[:4], f"{today}--fixture-sample-task.md")
+        content = textio.read_text(log)
+        fm, _ = frontmatter.parse(content)
+        self.assertEqual(fm["issues_completed"], ["task--fixture-sample-task"])
+        self.assertEqual(fm["decisions"], [])
+        self.assertIn("## Blackboard Record", content)
+        self.assertIn("Implementer finished step 1", content)
+        self.assertIn("#### Living Plan", content)
+        self.assertIn("no architectural decisions", content)
+        self.assertFalse(os.path.isdir(sdir))
+
+    def test_14_role_based_open_steps_block_wrap(self):
+        """[feat--along-team-step-enforcement] REQ-2."""
+        session.init_session(self.root, "fixture-sample-task", execution_mode="role-based")
+        code = lifecycle.execute_wrap(self.root, "fixture-sample-task", status="done", no_verify=True, decisions=[])
+        self.assertEqual(code, 2)
+        self.assertTrue(os.path.isfile(os.path.join(self.root, ".along", "ISSUES", "task--fixture-sample-task.md")))
+        code = lifecycle.execute_wrap(self.root, "fixture-sample-task", status="done", no_verify=True,
+                                      decisions=[], force_reason="user stopped the loop")
+        self.assertEqual(code, 0)
+        today = entities.today_iso()
+        log = os.path.join(self.root, ".along", "SESSIONS", today[:4], f"{today}--fixture-sample-task.md")
+        self.assertIn("user stopped the loop", textio.read_text(log))
+
+    def test_15_cli_requires_decisions_answer(self):
+        along_wrap = os.path.join(SCRIPTS_DIR, "along_wrap.py")
+        res = proc.run_python([along_wrap, "fixture-sample-task", "-n"], cwd=self.root)
+        self.assertFalse(res.ok)
+        self.assertIn("--no-decisions", res.stderr)
 
     def test_12_invalid_status_flag_rejected(self):
         """Invalid status via -s must exit non-zero and reject wrap."""

@@ -32,7 +32,7 @@ Project-specific architectural invariants and framework guidelines do NOT belong
 3. Protect `.along/rules/gates.yaml` and dirty files from destructive pruning.
 4. Provide `along rules status`, `along rules diff`, and `along rules restore` CLI commands.
 5. Ensure generic platform archetypes (`rules/platforms/web.md`) are 100% clean of proprietary/framework dependencies.
-6. Migrate `infomnia/src/apps/webapp`: extract Dynstruct/MsgMesh rules into `docs/topic--frontend-architecture.md` and `AGENTS.md`, and restore pristine Along `web.md`.
+6. Consumer repositories that put framework rules into a rule pack move them into `docs/topic--<slug>.md` and `AGENTS.md`, then restore the pristine pack with `along rules restore`.
 
 ## Acceptance Criteria
 - [ ] Rule templates copied to `.along/rules/` carry header comment and SHA-256 hash.
@@ -40,5 +40,5 @@ Project-specific architectural invariants and framework guidelines do NOT belong
 - [ ] `attach_rules` never deletes `.along/rules/gates.yaml` or dirty files during pruning.
 - [ ] `along rules status|diff|restore` CLI works reliably.
 - [ ] Generic `rules/platforms/web.md` contains zero proprietary framework references.
-- [ ] `infomnia/src/apps/webapp` migrated: rules moved to `docs/` and pristine `web.md` restored.
+- [ ] Consumer migration path documented (`docs/` + `AGENTS.md`, then `along rules restore`).
 - [ ] All automated tests pass hermetically.

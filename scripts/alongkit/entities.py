@@ -869,7 +869,8 @@ def detect_agent(explicit: Optional[str] = None) -> str:
     3. Provider-specific runtime environment markers:
        - Claude Cowork: ALONG_RUNTIME=cowork, or CLAUDE_CODE_HOST_HTTP_PROXY_PORT with a
          /sessions/ home (`alongkit.runtime.is_cowork_env`) -> 'cowork'
-       - Claude Code: CLAUDE_CODE, CLAUDE_PROJECT_DIR, CLAUDE_CONVERSATION_ID, ANTHROPIC_CLI -> 'claude-code'
+       - Claude Code: CLAUDECODE, CLAUDE_CODE_ENTRYPOINT, CLAUDE_CODE_SESSION_ID, CLAUDE_CODE,
+         CLAUDE_PROJECT_DIR, CLAUDE_CONVERSATION_ID, ANTHROPIC_CLI -> 'claude-code'
        - Antigravity: ANTIGRAVITY_AGENT, ANTIGRAVITY_CONVERSATION_ID, ANTIGRAVITY_PROJECT_ID -> 'antigravity'
        - Codex: CODEX_CLI, OPENAI_CODEX -> 'codex'
        - OpenCode: OPENCODE_CLI, OPENCODE_AGENT -> 'opencode'
@@ -891,8 +892,10 @@ def detect_agent(explicit: Optional[str] = None) -> str:
     if runtime.is_cowork_env(env):
         return "cowork"
 
-    # Claude Code
-    if any(k in env for k in ("CLAUDE_CODE", "CLAUDE_PROJECT_DIR", "CLAUDE_CONVERSATION_ID", "ANTHROPIC_CLI")):
+    # Claude Code (CLAUDECODE / CLAUDE_CODE_ENTRYPOINT / CLAUDE_CODE_SESSION_ID are what a
+    # Claude Code shell actually carries; see [bug--claude-runtime-not-detected])
+    if any(k in env for k in ("CLAUDECODE", "CLAUDE_CODE_ENTRYPOINT", "CLAUDE_CODE_SESSION_ID",
+                              "CLAUDE_CODE", "CLAUDE_PROJECT_DIR", "CLAUDE_CONVERSATION_ID", "ANTHROPIC_CLI")):
         return "claude-code"
 
     # Antigravity

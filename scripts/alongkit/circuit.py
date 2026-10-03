@@ -276,7 +276,7 @@ def load_circuit_state(repo_root: str) -> Dict[str, Any]:
 
 def save_circuit_state(repo_root: str, data: Dict[str, Any]) -> None:
     fpath = get_circuit_file_path(repo_root)
-    os.makedirs(os.path.dirname(fpath), exist_ok=True)
+    repo.ensure_diagnostics_dir(repo_root)
     try:
         textio.write_text(fpath, json.dumps(data, indent=2) + "\n")
     except (OSError, UnicodeDecodeError):
@@ -355,8 +355,15 @@ def run_health_probe(repo_root: str) -> Tuple[bool, List[str]]:
             issues.append("Missing .git/index file.")
 
     # 2. Check Python syntax of tracked modified files
-    activity_trace_path = os.path.join(repo.state_dir(repo_root), "diagnostics", "activity_trace.json")
-    if os.path.isfile(activity_trace_path):
+    # Shared trace plus one per agent session [bug--activity-trace-shared-across-sessions].
+    diag_dir = os.path.join(repo.state_dir(repo_root), "diagnostics")
+    trace_files = [os.path.join(diag_dir, "activity_trace.json")]
+    activity_dir = os.path.join(diag_dir, "activity")
+    if os.path.isdir(activity_dir):
+        trace_files += [os.path.join(activity_dir, n) for n in sorted(os.listdir(activity_dir)) if n.endswith(".json")]
+    for activity_trace_path in trace_files:
+        if not os.path.isfile(activity_trace_path):
+            continue
         try:
             raw = textio.read_text(activity_trace_path, strict=False)
             tdata = json.loads(raw)
@@ -414,7 +421,7 @@ def record_syntax_failure(repo_root: str, file_path: str, error_detail: str) -> 
     file_record["last_error"] = error_detail[:200]
     churn_data[rel_path] = file_record
 
-    os.makedirs(os.path.dirname(trace_path), exist_ok=True)
+    repo.ensure_diagnostics_dir(repo_root)
     try:
         textio.write_text(trace_path, json.dumps(churn_data, indent=2) + "\n")
     except (OSError, UnicodeDecodeError):

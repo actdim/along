@@ -38,8 +38,31 @@ PROTECTED_PROJECTIONS: Tuple[str, ...] = (
     "docs/index.md",
 )
 
+#: Managed rule packs copied by `along rules attach`; `.along/rules/gates.yaml` is not one.
+RULE_PACK_PATH_RE = re.compile(r"(?:^|/)\.along/rules/(?:[^/]+/)*[^/]+\.md$", re.IGNORECASE)
+#: A rule pack path as it appears inside a shell command (either slash style).
+RULE_PACK_SHELL_RE = re.compile(r"\.along[/\\]+rules[/\\]+(?:[^\s/\\'\"]+[/\\]+)*[^\s/\\'\"]+\.md\b",
+                                re.IGNORECASE)
+
 DANGEROUS_CLI_PATTERNS: List[Tuple[re.Pattern, str]] = [
-    (re.compile(r"<<\s*['\"]?EOF['\"]?", re.IGNORECASE), "Heredoc syntax (<<EOF)"),
+    # Any heredoc delimiter (<<EOF, <<'PY', <<-"END"), but not the bash here-string <<<
+    # or a shift operator: a heredoc body starts on the next line. [bug--cli-safety-heredoc-gaps]
+    (re.compile(r"(?<!<)<<(?!<)[-~]?[ \t]*(['\"]?)[A-Za-z_][A-Za-z0-9_]*\1[^\n]*(?:\n|$)"), "Heredoc syntax (<<EOF)"),
+    # PowerShell here-strings (@'...'@, @"..."@) sent to a file
+    (re.compile(r"@['\"][ \t]*\r?\n.*?\r?\n['\"]@[^\n]*(?:\|\s*(?:Set-Content|Add-Content|Out-File|tee)\b|>)",
+                re.DOTALL | re.IGNORECASE), "PowerShell here-string written to a file"),
+    # Inline file writers
+    # Inline file writers, matched in command position (start, or after | ; & ( { or a newline)
+    # so a search pattern that merely names them does not trip the gate.
+    (re.compile(r"(?:^|[|;&({\n])\s*(?:Set-Content|Add-Content)\b", re.IGNORECASE),
+     "Inline PowerShell file writer (Set-Content/Add-Content)"),
+    (re.compile(r"\[(?:System\.)?IO\.File\]::(?:Write|Append)", re.IGNORECASE), "Inline .NET file writer ([IO.File]::Write*)"),
+    (re.compile(r"(?:^|[|;&({\n])\s*New-Item\b[^\n|;]*\s-Value\b", re.IGNORECASE), "Inline file writer (New-Item -Value)"),
+    (re.compile(r"(?:^|[|;&({\n])\s*(?:echo|printf|Write-Output)\b[^\n|;&]*?(?<![0-9&])>{1,2}[ \t]*"
+                r"(?!&|/dev/null\b|\$null\b|NUL\b)[\"']?[\w./\\~$-]", re.IGNORECASE),
+     "Inline shell file writer (echo/printf > file)"),
+    (re.compile(r"(?:^|[|;&({\n])\s*(?:sed\s+(?:-[a-zA-Z]*i|--in-place)\b|perl\s+-[a-zA-Z]*i)", re.IGNORECASE),
+     "In-place shell edit (sed -i / perl -i)"),
     (re.compile(r"python\d*(?:\.exe)?\s+-c\s+.*open\(.*['\"][wa]['\"].*\)", re.DOTALL | re.IGNORECASE), "Inline Python file writer"),
     (re.compile(r"python\d*(?:\.exe)?\s+-c\s+['\"].*(?:import\s+(?:alongkit|along_exec)|from\s+(?:alongkit|along_exec)|sys\.path\.insert).*", re.DOTALL | re.IGNORECASE), "Ad-hoc internal module probe via python -c [gate: cli_safety] (use Along CLI, code search tools, or a scratch/ script)"),
     (re.compile(r"git\s+reset\s+--hard", re.IGNORECASE), "Destructive unstaged Git wipe (git reset --hard)"),
@@ -49,9 +72,20 @@ DANGEROUS_CLI_PATTERNS: List[Tuple[re.Pattern, str]] = [
     (re.compile(r"(choco|winget|apt-get|brew)\s+install", re.IGNORECASE), "Global system package installation"),
 ]
 
-TEST_COMMAND_PATTERNS: List[re.Pattern] = [
+#: Test runs through the Along lifecycle hook. Where `.along/scripts/test.py` exists only
+#: these satisfy test_before_stop [feat--test-gate-lifecycle-hook-only].
+LIFECYCLE_TEST_PATTERNS: List[re.Pattern] = [
     re.compile(r"along[-_]test", re.IGNORECASE),
+    re.compile(r"\balong(?:\.ps1|_exec\.py)?\s+test\b", re.IGNORECASE),
     re.compile(r"\.along[/\\]scripts[/\\]test\.py", re.IGNORECASE),
+]
+
+#: Raw test runners: they count only in repositories without a lifecycle test hook.
+TEST_COMMAND_PATTERNS: List[re.Pattern] = LIFECYCLE_TEST_PATTERNS + [
+    re.compile(r"\bvitest\b", re.IGNORECASE),
+    re.compile(r"\bjest\b", re.IGNORECASE),
+    re.compile(r"\bgo\s+test\b", re.IGNORECASE),
+    re.compile(r"\b(?:pnpm|yarn)\s+(?:run\s+)?test\b", re.IGNORECASE),
     re.compile(r"\bpytest\b", re.IGNORECASE),
     re.compile(r"\bnpm\s+test\b", re.IGNORECASE),
     re.compile(r"\bcargo\s+test\b", re.IGNORECASE),
@@ -68,6 +102,10 @@ MUTATION_WHITELIST_PATTERNS: Tuple[str, ...] = (
     ".along/.session/**",
     ".along/diagnostics/**",
     ".along/SESSIONS/**",
+    # Planning artifacts: an issue, risk or spike is how a plan is written down.
+    ".along/ISSUES/**",
+    ".along/RISKS/**",
+    ".along/SPIKES/**",
     "implementation_plan.md",
     "walkthrough.md",
     "living_plan.md",
@@ -108,6 +146,11 @@ def _extract_command(event: HookEvent) -> str:
     return args.get("CommandLine") or args.get("command") or args.get("cmd") or ""
 
 
+def event_session_key(event: HookEvent) -> Optional[str]:
+    """Session key of the agent session that raised `event` (payload id, else env)."""
+    return session.session_key(event.runtime, event.conversation_id) or session.current_session_key()
+
+
 def _matches_pattern(path: str, patterns: List[str]) -> bool:
     norm = repo.normalize_posix(path).lstrip("/")
     for pat in patterns:
@@ -127,12 +170,20 @@ def _issues_dir(repo_root: str) -> str:
     return os.path.join(repo.state_dir(repo_root), "ISSUES")
 
 
-def get_activity_trace_path(repo_root: str) -> str:
-    return os.path.join(repo.state_dir(repo_root), "diagnostics", "activity_trace.json")
+def get_activity_trace_path(repo_root: str, key: Optional[str] = None) -> str:
+    """Per-agent-session trace when the session is known, else the shared file.
+
+    Sessions must not see each other's edits and test runs
+    [bug--activity-trace-shared-across-sessions].
+    """
+    diag = os.path.join(repo.state_dir(repo_root), "diagnostics")
+    if key:
+        return os.path.join(diag, "activity", f"{key}.json")
+    return os.path.join(diag, "activity_trace.json")
 
 
-def load_activity_trace(repo_root: str) -> Dict[str, Any]:
-    trace_path = get_activity_trace_path(repo_root)
+def load_activity_trace(repo_root: str, key: Optional[str] = None) -> Dict[str, Any]:
+    trace_path = get_activity_trace_path(repo_root, key)
     if not os.path.isfile(trace_path):
         return {"last_edit_time": None, "last_test_time": None, "edited_files": []}
     try:
@@ -145,8 +196,9 @@ def load_activity_trace(repo_root: str) -> Dict[str, Any]:
     return {"last_edit_time": None, "last_test_time": None, "edited_files": []}
 
 
-def save_activity_trace(repo_root: str, data: Dict[str, Any]) -> None:
-    trace_path = get_activity_trace_path(repo_root)
+def save_activity_trace(repo_root: str, data: Dict[str, Any], key: Optional[str] = None) -> None:
+    trace_path = get_activity_trace_path(repo_root, key)
+    repo.ensure_diagnostics_dir(repo_root)
     os.makedirs(os.path.dirname(trace_path), exist_ok=True)
     try:
         textio.write_text(trace_path, json.dumps(data, indent=2) + "\n")
@@ -159,28 +211,84 @@ def record_tool_activity(event: HookEvent, repo_root: str) -> None:
     if not repo_root:
         return
 
-    now_iso = datetime.now(timezone.utc).isoformat()
-    trace = load_activity_trace(repo_root)
+    # Claude Code runs ExitPlanMode's PostToolUse only after the user accepted the plan.
+    # See [feat--plan-approval-exit-plan-mode].
+    raw_tool = str((event.raw_payload or {}).get("tool_name") or "")
+    if event.event_type == HookEventType.POST_TOOL_USE and raw_tool == "ExitPlanMode":
+        session.record_plan_approval(repo_root, event_session_key(event))
+        return
 
-    # Track file edits
+    now_iso = datetime.now(timezone.utc).isoformat()
+    key = event_session_key(event)
+    trace = load_activity_trace(repo_root, key)
+
+    # Track file edits: repository files outside .along/ (agent state is not source), plus the
+    # lifecycle hooks in .along/scripts/ [feat--rule-pack-protection-gate].
     if event.tool_name in ("write_to_file", "write_file", "replace_file_content", "edit_file", "patch_file", "create_file"):
-        target = _extract_target_file(event)
-        norm_target = repo.normalize_posix(target).lower() if target else ""
-        # Only consider project source files (skip session blackboard and diagnostics)
-        if norm_target and not norm_target.startswith(".along/.session") and not norm_target.startswith(".along/diagnostics"):
+        if event.event_type != HookEventType.PRE_TOOL_USE:
+            return
+        rel = _repo_relative(_extract_target_file(event), repo_root)
+        if rel and is_source_edit(rel):
             trace["last_edit_time"] = now_iso
             edited = trace.get("edited_files", [])
-            if target not in edited:
-                edited.append(target)
-            trace["edited_files"] = edited
-            save_activity_trace(repo_root, trace)
+            if rel not in edited:
+                edited.append(rel)
+            trace["edited_files"] = edited[-200:]
+            save_activity_trace(repo_root, trace, key)
 
     # Track test executions
     elif event.tool_name in ("run_command", "execute_command", "bash", "shell"):
         cmd = _extract_command(event)
-        if cmd and any(p.search(cmd) for p in TEST_COMMAND_PATTERNS):
+        if not cmd or event.event_type != HookEventType.PRE_TOOL_USE:
+            return
+        if any(p.search(cmd) for p in LIFECYCLE_TEST_PATTERNS) or (
+                not has_lifecycle_test_hook(repo_root) and any(p.search(cmd) for p in TEST_COMMAND_PATTERNS)):
             trace["last_test_time"] = now_iso
-            save_activity_trace(repo_root, trace)
+            save_activity_trace(repo_root, trace, key)
+        elif any(p.search(cmd) for p in TEST_COMMAND_PATTERNS):
+            trace["last_raw_test_time"] = now_iso
+            save_activity_trace(repo_root, trace, key)
+
+
+def _repo_relative(target: str, repo_root: str) -> Optional[str]:
+    """POSIX path of `target` relative to `repo_root`, or None when outside it."""
+    if not target:
+        return None
+    if os.path.isabs(target):
+        try:
+            rel = os.path.relpath(target, repo_root)
+        except ValueError:
+            return None
+        if rel.startswith("..") or os.path.isabs(rel):
+            return None
+        return repo.normalize_posix(rel)
+    rel = repo.normalize_posix(target)
+    while rel.startswith("./"):
+        rel = rel[2:]
+    return rel
+
+
+def is_source_edit(rel: str) -> bool:
+    """True when an edit to repo-relative `rel` is a source edit for test_before_stop.
+
+    Files under any `.along/` are agent state, except `.along/scripts/`: the repository's
+    lifecycle hooks (test, build, dev, bump_version) are code.
+    """
+    parts = repo.normalize_posix(rel).lower().split("/")
+    if ".along" not in parts:
+        return True
+    idx = parts.index(".along")
+    return len(parts) > idx + 2 and parts[idx + 1] == "scripts"
+
+
+def is_rule_pack_path(rel: str) -> bool:
+    """True for a managed rule pack: `.along/rules/**/*.md` (any `.along/`, any depth)."""
+    return bool(RULE_PACK_PATH_RE.search(repo.normalize_posix(rel)))
+
+
+def has_lifecycle_test_hook(repo_root: str) -> bool:
+    """True when the repository ships `.along/scripts/test.py`."""
+    return os.path.isfile(os.path.join(repo.state_dir(repo_root), "scripts", "test.py"))
 
 
 # ---------------------------------------------------------------------------
@@ -250,6 +358,52 @@ def check_projection_protection(event: HookEvent, repo_root: str, **kwargs: Any)
     return None
 
 
+_RULE_PACK_REMEDIATION = (
+    "Managed rule packs are Along's generic conventions and are replaced by 'along rules attach'. "
+    "Put project-specific guidelines in docs/topic--<slug>.md or the 'Project specifics' section of "
+    "AGENTS.md. Revert local edits with 'along rules restore'; change a pack itself in the Along "
+    "repository's rules/ templates."
+)
+
+
+def check_rule_pack_protection(event: HookEvent, repo_root: str, **kwargs: Any) -> Optional[str]:
+    """Deny agent writes to managed rule packs (`.along/rules/**/*.md`).
+
+    File tools are matched on their target; shell commands on any non-read-only segment that
+    names a rule pack, except `along rules ...` (attach / restore write them on purpose).
+    """
+    if event.tool_name in ("run_command", "execute_command", "bash", "shell"):
+        cmd = _extract_command(event)
+        if not cmd or not RULE_PACK_SHELL_RE.search(cmd):
+            return None
+        segments = shellparse.split_segments(cmd)
+        if segments is None:
+            segments = [cmd]
+        for seg in segments:
+            match = RULE_PACK_SHELL_RE.search(seg)
+            if not match:
+                continue
+            sub = shellparse.along_subcommand(seg)
+            if sub is not None and (sub == "rules" or sub.startswith("rules ")):
+                continue
+            if shellparse.is_read_only_command(seg):
+                continue
+            return (
+                f"Rule Pack Protection Violation [gate: rule-pack-protection]: the command writes to "
+                f"'{match.group(0)}'. {_RULE_PACK_REMEDIATION}"
+            )
+        return None
+
+    target = _extract_target_file(event)
+    rel = _repo_relative(target, repo_root) if target else None
+    if not rel or not is_rule_pack_path(rel):
+        return None
+    return (
+        f"Rule Pack Protection Violation [gate: rule-pack-protection]: '{rel}' is a managed Along "
+        f"rule pack. {_RULE_PACK_REMEDIATION}"
+    )
+
+
 def check_doc_manual_lock(event: HookEvent, repo_root: str, **kwargs: Any) -> Optional[str]:
     """Disallows modifying documentation marked with write_policy: manual without explicit intent."""
     target = _extract_target_file(event)
@@ -285,7 +439,7 @@ def check_doc_manual_lock(event: HookEvent, repo_root: str, **kwargs: Any) -> Op
     # Target has write_policy: manual (or locked: true).
     # Check if there is an active session or in-progress issue specifically targeting this doc.
     slug = fm.get("slug") or os.path.splitext(os.path.basename(rel_target))[0].replace("topic--", "")
-    active_slug = session.get_active_session_slug(repo_root)
+    active_slug = session.get_active_session_slug(repo_root, event_session_key(event))
     if active_slug and (active_slug == slug or active_slug == f"docs--{slug}" or active_slug == f"topic--{slug}"):
         return None
 
@@ -418,7 +572,7 @@ def check_mutation_authorization(event: HookEvent, repo_root: str, **kwargs: Any
         cmd = _extract_command(event).strip()
         if not cmd:
             return None
-        if shellparse.is_read_only_command(cmd):
+        if shellparse.is_read_only_command(cmd) or shellparse.is_along_state_command(cmd):
             return None
 
     # Check file modification tools
@@ -445,19 +599,25 @@ def check_mutation_authorization(event: HookEvent, repo_root: str, **kwargs: Any
         # Other / unknown tools: do not block
         return None
 
-    # Non-whitelisted file mutation or shell command. Verify session phase and plan approval.
-    phase = session.get_session_phase(repo_root)
-    approved = session.is_plan_approved(repo_root)
+    # Non-whitelisted file mutation or shell command. Verify this session's phase and approval.
+    key = event_session_key(event)
+    slug, how = session.resolve_active_session(repo_root, key)
+    approved = session.is_plan_approved(repo_root, slug=slug, key=key)
+    phase = session.get_session_phase(repo_root, slug=slug, key=key)
 
-    if phase == "execution" and approved:
+    if approved and (phase == "execution" or not slug):
         return None
 
     # Violation: inquiry phase or unapproved plan
+    target = f"issue '{slug}'" if slug else "this session"
+    if how == "ambiguous":
+        target = "this session (several in-progress issues, none bound to it)"
     reason = (
         f"Inquiry Read-Only Invariance [gate: require-plan-approval]: "
-        f"Current session phase is '{phase}' (plan_approved: {str(approved).lower()}). "
-        "Modifying repository files or executing state-mutating commands is prohibited without an approved execution plan. "
-        "Output your analysis, present an implementation plan to the user, and obtain approval before making changes."
+        f"No approved plan for {target} (phase: '{phase}', plan_approved: {str(approved).lower()}). "
+        "Present the implementation plan to the user first. Approval is recorded when the user "
+        "accepts it (Claude Code: ExitPlanMode), or by 'along plan approve' after the user's explicit yes. "
+        "Use 'along start <slug>' to bind this session to an issue."
     )
 
     if event.runtime == "antigravity":
@@ -506,12 +666,33 @@ def check_active_issue(event: HookEvent, repo_root: str, exclude_paths: Optional
     if _matches_pattern(rel_target, excludes):
         return None
 
+    # A file of a subproject with its own .along/ is anchored by that subproject's issue
+    # (subproject_boundary decides whether a root issue may cover it).
+    key = event_session_key(event)
+    ctx = subproject_context(repo_root, repo.normalize_posix(rel_target))
+    if ctx and _subproject_issue_ok(ctx, repo_root, key):
+        return None
+
     issues_dir = _issues_dir(repo_root)
     if not os.path.isdir(issues_dir):
         return None
 
-    # Verify session-bound active issue first
-    active_slug = session.get_active_session_slug(repo_root)
+    # Verify this session's bound issue first
+    active_slug, how = session.resolve_active_session(repo_root, key)
+    if how == "elsewhere":
+        bctx, bslug = session.resolve_bound(repo_root, key)
+        where = repo.normalize_posix(os.path.relpath(bctx, repo_root)) if bctx else "?"
+        return (
+            f"Mandatory Issue Anchoring Violation [gate: require-active-issue]: this session is bound to "
+            f"'{bslug}' in '{where}/.along/', and '{rel_target}' is outside that subproject. Bind an issue "
+            f"of this .along/ (or an umbrella issue) with 'along start <slug>'."
+        )
+    if how == "ambiguous":
+        return (
+            f"Mandatory Issue Anchoring Violation [gate: require-active-issue]: "
+            f"Several issues are in progress and none is bound to this agent session. "
+            f"Run 'along start <slug>' to bind it before modifying '{rel_target}'."
+        )
     if active_slug:
         has_active = False
         try:
@@ -548,8 +729,8 @@ def check_active_issue(event: HookEvent, repo_root: str, exclude_paths: Optional
     except (OSError, UnicodeDecodeError, ValueError):
         pass
 
-    # If explicit global session state is in inquiry mode without approved plan, block stale issue reuse
-    gst = session.load_global_session_state(repo_root)
+    # Runtimes without a session id keep the repository-level inquiry lock.
+    gst = session.load_global_session_state(repo_root) if not key else None
     if gst and gst.get("phase") == "inquiry" and not gst.get("plan_approved", False):
         return (
             f"Mandatory Issue Anchoring Violation [gate: require-active-issue]: "
@@ -566,21 +747,70 @@ def check_active_issue(event: HookEvent, repo_root: str, exclude_paths: Optional
     return None
 
 
+def check_team_step_active(event: HookEvent, repo_root: str, **kwargs: Any) -> Optional[str]:
+    """A role-based (along-team) blackboard allows source edits only inside an in-progress step.
+
+    See [feat--along-team-step-enforcement].
+    """
+    if not repo_root or event.event_type != HookEventType.PRE_TOOL_USE:
+        return None
+    rel = _repo_relative(_extract_target_file(event), repo_root)
+    if not rel or "/.along/" in f"/{rel.lower()}":
+        return None
+    ctx, slug = session.resolve_bound(repo_root, event_session_key(event))
+    st = session.load_state(ctx, slug) if slug else None
+    if not session.is_role_based(st):
+        return None
+    if any(s.get("status") == "in-progress" for s in st.get("steps", [])):
+        return None
+    nxt = next((s for s in st.get("steps", []) if s.get("status") in ("pending", "failed")), None)
+    hint = (f"'along scratch update {slug} --step {nxt.get('step')} --step-status in-progress'"
+            if nxt else f"'along scratch update {slug} --step <N> --step-status in-progress'")
+    return (
+        f"along-team Step Violation [gate: team-step-active]: '{slug}' runs the along-team step loop, "
+        f"but no step is in progress, so '{rel}' may not be edited. Start the step first with {hint}, "
+        f"or record a single-agent fallback: 'along scratch fallback {slug} --reason \"...\"'."
+    )
+
+
+def check_team_reviews_before_stop(event: HookEvent, repo_root: str, **kwargs: Any) -> Optional[str]:
+    """Every passed along-team step has its reviews/step-N.md before the turn ends."""
+    if not repo_root:
+        return None
+    ctx, slug = session.resolve_bound(repo_root, event_session_key(event))
+    if not slug:
+        return None
+    missing = session.missing_reviews(ctx, slug)
+    if not missing:
+        return None
+    files = ", ".join(f"reviews/step-{n}.md" for n in missing)
+    return (
+        f"Turn Completion Rejected [gate: team-reviews-before-stop]: along-team steps {missing} of '{slug}' "
+        f"are passed without a review record ({files} in .along/.session/{slug}/). Write the Reviewer's "
+        "verdict there, or set the step back to in-progress."
+    )
+
+
 def check_test_before_stop(event: HookEvent, repo_root: str, **kwargs: Any) -> Optional[str]:
     """Ensure automated tests were run after code modifications before stopping turn."""
     if not repo_root:
         return None
 
-    trace = load_activity_trace(repo_root)
+    trace = load_activity_trace(repo_root, event_session_key(event))
     edit_time = trace.get("last_edit_time")
     test_time = trace.get("last_test_time")
 
     if edit_time is not None:
         if test_time is None or test_time < edit_time:
+            raw = trace.get("last_raw_test_time")
+            hint = ""
+            if raw and raw >= edit_time:
+                hint = (" A raw test runner ran after the edit, but this repository has a lifecycle "
+                        "test hook, and only it counts.")
             return (
-                "Turn Completion Rejected [gate: test-before-stop]: Source files were modified during this turn, "
-                "but automated tests have not been executed afterward. "
-                "Run tests via '/along-test' or 'python .along/scripts/test.py' before completing."
+                "Turn Completion Rejected [gate: test-before-stop]: Source files were modified in this session, "
+                f"but automated tests have not been executed afterward.{hint} "
+                "Run tests via 'along test' or 'python .along/scripts/test.py' before completing."
             )
     return None
 
@@ -693,11 +923,91 @@ def check_entity_reference_integrity(event: HookEvent, repo_root: str, **kwargs:
     )
 
 
+def subproject_context(repo_root: str, rel_target: str) -> Optional[str]:
+    """Directory of the nearest `.along/` below `repo_root` that owns `rel_target`, or None."""
+    abs_target = os.path.normpath(os.path.join(repo_root, rel_target))
+    sdir = repo.find_state_dir(os.path.dirname(abs_target))
+    if not sdir:
+        return None
+    ctx = os.path.dirname(os.path.abspath(sdir))
+    root = os.path.abspath(repo_root)
+    if os.path.normcase(ctx) == os.path.normcase(root):
+        return None
+    try:
+        inside = not os.path.relpath(ctx, root).startswith("..")
+    except ValueError:
+        return None
+    return ctx if inside else None
+
+
+def _issue_frontmatter(context_root: str, slug: str, include_done: bool = False) -> Optional[Dict[str, Any]]:
+    issues_dir = _issues_dir(context_root)
+    dirs = [issues_dir] + ([os.path.join(issues_dir, "done")] if include_done else [])
+    for d in dirs:
+        for prefix in ("feat--", "bug--", "debt--", "task--", "docs--", ""):
+            path = os.path.join(d, f"{prefix}{slug}.md")
+            if os.path.isfile(path):
+                try:
+                    mapping, _b, _e = frontmatter.try_parse(textio.read_text(path, strict=False))
+                except (OSError, UnicodeDecodeError, ValueError):
+                    return None
+                return mapping or None
+    return None
+
+
+def _subproject_issue_ok(context_root: str, repo_root: str, key: Optional[str]) -> bool:
+    """The session works on an issue of `context_root`, or on a root umbrella with a child there."""
+    slug, _how = session.resolve_active_session(context_root, key)
+    if slug:
+        fm = _issue_frontmatter(context_root, slug)
+        if fm and fm.get("status") == "in-progress":
+            return True
+    root_slug = session.get_active_session_slug(repo_root, key)
+    root_fm = _issue_frontmatter(repo_root, root_slug) if root_slug else None
+    if not root_fm:
+        return False
+    root_key = f"{root_fm.get('type', '')}--{root_slug}"
+    issues_dir = _issues_dir(context_root)
+    if not os.path.isdir(issues_dir):
+        return False
+    for name in os.listdir(issues_dir):
+        if name.endswith(".md"):
+            try:
+                child, _b, _e = frontmatter.try_parse(textio.read_text(os.path.join(issues_dir, name), strict=False))
+            except (OSError, UnicodeDecodeError, ValueError):
+                continue
+            if child and str(child.get("parent") or "") in (root_key, root_slug):
+                return True
+    return False
+
+
 def check_subproject_boundary(event: HookEvent, repo_root: str, **kwargs: Any) -> Optional[str]:
-    """Enforce subproject localization: entities must be in nearest .along/."""
+    """Enforce subproject localization [gate: subproject-boundary].
+
+    1. A source edit inside a subproject that has its own `.along/` needs an issue of that
+       subproject bound to the session, or a root umbrella issue with a child there
+       (`parent: <root key>`). Decided from the edited path, not the process cwd.
+       See [feat--subproject-boundary-by-active-issue].
+    2. Entities are not written to the root `.along/` while working inside a subproject.
+    """
     target = _extract_target_file(event)
     if not target or not repo_root:
         return None
+
+    rel = _repo_relative(target, repo_root)
+    if rel and not rel.lower().startswith(".along/"):
+        ctx = subproject_context(repo_root, rel)
+        if ctx:
+            sub_rel = repo.normalize_posix(os.path.relpath(os.path.join(repo_root, rel), ctx))
+            if not sub_rel.lower().startswith(".along/") and \
+                    not _subproject_issue_ok(ctx, repo_root, event_session_key(event)):
+                sub = repo.normalize_posix(os.path.relpath(ctx, repo_root))
+                return (
+                    f"Subproject Boundary Violation [gate: subproject-boundary]: '{rel}' belongs to subproject "
+                    f"'{sub}', which has its own .along/. Work on it under an issue of '{sub}/.along/' "
+                    f"('along start <slug>' from '{sub}'), or give a child issue there "
+                    f"'parent: <root issue key>' of the umbrella issue this session is bound to."
+                )
 
     if os.path.isabs(target):
         try:
@@ -738,7 +1048,8 @@ def check_workspace_containment(event: HookEvent, repo_root: str, options: Optio
     if not repo_root:
         return None
     from . import containment
-    policy = containment.build_policy(repo_root, options, conversation_id=event.conversation_id)
+    policy = containment.build_policy(repo_root, options, conversation_id=event.conversation_id,
+                                      session_key=event_session_key(event))
     base = event.workspace_root or repo_root
     bad = containment.violations(event, policy, base=base)
     if not bad:

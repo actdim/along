@@ -46,6 +46,12 @@ class TestCoworkDetection(unittest.TestCase):
             self.assertEqual(entities.detect_agent(), "me")
         self.assertEqual(entities.detect_agent("explicit"), "explicit")
 
+    def test_detect_agent_claude_code_shell_markers(self):
+        """Markers a Claude Code shell really carries [bug--claude-runtime-not-detected]."""
+        for marker in ("CLAUDECODE", "CLAUDE_CODE_ENTRYPOINT", "CLAUDE_CODE_SESSION_ID"):
+            with mock.patch.dict(os.environ, {marker: "1", "HOME": "/home/u"}, clear=True):
+                self.assertEqual(entities.detect_agent(), "claude-code", marker)
+
 
 class TestEnforcementLevel(unittest.TestCase):
     def test_cowork_and_unknown_are_advisory(self):
@@ -60,11 +66,31 @@ class TestEnforcementLevel(unittest.TestCase):
             with mock.patch.dict(os.environ, {"HOME": home, "USERPROFILE": home}):
                 self.assertEqual(runtime.enforcement_level("claude-code")[0], runtime.ADVISORY)
                 os.makedirs(os.path.join(home, ".claude"))
-                with open(os.path.join(home, ".claude", "settings.json"), "w", encoding="utf-8") as f:
-                    f.write('{"hooks": {"PreToolUse": [{"hooks": [{"command": "python along_hook.py"}]}]}}')
+                settings = os.path.join(home, ".claude", "settings.json")
+                with open(settings, "w", encoding="utf-8") as f:
+                    f.write('{"hooks": {"PreToolUse": [{"matcher": "Bash", "command": '
+                            '"python along_hook.py --event PreToolUse"}], "Stop": [{"command": '
+                            '"python along_hook.py --event Stop"}]}}')
+                level, why = runtime.enforcement_level("claude-code")
+                self.assertEqual(level, runtime.ADVISORY)
+                self.assertIn("flat schema", why)
+                with open(settings, "w", encoding="utf-8") as f:
+                    f.write('{"hooks": {"PreToolUse": [{"hooks": [{"type": "command", "command": '
+                            '"python along_hook.py --event PreToolUse"}]}], "Stop": [{"hooks": '
+                            '[{"type": "command", "command": "python along_hook.py --event Stop"}]}]}}')
                 self.assertEqual(runtime.enforcement_level("claude-code")[0], runtime.MECHANICAL)
         finally:
             shutil.rmtree(home, ignore_errors=True)
+
+    def test_heartbeat_roundtrip(self):
+        root = tempfile.mkdtemp(prefix="along-rt-beat-")
+        try:
+            os.makedirs(os.path.join(root, ".along"))
+            self.assertIsNone(runtime.last_heartbeat(root, "claude-code"))
+            runtime.record_heartbeat(root, "claude", "2026-10-01T10:00:00Z")
+            self.assertEqual(runtime.last_heartbeat(root, "claude-code"), "2026-10-01T10:00:00Z")
+        finally:
+            shutil.rmtree(root, ignore_errors=True)
 
     def test_python_floor(self):
         self.assertTrue(runtime.python_supported((3, 10, 0)))

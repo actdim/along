@@ -91,7 +91,8 @@ For full specification and architecture, see [Declarative Gate Engine & Traceabi
 
 ### 2.4 Runtime Adapters (`alongkit.hooks.adapters`)
 - **`AntigravityAdapter`**: Translates Google Antigravity JSON payloads (`toolCall.name`, `toolCall.args`) to `HookEvent`, returning JSON stdout with `allow`/`deny` decisions.
-- **`ClaudeCodeAdapter`**: Translates Anthropic Claude Code CLI payloads to `HookEvent`, mapping `Write`/`WriteFile` to `write_to_file`, `Edit`/`EditFile` to `replace_file_content`, and `Bash` to `run_command`. Formats exit code 0 for allow, and exit code 2 with the remediation message written to `stderr` for gate denials.
+- **`ClaudeCodeAdapter`**: Translates Anthropic Claude Code payloads to `HookEvent`, mapping `Write` to `write_to_file`, `Edit`/`MultiEdit`/`NotebookEdit` to `replace_file_content`, `Bash`/`PowerShell` to `run_command`, and `Read`/`Grep`/`Glob` to the read tools; `session_id` becomes the event's session id. Responses: exit 0 for allow; exit 2 with the remediation on `stderr` for a denial; exit 0 with `hookSpecificOutput.permissionDecision: "ask"` for an ASK (the user decides); on `Stop` with `stop_hook_active: true` a denial is reported once as a `systemMessage` instead of forcing another continuation.
+- **Claude Code hook schema**: `along hook install --runtime claude [--global]` writes the nested schema Claude Code reads, `{"matcher": ..., "hooks": [{"type": "command", "command": ..., "timeout": 30}]}`, for `PreToolUse` (`Write|Edit|MultiEdit|NotebookEdit|Bash|PowerShell|Read|Grep|Glob`), `PostToolUse` (edits and `ExitPlanMode`) and `Stop`. Legacy flat `{matcher, command}` entries, which Claude Code ignores, are migrated in place; foreign hooks are kept.
 - **`CodexAdapter`**: Translates OpenAI Codex CLI and headless harness JSON payloads to HookEvent, mapping write_file/create_file to write_to_file, edit_file/patch to replace_file_content, and shell/bash/exec to run_command. Formats exit code 0 for allow, and exit code 2 with the remediation message written to stderr for gate denials.
 - **`GenericCliAdapter`**: Translates generic CLI tool invocations, terminal proxy wrappers, Cursor (`.cursor/hooks.json`), and OpenCode to `HookEvent`. Normalizes arguments across tool types, supports plain command strings as fallback `run_command`, and formats exit code 0 for allow or exit code 2 with stderr remediation message for gate denials.
 
@@ -131,6 +132,22 @@ Codex and Antigravity document no attribution key; for them the gate and `/along
 ```json
 { "commits": { "allow_ai_coauthor": true } }
 ```
+
+### 2.8 Agent-Session Binding & Plan Approval (`alongkit.session`)
+Several agent sessions may work in one repository at once, so gates never read a repository-wide "active issue". Each session is bound to one issue:
+
+- **Binding**: `along start <slug>` writes `.along/.session/bindings/<runtime>--<session_id>.json` (`slug`, `context`, `plan_approved`, `approved_slug`). The session id comes from the hook payload (`session_id`, antigravity conversation id) and, for CLI calls, from `CLAUDE_CODE_SESSION_ID`, `ANTIGRAVITY_CONVERSATION_ID`, `CODEX_SESSION_ID` or `ALONG_SESSION_ID` (+ `ALONG_SESSION_RUNTIME`). Bindings live in the outermost `.along/` of the workspace (up to the git top, never `~/.along`); `context` names the `.along/` the issue belongs to, so a session bound to a subproject issue is visible at the root.
+- **Resolution** (`session.resolve_active_session`): `ALONG_ISSUE_SLUG` (runner) > own binding > the single in-progress blackboard not bound to another session > none. Several unbound candidates are `ambiguous`: gates refuse and point at `along start <slug>`.
+- **Plan approval**: `along start` binds with `phase: planning`, `plan_approved: false`. Approval is recorded per session when the user accepts a plan in Claude Code (`PostToolUse` on `ExitPlanMode`), or by `along plan approve [<slug>]` after the user's explicit yes; an approval given before `along start` carries over to the first bound slug. `along start --approved` is for scripted runs. Along state commands (`issue`, `start`, `scratch`, `plan`, `decision`, `milestone`, `session`, `wrap`, `kb sync`) and writes to `.along/ISSUES|RISKS|SPIKES|SESSIONS|.session|diagnostics` pass `require_plan_approval`, so an issue can be written and started before a plan exists.
+- **Repository-level `.along/.session/state.json`** is read only for runtimes that pass no session id; `purge` removes it when it points at the purged slug.
+- **Housekeeping**: `along plan status`, `along session bindings`, `along session gc [--dry-run]` (bindings older than 72 h or without a blackboard). `along scratch purge` / `along wrap` remove the slug's bindings.
+- **Activity trace** (`test_before_stop`): per session in `.along/diagnostics/activity/<key>.json`; edits under `.along/` are not source edits. Where `.along/scripts/test.py` exists only `along test` / that script count as a test run; raw runners are named in the Stop message.
+- **Diagnostics** (`hooks_audit.jsonl`, activity traces, `hook_heartbeat.json`, circuit breaker) are machine-local: `.along/diagnostics/` carries its own `*` `.gitignore`.
+
+### 2.9 along-team Step Discipline & Wrap Record
+- `along scratch init` creates a `role-based` blackboard (`--mode direct` opts out); `along start` creates a `direct` one. `[gate: team-step-active]` denies source edits in a role-based session while no step is `in-progress`; `[gate: team-reviews-before-stop]` blocks the turn end while a `passed` step lacks `reviews/step-N.md`.
+- `along scratch purge` and `along wrap` refuse while role-based steps are open or reviews are missing; `--force --reason` / `--force-reason` records why in `execution_trace.md`. `along scratch fallback <slug> --reason` switches to single-agent execution with the reason in the trace.
+- `along wrap` requires `--decisions ADR-...` or `--no-decisions`, writes (or extends) today's session log with `issues_completed: [<type>--<slug>]`, the decisions answer and the blackboard record (plan, step table, research, trace, reviews), and only then purges the blackboard.
 
 ---
 
@@ -206,7 +223,7 @@ Every rule of the managed `AGENTS.md` block, classified: **a** enforced by a gat
 | Rule | Class | Enforced by | Layer |
 | :--- | :--- | :--- | :--- |
 | Nearest context boundary, precedence, session-start reading | c | - | - |
-| Subproject localization | a | `subproject_boundary` | runtime |
+| Subproject localization (edits under a subproject `.along/` need its issue or a root umbrella with `parent:` children) | a | `subproject_boundary` | runtime |
 | Uninitialized subprojects need `/along-init` | c | - | - |
 | Zero-manual-merge of projections | a | `projection_protection`, merge drivers (`along git setup`) | runtime, git, ci |
 | Append-only `HISTORY.md` merge | a | `along git setup` writes `merge=union` | git |
@@ -225,8 +242,9 @@ Every rule of the managed `AGENTS.md` block, classified: **a** enforced by a gat
 | Fact grounding, doc blast radius, routing tree | c | - | - |
 | Fast retrieval | a | `fast_retrieval` | runtime |
 | Manual document lock | a | `doc_manual_lock` | runtime, git, ci |
+| Managed rule packs (`.along/rules/**/*.md`) not edited by agents | a | `rule_pack_protection` (runtime: file tools and shell writes, `along rules ...` excepted; git / ci: body matches the managed header hash) | runtime, git, ci |
 | Lifecycle hooks first, token hygiene, post-change review | c | - | - |
-| Checklist: tests | a | `test_before_stop` | runtime |
+| Checklist: tests (edits under `.along/scripts/` count as source edits) | a | `test_before_stop` | runtime |
 | Checklist: session log | a | `wrap_before_stop` | runtime |
 | Checklist: projections | a | `projection_sync_before_stop`, projection freshness in `along gates check` | runtime, git, ci |
 | Checklist: file integrity, review, reconciliation, HISTORY, compaction | c | - | - |
@@ -241,6 +259,8 @@ Every rule of the managed `AGENTS.md` block, classified: **a** enforced by a gat
 | Hermetic tests | a | `tests/test_zz_hermetic_suite.py` (this repo) | ci |
 | Inquiry read-only | a | `require_plan_approval` | runtime |
 | Complexity escalation to `along-team` | c | - | - |
+| along-team step loop and reviews | a | `team_step_active`, `team_reviews_before_stop`, `along scratch purge` / `along wrap` refusal | runtime |
+| ADR question at wrap | a | `along wrap --decisions / --no-decisions` (required) | runtime |
 | Windows-safe filenames | a | `windows_safe_filenames` | git, ci |
 | `ISSUES.md` compact | a | `along context-budget --check`, `tests/test_context_budget.py` | ci |
 | No secrets in tracked files | a | `no_tracked_secrets` | git, ci |
@@ -251,13 +271,13 @@ Gates are mechanical only where the runtime loads Along's `PreToolUse`/`Stop` ho
 
 | Runtime | Along skills | Along runtime hooks | Enforcement |
 | :--- | :--- | :--- | :--- |
-| Claude Code | auto (`~/.claude/skills`) | yes (`~/.claude/settings.json`) | mechanical once `along hook install` ran |
+| Claude Code | auto (`~/.claude/skills`) | yes (`~/.claude/settings.json`, nested schema) | mechanical once `along hook install` ran; `along doctor` also checks the schema and the last hook heartbeat |
 | Google Antigravity | auto (`~/.gemini`) | yes (`~/.gemini/config/hooks.json`) | mechanical once installed |
 | OpenAI Codex | auto (`~/.codex`) | yes (`~/.codex/hooks.json`) | mechanical once installed |
 | Claude Cowork | not loaded (Cowork reads plugins from the claude.ai account, not `~/.claude`) | no (Cowork ignores `settings.json`; plugin hooks are tracked in `feat--cowork-plugin-skill-packaging`) | advisory |
 | OpenCode, Cursor, plain shell, human | rules only | no | advisory |
 
-Advisory runtimes are still covered at commit time by the portable layer: `along hooks install --git` (opt-in, local) and the CI job `along gates check --ci` enforce the gates whose catalogue entry lists `git` / `ci` (typography, conflict markers, anti-stub on added lines, issue binding, AI co-author trailers, projection freshness), regardless of which agent or human made the commit.
+Advisory runtimes are still covered at commit time by the portable layer: `along hooks install --git` (opt-in, local) and the CI job `along gates check --ci` enforce the gates whose catalogue entry lists `git` / `ci` (typography, conflict markers, anti-stub on added lines, issue binding, AI co-author trailers, projection freshness, rule pack integrity), regardless of which agent or human made the commit.
 
 Runtime detection (`entities.detect_agent`) honours `--agent` and `ALONG_AGENT` first; Claude Cowork is recognised by `ALONG_RUNTIME=cowork`, or by `CLAUDE_CODE_HOST_HTTP_PROXY_PORT` together with a `/sessions/` home (markers observed 2026-09-27, heuristic).
 

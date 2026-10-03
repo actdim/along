@@ -118,7 +118,9 @@ Lifecycle Commands (project hooks):
 Entity Management Commands:
   status         Instant terminal summary of repository state, active issues, and recent sessions
   doctor         Validate .along/ structure, .gitattributes, and ADR headers (--entities for entity graph)
-  start          Atomically mark issue in-progress, initialize session blackboard, and optional --worktree
+  start          Mark issue in-progress, initialize blackboard, bind this agent session [--approved] [--worktree]
+  plan approve   [<slug>]  Record the user's plan approval for this session (after an explicit yes)
+  plan status    Show this session's bound issue, phase and approval
   issue create   <type> <slug> --title "Title" [--priority high|medium|low] [--tags "t1,t2"] [--agent <name>] [--milestone <name>]
   issue update   <slug> [--milestone <name>] [--priority <priority>] [--status <status>] [--tags <tags>] [--title <title>]
   issue show     <slug> [--json]
@@ -132,15 +134,18 @@ Entity Management Commands:
   milestone show <slug> [--json]
   milestone create <slug> --title "Title" [--due YYYY-MM-DD]
   session create <slug> --summary "Summary" [--issues "slug1,slug2"] [--decisions "ADR-slug"] [--agent <name>] [--milestone <name>] [--commit <sha>]
-  session wrap   <slug> [--status done|superseded] [--summary "Summary"] [--dry-run] [-n]
+  session wrap   <slug> (--decisions "ADR-a,ADR-b" | --no-decisions) [--status done|superseded] [--summary "Summary"] [--force-reason "..."] [--dry-run] [-n]
+  session bindings  List agent-session bindings
+  session gc     [--dry-run]  Remove stale or orphaned bindings
   decision create <slug> --title "Title" --context "Why" --decision "What" --consequences "Tradeoffs"
   decision sync   Recompile .along/CONSTRAINTS.md projection from active ADRs
-  scratch init   <slug> [--title "Title"] [--steps N] [--restart]
+  scratch init   <slug> [--title "Title"] [--steps N] [--restart] [--mode direct]
   scratch state  <slug> [--json]
   scratch phase  <slug> <inquiry|planning|execution> [--approve]
   scratch approve <slug>  Grant plan approval (phase: execution)
   scratch update <slug> [--step N] [--step-status status] [--inc-retry] [--status status]
-  scratch purge  <slug>
+  scratch fallback <slug> --reason "..."  Single-agent execution, reason kept in execution_trace.md
+  scratch purge  <slug> [--force --reason "..."]  Refuses while role-based steps are open
   worktree create <slug> [--branch <name>] [--base-ref <ref>]
   worktree remove <slug> [--force] [--keep-branch]
   worktree merge  <slug> [--squash]
@@ -788,9 +793,10 @@ def handle_milestone_command(repo_root: str, args: List[str]):
 
 def handle_start_command(repo_root: str, args: List[str]):
     if not args or args[0] in ("-h", "--help", "help"):
-        print("Usage: along start <slug> [--worktree] [--allow-root <path>]... [--write-scope <path>]...")
-        print("  Atomically marks issue in-progress, initializes session blackboard,")
-        print("  and optionally creates an isolated worktree.")
+        print("Usage: along start <slug> [--approved] [--worktree] [--allow-root <path>]... [--write-scope <path>]...")
+        print("  Atomically marks issue in-progress, initializes session blackboard, binds this")
+        print("  agent session to the issue, and optionally creates an isolated worktree.")
+        print("  The plan stays unapproved until the user approves it; --approved is for scripted runs.")
         print("  --allow-root / --write-scope add to the issue's allowed_roots / write_scope")
         print("  frontmatter, read by [gate: workspace-containment].")
         sys.exit(0)
@@ -830,9 +836,25 @@ def handle_start_command(repo_root: str, args: List[str]):
 
     title = new_fm.get("title", issue["slug"].replace("-", " ").capitalize())
     st = session.init_session(repo_root, issue["slug"], title=title)
-    st = session.approve_plan(repo_root, issue["slug"])
     sdir = session.get_session_dir(repo_root, issue["slug"])
-    print(f"-> Initialized session blackboard: {sdir} (phase: execution, plan_approved: true)")
+    key = session.current_session_key()
+    # Starting an issue is not a plan approval: approval comes from the user (ExitPlanMode,
+    # or 'along plan approve' after an explicit yes); --approved is for scripted runs.
+    # See [feat--plan-approval-exit-plan-mode] and [bug--session-state-cross-session-leak].
+    binding = session.bind_session(repo_root, issue["slug"], key=key,
+                                   approved=True if "--approved" in args else None)
+    approved = "--approved" in args or session.is_plan_approved(repo_root, slug=issue["slug"], key=key)
+    st = session.set_session_phase(repo_root, "execution" if approved else "planning",
+                                   slug=issue["slug"], plan_approved=approved)
+    print(f"-> Initialized session blackboard: {sdir} "
+          f"(phase: {st.get('phase')}, plan_approved: {str(bool(st.get('plan_approved'))).lower()})")
+    if binding:
+        print(f"-> Bound agent session {binding['key']} to '{issue['slug']}'.")
+    else:
+        print("-> No agent session id in the environment; gates fall back to the single in-progress issue.")
+    if not approved:
+        print("-> Present the plan to the user. Edits unlock after approval "
+              "(Claude Code: ExitPlanMode; otherwise 'along plan approve' after the user's explicit yes).")
 
     if "--worktree" in args:
         from alongkit import worktree
@@ -867,7 +889,7 @@ def _tests_evidence_line(repo_root: str) -> str:
     """
     try:
         from alongkit.hooks.predicates import load_activity_trace
-        trace = load_activity_trace(repo_root)
+        trace = load_activity_trace(repo_root, session.current_session_key())
     except (ImportError, OSError, ValueError):
         trace = {}
     test_time = trace.get("last_test_time")
@@ -914,12 +936,62 @@ def _render_session_log(repo_root: str, *, today: str, slug: str, agent: str, su
     return frontmatter.render(fm, body)
 
 
+def handle_plan_command(repo_root: str, args: List[str]):
+    """`along plan approve [<slug>]` / `along plan status` for this agent session.
+
+    See [feat--plan-approval-exit-plan-mode].
+    """
+    if not args or args[0] in ("-h", "--help", "help"):
+        print("Usage: along plan approve [<slug>]   Record the user's approval of the plan (run only after an explicit yes)")
+        print("       along plan status             Show this session's binding, phase and approval")
+        sys.exit(0)
+    sub = args[0].lower()
+    key = session.current_session_key()
+    if sub == "approve":
+        slug = args[1].lower() if len(args) > 1 and not args[1].startswith("-") else None
+        slug = slug or session.get_active_session_slug(repo_root, key)
+        if slug:
+            session.set_session_phase(repo_root, "execution", slug=slug, plan_approved=True)
+            print(f"-> Plan approved for '{slug}' (session: {key or 'none'}).")
+        elif key:
+            session.record_plan_approval(repo_root, key)
+            print(f"-> Plan approved for session {key}; it applies to the next 'along start <slug>'.")
+        else:
+            print("[Error] No issue bound and no agent session id; run 'along start <slug>' first.", file=sys.stderr)
+            sys.exit(1)
+        sys.exit(0)
+    if sub == "status":
+        slug, how = session.resolve_active_session(repo_root, key)
+        print(f"Session key: {key or 'none (no session id in environment)'}")
+        print(f"Issue:       {slug or '-'} ({how})")
+        print(f"Phase:       {session.get_session_phase(repo_root, slug=slug, key=key)}")
+        print(f"Approved:    {str(session.is_plan_approved(repo_root, slug=slug, key=key)).lower()}")
+        sys.exit(0)
+    print(f"[Error] Unknown plan subcommand '{sub}'. Use: approve, status.", file=sys.stderr)
+    sys.exit(2)
+
+
 def handle_session_command(repo_root: str, args: List[str]):
     if not args or args[0] in ("-h", "--help", "help"):
         print("Usage: along_exec.py session create <slug> --summary \"Summary text\" [--issues \"slug1,slug2\"] [--decisions \"ADR-slug\"]")
+        print("       along_exec.py session bindings          List agent-session bindings")
+        print("       along_exec.py session gc [--dry-run]    Remove stale or orphaned bindings")
         sys.exit(0)
 
     subcmd = args[0].lower()
+    if subcmd == "bindings":
+        rows = session.list_bindings(repo_root)
+        if not rows:
+            print("No agent-session bindings.")
+        for b in rows:
+            print(f"{b.get('key')}: {b.get('slug') or '-'} (approved: "
+                  f"{str(bool(b.get('plan_approved'))).lower()}, updated: {b.get('updated')})")
+        sys.exit(0)
+    if subcmd == "gc":
+        removed = session.gc_bindings(repo_root, dry_run="--dry-run" in args)
+        verb = "Would remove" if "--dry-run" in args else "Removed"
+        print(f"-> {verb} {len(removed)} stale binding(s){': ' + ', '.join(removed) if removed else ''}.")
+        sys.exit(0)
     from datetime import datetime
     today = datetime.now().strftime("%Y-%m-%d")
     year = datetime.now().strftime("%Y")
@@ -1023,6 +1095,14 @@ def handle_session_command(repo_root: str, args: List[str]):
             else:
                 i += 1
 
+        # Same contract as `along wrap` [feat--wrap-session-log-from-blackboard].
+        raw_decisions = _flag_value(args, "--decisions") or _flag_value(args, "-d")
+        if (raw_decisions is None) == ("--no-decisions" not in args):
+            print("[Error] Answer whether architectural decisions were made: "
+                  "--decisions ADR-a,ADR-b or --no-decisions (exactly one).", file=sys.stderr)
+            sys.exit(2)
+        decisions = [] if raw_decisions is None else [d.strip() for d in raw_decisions.split(",") if d.strip()]
+
         code = lifecycle.execute_wrap(
             repo_root=repo_root,
             slug=islug,
@@ -1031,6 +1111,8 @@ def handle_session_command(repo_root: str, args: List[str]):
             dry_run=dry_run,
             no_verify=no_verify,
             agent=explicit_agent,
+            decisions=decisions,
+            force_reason=_flag_value(args, "--force-reason"),
         )
         sys.exit(code)
 
@@ -1170,7 +1252,9 @@ def handle_status_command(repo_root: str, args: List[str]):
     # In-flight blackboards
     session_bb_dir = os.path.join(along_dir, ".session")
     if os.path.exists(session_bb_dir):
-        bbs = [d for d in os.listdir(session_bb_dir) if os.path.isdir(os.path.join(session_bb_dir, d))]
+        bbs = [d for d in os.listdir(session_bb_dir)
+               if os.path.isdir(os.path.join(session_bb_dir, d))
+               and not d.startswith(".") and d != session.BINDINGS_DIRNAME]
         if bbs:
             print(f"\nActive Blackboards ({len(bbs)}): {', '.join(bbs)}")
     print("\n===============================")
@@ -1192,6 +1276,16 @@ def _doctor_runtime_checks(repo_root: str, errors: int, warnings: int) -> Tuple[
     print(f"{tag} Gate enforcement: {report['enforcement']}. {report['explanation']}")
     if report["enforcement"] != runtime.MECHANICAL:
         warnings += 1
+    else:
+        # Registered is not the same as firing: the hook writes a heartbeat on every run.
+        beat = runtime.last_heartbeat(repo_root, agent)
+        if beat:
+            print(f"[OK] Last {agent} hook run in this repository: {beat}.")
+        else:
+            print(f"[WARN] No {agent} hook run recorded in this repository yet "
+                  "(.along/diagnostics/hook_heartbeat.json). If this session already used tools, "
+                  "the runtime is not loading the hooks; restart it or check its hook settings.")
+            warnings += 1
 
     if report["python_supported"]:
         print(f"[OK] Python {report['python']} is supported (>= 3.10).")
@@ -1354,6 +1448,15 @@ def handle_doctor_command(repo_root: str, args: List[str]):
     sys.exit(1 if errors > 0 else 0)
 
 
+def _flag_value(args: List[str], flag: str) -> Optional[str]:
+    """Value following `flag` in `args`, or None."""
+    if flag in args:
+        idx = args.index(flag)
+        if idx + 1 < len(args) and not args[idx + 1].startswith("--"):
+            return args[idx + 1]
+    return None
+
+
 def handle_scratch_command(repo_root: str, args: List[str]):
     if not args or args[0] in ("-h", "--help", "help"):
         print("Usage: along scratch [init|state|update|approve|phase|purge] <slug> [options]")
@@ -1362,7 +1465,9 @@ def handle_scratch_command(repo_root: str, args: List[str]):
         print("  update <slug> [--step <N>] [--step-status <pending|in-progress|passed|failed>] [--inc-retry] [--status <in-progress|completed|failed>] [--plan-rev <N>] [--phase <inquiry|planning|execution>] [--approve]")
         print("  approve <slug>")
         print("  phase  <slug> <inquiry|planning|execution> [--approve]")
-        print("  purge  <slug>")
+        print("  fallback <slug> --reason <text>     Run single-agent; the reason goes to execution_trace.md")
+        print("  purge  <slug> [--force --reason <text>]   Refuses while role-based steps are open")
+        print("  init creates a role-based (along-team) blackboard; add '--mode direct' to opt out.")
         sys.exit(0)
 
     subcmd = args[0].lower()
@@ -1392,7 +1497,11 @@ def handle_scratch_command(repo_root: str, args: List[str]):
                 i += 1
             else:
                 i += 1
-        st = session.init_session(repo_root, slug, title=title, total_steps=total_steps, force_restart=force_restart)
+        # The step-loop blackboard is along-team's; gates hold it to the loop unless
+        # --mode direct is asked for [feat--along-team-step-enforcement].
+        mode = "direct" if "direct" in args[2:] and "--mode" in args[2:] else "role-based"
+        st = session.init_session(repo_root, slug, title=title, total_steps=total_steps,
+                                  force_restart=force_restart, execution_mode=mode)
         sdir = session.get_session_dir(repo_root, slug)
         print(f"-> Initialized session blackboard: {sdir}")
         print(session.format_state_summary(st))
@@ -1492,7 +1601,30 @@ def handle_scratch_command(repo_root: str, args: List[str]):
         print(session.format_state_summary(st))
         sys.exit(0)
 
+    elif subcmd == "fallback":
+        reason = _flag_value(args, "--reason")
+        if not reason:
+            print("[Error] Usage: along scratch fallback <slug> --reason \"why one agent does all roles\"", file=sys.stderr)
+            sys.exit(2)
+        session.record_fallback(repo_root, slug, reason)
+        print(f"-> '{slug}' now runs single-agent (direct); reason recorded in {session.TRACE_FILENAME}.")
+        sys.exit(0)
+
     elif subcmd == "purge":
+        problems = session.completion_problems(repo_root, slug)
+        if problems and "--force" not in args:
+            print(f"[Error] Refusing to purge role-based blackboard '{slug}':", file=sys.stderr)
+            for p in problems:
+                print(f"  - {p}", file=sys.stderr)
+            print("  Finish the steps (with reviews/step-N.md), or 'along scratch purge <slug> --force --reason \"...\"'.",
+                  file=sys.stderr)
+            sys.exit(2)
+        if problems:
+            reason = _flag_value(args, "--reason")
+            if not reason:
+                print("[Error] --force needs --reason \"...\"; it is kept in the session log by 'along wrap'.", file=sys.stderr)
+                sys.exit(2)
+            print(f"-> Forced purge of '{slug}' with open problems ({'; '.join(problems)}): {reason}")
         if session.purge_session(repo_root, slug):
             print(f"-> Purged session blackboard: {session.get_session_dir(repo_root, slug)}")
         else:
@@ -2283,6 +2415,8 @@ def main():
         handle_start_command(repo_root, extra_args)
     elif cmd == "session":
         handle_session_command(repo_root, extra_args)
+    elif cmd == "plan":
+        handle_plan_command(repo_root, extra_args)
     elif cmd == "decision":
         handle_decision_command(repo_root, extra_args)
     elif cmd == "scratch":

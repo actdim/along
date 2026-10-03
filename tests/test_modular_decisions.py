@@ -161,13 +161,18 @@ class TestModularDecisionsCompilation(unittest.TestCase):
             self.assertLess(len(content.encode("utf-8")), 7168)
 
     def test_live_repo_projection_size_budget(self):
-        """Verify the live repository's compiled DECISIONS.md satisfies the < 7 KB budget ceiling."""
+        """Verify the live repository's compiled DECISIONS.md stays under the 8 KB budget ceiling.
+
+        The board gains one line per ADR; 7 KB was reached at 44 ADRs (2026-10-01), so the
+        ceiling now matches the ISSUES.md budget. Superseded-ADR filtering is tracked in
+        [debt--constraints-superseded-adr-filtering].
+        """
         dec_file = os.path.join(REPO_ROOT, ".along", "DECISIONS.md")
         self.assertTrue(os.path.isfile(dec_file))
         size = os.path.getsize(dec_file)
         self.assertLess(
-            size, 7168,
-            f"Compiled .along/DECISIONS.md is {size} bytes, exceeds 7 KB budget limit (7168 B)"
+            size, 8192,
+            f"Compiled .along/DECISIONS.md is {size} bytes, exceeds 8 KB budget limit (8192 B)"
         )
 
     def test_sync_constraints(self):

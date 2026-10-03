@@ -57,16 +57,107 @@ def is_cowork_env(env: Optional[Mapping[str, str]] = None) -> bool:
     return "CLAUDE_CODE_HOST_HTTP_PROXY_PORT" in env and home.startswith("/sessions/")
 
 
+#: Hook events Along needs registered in Claude Code for mechanical enforcement.
+CLAUDE_REQUIRED_EVENTS: Tuple[str, ...] = ("PreToolUse", "Stop")
+
+#: Hook adapter runtime name for each `detect_agent` name, where they differ.
+HOOK_RUNTIME_NAMES: Dict[str, str] = {"claude-code": "claude"}
+
+
+def _claude_settings_files(repo_root: Optional[str]) -> List[str]:
+    files = [os.path.join(os.path.expanduser("~"), ".claude", "settings.json")]
+    if repo_root:
+        files += [os.path.join(repo_root, ".claude", "settings.json"),
+                  os.path.join(repo_root, ".claude", "settings.local.json")]
+    return files
+
+
+def claude_hook_status(repo_root: Optional[str] = None) -> Tuple[str, List[str]]:
+    """('ok' | 'flat' | 'missing', files) for Along hooks in Claude Code settings.
+
+    'ok' means every required event has an Along command in the nested schema Claude Code
+    reads; 'flat' means Along entries exist only in the legacy `{matcher, command}` shape,
+    which Claude Code ignores. See [bug--claude-runtime-not-detected].
+    """
+    from .hooks.config import is_along_hook_entry
+
+    nested: set = set()
+    flat_files: List[str] = []
+    for path in _claude_settings_files(repo_root):
+        try:
+            with open(path, "r", encoding="utf-8") as handle:
+                data = json.loads(handle.read() or "{}")
+        except (OSError, ValueError):
+            continue
+        hooks = data.get("hooks") if isinstance(data, dict) else None
+        if not isinstance(hooks, dict):
+            continue
+        for event in CLAUDE_REQUIRED_EVENTS:
+            for item in hooks.get(event) or []:
+                if not is_along_hook_entry(item, event):
+                    continue
+                inner = item.get("hooks") if isinstance(item, dict) else None
+                if isinstance(inner, list) and any(
+                        isinstance(h, dict) and "along_hook.py" in str(h.get("command", "")) for h in inner):
+                    nested.add(event)
+                elif path not in flat_files:
+                    flat_files.append(path)
+    if all(e in nested for e in CLAUDE_REQUIRED_EVENTS):
+        return "ok", []
+    if flat_files:
+        return "flat", flat_files
+    return "missing", []
+
+
+def heartbeat_path(repo_root: str) -> str:
+    from . import repo
+    return os.path.join(repo.state_dir(repo_root), "diagnostics", "hook_heartbeat.json")
+
+
+def record_heartbeat(repo_root: Optional[str], runtime: str, now_iso: str) -> None:
+    """Remember when a hook of `runtime` last ran in this repository (best effort)."""
+    if not repo_root or not runtime:
+        return
+    path = heartbeat_path(repo_root)
+    data: Dict[str, Any] = {}
+    try:
+        with open(path, "r", encoding="utf-8") as handle:
+            loaded = json.loads(handle.read() or "{}")
+            if isinstance(loaded, dict):
+                data = loaded
+    except (OSError, ValueError):
+        pass
+    if data.get(runtime) == now_iso:
+        return
+    data[runtime] = now_iso
+    try:
+        from . import repo
+        repo.ensure_diagnostics_dir(repo_root)
+        with open(path, "w", encoding="utf-8", newline="\n") as handle:
+            handle.write(json.dumps(data, indent=2, sort_keys=True) + "\n")
+    except OSError:
+        pass
+
+
+def last_heartbeat(repo_root: str, agent: str) -> Optional[str]:
+    """ISO timestamp of the last hook run for the runtime `agent` names, or None."""
+    name = HOOK_RUNTIME_NAMES.get(agent, agent)
+    try:
+        with open(heartbeat_path(repo_root), "r", encoding="utf-8") as handle:
+            data = json.loads(handle.read() or "{}")
+    except (OSError, ValueError):
+        return None
+    value = data.get(name) if isinstance(data, dict) else None
+    return str(value) if value else None
+
+
 def along_hooks_registered(runtime: str, repo_root: Optional[str] = None) -> bool:
     """True when Along's hook entry point is registered for `runtime` (user or project)."""
+    if runtime == "claude-code":
+        return claude_hook_status(repo_root)[0] == "ok"
     home = os.path.expanduser("~")
     candidates: List[str] = []
-    if runtime == "claude-code":
-        candidates = [os.path.join(home, ".claude", "settings.json")]
-        if repo_root:
-            candidates += [os.path.join(repo_root, ".claude", "settings.json"),
-                           os.path.join(repo_root, ".claude", "settings.local.json")]
-    elif runtime == "codex":
+    if runtime == "codex":
         candidates = [os.path.join(home, ".codex", "hooks.json")]
     elif runtime == "antigravity":
         candidates = [os.path.join(home, ".gemini", "config", "hooks.json")]
@@ -87,6 +178,11 @@ def enforcement_level(runtime: str, repo_root: Optional[str] = None) -> Tuple[st
     caps = RUNTIME_MATRIX.get(runtime, RUNTIME_MATRIX["unknown"])
     if caps["runtime_hooks"] and along_hooks_registered(runtime, repo_root):
         return MECHANICAL, f"Along hooks are registered for {runtime}; gates block violations."
+    if runtime == "claude-code":
+        status, files = claude_hook_status(repo_root)
+        if status == "flat":
+            return ADVISORY, ("Along hooks for claude-code use the legacy flat schema, which Claude Code "
+                              f"ignores ({', '.join(files)}). Run 'along hook install --runtime claude --global'.")
     if caps["runtime_hooks"]:
         return ADVISORY, f"{runtime} supports hooks, but Along hooks are not registered (run 'along hook install')."
     return ADVISORY, (f"{runtime} does not load Along hooks; the agent must self-apply the gates and use "

@@ -149,12 +149,12 @@ def _worktree_main_checkout(root: str) -> Optional[str]:
     return None
 
 
-def issue_scope(repo_root: str) -> Tuple[List[str], List[str]]:
-    """(allowed_roots, write_scope) declared by the active issue, else by in-progress issues."""
+def issue_scope(repo_root: str, session_key: Optional[str] = None) -> Tuple[List[str], List[str]]:
+    """(allowed_roots, write_scope) declared by the session's issue, else by in-progress issues."""
     issues_dir = os.path.join(repo.state_dir(repo_root), "ISSUES")
     if not os.path.isdir(issues_dir):
         return [], []
-    active = session.get_active_session_slug(repo_root)
+    active = session.get_active_session_slug(repo_root, session_key)
     roots: List[str] = []
     scope: List[str] = []
     try:
@@ -179,12 +179,13 @@ def issue_scope(repo_root: str) -> Tuple[List[str], List[str]]:
 
 def build_policy(repo_root: str, options: Optional[Dict[str, Any]] = None,
                  conversation_id: Optional[str] = None, home: Optional[str] = None,
-                 temp_dir: Optional[str] = None) -> ContainmentPolicy:
-    """Policy from built-in defaults, gate options and the in-progress issue."""
+                 temp_dir: Optional[str] = None,
+                 session_key: Optional[str] = None) -> ContainmentPolicy:
+    """Policy from built-in defaults, gate options and the session's in-progress issue."""
     opts = options or {}
     root = canonical(repo_root)
     home_dir = home or os.path.expanduser("~")
-    issue_roots, issue_write = issue_scope(repo_root)
+    issue_roots, issue_write = issue_scope(repo_root, session_key)
 
     brain = os.path.join(home_dir, *BRAIN_DIR)
     if conversation_id:

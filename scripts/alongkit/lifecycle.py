@@ -288,6 +288,79 @@ def render_lifecycle_script(action: str,
     )
 
 
+def _write_wrap_session_log(repo_root: str, tx: "transaction.FileTransaction", issue: dict, slug: str, *,
+                            status: str, summary: Optional[str], agent: Optional[str],
+                            decisions: List[str], today: str) -> str:
+    """Create or extend today's session log for `slug` with decisions and the blackboard.
+
+    `issues_completed` is the wrapped issue key when it closes as done, so the log never
+    loses it [feat--wrap-session-log-from-blackboard].
+    """
+    from .version import CURRENT_PROTOCOL_VERSION
+
+    year = today.split("-")[0]
+    log_path = os.path.join(repo.state_dir(repo_root), "SESSIONS", year, f"{today}--{slug}.md")
+    key = f"{issue.get('type', 'task')}--{slug}"
+    blackboard = session.render_blackboard_markdown(repo_root, slug)
+    decisions_md = "\n".join(f"- [{d}]" for d in decisions) if decisions else \
+        "- None (confirmed at wrap: no architectural decisions)."
+    tx.protect(log_path)
+
+    if os.path.isfile(log_path):
+        content = textio.read_text(log_path)
+        fm, body, _err = frontmatter.try_parse(content)
+        if fm is not None:
+            updates = {}
+            if status == "done":
+                done = [str(x) for x in (fm.get("issues_completed") or [])]
+                if key not in done:
+                    updates["issues_completed"] = done + [key]
+            known = [str(x) for x in (fm.get("decisions") or [])]
+            extra = [d for d in decisions if d not in known]
+            if extra:
+                updates["decisions"] = known + extra
+            if updates:
+                content = frontmatter.update(content, updates)
+        addition = ""
+        if "## Decisions" not in content:
+            addition += f"\n## Decisions\n{decisions_md}\n"
+        if blackboard and "## Blackboard Record" not in content:
+            addition += "\n" + blackboard
+        textio.write_text(log_path, content.rstrip("\n") + "\n" + addition, newline="\n")
+        return log_path
+
+    branch = proc.git(["rev-parse", "--abbrev-ref", "HEAD"], cwd=repo_root)
+    head = proc.git(["rev-parse", "--short", "HEAD"], cwd=repo_root)
+    fm_out = {
+        "protocol": "along",
+        "protocol_version": frontmatter.quoted(CURRENT_PROTOCOL_VERSION),
+        "date": today,
+        "slug": slug,
+        "agent": agent or entities.detect_agent(),
+    }
+    if branch.ok and branch.stdout.strip():
+        fm_out["branch"] = branch.stdout.strip()
+    if head.ok and head.stdout.strip():
+        fm_out["commit"] = head.stdout.strip()
+    fm_out["summary"] = (summary or f"Wrapped {key}").strip()
+    milestone = (issue.get("frontmatter") or {}).get("milestone")
+    if milestone:
+        fm_out["milestone"] = milestone
+    fm_out.update({
+        "issues_advanced": [],
+        "issues_completed": [key] if status == "done" else [],
+        "decisions": list(decisions),
+        "risks_logged": [],
+        "spikes_conducted": [],
+    })
+    title = (issue.get("frontmatter") or {}).get("title") or slug.replace("-", " ").capitalize()
+    body = (f"# Session: {title}\n\n## Summary\n{fm_out['summary']}\n\n"
+            f"## Decisions\n{decisions_md}\n\n" + (blackboard or ""))
+    os.makedirs(os.path.dirname(log_path), exist_ok=True)
+    textio.write_text(log_path, frontmatter.render(fm_out, body), newline="\n")
+    return log_path
+
+
 def execute_wrap(
     repo_root: str,
     slug: str,
@@ -296,8 +369,16 @@ def execute_wrap(
     dry_run: bool = False,
     no_verify: bool = False,
     agent: Optional[str] = None,
+    decisions: Optional[List[str]] = None,
+    force_reason: Optional[str] = None,
 ) -> int:
     """Execute automated session and issue wrap-up.
+
+    `decisions` is the answer to "were architectural decisions made?": a list of ADR keys,
+    or [] for an explicit no. When given, the session log for today is written (or
+    extended) with the blackboard record before the purge. A role-based blackboard with
+    open steps or missing reviews blocks the wrap unless `force_reason` says why.
+    See [feat--wrap-session-log-from-blackboard] and [feat--along-team-step-enforcement].
 
     1. Pre-flight test gate: executes repository automated tests unless no_verify.
     2. Working tree audit: verifies that modified files are non-zero size (no 0-byte corruptions).
@@ -325,6 +406,16 @@ def execute_wrap(
 
     src_file = issue["file_path"]
     is_already_done = issue.get("done", False) or "done" in os.path.normpath(src_file).split(os.sep)
+
+    # 0. along-team step discipline
+    problems = session.completion_problems(repo_root, clean_slug)
+    if problems and not force_reason:
+        print(f"[Error] Wrap aborted: role-based blackboard '{clean_slug}' is not complete:\n"
+              + "\n".join(f"  - {p}" for p in problems)
+              + "\n  Finish the steps with reviews/step-N.md, or pass --force-reason \"...\".", file=sys.stderr)
+        return 2
+    if problems:
+        session.append_trace(repo_root, clean_slug, f"Wrapped with open steps ({'; '.join(problems)}): {force_reason}")
 
     # 1. Pre-Flight Test Gate
     if not no_verify and not dry_run:
@@ -432,6 +523,14 @@ def execute_wrap(
             if not kb_res.ok:
                 raise RuntimeError(f"Knowledge Base sync failed:\n{kb_res.stderr or kb_res.stdout}")
             print("-> Synchronized Knowledge Base.")
+
+        # Session log with the blackboard record, written before the purge deletes it
+        if decisions is not None:
+            log_path = _write_wrap_session_log(
+                repo_root, tx, issue, clean_slug, status=status, summary=summary,
+                agent=agent, decisions=decisions, today=today,
+            )
+            print(f"-> Wrote session log: {repo.safe_relpath(log_path, repo_root)}")
 
         # Purge session blackboard
         if session.purge_session(repo_root, clean_slug):

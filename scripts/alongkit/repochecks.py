@@ -15,6 +15,10 @@ blobs, `--ci` passes every tracked path and reads the checked-out tree. A check 
 - `check_stable_entry_point`      `README.md` and `docs/` never link into `.along/`.
 - `check_issue_lifecycle`         closed issues live in `.along/ISSUES/done/`, open ones don't.
 - `check_no_tracked_secrets`      no private keys or well-known token shapes in content.
+- `check_rule_pack_integrity`     a `.along/rules/**/*.md` rule pack carries the managed header
+                                  and its body matches the header hash. Not a catalogue rule
+                                  handler: `gitgates.check_rule_packs` runs it for the
+                                  `rule_pack_protection` gate, whose rule is the runtime predicate.
 
 A line carrying `along: allow-<gate-id>` (e.g. `along: allow-no-tracked-secrets`) is
 exempt, for fixtures that must contain a sample violation.
@@ -54,6 +58,7 @@ _SECRET_PATTERNS: Tuple[Tuple[str, re.Pattern], ...] = (
     ("Google API key", re.compile(r"\bAIza[0-9A-Za-z_-]{35}\b")),
 )
 _ISSUE_PATH_RE = re.compile(r"(?:^|/)\.along/ISSUES/(done/)?[^/]+\.md$")
+_RULE_PACK_RE = re.compile(r"(?:^|/)\.along/rules/(?:[^/]+/)*[^/]+\.md$", re.IGNORECASE)
 _STATUS_RE = re.compile(r"^status:\s*(\S+)", re.MULTILINE)
 _CLOSED_STATUSES = {"done", "cancelled", "canceled", "superseded", "wontfix", "rejected"}
 _ACTIVE_STATUSES = {"open", "in-progress", "blocked", "review", "todo"}
@@ -210,6 +215,29 @@ def check_issue_lifecycle(paths: Sequence[str], read: Reader,
         elif in_done and status in _ACTIVE_STATUSES:
             findings.append((path, f"status '{status}' but the file is in ISSUES/done/; "
                                    "move it back or close it"))
+    return findings
+
+
+def check_rule_pack_integrity(paths: Sequence[str], read: Reader,
+                              options: Dict[str, Any]) -> List[Finding]:
+    """Managed rule packs are pristine copies of the Along templates [gate: rule-pack-protection]."""
+    from .rules import compute_rule_hash, parse_rule_header
+
+    findings: List[Finding] = []
+    for path in paths:
+        if not _RULE_PACK_RE.search(path) or _rc_excluded(path, options):
+            continue
+        text = read(path)
+        if text is None:
+            continue
+        _, header_hash, body = parse_rule_header(text)
+        if header_hash is None:
+            findings.append((path, "rule pack has no managed header; run `along rules attach` "
+                                   "(or `along rules restore`)"))
+        elif compute_rule_hash(body) != header_hash.lower():
+            findings.append((path, "managed rule pack was edited; move project guidelines to "
+                                   "docs/topic--*.md or AGENTS.md 'Project specifics' and run "
+                                   "`along rules restore`"))
     return findings
 
 

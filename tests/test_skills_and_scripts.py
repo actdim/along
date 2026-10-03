@@ -881,8 +881,8 @@ class TestAlongSkillsAndScripts(unittest.TestCase):
 
         with hermetic.repo_fixture(prefix="along-exec-") as fixture:
             # 1. Scratchpad lifecycle
-            init_res = run_engine([sys.executable, exec_script, "scratch", "init", "unit-test-task"],
-                           cwd=fixture)
+            init_res = run_engine([sys.executable, exec_script, "scratch", "init", "unit-test-task",
+                                   "--mode", "direct"], cwd=fixture)
             self.assertEqual(init_res.returncode, 0, init_res.stderr)
             scratch_dir = os.path.join(fixture, ".along", ".session", "unit-test-task")
             self.assertTrue(os.path.exists(scratch_dir), "Scratchpad directory should exist")

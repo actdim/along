@@ -35,7 +35,11 @@ def main():
     tests_dir = os.path.join(repo_root, "tests")
     
     os.environ["ALONG_TEST_RUNNER"] = "1"
-    
+    # The suite must not see the agent session that launched it: gates bind per session id.
+    from alongkit import session
+    for var in session.SESSION_ENV_VARS:
+        os.environ.pop(var, None)
+
     loader = unittest.TestLoader()
     suite = loader.discover(start_dir=tests_dir, pattern="test_*.py")
     quiet = any(arg in ("-q", "--quiet") for arg in sys.argv[1:])

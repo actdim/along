@@ -35,6 +35,8 @@ from alongkit.hooks.adapters.claude import ClaudeCodeAdapter
 from alongkit.hooks.config import (
     get_claude_hook_manifest,
     install_claude_hooks,
+    is_along_hook_entry,
+    purge_local_along_hooks,
 )
 
 EM_DASH = chr(0x2014)
@@ -227,6 +229,36 @@ class TestClaudeCodeEndToEnd(unittest.TestCase):
             self.assertIn("Heredoc", res.stderr)
 
 
+class TestClaudeDecisionOutput(unittest.TestCase):
+    """[bug--claude-stop-loop-ask-mapping]"""
+
+    def _adapter(self, payload):
+        adapter = ClaudeCodeAdapter()
+        adapter.parse(json.dumps(payload))
+        return adapter
+
+    def test_ask_uses_native_permission_decision(self):
+        adapter = self._adapter({"hook_event_name": "PreToolUse", "tool_name": "Read", "tool_input": {}})
+        code, out = adapter.format_response(GateResult(decision=GateDecision.ASK, reason="outside scope"))
+        self.assertEqual(code, 0)
+        data = json.loads(out)["hookSpecificOutput"]
+        self.assertEqual(data["permissionDecision"], "ask")
+        self.assertEqual(data["permissionDecisionReason"], "outside scope")
+
+    def test_deny_is_exit_two(self):
+        adapter = self._adapter({"hook_event_name": "PreToolUse", "tool_name": "Bash", "tool_input": {}})
+        code, out = adapter.format_response(GateResult(decision=GateDecision.DENY, reason="no"))
+        self.assertEqual((code, out), (2, "no"))
+
+    def test_stop_blocks_once_then_reports(self):
+        first = self._adapter({"hook_event_name": "Stop", "stop_hook_active": False})
+        self.assertEqual(first.format_response(GateResult(decision=GateDecision.DENY, reason="run tests"))[0], 2)
+        again = self._adapter({"hook_event_name": "Stop", "stop_hook_active": True})
+        code, out = again.format_response(GateResult(decision=GateDecision.DENY, reason="run tests"))
+        self.assertEqual(code, 0)
+        self.assertIn("run tests", json.loads(out)["systemMessage"])
+
+
 class TestInstallClaudeHooks(unittest.TestCase):
     def test_clean_install_creates_settings_json(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -272,7 +304,71 @@ class TestInstallClaudeHooks(unittest.TestCase):
             # User custom hook must still exist
             pre_hooks = updated_data["hooks"]["PreToolUse"]
             self.assertTrue(any(h.get("command") == "echo read" for h in pre_hooks))
-            self.assertTrue(any("along_hook.py" in h.get("command", "") for h in pre_hooks))
+            self.assertTrue(any(is_along_hook_entry(h, "PreToolUse") for h in pre_hooks))
+
+    def test_manifest_uses_nested_schema(self):
+        """Claude Code ignores flat {matcher, command} entries [bug--claude-hook-manifest-flat-schema]."""
+        manifest = get_claude_hook_manifest()
+        for event in ("PreToolUse", "PostToolUse", "Stop"):
+            entry = manifest[event][0]
+            self.assertNotIn("command", entry)
+            self.assertEqual(entry["hooks"][0]["type"], "command")
+            self.assertIn(f"--event {event}", entry["hooks"][0]["command"])
+            self.assertIsInstance(entry["hooks"][0]["timeout"], int)
+        self.assertNotIn("matcher", manifest["Stop"][0])
+        self.assertIn("ExitPlanMode", manifest["PostToolUse"][0]["matcher"])
+        self.assertIn("Read", manifest["PreToolUse"][0]["matcher"])
+
+    def test_legacy_flat_entries_are_migrated_without_duplicates(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            claude_dir = os.path.join(tmp, ".claude")
+            os.makedirs(claude_dir)
+            target = os.path.join(claude_dir, "settings.json")
+            legacy = {"hooks": {
+                "PreToolUse": [
+                    {"matcher": "Bash", "command": "python ~/.along/bin/along_hook.py --runtime claude --event PreToolUse"},
+                    {"matcher": "Read", "hooks": [{"type": "command", "command": "echo mine"}]},
+                    {"matcher": "Bash", "command": "python ~/.along/bin/along_hook.py --runtime claude --event PreToolUse"},
+                ],
+                "Stop": [{"command": "python ~/.along/bin/along_hook.py --runtime claude --event Stop"}],
+            }}
+            with open(target, "w", encoding="utf-8") as f:
+                json.dump(legacy, f)
+
+            status, _ = install_claude_hooks(tmp)
+            self.assertEqual(status, "installed")
+            with open(target, "r", encoding="utf-8") as f:
+                data = json.load(f)
+            pre = data["hooks"]["PreToolUse"]
+            along_pre = [h for h in pre if is_along_hook_entry(h, "PreToolUse")]
+            self.assertEqual(len(along_pre), 1)
+            self.assertIn("hooks", along_pre[0])
+            self.assertNotIn("command", along_pre[0])
+            self.assertEqual(pre[1]["hooks"][0]["command"], "echo mine")
+            self.assertNotIn("command", data["hooks"]["Stop"][0])
+            self.assertEqual(install_claude_hooks(tmp)[0], "present")
+
+    def test_purge_removes_nested_along_hooks_and_keeps_foreign(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            claude_dir = os.path.join(tmp, ".claude")
+            os.makedirs(claude_dir)
+            target = os.path.join(claude_dir, "settings.json")
+            with open(target, "w", encoding="utf-8") as f:
+                json.dump({"theme": "dark", "hooks": {"PreToolUse": [
+                    {"matcher": "Bash", "hooks": [
+                        {"type": "command", "command": "python along_hook.py --event PreToolUse"},
+                        {"type": "command", "command": "echo mine"},
+                    ]},
+                    {"matcher": "Write", "hooks": [
+                        {"type": "command", "command": "python along_hook.py --event PreToolUse"},
+                    ]},
+                ]}}, f)
+            purge_local_along_hooks(tmp, recursive=False)
+            with open(target, "r", encoding="utf-8") as f:
+                data = json.load(f)
+            pre = data["hooks"]["PreToolUse"]
+            self.assertEqual(len(pre), 1)
+            self.assertEqual(pre[0]["hooks"], [{"type": "command", "command": "echo mine"}])
 
     def test_dry_run_does_not_mutate_disk(self):
         with tempfile.TemporaryDirectory() as tmp:

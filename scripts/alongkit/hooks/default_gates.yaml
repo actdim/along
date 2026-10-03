@@ -76,6 +76,20 @@ gates:
       handler: alongkit.hooks.predicates.check_projection_protection
       error: "Manual edit to compiled projection rejected by [gate: projection-protection]."
 
+  - id: rule_pack_protection
+    # runtime: file tools and shell commands that write .along/rules/**/*.md (`along rules ...`
+    # excepted). git / ci: alongkit.gitgates.check_rule_packs - a staged or tracked rule pack
+    # carries the managed header and its body matches the header hash.
+    enforcement: [runtime, git, ci]
+    title: "Managed Rule Pack Protection"
+    description: "Blocks agent edits to managed rule packs (.along/rules/**/*.md); gates.yaml stays editable"
+    event: PreToolUse
+    tools: [write_to_file, write_file, replace_file_content, edit_file, patch_file, create_file, run_command, execute_command, bash, shell]
+    rule:
+      type: predicate
+      handler: alongkit.hooks.predicates.check_rule_pack_protection
+      error: "Edit to a managed rule pack rejected by [gate: rule-pack-protection]."
+
   - id: doc_manual_lock
     title: "Manual Document Lock Protection"
     description: "Blocks automated agent edits to documentation marked with write_policy: manual"
@@ -120,6 +134,25 @@ gates:
         - 'docs/**'
         - 'CHANGELOG.md'
       error: "Code edit rejected by [gate: require-active-issue]: Modifying repository source code requires an active issue with 'status: in-progress' in .along/ISSUES/. Create an issue first."
+
+  - id: team_step_active
+    title: "along-team Step Discipline"
+    description: "Blocks source edits in a role-based (along-team) session while no step is in progress"
+    event: PreToolUse
+    tools: [write_to_file, write_file, replace_file_content, edit_file, patch_file, create_file]
+    rule:
+      type: predicate
+      handler: alongkit.hooks.predicates.check_team_step_active
+      error: "Code edit rejected by [gate: team-step-active]: start an along-team step first."
+
+  - id: team_reviews_before_stop
+    title: "along-team Reviews Before Turn Termination"
+    description: "Blocks turn completion while a passed along-team step has no reviews/step-N.md"
+    event: Stop
+    rule:
+      type: predicate
+      handler: alongkit.hooks.predicates.check_team_reviews_before_stop
+      error: "Turn completion rejected by [gate: team-reviews-before-stop]: write the step review first."
 
   - id: test_before_stop
     title: "Test Execution Before Turn Termination"

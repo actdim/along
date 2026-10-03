@@ -37,7 +37,7 @@ In this session, we resolved updater and dashboard script discovery issues, adde
    - Updated `.along/CHECKLISTS/pre-commit.md` with mandatory automated test execution.
    - Added `.along/scripts/test.py` lifecycle hook for `/along-test`.
 4. **Release v2.0.7**:
-   - Released and deployed `v2.0.7` across global skill directories and verified on external repository (`d:\Src\myctdim\infomnia`).
+   - Released and deployed `v2.0.7` across global skill directories and verified on an external consumer repository.
 
 ## Verification & Code Review
 - Unit Tests: `python -m unittest tests/test_skills_and_scripts.py -v` (9/9 tests passed in 0.27s).

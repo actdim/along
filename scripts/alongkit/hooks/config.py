@@ -26,10 +26,13 @@ class HookMode:
     SHADOW = "shadow"
 
 
+#: cli_safety enforces like every other gate; the AGENTS.md rule is mandatory, and shadow mode
+#: let heredocs through. Override per repo in `.along/config.json` hooks.gates or with
+#: ALONG_HOOK_MODE. See [bug--cli-safety-heredoc-gaps].
 DEFAULT_GATE_MODES: Dict[str, str] = {
     "typography": HookMode.ENFORCE,
     "projection_protection": HookMode.ENFORCE,
-    "cli_safety": HookMode.SHADOW,
+    "cli_safety": HookMode.ENFORCE,
 }
 
 
@@ -98,9 +101,8 @@ def record_audit_entry(
     if not repo_root:
         return
 
-    diagnostics_dir = os.path.join(repo.state_dir(repo_root), "diagnostics")
     try:
-        os.makedirs(diagnostics_dir, exist_ok=True)
+        diagnostics_dir = repo.ensure_diagnostics_dir(repo_root)
         audit_file = os.path.join(diagnostics_dir, "hooks_audit.jsonl")
         entry = {
             "timestamp": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
@@ -226,26 +228,84 @@ def install_antigravity_hooks(
     return "installed", f"updated {hooks_file} with {gate_key}"
 
 
+#: Seconds Claude Code waits for one Along hook process before it gives up on it.
+CLAUDE_HOOK_TIMEOUT: int = 30
+
+#: Claude Code tools the PreToolUse gates inspect: writes, shells, and the read/search tools
+#: that workspace_containment and fast_retrieval govern.
+CLAUDE_PRE_TOOL_MATCHER: str = "Write|Edit|MultiEdit|NotebookEdit|Bash|PowerShell|Read|Grep|Glob"
+
+#: PostToolUse: edits (activity trace) and ExitPlanMode (the user accepted a plan).
+CLAUDE_POST_TOOL_MATCHER: str = "Write|Edit|MultiEdit|NotebookEdit|ExitPlanMode"
+
+
+def hook_entry_commands(item: Any) -> List[str]:
+    """Every command string of a hook entry, flat (`command`) or nested (`hooks[].command`)."""
+    commands: List[str] = []
+    if not isinstance(item, dict):
+        return commands
+    if "command" in item:
+        commands.append(str(item.get("command", "")))
+    inner = item.get("hooks")
+    if isinstance(inner, list):
+        for hook in inner:
+            if isinstance(hook, dict) and "command" in hook:
+                commands.append(str(hook.get("command", "")))
+    return commands
+
+
+def is_along_hook_entry(item: Any, event_name: Optional[str] = None) -> bool:
+    """True when a hook entry (either schema) runs along_hook.py, for `event_name` if given."""
+    for command in hook_entry_commands(item):
+        if "along_hook.py" not in command:
+            continue
+        if event_name is None or f"--event {event_name}".lower() in command.lower():
+            return True
+    return False
+
+
+def _strip_along_hooks(entries: List[Any]) -> Tuple[List[Any], bool]:
+    """Remove Along commands from a hook event list, keeping every foreign hook.
+
+    A nested entry that mixes Along and foreign commands keeps its foreign commands.
+    """
+    kept: List[Any] = []
+    modified = False
+    for item in entries:
+        if not is_along_hook_entry(item):
+            kept.append(item)
+            continue
+        modified = True
+        inner = item.get("hooks") if isinstance(item, dict) else None
+        if isinstance(inner, list) and "command" not in item:
+            foreign = [h for h in inner if not (isinstance(h, dict) and "along_hook.py" in str(h.get("command", "")))]
+            if foreign:
+                kept.append({**item, "hooks": foreign})
+    return kept, modified
+
+
+def _claude_entry(event: str, matcher: Optional[str], is_global: bool) -> Dict[str, Any]:
+    entry: Dict[str, Any] = {}
+    if matcher:
+        entry["matcher"] = matcher
+    entry["hooks"] = [{
+        "type": "command",
+        "command": get_hook_command("claude", event, is_global=is_global),
+        "timeout": CLAUDE_HOOK_TIMEOUT,
+    }]
+    return entry
+
+
 def get_claude_hook_manifest(is_global: bool = False) -> Dict[str, Any]:
-    """Canonical hook configuration dictionary for Anthropic Claude Code (.claude/settings.json)."""
+    """Canonical hook configuration for Anthropic Claude Code (.claude/settings.json).
+
+    Claude Code reads only the nested schema `{matcher, hooks: [{type, command, timeout}]}`;
+    a flat `{matcher, command}` entry is ignored. See [bug--claude-hook-manifest-flat-schema].
+    """
     return {
-        "PreToolUse": [
-            {
-                "matcher": "Write|WriteFile|Edit|EditFile|Bash|PowerShell",
-                "command": get_hook_command("claude", "PreToolUse", is_global=is_global),
-            }
-        ],
-        "PostToolUse": [
-            {
-                "matcher": "Write|WriteFile|Edit|EditFile",
-                "command": get_hook_command("claude", "PostToolUse", is_global=is_global),
-            }
-        ],
-        "Stop": [
-            {
-                "command": get_hook_command("claude", "Stop", is_global=is_global),
-            }
-        ],
+        "PreToolUse": [_claude_entry("PreToolUse", CLAUDE_PRE_TOOL_MATCHER, is_global)],
+        "PostToolUse": [_claude_entry("PostToolUse", CLAUDE_POST_TOOL_MATCHER, is_global)],
+        "Stop": [_claude_entry("Stop", None, is_global)],
     }
 
 
@@ -289,23 +349,19 @@ def install_claude_hooks(
             existing_hooks[event_name] = cur_list
             changed = True
 
-        for expected_hook in hook_list:
-            matched_idx = -1
-            for idx, item in enumerate(cur_list):
-                if (
-                    isinstance(item, dict)
-                    and "along_hook.py" in str(item.get("command", ""))
-                    and f"--event {event_name}" in str(item.get("command", ""))
-                ):
-                    matched_idx = idx
-                    break
-
-            if matched_idx >= 0:
-                if cur_list[matched_idx] != expected_hook:
-                    cur_list[matched_idx] = expected_hook
-                    changed = True
-            else:
-                cur_list.append(expected_hook)
+        # One Along entry per event, in the nested schema: legacy flat entries and
+        # duplicates are replaced in place, foreign hooks keep their position.
+        along_idx = [i for i, item in enumerate(cur_list) if is_along_hook_entry(item, event_name)]
+        expected_hook = hook_list[0]
+        if not along_idx:
+            cur_list.append(expected_hook)
+            changed = True
+        else:
+            if cur_list[along_idx[0]] != expected_hook:
+                cur_list[along_idx[0]] = expected_hook
+                changed = True
+            for idx in reversed(along_idx[1:]):
+                del cur_list[idx]
                 changed = True
 
     # Keep AI co-author trailers out of commits [gate: commit-no-ai-coauthor].
@@ -399,11 +455,7 @@ def install_codex_hooks(
         for expected_hook in hook_list:
             matched_idx = -1
             for idx, item in enumerate(cur_list):
-                if (
-                    isinstance(item, dict)
-                    and "along_hook.py" in str(item.get("command", ""))
-                    and f"--event {event_name}" in str(item.get("command", ""))
-                ):
+                if is_along_hook_entry(item, event_name):
                     matched_idx = idx
                     break
 
@@ -498,11 +550,7 @@ def install_cursor_hooks(
         for expected_hook in hook_list:
             matched_idx = -1
             for idx, item in enumerate(cur_list):
-                if (
-                    isinstance(item, dict)
-                    and "along_hook.py" in str(item.get("command", ""))
-                    and f"--event {event_name}".lower() in str(item.get("command", "")).lower()
-                ):
+                if is_along_hook_entry(item, event_name):
                     matched_idx = idx
                     break
 
@@ -641,8 +689,8 @@ def purge_local_along_hooks(repo_root: str, recursive: bool = True, dry_run: boo
                     for ev in list(data["hooks"].keys()):
                         ev_list = data["hooks"][ev]
                         if isinstance(ev_list, list):
-                            new_list = [h for h in ev_list if isinstance(h, dict) and "along_hook.py" not in str(h.get("command", ""))]
-                            if len(new_list) != len(ev_list):
+                            new_list, ev_modified = _strip_along_hooks(ev_list)
+                            if ev_modified:
                                 modified = True
                                 if new_list:
                                     data["hooks"][ev] = new_list
@@ -675,8 +723,8 @@ def purge_local_along_hooks(repo_root: str, recursive: bool = True, dry_run: boo
                     for ev in list(hooks_dict.keys()):
                         ev_list = hooks_dict[ev]
                         if isinstance(ev_list, list):
-                            new_list = [h for h in ev_list if isinstance(h, dict) and "along_hook.py" not in str(h.get("command", ""))]
-                            if len(new_list) != len(ev_list):
+                            new_list, ev_modified = _strip_along_hooks(ev_list)
+                            if ev_modified:
                                 modified = True
                                 if new_list:
                                     hooks_dict[ev] = new_list
@@ -708,8 +756,8 @@ def purge_local_along_hooks(repo_root: str, recursive: bool = True, dry_run: boo
                     for ev in list(data["hooks"].keys()):
                         ev_list = data["hooks"][ev]
                         if isinstance(ev_list, list):
-                            new_list = [h for h in ev_list if isinstance(h, dict) and "along_hook.py" not in str(h.get("command", ""))]
-                            if len(new_list) != len(ev_list):
+                            new_list, ev_modified = _strip_along_hooks(ev_list)
+                            if ev_modified:
                                 modified = True
                                 if new_list:
                                     data["hooks"][ev] = new_list

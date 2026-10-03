@@ -19,13 +19,16 @@ Universal finalization and memory synchronization protocol for sessions, tasks, 
 The mechanical synchronization steps (tests gate, moving the issue to `done/`, updating YAML front-matter, recompiling `ISSUES.md` and KB projections, purging the session blackboard, and appending to `HISTORY.md`) are executed transactionally in a single command:
 
 ```bash
-along wrap <slug> [-m "Summary of completed work"]
-along wrap <slug> --dry-run
-along wrap <slug> -s superseded
+along wrap <slug> --no-decisions [-m "Summary of completed work"]
+along wrap <slug> --decisions ADR-2026-10-01--my-choice -m "Summary"
+along wrap <slug> --no-decisions --dry-run
+along wrap <slug> -s superseded --no-decisions
 ```
-*(Or fallback: `python ~/.along/bin/along_exec.py wrap <slug>` or `along session wrap <slug>`)*
+*(Or fallback: `python ~/.along/bin/along_exec.py wrap <slug> --no-decisions` or `along session wrap <slug> --no-decisions`)*
 
 ### Command Flags:
+- `-d`, `--decisions "ADR-a,ADR-b"` or `--no-decisions` (one is required): Answer "were architectural decisions made in this session?". Create the ADRs first (`along decision create`). `--no-decisions` is an explicit confirmation, not a default.
+- `--force-reason "<text>"`: Wrap a role-based (along-team) blackboard although steps are open or reviews are missing; the reason is recorded.
 - `-s`, `--status <done|superseded|cancelled|duplicate>`: Terminal status to set in the issue front-matter (default: `done`).
 - `-m`, `--summary "<text>"`: One-line summary appended to `.along/HISTORY.md`.
 - `--dry-run`: Inspect planned actions without writing or moving files.
@@ -44,12 +47,13 @@ along wrap <slug> -s superseded
    - Run `/along-graph-arch` (or `along graph-arch`) if module boundaries or subsystem imports were restructured to verify coupling invariants.
    - Factually update all affected `docs/topic--*.md` articles identified in the impact report before proceeding to Phase B.
 2. **Session Log & Engineering Provenance**:
-   - Write `.along/SESSIONS/<YYYY>/<YYYY-MM-DD>--<short-slug>.md` in the nearest `.along/`.
+   - `along wrap` writes (or extends) `.along/SESSIONS/<YYYY>/<YYYY-MM-DD>--<slug>.md` in the issue's `.along/`, with `issues_completed: [<type>--<slug>]`, the decisions answer and the blackboard record (plan, step table, research, execution trace, reviews). Add the narrative (what changed, verification) to that file, before or after the wrap.
    - When orchestrating non-trivial multi-step tasks, compile the 3 Engineering Provenance sections: Baseline Plan, Execution Trace, and Verification Walkthrough.
+   - **Decisions**: ask yourself whether the session made an architectural choice or trade-off. If yes, record ADRs (`along decision create`) and pass them with `--decisions`; otherwise pass `--no-decisions`.
 
 ### Phase B: Automated Finalization (CLI Engine)
 3. **Execute Transactional Wrap**:
-   - Run: `along wrap <slug> --summary "Concise summary of work"`
+   - Run: `along wrap <slug> --no-decisions --summary "Concise summary of work"` (or `--decisions ADR-...`)
    - The engine automatically:
      - Runs pre-flight automated tests (halts if failing, leaving repo untouched).
      - Audits working tree for zero-byte corrupt files.
@@ -57,7 +61,8 @@ along wrap <slug> -s superseded
      - Adjusts sibling issue markdown links and relocates issue file to `.along/ISSUES/done/`.
      - Recompiles `.along/ISSUES.md` projection board.
      - Runs `along kb sync` to compile Knowledge Base links and index.
-     - Purges ephemeral session blackboard `.along/.session/<slug>/`.
+     - Refuses while a role-based blackboard has open steps or passed steps without `reviews/step-N.md`.
+     - Writes the session log with the blackboard record, then purges `.along/.session/<slug>/` and the agent-session bindings to it.
      - Appends formatted line to `.along/HISTORY.md` linking to the session log.
      - Protects all mutations with `alongkit.transaction.FileTransaction` (clean rollback on failure).
 

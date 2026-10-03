@@ -363,6 +363,14 @@ def _evaluate_and_respond(
     if not event.workspace_root and effective_root:
         event.workspace_root = effective_root
 
+    # Proof for `along doctor` that this runtime's hooks actually fire here.
+    from datetime import datetime, timezone
+    from alongkit import runtime as runtime_info
+    runtime_info.record_heartbeat(
+        effective_root, adapter.runtime_name or runtime,
+        datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
+    )
+
     config: HooksConfig = load_config(effective_root)
     if mode:
         config.mode = mode

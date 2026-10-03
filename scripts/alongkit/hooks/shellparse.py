@@ -249,6 +249,51 @@ def _segment_is_read_only(segment: str) -> bool:
     return False
 
 
+#: Along subcommands that only move Along's own state (entities, blackboards, projections).
+#: The plan gate lets them through so an agent can create and start an issue before any plan
+#: exists; `commit`, `bump`, `hook install` and `update` are not among them.
+_ALONG_STATE = (
+    "issue", "start", "scratch", "plan", "decision", "milestone", "session", "wrap",
+    "kb-sync", "kb sync", "glossary", "risk", "spike", "checklist",
+)
+
+
+def _along_subcommand(tokens: List[str]) -> Optional[str]:
+    """Words after `along` / `along_exec.py` when the segment invokes the Along CLI."""
+    tokens = _strip_wrappers(tokens)
+    if not tokens:
+        return None
+    first = tokens[0].lower()
+    if first == "along" or first.endswith("along_exec.py") or first.endswith("along.ps1"):
+        return " ".join(t.lower() for t in tokens[1:])
+    if _is_python(first) and len(tokens) > 1 and tokens[1].replace("\\", "/").lower().endswith("along_exec.py"):
+        return " ".join(t.lower() for t in tokens[2:])
+    return None
+
+
+def along_subcommand(segment: str) -> Optional[str]:
+    """Lower-cased words after the Along CLI in one command segment, or None if it is not one."""
+    tokens = _tokens(segment)
+    return _along_subcommand(tokens) if tokens else None
+
+
+def is_along_state_command(command: str) -> bool:
+    """True when every segment runs an Along state subcommand (or is read-only)."""
+    segments = split_segments(command or "")
+    if not segments:
+        return False
+    for seg in segments:
+        if _has_write_redirect(seg):
+            return False
+        tokens = _tokens(seg)
+        sub = _along_subcommand(tokens) if tokens else None
+        if sub is not None and any(sub == s or sub.startswith(s + " ") for s in _ALONG_STATE):
+            continue
+        if not _segment_is_read_only(seg):
+            return False
+    return True
+
+
 def is_read_only_command(command: str) -> bool:
     """True only when every segment of `command` is a read-only inspection or a test run."""
     if not command or not command.strip():

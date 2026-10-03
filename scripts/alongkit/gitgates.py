@@ -16,7 +16,8 @@ runs the commit-time subset of the catalogue - every gate declaring `git` or `ci
                  block) whenever the change touches an entity file;
                  repository-state gates (`alongkit.repochecks`: filenames, exports, code
                  fences, portable links, stable entry point, secrets) over the staged
-                 files (pre-commit) or every tracked file (CI).
+                 files (pre-commit) or every tracked file (CI);
+                 rule pack integrity (`.along/rules/**/*.md` matches its managed header hash).
 
 Patterns come from the gate catalogue so runtime, git and CI can never disagree.
 Checks are read-only: projections are recompiled in a throwaway snapshot, never in the
@@ -333,6 +334,24 @@ def check_repo_state(repo_root: str, paths: Sequence[str], layer: str, read) -> 
     return violations
 
 
+RULE_PACK_GATE = "rule_pack_protection"
+
+
+def check_rule_packs(paths: Sequence[str], layer: str, read) -> List[Violation]:
+    """[gate: rule-pack-protection] at git / ci: rule packs in `paths` are pristine.
+
+    The gate's catalogue rule is the runtime predicate, so `check_repo_state` does not pick
+    it up; the commit-time check is `repochecks.check_rule_pack_integrity`.
+    """
+    from . import repochecks
+    defn = _definitions(layer).get(RULE_PACK_GATE)
+    if defn is None:
+        return []
+    paths = [p.replace("\\", "/") for p in paths if p]
+    return [Violation(RULE_PACK_GATE, location, message)
+            for location, message in repochecks.check_rule_pack_integrity(paths, read, defn.options)]
+
+
 ENTITY_GATE = "entity_reference_integrity"
 ENTITY_SUBDIRS: Tuple[str, ...] = ("ISSUES", "MILESTONES", "RISKS", "SPIKES", "CHECKLISTS",
                                    "DECISIONS", "SESSIONS")
@@ -443,6 +462,7 @@ def check_pre_commit(repo_root: str) -> List[Violation]:
     return (check_diff(diff, repo_root, "git")
             + check_projections(repo_root, along_roots(staged), "index")
             + check_repo_state(repo_root, added, "git", _index_reader(repo_root))
+            + check_rule_packs(added, "git", _index_reader(repo_root))
             + check_entity_references(repo_root, staged, "git", "index", head))
 
 
@@ -484,8 +504,9 @@ def check_ci(repo_root: str, commit_range: Optional[str] = None, links: bool = T
     violations += check_projections(repo_root, roots, "tree")
     violations += check_entity_references(repo_root, changed, "ci", "tree",
                                           _range_base(repo_root, commit_range))
-    violations += check_repo_state(repo_root, _git_out(repo_root, "ls-files", "-z").split("\0"), "ci",
-                                   _tree_reader(repo_root))
+    tracked = _git_out(repo_root, "ls-files", "-z").split("\0")
+    violations += check_repo_state(repo_root, tracked, "ci", _tree_reader(repo_root))
+    violations += check_rule_packs(tracked, "ci", _tree_reader(repo_root))
 
     if links and kb_script and os.path.isdir(os.path.join(repo_root, "docs")):
         result = proc.run_capture([sys.executable, kb_script, "--check"], cwd=repo_root,
