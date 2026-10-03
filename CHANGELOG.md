@@ -2,6 +2,10 @@
 
 All notable changes to this project, newest first.
 
+## v4.4.3 - 2026-10-03
+
+- feat(gates): agent session bindings, scoped traces, Claude hook nested schema, and gate hardening [bug--session-state-cross-session-leak]
+
 ## v4.4.2 - 2026-10-01
 
 - feat(gates): merge drivers, git-level and repo-state gates, containment, distillation, entity integrity, rule pack integrity (refs #rule-packs-local-extensions)
