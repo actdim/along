@@ -21,6 +21,7 @@ Idempotent LLM-Wiki Knowledge Base synchronization, inbound link rewriting, comp
 9. **Deterministic Topic Dictionary & Auto-Crosslinking**: Automatically indexes topic titles, slugs, and tags with longest-term alias prioritization. In `--crosslink-check` mode, reports unlinked concept mentions. In `--crosslink-apply` mode, inserts relative cross-links for the first occurrence of each concept per section while strictly masking headings, code fences, inline code spans, and existing links.
 10. **AST Code Symbol Grounding Gate (`--check-symbols`)**: Extracts substantive codebase symbols (classes, functions, async methods, constants) via standard library `ast` and flags phantom "ghost symbols" documented in backticks. Exits with code 1 in `--strict` mode if ungrounded symbols are detected.
 11. **Structured Section Taxonomy Contracts (`--strict-sections`)**: Enforces required H2 section taxonomy schemas across standard article types (`architecture`, `domain-model`, `setup-workflow`), guaranteeing non-empty substantive documentation bodies. Exits with code 1 in `--strict-sections` mode on contract violations.
+12. **Root Notes Advisory**: Lists root-level `ROADMAP.md`, `ARCHITECTURE.md`, `SPEC.md`, `TODO.md`, `DESIGN.md`, which duplicate the Knowledge Base. The engine never moves them; the agent routes each one (architecture/spec/design -> `docs/topic--*.md`, roadmap -> `.along/VISION.md` `## Roadmap` and milestones, TODO items -> issues), repoints links through `docs/INDEX.md`, and deletes it.
 
 ## Universal Rendering & Stable Entry Points
 

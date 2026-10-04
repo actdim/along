@@ -3,7 +3,8 @@ protocol: along
 protocol_version: "4.4.3"
 slug: init-onboarding-regressions
 type: bug
-status: in-progress
+status: done
+completed: 2026-10-04
 priority: high
 created: 2026-10-04
 updated: 2026-10-04

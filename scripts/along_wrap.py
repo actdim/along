@@ -103,6 +103,10 @@ def main(argv=None) -> int:
         decisions=decisions,
         force_reason=args.force_reason,
     )
+    if code == 0:
+        # Not verifiable mechanically, so the engine only reminds (skills/along-wrap Phase A).
+        print("-> Wrap reminder: README.md and AGENTS.md 'Project specifics' current? New terms in "
+              ".along/GLOSSARY.md? .along/VISION.md roadmap touched only if scope/roadmap changed?")
     return code
 
 

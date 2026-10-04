@@ -82,6 +82,7 @@ flowchart TD
 - **Architectural Rationale**:
   - *Idempotent Managed Block*: Never overwrites custom human developer instructions in `AGENTS.md`; only refreshes the block between `<!-- BEGIN ALONG-PROTOCOL ... -->` and `<!-- END ALONG-PROTOCOL -->`.
   - *Non-Destructive Initialization*: Creates directories and template files only if missing, preserving existing project history.
+  - *Deterministic Engine, Judgment by the Agent*: `along init` performs every mechanical step (FULL/REF protocol block bounded by the git working tree, hand-written `AGENTS.md` adoption under `## Project specifics`, root `VISION.md` moved into `.along/VISION.md`, rule packs, merge drivers, hooks, migration). The agent then decomposes an imported VISION section, routes root notes (`ROADMAP.md`, `ARCHITECTURE.md`, ...) and runs the re-run dialog.
 - **Invocation Triggers**:
   - *Explicit*: `/along-init`, `install.ps1`, `install.sh`.
   - *Semantic / Automatic*: Triggered when an agent detects an uninitialized repository, missing `AGENTS.md`, or a user prompt like *"Set up Along in this repo"*, *"Initialize agent instructions"*.

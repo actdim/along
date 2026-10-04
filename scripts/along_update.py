@@ -42,7 +42,7 @@ from alongkit import bootstrap
 bootstrap.ensure_deps()
 
 
-from alongkit import proc, repo, semver
+from alongkit import proc, repo, scaffold, semver
 
 REMOTE_GIT_URL = "https://github.com/actdim/along.git"
 REMOTE_RAW_URL = "https://raw.githubusercontent.com/actdim/along/main/AGENTS.md"
@@ -274,26 +274,9 @@ def apply_migration_to_context(ctx_dir, protocol_text, migrate_script, is_root=T
     ctx_dir = os.path.normpath(ctx_dir.strip())
     agents_md = os.path.join(ctx_dir, "AGENTS.md")
 
-    # Sanitize protocol_text by stripping existing wrapper markers to prevent duplication
-    clean_proto = re.sub(r"^<!-- BEGIN (?:ALONG-PROTOCOL|ACTDIM-AGENTS-PROTOCOL).*?-->\r?\n?", "", protocol_text.strip())
-    clean_proto = re.sub(r"\r?\n?<!-- END (?:ALONG-PROTOCOL|ACTDIM-AGENTS-PROTOCOL) -->$", "", clean_proto.strip())
-
-    if is_root or not ancestor_root:
-        begin_marker = "<!-- BEGIN ALONG-PROTOCOL root (managed by along-init - do not edit by hand) -->"
-        end_marker = "<!-- END ALONG-PROTOCOL -->"
-        block = f"{begin_marker}\n{clean_proto}\n{end_marker}"
-    else:
-        rel_path = safe_relpath(os.path.join(ancestor_root, "AGENTS.md"), ctx_dir).replace('\\', '/')
-        begin_marker = f"<!-- BEGIN ALONG-PROTOCOL ref={rel_path} (managed by along-init - do not edit by hand) -->"
-        end_marker = "<!-- END ALONG-PROTOCOL -->"
-        block = (
-            f"{begin_marker}\n"
-            f"This folder belongs to a repository that uses the ALONG structure. The full working\n"
-            f"guidance + agent-context protocol live once in the nearest ancestor `AGENTS.md` (`{rel_path}`) -\n"
-            f"read it there. This folder keeps its OWN `.along/` state; use the nearest one.\n"
-            f"Only this folder's specifics follow.\n"
-            f"{end_marker}"
-        )
+    # FULL at an architecture root, REF inside a nested folder of the same git working
+    # tree; a submodule root is its own architecture root (alongkit.scaffold).
+    block = scaffold.protocol_block_for(ctx_dir, protocol_text)["block"]
 
     if os.path.islink(agents_md) and not os.path.exists(agents_md):
         print(f"   [WARN] Broken symlink detected: {agents_md}; skipping AGENTS.md update for this context.", file=sys.stderr)
@@ -305,15 +288,9 @@ def apply_migration_to_context(ctx_dir, protocol_text, migrate_script, is_root=T
         try:
             with open(agents_md, "r", encoding="utf-8", errors="ignore") as f:
                 existing = f.read()
-            pattern = re.compile(
-                r"(?:<!-- BEGIN (?:ALONG-PROTOCOL|ACTDIM-AGENTS-PROTOCOL).*?-->\s*)+.*?(?:<!-- END (?:ALONG-PROTOCOL|ACTDIM-AGENTS-PROTOCOL) -->\s*)+",
-                re.DOTALL
-            )
-            if pattern.search(existing):
-                remainder = pattern.sub("", existing).lstrip("\r\n")
-                new_content = block + ("\n\n" + remainder if remainder else "\n")
-            else:
-                new_content = block + "\n\n" + existing.lstrip("\r\n")
+            # Replaces the managed block in place; a hand-written file without markers
+            # gets the block on top and keeps its text under `## Project specifics`.
+            new_content = scaffold.merge_protocol_block(existing, block)
             with open(agents_md, "w", encoding="utf-8", newline="\n") as f:
                 f.write(new_content)
             print(f"   [OK] Refreshed managed protocol block in {os.path.basename(agents_md)}.")
@@ -323,7 +300,7 @@ def apply_migration_to_context(ctx_dir, protocol_text, migrate_script, is_root=T
     elif is_root:
         try:
             with open(agents_md, "w", encoding="utf-8", newline="\n") as f:
-                f.write(block + "\n\n## Project specifics\n\n- Add project conventions here.\n")
+                f.write(scaffold.new_agents_md(block))
             print("   [OK] Created root AGENTS.md with managed protocol block.")
         except OSError as exc:
             print(f"   [WARN] Could not create {agents_md}: {exc}", file=sys.stderr)

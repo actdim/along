@@ -3,7 +3,7 @@
 
 Compiled index of Architectural Decision Records stored in `.along/DECISIONS/`.
 
-## Active Decisions (42)
+## Active Decisions (43)
 
 - [Code Graph & Hybrid Knowledge Base Search MCP Integration](DECISIONS/ADR-2026-08-26--code-graph-mcp-and-hybrid-kb-search.md)
 - [Protocol v1.2.0 & Knowledge Base (KB) Architecture Standard](DECISIONS/ADR-2026-08-26--protocol-v120-knowledge-base-architecture.md)
@@ -47,6 +47,7 @@ Compiled index of Architectural Decision Records stored in `.along/DECISIONS/`.
 - [Opt-in git hooks and CI supersede the Zero Git Hooks invariant](DECISIONS/ADR-2026-09-29--opt-in-git-hooks-supersede-zero-git-hooks.md)
 - [Projection merge driver keeps ours and defers recompilation](DECISIONS/ADR-2026-09-29--projection-merge-driver-defers-recompile.md)
 - [Agent-Session Issue Bindings and Plan Approval](DECISIONS/ADR-2026-10-01--agent-session-bindings.md)
+- [One VISION per context: mechanical reconcile, agent restructure; git-bounded REF blocks](DECISIONS/ADR-2026-10-04--single-vision-hybrid-reconcile.md)
 
 ## Superseded & Retired Decisions (2)
 

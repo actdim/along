@@ -66,7 +66,7 @@ When a stage or session completes, agents MUST execute in this order:
 2. [ ] **File Integrity**: `git status -u` - all new/modified files non-zero size, no empty placeholders.
 3. [ ] **Code Review**: Inspect diff for side effects, verify REQ-N coverage, evaluate blast radius via `along graph-impact` (or static search), verify architectural decision compliance.
 4. [ ] **Entity Reconciliation**: Close issues (`done` + move to `done/`), update milestones, resolve risks, conclude spikes.
-5. [ ] **Doc Blast Radius**: Update affected `docs/topic--*.md` and run `/along-kb-sync`.
+5. [ ] **Doc Blast Radius**: Update affected `docs/topic--*.md`, `README.md` and Project specifics; add new terms to `.along/GLOSSARY.md`; touch `.along/VISION.md` only if scope/roadmap changed; run `/along-kb-sync`.
 6. [ ] **Session Log** [gate: wrap_before_stop]: `along wrap <slug> --decisions <ADR...> | --no-decisions` writes `.along/SESSIONS/<YYYY>/<date>--<slug>.md` with the blackboard record; answer the decisions question explicitly.
 7. [ ] **Projections** [gate: projection_sync_before_stop]: Run `/along-issue-sync` and `/along-decision-sync`.
 8. [ ] **HISTORY**: Append line to `.along/HISTORY.md`.

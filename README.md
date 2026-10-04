@@ -163,7 +163,7 @@ Along provides **21 singular automation skills** structured across 6 core lifecy
 ### 1. Bootstrap & Repository Protocol Management
 | Skill / Command | Purpose |
 | :--- | :--- |
-| **`along-init`** (`/along-init`) | Scaffold/refresh `AGENTS.md` + `CLAUDE.md` + `.along/` in a folder. |
+| **`along-init`** (`/along-init`) | Scaffold/refresh `AGENTS.md` + `CLAUDE.md` + `.along/` in a folder via the deterministic `along init` engine; a root `VISION.md` moves into `.along/`. |
 | **`along-update`** (`/along-update`) | One-liner update of repository context, protocol, and global skills from GitHub. |
 | **`along-version-bump`** (`/along-version-bump`) | Multi-stack version bump and release orchestrator (Node, Python, Rust, .NET). |
 

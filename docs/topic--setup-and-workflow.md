@@ -182,15 +182,19 @@ declared as the `dash` extra and resolved automatically by `uv run scripts/along
 To initialize Along in any repository:
 ```bash
 # Inside the repository root, run:
-along-init
+along init
 ```
-*(Or invoke `/along-init` directly inside your AI agent prompt).*
+*(Or invoke `/along-init` directly inside your AI agent prompt: the skill runs `along init` and then does the judgment steps.)*
 
-### What `along-init` Configures:
-1. `AGENTS.md`: Generates the root protocol context with the managed `ALONG-PROTOCOL v4.4.3` block.
+### What `along init` Configures:
+1. `AGENTS.md`: Generates the root protocol context with the managed `ALONG-PROTOCOL v4.4.3` block (a short REF block in a nested folder of the same git repository; a hand-written file keeps its text under `## Project specifics`).
 2. `CLAUDE.md`: Scaffolds the standard `@AGENTS.md` import line.
 3. `.gitattributes`: Configures `merge=union` for `.along/HISTORY.md` and `.along/DECISIONS.md` to prevent merge collisions across branches.
-4. `.along/`: Creates the persistent repository memory skeleton (`ISSUES/`, `DECISIONS.md`, `MILESTONES/`, `RISKS/`, `SPIKES/`, `CHECKLISTS/`, `SESSIONS/`, `docs/`).
+4. `.along/`: Creates the persistent repository memory skeleton (`ISSUES/`, `DECISIONS/`, `MILESTONES/`, `RISKS/`, `SPIKES/`, `CHECKLISTS/`, `SESSIONS/`, `docs/`).
+5. `VISION.md`: A root `VISION.md` is moved into `.along/VISION.md` (or merged under a `needs-restructure` marker the agent resolves); there is never a second copy.
+6. Pipeline: rule packs, git merge drivers, runtime hooks, migration.
+
+The agent then works through the report's `AGENT ACTIONS` (imported VISION section, root notes such as `ROADMAP.md`, `## Project specifics`) and, on a re-run, asks the `RE-RUN QUESTIONS`. See [Along CLI Command Reference](./topic--cli-reference.md).
 
 ---
 

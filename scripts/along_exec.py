@@ -61,6 +61,7 @@ TOOL_MAPPINGS = {
     "versionbump": "along_version_bump.py",
     "bump": "along_version_bump.py",
     "update": "along_update.py",
+    "init": "along_init.py",
     "dash": "along_dash.py",
     "dashboard": "along_dash.py",
     "migrate": "migrate_protocol.py",
@@ -1397,6 +1398,21 @@ def handle_doctor_command(repo_root: str, args: List[str]):
     else:
         print("[FAIL] Missing AGENTS.md at repository root.")
         errors += 1
+
+    # Check VISION: one file in .along/, no unresolved imported section, no root copy
+    from alongkit import scaffold
+    if scaffold.find_root_file(repo_root, scaffold.VISION_FILENAME) and os.path.isdir(along_dir):
+        print("[WARN] Root VISION.md coexists with .along/. Run `along migrate --apply` to reconcile.")
+        warnings += 1
+    if scaffold.find_imported_vision_markers(repo_root):
+        print("[WARN] .along/VISION.md has an unresolved 'along:imported-vision needs-restructure' "
+              "section. Decompose it (scope/non-goals/roadmap stay; architecture -> docs/; "
+              "backlog -> ISSUES/MILESTONES) and remove the markers.")
+        warnings += 1
+    for note in scaffold.find_root_notes(repo_root):
+        print(f"[WARN] Root note {os.path.basename(note)} duplicates the Knowledge Base; route it "
+              "into docs/topic--*.md, .along/VISION.md or entities (see /along-init).")
+        warnings += 1
 
     # Check along CLI availability on PATH
     along_cmd = shutil.which("along") or (shutil.which("along.cmd") if sys.platform == "win32" else None)

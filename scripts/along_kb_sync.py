@@ -1635,6 +1635,12 @@ def main():
     args = parser.parse_args()
 
     check_mode = args.check or args.dry_run
+    if not args.json:
+        # Root notes duplicate the KB; routing them needs judgment, so only report them.
+        from alongkit import scaffold
+        for note in scaffold.find_root_notes(os.path.abspath(args.repo_root)):
+            print(f"-> [Advisory] Root note {os.path.basename(note)}: route it into docs/topic--*.md, "
+                  ".along/VISION.md or entities, then delete it (see /along-init Step 2).")
     sync_kb(args.repo_root, check_only=check_mode, strict=args.strict, prune_intent=args.prune_intent,
             output_json=args.json, migrate_numbered=args.migrate_numbered,
             crosslink_check=args.crosslink_check, crosslink_apply=args.crosslink_apply,

@@ -1,7 +1,7 @@
 # Active Issues
 
 ## Active
-- [ ] `(bug)` [init-onboarding-regressions](ISSUES/bug--init-onboarding-regressions.md)
+<!-- No active issues -->
 
 ## Backlog
 - [ ] `(bug)` [worktree-cross-os-mount-guard](ISSUES/bug--worktree-cross-os-mount-guard.md)
@@ -60,9 +60,9 @@
 - [ ] `(feat)` [zero-step-state-recovery-and-drift-detection](ISSUES/feat--zero-step-state-recovery-and-drift-detection.md)
 
 ## Done (recent)
+- [x] `(bug)` [init-onboarding-regressions](ISSUES/done/bug--init-onboarding-regressions.md)
 - [x] `(bug)` [ci-matrix-gate-session-fixes](ISSUES/done/bug--ci-matrix-gate-session-fixes.md)
 - [x] `(feat)` [wrap-session-log-from-blackboard](ISSUES/done/feat--wrap-session-log-from-blackboard.md)
 - [x] `(feat)` [test-gate-lifecycle-hook-only](ISSUES/done/feat--test-gate-lifecycle-hook-only.md)
 - [x] `(feat)` [subproject-boundary-by-active-issue](ISSUES/done/feat--subproject-boundary-by-active-issue.md)
-- [x] `(feat)` [rule-packs-local-extensions](ISSUES/done/feat--rule-packs-local-extensions.md)
-<!-- 166 older completed issue(s) archived in .along/ISSUES/done/ -->
+<!-- 167 older completed issue(s) archived in .along/ISSUES/done/ -->

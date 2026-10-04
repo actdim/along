@@ -30,6 +30,16 @@ along update [target_root] [options]
 - `--history-sync`: Run Git commit history reconciliation (`/along-history-sync`).
 - `--all-sync`: Execute all three post-update sync operations sequentially.
 
+## What the update changes in each context
+For every folder with `AGENTS.md`, `.along/` or `.agents/` (root first, then nested):
+- **Protocol block** (shared with `along init`, `alongkit.scaffold`): FULL at an architecture root, a short REF in a nested folder of the same git working tree; a git submodule root gets FULL. A hand-written `AGENTS.md` without markers gets the block on top and keeps its text under `## Project specifics`.
+- **Migration** (`along migrate --apply`), including Step 13: a root `VISION.md` is moved into `.along/VISION.md` (or deduplicated, or merged under an `along:imported-vision needs-restructure` marker) and deleted; links to it are repointed (public files -> `docs/INDEX.md`). This check runs even when the context is already on the current version. Root notes (`ROADMAP.md`, `ARCHITECTURE.md`, `SPEC.md`, `TODO.md`, `DESIGN.md`) are listed.
+
+### Agent actions after the update (mandatory, same run)
+- Decompose any `along:imported-vision` section (scope / non-goals / roadmap stay; architecture -> `docs/topic--architecture.md`; backlog -> issues and milestones), then delete the section and its markers.
+- Route listed root notes the same way and delete them.
+- Run `along doctor` in each touched context; it must report no leftover marker, root `VISION.md` or root note.
+
 ## Post-Update Recommended Operations
 When run without automatic sync flags, `/along-update` displays a recommended next steps summary table offering:
 1. `📚 /along-kb-sync`: Ingest and compile Knowledge Base in `docs/` with in-place source provenance and `llms.txt` / `llms-full.txt` sync.

@@ -115,3 +115,13 @@ fails if the engine calls `shutil.move`, `os.remove` or their neighbours directl
 - Strips ` [vX.Y.Z]` title suffixes from local `skills/*/SKILL.md` manifests.
 - Decouples documentation sync from version bump churn, preventing spurious diffs and hash invalidation across releases.
 
+### `v4.4.3` -> `v4.4.4`: One VISION per Context (Step 13)
+- A folder's own root `VISION.md` is reconciled into `.along/VISION.md` and deleted (copy kept in `.along/.migration-backup/<timestamp>/root/`):
+  - `.along/VISION.md` missing or an empty skeleton (only headings, italic lines, comments) -> content moved;
+  - same content -> root copy removed;
+  - both with content -> root content appended inside `<!-- along:imported-vision needs-restructure ... -->` ... `<!-- /along:imported-vision -->`, which the agent decomposes (scope / non-goals / roadmap stay; architecture -> `docs/topic--architecture.md`; backlog -> issues and milestones) and `along doctor` reports until it is gone.
+- Links to the root file are repointed: from `README.md` and `docs/` to `docs/INDEX.md` (stable entry point), from `.along/` files to `.along/VISION.md`. Relative links inside the moved text are rebased.
+- Root notes (`ROADMAP.md`, `ARCHITECTURE.md`, `SPEC.md`, `TODO.md`, `DESIGN.md`) are listed as agent actions, never moved.
+- Runs as a standalone pass on a repository already at the current version, so a root `VISION.md` added later is still healed without re-running the version chain.
+- `VISION.md` files in subfolders are never touched: they belong to their subproject.
+

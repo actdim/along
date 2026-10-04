@@ -11,7 +11,7 @@ tags: [adr, architecture, decisions, index]
 This directory contains the project's Architectural Decision Records.
 Decisions are authored and maintained in `.along/DECISIONS/` and published here as first-class documentation.
 
-## Active Decisions (42)
+## Active Decisions (43)
 
 - **[code-graph-mcp-and-hybrid-kb-search](./ADR-2026-08-26--code-graph-mcp-and-hybrid-kb-search.md)** - Code Graph & Hybrid Knowledge Base Search MCP Integration
 - **[protocol-v120-knowledge-base-architecture](./ADR-2026-08-26--protocol-v120-knowledge-base-architecture.md)** - Protocol v1.2.0 & Knowledge Base (KB) Architecture Standard
@@ -55,6 +55,7 @@ Decisions are authored and maintained in `.along/DECISIONS/` and published here 
 - **[opt-in-git-hooks-supersede-zero-git-hooks](./ADR-2026-09-29--opt-in-git-hooks-supersede-zero-git-hooks.md)** - Opt-in git hooks and CI supersede the Zero Git Hooks invariant
 - **[projection-merge-driver-defers-recompile](./ADR-2026-09-29--projection-merge-driver-defers-recompile.md)** - Projection merge driver keeps ours and defers recompilation
 - **[agent-session-bindings](./ADR-2026-10-01--agent-session-bindings.md)** - Agent-Session Issue Bindings and Plan Approval
+- **[single-vision-hybrid-reconcile](./ADR-2026-10-04--single-vision-hybrid-reconcile.md)** - One VISION per context: mechanical reconcile, agent restructure; git-bounded REF blocks
 
 ## Superseded & Retired Decisions (2)
 

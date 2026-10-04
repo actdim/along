@@ -50,7 +50,7 @@ from alongkit import bootstrap
 # under an interpreter that has no dependencies prepared, which is exactly how the
 # installers and the documented skill commands invoke it.
 bootstrap.ensure_deps()
-from alongkit import frontmatter, migration, proc, repo, sanitizer, semver, textio
+from alongkit import frontmatter, migration, proc, repo, sanitizer, scaffold, semver, textio
 from alongkit.version import CURRENT_PROTOCOL_VERSION, V2_0_0, V2_2_9, V2_2_26, V3_0_0
 
 
@@ -899,6 +899,15 @@ def run_migrations(repo_root, dry_run=True, force=False, backup=True, verbose=Fa
     print("==================================================")
 
     if not _should_run_migrations(repo_root, along_dir, agents_dir, recorded_version, force):
+        # The VISION check is a standalone pass: a root VISION.md can reappear at any
+        # time, and healing it must not re-run the whole version chain.
+        if scaffold.find_root_file(repo_root, scaffold.VISION_FILENAME) and os.path.isdir(along_dir):
+            mig = migration.Migration(repo_root, dry_run=dry_run, state_dir=along_dir, backup=backup)
+            step_reconcile_root_vision_and_notes(mig, repo_root)
+            for line in mig.summary():
+                print(line)
+            return 1 if mig.errors else 0
+        _report_root_notes(repo_root)
         print(f"-> Already at v{CURRENT_PROTOCOL_VERSION}; nothing to do. "
               "Use --force to re-run every step.")
         return 0
@@ -1011,6 +1020,9 @@ def run_migrations(repo_root, dry_run=True, force=False, backup=True, verbose=Fa
         mig.record("legacy hook cleanup", p, "would purge" if dry_run else "purged")
         print(f"   [{'DRY-RUN' if dry_run else 'OK'}] {action_verb} legacy local hook artifact: {p}")
 
+    # Step 13: one VISION per context, root notes surfaced for the agent
+    step_reconcile_root_vision_and_notes(mig, repo_root)
+
     # The state marker is written last, so a run that died halfway is not recorded as
     # a completed migration.
     if not dry_run and not errors and not mig.errors:
@@ -1036,6 +1048,35 @@ def run_migrations(repo_root, dry_run=True, force=False, backup=True, verbose=Fa
 
     print(f"-> [OK] All Along v{CURRENT_PROTOCOL_VERSION} migrations & validations completed successfully!")
     return 0
+
+def _report_root_notes(repo_root):
+    notes = scaffold.find_root_notes(repo_root)
+    for note in notes:
+        print(f"   [AGENT ACTION] Route root note {os.path.basename(note)} into docs/topic--*.md, "
+              ".along/VISION.md or entities, then delete it.")
+    return notes
+
+
+def step_reconcile_root_vision_and_notes(mig, repo_root):
+    """Step 13 [v4.4.4]: a folder's own root VISION.md ends up only in `.along/VISION.md`.
+
+    Mechanical part only (see `alongkit.scaffold.reconcile_root_vision`): move,
+    deduplicate, or merge under an `along:imported-vision needs-restructure` marker,
+    with links repointed. Decomposing a merged section is the agent's job; `along
+    doctor` reports a marker that is still there.
+    """
+    print("-> Step 13 [v4.4.4]: Reconciling root VISION.md into .along/VISION.md...")
+    result = scaffold.reconcile_root_vision(repo_root, mig)
+    action = result["action"]
+    if action == "none":
+        print("   [OK] No root VISION.md outside .along/.")
+    elif action == "merged-needs-restructure":
+        print("   [AGENT ACTION] .along/VISION.md has an imported section; decompose it "
+              "(scope/non-goals/roadmap stay; architecture -> docs/; backlog -> ISSUES/MILESTONES) "
+              "and remove its markers.")
+    _report_root_notes(repo_root)
+    return action
+
 
 def step_migrate_v2_2_5_link_rewriting_and_integrity(mig, repo_root, detected_version="1.0.0"):
     """

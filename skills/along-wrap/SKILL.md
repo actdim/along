@@ -46,13 +46,18 @@ along wrap <slug> -s superseded --no-decisions
    - Mandatorily evaluate systemic blast radius by running `/along-graph-impact` (or `along graph-impact`) across all modified files and symbols. Inspect direct callers, affected execution flows, and verify candidate test coverage.
    - Run `/along-graph-arch` (or `along graph-arch`) if module boundaries or subsystem imports were restructured to verify coupling invariants.
    - Factually update all affected `docs/topic--*.md` articles identified in the impact report before proceeding to Phase B.
-2. **Session Log & Engineering Provenance**:
+2. **Docs, Conventions, Glossary & Vision Check** (mandatory; `along wrap` prints this reminder):
+   - `README.md`: does the completed work change the public overview, install steps or CLI usage? Update it.
+   - `AGENTS.md` `## Project specifics`: did build / test / run commands or project conventions change? Update them (never the managed protocol block).
+   - `.along/GLOSSARY.md`: add every domain term introduced or clarified during the session (`- **Term** - definition.`).
+   - `.along/VISION.md`: touch it only if scope or roadmap changed (tick a shipped roadmap item, add or drop a non-goal). Resolve any `along:imported-vision needs-restructure` section you find.
+3. **Session Log & Engineering Provenance**:
    - `along wrap` writes (or extends) `.along/SESSIONS/<YYYY>/<YYYY-MM-DD>--<slug>.md` in the issue's `.along/`, with `issues_completed: [<type>--<slug>]`, the decisions answer and the blackboard record (plan, step table, research, execution trace, reviews). Add the narrative (what changed, verification) to that file, before or after the wrap.
    - When orchestrating non-trivial multi-step tasks, compile the 3 Engineering Provenance sections: Baseline Plan, Execution Trace, and Verification Walkthrough.
    - **Decisions**: ask yourself whether the session made an architectural choice or trade-off. If yes, record ADRs (`along decision create`) and pass them with `--decisions`; otherwise pass `--no-decisions`.
 
 ### Phase B: Automated Finalization (CLI Engine)
-3. **Execute Transactional Wrap**:
+4. **Execute Transactional Wrap**:
    - Run: `along wrap <slug> --no-decisions --summary "Concise summary of work"` (or `--decisions ADR-...`)
    - The engine automatically:
      - Runs pre-flight automated tests (halts if failing, leaving repo untouched).
@@ -67,6 +72,6 @@ along wrap <slug> -s superseded --no-decisions
      - Protects all mutations with `alongkit.transaction.FileTransaction` (clean rollback on failure).
 
 ### Phase C: Clean Up
-4. **Compaction Prompt**: Advise user to run `/compact` to free up token budget.
+5. **Compaction Prompt**: Advise user to run `/compact` to free up token budget.
 
 
