@@ -2,6 +2,10 @@
 
 All notable changes to this project, newest first.
 
+## v4.4.5 - 2026-10-05
+
+- fix(hooks): forward-slash global hook paths on Windows, fail open on missing deps, cached ~/.along/venv runtime (refs #cached-runtime-venv) (refs #windows-hook-fail-open)
+
 ## v4.4.4 - 2026-10-04
 
 - fix(init): restore root VISION.md reconcile, FULL/REF blocks and hand-written AGENTS.md adoption via deterministic along init; migration Step 13; wrap and kb-sync onboarding checks (refs #init-onboarding-regressions)
