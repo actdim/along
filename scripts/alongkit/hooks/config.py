@@ -129,6 +129,11 @@ def _format_hook_script_path(script_path: str) -> str:
     literal quotes into Python and triggering [Errno 22] Invalid argument.
     If whitespace is present on Windows, resolve the 8.3 short path. If no
     whitespace exists (or short path succeeds), omit quotes.
+
+    On Windows the result always uses forward slashes: Claude Code runs hooks through
+    Git Bash, which strips unquoted backslashes (`C:\\Users\\Admin` -> `C:UsersAdmin`),
+    so Python cannot open the script and exits 2, which Claude Code reads as "block".
+    Forward slashes are valid for bash, cmd.exe, and Python alike.
     """
     if sys.platform == "win32":
         if " " in script_path:
@@ -137,11 +142,11 @@ def _format_hook_script_path(script_path: str) -> str:
                 norm = os.path.normpath(script_path)
                 buf = ctypes.create_unicode_buffer(500)
                 if ctypes.windll.kernel32.GetShortPathNameW(norm, buf, 500) > 0:
-                    return buf.value
+                    return buf.value.replace("\\", "/")
             except (AttributeError, OSError, ValueError, RuntimeError):
                 pass
-            return f'"{script_path}"'
-        return script_path
+            return '"' + script_path.replace("\\", "/") + '"'
+        return script_path.replace("\\", "/")
     if " " in script_path:
         return f'"{script_path}"'
     return script_path

@@ -704,7 +704,7 @@ class TestPackagingContract(unittest.TestCase):
             path = os.path.join(SCRIPTS_DIR, name)
             with open(path, "r", encoding="utf-8") as f:
                 content = f.read()
-            if "bootstrap.ensure_deps()" not in content:
+            if "bootstrap.ensure_deps(" not in content:
                 missing.append(name)
         self.assertEqual(
             missing,

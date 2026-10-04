@@ -31,6 +31,8 @@ class TestUpdateAndHooksHardening(unittest.TestCase):
     def test_global_hook_manifests(self):
         """Global manifests must generate direct script paths without fragile python -c."""
         expanded_path = os.path.expanduser("~/.along/bin/along_hook.py")
+        if sys.platform == "win32":
+            expanded_path = expanded_path.replace("\\", "/")
         # Antigravity
         ag_manifest = hook_config.get_antigravity_hook_manifest(is_global=True)
         self.assertIn("along-runtime-gates", ag_manifest)
@@ -66,6 +68,21 @@ class TestUpdateAndHooksHardening(unittest.TestCase):
         if sys.platform == "win32" and " " not in expanded_path:
             self.assertNotIn(f'"{expanded_path}"', pre_tool_cmd)
 
+    def test_global_hook_command_has_no_backslashes(self):
+        """Git Bash strips backslashes, so a global hook command must use forward slashes only."""
+        for runtime in ("claude", "codex", "cursor", "antigravity"):
+            cmd = hook_config.get_hook_command(runtime, "PreToolUse", is_global=True)
+            self.assertNotIn("\\", cmd, f"{runtime} hook command contains a backslash: {cmd}")
+
+    def test_format_hook_script_path_windows_forward_slashes(self):
+        """On Windows, mixed-slash expanduser output must come back with forward slashes only."""
+        from alongkit.hooks.config import _format_hook_script_path
+        with mock.patch("sys.platform", "win32"):
+            self.assertEqual(
+                _format_hook_script_path("C:\\Users\\Admin/.along/bin/along_hook.py"),
+                "C:/Users/Admin/.along/bin/along_hook.py",
+            )
+
     @unittest.skipUnless(sys.platform == "win32", "patches ctypes.windll, which exists only on Windows")
     def test_format_hook_script_path_windows_safety(self):
         """_format_hook_script_path must omit quotes on Windows when no whitespace exists."""
@@ -74,7 +91,7 @@ class TestUpdateAndHooksHardening(unittest.TestCase):
             # No space path
             self.assertEqual(
                 _format_hook_script_path(r"C:\Users\Admin\.along\bin\along_hook.py"),
-                r"C:\Users\Admin\.along\bin\along_hook.py",
+                "C:/Users/Admin/.along/bin/along_hook.py",
             )
             # Path with spaces and mock short path resolution
             with mock.patch("ctypes.windll.kernel32.GetShortPathNameW", create=True) as mock_short:
@@ -82,7 +99,102 @@ class TestUpdateAndHooksHardening(unittest.TestCase):
                 with mock.patch("ctypes.create_unicode_buffer") as mock_buf:
                     mock_buf.return_value.value = r"C:\Users\ADMINI~1\.along\bin\along_hook.py"
                     result = _format_hook_script_path(r"C:\Users\Admin User\.along\bin\along_hook.py")
-                    self.assertEqual(result, r"C:\Users\ADMINI~1\.along\bin\along_hook.py")
+                    self.assertEqual(result, "C:/Users/ADMINI~1/.along/bin/along_hook.py")
+
+    def test_ensure_deps_missing_exit_code(self):
+        """ensure_deps exits with missing_exit_code when deps are absent and uv cannot help."""
+        from alongkit import bootstrap
+        missing_venv = os.path.join(tempfile.gettempdir(), "along-no-such-venv")
+        with mock.patch.object(bootstrap, "have_deps", return_value=False), \
+                mock.patch.dict(os.environ, {bootstrap.VENV_ENV: missing_venv}), \
+                mock.patch("shutil.which", return_value=None):
+            os.environ.pop(bootstrap.GUARD_ENV, None)
+            with self.assertRaises(SystemExit) as ctx:
+                bootstrap.ensure_deps(missing_exit_code=0)
+            self.assertEqual(ctx.exception.code, 0)
+            with self.assertRaises(SystemExit) as ctx:
+                bootstrap.ensure_deps()
+            self.assertEqual(ctx.exception.code, 2)
+
+    def _run_ensure_deps_capturing_reexec(self, venv_dir, which="uv", build_result=None):
+        """Run ensure_deps with deps missing; return the command it re-executes."""
+        from alongkit import bootstrap
+        captured = {}
+
+        def fake_reexec(command, missing_exit_code):
+            captured["command"] = command
+            raise SystemExit(0)
+
+        patches = [
+            mock.patch.object(bootstrap, "have_deps", return_value=False),
+            mock.patch.object(bootstrap, "_reexec", side_effect=fake_reexec),
+            mock.patch("shutil.which", return_value=which),
+            mock.patch.dict(os.environ, {bootstrap.VENV_ENV: venv_dir}),
+        ]
+        if build_result is not None:
+            patches.append(mock.patch.object(bootstrap, "_build_venv", return_value=build_result))
+        for p in patches:
+            p.start()
+        try:
+            os.environ.pop(bootstrap.GUARD_ENV, None)
+            with self.assertRaises(SystemExit):
+                bootstrap.ensure_deps()
+        finally:
+            for p in reversed(patches):
+                p.stop()
+        return captured.get("command")
+
+    def _plant_venv(self, venv_dir, specs):
+        from alongkit import bootstrap
+        python = bootstrap.venv_python(venv_dir)
+        os.makedirs(os.path.dirname(python), exist_ok=True)
+        textio.write_text(python, "")
+        textio.write_text(os.path.join(venv_dir, ".along-deps"), "\n".join(specs) + "\n")
+        return python
+
+    def test_ensure_deps_reuses_cached_venv(self):
+        """A current cached venv is re-executed into directly, without building or uv run."""
+        from alongkit import bootstrap
+        with tempfile.TemporaryDirectory() as tmp:
+            venv_dir = os.path.join(tmp, "venv")
+            python = self._plant_venv(venv_dir, bootstrap.RUNTIME_DEPENDENCIES)
+            with mock.patch.object(bootstrap, "_build_venv") as build:
+                command = self._run_ensure_deps_capturing_reexec(venv_dir)
+                build.assert_not_called()
+            self.assertEqual(command[0], python)
+
+    def test_ensure_deps_rebuilds_venv_with_stale_stamp(self):
+        """A venv stamped with other dependency specs is not reused."""
+        from alongkit import bootstrap
+        with tempfile.TemporaryDirectory() as tmp:
+            venv_dir = os.path.join(tmp, "venv")
+            self._plant_venv(venv_dir, ["ruamel.yaml>=0.1"])
+            self.assertFalse(bootstrap._venv_is_current(venv_dir, bootstrap.RUNTIME_DEPENDENCIES))
+            command = self._run_ensure_deps_capturing_reexec(venv_dir, build_result=False)
+            self.assertEqual(command[1], "run", "failed rebuild must fall back to uv run")
+
+    def test_ensure_deps_builds_venv_then_reexecs_into_it(self):
+        """With uv available and no venv, ensure_deps builds the venv and re-executes into it."""
+        from alongkit import bootstrap
+        with tempfile.TemporaryDirectory() as tmp:
+            venv_dir = os.path.join(tmp, "venv")
+            command = self._run_ensure_deps_capturing_reexec(venv_dir, build_result=True)
+            self.assertEqual(command[0], bootstrap.venv_python(venv_dir))
+
+    def test_build_venv_failure_leaves_no_partial_env(self):
+        """A failed build removes its temp dir and reports no current venv."""
+        from alongkit import bootstrap
+        with tempfile.TemporaryDirectory() as tmp:
+            venv_dir = os.path.join(tmp, "venv")
+            with mock.patch("subprocess.run", side_effect=subprocess.CalledProcessError(1, "uv")):
+                self.assertFalse(bootstrap._build_venv("uv", venv_dir, bootstrap.RUNTIME_DEPENDENCIES))
+            self.assertEqual(os.listdir(tmp), [])
+
+    def test_along_hook_fails_open_without_deps(self):
+        """along_hook.py must pass missing_exit_code=0 so a missing ruamel.yaml never blocks a tool."""
+        hook_script = os.path.join(os.path.dirname(os.path.dirname(__file__)), "scripts", "along_hook.py")
+        source = textio.read_text(hook_script)
+        self.assertIn("ensure_deps(missing_exit_code=0)", source)
 
 
     def test_purge_local_along_hooks_removes_spurious_artifacts(self):

@@ -25,7 +25,8 @@ if _HERE not in sys.path:
 
 from alongkit import bootstrap, proc, repo
 
-bootstrap.ensure_deps()
+# Fail open: a missing dependency is a setup fault, and exit 2 would block every tool.
+bootstrap.ensure_deps(missing_exit_code=0)
 
 from alongkit.hooks import (
     HookEvent,

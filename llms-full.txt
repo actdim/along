@@ -2931,6 +2931,9 @@ When an agent emits a tool call, the execution loop flows through the hook harne
    - Runtime lifecycle hooks must never cause agent paralysis (tool interception deadlock) due to missing scripts, unhandled exceptions, or non-Along workspaces.
    - Hook commands use direct, robust script paths rather than fragile shell inline scripts (`python -c`).
    - If `along_hook.py` encounters any unexpected internal error or runs in a workspace without Along protocol files, it catches the exception and exits `0` (`ALLOW`), ensuring tools are never blocked by infrastructure faults.
+   - A missing `ruamel.yaml` with no usable `uv` is such a fault: `along_hook.py` calls `bootstrap.ensure_deps(missing_exit_code=0)`, because Claude Code reads exit code `2` as "block the tool".
+   - When the interpreter lacks the dependencies, `bootstrap.ensure_deps()` re-executes into a cached runtime environment (`~/.along/venv`, override with `ALONG_VENV`). It is built once with `uv`, stamped with the dependency specs in `.along-deps`, and rebuilt when those specs change. `uv run --with` is only the fallback when the build fails, so a hook does not re-resolve dependencies on every tool use.
+   - On Windows, global hook commands use forward slashes only (`python C:/Users/<user>/.along/bin/along_hook.py ...`). Claude Code runs hooks through Git Bash, which strips backslashes; Python then cannot open the script and exits `2`, blocking every tool. Re-running `along update --global` rewrites old entries in place.
 6. **Global Hook Centralization & Recursive Monorepo Purge**:
    - Since Along v3.9.2, runtime hooks are installed globally in user home configurations (`~/.gemini/config/hooks.json`, `~/.claude/settings.json`, `~/.codex/hooks.json`).
    - Consumer repositories and all nested subprojects are recursively purged of legacy local hooks during `along update`.

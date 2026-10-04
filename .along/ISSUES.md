@@ -1,7 +1,7 @@
 # Active Issues
 
 ## Active
-<!-- No active issues -->
+- [ ] `(task)` [release-v4-4-5](ISSUES/task--release-v4-4-5.md)
 
 ## Backlog
 - [ ] `(bug)` [worktree-cross-os-mount-guard](ISSUES/bug--worktree-cross-os-mount-guard.md)
@@ -60,9 +60,9 @@
 - [ ] `(feat)` [zero-step-state-recovery-and-drift-detection](ISSUES/feat--zero-step-state-recovery-and-drift-detection.md)
 
 ## Done (recent)
+- [x] `(debt)` [cached-runtime-venv](ISSUES/done/debt--cached-runtime-venv.md)
+- [x] `(bug)` [windows-hook-fail-open](ISSUES/done/bug--windows-hook-fail-open.md)
 - [x] `(bug)` [init-onboarding-regressions](ISSUES/done/bug--init-onboarding-regressions.md)
 - [x] `(bug)` [ci-matrix-gate-session-fixes](ISSUES/done/bug--ci-matrix-gate-session-fixes.md)
 - [x] `(feat)` [wrap-session-log-from-blackboard](ISSUES/done/feat--wrap-session-log-from-blackboard.md)
-- [x] `(feat)` [test-gate-lifecycle-hook-only](ISSUES/done/feat--test-gate-lifecycle-hook-only.md)
-- [x] `(feat)` [subproject-boundary-by-active-issue](ISSUES/done/feat--subproject-boundary-by-active-issue.md)
-<!-- 167 older completed issue(s) archived in .along/ISSUES/done/ -->
+<!-- 169 older completed issue(s) archived in .along/ISSUES/done/ -->
