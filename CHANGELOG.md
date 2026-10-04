@@ -2,6 +2,12 @@
 
 All notable changes to this project, newest first.
 
+## v4.4.4 - 2026-10-04
+
+- fix(init): restore root VISION.md reconcile, FULL/REF blocks and hand-written AGENTS.md adoption via deterministic along init; migration Step 13; wrap and kb-sync onboarding checks (refs #init-onboarding-regressions)
+- docs(session): wrap ci-matrix-gate-session-fixes session log (refs #ci-matrix-gate-session-fixes) (refs #init-onboarding-regressions)
+- fix(ci): fix gates argparse on python <= 3.12 and windows short path traversal (refs #ci-matrix-gate-session-fixes) (refs #init-onboarding-regressions)
+
 ## v4.4.3 - 2026-10-03
 
 - feat(gates): agent session bindings, scoped traces, Claude hook nested schema, and gate hardening [bug--session-state-cross-session-leak]
