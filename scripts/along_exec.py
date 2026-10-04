@@ -1700,10 +1700,20 @@ def handle_gates_command(repo_root: str, args: List[str]):
     import argparse
     from alongkit import gitgates
 
+    if not args or args[0] in ("-h", "--help", "help"):
+        print("Usage: along gates check [--hook {pre-commit,commit-msg}] [--ci] [--range COMMIT_RANGE] [--no-links] [--json] [hook_args...]")
+        print("  Run the commit-time gate subset outside agent runtimes (git hooks, CI).")
+        sys.exit(0)
+
+    subcmd = args[0].lower()
+    if subcmd != "check":
+        print(f"[Error] Unknown gates subcommand: {subcmd}. Use check.", file=sys.stderr)
+        sys.exit(2)
+
+    check_args = args[1:]
     parser = argparse.ArgumentParser(
         prog="along gates check",
         description="Run the commit-time gate subset outside agent runtimes (git hooks, CI).")
-    parser.add_argument("subcommand", choices=["check"])
     parser.add_argument("--hook", choices=list(gitgates.HOOK_NAMES),
                         help="Run as the named git hook (installed by `along hooks install --git`)")
     parser.add_argument("hook_args", nargs="*", help="Arguments git passes to the hook")
@@ -1712,7 +1722,7 @@ def handle_gates_command(repo_root: str, args: List[str]):
                         help="Commit range for --ci (default: from GITHUB_BASE_REF / ALONG_CI_BEFORE, else HEAD^..HEAD)")
     parser.add_argument("--no-links", action="store_true", help="Skip the link integrity check in --ci")
     parser.add_argument("--json", action="store_true", help="Emit violations as JSON")
-    opts = parser.parse_args(args)
+    opts = parser.parse_args(check_args)
 
     if not repo_root:
         print("[Error] Cannot locate repository root.", file=sys.stderr)

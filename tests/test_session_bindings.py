@@ -63,6 +63,7 @@ class SessionFixture(unittest.TestCase):
         self.env = mock.patch.dict(os.environ, CLEAN_ENV, clear=True)
         self.env.start()
         self.root = tempfile.mkdtemp(prefix="along-bind-test-")
+        os.makedirs(os.path.join(self.root, ".git"), exist_ok=True)
         os.makedirs(os.path.join(self.root, ".along", "ISSUES"))
         os.makedirs(os.path.join(self.root, ".along", ".session"))
         self.key_a = session.session_key("claude", "sess-a")
@@ -124,6 +125,16 @@ class TestParallelSessions(SessionFixture):
         _write_issue(self.root, "alpha")
         session.init_session(self.root, "alpha")
         self.assertEqual(session.resolve_active_session(self.root, self.key_a), ("alpha", "single"))
+
+    def test_binding_root_does_not_climb_to_home_without_git(self):
+        no_git_root = tempfile.mkdtemp(prefix="along-nogit-")
+        try:
+            os.makedirs(os.path.join(no_git_root, ".along", "ISSUES"))
+            b_root = session.binding_root(no_git_root)
+            self.assertTrue(session._same_dir(b_root, no_git_root))
+            self.assertFalse(session._same_dir(b_root, os.path.expanduser("~")))
+        finally:
+            shutil.rmtree(no_git_root, ignore_errors=True)
 
 
 class TestPlanApproval(SessionFixture):

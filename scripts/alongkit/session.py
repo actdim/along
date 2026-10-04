@@ -142,6 +142,26 @@ def current_session_key(env: Optional[Dict[str, str]] = None) -> Optional[str]:
     return None
 
 
+def _same_dir(a: str, b: str) -> bool:
+    try:
+        return os.path.samefile(a, b)
+    except (OSError, ValueError):
+        return os.path.normcase(os.path.realpath(a)) == os.path.normcase(os.path.realpath(b))
+
+
+def _is_or_above_home(path: str) -> bool:
+    home = os.path.expanduser("~")
+    if _same_dir(path, home):
+        return True
+    try:
+        rel = os.path.relpath(home, path)
+        if not rel.startswith("..") and rel != ".":
+            return True
+    except (OSError, ValueError):
+        pass
+    return False
+
+
 def binding_root(repo_root: str) -> str:
     """Workspace directory that holds the bindings: the outermost `.along/` owner.
 
@@ -151,10 +171,9 @@ def binding_root(repo_root: str) -> str:
     never climbs to or above the home directory, whose `~/.along` is the global install.
     """
     cur = os.path.abspath(repo_root)
-    home = os.path.normcase(os.path.abspath(os.path.expanduser("~")))
     best = cur
     while True:
-        if os.path.normcase(cur) == home:
+        if _is_or_above_home(cur):
             break
         if os.path.isdir(os.path.join(cur, repo.STATE_DIR)) or os.path.isdir(os.path.join(cur, repo.LEGACY_STATE_DIR)):
             best = cur
@@ -169,10 +188,6 @@ def binding_root(repo_root: str) -> str:
 
 def bindings_dir(repo_root: str) -> str:
     return os.path.join(repo.state_dir(binding_root(repo_root)), ".session", BINDINGS_DIRNAME)
-
-
-def _same_dir(a: str, b: str) -> bool:
-    return os.path.normcase(os.path.abspath(a)) == os.path.normcase(os.path.abspath(b))
 
 
 def binding_context(repo_root: str, binding: Optional[Dict[str, Any]]) -> Optional[str]:
