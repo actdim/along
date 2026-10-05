@@ -10,7 +10,7 @@ updated: 2026-10-05
 agent: claude-code
 tags: [session, blackboard, wrap, gates]
 blocked_by: []
-related: [bug--diagnostics-files-stay-tracked]
+related: [bug--diagnostics-files-stay-tracked, bug--commit-blocked-after-wrap, feat--parallel-session-closeout]
 ---
 
 # Session blackboards are lost: direct mode records nothing, issue done and scratch purge drop them
@@ -55,6 +55,60 @@ session log ("Blackboard Record") before purging it. In practice nothing reaches
 - REQ-7: The Blackboard Record section of a committed session log is append-only: a git/CI check
   rejects a change that removes lines from it (the Summary stays editable).
 - REQ-8: `along doctor` reports orphaned blackboards (no binding, issue closed or missing).
+
+## Code map (verified 2026-10-05)
+- Blackboard: `scripts/alongkit/session.py`: `init_session` (writes the scaffold `plan.md` with
+  `Step N: Step N` and an empty `research.md`; `execution_mode="direct"` by default),
+  `update_state`, `append_trace` (`execution_trace.md`), `render_blackboard_markdown` (what wrap
+  writes as "Blackboard Record"), `purge_session` (`unbind_slug` + `shutil.rmtree`, no copy),
+  `completion_problems` (role-based only).
+- Approval: `session.record_plan_approval` (called from `hooks/predicates.py::record_tool_activity`
+  on Claude Code `PostToolUse` of `ExitPlanMode`; the plan text is in the hook payload's tool input
+  and is currently dropped), `session.approve_plan`, CLI `along plan approve` in
+  `scripts/along_exec.py`.
+- Wrap: `scripts/alongkit/lifecycle.py::execute_wrap` -> `_write_wrap_session_log` (renders the
+  blackboard, only if the log has no "## Blackboard Record" yet) -> `session.purge_session`.
+- Purge CLI: `scripts/along_exec.py` `handle_scratch_command` `purge` (checks
+  `completion_problems` only, which is empty for direct blackboards).
+- `along issue done`: `scripts/along_exec.py::_issue_done` (no blackboard handling).
+- wrap-before-stop: `hooks/predicates.py::check_wrap_before_stop` (any session log of the day).
+- Repo checks for REQ-7: `scripts/alongkit/repochecks.py` + `default_gates.yaml` (git/ci gates).
+
+## Incident record (2026-10-05)
+- Five blackboards (`containment-root-from-shell-cwd`, `entity-gate-blocks-preexisting-problems`,
+  `migration-dangling-template-milestones`, `unconfigured-test-hook-reports-pass`,
+  `wrap-zero-byte-audit-unscoped`) were purged with `along scratch purge` without inspection;
+  their issues had been closed with `along issue done` under one wrap of another slug. Content
+  unrecoverable; most likely scaffold only (direct mode, nothing was written to them).
+- Generated session logs were rewritten by hand and their Blackboard Record tables dropped
+  (`bootstrap-guard-leaks-to-children`, `hook-activation-and-gate-deadlock`, and the log of the
+  entity-graph session), which REQ-7 would have rejected.
+- Plans were approved in chat only; none reached a `plan.md` until the last two tasks of the day,
+  where the plan was written to the blackboard by hand and wrap recorded it correctly
+  (`2026-10-05--along-update-dev-repo.md` shows the expected result).
+
+## Implementation plan
+Order: after `bug--commit-blocked-after-wrap`, before `feat--parallel-session-closeout` (which
+needs `archive_and_purge` and the trace). Execution mode: Role-Based (`along-team`).
+1. REQ-1 plan capture: `along plan approve --plan-file <path>` copies the text into `plan.md`
+   (keep revisions: append `## Revision N (<ts>)` instead of overwriting); refuse while `plan.md` is
+   the scaffold and no `--plan-file`; `record_tool_activity` stores `tool_input.plan` from
+   `ExitPlanMode`. Helper `session.is_scaffold_plan(text)`.
+2. REQ-2 direct-mode trace: hooks append to `execution_trace.md` of the bound slug: edits
+   (PostToolUse), test runs with result, gate denials, approval, phase changes. Bounded size.
+3. REQ-3 `session.archive_and_purge(repo_root, slug, reason=None)`: render blackboard into the
+   session log of that issue (create the log if missing, same format as wrap), then purge. Used by
+   `execute_wrap`, `scratch purge` (with `--force --reason` still recording), `_issue_done`.
+4. REQ-4 `_issue_done` calls `archive_and_purge` when a blackboard exists and adds the key to
+   `issues_completed` of the day's log.
+5. REQ-5 wrap: refuse purge on scaffold-only plan unless `--force --reason`;
+   `render_blackboard_markdown` skips scaffold placeholders.
+6. REQ-6 stricter `check_wrap_before_stop`.
+7. REQ-7 repo check `check_session_log_record_append_only` (diff of `SESSIONS/**` against HEAD:
+   no removed lines under `## Blackboard Record`), wired in `default_gates.yaml` as a git/ci gate.
+8. REQ-8 doctor: orphan blackboards.
+9. Tests per REQ (hermetic fixtures), docs: `docs/topic--session-lifecycle.md` (new, guide) or the
+   existing workflow article, `docs/topic--cli-reference.md`.
 
 ## Acceptance Criteria
 - [ ] Hermetic tests for REQ-1..REQ-8, positive and negative.

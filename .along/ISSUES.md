@@ -4,6 +4,8 @@
 <!-- No active issues -->
 
 ## Backlog
+- [ ] `(bug)` [commit-blocked-after-wrap](ISSUES/bug--commit-blocked-after-wrap.md)
+- [ ] `(bug)` [release-tags-not-pushed](ISSUES/bug--release-tags-not-pushed.md)
 - [ ] `(bug)` [session-records-not-captured](ISSUES/bug--session-records-not-captured.md)
 - [ ] `(bug)` [worktree-cross-os-mount-guard](ISSUES/bug--worktree-cross-os-mount-guard.md)
 - [ ] `(debt)` [agents-md-core-slimming](ISSUES/debt--agents-md-core-slimming.md)
@@ -49,6 +51,7 @@
 - [ ] `(feat)` [native-ast-blast-radius-analyzer](ISSUES/feat--native-ast-blast-radius-analyzer.md)
 - [ ] `(feat)` [openclaw-and-hermes-agent-integration](ISSUES/feat--openclaw-and-hermes-agent-integration.md)
 - [ ] `(feat)` [operational-assets-and-playbooks](ISSUES/feat--operational-assets-and-playbooks.md)
+- [ ] `(feat)` [parallel-session-closeout](ISSUES/feat--parallel-session-closeout.md)
 - [ ] `(feat)` [per-model-rework-metrics](ISSUES/feat--per-model-rework-metrics.md)
 - [ ] `(feat)` [pi-harness-support](ISSUES/feat--pi-harness-support.md)
 - [ ] `(feat)` [planning-fields-and-ordering-gates](ISSUES/feat--planning-fields-and-ordering-gates.md)

@@ -18,6 +18,10 @@ every segment of it is read-only:
    `pdm run`, `hatch run`, `npx`), must start with a known read-only command or test runner.
 5. `git` read subcommands are read-only only without flags that write: `--output` on
    `diff`/`log`/`show`, and anything that creates, deletes, renames or reconfigures a branch.
+   Subcommands with read and write forms (`tag`, `remote`, `stash`, `config`, `reflog`,
+   `worktree`, `notes`) pass only in their listing forms. Global options pass only when they
+   neither run nor write (`--no-pager`, `-C <dir>`); `-c` can set a pager or alias and does
+   not. See [bug--plan-gate-blocks-readonly-git].
 6. `python -c` is read-only only for a single `print(...)` call with no other call inside.
 
 See [bug--safe-command-prefix-bypass] and [bug--shell-classifier-residual-bypasses].
@@ -42,7 +46,46 @@ _READ_COMMANDS = frozenset({
     "write-output", "write-host",
 })
 
-_GIT_READ = frozenset({"status", "diff", "log", "branch", "show", "rev-parse", "describe"})
+#: Subcommands that only read in every form (`--output` aside, checked separately).
+_GIT_READ = frozenset({
+    "status", "diff", "log", "show", "rev-parse", "describe", "ls-remote", "ls-files", "ls-tree",
+    "cat-file", "rev-list", "for-each-ref", "show-ref", "show-branch", "blame", "shortlog",
+    "merge-base", "grep", "name-rev", "count-objects", "cherry", "check-ignore", "check-attr",
+    "whatchanged", "version",
+})
+#: Subcommands that read in some forms and write in others; `_GIT_MODAL` decides per form.
+_GIT_MODAL = frozenset({"branch", "tag", "remote", "stash", "config", "reflog", "worktree", "notes"})
+#: Flags that run a command or open files in a pager under any read subcommand (matched
+#: case-sensitively: `git grep -O` runs a pager, `git grep -o` only prints matches).
+_GIT_EXEC_FLAGS = ("--upload-pack", "-O", "--open-files-in-pager", "--ext-diff")
+#: Global options before the subcommand that change neither what runs nor what is written.
+#: `-c` is not among them: it can set `core.pager` or an alias to an arbitrary command.
+_GIT_GLOBAL_FLAGS = frozenset({"--no-pager", "-P", "-p", "--paginate", "--no-optional-locks",
+                               "--no-replace-objects", "--literal-pathspecs", "--bare"})
+_GIT_GLOBAL_VALUE_OPTS = frozenset({"-C"})
+_GIT_GLOBAL_VALUE_PREFIXES = ("--git-dir=", "--work-tree=")
+#: `git tag` flags that only list or verify; any of them also makes positionals patterns.
+_GIT_TAG_LIST_FLAGS = frozenset({
+    "-l", "--list", "-v", "--verify", "--contains", "--no-contains", "--merged", "--no-merged",
+    "--points-at", "--column", "--no-column", "-i", "--ignore-case", "--color", "--omit-empty",
+})
+_GIT_TAG_LIST_VALUE_PREFIXES = ("-n", "--sort=", "--format=", "--color=", "--column=",
+                                "--contains=", "--no-contains=", "--merged=", "--no-merged=",
+                                "--points-at=")
+#: `git tag` list options that take the next word as their value.
+_GIT_TAG_VALUE_OPTS = frozenset({"--sort", "--format", "--points-at"})
+#: `git config` options that only select or format what is read.
+_GIT_CONFIG_READ_FLAGS = frozenset({
+    "--get", "--get-all", "--get-regexp", "--get-urlmatch", "-l", "--list", "--show-origin",
+    "--show-scope", "--name-only", "--global", "--system", "--local", "--worktree", "-z",
+    "--null", "--includes", "--no-includes", "--bool", "--int", "--path", "--bool-or-int",
+    "--all", "--regexp",
+})
+_GIT_CONFIG_READ_MODES = frozenset({"--get", "--get-all", "--get-regexp", "--get-urlmatch",
+                                    "-l", "--list"})
+#: `git config` read options that carry a value (`--type=bool`, `--file path`, ...).
+_GIT_CONFIG_READ_VALUE_OPTS = frozenset({"--default", "--type", "--file", "-f", "--blob", "--url",
+                                         "--value", "--fixed-value"})
 #: `git branch` flags that only list; any other flag, or a bare name, may write.
 _GIT_BRANCH_LIST_FLAGS = frozenset({
     "-a", "-r", "-v", "-vv", "-l", "--list", "--all", "--remotes", "--verbose",
@@ -215,22 +258,105 @@ def _is_python(word: str) -> bool:
     return bool(re.match(r"^(python\d*(\.\d+)?|py)(\.exe)?$", base))
 
 
-def _git_is_read_only(rest: List[str]) -> bool:
-    """`rest` are the lowercased words after `git`."""
-    if not rest or rest[0] not in _GIT_READ:
+def _strip_git_globals(words: List[str]) -> Optional[List[str]]:
+    """`words` (original case) without the leading global options that neither run nor write
+    anything; None when a global option is not one of them (`-c`, `--exec-path=...`)."""
+    while words and words[0].startswith("-"):
+        opt = words[0]
+        if opt in _GIT_GLOBAL_FLAGS or opt.startswith(_GIT_GLOBAL_VALUE_PREFIXES):
+            words = words[1:]
+        elif opt in _GIT_GLOBAL_VALUE_OPTS and len(words) > 1:
+            words = words[2:]
+        else:
+            return None
+    return words
+
+
+def _git_branch_is_read_only(args: List[str]) -> bool:
+    listing = any(a in ("-l", "--list") for a in args)
+    for a in args:
+        if a in _GIT_BRANCH_LIST_FLAGS or a.startswith(_GIT_BRANCH_LIST_VALUE_PREFIXES):
+            continue
+        if not a.startswith("-") and listing:
+            continue  # pattern for `--list`
         return False
-    sub, args = rest[0], rest[1:]
+    return True
+
+
+def _git_tag_is_read_only(args: List[str]) -> bool:
+    """Bare `git tag` and its list/verify forms; a positional without them creates a tag."""
+    listing = False
+    positional = False
+    i = 0
+    while i < len(args):
+        a = args[i]
+        if a in _GIT_TAG_VALUE_OPTS:
+            listing = True
+            i += 2
+            continue
+        if a in _GIT_TAG_LIST_FLAGS or a.startswith(_GIT_TAG_LIST_VALUE_PREFIXES):
+            listing = True
+        elif a.startswith("-"):
+            return False  # -a, -s, -m, -F, -d, -f, -e, -u: create, sign, delete, edit
+        else:
+            positional = True
+        i += 1
+    return listing or not positional
+
+
+def _git_config_is_read_only(args: List[str]) -> bool:
+    """`git config get|list ...` and the `--get*` / `--list` forms of the option syntax."""
+    words = [a for a in args if not a.startswith("-")]
+    flags = [a.split("=", 1)[0] for a in args if a.startswith("-")]
+    if not (words and words[0] in ("get", "list")) \
+            and not any(f in _GIT_CONFIG_READ_MODES for f in flags):
+        return False  # `git config key value` sets; `git config key` alone is not worth parsing
+    return all(f in _GIT_CONFIG_READ_FLAGS or f in _GIT_CONFIG_READ_VALUE_OPTS for f in flags)
+
+
+def _git_modal_is_read_only(sub: str, args: List[str]) -> bool:
+    words = [a for a in args if not a.startswith("-")]
+    action = words[0] if words else ""
+    if sub == "branch":
+        return _git_branch_is_read_only(args)
+    if sub == "tag":
+        return _git_tag_is_read_only(args)
+    if sub == "config":
+        return _git_config_is_read_only(args)
+    if sub == "remote":
+        if not args:
+            return True
+        if args[0] in ("-v", "--verbose"):
+            return len(args) == 1 or (args[1] in ("show", "get-url") and len(args) <= 4)
+        return args[0] in ("show", "get-url")
+    if sub == "stash":
+        return action in ("list", "show")
+    if sub == "reflog":
+        # Bare `git reflog` is `git reflog show`; `expire` and `delete` rewrite the reflog.
+        return action in ("", "show", "exists")
+    if sub == "worktree":
+        return action == "list"
+    if sub == "notes":
+        return action in ("list", "show")
+    return False
+
+
+def _git_is_read_only(words: List[str]) -> bool:
+    """`words` are the words after `git` in their original case: `-C` and `-c`, `-O` and `-o`
+    differ only in case."""
+    stripped = _strip_git_globals(words)
+    if not stripped:
+        return False
+    if any(a == flag or a.startswith(flag + "=") for a in stripped[1:] for flag in _GIT_EXEC_FLAGS):
+        return False
+    sub, args = stripped[0].lower(), [a.lower() for a in stripped[1:]]
     if any(a == "--output" or a.startswith("--output=") for a in args):
         return False
-    if sub == "branch":
-        listing = any(a in ("-l", "--list") for a in args)
-        for a in args:
-            if a in _GIT_BRANCH_LIST_FLAGS or a.startswith(_GIT_BRANCH_LIST_VALUE_PREFIXES):
-                continue
-            if not a.startswith("-") and listing:
-                continue  # pattern for `--list`
-            return False
-    return True
+    if sub in _GIT_READ:
+        return True
+    if sub in _GIT_MODAL:
+        return _git_modal_is_read_only(sub, args)
+    return False
 
 
 def _python_c_is_read_only(code: str) -> bool:
@@ -337,7 +463,7 @@ def _segment_is_read_only(segment: str) -> bool:
     if first == "uniq":
         return len([t for t in rest if not t.startswith("-")]) <= 1
     if first == "git":
-        return _git_is_read_only(rest)
+        return _git_is_read_only(tokens[1:])
     if first == "along" or first.endswith("along_exec.py"):
         joined = " ".join(rest)
         return any(joined == sub or joined.startswith(sub + " ") for sub in _ALONG_READ)
