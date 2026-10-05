@@ -8,6 +8,7 @@
 - [ ] `(bug)` [release-tags-not-pushed](ISSUES/bug--release-tags-not-pushed.md)
 - [ ] `(bug)` [session-records-not-captured](ISSUES/bug--session-records-not-captured.md)
 - [ ] `(bug)` [stop-gates-breaker-deadlock](ISSUES/bug--stop-gates-breaker-deadlock.md)
+- [ ] `(bug)` [subcommand-help-as-argument](ISSUES/bug--subcommand-help-as-argument.md)
 - [ ] `(bug)` [worktree-cross-os-mount-guard](ISSUES/bug--worktree-cross-os-mount-guard.md)
 - [ ] `(debt)` [agents-md-core-slimming](ISSUES/debt--agents-md-core-slimming.md)
 - [ ] `(debt)` [along-core-extras-split](ISSUES/debt--along-core-extras-split.md)
