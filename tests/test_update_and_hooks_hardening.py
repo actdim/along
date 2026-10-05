@@ -190,6 +190,88 @@ class TestUpdateAndHooksHardening(unittest.TestCase):
                 self.assertFalse(bootstrap._build_venv("uv", venv_dir, bootstrap.RUNTIME_DEPENDENCIES))
             self.assertEqual(os.listdir(tmp), [])
 
+    def test_ensure_deps_clears_the_guard_once_deps_are_present(self):
+        """The marker guards one re-exec; it must not reach the engines this process starts."""
+        from alongkit import bootstrap
+        with mock.patch.object(bootstrap, "have_deps", return_value=True), \
+                mock.patch.dict(os.environ, {bootstrap.GUARD_ENV: "1"}):
+            bootstrap.ensure_deps()
+            self.assertNotIn(bootstrap.GUARD_ENV, os.environ)
+
+    def test_a_bootstrapped_process_starts_children_without_the_guard(self):
+        """End to end: a re-executed engine spawns another engine, which must see no marker.
+
+        Before the fix an installer run from a bootstrapped process called
+        `install_manifest.py` under a bare interpreter, which saw the inherited marker,
+        refused to bootstrap and exited 2. See [bug--bootstrap-guard-leaks-to-children].
+        """
+        from alongkit import bootstrap
+        scripts_dir = os.path.join(os.path.dirname(os.path.dirname(__file__)), "scripts")
+        with tempfile.TemporaryDirectory() as tmp:
+            child = os.path.join(tmp, "child.py")
+            textio.write_text(child, (
+                "import os\n"
+                f"print(os.environ.get({bootstrap.GUARD_ENV!r}, 'absent'))\n"))
+            engine = os.path.join(tmp, "engine.py")
+            textio.write_text(engine, (
+                "import subprocess, sys\n"
+                f"sys.path.insert(0, {scripts_dir!r})\n"
+                "from alongkit import bootstrap\n"
+                "bootstrap.ensure_deps()\n"
+                f"run = subprocess.run([sys.executable, {child!r}], capture_output=True, text=True)\n"
+                "sys.stdout.write(run.stdout)\n"))
+            env = dict(os.environ)
+            env[bootstrap.GUARD_ENV] = "1"
+            result = subprocess.run([sys.executable, engine], capture_output=True, text=True,
+                                    env=env, timeout=60)
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertEqual(result.stdout.strip(), "absent")
+
+    def _run_ensure_project_env(self, root, have=False, which="uv", guard=None):
+        """Run ensure_project_env; return (re-exec command or None, guard passed to _reexec)."""
+        from alongkit import bootstrap
+        captured = {}
+
+        def fake_reexec(command, missing_exit_code, guard=bootstrap.GUARD_ENV):
+            captured["command"], captured["guard"] = command, guard
+            raise SystemExit(0)
+
+        env = {bootstrap.PROJECT_GUARD_ENV: guard} if guard else {}
+        with mock.patch.object(bootstrap, "have_deps", return_value=have), \
+                mock.patch.object(bootstrap, "_reexec", side_effect=fake_reexec), \
+                mock.patch("shutil.which", return_value=which), \
+                mock.patch.dict(os.environ, env):
+            if not guard:
+                os.environ.pop(bootstrap.PROJECT_GUARD_ENV, None)
+            try:
+                bootstrap.ensure_project_env(root, ("pydantic",))
+            except SystemExit:
+                pass
+            guard_left = os.environ.get(bootstrap.PROJECT_GUARD_ENV)
+        return captured.get("command"), captured.get("guard"), guard_left
+
+    def test_ensure_project_env_reexecs_through_uv_project(self):
+        """Missing dev modules: re-exec via `uv run --project <root>` under its own guard."""
+        from alongkit import bootstrap
+        with tempfile.TemporaryDirectory() as root:
+            textio.write_text(os.path.join(root, "pyproject.toml"), "[project]\nname = \"x\"\n")
+            command, guard, _ = self._run_ensure_project_env(root)
+        self.assertIsNotNone(command)
+        self.assertEqual(command[:2], ["uv", "run"])
+        self.assertEqual(command[command.index("--project") + 1], root)
+        self.assertEqual(guard, bootstrap.PROJECT_GUARD_ENV)
+
+    def test_ensure_project_env_returns_when_it_cannot_or_need_not_help(self):
+        """Present modules, a set guard, no uv or no pyproject: no re-exec, never an exit."""
+        with tempfile.TemporaryDirectory() as root:
+            self.assertIsNone(self._run_ensure_project_env(root)[0], "no pyproject.toml")
+            textio.write_text(os.path.join(root, "pyproject.toml"), "[project]\nname = \"x\"\n")
+            self.assertIsNone(self._run_ensure_project_env(root, which=None)[0], "no uv")
+            self.assertIsNone(self._run_ensure_project_env(root, guard="1")[0], "already re-executed")
+            command, _, guard_left = self._run_ensure_project_env(root, have=True, guard="1")
+            self.assertIsNone(command, "modules present")
+            self.assertIsNone(guard_left, "the project guard is cleared once modules are present")
+
     def test_along_hook_fails_open_without_deps(self):
         """along_hook.py must pass missing_exit_code=0 so a missing ruamel.yaml never blocks a tool."""
         hook_script = os.path.join(os.path.dirname(os.path.dirname(__file__)), "scripts", "along_hook.py")

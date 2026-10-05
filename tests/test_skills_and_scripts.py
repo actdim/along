@@ -900,6 +900,7 @@ class TestAlongSkillsAndScripts(unittest.TestCase):
             self.assertIn("fixture-sample-task", list_res.stdout,
                           "the fixture entity must be listed, proving the fixture was the target")
 
+    @hermetic.requires_dashboard_deps
     def test_13_dashboard_graph_builder_with_kb_and_adr(self):
         """Verify that dashboard graph builder creates valid nodes and edges for KB articles and ADRs.
 
@@ -934,6 +935,7 @@ class TestAlongSkillsAndScripts(unittest.TestCase):
             self.assertIn("type", edge)
             self.assertIn("label", edge)
 
+    @hermetic.requires_dashboard_deps
     def test_13b_collector_metrics_extended_statuses_and_bug_debt_ratio(self):
         """Verify collector correctly categorizes superseded, cancelled, duplicate and computes bug_debt_ratio."""
         from dashboard.core.collector import EntityCollector

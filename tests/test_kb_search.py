@@ -24,6 +24,11 @@ if SCRIPTS_DIR not in sys.path:
 
 import along_kb_search as kb
 
+TESTS_DIR = os.path.dirname(os.path.abspath(__file__))
+if TESTS_DIR not in sys.path:
+    sys.path.insert(0, TESTS_DIR)
+import hermetic
+
 
 SLUG_FORMAT_FIXTURE = """# Decisions (ADR - append-only)
 
@@ -219,6 +224,7 @@ class TestCollectorSkipReporting(unittest.TestCase):
             self.assertEqual(len(results), 1)
             self.assertEqual(results[0]["slug"], "sample-valid")
 
+    @hermetic.requires_dashboard_deps
     def test_dashboard_collector_records_skips(self):
         from dashboard.core.collector import EntityCollector
         from pathlib import Path

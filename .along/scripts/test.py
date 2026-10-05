@@ -20,6 +20,12 @@ sys.path.insert(0, os.path.join(
     os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))), "scripts"))
 from alongkit import bootstrap, gates
 
+# The suite also needs the `dev` group (the dashboard stack), which the shared runtime
+# environment `~/.along/venv` does not carry: run inside the project environment first.
+# See [bug--test-hook-lacks-dashboard-deps].
+bootstrap.ensure_project_env(
+    os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))),
+    ("ruamel.yaml", "fastapi", "pydantic"))
 bootstrap.ensure_deps()
 
 def main():

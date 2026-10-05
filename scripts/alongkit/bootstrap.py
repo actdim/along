@@ -19,7 +19,16 @@ built once with uv and stamped with the dependency specs) and falls back to
 every tool use, so re-resolving dependencies per call is too slow to be the default.
 
 The re-exec happens at most once, guarded by an environment marker, so a failure to
-import after bootstrapping surfaces as a real error rather than an execution loop.
+import after bootstrapping surfaces as a real error rather than an execution loop. The
+marker is cleared as soon as the dependencies are present: it guards one re-exec, not the
+whole process tree, so an engine started from a bootstrapped process (an installer running
+`install_manifest.py` under a bare interpreter) still bootstraps itself.
+See [bug--bootstrap-guard-leaks-to-children].
+
+`ensure_project_env()` serves the repository's own test hook: the suite needs the `dev`
+dependency group, which the shared runtime environment deliberately does not carry, so it
+re-executes through `uv run --project <root>` instead.
+See [bug--test-hook-lacks-dashboard-deps].
 """
 
 
@@ -45,6 +54,9 @@ RUNTIME_DEPENDENCIES: tuple = ("ruamel.yaml>=0.18",)
 
 #: Set in the child environment before re-executing, to make the bootstrap idempotent.
 GUARD_ENV = "ALONGKIT_BOOTSTRAPPED"
+
+#: The same guard for the `uv run --project` re-exec of `ensure_project_env()`.
+PROJECT_GUARD_ENV = "ALONGKIT_PROJECT_ENV"
 
 #: Overrides the location of the cached runtime environment (default `~/.along/venv`).
 VENV_ENV = "ALONG_VENV"
@@ -137,10 +149,10 @@ def _build_venv(uv: str, venv_dir: str, dependencies: Sequence[str]) -> bool:
     return _venv_is_current(venv_dir, dependencies)
 
 
-def _reexec(command: List[str], missing_exit_code: int) -> None:
-    """Run `command` with the bootstrap guard set and exit with its return code."""
+def _reexec(command: List[str], missing_exit_code: int, guard: str = GUARD_ENV) -> None:
+    """Run `command` with the `guard` marker set and exit with its return code."""
     env = dict(os.environ)
-    env[GUARD_ENV] = "1"
+    env[guard] = "1"
     env.setdefault("PYTHONIOENCODING", "utf-8")
     env.setdefault("PYTHONUTF8", "1")
     try:
@@ -164,6 +176,8 @@ def ensure_deps(dependencies: Sequence[str] = RUNTIME_DEPENDENCIES,
     as "block the tool", and a setup fault must never block the agent.
     """
     if have_deps(modules):
+        # The marker guarded the re-exec that got us here; descendants start clean.
+        os.environ.pop(GUARD_ENV, None)
         return
 
     if os.environ.get(GUARD_ENV) == "1":
@@ -198,6 +212,31 @@ def ensure_deps(dependencies: Sequence[str] = RUNTIME_DEPENDENCIES,
     print(f"-> [Along] resolving dependencies via uv: {' '.join(dependencies)}",
           file=sys.stderr)
     _reexec(command, missing_exit_code)
+
+
+def ensure_project_env(project_root: str, modules: Sequence[str]) -> None:
+    """Re-execute the current script inside the uv project at `project_root` when `modules` are missing.
+
+    `uv run --project` syncs the project's default dependency groups (`dev`), which is
+    where a repository keeps what only its own tooling needs. Returns normally when the
+    modules are present, when `uv` or the script cannot be found, or when this process is
+    already that re-exec (the caller then degrades, e.g. tests skip). Never exits on its
+    own: the runtime bootstrap that usually follows reports what is truly missing.
+    """
+    if have_deps(modules):
+        os.environ.pop(PROJECT_GUARD_ENV, None)
+        return
+    if os.environ.get(PROJECT_GUARD_ENV) == "1":
+        return
+    if not os.path.isfile(os.path.join(project_root, "pyproject.toml")):
+        return
+    script = os.path.abspath(sys.argv[0]) if sys.argv and sys.argv[0] else ""
+    uv = shutil.which("uv")
+    if not script or not os.path.isfile(script) or not uv:
+        return
+    print(f"-> [Along] running in the project environment via uv: {project_root}", file=sys.stderr)
+    _reexec([uv, "run", "--quiet", "--project", project_root, "python", script, *sys.argv[1:]],
+            missing_exit_code=2, guard=PROJECT_GUARD_ENV)
 
 
 def require(module: str):

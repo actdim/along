@@ -37,14 +37,22 @@ import os
 import shutil
 import sys
 import tempfile
+import unittest
 
 REPO_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 SCRIPTS_DIR = os.path.join(REPO_ROOT, "scripts")
 if SCRIPTS_DIR not in sys.path:
     sys.path.insert(0, SCRIPTS_DIR)
 
-from alongkit import textio
+from alongkit import bootstrap, textio
 from alongkit.version import CURRENT_PROTOCOL_VERSION
+
+#: Skips a test that needs the dashboard stack (`dev` group: `actdim-along[dash]`) when the
+#: interpreter lacks it, e.g. no `uv` to enter the project environment.
+#: See [bug--test-hook-lacks-dashboard-deps].
+requires_dashboard_deps = unittest.skipUnless(
+    bootstrap.have_deps(("fastapi", "pydantic")),
+    "dashboard stack (fastapi, pydantic) not installed; run in the project environment (uv sync)")
 
 BEGIN_MARKER = "<!-- BEGIN ALONG-PROTOCOL root (managed by along-init - do not edit by hand) -->"
 END_MARKER = "<!-- END ALONG-PROTOCOL -->"
