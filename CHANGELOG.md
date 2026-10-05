@@ -2,6 +2,19 @@
 
 All notable changes to this project, newest first.
 
+## v4.4.6 - 2026-10-05
+
+- chore(issues): file bug--subcommand-help-as-argument (decision create --help made an ADR named --help) (refs #subcommand-help-as-argument)
+- chore(issues): file feat--tool-nature-classification (ask the nature of unknown tools, layered config, act by class) and bug--stop-gates-breaker-deadlock (refs #tool-nature-classification)
+- fix(hooks): plan gate lets read-only git through: pure-read subcommands (ls-remote, for-each-ref, show-ref, cat-file, rev-list, blame, ...) and listing forms of tag/remote/stash/config/reflog/worktree/notes; git words keep their case so -C passes and -c stays held; file bug--release-tags-not-pushed; includes parallel-session issue notes (commit-blocked-after-wrap reopened, parallel-session-closeout) (refs #plan-gate-blocks-readonly-git)
+- fix(hooks): along commit passes the plan gate as a completion command, so the checklist can commit after wrap unbinds the session (--fix-typography and raw git commit stay held) (refs #commit-blocked-after-wrap)
+- chore(update): run along update in the dev repository (merge drivers registered, dashboard-ui migration state 4.4.5); file bug--session-records-not-captured (refs #along-update-dev-repo)
+- fix(gates): keep per-machine .along/diagnostics/ out of git: untracked-exports rejects staging it at any depth, migration Step 14 untracks it (also on up-to-date repositories), along doctor reports leftovers (refs #diagnostics-files-stay-tracked)
+- fix(hooks): activate only on an Along context (no bare AGENTS.md) or a declared root, never create .along/ for diagnostics, awk and verification commands pass the plan gate, edits counted on PostToolUse, unbound sessions fail open unless enforce_unbound (refs #hook-activation-and-gate-deadlock)
+- fix(bootstrap): clear the re-exec guard once deps import so child engines bootstrap themselves; test hook runs in the uv project environment, dashboard tests skip without the stack (refs #bootstrap-guard-leaks-to-children)
+- fix(entities): resolve downward references to nested .along contexts, gates block only problems absent at HEAD, migration stops inventing milestones (doctor --entities --fix), unconfigured test hook warns instead of passing, wrap empty-file audit scoped to truncations and session edits; untrack per-machine diagnostics (refs #entity-refs-ignore-nested-contexts)
+- fix(hooks): anchor hook root on CLAUDE_PROJECT_DIR instead of shell cwd; read-only classifier accepts filters, sed/find reads, loops and command substitution (refs #readonly-classifier-pipelines) (refs #containment-root-from-shell-cwd)
+
 ## v4.4.5 - 2026-10-05
 
 - fix(hooks): forward-slash global hook paths on Windows, fail open on missing deps, cached ~/.along/venv runtime (refs #cached-runtime-venv) (refs #windows-hook-fail-open)
