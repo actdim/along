@@ -455,10 +455,10 @@ def _empty_changed_files(repo_root: str) -> Tuple[List[str], Optional[str]]:
         except OSError:
             return False
 
-    root = os.path.abspath(repo_root)
-    res = proc.git(["status", "--porcelain", "-u", "--", "."], cwd=repo_root)
-    top_res = proc.git(["rev-parse", "--show-toplevel"], cwd=repo_root) if res.ok else None
-    top = top_res.out.strip() if top_res is not None and top_res.ok else ""
+    root = os.path.realpath(os.path.abspath(repo_root))
+    res = proc.git(["status", "--porcelain", "-u", "--", "."], cwd=root)
+    top_res = proc.git(["rev-parse", "--show-toplevel"], cwd=root) if res.ok else None
+    top = os.path.realpath(top_res.out.strip()) if top_res is not None and top_res.ok else ""
     if not res.ok or not top:
         found = []
         for current, _, files in os.walk(root):
@@ -504,11 +504,12 @@ def zero_byte_working_tree_audit(repo_root: str) -> Tuple[List[str], List[str]]:
         return [], []
     edited = session_edited_files(repo_root)
     blocking, warnings = [], []
+    root = os.path.realpath(repo_root)
     for rel in found:
         truncated = False
         if top:
-            top_rel = os.path.relpath(os.path.join(repo_root, rel), top).replace("\\", "/")
-            size = proc.git(["cat-file", "-s", f"HEAD:{top_rel}"], cwd=repo_root)
+            top_rel = os.path.relpath(os.path.join(root, rel), top).replace("\\", "/")
+            size = proc.git(["cat-file", "-s", f"HEAD:{top_rel}"], cwd=root)
             truncated = size.ok and size.out.strip().isdigit() and int(size.out.strip()) > 0
         (blocking if truncated or rel in edited else warnings).append(rel)
     return blocking, warnings

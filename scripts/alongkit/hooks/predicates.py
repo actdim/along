@@ -920,9 +920,10 @@ _ENTITY_DIRS = ("ISSUES/", "MILESTONES/", "RISKS/", "SPIKES/", "CHECKLISTS/", "D
 
 def _entity_files_changed(repo_root: str) -> bool:
     """True when git reports a changed entity file under the state dir (or git cannot say)."""
-    sdir = repo.state_dir(repo_root)
-    rel = repo.normalize_posix(os.path.relpath(sdir, repo_root))
-    result = proc.run_capture(["git", "status", "--porcelain", "-uall", "--", rel], cwd=repo_root,
+    real_root = os.path.realpath(repo_root)
+    sdir = repo.state_dir(real_root)
+    rel = repo.normalize_posix(os.path.relpath(sdir, real_root))
+    result = proc.run_capture(["git", "status", "--porcelain", "-uall", "--", rel], cwd=real_root,
                               check=False, trip_on_anomaly=False)
     if not result.ok:
         return True

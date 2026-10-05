@@ -1,10 +1,10 @@
 # Active Issues
 
 ## Active
-<!-- No active issues -->
+- [ ] `(bug)` [commit-blocked-after-wrap](ISSUES/bug--commit-blocked-after-wrap.md)
 
 ## Backlog
-- [ ] `(bug)` [commit-blocked-after-wrap](ISSUES/bug--commit-blocked-after-wrap.md)
+- [ ] `(bug)` [git-index-corruption](ISSUES/bug--git-index-corruption.md)
 - [ ] `(bug)` [release-tags-not-pushed](ISSUES/bug--release-tags-not-pushed.md)
 - [ ] `(bug)` [session-records-not-captured](ISSUES/bug--session-records-not-captured.md)
 - [ ] `(bug)` [stop-gates-breaker-deadlock](ISSUES/bug--stop-gates-breaker-deadlock.md)
@@ -62,14 +62,15 @@
 - [ ] `(feat)` [structured-blackboard-state-machine](ISSUES/feat--structured-blackboard-state-machine.md)
 - [ ] `(feat)` [system-invariants-and-health-probes](ISSUES/feat--system-invariants-and-health-probes.md)
 - [ ] `(feat)` [test-gated-code-merge-pipeline](ISSUES/feat--test-gated-code-merge-pipeline.md)
+- [ ] `(feat)` [tool-class-model](ISSUES/feat--tool-class-model.md)
 - [ ] `(feat)` [tool-nature-classification](ISSUES/feat--tool-nature-classification.md)
 - [ ] `(feat)` [vps-runner-daemon](ISSUES/feat--vps-runner-daemon.md)
 - [ ] `(feat)` [zero-step-state-recovery-and-drift-detection](ISSUES/feat--zero-step-state-recovery-and-drift-detection.md)
 
 ## Done (recent)
+- [x] `(bug)` [ci-windows-short-paths](ISSUES/done/bug--ci-windows-short-paths.md)
 - [x] `(task)` [release-v4-4-5](ISSUES/done/task--release-v4-4-5.md)
 - [x] `(task)` [along-update-dev-repo](ISSUES/done/task--along-update-dev-repo.md)
 - [x] `(debt)` [cached-runtime-venv](ISSUES/done/debt--cached-runtime-venv.md)
 - [x] `(bug)` [wrap-zero-byte-audit-unscoped](ISSUES/done/bug--wrap-zero-byte-audit-unscoped.md)
-- [x] `(bug)` [windows-hook-fail-open](ISSUES/done/bug--windows-hook-fail-open.md)
-<!-- 183 older completed issue(s) archived in .along/ISSUES/done/ -->
+<!-- 184 older completed issue(s) archived in .along/ISSUES/done/ -->

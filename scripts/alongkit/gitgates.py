@@ -468,18 +468,20 @@ def baseline_entity_problems(repo_root: str, base: str = "HEAD") -> Optional[set
     commit yet) or git is unavailable. [bug--entity-gate-blocks-preexisting-problems]
     """
     from . import entities
-    top = _git_out(repo_root, "rev-parse", "--show-toplevel").strip()
-    if not top or not _git_out(repo_root, "rev-parse", "--verify", "-q", base).strip():
+    real_root = os.path.realpath(os.path.abspath(repo_root))
+    top = _git_out(real_root, "rev-parse", "--show-toplevel").strip()
+    if not top or not _git_out(real_root, "rev-parse", "--verify", "-q", base).strip():
         return None
-    prefix = os.path.relpath(os.path.abspath(repo_root), os.path.abspath(top)).replace("\\", "/")
+    real_top = os.path.realpath(os.path.abspath(top))
+    prefix = os.path.relpath(real_root, real_top).replace("\\", "/")
     prefix = "" if prefix == "." else prefix
-    dirs = _entity_dirs_at(top, base)
+    dirs = _entity_dirs_at(real_top, base)
     if dirs is None:
         return None
     tmp = tempfile.mkdtemp(prefix="along-entities-base-")
     try:
         os.makedirs(os.path.join(tmp, ".git"), exist_ok=True)
-        _snapshot_from_commit(top, base, [], tmp, specs=dirs)
+        _snapshot_from_commit(real_top, base, [], tmp, specs=dirs)
         ctx = os.path.join(tmp, prefix) if prefix else tmp
         if not os.path.isdir(os.path.join(ctx, ".along")):
             return set()
