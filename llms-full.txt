@@ -1157,7 +1157,7 @@ Lifecycle commands provide a uniform execution contract across any programming l
 Executes the project build lifecycle hook.
 - **Engine Script**: `.along/scripts/build.py`
 - **Auto-Detection Fallback**: Detects `package.json` (`npm run build`), `Cargo.toml` (`cargo build`), `.csproj`/`.sln` (`dotnet build`), `pyproject.toml`/`setup.py` (`python -m build`).
-- **Synthesis**: If no build script exists, automatically synthesizes a verified or unconfigured template in `.along/scripts/build.py`.
+- **Synthesis**: If no build script exists, automatically synthesizes a verified or unconfigured template in `.along/scripts/build.py`. An unconfigured template exits `0` with a `[Warning]` that nothing was verified, and the wrap / commit quality gates report "tests are not configured" instead of a pass.
 - **Usage**:
   ```bash
   along build [args...]
@@ -1210,11 +1210,13 @@ Validates repository compliance with the Along protocol. Audits `.along/` direct
 - **Runtime section**: names the runtime (`claude-code`, `cowork`, `antigravity`, `codex`, ...), the gate enforcement level (`mechanical` only when Along hooks are registered for that runtime, otherwise `advisory`), the Python floor (3.10), a stale `.git/index.lock`, and a cross-OS or VM-mounted repository (worktrees unsafe). See the capability matrix in [Runtime Lifecycle Hooks & Mechanical Gates](./topic--runtime-hooks-and-gates.md).
 - **Vision & root notes**: warns about a root `VISION.md` next to `.along/`, an unresolved `along:imported-vision needs-restructure` section in `.along/VISION.md`, and root notes (`ROADMAP.md`, `ARCHITECTURE.md`, `SPEC.md`, `TODO.md`, `DESIGN.md`) that the agent must route into the Knowledge Base.
 - **Options**:
-  - `--entities`: Performs deep validation of the entity DAG graph, verifying parent/child relationships, `blocked_by` dependencies, and detecting circular references.
+  - `--entities`: Performs deep validation of the entity DAG graph, verifying parent/child relationships, `blocked_by` dependencies, and detecting circular references. References resolve against the current `.along/`, every enclosing `.along/` up to the git boundary, and every nested subproject `.along/` below it (nested git repositories and dependency/build dirs are not entered).
+  - `--entities --fix`: Removes `milestone` fields of issues and session logs that resolve to no milestone, lists the changed files, then validates.
 - **Usage**:
   ```bash
   along doctor
   along doctor --entities
+  along doctor --entities --fix
   ```
 
 ### `along issue`
@@ -1234,7 +1236,7 @@ Manages atomic issue files in `.along/ISSUES/` and recompiles the active board p
     - Options: `--json` outputs structured JSON payload.
   - `along issue done <slug> [options...]`: Marks the issue as completed, records `completed: YYYY-MM-DD`, and moves the file into `.along/ISSUES/done/`.
     - Options: `--status {done,superseded,cancelled,duplicate}`, `--superseded-by <slug>`, `--duplicate-of <slug>`.
-  - `along issue sync`: Recompiles `.along/ISSUES.md` deterministically from atomic files in `.along/ISSUES/` and `.along/ISSUES/done/`, then runs the entity reference integrity gate (`validate_entities`): dangling references or schema / enum violations exit `1` in `enforce` mode and only warn in `shadow` mode.
+  - `along issue sync`: Recompiles `.along/ISSUES.md` deterministically from atomic files in `.along/ISSUES/` and `.along/ISSUES/done/`, then runs the entity reference integrity gate (`validate_entities`): dangling references or schema / enum violations that are absent at `HEAD` exit `1` in `enforce` mode and only warn in `shadow` mode; problems already present at `HEAD` are printed as a warning and never fail it.
   - `along issue list`: Lists all active in-progress and open issues in the terminal.
   - `along issue rename <old-key> <new-key>`: Renames an issue (type and/or slug; a bare slug keeps the type). Rewrites the file name and `slug`/`type`, then every inbound reference in the nearest `.along/`: `related`, `blocked_by`, `parent`, `superseded_by`, `duplicate_of` in issues, risks, spikes, checklists and ADRs, milestone `target_issues`, and session `issues_advanced` / `issues_completed`.
   - `along issue supersede <old-key> --by <new-key>`: Closes the old issue as `superseded` with `superseded_by: <new-key>` and moves it to `done/` (the file is kept, so session history stays valid). Dependency fields of other entities (`related`, `blocked_by`, `parent`, ...) are rewritten to the successor; session logs are left as they are.
@@ -1852,7 +1854,7 @@ Repository-state gates (17-23) declare `enforcement: [git, ci]` and no runtime l
 
 The entity graph gate spans all three layers:
 
-24. `entity_reference_integrity`: `alongkit.entities.validate_entities` finds no dangling reference (`related`, `blocked_by`, `parent`, `superseded_by`, `duplicate_of`, `milestone`, `target_issues`, session `issues_*`) and no schema or enum violation. References resolve in the nearest `.along/` and in enclosing contexts up to the git root. Runtime: a `Stop` predicate once git reports a changed entity file; `along wrap` (rolls back) and `along issue sync` (exit `1`) call `alongkit.gates.entity_integrity_gate`, which only warns in `shadow` mode. Git/CI: `along gates check` and `along commit` validate a snapshot of the staged (or checked-out) `.along/` against HEAD (or the range base) and block only problems the change introduces; pre-existing ones are printed as a notice. Renaming or retiring a referenced issue goes through `along issue rename` / `along issue supersede`, which rewrite the inbound references.
+24. `entity_reference_integrity`: `alongkit.entities.validate_entities` finds no dangling reference (`related`, `blocked_by`, `parent`, `superseded_by`, `duplicate_of`, `milestone`, `target_issues`, session `issues_*`) and no schema or enum violation. References resolve in the nearest `.along/`, in enclosing contexts up to the git root, and in nested subproject contexts below it (`descendant_entity_keys`; nested git repositories are not entered). Runtime: a `Stop` predicate once git reports a changed entity file; `along wrap` (rolls back) and `along issue sync` (exit `1`) call `alongkit.gates.entity_integrity_gate`, which only warns in `shadow` mode. All three block only problems absent at `HEAD` (`gitgates.baseline_entity_problems`); pre-existing ones are printed as a warning. Git/CI: `along gates check` and `along commit` validate a snapshot of the staged (or checked-out) `.along/` against HEAD (or the range base) and block only problems the change introduces; pre-existing ones are printed as a notice. Renaming or retiring a referenced issue goes through `along issue rename` / `along issue supersede`, which rewrite the inbound references.
 
 The managed rule pack gate also spans all three layers:
 
@@ -2861,6 +2863,7 @@ Several agent sessions may work in one repository at once, so gates never read a
 - **Plan approval**: `along start` binds with `phase: planning`, `plan_approved: false`. Approval is recorded per session when the user accepts a plan in Claude Code (`PostToolUse` on `ExitPlanMode`), or by `along plan approve [<slug>]` after the user's explicit yes; an approval given before `along start` carries over to the first bound slug. `along start --approved` is for scripted runs. Along state commands (`issue`, `start`, `scratch`, `plan`, `decision`, `milestone`, `session`, `wrap`, `kb sync`) and writes to `.along/ISSUES|RISKS|SPIKES|SESSIONS|.session|diagnostics` pass `require_plan_approval`, so an issue can be written and started before a plan exists.
 - **Read-only shell commands**: before approval, `alongkit.hooks.shellparse.is_read_only_command` lets a Bash call through only when every segment reads: inspection commands and pure filters (`cat`, `grep`, `head`, `tail`, `cut`, `sort`, `uniq`, `tr`, `diff`, ...), `sed` without `-i`, `-f` or `w`/`W`/`e` script commands, `find` without `-exec`/`-delete`/`-fprint*`, and test runs. `$(...)` and backquote substitutions are classified recursively, and shell keywords (`for ... in`, `do`, `done`, `if`, `then`, `else`, `fi`, `while`) defer to the commands they wrap.
 - **Session root**: the hook evaluates against the session's project, not the agent's current shell cwd (which follows `cd`). With Claude Code, `CLAUDE_PROJECT_DIR` anchors the root whenever the cwd lies inside it (`repo.find_session_root`), so session bindings and containment survive a `cd` into a nested `.along/` context.
+- **Entity reference integrity**: the Stop predicate runs only after an entity file changed and blocks only problems absent at `HEAD` (`gitgates.baseline_entity_problems` validates a `git archive` snapshot of every `.along/` entity dir); problems already committed are left to `along doctor --entities`. References resolve upward (enclosing contexts) and downward (nested subproject contexts, `entities.descendant_entity_keys`).
 - **Repository-level `.along/.session/state.json`** is read only for runtimes that pass no session id; `purge` removes it when it points at the purged slug.
 - **Housekeeping**: `along plan status`, `along session bindings`, `along session gc [--dry-run]` (bindings older than 72 h or without a blackboard). `along scratch purge` / `along wrap` remove the slug's bindings.
 - **Activity trace** (`test_before_stop`): per session in `.along/diagnostics/activity/<key>.json`; edits under `.along/` are not source edits. Where `.along/scripts/test.py` exists only `along test` / that script count as a test run; raw runners are named in the Stop message.

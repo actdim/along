@@ -905,19 +905,24 @@ def _entity_files_changed(repo_root: str) -> bool:
 
 
 def check_entity_reference_integrity(event: HookEvent, repo_root: str, **kwargs: Any) -> Optional[str]:
-    """Entity graph stays valid once entity files changed: no dangling references or enum violations."""
+    """Entity files changed: no new dangling references or enum violations.
+
+    Only problems absent at `HEAD` block; pre-existing ones belong to `along doctor
+    --entities`, not to the agent that happens to touch an entity file.
+    [bug--entity-gate-blocks-preexisting-problems]
+    """
     if not repo_root or not os.path.isdir(repo.state_dir(repo_root)):
         return None
     if not _entity_files_changed(repo_root):
         return None
     from .. import gates
-    problems = gates.entity_integrity_errors(repo_root)
+    problems, _old = gates.split_entity_integrity_errors(repo_root)
     if not problems:
         return None
     shown = "; ".join(problems[:5]) + (f"; ... {len(problems) - 5} more" if len(problems) > 5 else "")
     return (
         "Turn Completion Rejected [gate: entity-reference-integrity]: "
-        f"{len(problems)} entity graph problem(s): {shown}. "
+        f"{len(problems)} new entity graph problem(s) (absent at HEAD): {shown}. "
         "Fix them (see `along doctor --entities`); rename or retire referenced entities with "
         "`along issue rename` / `along issue supersede` instead of deleting them."
     )

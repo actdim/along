@@ -111,6 +111,35 @@ class TestLifecycleHooks(unittest.TestCase):
         compiled_unconf = compile(rendered_unconf, "build.py", "exec")
         self.assertIsNotNone(compiled_unconf)
 
+    def test_03b_unconfigured_hook_warns_and_gate_does_not_report_a_pass(self):
+        """[bug--unconfigured-test-hook-reports-pass]: the placeholder is not a passing run."""
+        from alongkit import gates
+        import contextlib
+        import io
+        with hermetic.repo_fixture() as fixture_root:
+            scripts_dir = os.path.join(fixture_root, ".along", "scripts")
+            os.makedirs(scripts_dir, exist_ok=True)
+            hook_file = os.path.join(scripts_dir, "test.py")
+            with open(hook_file, "w", encoding="utf-8") as f:
+                f.write(lifecycle.render_lifecycle_script("test", status_tag="unconfigured"))
+            self.assertTrue(gates.is_unconfigured_hook(hook_file))
+
+            res = subprocess.run([sys.executable, hook_file], cwd=fixture_root,
+                                 capture_output=True, text=True)
+            self.assertEqual(res.returncode, 0)
+            self.assertIn("[Warning] test is not configured", res.stderr)
+            self.assertIn("nothing was verified", res.stderr)
+
+            out, err = io.StringIO(), io.StringIO()
+            with contextlib.redirect_stdout(out), contextlib.redirect_stderr(err):
+                self.assertTrue(gates.run_repository_tests(fixture_root, label="T"))
+            self.assertNotIn("passed", out.getvalue())
+            self.assertIn("tests are not configured", err.getvalue())
+
+            with open(hook_file, "w", encoding="utf-8") as f:
+                f.write(lifecycle.render_lifecycle_script("test", base_cmd=[sys.executable, "-c", "0"]))
+            self.assertFalse(gates.is_unconfigured_hook(hook_file))
+
     def test_04_generated_hook_resolves_repo_root_via_markers(self):
         """REQ-4: Hook resolves root via ROOT_MARKERS (.along) without fragile triple dirname."""
         with hermetic.repo_fixture() as fixture_root:

@@ -24,6 +24,8 @@ if not os.environ.get("ALONG_TEST_RUNNER"):
     )
 
 import shutil
+import subprocess
+import tempfile
 import unittest
 from unittest.mock import patch
 
@@ -32,7 +34,7 @@ SCRIPTS_DIR = os.path.join(REPO_ROOT, "scripts")
 if SCRIPTS_DIR not in sys.path:
     sys.path.insert(0, SCRIPTS_DIR)
 
-from alongkit import entities, frontmatter, lifecycle, proc, repo, session, textio
+from alongkit import entities, frontmatter, gates, lifecycle, proc, repo, session, textio
 import hermetic
 
 
@@ -150,10 +152,17 @@ class TestLifecycleWrap(unittest.TestCase):
             os.path.isdir(session.get_session_dir(self.root, "fixture-sample-task"))
         )
 
+    def _record_edit(self, rel):
+        diag = os.path.join(self.root, ".along", "diagnostics", "activity")
+        os.makedirs(diag, exist_ok=True)
+        textio.write_text(os.path.join(diag, "fixture-session.json"),
+                          '{"edited_files": ["%s"]}\n' % rel)
+
     def test_04_zero_byte_working_tree_audit_aborts(self):
-        """0-byte corrupt file in working tree causes wrap to abort."""
+        """An empty file an agent session edited causes wrap to abort."""
         corrupt_file = os.path.join(self.root, "corrupt.py")
         textio.write_text(corrupt_file, "")  # 0 bytes
+        self._record_edit("corrupt.py")
 
         src_issue = os.path.join(self.root, ".along", "ISSUES", "task--fixture-sample-task.md")
         dest_issue = os.path.join(self.root, ".along", "ISSUES", "done", "task--fixture-sample-task.md")
@@ -166,6 +175,39 @@ class TestLifecycleWrap(unittest.TestCase):
         self.assertEqual(code, 1)
         self.assertTrue(os.path.isfile(src_issue))
         self.assertFalse(os.path.isfile(dest_issue))
+
+    def test_04b_unrelated_empty_file_only_warns(self):
+        """[bug--wrap-zero-byte-audit-unscoped]: an empty file no session edited does not block."""
+        placeholder = os.path.join(self.root, "packages", "other", "README.md")
+        os.makedirs(os.path.dirname(placeholder), exist_ok=True)
+        textio.write_text(placeholder, "")
+        blocking, warnings = gates.zero_byte_working_tree_audit(self.root)
+        self.assertEqual(blocking, [])
+        self.assertIn("packages/other/README.md", warnings)
+        code = lifecycle.execute_wrap(self.root, "fixture-sample-task", no_verify=True)
+        self.assertEqual(code, 0)
+
+    def test_04c_truncated_tracked_file_blocks(self):
+        """A tracked file that was non-empty at HEAD and is now empty blocks."""
+        git_root = tempfile.mkdtemp(prefix="along-zero-byte-")
+        try:
+            run = lambda *a: subprocess.run(["git", *a], cwd=git_root, check=True,
+                                            capture_output=True, text=True)
+            run("init", "-q")
+            run("config", "user.email", "t@example.com")
+            run("config", "user.name", "t")
+            os.makedirs(os.path.join(git_root, ".along"))
+            textio.write_text(os.path.join(git_root, "module.py"), "x = 1\n")
+            textio.write_text(os.path.join(git_root, "untouched.py"), "y = 2\n")
+            run("add", "-A")
+            run("commit", "-q", "--no-verify", "-m", "fixture")
+            textio.write_text(os.path.join(git_root, "module.py"), "")
+            textio.write_text(os.path.join(git_root, "placeholder.md"), "")
+            blocking, warnings = gates.zero_byte_working_tree_audit(git_root)
+            self.assertEqual(blocking, ["module.py"])
+            self.assertEqual(warnings, ["placeholder.md"])
+        finally:
+            shutil.rmtree(git_root, ignore_errors=True)
 
     def test_05_dry_run_mutates_nothing(self):
         """Dry-run reports plan without modifying files on disk."""

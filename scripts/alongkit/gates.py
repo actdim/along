@@ -37,7 +37,7 @@ from dataclasses import dataclass
 import json
 import os
 import sys
-from typing import List, Optional
+from typing import List, Optional, Tuple
 
 from . import proc, repo, sanitizer
 
@@ -71,10 +71,30 @@ def detect_test_command(repo_root: str) -> Optional[List[str]]:
     return None
 
 
+UNCONFIGURED_MARKER = "# Status: unconfigured"
+
+
+def is_unconfigured_hook(path: str) -> bool:
+    """True when `path` is a lifecycle hook still rendered from the unconfigured template."""
+    if not path.endswith(".py") or not os.path.isfile(path):
+        return False
+    try:
+        with open(path, "r", encoding="utf-8", errors="replace") as handle:
+            return UNCONFIGURED_MARKER in handle.read(500)
+    except OSError:
+        return False
+
+
 def run_repository_tests(repo_root: str, label: str = "Quality Gate") -> bool:
     """Run the repository's tests, printing the outcome. True when they passed or none exist."""
     cmd = detect_test_command(repo_root)
     if not cmd:
+        return True
+    if is_unconfigured_hook(cmd[-1]):
+        # [bug--unconfigured-test-hook-reports-pass]: the placeholder exits 0 without
+        # running anything, which must not read as a pass.
+        print(f"[Warning] {label}: tests are not configured (.along/scripts/test.py is the "
+              "unconfigured placeholder); nothing was verified.", file=sys.stderr)
         return True
 
     print(f"-> [{label}] Running automated tests: {' '.join(cmd)}")
@@ -200,21 +220,55 @@ def entity_integrity_errors(repo_root: str) -> List[str]:
             if entities.is_integrity_error(msg)]
 
 
+def split_entity_integrity_errors(repo_root: str) -> Tuple[List[str], List[str]]:
+    """`entity_integrity_errors` split into (new, pre-existing) against `HEAD`.
+
+    A problem already present at `HEAD` is pre-existing: it was not introduced by the
+    current change, so the gates report it without blocking. Without a `HEAD` every
+    problem is new. [bug--entity-gate-blocks-preexisting-problems]
+    """
+    from . import gitgates
+    problems = entity_integrity_errors(repo_root)
+    if not problems:
+        return [], []
+    baseline = gitgates.baseline_entity_problems(repo_root)
+    if not baseline:
+        return problems, []
+    known = {f"{location}: {message}" for location, message in baseline}
+    return ([p for p in problems if p not in known], [p for p in problems if p in known])
+
+
+def report_preexisting_entity_problems(old: List[str], label: str, limit: int = 10) -> None:
+    """Print pre-existing entity problems as a non-blocking warning."""
+    if not old:
+        return
+    print(f"[Warning] {label}: {len(old)} pre-existing entity graph problem(s) at HEAD, "
+          "not blocking [gate: entity-reference-integrity]:", file=sys.stderr)
+    for line in old[:limit]:
+        print(f"   - {line}", file=sys.stderr)
+    if len(old) > limit:
+        print(f"   ... {len(old) - limit} more", file=sys.stderr)
+    print("   Inspect them with `along doctor --entities` (`--fix` drops dangling milestone "
+          "fields).", file=sys.stderr)
+
+
 def entity_integrity_gate(repo_root: str, label: str = "Quality Gate") -> bool:
     """[gate: entity-reference-integrity] for the wrap and projection-sync stages.
 
-    Dangling references and schema / enum violations fail the gate in `enforce` mode;
-    in `shadow` mode (`.along/config.json` hooks mode or gate override) they are
-    reported and the caller proceeds. True when the caller may proceed.
+    Dangling references and schema / enum violations the current change introduces fail
+    the gate in `enforce` mode; in `shadow` mode (`.along/config.json` hooks mode or gate
+    override) they are reported and the caller proceeds. Problems already present at
+    `HEAD` are printed as a warning and never fail it. True when the caller may proceed.
     """
     from .hooks import config as hook_config
 
-    problems = entity_integrity_errors(repo_root)
+    problems, old = split_entity_integrity_errors(repo_root)
+    report_preexisting_entity_problems(old, label)
     if not problems:
         return True
     enforcing = hook_config.load_config(repo_root).is_enforcing(ENTITY_INTEGRITY_GATE)
     level = "Error" if enforcing else "Warning"
-    print(f"[{level}] {label}: entity graph has {len(problems)} problem(s) "
+    print(f"[{level}] {label}: entity graph has {len(problems)} new problem(s) "
           "[gate: entity-reference-integrity]:", file=sys.stderr)
     for line in problems:
         print(f"   - {line}", file=sys.stderr)
@@ -367,31 +421,58 @@ def syntax_gate(repo_root: str, label: str = "Quality Gate",
     return False
 
 
-def zero_byte_working_tree_audit(repo_root: str) -> List[str]:
-    """Inspect modified and untracked files in the repository for 0-byte corrupt files.
+def session_edited_files(repo_root: str) -> set:
+    """Repository-relative POSIX paths the agent sessions recorded as edited.
 
-    Returns a list of relative paths with size 0, ignoring .gitkeep files.
+    Union of `edited_files` over the shared and per-session activity traces in
+    `.along/diagnostics/`.
     """
-    cmd = ["status", "--porcelain", "-u"]
-    res = proc.git(cmd, cwd=repo_root)
-    if not res.ok:
-        corrupt = []
-        for root, _, files in os.walk(repo_root):
-            if any(part in repo.IGNORED_DIRS for part in root.split(os.sep)):
+    diag = os.path.join(repo.state_dir(repo_root), "diagnostics")
+    traces = [os.path.join(diag, "activity_trace.json")]
+    activity = os.path.join(diag, "activity")
+    if os.path.isdir(activity):
+        traces += [os.path.join(activity, f) for f in os.listdir(activity) if f.endswith(".json")]
+    edited = set()
+    for path in traces:
+        try:
+            with open(path, "r", encoding="utf-8") as handle:
+                data = json.load(handle)
+        except (OSError, ValueError):
+            continue
+        if isinstance(data, dict):
+            edited.update(repo.normalize_posix(str(p)) for p in data.get("edited_files") or [])
+    return edited
+
+
+def _empty_changed_files(repo_root: str) -> Tuple[List[str], Optional[str]]:
+    """0-byte modified or untracked files under `repo_root` (relative POSIX), and the git top.
+
+    The git top is None when git cannot list changes; the whole tree is walked then.
+    """
+    def empty(path: str) -> bool:
+        try:
+            return os.path.isfile(path) and os.path.getsize(path) == 0
+        except OSError:
+            return False
+
+    root = os.path.abspath(repo_root)
+    res = proc.git(["status", "--porcelain", "-u", "--", "."], cwd=repo_root)
+    top_res = proc.git(["rev-parse", "--show-toplevel"], cwd=repo_root) if res.ok else None
+    top = top_res.out.strip() if top_res is not None and top_res.ok else ""
+    if not res.ok or not top:
+        found = []
+        for current, _, files in os.walk(root):
+            if any(part in repo.IGNORED_DIRS for part in current.split(os.sep)):
                 continue
             for f in files:
-                if f == ".gitkeep":
-                    continue
-                p = os.path.join(root, f)
-                try:
-                    if os.path.isfile(p) and os.path.getsize(p) == 0:
-                        corrupt.append(repo.safe_relpath(p, repo_root).replace("\\", "/"))
-                except OSError:
-                    pass
-        return sorted(corrupt)
+                p = os.path.join(current, f)
+                if f != ".gitkeep" and empty(p):
+                    found.append(repo.safe_relpath(p, root).replace("\\", "/"))
+        return sorted(found), None
 
-    corrupt = []
-    for line in res.out.splitlines():
+    found = []
+    # Raw stdout: `out` strips the leading status column of the first line.
+    for line in res.stdout.splitlines():
         if not line.strip():
             continue
         payload = line[3:].strip()
@@ -401,12 +482,35 @@ def zero_byte_working_tree_audit(repo_root: str) -> List[str]:
             payload = payload[1:-1]
         if os.path.basename(payload) == ".gitkeep":
             continue
-        full_path = os.path.join(repo_root, payload)
-        try:
-            if os.path.isfile(full_path) and os.path.getsize(full_path) == 0:
-                corrupt.append(payload.replace("\\", "/"))
-        except OSError:
-            pass
-    return sorted(corrupt)
+        # Porcelain paths are relative to the git top, not to a subproject context.
+        full_path = os.path.normpath(os.path.join(top, payload))
+        rel = os.path.relpath(full_path, root).replace("\\", "/")
+        if rel.startswith("../") or not empty(full_path):
+            continue
+        found.append(rel)
+    return sorted(found), top
+
+
+def zero_byte_working_tree_audit(repo_root: str) -> Tuple[List[str], List[str]]:
+    """0-byte changed files as (blocking, warnings), relative POSIX paths.
+
+    Blocking means likely corruption: a tracked file that was non-empty at `HEAD` and is
+    now empty, or an empty file an agent session edited. Any other empty file (a
+    placeholder elsewhere in the tree, an empty `__init__.py`) only warns.
+    [bug--wrap-zero-byte-audit-unscoped]
+    """
+    found, top = _empty_changed_files(repo_root)
+    if not found:
+        return [], []
+    edited = session_edited_files(repo_root)
+    blocking, warnings = [], []
+    for rel in found:
+        truncated = False
+        if top:
+            top_rel = os.path.relpath(os.path.join(repo_root, rel), top).replace("\\", "/")
+            size = proc.git(["cat-file", "-s", f"HEAD:{top_rel}"], cwd=repo_root)
+            truncated = size.ok and size.out.strip().isdigit() and int(size.out.strip()) > 0
+        (blocking if truncated or rel in edited else warnings).append(rel)
+    return blocking, warnings
 
 

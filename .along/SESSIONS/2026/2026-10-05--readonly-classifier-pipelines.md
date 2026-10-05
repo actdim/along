@@ -17,10 +17,10 @@ spikes_conducted: []
 # Session: Containment root and read-only classifier
 
 ## Summary
-- `bug--containment-root-from-shell-cwd`: a Claude session opened in `infomnia` got a
+- `bug--containment-root-from-shell-cwd`: a Claude session opened in a monorepo got a
   workspace-containment ASK for a Grep over its own root. The hook resolved its root from the
-  payload `cwd` (the agent's current shell cwd), which had followed `cd` into
-  `src/apps/webapp/` with its own `.along/`. New `repo.find_session_root(cwd, project_dir)`;
+  payload `cwd` (the agent's current shell cwd), which had followed `cd` into a subproject
+  with its own `.along/`. New `repo.find_session_root(cwd, project_dir)`;
   `along_hook.py` passes `CLAUDE_PROJECT_DIR`, and the project root wins whenever the cwd lies
   inside it. Relative paths still resolve against the shell cwd. An "outermost `.along`" climb
   was considered and dropped (it would break sessions opened inside a subproject).

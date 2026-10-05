@@ -6,7 +6,7 @@ title: Along CLI Command Reference
 type: reference
 curated: true
 created: 2026-09-14
-updated: 2026-09-27
+updated: 2026-10-05
 tags: [cli, commands, router, lifecycle, tools, reference]
 ---
 
@@ -50,7 +50,7 @@ Lifecycle commands provide a uniform execution contract across any programming l
 Executes the project build lifecycle hook.
 - **Engine Script**: `.along/scripts/build.py`
 - **Auto-Detection Fallback**: Detects `package.json` (`npm run build`), `Cargo.toml` (`cargo build`), `.csproj`/`.sln` (`dotnet build`), `pyproject.toml`/`setup.py` (`python -m build`).
-- **Synthesis**: If no build script exists, automatically synthesizes a verified or unconfigured template in `.along/scripts/build.py`.
+- **Synthesis**: If no build script exists, automatically synthesizes a verified or unconfigured template in `.along/scripts/build.py`. An unconfigured template exits `0` with a `[Warning]` that nothing was verified, and the wrap / commit quality gates report "tests are not configured" instead of a pass.
 - **Usage**:
   ```bash
   along build [args...]
@@ -103,11 +103,13 @@ Validates repository compliance with the Along protocol. Audits `.along/` direct
 - **Runtime section**: names the runtime (`claude-code`, `cowork`, `antigravity`, `codex`, ...), the gate enforcement level (`mechanical` only when Along hooks are registered for that runtime, otherwise `advisory`), the Python floor (3.10), a stale `.git/index.lock`, and a cross-OS or VM-mounted repository (worktrees unsafe). See the capability matrix in [Runtime Lifecycle Hooks & Mechanical Gates](./topic--runtime-hooks-and-gates.md).
 - **Vision & root notes**: warns about a root `VISION.md` next to `.along/`, an unresolved `along:imported-vision needs-restructure` section in `.along/VISION.md`, and root notes (`ROADMAP.md`, `ARCHITECTURE.md`, `SPEC.md`, `TODO.md`, `DESIGN.md`) that the agent must route into the Knowledge Base.
 - **Options**:
-  - `--entities`: Performs deep validation of the entity DAG graph, verifying parent/child relationships, `blocked_by` dependencies, and detecting circular references.
+  - `--entities`: Performs deep validation of the entity DAG graph, verifying parent/child relationships, `blocked_by` dependencies, and detecting circular references. References resolve against the current `.along/`, every enclosing `.along/` up to the git boundary, and every nested subproject `.along/` below it (nested git repositories and dependency/build dirs are not entered).
+  - `--entities --fix`: Removes `milestone` fields of issues and session logs that resolve to no milestone, lists the changed files, then validates.
 - **Usage**:
   ```bash
   along doctor
   along doctor --entities
+  along doctor --entities --fix
   ```
 
 ### `along issue`
@@ -127,7 +129,7 @@ Manages atomic issue files in `.along/ISSUES/` and recompiles the active board p
     - Options: `--json` outputs structured JSON payload.
   - `along issue done <slug> [options...]`: Marks the issue as completed, records `completed: YYYY-MM-DD`, and moves the file into `.along/ISSUES/done/`.
     - Options: `--status {done,superseded,cancelled,duplicate}`, `--superseded-by <slug>`, `--duplicate-of <slug>`.
-  - `along issue sync`: Recompiles `.along/ISSUES.md` deterministically from atomic files in `.along/ISSUES/` and `.along/ISSUES/done/`, then runs the entity reference integrity gate (`validate_entities`): dangling references or schema / enum violations exit `1` in `enforce` mode and only warn in `shadow` mode.
+  - `along issue sync`: Recompiles `.along/ISSUES.md` deterministically from atomic files in `.along/ISSUES/` and `.along/ISSUES/done/`, then runs the entity reference integrity gate (`validate_entities`): dangling references or schema / enum violations that are absent at `HEAD` exit `1` in `enforce` mode and only warn in `shadow` mode; problems already present at `HEAD` are printed as a warning and never fail it.
   - `along issue list`: Lists all active in-progress and open issues in the terminal.
   - `along issue rename <old-key> <new-key>`: Renames an issue (type and/or slug; a bare slug keeps the type). Rewrites the file name and `slug`/`type`, then every inbound reference in the nearest `.along/`: `related`, `blocked_by`, `parent`, `superseded_by`, `duplicate_of` in issues, risks, spikes, checklists and ADRs, milestone `target_issues`, and session `issues_advanced` / `issues_completed`.
   - `along issue supersede <old-key> --by <new-key>`: Closes the old issue as `superseded` with `superseded_by: <new-key>` and moves it to `done/` (the file is kept, so session history stays valid). Dependency fields of other entities (`related`, `blocked_by`, `parent`, ...) are rewritten to the successor; session logs are left as they are.

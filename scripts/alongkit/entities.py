@@ -1231,6 +1231,24 @@ _ANCESTOR_ENTITY_DIRS = ("ISSUES", "RISKS", "SPIKES", "MILESTONES", "DECISIONS")
 _PROJECTION_FILES = ("ISSUES.md", "README.md", "CONSTRAINTS.md", "DECISIONS.md")
 
 
+def _context_entity_keys(along_dir: str, keys: set) -> None:
+    """Add the entity keys of one `.along/` directory to `keys`."""
+    import glob
+
+    for dirname in _ANCESTOR_ENTITY_DIRS:
+        pattern = os.path.join(along_dir, dirname, "**", "*.md")
+        for fpath in glob.glob(pattern, recursive=True):
+            fname = os.path.basename(fpath)
+            if fname in _PROJECTION_FILES:
+                continue
+            stem = fname[:-3]
+            keys.add(stem)
+            if "--" in stem:
+                bare = stem.split("--", 1)[1]
+                keys.add(bare)
+                keys.add(f"decision--{bare}")
+
+
 def ancestor_entity_keys(repo_root: str) -> set:
     """Entity keys of every enclosing `.along/` context up to the git boundary.
 
@@ -1238,8 +1256,6 @@ def ancestor_entity_keys(repo_root: str) -> set:
     The walk stops at the first directory holding `.git`; a `repo_root` that is itself
     a git root has no ancestors.
     """
-    import glob
-
     keys: set = set()
     root = os.path.abspath(repo_root)
     if os.path.exists(os.path.join(root, ".git")):
@@ -1248,25 +1264,68 @@ def ancestor_entity_keys(repo_root: str) -> set:
     while current and current != os.path.dirname(current):
         candidate = os.path.join(current, ".along")
         if os.path.isdir(candidate):
-            for dirname in _ANCESTOR_ENTITY_DIRS:
-                pattern = os.path.join(candidate, dirname, "**", "*.md")
-                for fpath in glob.glob(pattern, recursive=True):
-                    fname = os.path.basename(fpath)
-                    if fname in _PROJECTION_FILES:
-                        continue
-                    stem = fname[:-3]
-                    keys.add(stem)
-                    if "--" in stem:
-                        bare = stem.split("--", 1)[1]
-                        keys.add(bare)
-                        keys.add(f"decision--{bare}")
+            _context_entity_keys(candidate, keys)
         if os.path.exists(os.path.join(current, ".git")):
             break
         current = os.path.dirname(current)
     return keys
 
 
-def validate_entities(repo_root: str, ancestors: bool = True) -> Dict[str, Any]:
+def descendant_entity_keys(repo_root: str) -> set:
+    """Entity keys of every nested `.along/` context below `repo_root`.
+
+    Subproject issues live in the nearest `.along/` [gate: subproject-boundary], so a root
+    epic or session log references them downward. The walk skips dependency, build and
+    hidden directories (`repo.IGNORED_DIRS`, `repo.PROVIDER_DIRS`) and does not enter a
+    nested git repository: a submodule is its own boundary, as `.git` is for the ancestor
+    walk. [bug--entity-refs-ignore-nested-contexts]
+    """
+    from . import repo
+
+    keys: set = set()
+    root = os.path.abspath(repo_root)
+    ignored = set(repo.IGNORED_DIRS) | set(repo.PROVIDER_DIRS)
+    for current, dirs, _files in os.walk(root):
+        if current != root:
+            if os.path.exists(os.path.join(current, ".git")):
+                dirs[:] = []
+                continue
+            candidate = os.path.join(current, ".along")
+            if os.path.isdir(candidate):
+                _context_entity_keys(candidate, keys)
+        dirs[:] = [d for d in dirs if d not in ignored and not d.startswith(".")]
+    return keys
+
+
+_DANGLING_MILESTONE = "dangling milestone reference: "
+
+
+def drop_dangling_milestones(repo_root: str, dry_run: bool = False) -> List[str]:
+    """Remove `milestone` fields that resolve to no milestone (`along doctor --entities --fix`).
+
+    Covers issues and session logs, the two entities with a `milestone` field. Returns the
+    changed files relative to `repo_root` (the ones that would change with `dry_run`).
+    [bug--migration-dangling-template-milestones]
+    """
+    from . import frontmatter, repo, textio
+
+    targets = sorted({rel for rel, msg in validate_entities(repo_root)["errors"]
+                      if msg.startswith(_DANGLING_MILESTONE)})
+    changed: List[str] = []
+    for rel in targets:
+        path = os.path.join(repo_root, rel)
+        content = textio.read_text(path)
+        updated = frontmatter.update(content, {}, remove=["milestone"], path=path)
+        if updated == content:
+            continue
+        if not dry_run:
+            textio.write_text(path, updated, newline="\n")
+        changed.append(repo.normalize_posix(rel))
+    return changed
+
+
+def validate_entities(repo_root: str, ancestors: bool = True,
+                      descendants: bool = True) -> Dict[str, Any]:
     """Validate entity schemas, enums, mandatory fields, and graph references.
 
     Checks:
@@ -1277,7 +1336,9 @@ def validate_entities(repo_root: str, ancestors: bool = True) -> Dict[str, Any]:
     4. Sessions: mandatory fields, milestone resolution, issue resolutions.
 
     References also resolve against enclosing `.along/` contexts (`ancestor_entity_keys`)
-    unless `ancestors` is False. Every dangling reference message starts with "dangling ".
+    unless `ancestors` is False, and against nested subproject contexts
+    (`descendant_entity_keys`) unless `descendants` is False. Every dangling reference
+    message starts with "dangling ".
     """
     from . import frontmatter, repo, semver, textio
 
@@ -1285,7 +1346,11 @@ def validate_entities(repo_root: str, ancestors: bool = True) -> Dict[str, Any]:
     errors: List[Tuple[str, str]] = []
     warnings: List[Tuple[str, str]] = []
     scanned = 0
-    external = ancestor_entity_keys(repo_root) if ancestors else set()
+    external: set = set()
+    if ancestors:
+        external |= ancestor_entity_keys(repo_root)
+    if descendants:
+        external |= descendant_entity_keys(repo_root)
 
     all_issues = scan_issues(repo_root, include_done=True)
     known_issue_slugs = {iss["slug"] for iss in all_issues}

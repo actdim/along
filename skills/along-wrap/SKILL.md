@@ -61,7 +61,7 @@ along wrap <slug> -s superseded --no-decisions
    - Run: `along wrap <slug> --no-decisions --summary "Concise summary of work"` (or `--decisions ADR-...`)
    - The engine automatically:
      - Runs pre-flight automated tests (halts if failing, leaving repo untouched).
-     - Audits working tree for zero-byte corrupt files.
+     - Audits working tree for zero-byte corrupt files: a tracked file truncated to 0 bytes or an empty file an agent session edited halts the wrap; other empty files only warn.
      - Sets `status: done`, `completed: YYYY-MM-DD`, `updated: YYYY-MM-DD` in issue front-matter.
      - Adjusts sibling issue markdown links and relocates issue file to `.along/ISSUES/done/`.
      - Recompiles `.along/ISSUES.md` projection board.

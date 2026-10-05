@@ -4,6 +4,7 @@
 <!-- No active issues -->
 
 ## Backlog
+- [ ] `(bug)` [diagnostics-files-stay-tracked](ISSUES/bug--diagnostics-files-stay-tracked.md)
 - [ ] `(bug)` [worktree-cross-os-mount-guard](ISSUES/bug--worktree-cross-os-mount-guard.md)
 - [ ] `(debt)` [agents-md-core-slimming](ISSUES/debt--agents-md-core-slimming.md)
 - [ ] `(debt)` [along-core-extras-split](ISSUES/debt--along-core-extras-split.md)
@@ -62,7 +63,7 @@
 ## Done (recent)
 - [x] `(task)` [release-v4-4-5](ISSUES/done/task--release-v4-4-5.md)
 - [x] `(debt)` [cached-runtime-venv](ISSUES/done/debt--cached-runtime-venv.md)
+- [x] `(bug)` [wrap-zero-byte-audit-unscoped](ISSUES/done/bug--wrap-zero-byte-audit-unscoped.md)
 - [x] `(bug)` [windows-hook-fail-open](ISSUES/done/bug--windows-hook-fail-open.md)
-- [x] `(bug)` [readonly-classifier-pipelines](ISSUES/done/bug--readonly-classifier-pipelines.md)
-- [x] `(bug)` [containment-root-from-shell-cwd](ISSUES/done/bug--containment-root-from-shell-cwd.md)
-<!-- 172 older completed issue(s) archived in .along/ISSUES/done/ -->
+- [x] `(bug)` [unconfigured-test-hook-reports-pass](ISSUES/done/bug--unconfigured-test-hook-reports-pass.md)
+<!-- 177 older completed issue(s) archived in .along/ISSUES/done/ -->

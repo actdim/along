@@ -257,7 +257,8 @@ def find_repo_root(start_dir=None):
 
 def main():
     repo_root = find_repo_root(os.path.dirname(__file__))
-    print(f"[Notice] Please configure {action} command in .along/scripts/{action}.py")
+    print("[Warning] {action} is not configured for this repository: nothing was verified. "
+          "Configure the command in .along/scripts/{action}.py", file=sys.stderr)
     sys.exit(0)
 
 if __name__ == "__main__":
@@ -381,7 +382,8 @@ def execute_wrap(
     See [feat--wrap-session-log-from-blackboard] and [feat--along-team-step-enforcement].
 
     1. Pre-flight test gate: executes repository automated tests unless no_verify.
-    2. Working tree audit: verifies that modified files are non-zero size (no 0-byte corruptions).
+    2. Working tree audit: a truncated tracked file or an empty session-edited file aborts;
+       other empty files only warn.
     3. Issue finalization: updates YAML front-matter (status, updated, completed),
        rewrites sibling markdown links, and relocates to .along/ISSUES/done/.
     4. Projection recompilation: recompiles .along/ISSUES.md and Knowledge Base.
@@ -428,7 +430,10 @@ def execute_wrap(
 
     # 2. Working tree zero-byte audit
     if not dry_run:
-        corrupt_files = gates.zero_byte_working_tree_audit(repo_root)
+        corrupt_files, empty_files = gates.zero_byte_working_tree_audit(repo_root)
+        if empty_files:
+            print("[Warning] Empty file(s) in the working tree, not edited in an agent session "
+                  "(not blocking):\n" + "\n".join(f"  - {f}" for f in empty_files), file=sys.stderr)
         if corrupt_files:
             print(
                 "[Error] Wrap aborted: 0-byte file(s) detected in working tree:\n"

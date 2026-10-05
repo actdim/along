@@ -18,10 +18,10 @@ related: []
 
 `scripts/along_hook.py` resolves the hook root as `repo.find_repo_root(event.workspace_root)`, and the
 Claude adapter fills `workspace_root` from the payload `cwd`, which is the agent's *current shell cwd*
-(it persists across Bash calls). After `cd src/apps/webapp` in `infomnia` (which carries its own
-`.along/`), the hook root became `infomnia/src/apps/webapp`, so a Grep over the session's own project
-root `infomnia` was reported as "Read outside the allowed scope" (ASK). Evidence:
-`infomnia/src/apps/webapp/.along/diagnostics/hooks_audit.jsonl`.
+(it persists across Bash calls). After `cd <sub>` in a monorepo whose subproject carries its own
+`.along/`, the hook root became `<project>/<sub>`, so a Grep over the session's own project root was
+reported as "Read outside the allowed scope" (ASK). Evidence: the subproject's
+`.along/diagnostics/hooks_audit.jsonl`.
 
 The same root drives every gate (session binding, plan approval, subproject-boundary), so a `cd` into a
 nested context also loses the session's binding at the project root. Nearest-context is a rule for

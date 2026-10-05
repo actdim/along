@@ -118,7 +118,7 @@ Lifecycle Commands (project hooks):
 
 Entity Management Commands:
   status         Instant terminal summary of repository state, active issues, and recent sessions
-  doctor         Validate .along/ structure, .gitattributes, and ADR headers (--entities for entity graph)
+  doctor         Validate .along/ structure, .gitattributes, and ADR headers (--entities for entity graph; --entities --fix drops dangling milestone fields)
   start          Mark issue in-progress, initialize blackboard, bind this agent session [--approved] [--worktree]
   plan approve   [<slug>]  Record the user's plan approval for this session (after an explicit yes)
   plan status    Show this session's bound issue, phase and approval
@@ -1314,6 +1314,14 @@ def handle_doctor_command(repo_root: str, args: List[str]):
     check_entities = "--entities" in args or (bool(args) and args[0].lower() == "entities")
     if check_entities:
         print("=== Along Entity Graph Validation (Doctor) ===")
+        if "--fix" in args:
+            fixed = entities.drop_dangling_milestones(repo_root)
+            if fixed:
+                print(f"-> Removed {len(fixed)} dangling milestone field(s):")
+                for rel in fixed:
+                    print(f"  - {rel}")
+            else:
+                print("-> No dangling milestone fields to remove.")
         report = entities.validate_entities(repo_root)
         print(f"Scanned {report['scanned']} entities across .along/.")
         errs = report["errors"]
@@ -2512,9 +2520,9 @@ def main():
         script_file = get_lifecycle_script_path(repo_root, cmd)
 
         if os.path.exists(script_file):
-            header = textio.read_text(script_file, strict=False)[:500]
-            if "# Status: unconfigured" in header:
-                print(f"[Notice] {script_file} is unconfigured. Please customize it for this repository.")
+            if gates.is_unconfigured_hook(script_file):
+                print(f"[Warning] {script_file} is unconfigured: nothing is verified. "
+                      "Please customize it for this repository.", file=sys.stderr)
 
             print(f"-> Executing .along/scripts/{os.path.basename(script_file)}...")
             full_cmd = lifecycle.build_interpreter_cmd(script_file, extra_args)
@@ -2534,7 +2542,8 @@ def main():
             status_tag = "unconfigured"
             py_content = lifecycle.render_lifecycle_script(cmd, base_cmd=None, status_tag=status_tag)
             synthesize_lifecycle_script(script_file, py_content)
-            print(f"[Notice] Created unconfigured template: {script_file}")
+            print(f"[Warning] Created unconfigured template: {script_file} "
+                  "(nothing is verified until it is configured)", file=sys.stderr)
             print(f"Please customize .along/scripts/{cmd}.py for your repository build/test configuration.")
             sys.exit(0)
 

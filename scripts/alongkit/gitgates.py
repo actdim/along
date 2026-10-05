@@ -368,9 +368,12 @@ def touches_entities(paths: Iterable[str]) -> bool:
     return False
 
 
-def _snapshot_from_commit(repo_root: str, commit: str, roots: Sequence[str], dest: str) -> None:
+def _snapshot_from_commit(repo_root: str, commit: str, roots: Sequence[str], dest: str,
+                          specs: Optional[Sequence[str]] = None) -> None:
     import tarfile
-    specs = [f"{r}/.along" if r else ".along" for r in roots]
+    specs = list(specs) if specs is not None else [f"{r}/.along" if r else ".along" for r in roots]
+    if not specs:
+        return
     archive = os.path.join(dest, ".along-snapshot.tar")
     result = proc.run_capture(["git", "archive", "--format=tar", "-o", archive, commit, "--", *specs],
                               cwd=repo_root, check=False, trip_on_anomaly=False)
@@ -410,6 +413,53 @@ def _entity_snapshot(repo_root: str, roots: Sequence[str], source: str) -> set:
         elif source:
             _snapshot_from_commit(repo_root, source, roots, tmp)
         return entity_problems(tmp, roots)
+    finally:
+        shutil.rmtree(tmp, ignore_errors=True)
+
+
+def _entity_dirs_at(repo_root: str, commit: str) -> Optional[List[str]]:
+    """Every `<ctx>/.along/<entity dir>` tracked at `commit` (None when git cannot say)."""
+    result = proc.run_capture(["git", "ls-tree", "-r", "--name-only", "-z", commit], cwd=repo_root,
+                              check=False, trip_on_anomaly=False)
+    if not result.ok:
+        return None
+    dirs = set()
+    for path in result.stdout.split("\0"):
+        parts = path.split("/")
+        if ".along" in parts:
+            idx = parts.index(".along")
+            if len(parts) > idx + 2 and parts[idx + 1] in ENTITY_SUBDIRS:
+                dirs.add("/".join(parts[:idx + 2]))
+    return sorted(dirs)
+
+
+def baseline_entity_problems(repo_root: str, base: str = "HEAD") -> Optional[set]:
+    """Integrity problems of the `repo_root` context at commit `base`, as {(location, message)}.
+
+    Locations are POSIX paths relative to `repo_root`, the shape `gates.entity_integrity_errors`
+    prints. The snapshot holds the entity dirs of every `.along/` in the commit, so ancestor
+    and nested contexts resolve as they do on disk. None when `base` does not resolve (no
+    commit yet) or git is unavailable. [bug--entity-gate-blocks-preexisting-problems]
+    """
+    from . import entities
+    top = _git_out(repo_root, "rev-parse", "--show-toplevel").strip()
+    if not top or not _git_out(repo_root, "rev-parse", "--verify", "-q", base).strip():
+        return None
+    prefix = os.path.relpath(os.path.abspath(repo_root), os.path.abspath(top)).replace("\\", "/")
+    prefix = "" if prefix == "." else prefix
+    dirs = _entity_dirs_at(top, base)
+    if dirs is None:
+        return None
+    tmp = tempfile.mkdtemp(prefix="along-entities-base-")
+    try:
+        os.makedirs(os.path.join(tmp, ".git"), exist_ok=True)
+        _snapshot_from_commit(top, base, [], tmp, specs=dirs)
+        ctx = os.path.join(tmp, prefix) if prefix else tmp
+        if not os.path.isdir(os.path.join(ctx, ".along")):
+            return set()
+        return {(rel.replace("\\", "/"), message)
+                for rel, message in entities.validate_entities(ctx)["errors"]
+                if entities.is_integrity_error(message)}
     finally:
         shutil.rmtree(tmp, ignore_errors=True)
 

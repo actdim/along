@@ -158,6 +158,120 @@ class TestValidatorAndGate(_ErRepo):
         self.assertIn("entity-reference-integrity", result.stderr)
 
 
+class TestNestedContexts(_ErRepo):
+    """[bug--entity-refs-ignore-nested-contexts]: root entities reference subproject ones."""
+
+    def setUp(self):
+        super().setUp()
+        self.sub = os.path.join(self.root, "apps", "a")
+        _er_write(self.sub, ".along/ISSUES/feat--sub-feature.md",
+                  _er_issue("sub-feature", milestone="v9.3.0-sub-release"))
+        _er_write(self.sub, ".along/ISSUES/done/bug--sub-fix.md",
+                  _er_issue("sub-fix", itype="bug", status="done", milestone="v9.3.0-sub-release"))
+        _er_write(self.sub, ".along/MILESTONES/v9.3.0-sub-release.md",
+                  _er_milestone(["feat--sub-feature"], slug="v9.3.0-sub-release"))
+        _er_write(self.root, ".along/ISSUES/feat--root-epic.md",
+                  _er_issue("root-epic", related=["feat--sub-feature"], blocked_by=["bug--sub-fix"]))
+        _er_write(self.root, ".along/SESSIONS/2026/2026-09-30--root-release.md",
+                  _er_session(["bug--sub-fix", "feat--alpha-task"]))
+
+    def test_downward_references_resolve(self):
+        self.assertEqual(self.errors(), [])
+        self.assertIn("feat--sub-feature", entities.descendant_entity_keys(self.root))
+        self.assertEqual(entities.validate_entities(self.sub)["errors"], [])
+
+    def test_real_dangling_reference_is_still_reported(self):
+        _er_write(self.root, ".along/ISSUES/feat--root-epic.md",
+                  _er_issue("root-epic", related=["feat--sub-feature", "feat--nowhere-task"]))
+        messages = [msg for _, msg in self.errors()]
+        self.assertEqual(messages, ["dangling related reference: 'feat--nowhere-task'"])
+
+    def test_descendants_false_restores_old_behavior(self):
+        messages = [msg for _, msg in entities.validate_entities(self.root, descendants=False)["errors"]]
+        self.assertIn("dangling related reference: 'feat--sub-feature'", messages)
+        self.assertIn("dangling issues_completed reference: 'bug--sub-fix'", messages)
+
+    def test_nested_git_repository_and_ignored_dirs_are_not_entered(self):
+        nested = os.path.join(self.root, "vendor-repo")
+        os.makedirs(os.path.join(nested, ".git"))
+        _er_write(nested, ".along/ISSUES/feat--nested-repo-task.md", _er_issue("nested-repo-task"))
+        _er_write(self.root, "node_modules/pkg/.along/ISSUES/feat--dependency-task.md",
+                  _er_issue("dependency-task"))
+        keys = entities.descendant_entity_keys(self.root)
+        self.assertNotIn("feat--nested-repo-task", keys)
+        self.assertNotIn("feat--dependency-task", keys)
+
+
+class TestPreexistingProblemsDoNotBlock(_ErRepo):
+    """[bug--entity-gate-blocks-preexisting-problems]."""
+
+    def setUp(self):
+        super().setUp()
+        _er_write(self.root, ".along/ISSUES/feat--gamma-task.md",
+                  _er_issue("gamma-task", related=["feat--long-gone-task"]))
+        self.commit_all()
+
+    def test_baseline_holds_the_committed_problem(self):
+        self.assertEqual(gitgates.baseline_entity_problems(self.root),
+                         {(".along/ISSUES/feat--gamma-task.md",
+                           "dangling related reference: 'feat--long-gone-task'")})
+
+    def test_unrelated_entity_change_passes_stop_gate_and_issue_sync(self):
+        event = HookEvent(event_type=HookEventType.STOP)
+        _er_write(self.root, ".along/ISSUES/feat--delta-task.md", _er_issue("delta-task"))
+        self.assertIsNone(predicates.check_entity_reference_integrity(event, self.root))
+        new, old = gates.split_entity_integrity_errors(self.root)
+        self.assertEqual(new, [])
+        self.assertEqual(len(old), 1)
+        env = dict(os.environ, ALONG_HOOK_MODE="enforce")
+        result = subprocess.run([sys.executable, EXEC, "issue", "sync"], cwd=self.root, env=env,
+                                capture_output=True, text=True, encoding="utf-8")
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertIn("pre-existing", result.stderr)
+        self.assertIn("feat--long-gone-task", result.stderr)
+
+    def test_new_problem_still_blocks(self):
+        event = HookEvent(event_type=HookEventType.STOP)
+        os.remove(self.a)
+        message = predicates.check_entity_reference_integrity(event, self.root)
+        self.assertIn("feat--alpha-task", message)
+        self.assertNotIn("long-gone", message)
+        with mock.patch.dict(os.environ, {"ALONG_HOOK_MODE": "enforce"}):
+            self.assertFalse(gates.entity_integrity_gate(self.root, "T"))
+
+    def test_baseline_of_a_subproject_context(self):
+        sub = os.path.join(self.root, "apps", "b")
+        _er_write(sub, ".along/ISSUES/feat--sub-task.md",
+                  _er_issue("sub-task", related=["feat--sub-missing"]))
+        self.commit_all()
+        self.assertEqual(gitgates.baseline_entity_problems(sub),
+                         {(".along/ISSUES/feat--sub-task.md",
+                           "dangling related reference: 'feat--sub-missing'")})
+
+
+class TestDoctorFixDanglingMilestones(_ErRepo):
+    """[bug--migration-dangling-template-milestones] REQ-4."""
+
+    def test_fix_removes_only_dangling_milestones(self):
+        stray = _er_write(self.root, ".along/ISSUES/done/feat--old-task.md",
+                          _er_issue("old-task", status="done", milestone="v0.9.0-never-existed"))
+        _er_write(self.root, ".along/SESSIONS/2026/2026-09-29--old-session.md",
+                  "---\nprotocol: along\nslug: old-session\ndate: 2026-09-29\n"
+                  "milestone: v0.9.0-never-existed\nissues_advanced: []\nissues_completed: []\n"
+                  "---\n\n# Session\n")
+        self.assertEqual(entities.drop_dangling_milestones(self.root, dry_run=True),
+                         [".along/ISSUES/done/feat--old-task.md",
+                          ".along/SESSIONS/2026/2026-09-29--old-session.md"])
+        self.assertEqual(_er_fm(stray)["milestone"], "v0.9.0-never-existed")
+        result = subprocess.run([sys.executable, EXEC, "doctor", "--entities", "--fix"], cwd=self.root,
+                                capture_output=True, text=True, encoding="utf-8")
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertIn("Removed 2 dangling milestone field(s)", result.stdout)
+        self.assertNotIn("milestone", _er_fm(stray))
+        self.assertEqual(_er_fm(self.a)["milestone"], MILESTONE)
+        self.assertEqual(self.errors(), [])
+
+
 class TestCommitTimeCheck(_ErRepo):
 
     def test_blocks_only_problems_the_staged_change_introduces(self):
@@ -282,6 +396,72 @@ class TestReleaseRefusesOpenMilestone(_ErRepo):
         self.assertEqual(_er_fm(self.a)["milestone"], "v9.2.0-next-release")
         nxt = _er_fm(os.path.join(self.root, ".along", "MILESTONES", "v9.2.0-next-release.md"))
         self.assertEqual(sorted(nxt["target_issues"]), ["feat--alpha-task", "feat--beta-task"])
+
+
+class TestMigrationMilestones(unittest.TestCase):
+    """[bug--migration-dangling-template-milestones] REQ-1..REQ-3, REQ-5."""
+
+    def setUp(self):
+        import migrate_protocol
+        from alongkit import migration
+        self.mp = migrate_protocol
+        self.migration = migration
+        self.root = tempfile.mkdtemp(prefix="along_mig_milestones_")
+        os.makedirs(os.path.join(self.root, ".git"))
+        self.along = os.path.join(self.root, ".along")
+        _er_write(self.root, ".along/MILESTONES/v1.0.0-first-release.md",
+                  _er_milestone(slug="v1.0.0-first-release", status="completed"))
+        self.closed = _er_write(self.root, ".along/ISSUES/done/feat--closed-task.md",
+                                "---\nprotocol: along\nslug: closed-task\ntype: feat\nstatus: done\n"
+                                "priority: medium\ncreated: 2026-09-01\nupdated: 2026-09-02\n"
+                                "completed: 2026-09-02\n---\n\n# Closed\n")
+        self.open = _er_write(self.root, ".along/ISSUES/feat--open-task.md",
+                              "---\nprotocol: along\nslug: open-task\ntype: feat\nstatus: open\n"
+                              "priority: medium\ncreated: 2026-09-01\nupdated: 2026-09-01\n---\n\n# Open\n")
+        self.session = _er_write(self.root, ".along/SESSIONS/2026/2026-09-02--work.md",
+                                 "---\nprotocol: along\nslug: work\ndate: 2026-09-02\n---\n\n# Work\n")
+
+    def tearDown(self):
+        shutil.rmtree(self.root, ignore_errors=True)
+
+    def migrate(self):
+        mig = self.migration.Migration(self.root, dry_run=False, printer=lambda _m: None)
+        self.mp.step_migrate_v1_5_entity_ecosystem(mig, self.root, self.along)
+
+    def milestone_errors(self):
+        return [e for e in entities.validate_entities(self.root)["errors"]
+                if "milestone" in e[1]]
+
+    def test_no_milestone_is_invented(self):
+        self.migrate()
+        self.assertEqual(self.milestone_errors(), [])
+        for path in (self.closed, self.open, self.session):
+            self.assertNotIn("milestone", _er_fm(path))
+        milestones = sorted(os.listdir(os.path.join(self.along, "MILESTONES")))
+        self.assertEqual(milestones, ["v1.0.0-first-release.md"])
+
+    def test_dangling_template_references_are_repaired_idempotently(self):
+        for path, slug in ((self.closed, "v1.3.0-knowledge-base-and-graph"),
+                           (self.session, "v2.0.0-along-transition")):
+            textio.write_text(path, frontmatter.update(textio.read_text(path), {"milestone": slug}))
+        textio.write_text(self.open, frontmatter.update(textio.read_text(self.open),
+                                                        {"milestone": "v1.0.0-first-release"}))
+        self.migrate()
+        self.assertNotIn("milestone", _er_fm(self.closed))
+        self.assertNotIn("milestone", _er_fm(self.session))
+        self.assertEqual(_er_fm(self.open)["milestone"], "v1.0.0-first-release")
+        before = {p: textio.read_text(p) for p in (self.closed, self.open, self.session)}
+        self.migrate()
+        self.assertEqual(before, {p: textio.read_text(p) for p in before})
+        self.assertEqual(self.milestone_errors(), [])
+
+    def test_existing_template_milestone_is_kept(self):
+        _er_write(self.root, ".along/MILESTONES/v2.0.0-along-transition.md",
+                  _er_milestone(slug="v2.0.0-along-transition", status="completed"))
+        textio.write_text(self.open, frontmatter.update(textio.read_text(self.open),
+                                                        {"milestone": "v2.0.0-along-transition"}))
+        self.migrate()
+        self.assertEqual(_er_fm(self.open)["milestone"], "v2.0.0-along-transition")
 
 
 class TestMigrationReusesValidator(unittest.TestCase):

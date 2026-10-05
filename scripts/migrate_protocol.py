@@ -240,37 +240,39 @@ def _v1_5_synthesize_standard_checklists(working_dir, today_str, mig):
             mig.write(cpath, dump_yaml_frontmatter(fm, data["body"]))
 
 
-def _v1_5_synthesize_milestones_from_history(working_dir, done_slugs, active_slugs, mig):
-    milestones_dir = os.path.join(working_dir, "MILESTONES")
-    if len(glob.glob(os.path.join(milestones_dir, "*.md"))) == 0:
-        if done_slugs:
-            past_m = os.path.join(milestones_dir, "v1.3.0-knowledge-base-and-graph.md")
-            fm_past = {
-                "protocol": "along",
-                "slug": "v1.3.0-knowledge-base-and-graph",
-                "title": "v1.3.0: Knowledge Base Architecture & Code Graph Integration",
-                "status": "completed",
-                "due_date": "2026-08-26",
-                "created": "2026-08-11",
-                "target_issues": done_slugs,
-                "progress_pct": 100
-            }
-            body_past = "# Milestone: v1.3.0 Knowledge Base & Code Graph\n\nDelivered structured documentation architecture, /along-init-kb, /along-search-kb, /along-sync-kb, /along-check-graph, and code-review-graph MCP integration.\n"
-            mig.write(past_m, dump_yaml_frontmatter(fm_past, body_past))
+#: Milestone slugs older migrations synthesized (from Along's own release history) and
+#: assigned to issues and session logs whether or not the milestone file existed.
+TEMPLATE_MILESTONES = ("v1.3.0-knowledge-base-and-graph", "v2.0.0-along-transition")
 
-        current_m = os.path.join(milestones_dir, "v2.0.0-along-transition.md")
-        fm_curr = {
-            "protocol": "along",
-            "slug": "v2.0.0-along-transition",
-            "title": "v2.0.0: Transition to Along Ecosystem & .along/ Directory",
-            "status": "in-progress",
-            "due_date": "2026-09-05",
-            "created": "2026-08-27",
-            "target_issues": active_slugs,
-            "progress_pct": 50
-        }
-        body_curr = "# Milestone: v2.0.0 Along Transition\n\nDelivers isolated `.along/` directory, protocol: along metadata validation, /along-dash visual analytics, and full namespaced along-* command suite.\n"
-        mig.write(current_m, dump_yaml_frontmatter(fm_curr, body_curr))
+
+def _v1_5_drop_unresolved_template_milestones(working_dir, mig):
+    """Remove template `milestone` values whose milestone file does not exist.
+
+    Migration no longer synthesizes or assigns milestones; this repairs the references
+    earlier runs left behind. A template milestone that exists is kept, and so is any
+    other value. Idempotent. [bug--migration-dangling-template-milestones]
+    """
+    existing = {os.path.basename(p)[:-3]
+                for p in glob.glob(os.path.join(working_dir, "MILESTONES", "**", "*.md"),
+                                   recursive=True)}
+    dangling = {slug for slug in TEMPLATE_MILESTONES if slug not in existing}
+    if not dangling:
+        return
+    files = (glob.glob(os.path.join(working_dir, "ISSUES", "**", "*.md"), recursive=True)
+             + glob.glob(os.path.join(working_dir, "SESSIONS", "**", "*.md"), recursive=True))
+    for filepath in files:
+        if os.path.basename(filepath) in ("ISSUES.md", "README.md"):
+            continue
+        try:
+            content = textio.read_text(filepath)
+        except UnicodeDecodeError as exc:
+            mig.note_skipped(filepath, f"not valid UTF-8 ({exc.reason})")
+            continue
+        fields, _ = parse_yaml_frontmatter(content, path=filepath)
+        if not fields or str(fields.get('milestone') or '').strip() not in dangling:
+            continue
+        new_content = frontmatter.update(content, {}, remove=['milestone'], path=filepath)
+        mig.write(filepath, new_content, detail="dangling template milestone removed")
 
 
 def _v1_5_enrich_issues_frontmatter(all_issue_files, today_str, mig):
@@ -325,10 +327,6 @@ def _v1_5_enrich_issues_frontmatter(all_issue_files, today_str, mig):
             if 'dashboard' in slug or 'analytics' in slug or 'dash' in slug: tags.append('dashboard')
             updates['tags'] = tags
 
-        if not fields.get('milestone'):
-            updates['milestone'] = ('v1.3.0-knowledge-base-and-graph' if is_done
-                                    else 'v2.0.0-along-transition')
-
         if 'blocked_by' not in fields:
             updates['blocked_by'] = []
         if 'related' not in fields:
@@ -365,7 +363,6 @@ def _v1_5_enrich_sessions_frontmatter(working_dir, today_str, mig):
             ('branch', 'main'),
             ('commit', 'unknown'),
             ('summary', 'Work session log.'),
-            ('milestone', 'v2.0.0-along-transition'),
         )
         for key, value in defaults:
             if key not in fields:
@@ -389,12 +386,10 @@ def step_migrate_v1_5_entity_ecosystem(mig, repo_root, working_dir):
 
     done_issues = glob.glob(os.path.join(working_dir, "ISSUES", "done", "*.md"))
     active_issues = glob.glob(os.path.join(working_dir, "ISSUES", "*.md"))
-    done_slugs = [os.path.basename(f).replace(".md", "") for f in done_issues]
-    active_slugs = [os.path.basename(f).replace(".md", "") for f in active_issues]
 
-    _v1_5_synthesize_milestones_from_history(working_dir, done_slugs, active_slugs, mig)
     _v1_5_enrich_issues_frontmatter(done_issues + active_issues, today_str, mig)
     _v1_5_enrich_sessions_frontmatter(working_dir, today_str, mig)
+    _v1_5_drop_unresolved_template_milestones(working_dir, mig)
     return True
 
 # ----------------------------------------------------------------------
