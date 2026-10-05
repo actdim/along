@@ -4,6 +4,7 @@
 <!-- No active issues -->
 
 ## Backlog
+- [ ] `(bug)` [session-records-not-captured](ISSUES/bug--session-records-not-captured.md)
 - [ ] `(bug)` [worktree-cross-os-mount-guard](ISSUES/bug--worktree-cross-os-mount-guard.md)
 - [ ] `(debt)` [agents-md-core-slimming](ISSUES/debt--agents-md-core-slimming.md)
 - [ ] `(debt)` [along-core-extras-split](ISSUES/debt--along-core-extras-split.md)
@@ -61,8 +62,8 @@
 
 ## Done (recent)
 - [x] `(task)` [release-v4-4-5](ISSUES/done/task--release-v4-4-5.md)
+- [x] `(task)` [along-update-dev-repo](ISSUES/done/task--along-update-dev-repo.md)
 - [x] `(debt)` [cached-runtime-venv](ISSUES/done/debt--cached-runtime-venv.md)
 - [x] `(bug)` [wrap-zero-byte-audit-unscoped](ISSUES/done/bug--wrap-zero-byte-audit-unscoped.md)
 - [x] `(bug)` [windows-hook-fail-open](ISSUES/done/bug--windows-hook-fail-open.md)
-- [x] `(bug)` [unconfigured-test-hook-reports-pass](ISSUES/done/bug--unconfigured-test-hook-reports-pass.md)
-<!-- 181 older completed issue(s) archived in .along/ISSUES/done/ -->
+<!-- 182 older completed issue(s) archived in .along/ISSUES/done/ -->
