@@ -266,6 +266,44 @@ class TestPlanGate(_TempRoot):
         self.assertIsNone(check_mutation_authorization(_bash_tool_event("dotnet build -v q", self.root), self.root))
         self.assertIsNotNone(check_mutation_authorization(_bash_tool_event("rm -rf src", self.root), self.root))
 
+    def test_along_commit_passes_for_an_unbound_session(self):
+        """The completion checklist commits after `along wrap` unbound the session.
+
+        See [bug--commit-blocked-after-wrap].
+        """
+        enforce = {"enforce_unbound": True}
+        for cmd in ('along commit "fix x" -i x --all --push',
+                    'python scripts/along_exec.py commit "fix x" -i x --all',
+                    'along issue sync; along commit "fix x" -i x --all --push'):
+            with self.subTest(cmd=cmd):
+                self.assertIsNone(check_mutation_authorization(_bash_tool_event(cmd, self.root),
+                                                               self.root, options=enforce))
+
+    def test_rewriting_commit_and_raw_git_commit_stay_held(self):
+        enforce = {"enforce_unbound": True}
+        for cmd in ('along commit "fix x" -i x --all --fix-typography',
+                    'git commit -am "fix x"', 'git push',
+                    'along commit "fix x" -i x --all && rm -rf src',
+                    'along commit "fix x" > out.txt'):
+            with self.subTest(cmd=cmd):
+                self.assertIn("require-plan-approval",
+                              check_mutation_authorization(_bash_tool_event(cmd, self.root),
+                                                           self.root, options=enforce) or "")
+
+    def test_commit_right_after_wrap_purge(self):
+        """Bind, approve, purge (what `along wrap` does), then commit: the commit passes."""
+        key = session.session_key("claude", "sess-1")
+        session.init_session(self.root, "work")
+        session.bind_session(self.root, "work", key=key)
+        session.record_plan_approval(self.root, key)
+        session.purge_session(self.root, "work")
+        enforce = {"enforce_unbound": True}
+        self.assertIsNone(check_mutation_authorization(
+            _bash_tool_event('along commit "fix" -i work --all --push', self.root), self.root, options=enforce))
+        self.assertIsNotNone(check_mutation_authorization(
+            _edit_tool_event(self.src, self.root), self.root, options=enforce),
+            "source edits still need a new binding and approval")
+
     def test_declared_root_whitelists_its_state_paths(self):
         nested = tempfile.mkdtemp(prefix="along-declared-")
         try:

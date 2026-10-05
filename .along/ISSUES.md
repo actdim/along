@@ -66,4 +66,4 @@
 - [x] `(debt)` [cached-runtime-venv](ISSUES/done/debt--cached-runtime-venv.md)
 - [x] `(bug)` [wrap-zero-byte-audit-unscoped](ISSUES/done/bug--wrap-zero-byte-audit-unscoped.md)
 - [x] `(bug)` [windows-hook-fail-open](ISSUES/done/bug--windows-hook-fail-open.md)
-<!-- 182 older completed issue(s) archived in .along/ISSUES/done/ -->
+<!-- 183 older completed issue(s) archived in .along/ISSUES/done/ -->

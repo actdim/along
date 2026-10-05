@@ -158,10 +158,13 @@ class TestPlanApproval(SessionFixture):
         self.assertFalse(session.is_plan_approved(self.root, key=self.key_a))
 
     def test_along_state_commands_pass_the_plan_gate(self):
+        # `along commit` is a completion command: `along wrap` unbinds the session right
+        # before it [bug--commit-blocked-after-wrap]. Its file-rewriting form stays held.
         for cmd in ("along issue create bug x-y --title T", "along start x-y",
-                    "python scripts/along_exec.py issue sync", "along plan status && git status"):
+                    "python scripts/along_exec.py issue sync", "along plan status && git status",
+                    "along commit -m x"):
             self.assertTrue(shellparse.is_along_state_command(cmd), cmd)
-        for cmd in ("along commit -m x", "along bump patch", "along issue sync > out.txt",
+        for cmd in ("along commit -m x --fix-typography", "along bump patch", "along issue sync > out.txt",
                     "along start x && rm -rf src"):
             self.assertFalse(shellparse.is_along_state_command(cmd), cmd)
         event = HookEvent(event_type=HookEventType.PRE_TOOL_USE, tool_name="run_command",

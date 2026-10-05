@@ -374,6 +374,13 @@ _ALONG_STATE = (
     "kb-sync", "kb sync", "glossary", "risk", "spike", "checklist",
 )
 
+#: Completion-checklist commands that record work already in the tree and carry their own
+#: gates (`along commit`: issue binding, tests, typography, conflict markers). They pass the
+#: plan gate in every phase, because `along wrap` unbinds the session right before them.
+#: A flag that rewrites files takes the command out. See [bug--commit-blocked-after-wrap].
+_ALONG_COMPLETION = ("commit",)
+_COMPLETION_REWRITE_FLAGS = ("--fix-typography",)
+
 
 def _along_subcommand(tokens: List[str]) -> Optional[str]:
     """Words after `along` / `along_exec.py` when the segment invokes the Along CLI."""
@@ -394,8 +401,14 @@ def along_subcommand(segment: str) -> Optional[str]:
     return _along_subcommand(tokens) if tokens else None
 
 
+def _is_completion_subcommand(sub: str) -> bool:
+    if not any(sub == s or sub.startswith(s + " ") for s in _ALONG_COMPLETION):
+        return False
+    return not any(flag in sub.split() for flag in _COMPLETION_REWRITE_FLAGS)
+
+
 def is_along_state_command(command: str) -> bool:
-    """True when every segment runs an Along state subcommand (or is read-only)."""
+    """True when every segment runs an Along state or completion subcommand (or is read-only)."""
     segments = split_segments(command or "")
     if not segments:
         return False
@@ -404,7 +417,8 @@ def is_along_state_command(command: str) -> bool:
             return False
         tokens = _tokens(seg)
         sub = _along_subcommand(tokens) if tokens else None
-        if sub is not None and any(sub == s or sub.startswith(s + " ") for s in _ALONG_STATE):
+        if sub is not None and (any(sub == s or sub.startswith(s + " ") for s in _ALONG_STATE)
+                                or _is_completion_subcommand(sub)):
             continue
         if not _segment_is_read_only(seg):
             return False
