@@ -253,7 +253,7 @@ Also, when relevant: `.along/VISION.md`, `.along/GLOSSARY.md`. These reflect the
 ## Multi-Agent & Multi-Branch Concurrency
 - **Zero-Manual-Merge Rule** [gate: projection-protection]: On merge conflicts in derived projections (`ISSUES.md`, `INDEX.md`, `DECISIONS.md`), accept either side and run `/along-issue-sync`, `/along-kb-sync`, or `/along-decision-sync` to recompile. `along git setup` registers merge drivers that do this automatically; afterwards run `along git sync`.
 - **Append-Only Merge Driver**: `.along/HISTORY.md` and legacy monolithic `.along/DECISIONS.md` are append-only. Configure `.gitattributes` with `merge=union`. Modular ADR files in `.along/DECISIONS/` are isolated per-file to eliminate merge collisions.
-- **Untracked Exports** [gate: untracked-exports]: `.along/dashboard.html`, `.along/DASHBOARD.md` stay out of Git.
+- **Untracked Exports** [gate: untracked-exports]: `.along/dashboard.html`, `.along/DASHBOARD.md` and per-machine `.along/diagnostics/` stay out of Git.
 - **Context Isolation**: Context is localized to the target issue file, session-scoped blackboard (`.along/.session/<slug>/`), and completed session logs.
 
 ## Mandatory Issue Anchoring
@@ -1209,6 +1209,7 @@ Displays an instant terminal summary of repository health, active in-flight issu
 Validates repository compliance with the Along protocol. Audits `.along/` directory layout, `.gitattributes` merge drivers, and ADR header formatting.
 - **Runtime section**: names the runtime (`claude-code`, `cowork`, `antigravity`, `codex`, ...), the gate enforcement level (`mechanical` only when Along hooks are registered for that runtime, otherwise `advisory`), the Python floor (3.10), a stale `.git/index.lock`, and a cross-OS or VM-mounted repository (worktrees unsafe). See the capability matrix in [Runtime Lifecycle Hooks & Mechanical Gates](./topic--runtime-hooks-and-gates.md).
 - **Vision & root notes**: warns about a root `VISION.md` next to `.along/`, an unresolved `along:imported-vision needs-restructure` section in `.along/VISION.md`, and root notes (`ROADMAP.md`, `ARCHITECTURE.md`, `SPEC.md`, `TODO.md`, `DESIGN.md`) that the agent must route into the Knowledge Base.
+- **Tracked diagnostics**: warns when files under any `.along/diagnostics/` are still tracked in git (committed before the directory ignored itself) and names `along migrate --apply` (or `git rm --cached`) as the fix.
 - **Options**:
   - `--entities`: Performs deep validation of the entity DAG graph, verifying parent/child relationships, `blocked_by` dependencies, and detecting circular references. References resolve against the current `.along/`, every enclosing `.along/` up to the git boundary, and every nested subproject `.along/` below it (nested git repositories and dependency/build dirs are not entered).
   - `--entities --fix`: Removes `milestone` fields of issues and session logs that resolve to no milestone, lists the changed files, then validates.
@@ -1845,7 +1846,7 @@ The 25 canonical gates defined in the catalogue:
 Repository-state gates (17-23) declare `enforcement: [git, ci]` and no runtime layer, so the runtime pipeline skips them. `along gates check` runs their `alongkit.repochecks` handlers over the staged blobs (pre-commit) or every tracked file (`--ci`). A line containing `along: allow-<gate-id>` is exempt (for fixtures), and `exclude_paths` (fnmatch globs) exempts whole files:
 
 17. `windows_safe_filenames`: No `<>:"|?*`, control characters, trailing dot/space or reserved device names (`CON`, `NUL`, `COM1`, ...) in any path component.
-18. `untracked_exports`: `.along/dashboard.html` and `.along/DASHBOARD.md` are never tracked.
+18. `untracked_exports`: `.along/dashboard.html`, `.along/DASHBOARD.md` and per-machine `.along/diagnostics/` files (any context depth) are never tracked. Untracking (`git rm --cached`) passes; migration Step 14 untracks diagnostics committed before the directory ignored itself, and `along doctor` reports any that remain.
 19. `code_fence_language`: Every opening Markdown code fence names a language (`text` for plain output).
 20. `portable_links`: Markdown link targets use no `file://` scheme and no backslashes. Inline code and fenced blocks are ignored.
 21. `stable_entry_point`: Files in `scope` (default `README.md`, `docs/*`) never link into `.along/`.
@@ -2739,6 +2740,11 @@ fails if the engine calls `shutil.move`, `os.remove` or their neighbours directl
 - Root notes (`ROADMAP.md`, `ARCHITECTURE.md`, `SPEC.md`, `TODO.md`, `DESIGN.md`) are listed as agent actions, never moved.
 - Runs as a standalone pass on a repository already at the current version, so a root `VISION.md` added later is still healed without re-running the version chain.
 - `VISION.md` files in subfolders are never touched: they belong to their subproject.
+
+### `v4.4.5`: Per-Machine Diagnostics Leave the Index (Step 14)
+- Files under any `.along/diagnostics/` (hook audit, activity traces, heartbeat, circuit breaker) that were committed before the directory ignored itself are removed from the git index with `git rm --cached`; the files stay on disk and the removal is staged for the next commit.
+- Runs on every migration, including an up-to-date repository; a second run finds nothing, outside git it does nothing, `--dry-run` only lists the paths.
+- From then on the `untracked_exports` gate rejects staging them again, and `along doctor` reports any that remain.
 
 ---
 

@@ -894,11 +894,20 @@ def run_migrations(repo_root, dry_run=True, force=False, backup=True, verbose=Fa
     print("==================================================")
 
     if not _should_run_migrations(repo_root, along_dir, agents_dir, recorded_version, force):
-        # The VISION check is a standalone pass: a root VISION.md can reappear at any
-        # time, and healing it must not re-run the whole version chain.
-        if scaffold.find_root_file(repo_root, scaffold.VISION_FILENAME) and os.path.isdir(along_dir):
+        # The VISION check and the diagnostics untrack are standalone passes: a root
+        # VISION.md can reappear at any time, and a repository already at the current
+        # version can still carry diagnostics committed long ago. Healing either must not
+        # re-run the whole version chain.
+        from alongkit import gitgates
+        heal_vision = bool(scaffold.find_root_file(repo_root, scaffold.VISION_FILENAME)
+                           and os.path.isdir(along_dir))
+        heal_diagnostics = bool(gitgates.tracked_diagnostics(repo_root))
+        if heal_vision or heal_diagnostics:
             mig = migration.Migration(repo_root, dry_run=dry_run, state_dir=along_dir, backup=backup)
-            step_reconcile_root_vision_and_notes(mig, repo_root)
+            if heal_vision:
+                step_reconcile_root_vision_and_notes(mig, repo_root)
+            if heal_diagnostics:
+                step_untrack_diagnostics(mig, repo_root)
             for line in mig.summary():
                 print(line)
             return 1 if mig.errors else 0
@@ -1018,6 +1027,9 @@ def run_migrations(repo_root, dry_run=True, force=False, backup=True, verbose=Fa
     # Step 13: one VISION per context, root notes surfaced for the agent
     step_reconcile_root_vision_and_notes(mig, repo_root)
 
+    # Step 14: per-machine diagnostics leave the git index
+    step_untrack_diagnostics(mig, repo_root)
+
     # The state marker is written last, so a run that died halfway is not recorded as
     # a completed migration.
     if not dry_run and not errors and not mig.errors:
@@ -1071,6 +1083,24 @@ def step_reconcile_root_vision_and_notes(mig, repo_root):
               "and remove its markers.")
     _report_root_notes(repo_root)
     return action
+
+
+def step_untrack_diagnostics(mig, repo_root):
+    """Step 14 [v4.4.5]: per-machine `.along/diagnostics/` files leave the git index.
+
+    `repo.ensure_diagnostics_dir` makes the directory ignore itself, which does not untrack
+    files committed before that. `git rm --cached` keeps them on disk and stages the
+    removal for the next commit; a second run finds nothing, outside git it is a no-op.
+    See [bug--diagnostics-files-stay-tracked].
+    """
+    from alongkit import gitgates
+    print("-> Step 14 [v4.4.5]: Untracking per-machine .along/diagnostics/ files...")
+    paths = gitgates.untrack_diagnostics(repo_root, dry_run=mig.dry_run)
+    if not paths:
+        print("   [OK] No tracked diagnostics files.")
+    for path in paths:
+        mig.record("untrack diagnostics", path, "git rm --cached (kept on disk)")
+    return paths
 
 
 def step_migrate_v2_2_5_link_rewriting_and_integrity(mig, repo_root, detected_version="1.0.0"):

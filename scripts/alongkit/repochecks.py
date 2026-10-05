@@ -8,8 +8,8 @@ blobs, `--ci` passes every tracked path and reads the checked-out tree. A check 
 
 - `check_windows_safe_filenames`  no `<>:"|?*`, control chars, trailing dot/space or
                                   reserved device names (CON, NUL, COM1, ...) in a path.
-- `check_untracked_exports`       `.along/dashboard.html` and `.along/DASHBOARD.md` stay
-                                  out of git.
+- `check_untracked_exports`       `.along/dashboard.html`, `.along/DASHBOARD.md` and the
+                                  per-machine `.along/diagnostics/` stay out of git.
 - `check_code_fence_language`     every opening Markdown fence names a language.
 - `check_portable_links`          Markdown link targets use no `file://` and no backslashes.
 - `check_stable_entry_point`      `README.md` and `docs/` never link into `.along/`.
@@ -45,6 +45,7 @@ _RESERVED_NAMES = {"CON", "PRN", "AUX", "NUL",
                    *(f"COM{i}" for i in range(1, 10)), *(f"LPT{i}" for i in range(1, 10))}
 _BAD_CHARS_RE = re.compile(r'[<>:"|?*\x00-\x1f]')
 _EXPORTS = ("dashboard.html", "DASHBOARD.md")
+_DIAGNOSTICS_RE = re.compile(r"(?:^|/)\.along/diagnostics/")
 _FENCE_RE = re.compile(r"^ {0,3}(`{3,}|~{3,})(.*)$")
 _INLINE_CODE_RE = re.compile(r"(`+)(?:(?!\1).)+?\1")
 _LINK_RE = re.compile(r"!?\[[^\]\n]*\]\(\s*<?([^)\s>]+)>?(?:\s+\"[^\"]*\")?\s*\)")
@@ -121,13 +122,28 @@ def check_windows_safe_filenames(paths: Sequence[str], read: Reader,
     return findings
 
 
+def is_diagnostics_path(path: str) -> bool:
+    """True for a repo-relative POSIX path inside any `.along/diagnostics/`."""
+    return bool(_DIAGNOSTICS_RE.search(path))
+
+
 def check_untracked_exports(paths: Sequence[str], read: Reader,
                             options: Dict[str, Any]) -> List[Finding]:
-    return [(path, "local dashboard export must not be tracked; `git rm --cached` it "
-                   "and keep it in .gitignore")
-            for path in paths
-            if posixpath.basename(path) in _EXPORTS
-            and posixpath.basename(posixpath.dirname(path)) == ".along"]
+    """Local exports and per-machine diagnostics never enter git.
+
+    Diagnostics (hook audit, activity traces, heartbeat, circuit breaker) differ per machine
+    and session; `repo.ensure_diagnostics_dir` ignores the directory, but that does not
+    untrack files committed before. See [bug--diagnostics-files-stay-tracked].
+    """
+    findings: List[Finding] = []
+    for path in paths:
+        if posixpath.basename(path) in _EXPORTS and posixpath.basename(posixpath.dirname(path)) == ".along":
+            findings.append((path, "local dashboard export must not be tracked; `git rm --cached` it "
+                                   "and keep it in .gitignore"))
+        elif is_diagnostics_path(path):
+            findings.append((path, "per-machine diagnostics must not be tracked; `git rm --cached` it "
+                                   "(the directory ignores itself) or run `along migrate --apply`"))
+    return findings
 
 
 # ---------------------------------------------------------------------------

@@ -3,7 +3,8 @@ protocol: along
 protocol_version: "4.4.5"
 slug: diagnostics-files-stay-tracked
 type: bug
-status: open
+status: done
+completed: 2026-10-05
 priority: medium
 created: 2026-10-05
 updated: 2026-10-05
@@ -34,7 +35,11 @@ carry them, and nothing reports it.
 - REQ-3: `along doctor` reports tracked diagnostics files.
 
 ## Acceptance Criteria
-- [ ] Hermetic test: a commit that adds or keeps `.along/diagnostics/hooks_audit.jsonl` is rejected by the gate; a nested `<sub>/.along/diagnostics/` file too.
-- [ ] Hermetic test: the migration step untracks tracked diagnostics files, keeps them on disk, and a second run changes nothing.
-- [ ] Docs: `docs/topic--runtime-hooks-and-gates.md` / `docs/topic--cli-reference.md` updated.
-- [ ] Automated tests passing
+- [x] Hermetic test: a commit that adds or keeps `.along/diagnostics/hooks_audit.jsonl` is rejected by the gate; a nested `<sub>/.along/diagnostics/` file too; untracking passes (`tests/test_diagnostics_untracked.py`).
+- [x] Hermetic test: the migration step untracks tracked diagnostics files, keeps them on disk, and a second run changes nothing; a repository already at the current version still runs it.
+- [x] Docs: `docs/topic--cli-reference.md`, `docs/topic--migrations.md`, `docs/topic--declarative-gates-and-traceability.md`, AGENTS.md / `skills/along-init/protocol.md` rule line.
+- [x] Automated tests passing (964)
+
+## Notes
+- REQ-1 needed no `default_gates.yaml` change: the handler is shared, only its check grew.
+- Pre-commit passes only added/modified paths (`--diff-filter=ACMR`) to the check, so `git rm --cached` is never rejected; CI mode checks every tracked path.

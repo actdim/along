@@ -433,6 +433,32 @@ def _entity_dirs_at(repo_root: str, commit: str) -> Optional[List[str]]:
     return sorted(dirs)
 
 
+def tracked_diagnostics(repo_root: str) -> List[str]:
+    """Tracked files under any `.along/diagnostics/` below `repo_root`, relative POSIX paths.
+
+    Empty outside git. Per-machine runtime state that only lingers in the index because it
+    was committed before the directory ignored itself. See [bug--diagnostics-files-stay-tracked].
+    """
+    from .repochecks import is_diagnostics_path
+    listing = _git_out(repo_root, "ls-files", "-z")
+    return sorted(p for p in listing.split("\0") if p and is_diagnostics_path(p))
+
+
+def untrack_diagnostics(repo_root: str, dry_run: bool = False) -> List[str]:
+    """Remove tracked diagnostics from the index (`git rm --cached`); files stay on disk.
+
+    Returns the paths untracked (or that would be, with `dry_run`). Idempotent: a second
+    run finds nothing. The removal is staged, so the next commit records it.
+    """
+    paths = tracked_diagnostics(repo_root)
+    if paths and not dry_run:
+        result = proc.run_capture(["git", "rm", "--cached", "-q", "--", *paths], cwd=repo_root,
+                                  check=False, trip_on_anomaly=False)
+        if not result.ok:
+            return []
+    return paths
+
+
 def baseline_entity_problems(repo_root: str, base: str = "HEAD") -> Optional[set]:
     """Integrity problems of the `repo_root` context at commit `base`, as {(location, message)}.
 

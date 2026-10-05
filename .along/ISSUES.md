@@ -4,7 +4,6 @@
 <!-- No active issues -->
 
 ## Backlog
-- [ ] `(bug)` [diagnostics-files-stay-tracked](ISSUES/bug--diagnostics-files-stay-tracked.md)
 - [ ] `(bug)` [worktree-cross-os-mount-guard](ISSUES/bug--worktree-cross-os-mount-guard.md)
 - [ ] `(debt)` [agents-md-core-slimming](ISSUES/debt--agents-md-core-slimming.md)
 - [ ] `(debt)` [along-core-extras-split](ISSUES/debt--along-core-extras-split.md)
@@ -66,4 +65,4 @@
 - [x] `(bug)` [wrap-zero-byte-audit-unscoped](ISSUES/done/bug--wrap-zero-byte-audit-unscoped.md)
 - [x] `(bug)` [windows-hook-fail-open](ISSUES/done/bug--windows-hook-fail-open.md)
 - [x] `(bug)` [unconfigured-test-hook-reports-pass](ISSUES/done/bug--unconfigured-test-hook-reports-pass.md)
-<!-- 180 older completed issue(s) archived in .along/ISSUES/done/ -->
+<!-- 181 older completed issue(s) archived in .along/ISSUES/done/ -->

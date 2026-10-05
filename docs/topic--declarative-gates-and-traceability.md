@@ -96,7 +96,7 @@ The 25 canonical gates defined in the catalogue:
 Repository-state gates (17-23) declare `enforcement: [git, ci]` and no runtime layer, so the runtime pipeline skips them. `along gates check` runs their `alongkit.repochecks` handlers over the staged blobs (pre-commit) or every tracked file (`--ci`). A line containing `along: allow-<gate-id>` is exempt (for fixtures), and `exclude_paths` (fnmatch globs) exempts whole files:
 
 17. `windows_safe_filenames`: No `<>:"|?*`, control characters, trailing dot/space or reserved device names (`CON`, `NUL`, `COM1`, ...) in any path component.
-18. `untracked_exports`: `.along/dashboard.html` and `.along/DASHBOARD.md` are never tracked.
+18. `untracked_exports`: `.along/dashboard.html`, `.along/DASHBOARD.md` and per-machine `.along/diagnostics/` files (any context depth) are never tracked. Untracking (`git rm --cached`) passes; migration Step 14 untracks diagnostics committed before the directory ignored itself, and `along doctor` reports any that remain.
 19. `code_fence_language`: Every opening Markdown code fence names a language (`text` for plain output).
 20. `portable_links`: Markdown link targets use no `file://` scheme and no backslashes. Inline code and fenced blocks are ignored.
 21. `stable_entry_point`: Files in `scope` (default `README.md`, `docs/*`) never link into `.along/`.

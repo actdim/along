@@ -125,3 +125,8 @@ fails if the engine calls `shutil.move`, `os.remove` or their neighbours directl
 - Runs as a standalone pass on a repository already at the current version, so a root `VISION.md` added later is still healed without re-running the version chain.
 - `VISION.md` files in subfolders are never touched: they belong to their subproject.
 
+### `v4.4.5`: Per-Machine Diagnostics Leave the Index (Step 14)
+- Files under any `.along/diagnostics/` (hook audit, activity traces, heartbeat, circuit breaker) that were committed before the directory ignored itself are removed from the git index with `git rm --cached`; the files stay on disk and the removal is staged for the next commit.
+- Runs on every migration, including an up-to-date repository; a second run finds nothing, outside git it does nothing, `--dry-run` only lists the paths.
+- From then on the `untracked_exports` gate rejects staging them again, and `along doctor` reports any that remain.
+

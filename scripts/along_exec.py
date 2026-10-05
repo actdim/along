@@ -1379,6 +1379,15 @@ def handle_doctor_command(repo_root: str, args: List[str]):
                   + ", ".join(driver_info["pending_resync"]))
             warnings += 1
 
+    # Check per-machine diagnostics committed before the directory ignored itself
+    from alongkit import gitgates
+    tracked_diag = gitgates.tracked_diagnostics(repo_root)
+    if tracked_diag:
+        print(f"[WARN] {len(tracked_diag)} per-machine diagnostics file(s) tracked in git "
+              f"({', '.join(tracked_diag[:3])}{', ...' if len(tracked_diag) > 3 else ''}). "
+              "Run `along migrate --apply` (or `git rm --cached` them) and commit.")
+        warnings += 1
+
     # Check DECISIONS
     dec_dir = os.path.join(along_dir, "DECISIONS")
     dec_file = os.path.join(along_dir, "DECISIONS.md")
