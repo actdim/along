@@ -44,6 +44,24 @@ from alongkit.hooks.predicates import (
     check_mutation_authorization,
 )
 
+#: These fixtures exercise the inquiry lock on sessions not bound to an issue, which the gate
+#: holds only when a repository opts in (`enforce_unbound: true`).
+ENFORCE_UNBOUND = {"enforce_unbound": True}
+
+GATES_OPT_IN = (
+    "version: 1\ngates:\n"
+    "  - id: require_plan_approval\n    enforce_unbound: true\n"
+    "  - id: test_before_stop\n    enforce_unbound: true\n"
+)
+
+
+def write_gates_opt_in(root):
+    """Opt the fixture repository into holding unbound sessions."""
+    rules = os.path.join(root, ".along", "rules")
+    os.makedirs(rules, exist_ok=True)
+    with open(os.path.join(rules, "gates.yaml"), "w", encoding="utf-8") as handle:
+        handle.write(GATES_OPT_IN)
+
 
 class TestInquiryGatePredicate(unittest.TestCase):
     """Hermetic unit tests for check_mutation_authorization predicate."""
@@ -66,7 +84,7 @@ class TestInquiryGatePredicate(unittest.TestCase):
                 workspace_root=self.temp_dir,
                 runtime="generic",
             )
-            result = check_mutation_authorization(event, self.temp_dir)
+            result = check_mutation_authorization(event, self.temp_dir, options=ENFORCE_UNBOUND)
             self.assertIsNone(result, f"Expected {tool} to be allowed in inquiry phase")
 
     def test_safe_read_commands_allowed_in_inquiry_phase(self):
@@ -79,7 +97,7 @@ class TestInquiryGatePredicate(unittest.TestCase):
                 workspace_root=self.temp_dir,
                 runtime="generic",
             )
-            result = check_mutation_authorization(event, self.temp_dir)
+            result = check_mutation_authorization(event, self.temp_dir, options=ENFORCE_UNBOUND)
             self.assertIsNone(result, f"Expected '{cmd}' to be allowed in inquiry phase")
 
     def test_brain_and_planning_artifacts_allowed_in_inquiry_phase(self):
@@ -100,7 +118,7 @@ class TestInquiryGatePredicate(unittest.TestCase):
                 workspace_root=self.temp_dir,
                 runtime="generic",
             )
-            result = check_mutation_authorization(event, self.temp_dir)
+            result = check_mutation_authorization(event, self.temp_dir, options=ENFORCE_UNBOUND)
             self.assertIsNone(result, f"Expected '{target}' to be writable in inquiry phase")
 
     def test_repository_source_mutation_prompts_ask_in_antigravity(self):
@@ -113,7 +131,7 @@ class TestInquiryGatePredicate(unittest.TestCase):
             workspace_root=self.temp_dir,
             runtime="antigravity",
         )
-        result = check_mutation_authorization(event, self.temp_dir)
+        result = check_mutation_authorization(event, self.temp_dir, options=ENFORCE_UNBOUND)
         self.assertIsInstance(result, GateResult)
         self.assertEqual(result.decision, GateDecision.ASK)
         self.assertIn("require-plan-approval", result.reason or "")
@@ -129,13 +147,13 @@ class TestInquiryGatePredicate(unittest.TestCase):
                 workspace_root=self.temp_dir,
                 runtime=r_name,
             )
-            result = check_mutation_authorization(event, self.temp_dir)
+            result = check_mutation_authorization(event, self.temp_dir, options=ENFORCE_UNBOUND)
             self.assertIsInstance(result, str)
             self.assertIn("require-plan-approval", result)
 
     def test_mutating_shell_command_blocked_in_inquiry_phase(self):
         session.set_session_phase(self.temp_dir, "inquiry", plan_approved=False)
-        cmd = "npm run build"
+        cmd = "rm -rf build"
         event = HookEvent(
             event_type=HookEventType.PRE_TOOL_USE,
             tool_name="run_command",
@@ -143,7 +161,7 @@ class TestInquiryGatePredicate(unittest.TestCase):
             workspace_root=self.temp_dir,
             runtime="claude",
         )
-        result = check_mutation_authorization(event, self.temp_dir)
+        result = check_mutation_authorization(event, self.temp_dir, options=ENFORCE_UNBOUND)
         self.assertIsInstance(result, str)
         self.assertIn("require-plan-approval", result)
 
@@ -158,13 +176,13 @@ class TestInquiryGatePredicate(unittest.TestCase):
             runtime="claude",
         )
         # Blocked before approval
-        self.assertIsNotNone(check_mutation_authorization(event, self.temp_dir))
+        self.assertIsNotNone(check_mutation_authorization(event, self.temp_dir, options=ENFORCE_UNBOUND))
 
         # Approve plan
         session.approve_plan(self.temp_dir)
 
         # Allowed after approval
-        self.assertIsNone(check_mutation_authorization(event, self.temp_dir))
+        self.assertIsNone(check_mutation_authorization(event, self.temp_dir, options=ENFORCE_UNBOUND))
 
 
 class TestHookEngineInquiryIntegration(unittest.TestCase):
@@ -174,6 +192,7 @@ class TestHookEngineInquiryIntegration(unittest.TestCase):
         self.temp_dir = tempfile.mkdtemp(prefix="along-engine-inquiry-")
         os.makedirs(os.path.join(self.temp_dir, ".along", "ISSUES"), exist_ok=True)
         os.makedirs(os.path.join(self.temp_dir, ".along", ".session"), exist_ok=True)
+        write_gates_opt_in(self.temp_dir)
 
     def tearDown(self):
         shutil.rmtree(self.temp_dir, ignore_errors=True)

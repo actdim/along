@@ -1,0 +1,12 @@
+# Repository overrides of the built-in gate catalogue (alongkit/hooks/default_gates.yaml).
+# Repo-owned: `along rules attach` never rewrites this file.
+version: 1
+
+gates:
+  # AGENTS.md requires an approved plan before source edits and a test run before a turn
+  # ends; hold sessions to that even before they are bound to an issue.
+  - id: require_plan_approval
+    enforce_unbound: true
+
+  - id: test_before_stop
+    enforce_unbound: true

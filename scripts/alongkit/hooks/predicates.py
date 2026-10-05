@@ -176,7 +176,7 @@ def get_activity_trace_path(repo_root: str, key: Optional[str] = None) -> str:
     Sessions must not see each other's edits and test runs
     [bug--activity-trace-shared-across-sessions].
     """
-    diag = os.path.join(repo.state_dir(repo_root), "diagnostics")
+    diag = repo.diagnostics_dir(repo_root)
     if key:
         return os.path.join(diag, "activity", f"{key}.json")
     return os.path.join(diag, "activity_trace.json")
@@ -207,7 +207,13 @@ def save_activity_trace(repo_root: str, data: Dict[str, Any], key: Optional[str]
 
 
 def record_tool_activity(event: HookEvent, repo_root: str) -> None:
-    """Record file modifications and test runs to track lifecycle state."""
+    """Record file modifications and test runs to track lifecycle state.
+
+    Called by the engine only for events the gates allowed. An edit counts on PostToolUse,
+    once the tool succeeded, so a write a gate (or the user) rejected is never attributed
+    to the session; a test run counts on PreToolUse, after the gates let the command
+    through. See [bug--hook-activation-and-gate-deadlock].
+    """
     if not repo_root:
         return
 
@@ -225,7 +231,7 @@ def record_tool_activity(event: HookEvent, repo_root: str) -> None:
     # Track file edits: repository files outside .along/ (agent state is not source), plus the
     # lifecycle hooks in .along/scripts/ [feat--rule-pack-protection-gate].
     if event.tool_name in ("write_to_file", "write_file", "replace_file_content", "edit_file", "patch_file", "create_file"):
-        if event.event_type != HookEventType.PRE_TOOL_USE:
+        if event.event_type != HookEventType.POST_TOOL_USE:
             return
         rel = _repo_relative(_extract_target_file(event), repo_root)
         if rel and is_source_edit(rel):
@@ -251,9 +257,20 @@ def record_tool_activity(event: HookEvent, repo_root: str) -> None:
 
 
 def _repo_relative(target: str, repo_root: str) -> Optional[str]:
-    """POSIX path of `target` relative to `repo_root`, or None when outside it."""
+    """POSIX path of `target` relative to `repo_root`, or None when outside it.
+
+    A path inside the root's state directory comes back as `.along/...` even when that
+    directory lives elsewhere (a declared root such as `.local/.along/`), so state paths
+    match the same patterns wherever the state is kept.
+    """
     if not target:
         return None
+    abs_target = os.path.normpath(target if os.path.isabs(target) else os.path.join(repo_root, target))
+    sdir = os.path.normpath(repo.state_dir(repo_root))
+    if os.path.normcase(sdir) != os.path.normcase(os.path.normpath(os.path.join(repo_root, repo.STATE_DIR))) \
+            and repo.is_within(abs_target, sdir):
+        inner = repo.normalize_posix(os.path.relpath(abs_target, sdir))
+        return repo.STATE_DIR if inner == "." else f"{repo.STATE_DIR}/{inner}"
     if os.path.isabs(target):
         try:
             rel = os.path.relpath(target, repo_root)
@@ -410,21 +427,15 @@ def check_doc_manual_lock(event: HookEvent, repo_root: str, **kwargs: Any) -> Op
     if not target:
         return None
 
-    if os.path.isabs(target):
-        try:
-            rel_target = os.path.relpath(target, repo_root)
-            if rel_target.startswith("..") or os.path.isabs(rel_target):
-                return None
-        except ValueError:
-            return None
-    else:
-        rel_target = target
+    rel_target = _repo_relative(target, repo_root)
+    if rel_target is None:
+        return None
 
     norm_rel = repo.normalize_posix(rel_target).lstrip("/")
     if not (norm_rel.startswith("docs/") or norm_rel.startswith(".along/")):
         return None
 
-    abs_target = os.path.normpath(os.path.join(repo_root, rel_target))
+    abs_target = os.path.normpath(target if os.path.isabs(target) else os.path.join(repo_root, target))
     if not os.path.isfile(abs_target):
         return None
 
@@ -558,8 +569,25 @@ def check_ai_coauthor(event: HookEvent, repo_root: str, **kwargs: Any) -> Option
     )
 
 
-def check_mutation_authorization(event: HookEvent, repo_root: str, **kwargs: Any) -> Optional[Any]:
-    """Intercept file mutations and shell commands outside execution phase without plan approval."""
+def is_unbound(repo_root: str, key: Optional[str]) -> bool:
+    """True when the agent session is not bound to an issue (no binding, no runner slug)."""
+    _slug, how = session.resolve_active_session(repo_root, key)
+    return how not in ("binding", "env", "elsewhere")
+
+
+def _enforce_unbound(options: Optional[Dict[str, Any]]) -> bool:
+    """Gate option `enforce_unbound`: also hold sessions not bound to an issue (default off)."""
+    return bool((options or {}).get("enforce_unbound", False))
+
+
+def check_mutation_authorization(event: HookEvent, repo_root: str, options: Optional[Dict[str, Any]] = None,
+                                 **kwargs: Any) -> Optional[Any]:
+    """Intercept file mutations and shell commands outside execution phase without plan approval.
+
+    Sessions not bound to an issue are not held unless the repository sets
+    `enforce_unbound: true` for this gate; read-only and verification commands (build,
+    test, lint, typecheck) pass in every phase. See [bug--hook-activation-and-gate-deadlock].
+    """
     if event.event_type != HookEventType.PRE_TOOL_USE:
         return None
 
@@ -572,7 +600,8 @@ def check_mutation_authorization(event: HookEvent, repo_root: str, **kwargs: Any
         cmd = _extract_command(event).strip()
         if not cmd:
             return None
-        if shellparse.is_read_only_command(cmd) or shellparse.is_along_state_command(cmd):
+        if shellparse.is_read_only_command(cmd) or shellparse.is_along_state_command(cmd) \
+                or shellparse.is_verification_command(cmd):
             return None
 
     # Check file modification tools
@@ -581,16 +610,10 @@ def check_mutation_authorization(event: HookEvent, repo_root: str, **kwargs: Any
         if not target or not repo_root:
             return None
 
-        # Check if outside repository root (e.g. brain artifacts, temporary directories)
-        if os.path.isabs(target):
-            try:
-                rel_target = os.path.relpath(target, repo_root)
-                if rel_target.startswith("..") or os.path.isabs(rel_target):
-                    return None
-            except ValueError:
-                return None
-        else:
-            rel_target = target
+        # Outside the repository root (brain artifacts, temporary directories): not ours.
+        rel_target = _repo_relative(target, repo_root)
+        if rel_target is None:
+            return None
 
         # Check whitelisted session/planning/diagnostics paths
         if _matches_pattern(rel_target, list(MUTATION_WHITELIST_PATTERNS)):
@@ -601,6 +624,8 @@ def check_mutation_authorization(event: HookEvent, repo_root: str, **kwargs: Any
 
     # Non-whitelisted file mutation or shell command. Verify this session's phase and approval.
     key = event_session_key(event)
+    if not _enforce_unbound(options) and is_unbound(repo_root, key):
+        return None
     slug, how = session.resolve_active_session(repo_root, key)
     approved = session.is_plan_approved(repo_root, slug=slug, key=key)
     phase = session.get_session_phase(repo_root, slug=slug, key=key)
@@ -651,17 +676,10 @@ def check_active_issue(event: HookEvent, repo_root: str, exclude_paths: Optional
         "CHANGELOG.md",
     ]
 
-    if os.path.isabs(target):
-        try:
-            rel_target = os.path.relpath(target, repo_root)
-            if rel_target.startswith("..") or os.path.isabs(rel_target):
-                # Outside repository root (e.g. brain artifacts, temp files)
-                return None
-        except ValueError:
-            # Different drive on Windows: target is outside repository root
-            return None
-    else:
-        rel_target = target
+    # Outside the repository root (brain artifacts, temp files, another drive): not ours.
+    rel_target = _repo_relative(target, repo_root)
+    if rel_target is None:
+        return None
 
     if _matches_pattern(rel_target, excludes):
         return None
@@ -791,12 +809,24 @@ def check_team_reviews_before_stop(event: HookEvent, repo_root: str, **kwargs: A
     )
 
 
-def check_test_before_stop(event: HookEvent, repo_root: str, **kwargs: Any) -> Optional[str]:
-    """Ensure automated tests were run after code modifications before stopping turn."""
+def check_test_before_stop(event: HookEvent, repo_root: str, options: Optional[Dict[str, Any]] = None,
+                           **kwargs: Any) -> Optional[str]:
+    """Ensure automated tests were run after code modifications before stopping turn.
+
+    Quiet for sessions not bound to an issue (unless `enforce_unbound: true`) and while the
+    circuit breaker blocks commands, since no test could run then.
+    """
     if not repo_root:
         return None
 
-    trace = load_activity_trace(repo_root, event_session_key(event))
+    key = event_session_key(event)
+    if not _enforce_unbound(options) and is_unbound(repo_root, key):
+        return None
+    from .. import circuit
+    if circuit.get_breaker_state(repo_root)[0] == circuit.CircuitState.TRIPPED:
+        return None
+
+    trace = load_activity_trace(repo_root, key)
     edit_time = trace.get("last_edit_time")
     test_time = trace.get("last_test_time")
 
@@ -929,14 +959,20 @@ def check_entity_reference_integrity(event: HookEvent, repo_root: str, **kwargs:
 
 
 def subproject_context(repo_root: str, rel_target: str) -> Optional[str]:
-    """Directory of the nearest `.along/` below `repo_root` that owns `rel_target`, or None."""
+    """Directory of the nearest Along context below `repo_root` that owns `rel_target`, or None.
+
+    A `.along/` holding only hook output is not a context, and the directory a declared root
+    keeps its state in belongs to the declaring context, not to a subproject of its own.
+    """
     abs_target = os.path.normpath(os.path.join(repo_root, rel_target))
-    sdir = repo.find_state_dir(os.path.dirname(abs_target))
-    if not sdir:
+    found = repo.find_context(os.path.dirname(abs_target))
+    if not found:
         return None
-    ctx = os.path.dirname(os.path.abspath(sdir))
+    ctx, sdir = found
     root = os.path.abspath(repo_root)
-    if os.path.normcase(ctx) == os.path.normcase(root):
+    if os.path.normcase(os.path.abspath(ctx)) == os.path.normcase(root):
+        return None
+    if os.path.normcase(os.path.abspath(sdir)) == os.path.normcase(os.path.abspath(repo.state_dir(root))):
         return None
     try:
         inside = not os.path.relpath(ctx, root).startswith("..")
@@ -1014,16 +1050,9 @@ def check_subproject_boundary(event: HookEvent, repo_root: str, **kwargs: Any) -
                     f"'parent: <root issue key>' of the umbrella issue this session is bound to."
                 )
 
-    if os.path.isabs(target):
-        try:
-            rel = os.path.relpath(target, repo_root)
-            if rel.startswith(".."):
-                return None
-            rel_path = repo.normalize_posix(rel)
-        except ValueError:
-            return None
-    else:
-        rel_path = repo.normalize_posix(target)
+    rel_path = rel
+    if rel_path is None:
+        return None
 
     # If writing directly to root .along/ but the path indicates working inside a subproject
     if rel_path.startswith(".along/"):
@@ -1031,10 +1060,12 @@ def check_subproject_boundary(event: HookEvent, repo_root: str, **kwargs: Any) -
         root_norm = repo.normalize_posix(repo_root)
         if cwd != root_norm and cwd.startswith(root_norm + "/"):
             subpath = cwd[len(root_norm) + 1:]
-            # Check if subproject has manifest
+            # Check if subproject has manifest; the root's own (declared) state dir is no subproject.
             sub_along = os.path.join(cwd, ".along")
             sub_pkg = os.path.join(cwd, "package.json")
-            if os.path.isdir(sub_along) or os.path.isfile(sub_pkg):
+            own_state = os.path.normcase(os.path.abspath(sub_along)) == \
+                os.path.normcase(os.path.abspath(repo.state_dir(repo_root)))
+            if not own_state and (repo.is_along_state_dir(sub_along) or os.path.isfile(sub_pkg)):
                 return (
                     f"Subproject Boundary Violation [gate: subproject-boundary]: "
                     f"Cannot write to root '{rel_path}' while working inside subproject '{subpath}'. "

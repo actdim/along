@@ -66,4 +66,4 @@
 - [x] `(bug)` [wrap-zero-byte-audit-unscoped](ISSUES/done/bug--wrap-zero-byte-audit-unscoped.md)
 - [x] `(bug)` [windows-hook-fail-open](ISSUES/done/bug--windows-hook-fail-open.md)
 - [x] `(bug)` [unconfigured-test-hook-reports-pass](ISSUES/done/bug--unconfigured-test-hook-reports-pass.md)
-<!-- 179 older completed issue(s) archived in .along/ISSUES/done/ -->
+<!-- 180 older completed issue(s) archived in .along/ISSUES/done/ -->

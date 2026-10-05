@@ -277,6 +277,33 @@ def _sed_is_read_only(args: List[str]) -> bool:
     return not any(_SED_WRITE.search(s) for s in scripts)
 
 
+_AWK_NAMES = frozenset({"awk", "gawk", "mawk", "nawk"})
+#: An awk program that runs commands, or prints into a file or a pipe.
+_AWK_WRITE = re.compile(r"\bsystem\s*\(|\|\s*getline\b|\bprintf?\b[^;{}]*?(?:>|\|)")
+_AWK_OPTS_WITH_VALUE = frozenset({"-F", "-v", "--field-separator", "--assign"})
+
+
+def _awk_is_read_only(args: List[str]) -> bool:
+    """`awk` without in-place editing, program files, or writing/command-running programs."""
+    program = None
+    i = 0
+    while i < len(args):
+        arg = args[i]
+        if arg in ("-i", "--include", "-f", "--file", "-E", "--exec") or arg.startswith(
+                ("--include=", "--file=", "-f", "--exec=")):
+            return False
+        if arg in _AWK_OPTS_WITH_VALUE:
+            i += 2
+            continue
+        if arg.startswith("-") and program is None:
+            i += 1
+            continue
+        if program is None:
+            program = arg
+        i += 1
+    return program is not None and not _AWK_WRITE.search(program)
+
+
 def _segment_is_read_only(segment: str) -> bool:
     if _has_write_redirect(segment):
         return False
@@ -300,6 +327,8 @@ def _segment_is_read_only(segment: str) -> bool:
         return True
     if first == "sed":
         return _sed_is_read_only(tokens[1:])
+    if first in _AWK_NAMES:
+        return _awk_is_read_only(tokens[1:])
     if first == "find":
         return not any(t in _FIND_WRITE for t in rest)
     if first == "sort":
@@ -390,6 +419,72 @@ def is_read_only_command(command: str) -> bool:
     if segments is None:
         return False
     return all(_segment_is_read_only(seg) for seg in segments)
+
+
+#: Flags that turn a checker into a rewriter.
+_FIX_FLAGS = frozenset({"--fix", "--fix-only", "--write", "-w", "--unsafe-fixes", "--allow-dirty",
+                        "--allow-staged"})
+#: Package-script names that verify (`npm run <name>`): build output is not source.
+_SCRIPT_VERIFY = frozenset({"build", "test", "lint", "typecheck", "type-check", "check", "tsc",
+                            "test:quiet", "test:ci", "verify"})
+
+
+def _segment_is_verification(segment: str) -> bool:
+    """A build, test, lint or typecheck run: writes build output, never sources."""
+    if _has_write_redirect(segment):
+        return False
+    tokens = _tokens(segment)
+    if not tokens:
+        return False
+    tokens = _strip_wrappers(tokens)
+    if not tokens:
+        return False
+    first = tokens[0].lower()
+    if first.endswith(".exe"):
+        first = first[:-4]
+    rest = [t.lower() for t in tokens[1:]]
+    if any(t in _FIX_FLAGS or t.startswith("--fix=") for t in rest):
+        return False
+    sub = rest[0] if rest else ""
+    if first == "dotnet":
+        return sub in ("build", "test", "msbuild")
+    if first == "cargo":
+        return sub in ("build", "check", "test", "clippy", "doc")
+    if first == "go":
+        return sub in ("build", "vet", "test")
+    if first in ("npm", "pnpm", "yarn", "bun"):
+        name = rest[1] if sub == "run" and len(rest) > 1 else sub
+        return name in _SCRIPT_VERIFY
+    if first in ("tsc", "vue-tsc", "mypy", "pyright", "eslint", "pytest", "vitest", "jest"):
+        # Snapshot updates rewrite test files.
+        return first not in ("vitest", "jest") or ("-u" not in rest and "--updatesnapshot" not in rest)
+    if first == "ruff":
+        return sub == "check"
+    if first in ("mvn", "mvnw", "./mvnw"):
+        return bool(rest) and all(t in ("test", "verify", "compile", "-q", "--quiet", "-b", "--batch-mode")
+                                  for t in rest)
+    if first in ("gradle", "gradlew", "./gradlew"):
+        return bool(rest) and all(t in ("test", "build", "check", "-q", "--quiet") for t in rest)
+    sub_along = _along_subcommand(tokens)
+    if sub_along is not None:
+        return sub_along.split(" ", 1)[0] in ("build", "test")
+    if _is_python(first) and rest:
+        script = rest[0].replace("\\", "/")
+        return script.endswith((".along/scripts/build.py", ".along/scripts/test.py"))
+    return False
+
+
+def is_verification_command(command: str) -> bool:
+    """True when every segment is read-only or a verification run (build, test, lint, typecheck).
+
+    These change no sources, so the plan gate lets them through in every session phase;
+    test-before-stop could otherwise demand a test run the plan gate forbids.
+    See [bug--hook-activation-and-gate-deadlock].
+    """
+    segments = split_segments(command or "")
+    if not segments:
+        return False
+    return all(_segment_is_read_only(seg) or _segment_is_verification(seg) for seg in segments)
 
 
 def classify(command: str) -> Tuple[bool, List[str]]:

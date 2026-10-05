@@ -185,7 +185,7 @@ class TestStatefulPredicates(unittest.TestCase):
     def test_check_test_before_stop(self):
         # Record file edit
         edit_event = HookEvent(
-            event_type=HookEventType.PRE_TOOL_USE,
+            event_type=HookEventType.POST_TOOL_USE,
             tool_name="write_to_file",
             tool_args={"TargetFile": "src/app.py", "CodeContent": "x = 2"},
             workspace_root=self.tmp,
@@ -197,7 +197,7 @@ class TestStatefulPredicates(unittest.TestCase):
             event_type=HookEventType.STOP,
             workspace_root=self.tmp,
         )
-        err = check_test_before_stop(stop_event, repo_root=self.tmp)
+        err = check_test_before_stop(stop_event, repo_root=self.tmp, options={"enforce_unbound": True})
         self.assertIsNotNone(err)
         self.assertIn("test-before-stop", err or "")
 
@@ -211,7 +211,7 @@ class TestStatefulPredicates(unittest.TestCase):
         record_tool_activity(test_event, repo_root=self.tmp)
 
         # Stop event after tests ran -> allowed
-        err = check_test_before_stop(stop_event, repo_root=self.tmp)
+        err = check_test_before_stop(stop_event, repo_root=self.tmp, options={"enforce_unbound": True})
         self.assertIsNone(err)
 
     def test_check_fast_retrieval_blocks_docs_and_along_directories(self):

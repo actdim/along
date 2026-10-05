@@ -45,7 +45,7 @@ import os
 import shutil
 import subprocess
 import sys
-from typing import Iterable, List, Sequence
+from typing import Iterable, List, Optional, Sequence
 
 #: Runtime dependencies of the engines. `pyproject.toml` is the source of truth;
 #: this list mirrors it for the direct-invocation bootstrap and is asserted equal
@@ -149,14 +149,21 @@ def _build_venv(uv: str, venv_dir: str, dependencies: Sequence[str]) -> bool:
     return _venv_is_current(venv_dir, dependencies)
 
 
-def _reexec(command: List[str], missing_exit_code: int, guard: str = GUARD_ENV) -> None:
-    """Run `command` with the `guard` marker set and exit with its return code."""
+def _reexec(command: List[str], missing_exit_code: int, guard: str = GUARD_ENV,
+            stdin_data: Optional[bytes] = None) -> None:
+    """Run `command` with the `guard` marker set and exit with its return code.
+
+    `stdin_data` replays input this process already consumed (a hook payload).
+    """
     env = dict(os.environ)
     env[guard] = "1"
     env.setdefault("PYTHONIOENCODING", "utf-8")
     env.setdefault("PYTHONUTF8", "1")
     try:
-        completed = subprocess.run(command, env=env)
+        if stdin_data is None:
+            completed = subprocess.run(command, env=env)
+        else:
+            completed = subprocess.run(command, env=env, input=stdin_data)
     except OSError as exc:
         print(f"[Error] could not start {command[0]}: {exc}\n{_INSTALL_HINT}", file=sys.stderr)
         sys.exit(missing_exit_code)
@@ -165,7 +172,8 @@ def _reexec(command: List[str], missing_exit_code: int, guard: str = GUARD_ENV) 
 
 def ensure_deps(dependencies: Sequence[str] = RUNTIME_DEPENDENCIES,
                 modules: Sequence[str] = ("ruamel.yaml",),
-                missing_exit_code: int = 2) -> None:
+                missing_exit_code: int = 2, quiet: bool = False,
+                stdin_data: Optional[bytes] = None) -> None:
     """Guarantee `modules` are importable, re-executing under `uv run` if they are not.
 
     Returns normally when the dependencies are already present. Otherwise the current
@@ -173,7 +181,9 @@ def ensure_deps(dependencies: Sequence[str] = RUNTIME_DEPENDENCIES,
     `uv` is unavailable, exits with `missing_exit_code` (2 by default) and an actionable
     message: a missing dependency is a setup error, not a crash to be reported as an
     Along defect. Runtime hooks pass 0, because hosts such as Claude Code read exit 2
-    as "block the tool", and a setup fault must never block the agent.
+    as "block the tool", and a setup fault must never block the agent. They also pass
+    `quiet` (hook stderr lands in every tool result, so progress notes are noise) and the
+    stdin payload they already read, which the re-executed process needs again.
     """
     if have_deps(modules):
         # The marker guarded the re-exec that got us here; descendants start clean.
@@ -193,25 +203,29 @@ def ensure_deps(dependencies: Sequence[str] = RUNTIME_DEPENDENCIES,
     # re-resolves the dependencies on every call (every hook, every tool use).
     venv_dir = runtime_venv_dir()
     if _venv_is_current(venv_dir, dependencies):
-        _reexec([venv_python(venv_dir), script, *sys.argv[1:]], missing_exit_code)
+        _reexec([venv_python(venv_dir), script, *sys.argv[1:]], missing_exit_code,
+                stdin_data=stdin_data)
 
     uv = shutil.which("uv")
     if not uv:
         print(f"[Error] {MissingDependency(modules[0])}", file=sys.stderr)
         sys.exit(missing_exit_code)
 
-    print(f"-> [Along] building cached runtime {venv_dir} (one-time): {' '.join(dependencies)}",
-          file=sys.stderr)
+    if not quiet:
+        print(f"-> [Along] building cached runtime {venv_dir} (one-time): {' '.join(dependencies)}",
+              file=sys.stderr)
     if _build_venv(uv, venv_dir, dependencies):
-        _reexec([venv_python(venv_dir), script, *sys.argv[1:]], missing_exit_code)
+        _reexec([venv_python(venv_dir), script, *sys.argv[1:]], missing_exit_code,
+                stdin_data=stdin_data)
 
     command: List[str] = [uv, "run", "--quiet"]
     for spec in dependencies:
         command += ["--with", spec]
     command += [script, *sys.argv[1:]]
-    print(f"-> [Along] resolving dependencies via uv: {' '.join(dependencies)}",
-          file=sys.stderr)
-    _reexec(command, missing_exit_code)
+    if not quiet:
+        print(f"-> [Along] resolving dependencies via uv: {' '.join(dependencies)}",
+              file=sys.stderr)
+    _reexec(command, missing_exit_code, stdin_data=stdin_data)
 
 
 def ensure_project_env(project_root: str, modules: Sequence[str]) -> None:

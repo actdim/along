@@ -67,10 +67,6 @@ class HookEngine:
                 "audit",
             )
 
-        # Track session activity (edits and test runs)
-        if effective_root:
-            record_tool_activity(event, effective_root)
-
         for gate in self.gates:
             # Propagate effective repo_root to declarative gates if needed
             if hasattr(gate, "repo_root") and getattr(gate, "repo_root") is None:
@@ -96,6 +92,11 @@ class HookEngine:
                     # Shadow mode: print warning to stderr and continue
                     sys.stderr.write(f"[ALONG HOOK: SHADOW] Would block execution ({result.decision.value}): {result.reason}\n")
                     sys.stderr.flush()
+
+        # Track session activity (edits and test runs) only for what the gates let through:
+        # a rejected write or test run is not the session's. [bug--hook-activation-and-gate-deadlock]
+        if effective_root:
+            record_tool_activity(event, effective_root)
 
         return GateResult(decision=GateDecision.ALLOW, exit_code=0)
 

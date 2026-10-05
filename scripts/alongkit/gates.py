@@ -427,7 +427,7 @@ def session_edited_files(repo_root: str) -> set:
     Union of `edited_files` over the shared and per-session activity traces in
     `.along/diagnostics/`.
     """
-    diag = os.path.join(repo.state_dir(repo_root), "diagnostics")
+    diag = repo.diagnostics_dir(repo_root)
     traces = [os.path.join(diag, "activity_trace.json")]
     activity = os.path.join(diag, "activity")
     if os.path.isdir(activity):

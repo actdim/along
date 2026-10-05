@@ -18,8 +18,10 @@ if __name__ == "__main__":
     )
 
 
+import json
 import os
-from typing import Iterable, Iterator, List, Optional
+import re
+from typing import Iterable, Iterator, List, Optional, Tuple
 
 # A directory is a repository root when it carries any of these markers.
 # The union of what the five former copies checked, so no caller loses a root it
@@ -31,6 +33,138 @@ ROOT_MARKERS: tuple = (".along", ".git", "AGENTS.md")
 # Legacy state directory name, still readable for repositories initialized before v2.0.0.
 STATE_DIR = ".along"
 LEGACY_STATE_DIR = ".agents"
+
+#: What the runtime hooks write into a `.along/` on their own. A `.along/` holding nothing
+#: else is hook output left behind in some directory, not an Along context, so it never
+#: activates the gates and never makes a subproject. See [bug--hook-activation-and-gate-deadlock].
+RUNTIME_ONLY_ENTRIES: frozenset = frozenset({"diagnostics", ".gitignore"})
+
+#: Along state inside a legacy `.agents/`; that name is also a third-party convention
+#: (`.agents/skills/`), so only these entries make it an Along context.
+LEGACY_STATE_ENTRIES: tuple = ("ISSUES.md", "ISSUES", "DECISIONS.md", "DECISIONS", "VISION.md",
+                               "HISTORY.md", "GLOSSARY.md")
+
+#: Root pointer in a directory's AGENTS.md: the Along state of that directory lives in
+#: `<dir>/<relpath>/.along/` (for example a nested personal repository).
+ROOT_POINTER_RE = re.compile(r"<!--\s*along-root:\s*(.+?)\s*-->", re.IGNORECASE)
+
+#: Bytes of AGENTS.md searched for the root pointer.
+_POINTER_SCAN_BYTES = 65536
+
+
+def global_along_dir() -> str:
+    """The per-user Along directory (`~/.along`: install, runtime venv, global config)."""
+    return os.path.join(os.path.expanduser("~"), ".along")
+
+
+def _same_path(a: str, b: str) -> bool:
+    return os.path.normcase(os.path.abspath(a)) == os.path.normcase(os.path.abspath(b))
+
+
+def is_along_state_dir(path: str) -> bool:
+    """True when `path` is an Along state directory, not hook output or a foreign `.agents/`.
+
+    An empty `.along/` counts (someone created it on purpose); one holding only
+    RUNTIME_ONLY_ENTRIES does not. The global `~/.along` is never a context.
+    """
+    if not os.path.isdir(path) or _same_path(path, global_along_dir()):
+        return False
+    try:
+        entries = os.listdir(path)
+    except OSError:
+        return False
+    if not entries:
+        return True
+    if os.path.basename(os.path.normpath(path)) == LEGACY_STATE_DIR:
+        return any(e in LEGACY_STATE_ENTRIES for e in entries)
+    return any(e not in RUNTIME_ONLY_ENTRIES for e in entries)
+
+
+def _pointer_from_agents_md(directory: str) -> Optional[str]:
+    path = os.path.join(directory, "AGENTS.md")
+    if not os.path.isfile(path):
+        return None
+    try:
+        with open(path, "r", encoding="utf-8", errors="replace") as handle:
+            match = ROOT_POINTER_RE.search(handle.read(_POINTER_SCAN_BYTES))
+    except OSError:
+        return None
+    if not match:
+        return None
+    return os.path.normpath(os.path.join(directory, match.group(1).strip().strip("'\"`")))
+
+
+def configured_context_roots() -> List[Tuple[str, str]]:
+    """`context_roots` of `~/.along/config.json` as (workspace, root) absolute pairs.
+
+    `[{"workspace": "<dir>", "root": "<dir holding .along/>"}]`; a relative root resolves
+    against its workspace. A personal declaration, for repositories whose shared files
+    must not mention Along.
+    """
+    path = os.path.join(global_along_dir(), "config.json")
+    try:
+        with open(path, "r", encoding="utf-8") as handle:
+            data = json.load(handle)
+    except (OSError, ValueError):
+        return []
+    entries = data.get("context_roots") if isinstance(data, dict) else None
+    pairs: List[Tuple[str, str]] = []
+    for item in entries if isinstance(entries, list) else []:
+        if not isinstance(item, dict) or not item.get("workspace") or not item.get("root"):
+            continue
+        workspace = os.path.abspath(os.path.expanduser(str(item["workspace"])))
+        root = os.path.normpath(os.path.join(workspace, os.path.expanduser(str(item["root"]))))
+        pairs.append((workspace, root))
+    return pairs
+
+
+def declared_root(directory: str) -> Optional[str]:
+    """Directory holding the Along state declared for `directory`, or None.
+
+    Declared by an `<!-- along-root: <relpath> -->` pointer in `<directory>/AGENTS.md` or
+    by `context_roots` in `~/.along/config.json`; it counts only when `<root>/.along/` is
+    an Along state directory.
+    """
+    directory = os.path.abspath(directory)
+    candidates = [_pointer_from_agents_md(directory)]
+    candidates += [root for workspace, root in configured_context_roots() if _same_path(workspace, directory)]
+    for root in candidates:
+        if root and not _same_path(root, directory) and is_along_state_dir(os.path.join(root, STATE_DIR)):
+            return root
+    return None
+
+
+def context_state_dir(directory: str) -> Optional[str]:
+    """The Along state directory that `directory` owns (its own, legacy, or declared), or None."""
+    own = os.path.join(directory, STATE_DIR)
+    if is_along_state_dir(own):
+        return own
+    legacy = os.path.join(directory, LEGACY_STATE_DIR)
+    if is_along_state_dir(legacy):
+        return legacy
+    root = declared_root(directory)
+    return os.path.join(root, STATE_DIR) if root else None
+
+
+def find_context(start_dir: Optional[str] = None) -> Optional[Tuple[str, str]]:
+    """(owner directory, state directory) of the nearest Along context at or above `start_dir`.
+
+    The owner is the directory the context governs: for a declared root it is the directory
+    carrying the declaration, not the directory the state lives in. The walk stops below the
+    home directory: home and its ancestors hold the per-user install, never a project.
+    """
+    cur = os.path.abspath(start_dir or os.getcwd())
+    home = os.path.expanduser("~")
+    while True:
+        if is_within(home, cur):
+            return None
+        sdir = context_state_dir(cur)
+        if sdir:
+            return cur, sdir
+        parent = os.path.dirname(cur)
+        if parent == cur:
+            return None
+        cur = parent
 
 # Where a globally installed copy of the engines may live. Kept in one place so
 # `resolve_tool_script` and the installers agree.
@@ -90,6 +224,11 @@ def _is_within(path: str, root: str) -> bool:
         return False
 
 
+def is_within(path: str, root: str) -> bool:
+    """True when absolute `path` is `root` or lies below it (False across Windows drives)."""
+    return _is_within(os.path.abspath(path), os.path.abspath(root))
+
+
 def find_session_root(cwd: Optional[str] = None, project_dir: Optional[str] = None) -> str:
     """Root a hook evaluates against: the session's project, not the shell's current directory.
 
@@ -106,44 +245,79 @@ def find_session_root(cwd: Optional[str] = None, project_dir: Optional[str] = No
     return find_repo_root(origin)
 
 
+def find_hook_root(cwd: Optional[str] = None, project_dir: Optional[str] = None) -> Optional[str]:
+    """Along root a runtime hook evaluates against, or None when no Along context applies.
+
+    Like `find_session_root`, the session's project wins over the shell cwd; but only an
+    Along context counts (a real `.along/`, or a declared root), never a bare `AGENTS.md`
+    or `.git`, so repositories that never adopted Along are left alone.
+    """
+    origin = os.path.abspath(cwd or os.getcwd())
+    starts = []
+    if project_dir:
+        project = os.path.abspath(project_dir)
+        if os.path.isdir(project) and _is_within(origin, project):
+            starts.append(project)
+    starts.append(origin)
+    for start in starts:
+        found = find_context(start)
+        if found:
+            return found[0]
+    return None
+
+
 def find_state_dir(start_dir: Optional[str] = None) -> Optional[str]:
-    """Nearest existing `.along/` (or legacy `.agents/`) directory, or None.
+    """Nearest Along state directory (`.along/`, legacy `.agents/`, or declared), or None.
 
     This is the nearest-context-boundary lookup: entities belong to the closest
-    state directory, not to the outermost repository.
+    state directory, not to the outermost repository. A `.along/` holding only hook
+    output does not count.
     """
-    cur = os.path.abspath(start_dir or os.getcwd())
-    while True:
-        for name in (STATE_DIR, LEGACY_STATE_DIR):
-            candidate = os.path.join(cur, name)
-            if os.path.isdir(candidate):
-                return candidate
-        parent = os.path.dirname(cur)
-        if parent == cur:
-            return None
-        cur = parent
+    found = find_context(start_dir)
+    return found[1] if found else None
 
 
 def state_dir(repo_root: str) -> str:
-    """Path of the state directory for `repo_root`, preferring an existing legacy one."""
+    """Path of the state directory for `repo_root`: its own, legacy, or declared one.
+
+    Falls back to `<repo_root>/.along` (which may not exist) so callers can create it.
+    """
     primary = os.path.join(repo_root, STATE_DIR)
-    if os.path.isdir(primary):
+    if os.path.isdir(primary) and is_along_state_dir(primary):
         return primary
     legacy = os.path.join(repo_root, LEGACY_STATE_DIR)
-    if os.path.isdir(legacy):
+    if os.path.isdir(legacy) and is_along_state_dir(legacy):
         return legacy
+    root = declared_root(repo_root)
+    if root:
+        return os.path.join(root, STATE_DIR)
     return primary
 
 
+def diagnostics_dir(repo_root: Optional[str]) -> str:
+    """Where per-machine diagnostics of `repo_root` live (not created here).
+
+    `<state>/diagnostics/` when the state directory exists; otherwise a per-workspace
+    directory under `~/.along/diagnostics/workspaces/`, so diagnostics never create a
+    `.along/` in whatever directory a session happens to sit in.
+    """
+    if repo_root:
+        sdir = state_dir(repo_root)
+        if os.path.isdir(sdir):
+            return os.path.join(sdir, "diagnostics")
+    name = re.sub(r"[^A-Za-z0-9._-]+", "-", os.path.abspath(repo_root or os.getcwd())).strip("-")
+    return os.path.join(global_along_dir(), "diagnostics", "workspaces", name[-120:] or "default")
+
+
 def ensure_diagnostics_dir(repo_root: str) -> str:
-    """Create `<state>/diagnostics/` with a `*` .gitignore and return its path.
+    """Create the diagnostics directory (see `diagnostics_dir`) with a `*` .gitignore.
 
     Diagnostics are per-machine runtime state (hook audit, activity traces, heartbeat,
     circuit breaker); tracking them dirties every session and conflicts across branches.
     The directory ignores itself so the user's `.gitignore` is never edited.
     See [bug--activity-trace-shared-across-sessions].
     """
-    path = os.path.join(state_dir(repo_root), "diagnostics")
+    path = diagnostics_dir(repo_root)
     os.makedirs(path, exist_ok=True)
     marker = os.path.join(path, ".gitignore")
     if not os.path.isfile(marker):
@@ -281,6 +455,8 @@ STANDARD_MANIFESTS: tuple = (
 def find_agent_contexts(root: str) -> List[str]:
     """Walk `root` downwards to find all Along agent contexts (directories containing
     .along/, .agents/, or AGENTS.md), respecting IGNORED_DIRS and PROVIDER_DIRS.
+
+    A `.along/` holding only hook output and a foreign `.agents/` do not count.
     """
     root = os.path.abspath(root)
     contexts = []
@@ -290,8 +466,8 @@ def find_agent_contexts(root: str) -> List[str]:
         dirs[:] = [d for d in dirs if d not in ignored and not d.startswith(".")]
 
         has_agents_md = "AGENTS.md" in files
-        has_along_dir = os.path.isdir(os.path.join(current, STATE_DIR))
-        has_legacy_dir = os.path.isdir(os.path.join(current, LEGACY_STATE_DIR))
+        has_along_dir = is_along_state_dir(os.path.join(current, STATE_DIR))
+        has_legacy_dir = is_along_state_dir(os.path.join(current, LEGACY_STATE_DIR))
 
         if has_agents_md or has_along_dir or has_legacy_dir:
             contexts.append(os.path.abspath(current))

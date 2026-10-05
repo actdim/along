@@ -119,7 +119,13 @@ gates:
     allowed_roots: ["../contracts", "../shared-lib"]
     write_scope: ["packages/auth"]
     on_violation: deny      # auto (default) | ask | deny
+  - id: require_plan_approval
+    enforce_unbound: true   # also hold sessions not bound to an issue (default false)
+  - id: test_before_stop
+    enforce_unbound: true
 ```
+
+`enforce_unbound` (`require_plan_approval`, `test_before_stop`): by default these gates hold only agent sessions bound to an issue (`along start <slug>`); unbound sessions fail open. Set it to `true` to hold every session.
 
 
 ### 2.2 Stateful Predicate Handlers (`alongkit.hooks.predicates`)

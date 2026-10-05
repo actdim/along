@@ -257,7 +257,7 @@ def format_escalation_report(anomaly: AnomalyMatch) -> str:
 # ---------------------------------------------------------------------------
 
 def get_circuit_file_path(repo_root: str) -> str:
-    return os.path.join(repo.state_dir(repo_root), "diagnostics", "circuit_breaker.json")
+    return os.path.join(repo.diagnostics_dir(repo_root), "circuit_breaker.json")
 
 
 def load_circuit_state(repo_root: str) -> Dict[str, Any]:
@@ -356,7 +356,7 @@ def run_health_probe(repo_root: str) -> Tuple[bool, List[str]]:
 
     # 2. Check Python syntax of tracked modified files
     # Shared trace plus one per agent session [bug--activity-trace-shared-across-sessions].
-    diag_dir = os.path.join(repo.state_dir(repo_root), "diagnostics")
+    diag_dir = repo.diagnostics_dir(repo_root)
     trace_files = [os.path.join(diag_dir, "activity_trace.json")]
     activity_dir = os.path.join(diag_dir, "activity")
     if os.path.isdir(activity_dir):
@@ -406,7 +406,7 @@ def reset_breaker(repo_root: str, force: bool = False) -> Tuple[bool, str]:
 
 def record_syntax_failure(repo_root: str, file_path: str, error_detail: str) -> Optional[AnomalyMatch]:
     """Track compilation errors per file. Trip Class 5 if >= 2 consecutive failures."""
-    trace_path = os.path.join(repo.state_dir(repo_root), "diagnostics", "syntax_churn.json")
+    trace_path = os.path.join(repo.diagnostics_dir(repo_root), "syntax_churn.json")
     churn_data: Dict[str, Any] = {}
     if os.path.isfile(trace_path):
         try:
@@ -444,7 +444,7 @@ def record_syntax_failure(repo_root: str, file_path: str, error_detail: str) -> 
 
 def record_syntax_success(repo_root: str, file_path: str) -> None:
     """Clear syntax failure count for a file after successful compilation."""
-    trace_path = os.path.join(repo.state_dir(repo_root), "diagnostics", "syntax_churn.json")
+    trace_path = os.path.join(repo.diagnostics_dir(repo_root), "syntax_churn.json")
     if not os.path.isfile(trace_path):
         return
     try:

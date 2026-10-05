@@ -205,7 +205,7 @@ def build_policy(repo_root: str, options: Optional[Dict[str, Any]] = None,
     write_scope: List[str] = []
     if declared_scope:
         write_scope = [canonical(p, root) for p in declared_scope]
-        write_scope.append(canonical(os.path.join(root, ".along")))
+        write_scope.append(canonical(repo.state_dir(root)))
 
     mode = str(opts.get("on_violation", "auto")).strip().lower()
     return ContainmentPolicy(

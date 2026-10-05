@@ -121,7 +121,7 @@ class TestUpdateAndHooksHardening(unittest.TestCase):
         from alongkit import bootstrap
         captured = {}
 
-        def fake_reexec(command, missing_exit_code):
+        def fake_reexec(command, missing_exit_code, **_kwargs):
             captured["command"] = command
             raise SystemExit(0)
 
@@ -276,7 +276,7 @@ class TestUpdateAndHooksHardening(unittest.TestCase):
         """along_hook.py must pass missing_exit_code=0 so a missing ruamel.yaml never blocks a tool."""
         hook_script = os.path.join(os.path.dirname(os.path.dirname(__file__)), "scripts", "along_hook.py")
         source = textio.read_text(hook_script)
-        self.assertIn("ensure_deps(missing_exit_code=0)", source)
+        self.assertIn("ensure_deps(missing_exit_code=0,", source)
 
 
     def test_purge_local_along_hooks_removes_spurious_artifacts(self):

@@ -23,19 +23,64 @@ _HERE = os.path.dirname(os.path.abspath(__file__))
 if _HERE not in sys.path:
     sys.path.insert(0, _HERE)
 
-from alongkit import bootstrap, proc, repo
+from alongkit import bootstrap, hookpreflight, proc, repo
 
-# Fail open: a missing dependency is a setup fault, and exit 2 would block every tool.
-bootstrap.ensure_deps(missing_exit_code=0)
 
-from alongkit.hooks import (
-    HookEvent,
-    HookEventType,
-    HooksConfig,
-    evaluate_event,
-    get_adapter,
-    load_config,
-)
+def _hooks():
+    """The gate pipeline package, after making its dependencies available.
+
+    Loaded lazily: `hookpreflight` answers hooks outside an Along context, and reads inside it,
+    without the dependency bootstrap (which may re-execute this process). The re-executed
+    process gets the stdin payload this one already consumed.
+    """
+    # Fail open: a missing dependency is a setup fault, and exit 2 would block every tool.
+    bootstrap.ensure_deps(missing_exit_code=0, quiet=True, stdin_data=_STDIN_BYTES)
+    import alongkit.hooks as hooks
+    globals().update(
+        HookEvent=hooks.HookEvent,
+        HookEventType=hooks.HookEventType,
+        evaluate_event=hooks.evaluate_event,
+        get_adapter=hooks.get_adapter,
+        load_config=hooks.load_config,
+    )
+    return hooks
+
+
+_STDIN_BYTES: bytes | None = None
+
+
+def _read_stdin() -> str:
+    """The hook payload as text; the raw bytes are kept for a bootstrap re-exec."""
+    global _STDIN_BYTES
+    try:
+        stream = getattr(sys.stdin, "buffer", None)
+        if stream is None:
+            text = sys.stdin.read()
+            _STDIN_BYTES = text.encode("utf-8")
+            return text
+        _STDIN_BYTES = stream.read()
+    except (OSError, ValueError) as exc:
+        sys.stderr.write(f"[Along Hook] Failed to read stdin: {exc}\n")
+        _STDIN_BYTES = b""
+    return _STDIN_BYTES.decode("utf-8", errors="replace")
+
+
+def _preflight_or_load(raw_input: str, runtime: str, event_name: str, repo_root: str | None):
+    """(exit code, response) when hookpreflight answers, else (None, hooks package)."""
+    answer = hookpreflight.preflight(raw_input, runtime, event_name, repo_root=repo_root,
+                                     project_dir=os.environ.get("CLAUDE_PROJECT_DIR"))
+    if answer is not None:
+        return answer, None
+    return None, _hooks()
+
+
+def _emit(answer) -> int:
+    exit_code, response = answer
+    if response:
+        stream = sys.stderr if exit_code != 0 else sys.stdout
+        stream.write(response + "\n")
+        stream.flush()
+    return exit_code
 
 
 _GIT_HOOK_STATUS_TEXT = {
@@ -74,6 +119,9 @@ def _install_git_hooks(args) -> int:
 
 
 def main() -> int:
+    if len(sys.argv) > 1 and sys.argv[1] in ("install", "attribution", "verify", "run"):
+        _hooks()
+
     if len(sys.argv) > 1 and sys.argv[1] == "install":
         parser = argparse.ArgumentParser(
             prog="along hook install",
@@ -263,11 +311,7 @@ def main() -> int:
 
         raw_input = args.payload_opt if args.payload_opt is not None else args.payload
         if raw_input is None:
-            try:
-                raw_input = sys.stdin.read()
-            except (OSError, UnicodeDecodeError) as exc:
-                sys.stderr.write(f"[Along Hook] Failed to read stdin: {exc}\n")
-                raw_input = ""
+            raw_input = _read_stdin()
 
         return _evaluate_and_respond(
             raw_input=raw_input,
@@ -305,11 +349,7 @@ def main() -> int:
     )
     args = parser.parse_args()
 
-    try:
-        raw_input = sys.stdin.read()
-    except (OSError, UnicodeDecodeError) as exc:
-        sys.stderr.write(f"[Along Hook] Failed to read stdin: {exc}\n")
-        raw_input = ""
+    raw_input = _read_stdin()
 
     return _evaluate_and_respond(
         raw_input=raw_input,
@@ -328,6 +368,14 @@ def _evaluate_and_respond(
     mode: str | None = None,
 ) -> int:
     raw_input = raw_input.lstrip("\ufeff")
+
+    # Fail open outside an Along context, and answer workspace reads, before any dependency
+    # is loaded. Only a real .along/ or a declared root activates the gates; a bare AGENTS.md
+    # does not. See [bug--hook-activation-and-gate-deadlock].
+    answer, _ = _preflight_or_load(raw_input, runtime, event_name, repo_root)
+    if answer is not None:
+        return _emit(answer)
+
     adapter = get_adapter(runtime)
 
     try:
@@ -338,30 +386,12 @@ def _evaluate_and_respond(
     event = adapter.parse(raw_input, event_type=event_type)
 
     effective_root = repo_root
-    if not effective_root and event.workspace_root:
-        # The payload cwd is the shell's current directory; anchor on the session's project.
-        effective_root = repo.find_session_root(
-            event.workspace_root, os.environ.get("CLAUDE_PROJECT_DIR")) or event.workspace_root
     if not effective_root:
-        effective_root = repo.find_repo_root()
-
-    # Fail-open check: if workspace does not carry Along protocol, do not block
-    is_along_repo = bool(
-        effective_root and (
-            os.path.isdir(os.path.join(effective_root, ".along"))
-            or os.path.isdir(os.path.join(effective_root, ".agents"))
-            or os.path.isfile(os.path.join(effective_root, "AGENTS.md"))
-        )
-    )
-    if not is_along_repo:
-        from alongkit.hooks import GateDecision, GateResult
-        exit_code, response_str = adapter.format_response(
-            GateResult(decision=GateDecision.ALLOW, exit_code=0)
-        )
-        if response_str:
-            sys.stdout.write(response_str + "\n")
-            sys.stdout.flush()
-        return 0
+        # The payload cwd is the shell's current directory; anchor on the session's project.
+        effective_root = repo.find_hook_root(
+            event.workspace_root or os.getcwd(), os.environ.get("CLAUDE_PROJECT_DIR"))
+    if not effective_root:
+        return _emit(hookpreflight.allow_response(runtime, event_name))
 
     if not event.workspace_root and effective_root:
         event.workspace_root = effective_root

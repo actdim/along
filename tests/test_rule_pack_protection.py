@@ -170,13 +170,14 @@ class TestLifecycleHookEditsAreSource(unittest.TestCase):
 
     def _edit(self, target: str) -> None:
         predicates.record_tool_activity(HookEvent(
-            event_type=HookEventType.PRE_TOOL_USE, tool_name="write_to_file",
+            event_type=HookEventType.POST_TOOL_USE, tool_name="write_to_file",
             tool_args={"TargetFile": target, "CodeContent": "x = 1\n"}, workspace_root=self.tmp),
             repo_root=self.tmp)
 
     def _stop(self):
         return predicates.check_test_before_stop(
-            HookEvent(event_type=HookEventType.STOP, workspace_root=self.tmp), repo_root=self.tmp)
+            HookEvent(event_type=HookEventType.STOP, workspace_root=self.tmp), repo_root=self.tmp,
+            options={"enforce_unbound": True})
 
     def test_is_source_edit(self):
         self.assertTrue(predicates.is_source_edit("src/app.py"))

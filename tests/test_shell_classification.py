@@ -172,6 +172,10 @@ class TestPlanApprovalGateEndToEnd(unittest.TestCase):
         os.makedirs(os.path.join(self.root, "src"))
         with open(os.path.join(self.root, "AGENTS.md"), "w", encoding="utf-8") as f:
             f.write("# fixture\n")
+        # Hold the unbound fixture session to the inquiry lock (off by default).
+        os.makedirs(os.path.join(self.root, ".along", "rules"))
+        with open(os.path.join(self.root, ".along", "rules", "gates.yaml"), "w", encoding="utf-8") as f:
+            f.write("version: 1\ngates:\n  - id: require_plan_approval\n    enforce_unbound: true\n")
 
     def tearDown(self):
         shutil.rmtree(self.root, ignore_errors=True)

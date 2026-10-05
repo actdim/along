@@ -106,7 +106,8 @@ class TestParallelSessions(SessionFixture):
         self.start("beta", self.key_b)
         session.save_global_session_state(self.root, {"active_slug": "beta", "phase": "execution",
                                                       "plan_approved": True})
-        self.assertIsNotNone(check_mutation_authorization(_edit(self.root, "sess-new"), self.root))
+        self.assertIsNotNone(check_mutation_authorization(_edit(self.root, "sess-new"), self.root,
+                                                          options={"enforce_unbound": True}))
 
     def test_unbound_session_does_not_adopt_another_sessions_issue(self):
         self.start("alpha", self.key_a, approved=True)

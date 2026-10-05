@@ -111,7 +111,7 @@ def claude_hook_status(repo_root: Optional[str] = None) -> Tuple[str, List[str]]
 
 def heartbeat_path(repo_root: str) -> str:
     from . import repo
-    return os.path.join(repo.state_dir(repo_root), "diagnostics", "hook_heartbeat.json")
+    return os.path.join(repo.diagnostics_dir(repo_root), "hook_heartbeat.json")
 
 
 def record_heartbeat(repo_root: Optional[str], runtime: str, now_iso: str) -> None:
