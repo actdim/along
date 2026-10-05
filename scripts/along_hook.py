@@ -339,7 +339,9 @@ def _evaluate_and_respond(
 
     effective_root = repo_root
     if not effective_root and event.workspace_root:
-        effective_root = repo.find_repo_root(event.workspace_root) or event.workspace_root
+        # The payload cwd is the shell's current directory; anchor on the session's project.
+        effective_root = repo.find_session_root(
+            event.workspace_root, os.environ.get("CLAUDE_PROJECT_DIR")) or event.workspace_root
     if not effective_root:
         effective_root = repo.find_repo_root()
 

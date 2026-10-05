@@ -1,7 +1,7 @@
 # Active Issues
 
 ## Active
-- [ ] `(task)` [release-v4-4-5](ISSUES/task--release-v4-4-5.md)
+<!-- No active issues -->
 
 ## Backlog
 - [ ] `(bug)` [worktree-cross-os-mount-guard](ISSUES/bug--worktree-cross-os-mount-guard.md)
@@ -60,9 +60,9 @@
 - [ ] `(feat)` [zero-step-state-recovery-and-drift-detection](ISSUES/feat--zero-step-state-recovery-and-drift-detection.md)
 
 ## Done (recent)
+- [x] `(task)` [release-v4-4-5](ISSUES/done/task--release-v4-4-5.md)
 - [x] `(debt)` [cached-runtime-venv](ISSUES/done/debt--cached-runtime-venv.md)
 - [x] `(bug)` [windows-hook-fail-open](ISSUES/done/bug--windows-hook-fail-open.md)
-- [x] `(bug)` [init-onboarding-regressions](ISSUES/done/bug--init-onboarding-regressions.md)
-- [x] `(bug)` [ci-matrix-gate-session-fixes](ISSUES/done/bug--ci-matrix-gate-session-fixes.md)
-- [x] `(feat)` [wrap-session-log-from-blackboard](ISSUES/done/feat--wrap-session-log-from-blackboard.md)
-<!-- 169 older completed issue(s) archived in .along/ISSUES/done/ -->
+- [x] `(bug)` [readonly-classifier-pipelines](ISSUES/done/bug--readonly-classifier-pipelines.md)
+- [x] `(bug)` [containment-root-from-shell-cwd](ISSUES/done/bug--containment-root-from-shell-cwd.md)
+<!-- 172 older completed issue(s) archived in .along/ISSUES/done/ -->

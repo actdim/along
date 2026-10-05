@@ -83,6 +83,29 @@ def find_repo_root(start_dir: Optional[str] = None,
         cur = parent
 
 
+def _is_within(path: str, root: str) -> bool:
+    try:
+        return os.path.commonpath([os.path.normcase(path), os.path.normcase(root)]) == os.path.normcase(root)
+    except ValueError:          # different drives on Windows
+        return False
+
+
+def find_session_root(cwd: Optional[str] = None, project_dir: Optional[str] = None) -> str:
+    """Root a hook evaluates against: the session's project, not the shell's current directory.
+
+    Runtimes report the agent's current shell cwd, which follows `cd` into nested `.along/`
+    contexts. When the runtime also names the project it was opened in (Claude Code:
+    `CLAUDE_PROJECT_DIR`) and the cwd lies inside it, the project's root wins, so a nested
+    context never narrows the session's scope. Nearest-context placement stays path-based.
+    """
+    origin = os.path.abspath(cwd or os.getcwd())
+    if project_dir:
+        project = os.path.abspath(project_dir)
+        if os.path.isdir(project) and _is_within(origin, project):
+            return find_repo_root(project)
+    return find_repo_root(origin)
+
+
 def find_state_dir(start_dir: Optional[str] = None) -> Optional[str]:
     """Nearest existing `.along/` (or legacy `.agents/`) directory, or None.
 

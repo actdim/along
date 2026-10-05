@@ -36,6 +36,8 @@ _NULL_TARGETS = ("/dev/null", "nul", "$null")
 _READ_COMMANDS = frozenset({
     "echo", "printf", "cat", "dir", "ls", "type", "head", "tail", "grep", "rg", "which",
     "where", "pwd", "cd", "wc", "stat", "file", "true",
+    "cut", "tr", "nl", "basename", "dirname", "realpath", "du", "df", "test", "[", "diff", "cmp",
+    "comm", "false",
     "get-childitem", "get-content", "select-string", "get-location", "set-location",
     "write-output", "write-host",
 })
@@ -51,15 +53,52 @@ _ALONG_READ = (
     "test", "status", "doctor", "budget", "context-budget", "kb-search", "scratch state",
     "worktree list", "worktree status", "hook verify",
 )
+#: `find` primaries that run commands or write files.
+_FIND_WRITE = frozenset({
+    "-exec", "-execdir", "-ok", "-okdir", "-delete", "-fprint", "-fprint0", "-fprintf", "-fls",
+})
+#: Shell keywords that open a clause; the command after them decides.
+_SHELL_LEAD_KEYWORDS = frozenset({"do", "then", "else", "elif", "if", "while", "until", "{"})
+#: Shell keywords that close a clause and run nothing themselves.
+_SHELL_CLOSE_KEYWORDS = frozenset({"done", "fi", "}"})
+#: A sed script command that writes a file (`w`, `W`) or executes one (`e`, `s///e`).
+_SED_WRITE = re.compile(r"[wWe](\s|$|;|\})")
 _WRAPPER_OPTS_WITH_VALUE = frozenset({
     "--with", "--python", "-p", "--project", "--directory", "--extra", "--group", "--env-file",
     "--from", "--package",
 })
 
 
+def _substitution(command: str, i: int) -> Optional[Tuple[str, int]]:
+    """(inner command, index after it) for the `$(...)` or backquote starting at `i`; None when
+    it is unterminated."""
+    if command[i] == "`":
+        end = command.find("`", i + 1)
+        return (command[i + 1:end], end + 1) if end != -1 else None
+    depth = 0
+    quote = ""
+    j = i + 1
+    while j < len(command):
+        ch = command[j]
+        if quote:
+            if ch == quote:
+                quote = ""
+        elif ch in ("'", '"'):
+            quote = ch
+        elif ch == "(":
+            depth += 1
+        elif ch == ")":
+            depth -= 1
+            if depth == 0:
+                return command[i + 2:j], j + 1
+        j += 1
+    return None
+
+
 def split_segments(command: str) -> Optional[List[str]]:
-    """Split on control operators outside quotes. None when the command is not simple enough
-    to classify (unbalanced quotes, command substitution)."""
+    """Split on control operators outside quotes. Command substitutions are classified on their
+    own and stand in as a plain word when read-only. None when the command is not simple
+    enough to classify (unbalanced quotes, a substitution that may write)."""
     segments: List[str] = []
     buf: List[str] = []
     quote = ""
@@ -67,11 +106,16 @@ def split_segments(command: str) -> Optional[List[str]]:
     n = len(command)
     while i < n:
         ch = command[i]
+        if (ch == "`" or command.startswith("$(", i)) and quote != "'":
+            sub = _substitution(command, i)
+            if sub is None or not is_read_only_command(sub[0]):
+                return None
+            buf.append("SUBST")
+            i = sub[1]
+            continue
         if quote:
             if ch == quote:
                 quote = ""
-            elif quote == '"' and (ch == "`" or command.startswith("$(", i)):
-                return None
             buf.append(ch)
             i += 1
             continue
@@ -80,8 +124,6 @@ def split_segments(command: str) -> Optional[List[str]]:
             buf.append(ch)
             i += 1
             continue
-        if ch == "`" or command.startswith("$(", i):
-            return None
         two = command[i:i + 2]
         if two in ("&&", "||"):
             segments.append("".join(buf))
@@ -205,6 +247,36 @@ def _python_c_is_read_only(code: str) -> bool:
     return sum(isinstance(node, ast.Call) for node in ast.walk(call)) == 1
 
 
+def _sed_is_read_only(args: List[str]) -> bool:
+    """`sed` without in-place editing, script files, or write/execute script commands."""
+    scripts: List[str] = []
+    positional: List[str] = []
+    i = 0
+    while i < len(args):
+        arg = args[i]
+        if arg in ("-e", "--expression"):
+            if i + 1 >= len(args):
+                return False
+            scripts.append(args[i + 1])
+            i += 2
+            continue
+        if arg.startswith("--expression="):
+            scripts.append(arg.split("=", 1)[1])
+        elif arg.startswith("--in-place") or arg in ("-f", "--file") or arg.startswith("--file="):
+            return False
+        elif arg.startswith("-") and not arg.startswith("--") and len(arg) > 1:
+            if "i" in arg or "f" in arg:
+                return False
+        elif not arg.startswith("-"):
+            positional.append(arg)
+        i += 1
+    if not scripts:
+        if not positional:
+            return False
+        scripts.append(positional[0])
+    return not any(_SED_WRITE.search(s) for s in scripts)
+
+
 def _segment_is_read_only(segment: str) -> bool:
     if _has_write_redirect(segment):
         return False
@@ -212,13 +284,29 @@ def _segment_is_read_only(segment: str) -> bool:
     if not tokens:
         return tokens is not None
     tokens = _strip_wrappers(tokens)
+    while tokens and tokens[0].lower() in _SHELL_LEAD_KEYWORDS:
+        tokens = _strip_wrappers(tokens[1:])
     if not tokens:
         return True
     first = tokens[0].lower()
     rest = [t.lower() for t in tokens[1:]]
 
+    if first in _SHELL_CLOSE_KEYWORDS:
+        return not rest
+    if first == "for":
+        # `for NAME in WORDS`: substitutions among the words were already classified.
+        return len(rest) >= 1 and (len(rest) == 1 or rest[1] == "in")
     if first in _READ_COMMANDS:
         return True
+    if first == "sed":
+        return _sed_is_read_only(tokens[1:])
+    if first == "find":
+        return not any(t in _FIND_WRITE for t in rest)
+    if first == "sort":
+        return not any(t.startswith("--output") or (t.startswith("-") and not t.startswith("--")
+                                                    and "o" in t) for t in rest)
+    if first == "uniq":
+        return len([t for t in rest if not t.startswith("-")]) <= 1
     if first == "git":
         return _git_is_read_only(rest)
     if first == "along" or first.endswith("along_exec.py"):

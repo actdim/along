@@ -259,6 +259,73 @@ class TestClaudeDecisionOutput(unittest.TestCase):
         self.assertIn("run tests", json.loads(out)["systemMessage"])
 
 
+class TestSessionRootFromProjectDir(unittest.TestCase):
+    """[bug--containment-root-from-shell-cwd]: a `cd` into a nested `.along/` context must not
+    narrow the session's root to that context."""
+
+    def _workspace(self, tmp):
+        project = os.path.join(tmp, "project")
+        nested = os.path.join(project, "src", "apps", "webapp")
+        os.makedirs(os.path.join(project, ".along"))
+        os.makedirs(os.path.join(nested, ".along"))
+        outside = os.path.join(tmp, "other-repo")
+        os.makedirs(os.path.join(outside, ".along"))
+        return project, nested, outside
+
+    def test_project_dir_wins_over_nested_cwd(self):
+        from alongkit import repo
+        with tempfile.TemporaryDirectory() as tmp:
+            project, nested, _outside = self._workspace(tmp)
+            self.assertEqual(repo.find_session_root(nested, project), os.path.abspath(project))
+
+    def test_cwd_outside_project_dir_keeps_nearest_root(self):
+        from alongkit import repo
+        with tempfile.TemporaryDirectory() as tmp:
+            project, _nested, outside = self._workspace(tmp)
+            self.assertEqual(repo.find_session_root(outside, project), os.path.abspath(outside))
+
+    def test_without_project_dir_nearest_root_is_kept(self):
+        from alongkit import repo
+        with tempfile.TemporaryDirectory() as tmp:
+            _project, nested, _outside = self._workspace(tmp)
+            self.assertEqual(repo.find_session_root(nested, None), os.path.abspath(nested))
+
+    def _grep(self, tmp, cwd, search_path, project_dir):
+        script_path = os.path.join(SCRIPTS_DIR, "along_hook.py")
+        payload = json.dumps({
+            "hook_event_name": "PreToolUse",
+            "session_id": "containment-root-test",
+            "cwd": cwd,
+            "tool_name": "Grep",
+            "tool_input": {"pattern": "needle", "path": search_path},
+        })
+        # A private temp dir: the system temp dir is readable by policy and would hide the fixture.
+        systemp = os.path.join(tmp, "systemp")
+        os.makedirs(systemp, exist_ok=True)
+        env = {k: v for k, v in os.environ.items() if k != "CLAUDE_PROJECT_DIR"}
+        env.update({"TMP": systemp, "TEMP": systemp, "TMPDIR": systemp})
+        env.pop("ALONG_AUTONOMOUS", None)
+        if project_dir:
+            env["CLAUDE_PROJECT_DIR"] = project_dir
+        return proc.run_capture(
+            [sys.executable, script_path, "--runtime", "claude", "--event", "PreToolUse"],
+            stdin_text=payload, env=env, cwd=cwd,
+        )
+
+    def test_grep_at_project_root_from_nested_cwd_is_allowed(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            project, nested, _outside = self._workspace(tmp)
+            res = self._grep(tmp, nested, project, project)
+            self.assertEqual(res.returncode, 0, res.stderr)
+            self.assertNotIn("workspace-containment", res.stdout + res.stderr)
+
+    def test_grep_in_foreign_repo_still_asks(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            project, nested, outside = self._workspace(tmp)
+            res = self._grep(tmp, nested, outside, project)
+            self.assertIn("workspace-containment", res.stdout + res.stderr)
+
+
 class TestInstallClaudeHooks(unittest.TestCase):
     def test_clean_install_creates_settings_json(self):
         with tempfile.TemporaryDirectory() as tmp:

@@ -1,6 +1,6 @@
 {
-  "last_edit_time": "2026-10-03T21:45:18.404529+00:00",
-  "last_test_time": "2026-10-03T21:47:44.173592+00:00",
+  "last_edit_time": "2026-10-04T12:52:25.608565+00:00",
+  "last_test_time": "2026-10-04T12:52:07.786952+00:00",
   "edited_files": [
     "d:\\Src\\my\\actdim\\public\\along\\scripts\\alongkit\\install.py",
     "d:\\Src\\my\\actdim\\public\\along\\scripts\\alongkit\\hooks\\predicates.py",
@@ -490,6 +490,22 @@
     "d:\\Src\\my\\actdim\\public\\along\\tests\\test_rules.py",
     "C:\\Users\\Admin\\.gemini\\antigravity\\brain\\639b0338-4079-4d29-877e-1767931fa698\\walkthrough.md",
     "d:\\Src\\my\\actdim\\public\\along\\.along\\SESSIONS\\2026\\2026-10-01--rule-packs-local-extensions.md",
-    "d:\\Src\\my\\actdim\\public\\along\\.along\\SESSIONS\\2026\\2026-10-01--agent-session-bindings-and-gate-hardening.md"
+    "d:\\Src\\my\\actdim\\public\\along\\.along\\SESSIONS\\2026\\2026-10-01--agent-session-bindings-and-gate-hardening.md",
+    "C:\\Users\\Admin\\.gemini\\antigravity\\brain\\a46c1793-637e-4630-bfb2-90844ac596a3\\scratch\\check_paths.py",
+    "C:\\Users\\Admin\\.gemini\\antigravity\\brain\\a46c1793-637e-4630-bfb2-90844ac596a3\\scratch\\check_83.py",
+    "C:\\Users\\Admin\\.gemini\\antigravity\\brain\\a46c1793-637e-4630-bfb2-90844ac596a3\\scratch\\test_argparse.py",
+    "C:\\Users\\Admin\\.gemini\\antigravity\\brain\\a46c1793-637e-4630-bfb2-90844ac596a3\\scratch\\print_hook.py",
+    "C:\\Users\\Admin\\.gemini\\antigravity\\brain\\a46c1793-637e-4630-bfb2-90844ac596a3\\scratch\\run_gitgates_test.py",
+    "C:\\Users\\Admin\\.gemini\\antigravity\\brain\\a46c1793-637e-4630-bfb2-90844ac596a3\\scratch\\test_parser_cases.py",
+    "C:\\Users\\Admin\\.gemini\\antigravity\\brain\\a46c1793-637e-4630-bfb2-90844ac596a3\\scratch\\check_engine.py",
+    "C:\\Users\\Admin\\.gemini\\antigravity\\brain\\a46c1793-637e-4630-bfb2-90844ac596a3\\scratch\\test_parser_no_subcmd.py",
+    "C:\\Users\\Admin\\.gemini\\antigravity\\brain\\a46c1793-637e-4630-bfb2-90844ac596a3\\scratch\\run_session_test.py",
+    "C:\\Users\\Admin\\.gemini\\antigravity\\brain\\a46c1793-637e-4630-bfb2-90844ac596a3\\scratch\\check_along_home.py",
+    "C:\\Users\\Admin\\.gemini\\antigravity\\brain\\a46c1793-637e-4630-bfb2-90844ac596a3\\scratch\\simulate_runner_paths.py",
+    "C:\\Users\\Admin\\.gemini\\antigravity\\brain\\a46c1793-637e-4630-bfb2-90844ac596a3\\scratch\\test_is_or_above_home.py",
+    "C:\\Users\\Admin\\.gemini\\antigravity\\brain\\a46c1793-637e-4630-bfb2-90844ac596a3\\scratch\\test_revised_gates.py",
+    "d:\\Src\\my\\actdim\\public\\along\\.along\\ISSUES\\bug--ci-matrix-gate-session-fixes.md",
+    "d:\\Src\\my\\actdim\\public\\along\\scripts\\alongkit\\session.py",
+    "d:\\Src\\my\\actdim\\public\\along\\tests\\test_session_bindings.py"
   ]
 }

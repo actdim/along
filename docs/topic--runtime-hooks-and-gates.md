@@ -4,7 +4,7 @@ slug: runtime-hooks-and-gates
 title: Runtime Lifecycle Hooks & Mechanical Gates
 type: architecture
 created: 2026-09-11
-updated: 2026-09-29
+updated: 2026-10-05
 tags: [hooks, gates, runtime, enforcement, antigravity, claude, codex, typography, cli-safety, circuit-breaker, attribution]
 sources:
   - path: scripts/alongkit/attribution.py
@@ -139,6 +139,8 @@ Several agent sessions may work in one repository at once, so gates never read a
 - **Binding**: `along start <slug>` writes `.along/.session/bindings/<runtime>--<session_id>.json` (`slug`, `context`, `plan_approved`, `approved_slug`). The session id comes from the hook payload (`session_id`, antigravity conversation id) and, for CLI calls, from `CLAUDE_CODE_SESSION_ID`, `ANTIGRAVITY_CONVERSATION_ID`, `CODEX_SESSION_ID` or `ALONG_SESSION_ID` (+ `ALONG_SESSION_RUNTIME`). Bindings live in the outermost `.along/` of the workspace (up to the git top, never `~/.along`); `context` names the `.along/` the issue belongs to, so a session bound to a subproject issue is visible at the root.
 - **Resolution** (`session.resolve_active_session`): `ALONG_ISSUE_SLUG` (runner) > own binding > the single in-progress blackboard not bound to another session > none. Several unbound candidates are `ambiguous`: gates refuse and point at `along start <slug>`.
 - **Plan approval**: `along start` binds with `phase: planning`, `plan_approved: false`. Approval is recorded per session when the user accepts a plan in Claude Code (`PostToolUse` on `ExitPlanMode`), or by `along plan approve [<slug>]` after the user's explicit yes; an approval given before `along start` carries over to the first bound slug. `along start --approved` is for scripted runs. Along state commands (`issue`, `start`, `scratch`, `plan`, `decision`, `milestone`, `session`, `wrap`, `kb sync`) and writes to `.along/ISSUES|RISKS|SPIKES|SESSIONS|.session|diagnostics` pass `require_plan_approval`, so an issue can be written and started before a plan exists.
+- **Read-only shell commands**: before approval, `alongkit.hooks.shellparse.is_read_only_command` lets a Bash call through only when every segment reads: inspection commands and pure filters (`cat`, `grep`, `head`, `tail`, `cut`, `sort`, `uniq`, `tr`, `diff`, ...), `sed` without `-i`, `-f` or `w`/`W`/`e` script commands, `find` without `-exec`/`-delete`/`-fprint*`, and test runs. `$(...)` and backquote substitutions are classified recursively, and shell keywords (`for ... in`, `do`, `done`, `if`, `then`, `else`, `fi`, `while`) defer to the commands they wrap.
+- **Session root**: the hook evaluates against the session's project, not the agent's current shell cwd (which follows `cd`). With Claude Code, `CLAUDE_PROJECT_DIR` anchors the root whenever the cwd lies inside it (`repo.find_session_root`), so session bindings and containment survive a `cd` into a nested `.along/` context.
 - **Repository-level `.along/.session/state.json`** is read only for runtimes that pass no session id; `purge` removes it when it points at the purged slug.
 - **Housekeeping**: `along plan status`, `along session bindings`, `along session gc [--dry-run]` (bindings older than 72 h or without a blackboard). `along scratch purge` / `along wrap` remove the slug's bindings.
 - **Activity trace** (`test_before_stop`): per session in `.along/diagnostics/activity/<key>.json`; edits under `.along/` are not source edits. Where `.along/scripts/test.py` exists only `along test` / that script count as a test run; raw runners are named in the Stop message.

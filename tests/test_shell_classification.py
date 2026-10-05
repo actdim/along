@@ -65,6 +65,20 @@ READ_ONLY = (
     "git diff --stat",
     "python -c \"print('a; b')\"",
     "python -c \"print(1 + 2, 'x')\"",
+    # [bug--readonly-classifier-pipelines]: pure filters, sed/find reads, loops, substitutions.
+    "grep needle log.jsonl | tail -2 | cut -c1-900",
+    "sort -u names.txt | uniq -c | nl",
+    "tr a-z A-Z < in.txt",
+    "diff -u a.txt b.txt",
+    "sed -n 1,80p tests/test_hooks_claude.py | grep -n def",
+    "sed -n -e '/start/,/end/p' notes.md",
+    "find . -name '*.py' -newer setup.cfg",
+    "for f in $(grep -rl needle .along/diagnostics); do grep needle \"$f\"; done",
+    "ls $(git rev-parse --show-toplevel)",
+    "echo \"root: $(pwd)\"",
+    "echo `basename $PWD`",
+    "if [ -f a.txt ]; then cat a.txt; else echo none; fi",
+    "echo '$(rm -rf src)'",
 )
 
 MUTATING = (
@@ -105,6 +119,25 @@ MUTATING = (
     "git diff --output=src/a.py",
     "git log --output src/a.py",
     "git show --output=src/a.py HEAD",
+    # [bug--readonly-classifier-pipelines]: the new rules stay closed to writes.
+    "sed -i s/a/b/ src/a.py",
+    "sed -ni 1p src/a.py",
+    "sed --in-place=.bak s/a/b/ src/a.py",
+    "sed -n 'w src/out.txt' src/a.py",
+    "sed 's/a/b/w src/out.txt' src/a.py",
+    "sed 's/x/date/e' src/a.py",
+    "sed -f script.sed src/a.py",
+    "find . -name '*.pyc' -delete",
+    "find . -exec rm {} ;",
+    "sort -o src/sorted.txt names.txt",
+    "sort --output=src/sorted.txt names.txt",
+    "uniq names.txt src/out.txt",
+    "for f in *; do rm \"$f\"; done",
+    "for f in $(rm -rf src); do echo x; done",
+    "echo $(ls; rm -rf src)",
+    "if true; then rm -rf src; fi",
+    "done rm",
+    "echo $(unterminated",
 )
 
 
