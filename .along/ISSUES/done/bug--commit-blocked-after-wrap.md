@@ -3,10 +3,11 @@ protocol: along
 protocol_version: "4.4.5"
 slug: commit-blocked-after-wrap
 type: bug
-status: open
+status: done
+completed: 2026-10-06
 priority: high
 created: 2026-10-05
-updated: 2026-10-05
+updated: 2026-10-06
 agent: claude-code
 tags: [hooks, gates, wrap, commit, reopened]
 blocked_by: []
@@ -95,11 +96,25 @@ Any session, with no approval at all, can now run `along commit --all --push`:
    the same session; a fresh unbound session cannot commit.
 
 ## Acceptance Criteria
-- [ ] REQ-1..REQ-7 covered by hermetic tests, positive and negative.
-- [ ] b7d1379 blanket allow removed; old allow-list assertion restored.
-- [ ] Docs updated.
-- [ ] Automated tests passing.
-- [ ] End to end after reinstall: commit right after wrap passes in the wrapping session only.
+- [x] REQ-1..REQ-7 covered by hermetic tests, positive and negative.
+- [x] b7d1379 blanket allow removed; old allow-list assertion restored.
+- [x] Docs updated.
+- [x] Automated tests passing.
+- [x] End to end after reinstall: commit right after wrap passes in the wrapping session only.
+
+## Resolution (2026-10-06)
+- Completion tokens in the session binding (`session.record_completion_token`,
+  `completion_tokens`, `consume_completion_token`, `completion_token_owners`;
+  `purge_session(..., complete=True)` from `along wrap` only).
+- Plan gate: `shellparse.along_commit_issue` + token check in
+  `predicates.check_mutation_authorization`; held commits explain why (`_held_commit_reason`).
+- `along commit` consumes the token after a successful commit.
+- Plan revision 2 (end-to-end finding, approved by the user): an unbound session with a known id
+  resolved to the single unbound in-progress blackboard and inherited its approval (an orphan of
+  `release-tags-not-pushed` approved every fresh session). `session.is_plan_approved` now counts a
+  blackboard's approval only for the session bound to it. Side effect: `along start` of an issue
+  another session approved starts unapproved.
+- The closeout approval branch of REQ-5 is left to `feat--parallel-session-closeout` REQ-6.
 
 ## Notes
 - Verified on 2026-10-05 that b7d1379 lets the commit after wrap through (commit b7d1379 itself

@@ -158,14 +158,13 @@ class TestPlanApproval(SessionFixture):
         self.assertFalse(session.is_plan_approved(self.root, key=self.key_a))
 
     def test_along_state_commands_pass_the_plan_gate(self):
-        # `along commit` is a completion command: `along wrap` unbinds the session right
-        # before it [bug--commit-blocked-after-wrap]. Its file-rewriting form stays held.
+        # `along commit` is not a state command: without an approved plan it passes only on a
+        # completion token of the wrapping session [bug--commit-blocked-after-wrap].
         for cmd in ("along issue create bug x-y --title T", "along start x-y",
-                    "python scripts/along_exec.py issue sync", "along plan status && git status",
-                    "along commit -m x"):
+                    "python scripts/along_exec.py issue sync", "along plan status && git status"):
             self.assertTrue(shellparse.is_along_state_command(cmd), cmd)
-        for cmd in ("along commit -m x --fix-typography", "along bump patch", "along issue sync > out.txt",
-                    "along start x && rm -rf src"):
+        for cmd in ("along commit -m x", "along commit -m x --fix-typography", "along bump patch",
+                    "along issue sync > out.txt", "along start x && rm -rf src"):
             self.assertFalse(shellparse.is_along_state_command(cmd), cmd)
         event = HookEvent(event_type=HookEventType.PRE_TOOL_USE, tool_name="run_command",
                           tool_args={"CommandLine": "along issue create bug a-b --title T"},
@@ -198,6 +197,72 @@ class TestBindingLifecycle(SessionFixture):
         self.assertEqual(data["slug"], "alpha")
         self.assertNotIn("alpha", [e for e in os.listdir(os.path.join(self.root, ".along", ".session"))
                                    if e == session.BINDINGS_DIRNAME])
+
+
+class TestOrphanApproval(SessionFixture):
+    """[bug--commit-blocked-after-wrap] Rev 2: blackboard approval belongs to its session."""
+
+    def setUp(self):
+        super().setUp()
+        _write_issue(self.root, "alpha")
+        session.init_session(self.root, "alpha")
+        session.update_state(self.root, "alpha", phase="execution", plan_approved=True)
+
+    def test_unbound_session_with_an_id_is_not_approved(self):
+        self.assertEqual(session.resolve_active_session(self.root, self.key_a), ("alpha", "single"))
+        self.assertFalse(session.is_plan_approved(self.root, key=self.key_a))
+
+    def test_runner_slug_and_keyless_runtime_keep_the_blackboard_approval(self):
+        self.assertTrue(session.is_plan_approved(self.root, slug="alpha", key=None))
+        with mock.patch.dict(os.environ, {"ALONG_ISSUE_SLUG": "alpha"}):
+            self.assertTrue(session.is_plan_approved(self.root, key=self.key_a))
+
+
+class TestCompletionTokens(SessionFixture):
+    """[bug--commit-blocked-after-wrap] REQ-4, REQ-6."""
+
+    def wrap(self, slug: str, key: str) -> None:
+        self.start(slug, key)
+        session.record_plan_approval(self.root, key)
+        session.purge_session(self.root, slug, key=key, complete=True)
+
+    def test_wrap_keeps_a_token_and_unbinds(self):
+        self.wrap("alpha", self.key_a)
+        binding = session.load_binding(self.root, self.key_a) or {}
+        self.assertEqual(session.completion_tokens(self.root, self.key_a), ["alpha"])
+        self.assertIsNone(binding.get("slug"))
+        self.assertFalse(binding.get("plan_approved"))
+        self.assertTrue(binding["completed"][0]["approved_at"])
+        self.assertEqual(session.resolve_active_session(self.root, self.key_a)[1], "none")
+        self.assertFalse(session.is_plan_approved(self.root, key=self.key_a))
+        self.assertEqual(session.completion_token_owners(self.root, "alpha"), [self.key_a])
+
+    def test_other_sessions_bound_to_the_slug_lose_their_binding(self):
+        self.start("alpha", self.key_b)
+        self.wrap("alpha", self.key_a)
+        self.assertIsNone(session.load_binding(self.root, self.key_b))
+        self.assertEqual(session.completion_tokens(self.root, self.key_b), [])
+
+    def test_token_survives_start_of_another_issue(self):
+        self.wrap("alpha", self.key_a)
+        self.start("beta", self.key_a)
+        self.assertEqual(session.completion_tokens(self.root, self.key_a), ["alpha"])
+        self.assertEqual(session.get_active_session_slug(self.root, self.key_a), "beta")
+
+    def test_consume_once(self):
+        self.wrap("alpha", self.key_a)
+        self.start("beta", self.key_a)
+        self.assertTrue(session.consume_completion_token(self.root, self.key_a, "alpha"))
+        self.assertFalse(session.consume_completion_token(self.root, self.key_a, "alpha"))
+        self.assertEqual(session.get_active_session_slug(self.root, self.key_a), "beta",
+                         "a binding that still has a slug is kept")
+
+    def test_token_expires_with_age(self):
+        self.wrap("alpha", self.key_a)
+        future = datetime.now(timezone.utc) + timedelta(hours=session.BINDING_MAX_AGE_HOURS + 1)
+        self.assertEqual(session.completion_tokens(self.root, self.key_a, now=future), [])
+        self.assertEqual(session.gc_bindings(self.root, dry_run=True), [], "a token binding is no orphan")
+        self.assertEqual(session.gc_bindings(self.root, now=future), [self.key_a])
 
 
 if __name__ == "__main__":

@@ -537,8 +537,9 @@ def execute_wrap(
             )
             print(f"-> Wrote session log: {repo.safe_relpath(log_path, repo_root)}")
 
-        # Purge session blackboard
-        if session.purge_session(repo_root, clean_slug):
+        # Purge session blackboard; this session keeps a completion token for the commit
+        # that follows [bug--commit-blocked-after-wrap].
+        if session.purge_session(repo_root, clean_slug, complete=True):
             print(f"-> Purged session blackboard: .along/.session/{clean_slug}")
 
         # Append to HISTORY.md if summary provided

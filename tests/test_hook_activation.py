@@ -266,44 +266,6 @@ class TestPlanGate(_TempRoot):
         self.assertIsNone(check_mutation_authorization(_bash_tool_event("dotnet build -v q", self.root), self.root))
         self.assertIsNotNone(check_mutation_authorization(_bash_tool_event("rm -rf src", self.root), self.root))
 
-    def test_along_commit_passes_for_an_unbound_session(self):
-        """The completion checklist commits after `along wrap` unbound the session.
-
-        See [bug--commit-blocked-after-wrap].
-        """
-        enforce = {"enforce_unbound": True}
-        for cmd in ('along commit "fix x" -i x --all --push',
-                    'python scripts/along_exec.py commit "fix x" -i x --all',
-                    'along issue sync; along commit "fix x" -i x --all --push'):
-            with self.subTest(cmd=cmd):
-                self.assertIsNone(check_mutation_authorization(_bash_tool_event(cmd, self.root),
-                                                               self.root, options=enforce))
-
-    def test_rewriting_commit_and_raw_git_commit_stay_held(self):
-        enforce = {"enforce_unbound": True}
-        for cmd in ('along commit "fix x" -i x --all --fix-typography',
-                    'git commit -am "fix x"', 'git push',
-                    'along commit "fix x" -i x --all && rm -rf src',
-                    'along commit "fix x" > out.txt'):
-            with self.subTest(cmd=cmd):
-                self.assertIn("require-plan-approval",
-                              check_mutation_authorization(_bash_tool_event(cmd, self.root),
-                                                           self.root, options=enforce) or "")
-
-    def test_commit_right_after_wrap_purge(self):
-        """Bind, approve, purge (what `along wrap` does), then commit: the commit passes."""
-        key = session.session_key("claude", "sess-1")
-        session.init_session(self.root, "work")
-        session.bind_session(self.root, "work", key=key)
-        session.record_plan_approval(self.root, key)
-        session.purge_session(self.root, "work")
-        enforce = {"enforce_unbound": True}
-        self.assertIsNone(check_mutation_authorization(
-            _bash_tool_event('along commit "fix" -i work --all --push', self.root), self.root, options=enforce))
-        self.assertIsNotNone(check_mutation_authorization(
-            _edit_tool_event(self.src, self.root), self.root, options=enforce),
-            "source edits still need a new binding and approval")
-
     def test_declared_root_whitelists_its_state_paths(self):
         nested = tempfile.mkdtemp(prefix="along-declared-")
         try:
@@ -316,6 +278,108 @@ class TestPlanGate(_TempRoot):
             self.assertIsNone(check_subproject_boundary(_edit_tool_event(issue, nested), nested))
         finally:
             shutil.rmtree(nested, ignore_errors=True)
+
+
+class TestCommitAfterWrap(_TempRoot):
+    """`along wrap` leaves a completion token; only that session commits only that issue.
+
+    See [bug--commit-blocked-after-wrap] REQ-1..REQ-7.
+    """
+    ENFORCE = {"enforce_unbound": True}
+
+    def setUp(self):
+        super().setUp()
+        _along(self.root)
+        self.src = os.path.join(self.root, "src", "a.py")
+        self.key = session.session_key("claude", "sess-1")
+
+    def _wrap(self, slug="work", approve=True, key=None):
+        """What `along wrap` does to the session: bind, approve, purge with completion."""
+        key = key or self.key
+        session.init_session(self.root, slug)
+        session.bind_session(self.root, slug, key=key)
+        if approve:
+            session.record_plan_approval(self.root, key)
+        session.purge_session(self.root, slug, key=key, complete=True)
+
+    def _gate(self, cmd, key="sess-1"):
+        return check_mutation_authorization(_bash_tool_event(cmd, self.root, key=key), self.root,
+                                            options=self.ENFORCE)
+
+    def test_wrapping_session_commits_its_issue(self):
+        self._wrap()
+        for cmd in ('along commit "fix" -i work --all --push',
+                    'along commit "fix" --issue=work --paths a.py',
+                    'along commit "fix" -i bug--work --all',
+                    'python scripts/along_exec.py commit "fix" --issue work --all',
+                    'along issue sync; along commit "fix" -i work --all --push'):
+            with self.subTest(cmd=cmd):
+                self.assertIsNone(self._gate(cmd))
+
+    def test_other_session_is_held_and_told_who_wrapped(self):
+        self._wrap()
+        reason = self._gate('along commit "fix" -i work --all', key="sess-2")
+        self.assertIn("require-plan-approval", reason or "")
+        self.assertIn("another agent session", reason or "")
+        self.assertIn(self.key, reason or "")
+
+    def test_other_issue_is_held(self):
+        self._wrap()
+        reason = self._gate('along commit "fix" -i other --all')
+        self.assertIn("no completion token for 'other'", reason or "")
+
+    def test_commit_without_issue_is_held(self):
+        self._wrap()
+        reason = self._gate('along commit "fix" --all')
+        self.assertIn("pass '-i <slug>'", reason or "")
+
+    def test_a_quoted_message_is_not_the_issue_flag(self):
+        self._wrap()
+        self.assertIsNotNone(self._gate('along commit "drop -i work flag" --all'))
+
+    def test_unapproved_wrap_leaves_no_token(self):
+        self._wrap(approve=False)
+        self.assertEqual(session.completion_tokens(self.root, self.key), [])
+        self.assertIsNotNone(self._gate('along commit "fix" -i work --all'))
+
+    def test_scratch_purge_leaves_no_token(self):
+        session.init_session(self.root, "work")
+        session.bind_session(self.root, "work", key=self.key)
+        session.record_plan_approval(self.root, self.key)
+        session.purge_session(self.root, "work", key=self.key)
+        self.assertEqual(session.completion_tokens(self.root, self.key), [])
+        self.assertIsNotNone(self._gate('along commit "fix" -i work --all'))
+
+    def test_rewriting_chained_and_raw_git_commits_stay_held(self):
+        self._wrap()
+        for cmd in ('along commit "fix" -i work --all --fix-typography',
+                    'git commit -am "fix"', 'git push',
+                    'along commit "fix" -i work --all && rm -rf src',
+                    'along commit "fix" -i work > out.txt',
+                    'along commit "a" -i work; along commit "b" -i work'):
+            with self.subTest(cmd=cmd):
+                self.assertIn("require-plan-approval", self._gate(cmd) or "")
+
+    def test_source_edits_after_wrap_stay_held(self):
+        self._wrap()
+        self.assertIsNotNone(check_mutation_authorization(
+            _edit_tool_event(self.src, self.root), self.root, options=self.ENFORCE))
+
+    def test_consumed_token_holds_the_second_commit(self):
+        self._wrap()
+        self.assertTrue(session.consume_completion_token(self.root, self.key, "work"))
+        self.assertIsNotNone(self._gate('along commit "again" -i work --all'))
+        self.assertIsNone(session.load_binding(self.root, self.key), "an empty binding is removed")
+
+    def test_fresh_session_does_not_inherit_an_orphan_approval(self):
+        """An approved blackboard whose session ended approves nobody else (Rev 2)."""
+        session.init_session(self.root, "orphan")
+        session.update_state(self.root, "orphan", phase="execution", plan_approved=True)
+        for cmd in ("touch x.txt", 'along commit "fix" -i orphan --all'):
+            with self.subTest(cmd=cmd):
+                self.assertIn("require-plan-approval", self._gate(cmd, key="fresh") or "")
+        session.bind_session(self.root, "orphan", key=session.session_key("claude", "fresh"))
+        self.assertIsNone(self._gate("touch x.txt", key="fresh"), "the bound session uses its blackboard")
 
 
 class TestActivityTrace(_TempRoot):

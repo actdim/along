@@ -24,6 +24,8 @@ related: []
   gate and aborted the v4.4.6 release until `along decision sync` ran.
 - `along issue update --help` printed `[Error] Issue '--help' not found in .along/ISSUES/.`
 - `along issue create --help` prints usage, but through the missing-arguments error path.
+- `along scratch init --help` created a blackboard `.along/.session/--help/` (2026-10-06,
+  session of `bug--commit-blocked-after-wrap`; removed by hand).
 
 Not covered by [bug--cli-help-missing-subcommands], which fixed the router help listing.
 

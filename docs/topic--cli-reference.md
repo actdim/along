@@ -6,7 +6,7 @@ title: Along CLI Command Reference
 type: reference
 curated: true
 created: 2026-09-14
-updated: 2026-10-05
+updated: 2026-10-06
 tags: [cli, commands, router, lifecycle, tools, reference]
 ---
 
@@ -339,6 +339,7 @@ Transactional end-of-stage wrap engine.
   - `-a, --agent "<name>"`: Explicit agent name.
   - `-d, --decisions "ADR-a,ADR-b"` or `--no-decisions` (one is required): The answer to "were architectural decisions made?". The session log for today is written or extended with `issues_completed: [<type>--<slug>]`, the decisions, and the blackboard record (plan, step table, research, execution trace, reviews) before the blackboard is purged.
   - `--force-reason "<text>"`: Wrap a role-based blackboard with open steps or missing reviews; the reason is recorded in the trace.
+- **Completion token**: the purge removes the session's binding; when this session had an approved plan for the slug, it keeps a completion token so the following `along commit -i <slug>` passes the plan gate without a new approval (see `along commit`).
 - **Usage**:
   ```bash
   along wrap <slug> --no-decisions -m "Summary of work"
@@ -403,6 +404,9 @@ Conventional Commits generator with active issue binding and typography validati
   - `-m "<message>"`: Commit message body.
   - `--fix-typography`: Automatically rewrites non-ASCII typography violations before committing.
   - `--no-verify`: Skips pre-commit test gate.
+  - `-a, --all` / `--paths <file>...`: Stage the whole tree / only these paths. Prefer `--paths` when other sessions have uncommitted work in the tree.
+  - `-p, --push`: Push after the commit.
+- **After `along wrap`**: the plan gate passes `along commit -i <slug>` only for the session that wrapped `<slug>` with an approved plan (completion token); the commit uses the token up. `-i` is required on this path; `--fix-typography`, a write redirect or a chained mutation take the command off it.
 - **Usage**:
   ```bash
   along commit -i token-refresh -m "feat(auth): implement refresh token rotation"

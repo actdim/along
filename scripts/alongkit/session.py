@@ -325,6 +325,78 @@ def gc_bindings(repo_root: str, max_age_hours: int = BINDING_MAX_AGE_HOURS,
     return stale
 
 
+# ---------------------------------------------------------------------------
+# Completion tokens [bug--commit-blocked-after-wrap]
+#
+# `along wrap` purges the blackboard and the bindings of the wrapped slug. The session that
+# wrapped an issue it had an approved plan for keeps a completion token in its binding, so
+# the plan gate lets exactly that session commit exactly that issue (`along commit -i <slug>`)
+# without a new approval. A successful commit consumes the token.
+# ---------------------------------------------------------------------------
+
+def _token_age_hours(token: Dict[str, Any], now: datetime) -> float:
+    try:
+        wrapped = datetime.strptime(str(token.get("wrapped_at", "")), "%Y-%m-%dT%H:%M:%SZ")
+    except ValueError:
+        return float("inf")
+    return (now - wrapped.replace(tzinfo=timezone.utc)).total_seconds() / 3600
+
+
+def record_completion_token(repo_root: str, key: Optional[str], slug: str) -> bool:
+    """Session `key` wrapped `slug`: keep a completion token when its plan was approved.
+
+    The binding stays with the token; its slug and approval are cleared. Returns False (no
+    change) when the session has no approval for `slug`.
+    """
+    binding = load_binding(repo_root, key)
+    if not key or not binding or not binding.get("plan_approved") or binding.get("approved_slug") != slug:
+        return False
+    tokens = [t for t in binding.get("completed") or [] if isinstance(t, dict) and t.get("slug") != slug]
+    tokens.append({"slug": slug, "approved_at": binding.get("approved_at"), "wrapped_at": _utc_now_iso()})
+    binding["completed"] = tokens
+    binding["slug"] = None
+    binding["plan_approved"] = False
+    binding["approved_slug"] = None
+    save_binding(repo_root, key, binding)
+    return True
+
+
+def completion_tokens(repo_root: str, key: Optional[str], now: Optional[datetime] = None) -> List[str]:
+    """Slugs session `key` wrapped and has not committed yet (tokens younger than the gc age)."""
+    binding = load_binding(repo_root, key)
+    if not binding:
+        return []
+    now = now or datetime.now(timezone.utc)
+    return [str(t["slug"]) for t in binding.get("completed") or []
+            if isinstance(t, dict) and t.get("slug") and _token_age_hours(t, now) <= BINDING_MAX_AGE_HOURS]
+
+
+def completion_token_owners(repo_root: str, slug: str) -> List[str]:
+    """Keys of the sessions that hold a completion token for `slug`."""
+    return [str(b.get("key")) for b in list_bindings(repo_root)
+            if slug in completion_tokens(repo_root, str(b.get("key")))]
+
+
+def consume_completion_token(repo_root: str, key: Optional[str], slug: str) -> bool:
+    """Drop the token of `slug` (a commit used it). A binding left empty is removed."""
+    binding = load_binding(repo_root, key)
+    if not key or not binding:
+        return False
+    tokens = [t for t in binding.get("completed") or [] if isinstance(t, dict)]
+    kept = [t for t in tokens if t.get("slug") != slug]
+    if len(kept) == len(tokens):
+        return False
+    if not kept and not binding.get("slug"):
+        try:
+            os.remove(_binding_file(repo_root, key))
+        except OSError:
+            pass
+        return True
+    binding["completed"] = kept
+    save_binding(repo_root, key, binding)
+    return True
+
+
 def in_progress_slugs(repo_root: str) -> List[str]:
     """Slugs of blackboards with status in-progress, sorted."""
     s_root = os.path.join(repo.state_dir(repo_root), ".session")
@@ -412,7 +484,10 @@ def is_plan_approved(repo_root: str, slug: Optional[str] = None, key: Optional[s
     """True when the plan for the session's slug was approved.
 
     The binding of session `key` counts (an approval recorded for this slug, e.g. from
-    ExitPlanMode), as does `plan_approved` in the slug's own blackboard.
+    ExitPlanMode), as does `plan_approved` in the slug's own blackboard. When the session id
+    is known, the blackboard counts only for the session bound to that slug: an unbound
+    session must not inherit the approval of a blackboard whose session ended
+    [bug--commit-blocked-after-wrap].
     """
     key = key or current_session_key()
     effective_slug = slug or get_active_session_slug(repo_root, key)
@@ -422,6 +497,10 @@ def is_plan_approved(repo_root: str, slug: Optional[str] = None, key: Optional[s
         approved_slug = binding.get("approved_slug")
         if approved_slug is None or approved_slug == (binding.get("slug") or effective_slug):
             return True
+    if effective_slug and key:
+        owner = (binding or {}).get("slug") or (os.environ.get("ALONG_ISSUE_SLUG") or "").strip()
+        if owner != effective_slug:
+            return False
     if effective_slug:
         st = load_state(repo_root, effective_slug)
         if st:
@@ -765,11 +844,15 @@ def update_state(
     return state, retry_exhausted
 
 
-def purge_session(repo_root: str, slug: str) -> bool:
+def purge_session(repo_root: str, slug: str, key: Optional[str] = None, complete: bool = False) -> bool:
     """Remove ephemeral session blackboard directory and every binding to `slug`.
 
+    With `complete` (`along wrap`), the session `key` (default: this process's session) keeps
+    a completion token for `slug` when it had an approved plan for it.
     True if the blackboard was purged, False if it did not exist.
     """
+    if complete:
+        record_completion_token(repo_root, key or current_session_key(), slug)
     unbind_slug(repo_root, slug)
     gst = load_global_session_state(repo_root)
     if gst and gst.get("active_slug") == slug:

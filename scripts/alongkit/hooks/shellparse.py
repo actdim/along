@@ -500,25 +500,29 @@ _ALONG_STATE = (
     "kb-sync", "kb sync", "glossary", "risk", "spike", "checklist",
 )
 
-#: Completion-checklist commands that record work already in the tree and carry their own
-#: gates (`along commit`: issue binding, tests, typography, conflict markers). They pass the
-#: plan gate in every phase, because `along wrap` unbinds the session right before them.
-#: A flag that rewrites files takes the command out. See [bug--commit-blocked-after-wrap].
-_ALONG_COMPLETION = ("commit",)
-_COMPLETION_REWRITE_FLAGS = ("--fix-typography",)
+#: `along commit` is not a state command: it passes the plan gate without an approval only for
+#: an issue this session wrapped (a completion token), see `along_commit_issue`. A flag that
+#: rewrites files takes the command out. See [bug--commit-blocked-after-wrap].
+_COMMIT_REWRITE_FLAGS = ("--fix-typography",)
 
 
-def _along_subcommand(tokens: List[str]) -> Optional[str]:
-    """Words after `along` / `along_exec.py` when the segment invokes the Along CLI."""
+def _along_words(tokens: List[str]) -> Optional[List[str]]:
+    """Lower-cased argument tokens after `along` / `along_exec.py`, or None if not the Along CLI."""
     tokens = _strip_wrappers(tokens)
     if not tokens:
         return None
     first = tokens[0].lower()
     if first == "along" or first.endswith("along_exec.py") or first.endswith("along.ps1"):
-        return " ".join(t.lower() for t in tokens[1:])
+        return [t.lower() for t in tokens[1:]]
     if _is_python(first) and len(tokens) > 1 and tokens[1].replace("\\", "/").lower().endswith("along_exec.py"):
-        return " ".join(t.lower() for t in tokens[2:])
+        return [t.lower() for t in tokens[2:]]
     return None
+
+
+def _along_subcommand(tokens: List[str]) -> Optional[str]:
+    """Words after `along` / `along_exec.py` when the segment invokes the Along CLI."""
+    words = _along_words(tokens)
+    return None if words is None else " ".join(words)
 
 
 def along_subcommand(segment: str) -> Optional[str]:
@@ -527,14 +531,12 @@ def along_subcommand(segment: str) -> Optional[str]:
     return _along_subcommand(tokens) if tokens else None
 
 
-def _is_completion_subcommand(sub: str) -> bool:
-    if not any(sub == s or sub.startswith(s + " ") for s in _ALONG_COMPLETION):
-        return False
-    return not any(flag in sub.split() for flag in _COMPLETION_REWRITE_FLAGS)
+def _is_state_subcommand(sub: str) -> bool:
+    return any(sub == s or sub.startswith(s + " ") for s in _ALONG_STATE)
 
 
 def is_along_state_command(command: str) -> bool:
-    """True when every segment runs an Along state or completion subcommand (or is read-only)."""
+    """True when every segment runs an Along state subcommand (or is read-only)."""
     segments = split_segments(command or "")
     if not segments:
         return False
@@ -543,12 +545,61 @@ def is_along_state_command(command: str) -> bool:
             return False
         tokens = _tokens(seg)
         sub = _along_subcommand(tokens) if tokens else None
-        if sub is not None and (any(sub == s or sub.startswith(s + " ") for s in _ALONG_STATE)
-                                or _is_completion_subcommand(sub)):
+        if sub is not None and _is_state_subcommand(sub):
             continue
         if not _segment_is_read_only(seg):
             return False
     return True
+
+
+def _commit_issue_value(words: List[str]) -> str:
+    """The `-i x` / `--issue x` / `--issue=x` value among `along commit` words, else ''."""
+    for i, word in enumerate(words):
+        if word in ("-i", "--issue") and i + 1 < len(words):
+            return words[i + 1]
+        if word.startswith("--issue="):
+            return word.split("=", 1)[1]
+    return ""
+
+
+def is_along_commit(command: str) -> bool:
+    """True when some segment of `command` runs `along commit`."""
+    for seg in split_segments(command or "") or []:
+        sub = along_subcommand(seg)
+        if sub is not None and (sub == "commit" or sub.startswith("commit ")):
+            return True
+    return False
+
+
+def along_commit_issue(command: str) -> Optional[str]:
+    """Issue of a plain `along commit` the plan gate may pass on a completion token.
+
+    The `-i/--issue` value (lower-cased) when exactly one segment runs `along commit`, without
+    a file-rewriting flag or a write redirect, and every other segment is an Along state
+    command or read-only; '' for such a commit without `-i`; None for anything else.
+    See [bug--commit-blocked-after-wrap].
+    """
+    segments = split_segments(command or "")
+    if not segments:
+        return None
+    issue: Optional[str] = None
+    for seg in segments:
+        if _has_write_redirect(seg):
+            return None
+        tokens = _tokens(seg)
+        words = _along_words(tokens) if tokens else None
+        if words and words[0] == "commit":
+            # Tokens, not the joined words: a quoted message may itself contain "-i".
+            if issue is not None or any(flag in words for flag in _COMMIT_REWRITE_FLAGS):
+                return None
+            issue = _commit_issue_value(words[1:])
+            continue
+        sub = None if words is None else " ".join(words)
+        if sub is not None and _is_state_subcommand(sub):
+            continue
+        if not _segment_is_read_only(seg):
+            return None
+    return issue
 
 
 def is_read_only_command(command: str) -> bool:

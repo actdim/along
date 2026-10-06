@@ -15,7 +15,7 @@ import os
 import re
 from typing import Any, Dict, List, Optional, Tuple
 
-from .. import attribution, frontmatter, kb, proc, repo, sanitizer, session, textio, typography
+from .. import attribution, entities, frontmatter, kb, proc, repo, sanitizer, session, textio, typography
 from . import shellparse
 from .models import GateDecision, GateResult, HookEvent, HookEventType
 
@@ -603,6 +603,11 @@ def check_mutation_authorization(event: HookEvent, repo_root: str, options: Opti
         if shellparse.is_read_only_command(cmd) or shellparse.is_along_state_command(cmd) \
                 or shellparse.is_verification_command(cmd):
             return None
+        # `along wrap` left this session a completion token for the issue it commits.
+        commit_issue = shellparse.along_commit_issue(cmd)
+        if commit_issue and entities.parse_key(commit_issue)[1] in session.completion_tokens(
+                repo_root, event_session_key(event)):
+            return None
 
     # Check file modification tools
     elif tool in ("write_to_file", "write_file", "replace_file_content", "edit_file", "patch_file", "create_file"):
@@ -637,6 +642,8 @@ def check_mutation_authorization(event: HookEvent, repo_root: str, options: Opti
     target = f"issue '{slug}'" if slug else "this session"
     if how == "ambiguous":
         target = "this session (several in-progress issues, none bound to it)"
+    elif how == "single" and key:
+        target = f"this session (not bound to an issue; in-progress '{slug}' is not bound to it)"
     reason = (
         f"Inquiry Read-Only Invariance [gate: require-plan-approval]: "
         f"No approved plan for {target} (phase: '{phase}', plan_approved: {str(approved).lower()}). "
@@ -644,6 +651,8 @@ def check_mutation_authorization(event: HookEvent, repo_root: str, options: Opti
         "accepts it (Claude Code: ExitPlanMode), or by 'along plan approve' after the user's explicit yes. "
         "Use 'along start <slug>' to bind this session to an issue."
     )
+    if tool in ("run_command", "execute_command", "bash", "shell") and shellparse.is_along_commit(cmd):
+        reason += " " + _held_commit_reason(repo_root, key, cmd)
 
     if event.runtime == "antigravity":
         return GateResult(
@@ -652,6 +661,27 @@ def check_mutation_authorization(event: HookEvent, repo_root: str, options: Opti
             gate_name="require_plan_approval",
         )
     return reason
+
+
+def _held_commit_reason(repo_root: str, key: Optional[str], cmd: str) -> str:
+    """Why an `along commit` without an approved plan is held, and what to run instead.
+
+    See [bug--commit-blocked-after-wrap] REQ-7.
+    """
+    issue = shellparse.along_commit_issue(cmd)
+    if issue is None:
+        return ("This 'along commit' rewrites files (--fix-typography), redirects output or is chained "
+                "with a mutation: run the plain 'along commit -i <slug> ...' on its own.")
+    if not issue:
+        return ("Without an approved plan, 'along commit' passes only for an issue this session wrapped: "
+                "pass '-i <slug>'.")
+    slug = entities.parse_key(issue)[1]
+    owners = [k for k in session.completion_token_owners(repo_root, slug) if k != key]
+    if owners:
+        return (f"Issue '{slug}' was wrapped by another agent session ({', '.join(owners)}): commit it from "
+                "that session.")
+    return (f"This session holds no completion token for '{slug}': 'along wrap {slug}' in the session that "
+            "had its plan approved leaves one; otherwise bind the issue ('along start') and get the plan approved.")
 
 
 def check_active_issue(event: HookEvent, repo_root: str, exclude_paths: Optional[List[str]] = None, **kwargs: Any) -> Optional[str]:

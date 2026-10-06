@@ -293,6 +293,30 @@ class TestAlongCommitStaging(unittest.TestCase):
             finally:
                 os.chdir(orig_cwd)
 
+    def test_14_commit_consumes_completion_token(self):
+        """[bug--commit-blocked-after-wrap] REQ-6: the commit uses up the wrap's token."""
+        from unittest import mock
+        from alongkit import session
+        with repo_fixture() as root:
+            self._init_git_repo(root)
+            issue = os.path.join(root, ".along", "ISSUES", "done", "bug--work.md")
+            os.makedirs(os.path.dirname(issue), exist_ok=True)
+            textio.write_text(issue, SAMPLE_ISSUE_TEMPLATE.format(
+                slug="work", itype="bug", status="done", priority="high", title="Work"))
+            textio.write_text(os.path.join(root, "file_t.txt"), "content t")
+            key = session.session_key("generic", "sess-t")
+            session.save_binding(root, key, {"slug": None, "completed": [
+                {"slug": "work", "approved_at": None, "wrapped_at": session._utc_now_iso()}]})
+            orig_cwd = os.getcwd()
+            try:
+                os.chdir(root)
+                with mock.patch.dict(os.environ, {"ALONG_SESSION_ID": "sess-t"}):
+                    along_commit.main(["fix: t", "-i", "bug--work", "--paths", "file_t.txt", "-n"])
+            finally:
+                os.chdir(orig_cwd)
+            self.assertEqual(session.completion_tokens(root, key), [])
+            self.assertIn("refs #work", proc.git(["log", "-1", "--format=%s"], cwd=root).stdout)
+
     def test_13_push_failure_exits_nonzero(self):
         with repo_fixture() as root:
             self._init_git_repo(root)

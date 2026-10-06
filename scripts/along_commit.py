@@ -27,7 +27,7 @@ from alongkit import bootstrap
 bootstrap.ensure_deps()
 
 
-from alongkit import attribution, entities, gates, gitgates, proc, repo
+from alongkit import attribution, entities, gates, gitgates, proc, repo, session
 
 
 # Both gates live in alongkit.gates, shared with the release engine, which used to
@@ -198,6 +198,11 @@ def main(argv=None):
         sys.exit(res.returncode)
     print("-> Git commit created successfully.")
     print(res.out)
+
+    # The completion token `along wrap` left for this issue is used up by its commit.
+    if active_issue and session.consume_completion_token(
+            repo_root, session.current_session_key(), str(active_issue["slug"])):
+        print(f"-> Completion token for '{active_issue['slug']}' used.")
 
     # 5. Optional Push
     if parsed.push:
