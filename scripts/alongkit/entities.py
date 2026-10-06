@@ -769,6 +769,33 @@ def scan_issues(repo_root: str, include_done: bool = False) -> List[Dict[str, An
     return issues
 
 
+_CRITERION_RE = re.compile(r"^\s*[-*]\s+\[([ xX])\]\s+")
+
+
+def acceptance_criteria(body: str) -> Tuple[int, int]:
+    """(ticked, total) checkboxes under the issue's `## Acceptance Criteria` heading.
+
+    Only that section counts (up to the next level-2 heading); fenced code is ignored.
+    (0, 0) when the issue has no such section. [feat--parallel-session-closeout] REQ-3.
+    """
+    ticked = total = 0
+    inside = fence = False
+    for line in (body or "").splitlines():
+        if line.lstrip().startswith(("```", "~~~")):
+            fence = not fence
+            continue
+        if fence:
+            continue
+        if line.startswith("## "):
+            inside = line[3:].strip().lower().startswith("acceptance criteria")
+            continue
+        m = _CRITERION_RE.match(line) if inside else None
+        if m:
+            total += 1
+            ticked += m.group(1) in "xX"
+    return ticked, total
+
+
 def find_issue_by_slug(repo_root: str, slug: str) -> Optional[Dict[str, Any]]:
     """Search .along/ISSUES/ and .along/ISSUES/done/ for an issue matching `slug`."""
     clean_type, clean_slug = parse_key(slug)

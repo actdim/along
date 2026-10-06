@@ -43,6 +43,9 @@ class HookEvent:
     conversation_id: Optional[str] = None
     model_name: Optional[str] = None
     raw_payload: Dict[str, Any] = field(default_factory=dict)
+    #: Session ledger record written for this event, projected onto telemetry afterwards
+    #: (ADR-2026-10-05--session-event-ledger-feeds-telemetry).
+    ledger_event: Optional[Dict[str, Any]] = None
 
 
 @dataclass

@@ -116,10 +116,15 @@ A version whose string merely starts with the one being released.
 
 
 def snapshot_tree(root):
-    """Every file under `root` as {relative path: exact bytes}."""
+    """Every file under `root` as {relative path: exact bytes}.
+
+    Machine-local diagnostics (`.along/diagnostics/`, git-ignored: hook audit, the recorded
+    test run of [feat--parallel-session-closeout] REQ-8) are not part of the tree.
+    """
     out = {}
     for current, dirs, files in os.walk(root):
-        dirs[:] = [d for d in dirs if d not in (".git", "__pycache__")]
+        dirs[:] = [d for d in dirs if d not in (".git", "__pycache__")
+                   and not (d == "diagnostics" and os.path.basename(current) == ".along")]
         for name in files:
             path = os.path.join(current, name)
             rel = os.path.relpath(path, root).replace("\\", "/")

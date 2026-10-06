@@ -39,7 +39,7 @@ import os
 import sys
 from typing import List, Optional, Tuple
 
-from . import proc, repo, sanitizer, session
+from . import proc, repo, sanitizer, session, testruns
 
 
 def detect_test_command(repo_root: str) -> Optional[List[str]]:
@@ -97,8 +97,18 @@ def run_repository_tests(repo_root: str, label: str = "Quality Gate") -> bool:
               "unconfigured placeholder); nothing was verified.", file=sys.stderr)
         return True
 
+    # [feat--parallel-session-closeout] REQ-8: one run per completion; a green run on the
+    # same tree (Along state and KB projections aside) is reused.
+    tree = testruns.tree_hash(repo_root)
+    reused = testruns.green_run_for(repo_root, tree)
+    if reused:
+        print(f"-> [{label}] Tests passed on this tree at {reused.get('ts')} ({reused.get('source')}); "
+              "not running them again.")
+        return True
+
     print(f"-> [{label}] Running automated tests: {' '.join(cmd)}")
     res = proc.run_capture(cmd, cwd=repo_root)
+    testruns.record_run(repo_root, res.ok, tree, label)
     session.trace_test_run(repo_root, res.ok, label)
     if res.ok:
         print(f"-> [{label}] All tests passed successfully.")

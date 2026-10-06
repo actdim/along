@@ -35,6 +35,8 @@ flowchart TD
     INDEX --> T_LLM_WIKI_ARCHITECTURE
     T_MIGRATIONS["Protocol & Repository Migrations Guide"]
     INDEX --> T_MIGRATIONS
+    T_PARALLEL_SESSIONS["Parallel Sessions & Closeout Guide"]
+    INDEX --> T_PARALLEL_SESSIONS
     T_RUNTIME_HOOKS_AND_GATES["Runtime Lifecycle Hooks & Mechanical Gates"]
     INDEX --> T_RUNTIME_HOOKS_AND_GATES
     T_SESSION_LIFECYCLE["Session & Blackboard Lifecycle Guide"]
@@ -49,6 +51,7 @@ flowchart TD
     T_ARCHITECTURE -.->|references| T_SETUP_AND_WORKFLOW
     T_ARCHITECTURE -.->|references| T_SESSION_LIFECYCLE
     T_CLI_REFERENCE -.->|references| T_RUNTIME_HOOKS_AND_GATES
+    T_CLI_REFERENCE -.->|references| T_PARALLEL_SESSIONS
     T_CLI_REFERENCE -.->|references| T_SESSION_LIFECYCLE
     T_DECLARATIVE_GATES_AND_TRACEABILITY -.->|references| T_RUNTIME_HOOKS_AND_GATES
     T_LLM_WIKI_ARCHITECTURE -.->|references| T_SYSTEM_COMPARISONS
@@ -56,10 +59,14 @@ flowchart TD
     T_LLM_WIKI_ARCHITECTURE -.->|references| T_DOMAIN_MODEL
     T_LLM_WIKI_ARCHITECTURE -.->|references| T_SKILLS_REFERENCE
     T_LLM_WIKI_ARCHITECTURE -.->|references| T_SETUP_AND_WORKFLOW
+    T_PARALLEL_SESSIONS -.->|references| T_SESSION_LIFECYCLE
+    T_PARALLEL_SESSIONS -.->|references| T_CLI_REFERENCE
     T_RUNTIME_HOOKS_AND_GATES -.->|references| T_DECLARATIVE_GATES_AND_TRACEABILITY
+    T_RUNTIME_HOOKS_AND_GATES -.->|references| T_PARALLEL_SESSIONS
     T_RUNTIME_HOOKS_AND_GATES -.->|references| T_SESSION_LIFECYCLE
     T_SESSION_LIFECYCLE -.->|references| T_CLI_REFERENCE
     T_SESSION_LIFECYCLE -.->|references| T_RUNTIME_HOOKS_AND_GATES
+    T_SESSION_LIFECYCLE -.->|references| T_PARALLEL_SESSIONS
     T_SETUP_AND_WORKFLOW -.->|references| T_RUNTIME_HOOKS_AND_GATES
     T_SETUP_AND_WORKFLOW -.->|references| T_CLI_REFERENCE
     T_SYSTEM_COMPARISONS -.->|references| T_LLM_WIKI_ARCHITECTURE
@@ -81,6 +88,7 @@ flowchart TD
 - **[License](./topic--license.md)** (license) `license`, `mit`
 - **[LLM-Wiki Knowledge Base Architecture & Paradigm](./topic--llm-wiki-architecture.md)** (topic) `llm-wiki`, `architecture`, `knowledge-base`, `token-efficiency`, `indexing`, `methodology`, `search`, `karpathy`
 - **[Protocol & Repository Migrations Guide](./topic--migrations.md)** (guide) `migrations`, `upgrade`, `protocol`, `changelog`, `versioning`, `data-safety`
+- **[Parallel Sessions & Closeout Guide](./topic--parallel-sessions.md)** (guide) `session`, `parallel`, `closeout`, `attribution`, `ledger`, `commit`, `readiness`, `approval`
 - **[Runtime Lifecycle Hooks & Mechanical Gates](./topic--runtime-hooks-and-gates.md)** (architecture) `hooks`, `gates`, `runtime`, `enforcement`, `antigravity`, `claude`, `codex`, `typography`, `cli-safety`, `circuit-breaker`, `attribution`
 - **[Session & Blackboard Lifecycle Guide](./topic--session-lifecycle.md)** (guide) `session`, `blackboard`, `plan`, `trace`, `wrap`, `purge`, `issue-done`, `session-log`, `gates`
 - **[Setup & Developer Workflow](./topic--setup-and-workflow.md)** (setup-workflow) `setup-workflow`, `installation`, `lifecycle`, `runners`, `developer-workflow`, `testing`

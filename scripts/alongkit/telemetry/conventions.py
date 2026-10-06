@@ -58,6 +58,23 @@ ALONG_TURN_RETRIES = "along.turn.retries"
 ALONG_ARTIFACT_OFFLOADED = "along.artifact.offloaded"
 ALONG_ARTIFACT_REF = "along.artifact.ref"
 ALONG_ARTIFACT_SHA256 = "along.artifact.sha256"
+# Session event ledger record (ADR-2026-10-05--session-event-ledger-feeds-telemetry): the same
+# record the ledger keeps, projected onto a span event.
+ALONG_SESSION_KEY = "along.session.key"
+ALONG_EVENT_SCHEMA = "along.event.schema"
+ALONG_EVENT_KIND = "along.event.kind"
+ALONG_EVENT_PATH = "along.event.path"
+ALONG_EVENT_PATH_KIND = "along.event.path_kind"
+ALONG_EVENT_OK = "along.event.ok"
+
+
+def ledger_event_attributes(record: dict) -> dict:
+    """Span-event attributes of a session ledger record (unset fields left out)."""
+    pairs = ((ALONG_EVENT_SCHEMA, record.get("schema")), (ALONG_SESSION_KEY, record.get("session")),
+             (ALONG_ISSUE_SLUG, record.get("slug")), (ALONG_EVENT_KIND, record.get("kind")),
+             (ALONG_EVENT_PATH, record.get("path")), (ALONG_EVENT_PATH_KIND, record.get("path_kind")),
+             (ALONG_EVENT_OK, record.get("ok")))
+    return {name: value for name, value in pairs if value is not None}
 
 # ---------------------------------------------------------------------------
 # Standard Resource Attributes

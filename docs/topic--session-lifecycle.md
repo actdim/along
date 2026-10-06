@@ -25,6 +25,7 @@ Each issue in progress has a blackboard in `.along/.session/<slug>/` (not tracke
 | `plan.md` | the approved plan, with `## Revision N` sections | `ExitPlanMode`, `along plan approve --plan-file`, the agent |
 | `research.md` | findings (role-based work) | the agent |
 | `execution_trace.md` | edits, test runs and results, gate denials, approvals, phase and step changes | hooks and Along commands |
+| `events.jsonl` | the event ledger: one record per edit, test run, plan and approval, used for attribution | hooks and Along commands |
 | `reviews/step-N.md` | step verdicts (role-based work) | the agent |
 
 `along start` creates a `direct` blackboard, `along scratch init` a `role-based` one (held to the
@@ -95,3 +96,7 @@ Every way a blackboard leaves the repository writes it into the issue's session 
 `along wrap` removes the session's binding. The session that wrapped an issue with an approved
 plan keeps a completion token, so `along commit -i <slug> --paths ...` passes the plan gate right
 after the wrap; the commit uses the token up.
+
+Several issues finished in parallel are closed in one step with `along session close`; the
+record of each one then also lists its attributed files. See
+[Parallel Sessions](./topic--parallel-sessions.md).

@@ -52,7 +52,6 @@
 - [ ] `(feat)` [native-ast-blast-radius-analyzer](ISSUES/feat--native-ast-blast-radius-analyzer.md)
 - [ ] `(feat)` [openclaw-and-hermes-agent-integration](ISSUES/feat--openclaw-and-hermes-agent-integration.md)
 - [ ] `(feat)` [operational-assets-and-playbooks](ISSUES/feat--operational-assets-and-playbooks.md)
-- [ ] `(feat)` [parallel-session-closeout](ISSUES/feat--parallel-session-closeout.md)
 - [ ] `(feat)` [per-model-rework-metrics](ISSUES/feat--per-model-rework-metrics.md)
 - [ ] `(feat)` [pi-harness-support](ISSUES/feat--pi-harness-support.md)
 - [ ] `(feat)` [planning-fields-and-ordering-gates](ISSUES/feat--planning-fields-and-ordering-gates.md)
@@ -67,9 +66,9 @@
 - [ ] `(feat)` [zero-step-state-recovery-and-drift-detection](ISSUES/feat--zero-step-state-recovery-and-drift-detection.md)
 
 ## Done (recent)
+- [x] `(feat)` [parallel-session-closeout](ISSUES/done/feat--parallel-session-closeout.md)
 - [x] `(bug)` [session-records-not-captured](ISSUES/done/bug--session-records-not-captured.md)
 - [x] `(bug)` [commit-blocked-after-wrap](ISSUES/done/bug--commit-blocked-after-wrap.md)
 - [x] `(bug)` [ci-windows-short-paths](ISSUES/done/bug--ci-windows-short-paths.md)
 - [x] `(task)` [release-v4-4-5](ISSUES/done/task--release-v4-4-5.md)
-- [x] `(task)` [along-update-dev-repo](ISSUES/done/task--along-update-dev-repo.md)
-<!-- 186 older completed issue(s) archived in .along/ISSUES/done/ -->
+<!-- 187 older completed issue(s) archived in .along/ISSUES/done/ -->

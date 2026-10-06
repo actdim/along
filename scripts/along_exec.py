@@ -443,6 +443,61 @@ def _issue_done(repo_root: str, args: List[str], issues_dir: str, done_dir: str,
     sys.exit(0)
 
 
+def _issue_reopen(repo_root: str, args: List[str], issues_dir: str, done_dir: str, today: str):
+    """`along issue reopen <slug>`: back from done/ to ISSUES/, `status: open`.
+
+    The closing fields (`completed`, `superseded_by`, `duplicate_of`) are removed, sibling
+    links rewritten for done/ are restored, and ISSUES.md is recompiled, in one transaction.
+    Session logs that list the issue as completed stay as they are (history).
+    See [feat--parallel-session-closeout] REQ-7.
+    """
+    if len(args) < 2 or args[1].startswith("-"):
+        print("[Error] Usage: along issue reopen <slug>", file=sys.stderr)
+        sys.exit(1)
+    _itype, islug = entities.parse_key(args[1].lower())
+    if any(f.endswith(f"--{islug}.md") for f in os.listdir(issues_dir) if os.path.isfile(os.path.join(issues_dir, f))):
+        print(f"[Error] Issue '{islug}' is already open in {issues_dir}.", file=sys.stderr)
+        sys.exit(1)
+    found = next((os.path.join(done_dir, f) for f in sorted(os.listdir(done_dir))
+                  if f.endswith(f"--{islug}.md")), None) if os.path.isdir(done_dir) else None
+    if not found:
+        print(f"[Error] Issue '{islug}' not found in {done_dir}", file=sys.stderr)
+        sys.exit(1)
+    dest = os.path.join(issues_dir, os.path.basename(found))
+    content = textio.read_text(found)
+    if not has_frontmatter(content):
+        print(f"[Error] {os.path.basename(found)} has no parseable YAML front-matter.", file=sys.stderr)
+        sys.exit(1)
+    content = frontmatter.update(content, {"status": "open", "updated": today},
+                                 remove=("completed", "superseded_by", "duplicate_of"))
+    block = frontmatter.split(content)
+    if block:
+        back = re.compile(r'(\[[^\]]+\]\()\.\./((?:feat|bug|debt|task|docs)--[a-z0-9-]+\.md\b)')
+        body, in_fence = [], False
+        for line in block.body.splitlines(keepends=True):
+            if line.strip().startswith(("```", "~~~")):
+                in_fence = not in_fence
+            body.append(line if in_fence else back.sub(r"\1\2", line))
+        content = block.bom + block.open_delim + block.raw + block.close_delim + "".join(body)
+    tx = transaction.FileTransaction(repo_root, label=f"issue-reopen-{islug}")
+    try:
+        tx.protect(found)
+        tx.protect(dest)
+        textio.write_text(dest, content, newline="\n", atomic=True)
+        os.remove(found)
+        board = os.path.join(repo.state_dir(repo_root), "ISSUES.md")
+        if os.path.exists(board):
+            tx.protect(board)
+            entities.sync_issues_board(repo_root, recent_done_limit=RECENT_DONE_LIMIT)
+        tx.commit()
+    except (OSError, ValueError, frontmatter.FrontmatterError) as exc:
+        print(f"[Error] issue reopen failed: {exc}", file=sys.stderr)
+        tx.rollback()
+        sys.exit(1)
+    print(f"-> Reopened {repo.safe_relpath(dest, repo_root)} (status: open). Resume with 'along start {islug}'.")
+    sys.exit(0)
+
+
 def _issue_sync(repo_root: str):
     entities.sync_issues_board(repo_root, recent_done_limit=RECENT_DONE_LIMIT)
     print(f"-> Recompiled .along/ISSUES.md projection (capped to {RECENT_DONE_LIMIT} recent completed issues).")
@@ -617,7 +672,7 @@ def _issue_show(repo_root: str, args: List[str]):
 
 def handle_issue_command(repo_root: str, args: List[str]):
     if not args or args[0] in ("-h", "--help", "help"):
-        print("Usage: along_exec.py issue [create|update|done|sync|list|show|rename|supersede] [args...]")
+        print("Usage: along_exec.py issue [create|update|done|reopen|sync|list|show|rename|supersede] [args...]")
         sys.exit(0)
 
     subcmd = args[0].lower()
@@ -631,6 +686,7 @@ def handle_issue_command(repo_root: str, args: List[str]):
         "create": lambda: _issue_create(repo_root, args, issues_dir, today),
         "done": lambda: _issue_done(repo_root, args, issues_dir, done_dir, today),
         "close": lambda: _issue_done(repo_root, args, issues_dir, done_dir, today),
+        "reopen": lambda: _issue_reopen(repo_root, args, issues_dir, done_dir, today),
         "sync": lambda: _issue_sync(repo_root),
         "list": lambda: _issue_list(issues_dir),
         "update": lambda: _issue_update(repo_root, args, today),
@@ -970,10 +1026,32 @@ def handle_plan_command(repo_root: str, args: List[str]):
         print("Usage: along plan approve [<slug>] [--plan-file <path>]")
         print("                                     Record the user's approval of the plan (run only after an explicit yes);")
         print("                                     --plan-file writes the approved plan into the blackboard plan.md")
+        print("       along plan approve --closeout <slug>... | --closeout --ready")
+        print("                                     Record the user's approval to close these issues out (after an explicit yes)")
         print("       along plan status             Show this session's binding, phase and approval")
         sys.exit(0)
     sub = args[0].lower()
     key = session.current_session_key()
+    if sub == "approve" and "--closeout" in args:
+        # [feat--parallel-session-closeout] REQ-6: the user approved closing these issues out.
+        if not key:
+            print("[Error] No agent session id in the environment: a closeout approval belongs to a session.",
+                  file=sys.stderr)
+            sys.exit(2)
+        if "--ready" in args:
+            from alongkit import closeout
+            slugs = [i["slug"] for i in closeout.closeout_status(repo_root)["items"] if i["verdict"] == "ready"]
+        else:
+            slugs = [entities.parse_key(a.lower())[1] for a in args[args.index("--closeout") + 1:]
+                     if not a.startswith("-")]
+        if not slugs:
+            print("[Error] Nothing to approve: name the issues ('--closeout <slug>...') or use '--ready' "
+                  "when 'along session list' shows ready issues.", file=sys.stderr)
+            sys.exit(2)
+        session.record_closeout_approval(repo_root, key, slugs)
+        print(f"-> Closeout approved for {', '.join(slugs)} (session: {key}). "
+              "Next: 'along session close " + " ".join(slugs) + " [--push]'.")
+        sys.exit(0)
     if sub == "approve":
         slug = args[1].lower() if len(args) > 1 and not args[1].startswith("-") else None
         slug = slug or session.get_active_session_slug(repo_root, key)
@@ -1003,6 +1081,7 @@ def handle_plan_command(repo_root: str, args: List[str]):
                 sys.exit(2)
             session.set_session_phase(repo_root, "execution", slug=slug, plan_approved=True)
             session.append_trace(repo_root, slug, "plan approved (along plan approve)")
+            session.append_event(repo_root, slug, key, "approve")
             print(f"-> Plan approved for '{slug}' (session: {key or 'none'}).")
         elif key:
             session.record_plan_approval(repo_root, key)
@@ -1027,6 +1106,10 @@ def handle_session_command(repo_root: str, args: List[str]):
         print("Usage: along_exec.py session create <slug> --summary \"Summary text\" [--issues \"slug1,slug2\"] [--decisions \"ADR-slug\"]")
         print("       along_exec.py session bindings          List agent-session bindings")
         print("       along_exec.py session gc [--dry-run]    Remove stale or orphaned bindings")
+        print("       along_exec.py session list [--json]     Readiness of every issue in progress, binding and blackboard")
+        print("       along_exec.py session close <slug>... | --ready [--dry-run] [--push]")
+        print("                                               Close out finished work: tests once, wrap, commit by attribution,")
+        print("                                               push once (needs 'along plan approve --closeout' after the user's yes)")
         sys.exit(0)
 
     subcmd = args[0].lower()
@@ -1043,6 +1126,25 @@ def handle_session_command(repo_root: str, args: List[str]):
         verb = "Would remove" if "--dry-run" in args else "Removed"
         print(f"-> {verb} {len(removed)} stale binding(s){': ' + ', '.join(removed) if removed else ''}.")
         sys.exit(0)
+    if subcmd == "list":
+        # [feat--parallel-session-closeout] REQ-4: readiness of every open piece of work.
+        from alongkit import closeout
+        status = closeout.closeout_status(repo_root)
+        if "--json" in args:
+            import json
+            print(json.dumps(status, indent=2))
+        else:
+            print(closeout.format_closeout_status(status))
+        sys.exit(0)
+    if subcmd == "close":
+        # [feat--parallel-session-closeout] REQ-5: one step for every finished piece of work.
+        from alongkit import closeout
+        names = [a for a in args[1:] if not a.startswith("-")]
+        if not names and "--ready" not in args and not closeout.load_run(repo_root):
+            print("[Error] Usage: along session close <slug>... | --ready [--dry-run] [--push]", file=sys.stderr)
+            sys.exit(2)
+        sys.exit(closeout.run_closeout(repo_root, keys=names, ready="--ready" in args,
+                                       dry_run="--dry-run" in args, push="--push" in args))
     from datetime import datetime
     today = datetime.now().strftime("%Y-%m-%d")
     year = datetime.now().strftime("%Y")
@@ -1448,6 +1550,22 @@ def handle_doctor_command(repo_root: str, args: List[str]):
         warnings += 1
     else:
         print("[OK] No orphan blackboards.")
+
+    # Stale bindings and in-progress issues nobody is bound to
+    # [feat--parallel-session-closeout] REQ-9.
+    stale = session.gc_bindings(repo_root, dry_run=True)
+    if stale:
+        print(f"[WARN] {len(stale)} stale session binding(s) (older than {session.BINDING_MAX_AGE_HOURS} h "
+              f"or without a blackboard): {', '.join(stale)}. Run `along session gc`.")
+        warnings += 1
+    bound = {str(b.get("slug")) for b in session.list_bindings(repo_root) if b.get("slug")}
+    unbound = [i["slug"] for i in entities.scan_issues(repo_root) if i.get("status") == "in-progress"
+               and i["slug"] not in bound]
+    if unbound:
+        print(f"[WARN] {len(unbound)} issue(s) in progress with no session bound: {', '.join(unbound)}. "
+              "Resume with `along start <slug>`, close them out (`along session list`), or set them back "
+              "to open (`along issue update <slug> --status open`).")
+        warnings += 1
 
     # Check DECISIONS
     dec_dir = os.path.join(along_dir, "DECISIONS")

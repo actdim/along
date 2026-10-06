@@ -23,6 +23,7 @@ Also, when relevant: `.along/VISION.md`, `.along/GLOSSARY.md`. These reflect the
 - **Append-Only Merge Driver**: `.along/HISTORY.md` and legacy monolithic `.along/DECISIONS.md` are append-only. Configure `.gitattributes` with `merge=union`. Modular ADR files in `.along/DECISIONS/` are isolated per-file to eliminate merge collisions.
 - **Untracked Exports** [gate: untracked-exports]: `.along/dashboard.html`, `.along/DASHBOARD.md` and per-machine `.along/diagnostics/` stay out of Git.
 - **Context Isolation**: Context is localized to the target issue file, session-scoped blackboard (`.along/.session/<slug>/`), and completed session logs.
+- **Parallel Closeout**: `along session list`; on the user's yes `along plan approve --closeout --ready`, then `along session close --ready`.
 
 ## Mandatory Issue Anchoring
 - **No Code Without Issue** [gate: require-active-issue]: Before modifying source code, agents MUST identify or create an issue in `.along/ISSUES/<type>--<slug>.md` and set `status: in-progress`.
@@ -110,10 +111,10 @@ See the following engineering guidelines:
 This repository is **ActDim Along** (`actdim-along`) - the provider-agnostic agent-context protocol and skills suite.
 
 - **Skills Source**: `skills/` (`along-init`, `along-update`, `along-dash`, `along-wrap`, `along-commit`, `along-build`, `along-test`, `along-dev`, `along-team`, `along-kb-sync`, `along-kb-search`, `along-issue-sync`, `along-decision-sync`, `along-history-sync`, `along-graph-check`, `along-graph-sync`, `along-graph-impact`, `along-graph-arch`, `along-dep-scan`, `along-version-bump`, `along-feedback`).
-- **Engines**: `scripts/` (one per skill) on shared `scripts/alongkit/` package. Helpers defined there only; `tests/test_alongkit.py` enforces no duplicates. Runtime dep: `ruamel.yaml`.
-- **Typography**: `along sanitize` checks (writes with `--write`). `/along-commit` and `/along-version-bump` verify and abort (rewrite with `--fix-typography`). Scope: `.md`, `.py`, `.sh`, `.ps1`, `.bat`.
-- **Release**: `/along-version-bump` runs pre-mutation gates, transactional rollback via `alongkit.transaction.FileTransaction`.
-- **Migration**: `migrate_protocol.py` preserves destinations, union-merges append-only files, backs up to `.along/.migration-backup/`.
-- **Install**: Windows: `install.ps1 -Target all` (or `install.bat`). Unix: `bash install.sh`. Uninstall: `-Uninstall` / `--uninstall`. Manifest: `~/.along/install-manifest.json`.
+- **Engines**: `scripts/` (one per skill) on shared `scripts/alongkit/` package. Helpers live there only (`tests/test_alongkit.py` checks). Runtime dep: `ruamel.yaml`.
+- **Typography**: `along sanitize [--write]`; `/along-commit` and `/along-version-bump` abort on it (`--fix-typography` rewrites). Scope: `.md .py .sh .ps1 .bat`.
+- **Release**: `/along-version-bump`: pre-mutation gates, rollback via `alongkit.transaction.FileTransaction`.
+- **Migration**: `migrate_protocol.py` keeps destinations, union-merges append-only files, backs up to `.along/.migration-backup/`.
+- **Install**: `install.ps1 -Target all` / `install.bat` (Windows), `bash install.sh` (Unix); `-Uninstall` / `--uninstall`; manifest `~/.along/install-manifest.json`.
 - **Lifecycle**: Tests: `python .along/scripts/test.py`. Dev: `npm run dev`. Build: `npm run build`.
-- **Frontend** (`packages/dashboard-ui/`): Internal dashboard package. Strict `@actdim/dynstruct` + MobX (zero `useState`/`useEffect`), NSwag client via `@actdim/msgmesh/adapters`. 100% typed (zero `any`/`as`). Full rules: `[packages/dashboard-ui/README.md](./packages/dashboard-ui/README.md)`.
+- **Frontend** (`packages/dashboard-ui/`): Internal dashboard. Strict `@actdim/dynstruct` + MobX (zero `useState`/`useEffect`), NSwag client via `@actdim/msgmesh/adapters`. 100% typed (zero `any`/`as`). Rules: `[packages/dashboard-ui/README.md](./packages/dashboard-ui/README.md)`.

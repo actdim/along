@@ -3,14 +3,15 @@ protocol: along
 protocol_version: "4.4.5"
 slug: parallel-session-closeout
 type: feat
-status: open
+status: done
+completed: 2026-10-06
 priority: high
 created: 2026-10-05
-updated: 2026-10-05
+updated: 2026-10-06
 agent: claude-code
 tags: [session, parallel, wrap, commit, closeout]
 blocked_by: [bug--commit-blocked-after-wrap, bug--session-records-not-captured]
-related: [bug--commit-blocked-after-wrap, bug--session-records-not-captured]
+related: [bug--commit-blocked-after-wrap, bug--session-records-not-captured, feat--agent-run-protocol-and-observability]
 ---
 
 # Close parallel sessions in one step: attribution, readiness, closeout command and approval
@@ -50,6 +51,21 @@ Working strictly one isolated issue at a time must never be a precondition.
 3. Wrap leaves no trace of a finished approved issue (handled by `bug--commit-blocked-after-wrap`).
 4. Plan and execution are not recorded (handled by `bug--session-records-not-captured`).
 5. No command that does the whole closeout, and no approval form for "close these issues".
+
+## Design note: shared event model with observability (2026-10-05)
+Decision: `ADR-2026-10-05--session-event-ledger-feeds-telemetry`. The attribution trace of REQ-1
+and the event model of `feat--agent-run-protocol-and-observability` describe the same facts, so
+they share one schema and one capture point, but not one store:
+- one versioned event record `{schema, ts, session, slug, kind, path, path_kind, ok}`
+  (`kind`: edit / test / tool / plan / approve; `path_kind`: source / docs / state), field names
+  taken from `scripts/alongkit/telemetry/conventions.py` (`along.issue.slug`, `along.session.*`);
+- the PostToolUse hook is the single capture point: append to the durable session ledger first,
+  then, if a `Tracer` is active, emit the same event as a span event (the existing telemetry
+  branch in `scripts/along_hook.py` becomes this second step);
+- the ledger is the source of truth for REQ-1..REQ-5; telemetry is a fail-open projection and
+  never feeds closeout decisions; a failed ledger write is reported, not swallowed;
+- out of scope here: a generic event bus, subscribers, replay of the ledger into spans (left to
+  the observability epic).
 
 ## Requirements
 - REQ-1 Attribution: every traced edit records `{path, slug, ts}` with the session's active issue
@@ -117,10 +133,31 @@ blackboard.
    template line about closing parallel sessions.
 
 ## Acceptance Criteria
-- [ ] REQ-1..REQ-9 covered by hermetic tests, positive and negative.
-- [ ] Scenario test: two sessions, two issues, one shared file, one unrelated change -> one closeout command closes both, three commits (two exclusive, one combined), the unrelated change stays uncommitted, push once.
-- [ ] Docs written.
-- [ ] Automated tests passing.
+- [x] REQ-1..REQ-9 covered by hermetic tests, positive and negative.
+- [x] Scenario test: two sessions, two issues, one shared file, one unrelated change -> one closeout command closes both, three commits (two exclusive, one combined), the unrelated change stays uncommitted, push once. (Plus a fourth commit for the projections, as REQ-5.4 requires.)
+- [x] Docs written.
+- [x] Automated tests passing.
+
+## Resolution (2026-10-06)
+- REQ-1, REQ-2: session event ledger `events.jsonl` per issue blackboard (`session.record_event`,
+  `append_event`, `load_events`, `attributed_files`, `path_kind`, `ledger_errors`); PostToolUse,
+  test runs, plan and approval as capture points; telemetry projection (`conventions.py`
+  `along.session.key`, `along.event.*`; `HookEvent.ledger_event`); `### Attributed Files` in the
+  Blackboard Record.
+- REQ-8: `alongkit.testruns` (tree hash, `test_runs.json`); the test gate reuses a green run on the
+  same tree; the closeout carries its run over its own wraps when they changed only state / docs.
+- REQ-3, REQ-4: `alongkit.closeout.closeout_status`, `entities.acceptance_criteria`,
+  `along session list [--json]`.
+- REQ-6: `along plan approve --closeout <slug>...|--ready`, `session.record_closeout_approval` /
+  `closeout_approved` / `consume_closeout_approval`, commit gate branch.
+- REQ-5: `along session close` (`closeout.run_closeout`, `plan_closeout`), resumable.
+- REQ-7: `along issue reopen`. REQ-9: doctor (stale bindings, unbound in-progress issues).
+- Deviation (approved in the plan): tests run once before the wraps, not after.
+- Docs: new `docs/topic--parallel-sessions.md`; CLI reference, runtime hooks and gates, session
+  lifecycle; protocol line "Parallel Closeout" (`skills/along-init/protocol.md`, AGENTS.md).
+- The findings F1, F2, F4, F5 below are still to be filed (not part of this ticket).
+- AGENTS.md budget: the protocol line fits the 14 KB ceiling only after tightening the wording of
+  this repository's Project specifics (no fact dropped); 3 B of headroom remain.
 
 ## Findings from 2026-10-05 to file as separate issues
 - F1: `along update --dry-run` does not show each context's migration plan.

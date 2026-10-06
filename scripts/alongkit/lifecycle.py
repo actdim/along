@@ -28,7 +28,7 @@ import shutil
 import sys
 from typing import List, Optional, Sequence, Tuple, Union
 
-from . import entities, frontmatter, gates, proc, repo, session, textio, transaction
+from . import entities, frontmatter, gates, proc, repo, session, testruns, textio, transaction
 
 LIFECYCLE_ACTIONS: tuple = ("build", "test", "dev", "debug")
 
@@ -116,8 +116,12 @@ def run_lifecycle_command(action: str, cmd: Sequence[str], repo_root: str, mode:
     A test run and its result go into the execution trace of the session's bound issue
     [bug--session-records-not-captured].
     """
+    tree = testruns.tree_hash(repo_root) if action == "test" else None
     code = _run_lifecycle_command(action, cmd, repo_root, mode)
     if action == "test":
+        # The tree is hashed before the run: a file changed during the run makes the record
+        # stale, never wrongly green [feat--parallel-session-closeout] REQ-8.
+        testruns.record_run(repo_root, code == 0, tree, "along test")
         session.trace_test_run(repo_root, code == 0, "along test")
     return code
 

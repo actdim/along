@@ -259,6 +259,12 @@ def record_tool_activity(event: HookEvent, repo_root: str) -> None:
         # Every repository edit goes into the bound issue's execution trace, except the
         # blackboard and diagnostics themselves [bug--session-records-not-captured].
         if rel and not _matches_pattern(rel, list(TRACE_EXCLUDED_PATTERNS)):
+            # Ledger first (source of truth for attribution), then the readable trace
+            # [feat--parallel-session-closeout].
+            record = session.record_event(repo_root, key, "edit", repo.normalize_posix(rel))
+            if record:
+                # The hook projects the same record onto the runner's span (fail-open).
+                event.ledger_event = record
             session.trace_event(repo_root, key, f"edit {repo.normalize_posix(rel)}", collapse=True)
         if rel and is_source_edit(rel):
             trace["last_edit_time"] = now_iso
@@ -629,11 +635,15 @@ def check_mutation_authorization(event: HookEvent, repo_root: str, options: Opti
         if shellparse.is_read_only_command(cmd) or shellparse.is_along_state_command(cmd) \
                 or shellparse.is_verification_command(cmd):
             return None
-        # `along wrap` left this session a completion token for the issue it commits.
+        # `along wrap` left this session a completion token for the issue it commits, or the
+        # user approved closing it out [feat--parallel-session-closeout] REQ-6.
         commit_issue = shellparse.along_commit_issue(cmd)
-        if commit_issue and entities.parse_key(commit_issue)[1] in session.completion_tokens(
-                repo_root, event_session_key(event)):
-            return None
+        if commit_issue:
+            commit_slug = entities.parse_key(commit_issue)[1]
+            ckey = event_session_key(event)
+            if commit_slug in session.completion_tokens(repo_root, ckey) \
+                    or commit_slug in session.closeout_approved(repo_root, ckey):
+                return None
 
     # Check file modification tools
     elif tool in ("write_to_file", "write_file", "replace_file_content", "edit_file", "patch_file", "create_file"):
@@ -706,8 +716,10 @@ def _held_commit_reason(repo_root: str, key: Optional[str], cmd: str) -> str:
     if owners:
         return (f"Issue '{slug}' was wrapped by another agent session ({', '.join(owners)}): commit it from "
                 "that session.")
-    return (f"This session holds no completion token for '{slug}': 'along wrap {slug}' in the session that "
-            "had its plan approved leaves one; otherwise bind the issue ('along start') and get the plan approved.")
+    return (f"This session holds no completion token for '{slug}' and no closeout approval for it: "
+            f"'along wrap {slug}' in the session that had its plan approved leaves a token; a closeout needs the "
+            f"user's yes, then 'along plan approve --closeout {slug}'; otherwise bind the issue ('along start') "
+            "and get the plan approved.")
 
 
 def check_active_issue(event: HookEvent, repo_root: str, exclude_paths: Optional[List[str]] = None, **kwargs: Any) -> Optional[str]:

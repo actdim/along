@@ -288,7 +288,7 @@ def record_accepted_plan(repo_root: str, key: Optional[str], plan_text: Optional
     if plan_text and plan_text.strip():
         if slug:
             ctx = binding_context(repo_root, binding) or repo_root
-            record_plan(ctx, str(slug), plan_text, "ExitPlanMode")
+            record_plan(ctx, str(slug), plan_text, "ExitPlanMode", key=key)
         else:
             binding.setdefault("created", _utc_now_iso())
             binding["pending_plan"] = plan_text.strip()
@@ -297,6 +297,7 @@ def record_accepted_plan(repo_root: str, key: Optional[str], plan_text: Optional
     ctx = binding_context(repo_root, binding) or repo_root
     if slug and load_state(ctx, str(slug)):
         append_trace(ctx, str(slug), "plan approved (ExitPlanMode)")
+        append_event(ctx, str(slug), key, "approve")
     return saved
 
 
@@ -420,15 +421,62 @@ def consume_completion_token(repo_root: str, key: Optional[str], slug: str) -> b
     kept = [t for t in tokens if t.get("slug") != slug]
     if len(kept) == len(tokens):
         return False
-    if not kept and not binding.get("slug"):
-        try:
-            os.remove(_binding_file(repo_root, key))
-        except OSError:
-            pass
-        return True
     binding["completed"] = kept
-    save_binding(repo_root, key, binding)
+    _save_or_drop_binding(repo_root, key, binding)
     return True
+
+
+def _save_or_drop_binding(repo_root: str, key: str, binding: Dict[str, Any]) -> None:
+    """Save `binding`, or remove its file when it holds no slug, token or closeout approval."""
+    if binding.get("slug") or binding.get("completed") or (binding.get("closeout") or {}).get("slugs"):
+        save_binding(repo_root, key, binding)
+        return
+    try:
+        os.remove(_binding_file(repo_root, key))
+    except OSError:
+        pass
+
+
+# ---------------------------------------------------------------------------
+# Closeout approval [feat--parallel-session-closeout] REQ-6
+#
+# `along plan approve --closeout <slug>...` (after the user's explicit yes) records the set of
+# issues this session may close out: `along session close` and `along commit -i <slug>` of
+# those slugs pass without a per-issue plan approval. Works from a fresh session with no
+# binding; consumed by the closeout.
+# ---------------------------------------------------------------------------
+
+def record_closeout_approval(repo_root: str, key: Optional[str], slugs: List[str]) -> Optional[Dict[str, Any]]:
+    if not key:
+        return None
+    binding = load_binding(repo_root, key) or {"created": _utc_now_iso()}
+    known = set(closeout_approved(repo_root, key))
+    binding["closeout"] = {"slugs": sorted(known | {s for s in slugs if s}), "approved_at": _utc_now_iso()}
+    return save_binding(repo_root, key, binding)
+
+
+def closeout_approved(repo_root: str, key: Optional[str], now: Optional[datetime] = None) -> List[str]:
+    """Slugs session `key` was approved to close out (approvals older than the gc age lapse)."""
+    closeout = (load_binding(repo_root, key) or {}).get("closeout") or {}
+    if not closeout.get("slugs"):
+        return []
+    if _token_age_hours({"wrapped_at": closeout.get("approved_at")}, now or datetime.now(timezone.utc)) \
+            > BINDING_MAX_AGE_HOURS:
+        return []
+    return [str(s) for s in closeout["slugs"]]
+
+
+def consume_closeout_approval(repo_root: str, key: Optional[str], slugs: List[str]) -> None:
+    """Drop `slugs` from the session's closeout approval once they are closed."""
+    binding = load_binding(repo_root, key)
+    if not key or not binding or not binding.get("closeout"):
+        return
+    left = [s for s in (binding["closeout"].get("slugs") or []) if s not in set(slugs)]
+    if left:
+        binding["closeout"]["slugs"] = left
+    else:
+        binding.pop("closeout", None)
+    _save_or_drop_binding(repo_root, key, binding)
 
 
 def in_progress_slugs(repo_root: str) -> List[str]:
@@ -664,19 +712,29 @@ def append_trace(repo_root: str, slug: str, line: str, collapse: bool = False) -
     return path
 
 
+def bound_blackboard(repo_root: str, key: Optional[str]) -> Tuple[Optional[str], Optional[str]]:
+    """(context root, slug) of the blackboard session `key` is bound to (or a runner's
+    `ALONG_ISSUE_SLUG`); (None, None) for an unbound session or a missing blackboard.
+    Never the 'single' fallback: an unbound session's work is nobody's.
+    """
+    binding = load_binding(repo_root, key) or {}
+    slug = binding.get("slug") or (os.environ.get("ALONG_ISSUE_SLUG") or "").strip()
+    if not slug:
+        return None, None
+    ctx = (binding_context(repo_root, binding) if binding.get("slug") else repo_root) or repo_root
+    if not load_state(ctx, str(slug)):
+        return None, None
+    return ctx, str(slug)
+
+
 def trace_event(repo_root: str, key: Optional[str], line: str, collapse: bool = False) -> Optional[str]:
     """Append `line` to the trace of the issue session `key` is bound to (or a runner's
     `ALONG_ISSUE_SLUG`); nothing for an unbound session or a missing blackboard.
 
     Hooks call it, so a failed write is reported on stderr, never raised.
     """
-    binding = load_binding(repo_root, key) or {}
-    slug = binding.get("slug") or (os.environ.get("ALONG_ISSUE_SLUG") or "").strip()
-    if not slug:
-        return None
-    ctx = binding_context(repo_root, binding) if binding.get("slug") else repo_root
-    ctx = ctx or repo_root
-    if not load_state(ctx, str(slug)):
+    ctx, slug = bound_blackboard(repo_root, key)
+    if not slug or not ctx:
         return None
     try:
         return append_trace(ctx, str(slug), line, collapse=collapse)
@@ -686,8 +744,161 @@ def trace_event(repo_root: str, key: Optional[str], line: str, collapse: bool = 
 
 
 def trace_test_run(repo_root: str, ok: bool, source: str) -> Optional[str]:
-    """A test run of this process's session and its result, into the bound issue's trace."""
-    return trace_event(repo_root, current_session_key(), f"test {'pass' if ok else 'FAIL'} ({source})")
+    """A test run of this process's session and its result, into the bound issue's trace
+    and event ledger."""
+    key = current_session_key()
+    record_event(repo_root, key, "test", ok=ok)
+    return trace_event(repo_root, key, f"test {'pass' if ok else 'FAIL'} ({source})")
+
+
+# ---------------------------------------------------------------------------
+# Session event ledger [feat--parallel-session-closeout] REQ-1, REQ-2;
+# ADR-2026-10-05--session-event-ledger-feeds-telemetry.
+#
+# One versioned record per event, appended (never rewritten in the hot path) to the bound
+# issue's `.along/.session/<slug>/events.jsonl`. It is the source of truth for attribution,
+# readiness and closeout; telemetry gets the same record as a fail-open projection.
+# ---------------------------------------------------------------------------
+
+EVENTS_FILENAME: str = "events.jsonl"
+EVENT_SCHEMA: int = 1
+EVENT_KINDS: Tuple[str, ...] = ("edit", "test", "tool", "plan", "approve")
+PATH_KINDS: Tuple[str, ...] = ("source", "docs", "state")
+#: Events kept per issue; when exceeded, the oldest edit events go first.
+EVENTS_MAX: int = 2000
+_EVENTS_COMPACT_BYTES: int = 400_000
+LEDGER_ERRORS_FILENAME: str = "ledger_errors.json"
+
+
+def path_kind(rel: str) -> str:
+    """`state` (Along state), `docs` (docs/ and root Markdown) or `source`."""
+    rel = repo.normalize_posix(rel).lstrip("/")
+    parts = rel.split("/")
+    if repo.STATE_DIR in parts:
+        return "state"
+    if "docs" in parts[:-1] or (len(parts) == 1 and rel.lower().endswith(".md")):
+        return "docs"
+    return "source"
+
+
+def events_path(ctx: str, slug: str) -> str:
+    return os.path.join(get_session_dir(ctx, slug), EVENTS_FILENAME)
+
+
+def workspace_path(repo_root: str, rel: str) -> str:
+    """`rel` (relative to `repo_root`) as a POSIX path relative to the workspace root
+    (`binding_root`), the form every ledger entry uses."""
+    absolute = os.path.normpath(os.path.join(repo_root, rel))
+    return repo.normalize_posix(os.path.relpath(absolute, binding_root(repo_root)))
+
+
+def _ledger_errors_file(repo_root: str) -> str:
+    return os.path.join(repo.diagnostics_dir(repo_root), LEDGER_ERRORS_FILENAME)
+
+
+def ledger_errors(repo_root: str) -> Dict[str, Dict[str, Any]]:
+    """{slug: {count, last_error, ts}} of failed ledger writes on this machine."""
+    path = _ledger_errors_file(repo_root)
+    try:
+        data = json.loads(textio.read_text(path, strict=False)) if os.path.isfile(path) else {}
+    except (OSError, UnicodeDecodeError, json.JSONDecodeError):
+        return {}
+    return data if isinstance(data, dict) else {}
+
+
+def _report_ledger_error(repo_root: str, slug: str, error: str) -> None:
+    print(f"[Along] Could not write the event ledger of '{slug}': {error}", file=sys.stderr)
+    try:
+        errors = ledger_errors(repo_root)
+        entry = errors.get(slug) or {"count": 0}
+        errors[slug] = {"count": int(entry.get("count", 0)) + 1, "last_error": error, "ts": _utc_now_iso()}
+        repo.ensure_diagnostics_dir(repo_root)
+        textio.write_text(_ledger_errors_file(repo_root), json.dumps(errors, indent=2) + "\n", newline="\n")
+    except OSError:
+        pass
+
+
+def append_event(ctx: str, slug: str, key: Optional[str], kind: str, path: Optional[str] = None,
+                 ok: Optional[bool] = None) -> Optional[Dict[str, Any]]:
+    """Append one ledger record to the blackboard of `slug` in `ctx`. `path` is already
+    workspace-relative. A failed write is reported (stderr + ledger_errors.json), not raised."""
+    event: Dict[str, Any] = {"schema": EVENT_SCHEMA, "ts": _utc_now_iso(), "session": key, "slug": slug,
+                             "kind": kind, "path": path, "path_kind": path_kind(path) if path else None,
+                             "ok": ok}
+    target = events_path(ctx, slug)
+    try:
+        with open(target, "a", encoding="utf-8", newline="\n") as handle:
+            handle.write(json.dumps(event, separators=(",", ":")) + "\n")
+        if os.path.getsize(target) > _EVENTS_COMPACT_BYTES:
+            _compact_events(ctx, slug)
+    except OSError as exc:
+        _report_ledger_error(ctx, slug, str(exc))
+        return None
+    return event
+
+
+def record_event(repo_root: str, key: Optional[str], kind: str, path: Optional[str] = None,
+                 ok: Optional[bool] = None) -> Optional[Dict[str, Any]]:
+    """Ledger record for the issue session `key` is bound to; `path` relative to `repo_root`.
+    Nothing for an unbound session (its changes stay unattributed)."""
+    ctx, slug = bound_blackboard(repo_root, key)
+    if not slug or not ctx:
+        return None
+    return append_event(ctx, slug, key, kind, workspace_path(repo_root, path) if path else None, ok)
+
+
+def load_events(ctx: str, slug: str) -> List[Dict[str, Any]]:
+    """The ledger of `slug`, oldest first; unreadable lines are skipped. Records without a
+    `schema` field are read as schema 1."""
+    path = events_path(ctx, slug)
+    out: List[Dict[str, Any]] = []
+    if not os.path.isfile(path):
+        return out
+    try:
+        text = textio.read_text(path, strict=False)
+    except (OSError, UnicodeDecodeError):
+        return out
+    for line in text.splitlines():
+        try:
+            event = json.loads(line)
+        except json.JSONDecodeError:
+            continue
+        if isinstance(event, dict) and event.get("kind"):
+            event.setdefault("schema", EVENT_SCHEMA)
+            out.append(event)
+    return out
+
+
+def _compact_events(ctx: str, slug: str) -> None:
+    """Keep at most `EVENTS_MAX` events, dropping the oldest edit events first."""
+    events = load_events(ctx, slug)
+    excess = len(events) - EVENTS_MAX
+    if excess <= 0:
+        return
+    kept: List[Dict[str, Any]] = []
+    for event in events:
+        if excess > 0 and event.get("kind") == "edit":
+            excess -= 1
+            continue
+        kept.append(event)
+    kept = kept[-EVENTS_MAX:]
+    textio.write_text(events_path(ctx, slug),
+                      "".join(json.dumps(e, separators=(",", ":")) + "\n" for e in kept), newline="\n")
+
+
+def attributed_files(ctx: str, slug: str) -> Dict[str, Dict[str, Any]]:
+    """{workspace path: {path_kind, edits, last, sessions}} from the edit events of `slug`."""
+    files: Dict[str, Dict[str, Any]] = {}
+    for event in load_events(ctx, slug):
+        if event.get("kind") != "edit" or not event.get("path"):
+            continue
+        entry = files.setdefault(str(event["path"]), {"path_kind": event.get("path_kind") or "source",
+                                                      "edits": 0, "last": None, "sessions": []})
+        entry["edits"] += 1
+        entry["last"] = event.get("ts")
+        if event.get("session") and event["session"] not in entry["sessions"]:
+            entry["sessions"].append(event["session"])
+    return files
 
 
 # ---------------------------------------------------------------------------
@@ -725,7 +936,7 @@ def plan_recorded(repo_root: str, slug: str) -> bool:
     return not is_scaffold_plan(read_plan(repo_root, slug))
 
 
-def record_plan(repo_root: str, slug: str, text: str, source: str) -> int:
+def record_plan(repo_root: str, slug: str, text: str, source: str, key: Optional[str] = None) -> int:
     """Write an approved plan into the blackboard's plan.md; returns its revision number.
 
     The scaffold is replaced by revision 1; a later plan is appended as the next revision, so
@@ -750,6 +961,7 @@ def record_plan(repo_root: str, slug: str, text: str, source: str) -> int:
         content = current.rstrip("\n") + f"\n\n## Revision {revision} {stamp}\n\n{text}\n"
     textio.write_text(plan_path(repo_root, slug), content, newline="\n")
     append_trace(repo_root, slug, f"plan recorded: revision {revision} ({source})")
+    append_event(repo_root, slug, key or current_session_key(), "plan")
     return revision
 
 
@@ -827,6 +1039,16 @@ def render_blackboard_markdown(repo_root: str, slug: str, reason: Optional[str] 
             n = int(s.get("step", 0))
             has_review = "yes" if os.path.isfile(review_file(repo_root, slug, n)) else "no"
             out.append(f"| {n} | {s.get('title', '')} | {s.get('status', '')} | {s.get('retries', 0)} | {has_review} |")
+        out.append("")
+    # Attribution survives the purge in the session log [feat--parallel-session-closeout] REQ-2.
+    files = attributed_files(repo_root, slug)
+    if files:
+        out.append("### Attributed Files\n")
+        out.append("| Path | Kind | Edits | Last edit | Sessions |")
+        out.append("| --- | --- | --- | --- | --- |")
+        for path in sorted(files):
+            f = files[path]
+            out.append(f"| `{path}` | {f['path_kind']} | {f['edits']} | {f['last']} | {', '.join(f['sessions'])} |")
         out.append("")
     for title, name in (("Plan", PLAN_FILENAME), ("Research", "research.md"), ("Execution Trace", TRACE_FILENAME)):
         text = _read(name)

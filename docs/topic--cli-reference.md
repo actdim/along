@@ -103,6 +103,7 @@ Validates repository compliance with the Along protocol. Audits `.along/` direct
 - **Runtime section**: names the runtime (`claude-code`, `cowork`, `antigravity`, `codex`, ...), the gate enforcement level (`mechanical` only when Along hooks are registered for that runtime, otherwise `advisory`), the Python floor (3.10), a stale `.git/index.lock`, and a cross-OS or VM-mounted repository (worktrees unsafe). See the capability matrix in [Runtime Lifecycle Hooks & Mechanical Gates](./topic--runtime-hooks-and-gates.md).
 - **Vision & root notes**: warns about a root `VISION.md` next to `.along/`, an unresolved `along:imported-vision needs-restructure` section in `.along/VISION.md`, and root notes (`ROADMAP.md`, `ARCHITECTURE.md`, `SPEC.md`, `TODO.md`, `DESIGN.md`) that the agent must route into the Knowledge Base.
 - **Tracked diagnostics**: warns when files under any `.along/diagnostics/` are still tracked in git (committed before the directory ignored itself) and names `along migrate --apply` (or `git rm --cached`) as the fix.
+- **Sessions**: warns about orphan blackboards (no session bound, issue closed or missing), session bindings older than 72 h or without a blackboard (`along session gc`), and issues in progress with no session bound. See [Parallel Sessions](./topic--parallel-sessions.md).
 - **Options**:
   - `--entities`: Performs deep validation of the entity DAG graph, verifying parent/child relationships, `blocked_by` dependencies, and detecting circular references. References resolve against the current `.along/`, every enclosing `.along/` up to the git boundary, and every nested subproject `.along/` below it (nested git repositories and dependency/build dirs are not entered).
   - `--entities --fix`: Removes `milestone` fields of issues and session logs that resolve to no milestone, lists the changed files, then validates.
@@ -130,6 +131,7 @@ Manages atomic issue files in `.along/ISSUES/` and recompiles the active board p
     - Options: `--json` outputs structured JSON payload.
   - `along issue done <slug> [options...]`: Marks the issue as completed, records `completed: YYYY-MM-DD`, and moves the file into `.along/ISSUES/done/`. In the same transaction the issue's blackboard (if any) is archived into today's session log `.along/SESSIONS/<YYYY>/<date>--<slug>.md` and, with status `done`, the key is added to its `issues_completed` (the log is created without a blackboard too); the blackboard is purged after the commit. See [Session Lifecycle](./topic--session-lifecycle.md).
     - Options: `--status {done,superseded,cancelled,duplicate}`, `--superseded-by <slug>`, `--duplicate-of <slug>`.
+  - `along issue reopen <slug>`: Moves a closed issue from `.along/ISSUES/done/` back to `.along/ISSUES/`, sets `status: open`, removes `completed` / `superseded_by` / `duplicate_of`, restores sibling links and recompiles `.along/ISSUES.md` (one transaction). Session logs that list it as completed stay as they are. Resume with `along start <slug>`.
   - `along issue sync`: Recompiles `.along/ISSUES.md` deterministically from atomic files in `.along/ISSUES/` and `.along/ISSUES/done/`, then runs the entity reference integrity gate (`validate_entities`): dangling references or schema / enum violations that are absent at `HEAD` exit `1` in `enforce` mode and only warn in `shadow` mode; problems already present at `HEAD` are printed as a warning and never fail it.
   - `along issue list`: Lists all active in-progress and open issues in the terminal.
   - `along issue rename <old-key> <new-key>`: Renames an issue (type and/or slug; a bare slug keeps the type). Rewrites the file name and `slug`/`type`, then every inbound reference in the nearest `.along/`: `related`, `blocked_by`, `parent`, `superseded_by`, `duplicate_of` in issues, risks, spikes, checklists and ADRs, milestone `target_issues`, and session `issues_advanced` / `issues_completed`.
@@ -189,8 +191,13 @@ Manages session logs in `.along/SESSIONS/` and records engineering provenance.
     - Options: `--status {done,superseded,cancelled,duplicate}`, `--summary "Summary"`, `--decisions "ADR-a,ADR-b"` or `--no-decisions`, `--force-reason "..."`, `--dry-run`, `-n`.
   - `along session bindings`: Lists agent-session bindings (session key, issue, approval, last update).
   - `along session gc [--dry-run]`: Removes bindings older than 72 hours or pointing at a purged blackboard.
+  - `along session list [--json]`: Readiness of every issue in progress, every bound issue and every blackboard: sessions and their last event, attributed files (exclusive / shared with which issues, still uncommitted), last edit vs last test run, acceptance criteria ticked / total, plan recorded, verdict `ready` / `blocked` with reasons; for the repository: changed, unattributed and staged paths, a merge / rebase in progress, conflict markers.
+  - `along session close <slug>... | --ready [--dry-run] [--push]`: Closes out finished work in one step. Needs the user's approval recorded with `along plan approve --closeout` in this session. Refuses during a merge / rebase / cherry-pick, with conflicts or with staged files. Plans the commits first, runs the tests once (nothing is touched when they fail), wraps each issue, then commits by attribution: one commit per issue (its files, issue move, session log), one combined commit per set of issues sharing files (all refs), the projections last. Files also attributed to an issue not closed now are held back; unattributed changes are never committed. `--push` pushes once at the end. Idempotent: a re-run (`along session close`) resumes from `.along/.session/.closeout.json`. Issues that are not ready are listed and left untouched.
 - **Usage**:
   ```bash
+  along session list
+  along plan approve --closeout --ready
+  along session close --ready --push
   along session create token-refresh --summary "Implementing OAuth token refresh logic"
   along session wrap token-refresh --status done --no-decisions --summary "Completed implementation and hermetic tests"
   along session gc --dry-run
@@ -200,6 +207,7 @@ Manages session logs in `.along/SESSIONS/` and records engineering provenance.
 Plan approval for this agent session ([gate: require-plan-approval]).
 - **Subcommands**:
   - `along plan approve [<slug>] [--plan-file <path>]`: Records the user's approval of the presented plan for the bound issue (or for the next `along start` when none is bound). Run it only after the user's explicit yes; in Claude Code accepting a plan via `ExitPlanMode` records it automatically, plan text included. `--plan-file` writes the approved plan into the blackboard `plan.md` (the scaffold becomes `## Revision 1`, later plans are appended as `## Revision N`). With an issue, approval is refused (exit 2) while `plan.md` is still the scaffold.
+  - `along plan approve --closeout <slug>... | --closeout --ready`: Records the user's approval to close these issues out (`--ready`: every issue `along session list` shows ready) in this session's binding; works from a fresh session. `along session close` and `along commit -i <slug>` of those issues pass with it; the closeout consumes it; it lapses after 72 h. Run it only after the user's explicit yes.
   - `along plan status`: Prints the session key, the resolved issue (`binding`, `single`, `ambiguous`, `elsewhere`, `none`), the phase and the approval.
 - **Usage**:
   ```bash
@@ -406,7 +414,8 @@ Conventional Commits generator with active issue binding and typography validati
   - `--no-verify`: Skips pre-commit test gate.
   - `-a, --all` / `--paths <file>...`: Stage the whole tree / only these paths. Prefer `--paths` when other sessions have uncommitted work in the tree.
   - `-p, --push`: Push after the commit.
-- **After `along wrap`**: the plan gate passes `along commit -i <slug>` only for the session that wrapped `<slug>` with an approved plan (completion token); the commit uses the token up. `-i` is required on this path; `--fix-typography`, a write redirect or a chained mutation take the command off it.
+- **After `along wrap`**: the plan gate passes `along commit -i <slug>` only for the session that wrapped `<slug>` with an approved plan (completion token), or that holds a closeout approval for it (`along plan approve --closeout`); the commit uses the token up. `-i` is required on this path; `--fix-typography`, a write redirect or a chained mutation take the command off it.
+- **Test reuse**: the pre-commit test gate (also of `along wrap` and `along bump`) skips the suite when the last run on the same working tree was green (tree hash without `.along/` state, KB projections and `__pycache__`; `.along/scripts/` counts). `along test` always runs. Runs are kept in `.along/diagnostics/test_runs.json`.
 - **Usage**:
   ```bash
   along commit -i token-refresh -m "feat(auth): implement refresh token rotation"

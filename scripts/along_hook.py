@@ -454,6 +454,12 @@ def _evaluate_and_respond(
                                     attrs["process.exit.code"] = tool_result["exitCode"]
                                 if "durationMs" in tool_result:
                                     attrs["tool.duration_ms"] = tool_result["durationMs"]
+                            # Second step after the ledger append: the same session event record
+                            # (ADR-2026-10-05--session-event-ledger-feeds-telemetry).
+                            record = event.ledger_event
+                            if isinstance(record, dict):
+                                from alongkit.telemetry.conventions import ledger_event_attributes
+                                attrs.update(ledger_event_attributes(record))
                             span.add_event(
                                 f"hook.post_tool.{event.tool_name}",
                                 attributes=attrs,
