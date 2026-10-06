@@ -39,7 +39,7 @@ import os
 import sys
 from typing import List, Optional, Tuple
 
-from . import proc, repo, sanitizer
+from . import proc, repo, sanitizer, session
 
 
 def detect_test_command(repo_root: str) -> Optional[List[str]]:
@@ -99,6 +99,7 @@ def run_repository_tests(repo_root: str, label: str = "Quality Gate") -> bool:
 
     print(f"-> [{label}] Running automated tests: {' '.join(cmd)}")
     res = proc.run_capture(cmd, cwd=repo_root)
+    session.trace_test_run(repo_root, res.ok, label)
     if res.ok:
         print(f"-> [{label}] All tests passed successfully.")
         return True

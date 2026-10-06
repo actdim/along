@@ -1047,15 +1047,18 @@ To prevent multi-agent coordination data from leaking across sessions or clutter
 
 - **Location**: `.along/.session/<issue-slug>/` (automatically excluded in `.gitignore`).
 - **Artifacts**:
-  - `plan.md`: The active Living Plan updated across step loops.
-  - `scout_findings.json`: Distilled symbols, dependencies, and constraints.
-  - `step_reviews/`: Reviewer reports and verdicts per step.
-  - `blackboard.json`: Shared in-session state, mocks, and intermediate variables.
-- **Lifecycle & Automated Garbage Collection**:
-  1. *Allocated*: Created at the start of `/along-team` or autonomous goal execution.
-  2. *Updated*: Maintained dynamically during step execution.
-  3. *Distilled*: Key achievements, decisions, and diff summaries are extracted into `.along/SESSIONS/<YYYY>/<date>--<slug>.md`.
-  4. *Purged*: The entire `.along/.session/<slug>/` directory is automatically deleted during `/along-wrap`.
+  - `state.json`: Phase, approval, execution mode (`direct` / `role-based`), steps and retry counters.
+  - `plan.md`: The approved Living Plan; later plans are appended as `## Revision N`.
+  - `research.md`: Scout findings (symbols, constraints, patterns).
+  - `execution_trace.md`: Edits, test runs with results, gate denials, approvals, phase and step changes (written by the hooks and Along commands).
+  - `reviews/step-N.md`: Reviewer reports and verdicts per step.
+- **Lifecycle**:
+  1. *Allocated*: `along start` (direct) or `along scratch init` (role-based).
+  2. *Updated*: Plan capture at approval, trace by the hooks, step state by `along scratch update`.
+  3. *Archived*: `along wrap`, `along scratch purge` and `along issue done` write the Blackboard Record into `.along/SESSIONS/<YYYY>/<date>--<slug>.md` (append-only once committed).
+  4. *Purged*: Deleted only after the record is committed.
+
+See [Session Lifecycle](./topic--session-lifecycle.md).
 
 ---
 
@@ -1235,7 +1238,7 @@ Manages atomic issue files in `.along/ISSUES/` and recompiles the active board p
     - Side-effects: Automatically recompiles `.along/ISSUES.md` board projection and synchronizes affected milestones.
   - `along issue show <slug> [--json]` (alias: `along issue get`): Displays detailed summary of an issue, including frontmatter metadata, priority, status, milestone, and body excerpt.
     - Options: `--json` outputs structured JSON payload.
-  - `along issue done <slug> [options...]`: Marks the issue as completed, records `completed: YYYY-MM-DD`, and moves the file into `.along/ISSUES/done/`.
+  - `along issue done <slug> [options...]`: Marks the issue as completed, records `completed: YYYY-MM-DD`, and moves the file into `.along/ISSUES/done/`. In the same transaction the issue's blackboard (if any) is archived into today's session log `.along/SESSIONS/<YYYY>/<date>--<slug>.md` and, with status `done`, the key is added to its `issues_completed` (the log is created without a blackboard too); the blackboard is purged after the commit. See [Session Lifecycle](./topic--session-lifecycle.md).
     - Options: `--status {done,superseded,cancelled,duplicate}`, `--superseded-by <slug>`, `--duplicate-of <slug>`.
   - `along issue sync`: Recompiles `.along/ISSUES.md` deterministically from atomic files in `.along/ISSUES/` and `.along/ISSUES/done/`, then runs the entity reference integrity gate (`validate_entities`): dangling references or schema / enum violations that are absent at `HEAD` exit `1` in `enforce` mode and only warn in `shadow` mode; problems already present at `HEAD` are printed as a warning and never fail it.
   - `along issue list`: Lists all active in-progress and open issues in the terminal.
@@ -1306,12 +1309,12 @@ Manages session logs in `.along/SESSIONS/` and records engineering provenance.
 ### `along plan`
 Plan approval for this agent session ([gate: require-plan-approval]).
 - **Subcommands**:
-  - `along plan approve [<slug>]`: Records the user's approval of the presented plan for the bound issue (or for the next `along start` when none is bound). Run it only after the user's explicit yes; in Claude Code accepting a plan via `ExitPlanMode` records it automatically.
+  - `along plan approve [<slug>] [--plan-file <path>]`: Records the user's approval of the presented plan for the bound issue (or for the next `along start` when none is bound). Run it only after the user's explicit yes; in Claude Code accepting a plan via `ExitPlanMode` records it automatically, plan text included. `--plan-file` writes the approved plan into the blackboard `plan.md` (the scaffold becomes `## Revision 1`, later plans are appended as `## Revision N`). With an issue, approval is refused (exit 2) while `plan.md` is still the scaffold.
   - `along plan status`: Prints the session key, the resolved issue (`binding`, `single`, `ambiguous`, `elsewhere`, `none`), the phase and the approval.
 - **Usage**:
   ```bash
   along plan status
-  along plan approve token-refresh
+  along plan approve token-refresh --plan-file plan.md
   ```
 
 ### `along decision`
@@ -1331,10 +1334,10 @@ Manages ephemeral multi-agent session blackboard memory (`.along/.session/<slug>
   - `along scratch init <slug> [--title "Title"] [--steps N] [--restart] [--mode direct]`: Initializes session scratchpad directory, `state.json`, and `plan.md`. The blackboard is `role-based` (held to the along-team step loop by `[gate: team-step-active]` and `[gate: team-reviews-before-stop]`) unless `--mode direct` is given.
   - `along scratch state <slug> [--json]`: Displays current step progress, status, and retry counters.
   - `along scratch phase <slug> <inquiry|planning|execution> [--approve]`: Sets the session phase; `--approve` also marks the plan as approved.
-  - `along scratch approve <slug>` (alias: `plan-approve`): Grants plan approval and moves the session to the `execution` phase.
+  - `along scratch approve <slug>` (alias: `plan-approve`): Grants plan approval and moves the session to the `execution` phase. Refused while `plan.md` is the scaffold.
   - `along scratch update <slug> [--step N] [--step-status {pending,in-progress,passed,failed}] [--inc-retry] [--status {in-progress,completed,failed}]`: Updates execution state.
   - `along scratch fallback <slug> --reason "..."`: Switches the blackboard to single-agent (`direct`) execution and records the reason in `execution_trace.md`.
-  - `along scratch purge <slug> [--force --reason "..."]`: Deletes the blackboard and the bindings to it. Refuses (exit 2) while a role-based blackboard has steps that are not `passed` or passed steps without `reviews/step-N.md`, unless forced with a reason.
+  - `along scratch purge <slug> [--force --reason "..."]`: Archives the blackboard into today's session log of the issue, then deletes it and the bindings to it (direct blackboards included). Refuses (exit 2) while a role-based blackboard has steps that are not `passed` or passed steps without `reviews/step-N.md`, unless forced with a reason; the reason is written into the record and the trace.
 - **Usage**:
   ```bash
   along scratch init token-refresh --title "Token Refresh Step Loop" --steps 4
@@ -1444,8 +1447,8 @@ Transactional end-of-stage wrap engine.
   - `--dry-run`: Simulate wrap-up operations without writing or moving files.
   - `-n, --no-verify`: Skip pre-flight automated tests.
   - `-a, --agent "<name>"`: Explicit agent name.
-  - `-d, --decisions "ADR-a,ADR-b"` or `--no-decisions` (one is required): The answer to "were architectural decisions made?". The session log for today is written or extended with `issues_completed: [<type>--<slug>]`, the decisions, and the blackboard record (plan, step table, research, execution trace, reviews) before the blackboard is purged.
-  - `--force-reason "<text>"`: Wrap a role-based blackboard with open steps or missing reviews; the reason is recorded in the trace.
+  - `-d, --decisions "ADR-a,ADR-b"` or `--no-decisions` (one is required): The answer to "were architectural decisions made?". The session log for today is written or extended with `issues_completed: [<type>--<slug>]`, the decisions, and the blackboard record (plan, step table, research, execution trace, reviews). A second record of the same issue on the same day is appended as `## Blackboard Record (<n>, <ts>)`. The blackboard is purged only after the wrap transaction committed.
+  - `--force-reason "<text>"`: Wrap a role-based blackboard with open steps or missing reviews, or a blackboard whose `plan.md` is still the scaffold (refused otherwise, exit 2); the reason is recorded in the trace.
 - **Completion token**: the purge removes the session's binding; when this session had an approved plan for the slug, it keeps a completion token so the following `along commit -i <slug>` passes the plan gate without a new approval (see `along commit`).
 - **Usage**:
   ```bash
@@ -2884,7 +2887,7 @@ Several agent sessions may work in one repository at once, so gates never read a
 
 - **Binding**: `along start <slug>` writes `.along/.session/bindings/<runtime>--<session_id>.json` (`slug`, `context`, `plan_approved`, `approved_slug`). The session id comes from the hook payload (`session_id`, antigravity conversation id) and, for CLI calls, from `CLAUDE_CODE_SESSION_ID`, `ANTIGRAVITY_CONVERSATION_ID`, `CODEX_SESSION_ID` or `ALONG_SESSION_ID` (+ `ALONG_SESSION_RUNTIME`). Bindings live in the outermost `.along/` of the workspace (up to the git top, never `~/.along`); `context` names the `.along/` the issue belongs to, so a session bound to a subproject issue is visible at the root.
 - **Resolution** (`session.resolve_active_session`): `ALONG_ISSUE_SLUG` (runner) > own binding > the single in-progress blackboard not bound to another session > none. Several unbound candidates are `ambiguous`: gates refuse and point at `along start <slug>`. A single candidate names the issue, but its blackboard's `plan_approved` counts only for the session bound to it (or a runner's `ALONG_ISSUE_SLUG`): an unbound session with a known id never inherits the approval of a blackboard whose session ended. Runtimes that pass no session id keep it.
-- **Plan approval**: `along start` binds with `phase: planning`, `plan_approved: false`. Approval is recorded per session when the user accepts a plan in Claude Code (`PostToolUse` on `ExitPlanMode`), or by `along plan approve [<slug>]` after the user's explicit yes; an approval given before `along start` carries over to the first bound slug. `along start --approved` is for scripted runs. Along state commands (`issue`, `start`, `scratch`, `plan`, `decision`, `milestone`, `session`, `wrap`, `kb sync`) and writes to `.along/ISSUES|RISKS|SPIKES|SESSIONS|.session|diagnostics` pass `require_plan_approval`, so an issue can be written and started before a plan exists. `along commit` is not a state command (see completion tokens below).
+- **Plan approval**: `along start` binds with `phase: planning`, `plan_approved: false`. Approval is recorded per session when the user accepts a plan in Claude Code (`PostToolUse` on `ExitPlanMode`; the plan text from `tool_input.plan` is written into the blackboard `plan.md`, or kept as `pending_plan` in the binding until the first `along start`), or by `along plan approve [<slug>] [--plan-file <path>]` after the user's explicit yes, which is refused while `plan.md` is still the scaffold (`session.is_scaffold_plan`); an approval given before `along start` carries over to the first bound slug. `along start --approved` is for scripted runs. Along state commands (`issue`, `start`, `scratch`, `plan`, `decision`, `milestone`, `session`, `wrap`, `kb sync`) and writes to `.along/ISSUES|RISKS|SPIKES|SESSIONS|.session|diagnostics` pass `require_plan_approval`, so an issue can be written and started before a plan exists. `along commit` is not a state command (see completion tokens below).
 - **Unbound sessions**: `require_plan_approval` and `test_before_stop` hold only sessions bound to an issue (`along start`, or `ALONG_ISSUE_SLUG` from a runner). A repository that wants unbound sessions held too sets `enforce_unbound: true` for those gates in `.along/rules/gates.yaml` (this repository does). `require_active_issue` is unaffected: source edits still need an in-progress issue.
 - **Completion tokens**: `along wrap` purges the blackboard and every binding of the wrapped slug. The wrapping session, if its plan for that slug was approved, keeps a token in its binding (`completed: [{slug, approved_at, wrapped_at}]`; `slug` and approval cleared). Without an approved plan, `require_plan_approval` lets an `along commit` through only when its `-i/--issue <slug>` (bare or `<type>--<slug>`) is a token of this session (`shellparse.along_commit_issue`, `session.completion_tokens`). The token is used up by the successful `along commit` of that issue, ignored after 72 h (by `wrapped_at`), survives `along start <other>`, and leaves with the binding (`along session gc`). `along scratch purge` leaves no token. Everything else stays held, with the cause in the message: no `-i`, no token in this session, a token held by another session, `--fix-typography` (rewrites files), a write redirect, a commit chained with a mutation, raw `git commit` / `git push`. A bound session with an approved plan commits as before.
 - **Read-only shell commands**: before approval, `alongkit.hooks.shellparse.is_read_only_command` lets a Bash call through only when every segment reads: inspection commands and pure filters (`cat`, `grep`, `head`, `tail`, `cut`, `sort`, `uniq`, `tr`, `diff`, ...), `sed` without `-i`, `-f` or `w`/`W`/`e` script commands, `awk` without `-i inplace`, `-f`, `system()` or print redirection/pipes, `find` without `-exec`/`-delete`/`-fprint*`, and test runs. Git passes for subcommands that only read (`status`, `diff`, `log`, `show`, `rev-parse`, `describe`, `ls-remote`, `ls-files`, `ls-tree`, `cat-file`, `rev-list`, `for-each-ref`, `show-ref`, `blame`, `shortlog`, `merge-base`, `grep`, ...) and for the listing forms of `branch`, `tag` (bare, `-l`, `--contains`, `--sort`, `-v`, ...), `remote` (bare, `-v`, `show`, `get-url`), `stash list|show`, `config --get*|--list|get|list`, `reflog [show]`, `worktree list` and `notes list|show`; creating, deleting or reconfiguring forms stay held. Global options pass only when they neither run nor write (`--no-pager`, `-P`, `-C <dir>`); `-c`, `--upload-pack`, `grep -O` and `--ext-diff` can run a command and stay held. `git fetch` updates refs and is not read-only.
@@ -2894,12 +2897,16 @@ Several agent sessions may work in one repository at once, so gates never read a
 - **Repository-level `.along/.session/state.json`** is read only for runtimes that pass no session id; `purge` removes it when it points at the purged slug.
 - **Housekeeping**: `along plan status`, `along session bindings`, `along session gc [--dry-run]` (bindings older than 72 h or without a blackboard). `along scratch purge` / `along wrap` remove the slug's bindings (`along wrap` keeps the wrapping session's completion token).
 - **Activity trace** (`test_before_stop`): per session in `.along/diagnostics/activity/<key>.json`; edits under `.along/` are not source edits. Only what the gates let through is recorded: an edit on `PostToolUse` (the tool succeeded), a test run on `PreToolUse` after every gate allowed it, so changes made outside the session or writes a gate rejected never count. Where `.along/scripts/test.py` exists only `along test` / that script count as a test run; raw runners are named in the Stop message. The gate is quiet while the circuit breaker is tripped, since no command could run.
+- **Execution trace** (`session.trace_event`): the bound issue's `.along/.session/<slug>/execution_trace.md` records, in direct and role-based mode, every repository edit (`PostToolUse`, except `.along/.session/**` and diagnostics; repeated edits of a path collapse to `(xN)`), enforced gate denials (`engine.py` -> `predicates.record_gate_denial`), plan recorded / approved, phase, step and retry changes (`session.update_state`), and test runs with their result from `along test` and the wrap / commit test gate (`gates.run_repository_tests`). Raw runners are not traced (no Bash `PostToolUse`). Unbound sessions write nothing; the trace keeps the newest 400 entries. See [Session Lifecycle](./topic--session-lifecycle.md).
 - **Diagnostics** (`hooks_audit.jsonl`, activity traces, `hook_heartbeat.json`, circuit breaker) are machine-local: `.along/diagnostics/` carries its own `*` `.gitignore`. They go to the resolved state directory (`repo.diagnostics_dir`); without one they go to `~/.along/diagnostics/workspaces/<path>/`. The hooks never create a `.along/` of their own.
 
 ### 2.9 along-team Step Discipline & Wrap Record
 - `along scratch init` creates a `role-based` blackboard (`--mode direct` opts out); `along start` creates a `direct` one. `[gate: team-step-active]` denies source edits in a role-based session while no step is `in-progress`; `[gate: team-reviews-before-stop]` blocks the turn end while a `passed` step lacks `reviews/step-N.md`.
 - `along scratch purge` and `along wrap` refuse while role-based steps are open or reviews are missing; `--force --reason` / `--force-reason` records why in `execution_trace.md`. `along scratch fallback <slug> --reason` switches to single-agent execution with the reason in the trace.
-- `along wrap` requires `--decisions ADR-...` or `--no-decisions`, writes (or extends) today's session log with `issues_completed: [<type>--<slug>]`, the decisions answer and the blackboard record (plan, step table, research, trace, reviews), and only then purges the blackboard.
+- `along wrap` requires `--decisions ADR-...` or `--no-decisions`, writes (or extends) today's session log with `issues_completed: [<type>--<slug>]`, the decisions answer and the blackboard record (plan, step table, research, trace, reviews), and purges the blackboard only after its transaction committed. It refuses a blackboard whose `plan.md` is the scaffold unless `--force-reason`.
+- One archive path (`lifecycle.write_session_record`, `lifecycle.archive_and_purge`) serves `along wrap`, `along scratch purge` and `along issue done`: no blackboard is deleted without its record; scaffold placeholders are not rendered; a forced purge's reason goes into the record; a second record on the same day is appended as `## Blackboard Record (<n>, <ts>)`.
+- `wrap_before_stop` (Stop): every issue closed as `done` today (local date) must be in `issues_completed` of a session log of today. `along doctor` warns about orphan blackboards (no binding, issue closed or missing).
+- `session_record_append_only` (git, ci; `gitgates.check_session_records`, also run by `along commit`): a change never removes or rewrites lines inside a `## Blackboard Record` section of a committed session log; the Summary stays editable.
 
 ---
 
@@ -2993,6 +3000,7 @@ Every rule of the managed `AGENTS.md` block, classified: **a** enforced by a gat
 | Never delete a referenced entity; rename / supersede | a | `entity_reference_integrity`, `along issue rename` / `supersede` | runtime, git, ci |
 | ADRs never edited, only superseded | c | - | - |
 | Issue lifecycle (`done/` placement) | a | `issue_lifecycle` | git, ci |
+| Session log Blackboard Record is append-only | a | `session_record_append_only` (also `along commit`) | git, ci |
 | Auto-entity creation | c | - | - |
 | Stable entry point | a | `stable_entry_point` (also `along kb-sync --check`) | git, ci |
 | Portable links | a | `portable_links` (also `along kb-sync --check`) | git, ci |
@@ -3047,6 +3055,98 @@ Cowork runs the agent in a cloud container plus a Linux VM on the user's machine
 3. Run the CLI with a supported interpreter, for example `uv run --python 3.12 --with ruamel.yaml python scripts/along_exec.py <command>` (Python 3.10 is supported from v4.3.0; see `bug--py310-fstring-syntax-error`).
 4. Do not run `along worktree` from the VM: the repository is on the host filesystem (`core.symlinks=false`), so worktree metadata would record VM paths. `along doctor` warns on a cross-OS mount.
 5. Pass `--agent cowork` only when detection reports `unknown`.
+
+---
+
+## Document: docs/topic--session-lifecycle.md (Session & Blackboard Lifecycle Guide)
+
+# Session & Blackboard Lifecycle Guide
+
+How the working record of an issue is kept from `along start` to the committed session log, and
+which commands and gates keep it from being lost. Command details are in the
+[CLI Reference](./topic--cli-reference.md); the gates are in
+[Runtime Hooks & Gates](./topic--runtime-hooks-and-gates.md).
+
+## 1. The blackboard
+
+Each issue in progress has a blackboard in `.along/.session/<slug>/` (not tracked by git):
+
+| File | Content | Written by |
+| --- | --- | --- |
+| `state.json` | phase, approval, execution mode, steps, retries | `along start`, `along scratch`, approval |
+| `plan.md` | the approved plan, with `## Revision N` sections | `ExitPlanMode`, `along plan approve --plan-file`, the agent |
+| `research.md` | findings (role-based work) | the agent |
+| `execution_trace.md` | edits, test runs and results, gate denials, approvals, phase and step changes | hooks and Along commands |
+| `reviews/step-N.md` | step verdicts (role-based work) | the agent |
+
+`along start` creates a `direct` blackboard, `along scratch init` a `role-based` one (held to the
+along-team step loop). Both are recorded the same way; `direct` only means "no step loop".
+
+## 2. Recording the plan
+
+The plan the user approved is part of the record:
+
+- **Claude Code**: accepting a plan with `ExitPlanMode` stores its text in `plan.md` of the bound
+  issue. A plan accepted before `along start` waits in the session binding and goes to the first
+  issue started.
+- **Elsewhere**: after the user's explicit yes, write the plan to a file and run
+  `along plan approve <slug> --plan-file <path>`, or write it into `plan.md` yourself and run
+  `along plan approve <slug>`.
+- Approval is refused while `plan.md` is still the scaffold `along start` created.
+- A revised plan is appended as the next `## Revision N`; earlier revisions stay.
+
+```bash
+along start token-refresh
+along plan approve token-refresh --plan-file plan.md
+```
+
+## 3. The execution trace
+
+The trace of the issue the session is bound to is written automatically:
+
+- every repository edit made with the agent's file tools (repeated edits of one file collapse to
+  `(xN)`); the blackboard and diagnostics themselves are left out;
+- `along test` runs and the test gates of `along wrap` / `along commit`, with pass or FAIL;
+- gate denials (gate id and the first line of the reason);
+- plan recorded and approved; phase, step-status and retry changes.
+
+Raw test runners (`pytest`, `npm test` called directly) are not traced; use `along test`. A
+session that is not bound to an issue writes no trace. The newest 400 entries are kept.
+
+## 4. Closing an issue
+
+Every way a blackboard leaves the repository writes it into the issue's session log
+`.along/SESSIONS/<YYYY>/<date>--<slug>.md` first, as a `## Blackboard Record` section:
+
+| Command | Session log | Blackboard |
+| --- | --- | --- |
+| `along wrap <slug> --no-decisions -m "..."` | record, `issues_completed`, decisions | purged after the wrap committed |
+| `along issue done <slug>` | record (if any), `issues_completed` for `done` | purged after the move committed |
+| `along scratch purge <slug> [--force --reason "..."]` | record, with the reason when forced | purged after the log is written |
+
+- `along wrap` refuses a blackboard whose plan was never recorded, unless
+  `--force-reason "..."` says why; the reason is kept in the trace.
+- Template placeholders (scaffold plan, empty research headings, the generic step list) are not
+  written as content: a missing plan shows as `No plan recorded.`
+- A second record of the same issue on the same day is appended as
+  `## Blackboard Record (<n>, <timestamp>)`.
+
+## 5. Checks that keep the record
+
+- **wrap-before-stop** (end of turn): every issue closed as `done` today must be listed in
+  `issues_completed` of a session log of today. Fix a gap with `along wrap <slug> --no-decisions`,
+  which also works for an issue already in `done/`.
+- **session-record-append-only** (`along commit`, `along gates check`, CI): a change may not
+  remove or rewrite lines inside a `## Blackboard Record` of a committed session log. The Summary
+  and Decisions sections stay editable.
+- **`along doctor`**: warns about orphan blackboards (no session bound, issue closed or missing).
+  `along scratch purge <slug>` archives and removes one.
+
+## 6. Committing after wrap
+
+`along wrap` removes the session's binding. The session that wrapped an issue with an approved
+plan keeps a completion token, so `along commit -i <slug> --paths ...` passes the plan gate right
+after the wrap; the commit uses the token up.
 
 ---
 

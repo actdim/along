@@ -3,10 +3,11 @@ protocol: along
 protocol_version: "4.4.5"
 slug: session-records-not-captured
 type: bug
-status: open
+status: done
+completed: 2026-10-06
 priority: high
 created: 2026-10-05
-updated: 2026-10-05
+updated: 2026-10-06
 agent: claude-code
 tags: [session, blackboard, wrap, gates]
 blocked_by: []
@@ -111,6 +112,22 @@ needs `archive_and_purge` and the trace). Execution mode: Role-Based (`along-tea
    existing workflow article, `docs/topic--cli-reference.md`.
 
 ## Acceptance Criteria
-- [ ] Hermetic tests for REQ-1..REQ-8, positive and negative.
-- [ ] Docs: session/blackboard lifecycle in `docs/topic--*.md`, CLI reference for `plan approve`, `scratch purge`, `issue done`, `wrap`.
-- [ ] Automated tests passing
+- [x] Hermetic tests for REQ-1..REQ-8, positive and negative.
+- [x] Docs: session/blackboard lifecycle in `docs/topic--*.md`, CLI reference for `plan approve`, `scratch purge`, `issue done`, `wrap`.
+- [x] Automated tests passing
+
+## Resolution (2026-10-06)
+- REQ-1: `session.record_plan` / `is_scaffold_plan` / `record_accepted_plan`; `along plan approve
+  --plan-file`, refused (also `scratch approve`) while `plan.md` is the scaffold; ExitPlanMode
+  stores `tool_input.plan` (or `pending_plan` until the first `along start`).
+- REQ-2: `session.trace_event` / `trace_test_run`, bounded `append_trace` (400 entries, `(xN)`):
+  edits (PostToolUse), gate denials (`engine.py`), test runs with result (`along test`,
+  `gates.run_repository_tests`), plan, phase, step and retry changes. No Bash PostToolUse matcher.
+- REQ-3..REQ-5: `lifecycle.write_session_record`, `archive_and_purge`, `purge_archived`; wrap,
+  `scratch purge` and `issue done` archive first; purge after the transaction commit; scaffold
+  refusal with `--force-reason`; same-day second record kept.
+- REQ-6: `check_wrap_before_stop` per issue completed today (local date).
+- REQ-7: `gitgates.check_session_records`, gate `session_record_append_only` (git, ci, `along commit`).
+- REQ-8: `lifecycle.orphan_blackboards` in `along doctor`.
+- Docs: new `docs/topic--session-lifecycle.md`; CLI reference, runtime hooks and gates (2.8, 2.9,
+  gate table), architecture section 8; `along-team` skill.

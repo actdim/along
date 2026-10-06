@@ -40,6 +40,7 @@ ActDim Along provides repositories with an isolated, durable, and human-readable
 - [docs/topic--llm-wiki-architecture.md](docs/topic--llm-wiki-architecture.md): LLM-Wiki Knowledge Base Architecture & Paradigm.
 - [docs/topic--migrations.md](docs/topic--migrations.md): Protocol & Repository Migrations Guide.
 - [docs/topic--runtime-hooks-and-gates.md](docs/topic--runtime-hooks-and-gates.md): Runtime Lifecycle Hooks & Mechanical Gates.
+- [docs/topic--session-lifecycle.md](docs/topic--session-lifecycle.md): Session & Blackboard Lifecycle Guide.
 - [docs/topic--setup-and-workflow.md](docs/topic--setup-and-workflow.md): Setup & Developer Workflow.
 - [docs/topic--skills-reference.md](docs/topic--skills-reference.md): Skills & Slash Commands Technical Reference.
 - [docs/topic--system-comparisons.md](docs/topic--system-comparisons.md): System Comparisons & Alternative Architectural Paradigms.

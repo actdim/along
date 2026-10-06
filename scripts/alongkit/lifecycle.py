@@ -111,7 +111,18 @@ def raw_log_path(repo_root: str, action: str) -> str:
 
 def run_lifecycle_command(action: str, cmd: Sequence[str], repo_root: str, mode: str) -> int:
     """Run a lifecycle command; in distill mode print the observation and keep the raw
-    output in `.along/artifacts/lifecycle/<action>.log` (overwritten per run)."""
+    output in `.along/artifacts/lifecycle/<action>.log` (overwritten per run).
+
+    A test run and its result go into the execution trace of the session's bound issue
+    [bug--session-records-not-captured].
+    """
+    code = _run_lifecycle_command(action, cmd, repo_root, mode)
+    if action == "test":
+        session.trace_test_run(repo_root, code == 0, "along test")
+    return code
+
+
+def _run_lifecycle_command(action: str, cmd: Sequence[str], repo_root: str, mode: str) -> int:
     if mode != "distill":
         return proc.run_passthrough(list(cmd), cwd=repo_root)
 
@@ -289,22 +300,37 @@ def render_lifecycle_script(action: str,
     )
 
 
-def _write_wrap_session_log(repo_root: str, tx: "transaction.FileTransaction", issue: dict, slug: str, *,
-                            status: str, summary: Optional[str], agent: Optional[str],
-                            decisions: List[str], today: str) -> str:
-    """Create or extend today's session log for `slug` with decisions and the blackboard.
+def session_log_path(repo_root: str, slug: str, today: str) -> str:
+    """`.along/SESSIONS/<YYYY>/<today>--<slug>.md`: one session log per issue and day."""
+    return os.path.join(repo.state_dir(repo_root), "SESSIONS", today.split("-")[0], f"{today}--{slug}.md")
 
-    `issues_completed` is the wrapped issue key when it closes as done, so the log never
-    loses it [feat--wrap-session-log-from-blackboard].
+
+_RECORD_HEADING = re.compile(r"^## Blackboard Record\b", re.MULTILINE)
+
+
+def write_session_record(repo_root: str, tx: "transaction.FileTransaction", slug: str, *, today: str,
+                         issue: Optional[dict] = None, completed: bool = False,
+                         summary: Optional[str] = None, agent: Optional[str] = None,
+                         decisions: Optional[List[str]] = None, reason: Optional[str] = None) -> str:
+    """Create or extend today's session log of `slug` with the blackboard record.
+
+    The one writer behind `along wrap`, `along scratch purge` and `along issue done`
+    [bug--session-records-not-captured]. `completed` adds the issue key to `issues_completed`
+    [feat--wrap-session-log-from-blackboard]. `decisions` (wrap's answer) adds the Decisions
+    section; None leaves it out. A later record of the same day is appended as
+    `## Blackboard Record (<n>, <ts>)` instead of being dropped; `reason` (a forced purge) is
+    written into the record.
     """
     from .version import CURRENT_PROTOCOL_VERSION
 
-    year = today.split("-")[0]
-    log_path = os.path.join(repo.state_dir(repo_root), "SESSIONS", year, f"{today}--{slug}.md")
+    issue = issue or entities.find_issue_by_slug(repo_root, slug) or {}
+    log_path = session_log_path(repo_root, slug, today)
     key = f"{issue.get('type', 'task')}--{slug}"
-    blackboard = session.render_blackboard_markdown(repo_root, slug)
-    decisions_md = "\n".join(f"- [{d}]" for d in decisions) if decisions else \
-        "- None (confirmed at wrap: no architectural decisions)."
+    blackboard = session.render_blackboard_markdown(repo_root, slug, reason=reason)
+    decisions_md = None
+    if decisions is not None:
+        decisions_md = "\n".join(f"- [{d}]" for d in decisions) if decisions else \
+            "- None (confirmed at wrap: no architectural decisions)."
     tx.protect(log_path)
 
     if os.path.isfile(log_path):
@@ -312,20 +338,24 @@ def _write_wrap_session_log(repo_root: str, tx: "transaction.FileTransaction", i
         fm, body, _err = frontmatter.try_parse(content)
         if fm is not None:
             updates = {}
-            if status == "done":
+            if completed:
                 done = [str(x) for x in (fm.get("issues_completed") or [])]
                 if key not in done:
                     updates["issues_completed"] = done + [key]
             known = [str(x) for x in (fm.get("decisions") or [])]
-            extra = [d for d in decisions if d not in known]
+            extra = [d for d in (decisions or []) if d not in known]
             if extra:
                 updates["decisions"] = known + extra
             if updates:
                 content = frontmatter.update(content, updates)
         addition = ""
-        if "## Decisions" not in content:
+        if decisions_md and "## Decisions" not in content:
             addition += f"\n## Decisions\n{decisions_md}\n"
-        if blackboard and "## Blackboard Record" not in content:
+        if blackboard:
+            records = len(_RECORD_HEADING.findall(content))
+            if records:
+                blackboard = blackboard.replace(
+                    "## Blackboard Record", f"## Blackboard Record ({records + 1}, {session._utc_now_iso()})", 1)
             addition += "\n" + blackboard
         textio.write_text(log_path, content.rstrip("\n") + "\n" + addition, newline="\n")
         return log_path
@@ -343,23 +373,87 @@ def _write_wrap_session_log(repo_root: str, tx: "transaction.FileTransaction", i
         fm_out["branch"] = branch.stdout.strip()
     if head.ok and head.stdout.strip():
         fm_out["commit"] = head.stdout.strip()
-    fm_out["summary"] = (summary or f"Wrapped {key}").strip()
+    fm_out["summary"] = (summary or (f"Completed {key}" if completed else f"Record of {key}")).strip()
     milestone = (issue.get("frontmatter") or {}).get("milestone")
     if milestone:
         fm_out["milestone"] = milestone
     fm_out.update({
         "issues_advanced": [],
-        "issues_completed": [key] if status == "done" else [],
-        "decisions": list(decisions),
+        "issues_completed": [key] if completed else [],
+        "decisions": list(decisions or []),
         "risks_logged": [],
         "spikes_conducted": [],
     })
     title = (issue.get("frontmatter") or {}).get("title") or slug.replace("-", " ").capitalize()
-    body = (f"# Session: {title}\n\n## Summary\n{fm_out['summary']}\n\n"
-            f"## Decisions\n{decisions_md}\n\n" + (blackboard or ""))
+    body = f"# Session: {title}\n\n## Summary\n{fm_out['summary']}\n\n"
+    if decisions_md:
+        body += f"## Decisions\n{decisions_md}\n\n"
+    body += blackboard or ""
     os.makedirs(os.path.dirname(log_path), exist_ok=True)
     textio.write_text(log_path, frontmatter.render(fm_out, body), newline="\n")
     return log_path
+
+
+def archive_and_purge(repo_root: str, slug: str, *, reason: Optional[str] = None, completed: bool = False,
+                      source: str = "purge", today: Optional[str] = None,
+                      tx: Optional["transaction.FileTransaction"] = None) -> Optional[str]:
+    """Write the blackboard of `slug` into its session log, then delete it.
+
+    The only way a blackboard leaves the repository [bug--session-records-not-captured]
+    REQ-3. With `tx`, the log is written in the caller's transaction and the caller purges
+    (`purge_archived`) after committing; without, this commits its own. Returns the log path,
+    or None when there is no blackboard.
+    """
+    if not session.load_state(repo_root, slug):
+        return None
+    today = today or entities.today_iso()
+    session.append_trace(repo_root, slug, f"archived by {source}" + (f": {reason}" if reason else ""))
+    own = tx is None
+    tx = tx or transaction.FileTransaction(repo_root, label=f"archive-{slug}")
+    try:
+        log_path = write_session_record(repo_root, tx, slug, today=today, completed=completed, reason=reason)
+        if own:
+            tx.commit()
+    except Exception:
+        if own:
+            tx.rollback()
+        raise
+    if own:
+        purge_archived(repo_root, slug)
+    return log_path
+
+
+def orphan_blackboards(repo_root: str) -> List[Tuple[str, str]]:
+    """(slug, why) of blackboards no session is bound to whose issue is closed or missing.
+
+    `along doctor` reports them; `along scratch purge <slug>` archives and removes one.
+    See [bug--session-records-not-captured] REQ-8.
+    """
+    s_root = os.path.join(repo.state_dir(repo_root), ".session")
+    if not os.path.isdir(s_root):
+        return []
+    bound = {str(b.get("slug")) for b in session.list_bindings(repo_root) if b.get("slug")}
+    found: List[Tuple[str, str]] = []
+    for entry in sorted(os.scandir(s_root), key=lambda e: e.name):
+        if not entry.is_dir() or entry.name.startswith(".") or entry.name == session.BINDINGS_DIRNAME:
+            continue
+        if entry.name in bound:
+            continue
+        issue = entities.find_issue_by_slug(repo_root, entry.name)
+        if not issue:
+            found.append((entry.name, "issue missing"))
+        elif issue.get("status") in entities.CLOSED_ISSUE_STATUSES:
+            found.append((entry.name, f"issue {issue.get('status')}"))
+    return found
+
+
+def purge_archived(repo_root: str, slug: str, complete: bool = False) -> bool:
+    """Purge a blackboard whose record is committed; a failed delete only warns (nothing is lost)."""
+    try:
+        return session.purge_session(repo_root, slug, complete=complete)
+    except OSError as exc:
+        print(f"[Warning] Blackboard '.along/.session/{slug}' archived but not deleted: {exc}", file=sys.stderr)
+        return False
 
 
 def execute_wrap(
@@ -387,8 +481,10 @@ def execute_wrap(
     3. Issue finalization: updates YAML front-matter (status, updated, completed),
        rewrites sibling markdown links, and relocates to .along/ISSUES/done/.
     4. Projection recompilation: recompiles .along/ISSUES.md and Knowledge Base.
-    5. Session blackboard purge: deletes .along/.session/<slug>/.
+    5. Session log: the blackboard record (refused while plan.md is the scaffold, unless
+       `force_reason`).
     6. History append: appends formatted entry to .along/HISTORY.md when summary is provided.
+    7. Session blackboard purge, after the transaction committed: deletes .along/.session/<slug>/.
 
     All disk mutations are protected by FileTransaction for byte-exact rollback on failure.
     """
@@ -418,6 +514,16 @@ def execute_wrap(
         return 2
     if problems:
         session.append_trace(repo_root, clean_slug, f"Wrapped with open steps ({'; '.join(problems)}): {force_reason}")
+    # [bug--session-records-not-captured] REQ-5: a blackboard is never archived without its plan.
+    has_blackboard = session.load_state(repo_root, clean_slug) is not None
+    if has_blackboard and not session.plan_recorded(repo_root, clean_slug):
+        if not force_reason:
+            print(f"[Error] Wrap aborted: no plan recorded for '{clean_slug}' (.along/.session/{clean_slug}/plan.md "
+                  "is the scaffold).\n  Record the approved plan ('along plan approve <slug> --plan-file <path>', "
+                  "or write it into plan.md), or pass --force-reason \"...\".", file=sys.stderr)
+            return 2
+        if not dry_run:
+            session.append_trace(repo_root, clean_slug, f"Wrapped without a recorded plan: {force_reason}")
 
     # 1. Pre-Flight Test Gate
     if not no_verify and not dry_run:
@@ -529,18 +635,14 @@ def execute_wrap(
                 raise RuntimeError(f"Knowledge Base sync failed:\n{kb_res.stderr or kb_res.stdout}")
             print("-> Synchronized Knowledge Base.")
 
-        # Session log with the blackboard record, written before the purge deletes it
-        if decisions is not None:
-            log_path = _write_wrap_session_log(
-                repo_root, tx, issue, clean_slug, status=status, summary=summary,
-                agent=agent, decisions=decisions, today=today,
+        # Session log with the blackboard record; the blackboard is purged only after the
+        # transaction committed [bug--session-records-not-captured].
+        if decisions is not None or has_blackboard:
+            log_path = write_session_record(
+                repo_root, tx, clean_slug, today=today, issue=issue, completed=(status == "done"),
+                summary=summary, agent=agent, decisions=decisions,
             )
             print(f"-> Wrote session log: {repo.safe_relpath(log_path, repo_root)}")
-
-        # Purge session blackboard; this session keeps a completion token for the commit
-        # that follows [bug--commit-blocked-after-wrap].
-        if session.purge_session(repo_root, clean_slug, complete=True):
-            print(f"-> Purged session blackboard: .along/.session/{clean_slug}")
 
         # Append to HISTORY.md if summary provided
         if summary:
@@ -564,6 +666,10 @@ def execute_wrap(
                 print(f"-> Appended history entry to {repo.safe_relpath(history_file, repo_root)}")
 
         tx.commit()
+        # This session keeps a completion token for the commit that follows
+        # [bug--commit-blocked-after-wrap].
+        if purge_archived(repo_root, clean_slug, complete=True):
+            print(f"-> Purged session blackboard: .along/.session/{clean_slug}")
         print(f"-> [OK] Successfully wrapped up '{clean_slug}'.")
         return 0
 

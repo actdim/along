@@ -19,7 +19,9 @@ if __name__ == "__main__":
 
 import json
 import os
+import re
 import shutil
+import sys
 from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional, Tuple
 
@@ -239,15 +241,22 @@ def bind_session(repo_root: str, slug: str, key: Optional[str] = None,
     if approved is not None:
         binding["plan_approved"] = bool(approved)
         binding["approved_slug"] = slug if approved else None
+        if approved:
+            binding["approved_at"] = _utc_now_iso()
     elif pending:
         binding["approved_slug"] = slug
     elif binding.get("approved_slug") != slug:
         binding["plan_approved"] = False
         binding["approved_slug"] = None
+    # A plan accepted before any slug was bound goes with its approval to the first slug.
+    pending_plan = binding.pop("pending_plan", None)
     binding["slug"] = slug
     rel_ctx = os.path.relpath(os.path.abspath(repo_root), binding_root(repo_root))
     binding["context"] = repo.normalize_posix(rel_ctx)
-    return save_binding(repo_root, key, binding)
+    saved = save_binding(repo_root, key, binding)
+    if pending_plan and pending and approved is None:
+        record_plan(repo_root, slug, pending_plan, "ExitPlanMode")
+    return saved
 
 
 def record_plan_approval(repo_root: str, key: Optional[str]) -> Optional[Dict[str, Any]]:
@@ -263,6 +272,31 @@ def record_plan_approval(repo_root: str, key: Optional[str]) -> Optional[Dict[st
     ctx = binding_context(repo_root, binding) if slug else None
     if slug and ctx and load_state(ctx, slug):
         update_state(ctx, slug, phase="execution", plan_approved=True)
+    return saved
+
+
+def record_accepted_plan(repo_root: str, key: Optional[str], plan_text: Optional[str]) -> Optional[Dict[str, Any]]:
+    """The user accepted `plan_text` in session `key` (ExitPlanMode): record it, then approve.
+
+    The plan goes into the bound slug's plan.md; with no slug bound yet it waits in the
+    binding (`pending_plan`) for the first `along start`. See [bug--session-records-not-captured].
+    """
+    if not key:
+        return None
+    binding = load_binding(repo_root, key) or {}
+    slug = binding.get("slug")
+    if plan_text and plan_text.strip():
+        if slug:
+            ctx = binding_context(repo_root, binding) or repo_root
+            record_plan(ctx, str(slug), plan_text, "ExitPlanMode")
+        else:
+            binding.setdefault("created", _utc_now_iso())
+            binding["pending_plan"] = plan_text.strip()
+            save_binding(repo_root, key, binding)
+    saved = record_plan_approval(repo_root, key)
+    ctx = binding_context(repo_root, binding) or repo_root
+    if slug and load_state(ctx, str(slug)):
+        append_trace(ctx, str(slug), "plan approved (ExitPlanMode)")
     return saved
 
 
@@ -581,13 +615,142 @@ def review_file(repo_root: str, slug: str, step: int) -> str:
     return os.path.join(get_session_dir(repo_root, slug), "reviews", f"step-{step}.md")
 
 
-def append_trace(repo_root: str, slug: str, line: str) -> str:
-    """Append a timestamped line to the blackboard's execution_trace.md."""
+#: Entries kept in execution_trace.md; older ones are dropped behind a marker.
+TRACE_MAX_ENTRIES: int = 400
+_TRACE_ENTRY = re.compile(r"^- (\S+) (.*)$")
+_TRACE_COUNT = re.compile(r"^(.*) \(x(\d+)\)$")
+_TRACE_TRIMMED = re.compile(r"^\((\d+) earlier entries trimmed\)$")
+
+
+def append_trace(repo_root: str, slug: str, line: str, collapse: bool = False) -> str:
+    """Append a timestamped line to the blackboard's execution_trace.md.
+
+    With `collapse`, a line equal to the last entry bumps its `(xN)` count instead. The trace
+    keeps the newest `TRACE_MAX_ENTRIES` entries. [bug--session-records-not-captured]
+    """
     path = os.path.join(get_session_dir(repo_root, slug), TRACE_FILENAME)
     os.makedirs(os.path.dirname(path), exist_ok=True)
     existing = textio.read_text(path, strict=False) if os.path.isfile(path) else f"# Execution Trace: {slug}\n\n"
-    textio.write_text(path, existing.rstrip("\n") + f"\n- {_utc_now_iso()} {line}\n", newline="\n")
+    lines = existing.rstrip("\n").split("\n")
+    entries = [i for i, text in enumerate(lines) if _TRACE_ENTRY.match(text)]
+    stamp = _utc_now_iso()
+    last = _TRACE_ENTRY.match(lines[entries[-1]]) if entries else None
+    if collapse and last:
+        body = last.group(2)
+        counted = _TRACE_COUNT.match(body)
+        base, count = (counted.group(1), int(counted.group(2))) if counted else (body, 1)
+        if base == line:
+            lines[entries[-1]] = f"- {stamp} {line} (x{count + 1})"
+            textio.write_text(path, "\n".join(lines) + "\n", newline="\n")
+            return path
+    lines.append(f"- {stamp} {line}")
+    entries.append(len(lines) - 1)
+    excess = len(entries) - TRACE_MAX_ENTRIES
+    if excess > 0:
+        trimmed = excess
+        drop = set(entries[:excess])
+        kept = []
+        for i, text in enumerate(lines):
+            m = _TRACE_TRIMMED.match(text)
+            if m:
+                trimmed += int(m.group(1))
+                continue
+            if i not in drop:
+                kept.append(text)
+        first = next(i for i, text in enumerate(kept) if _TRACE_ENTRY.match(text))
+        kept.insert(first, f"({trimmed} earlier entries trimmed)")
+        lines = kept
+    textio.write_text(path, "\n".join(lines) + "\n", newline="\n")
     return path
+
+
+def trace_event(repo_root: str, key: Optional[str], line: str, collapse: bool = False) -> Optional[str]:
+    """Append `line` to the trace of the issue session `key` is bound to (or a runner's
+    `ALONG_ISSUE_SLUG`); nothing for an unbound session or a missing blackboard.
+
+    Hooks call it, so a failed write is reported on stderr, never raised.
+    """
+    binding = load_binding(repo_root, key) or {}
+    slug = binding.get("slug") or (os.environ.get("ALONG_ISSUE_SLUG") or "").strip()
+    if not slug:
+        return None
+    ctx = binding_context(repo_root, binding) if binding.get("slug") else repo_root
+    ctx = ctx or repo_root
+    if not load_state(ctx, str(slug)):
+        return None
+    try:
+        return append_trace(ctx, str(slug), line, collapse=collapse)
+    except OSError as exc:
+        print(f"[Along] Could not write the execution trace of '{slug}': {exc}", file=sys.stderr)
+        return None
+
+
+def trace_test_run(repo_root: str, ok: bool, source: str) -> Optional[str]:
+    """A test run of this process's session and its result, into the bound issue's trace."""
+    return trace_event(repo_root, current_session_key(), f"test {'pass' if ok else 'FAIL'} ({source})")
+
+
+# ---------------------------------------------------------------------------
+# Recorded plan [bug--session-records-not-captured] REQ-1
+# ---------------------------------------------------------------------------
+
+PLAN_FILENAME: str = "plan.md"
+_SCAFFOLD_PLAN_LINE = re.compile(r"^(# Living Plan:.*|Title:.*|## Steps|- \[[ x]\] Step (\d+): Step (\d+))$")
+_PLAN_REVISION = re.compile(r"^## Revision (\d+) \(", re.MULTILINE)
+
+
+def is_scaffold_plan(text: Optional[str]) -> bool:
+    """True when `text` holds nothing but the `init_session` scaffold (or nothing at all)."""
+    for line in (text or "").splitlines():
+        line = line.strip()
+        if not line:
+            continue
+        m = _SCAFFOLD_PLAN_LINE.match(line)
+        if not m or (m.group(2) and m.group(2) != m.group(3)):
+            return False
+    return True
+
+
+def plan_path(repo_root: str, slug: str) -> str:
+    return os.path.join(get_session_dir(repo_root, slug), PLAN_FILENAME)
+
+
+def read_plan(repo_root: str, slug: str) -> str:
+    path = plan_path(repo_root, slug)
+    return textio.read_text(path, strict=False) if os.path.isfile(path) else ""
+
+
+def plan_recorded(repo_root: str, slug: str) -> bool:
+    """True when the slug's blackboard holds a plan beyond the scaffold."""
+    return not is_scaffold_plan(read_plan(repo_root, slug))
+
+
+def record_plan(repo_root: str, slug: str, text: str, source: str) -> int:
+    """Write an approved plan into the blackboard's plan.md; returns its revision number.
+
+    The scaffold is replaced by revision 1; a later plan is appended as the next revision, so
+    earlier revisions stay. A plan identical to the latest one is not recorded again (0).
+    """
+    text = (text or "").strip()
+    if not text:
+        return 0
+    if not load_state(repo_root, slug):
+        init_session(repo_root, slug)
+    current = read_plan(repo_root, slug)
+    stamp = f"({_utc_now_iso()}, {source})"
+    if is_scaffold_plan(current):
+        revision = 1
+        content = f"# Living Plan: {slug}\n\n## Revision 1 {stamp}\n\n{text}\n"
+    else:
+        if current.rstrip().endswith(text):
+            return 0
+        found = [int(n) for n in _PLAN_REVISION.findall(current)]
+        # A plan written into plan.md directly (along-team) is revision 1.
+        revision = (max(found) if found else 1) + 1
+        content = current.rstrip("\n") + f"\n\n## Revision {revision} {stamp}\n\n{text}\n"
+    textio.write_text(plan_path(repo_root, slug), content, newline="\n")
+    append_trace(repo_root, slug, f"plan recorded: revision {revision} ({source})")
+    return revision
 
 
 def missing_reviews(repo_root: str, slug: str) -> List[int]:
@@ -610,11 +773,28 @@ def completion_problems(repo_root: str, slug: str) -> List[str]:
     return problems
 
 
-def render_blackboard_markdown(repo_root: str, slug: str) -> str:
+_SCAFFOLD_RESEARCH_LINE = re.compile(
+    r"^(# Research & Findings:.*|## Target Symbols and Files|## Constraints & Risks|## Architectural Patterns)$")
+
+
+def _is_scaffold_research(text: str) -> bool:
+    return all(_SCAFFOLD_RESEARCH_LINE.match(line.strip()) for line in text.splitlines() if line.strip())
+
+
+def _is_scaffold_steps(steps: List[Dict[str, Any]]) -> bool:
+    """Generic `Step N` titles, none ever started: the scaffold's step list, not a plan."""
+    return all(s.get("title") == f"Step {s.get('step')}" and s.get("status") == "pending"
+               and not s.get("started") for s in steps)
+
+
+def render_blackboard_markdown(repo_root: str, slug: str, reason: Optional[str] = None) -> str:
     """The blackboard as a session-log section (plan, steps, reviews, trace), or ''.
 
-    `along wrap` writes it into the session log before the purge deletes the blackboard.
-    See [feat--wrap-session-log-from-blackboard].
+    `along wrap`, `along scratch purge` and `along issue done` write it into the session log
+    before the blackboard is deleted. Scaffold placeholders (template plan, empty research
+    headings, the generic step list) are not rendered as content; `reason` is why the
+    blackboard was archived without completing. See [feat--wrap-session-log-from-blackboard],
+    [bug--session-records-not-captured].
     """
     sdir = get_session_dir(repo_root, slug)
     st = load_state(repo_root, slug)
@@ -637,8 +817,10 @@ def render_blackboard_markdown(repo_root: str, slug: str) -> str:
     out = [f"## Blackboard Record\n",
            f"Execution mode: {st.get('execution_mode', 'direct')}; plan revision "
            f"{st.get('plan_revision', 1)}; approved: {str(bool(st.get('plan_approved'))).lower()}.\n"]
+    if reason:
+        out.append(f"Archived without completing: {reason}\n")
     steps = st.get("steps", [])
-    if steps:
+    if steps and not _is_scaffold_steps(steps):
         out.append("| Step | Title | Status | Retries | Review |")
         out.append("| --- | --- | --- | --- | --- |")
         for s in steps:
@@ -646,8 +828,13 @@ def render_blackboard_markdown(repo_root: str, slug: str) -> str:
             has_review = "yes" if os.path.isfile(review_file(repo_root, slug, n)) else "no"
             out.append(f"| {n} | {s.get('title', '')} | {s.get('status', '')} | {s.get('retries', 0)} | {has_review} |")
         out.append("")
-    for title, name in (("Plan", "plan.md"), ("Research", "research.md"), ("Execution Trace", TRACE_FILENAME)):
+    for title, name in (("Plan", PLAN_FILENAME), ("Research", "research.md"), ("Execution Trace", TRACE_FILENAME)):
         text = _read(name)
+        if name == PLAN_FILENAME and is_scaffold_plan(text):
+            out.append(f"### {title}\n\nNo plan recorded.\n")
+            continue
+        if name == "research.md" and _is_scaffold_research(text):
+            continue
         if text:
             out.append(f"### {title}\n\n{_demote(text)}\n")
     rdir = os.path.join(sdir, "reviews")
@@ -781,10 +968,13 @@ def update_state(
     state = load_state(repo_root, slug)
     if not state:
         state = init_session(repo_root, slug)
+    changes: List[str] = []
 
     if status:
         state["status"] = status
 
+    if phase and phase != state.get("phase"):
+        changes.append(f"phase: {state.get('phase', DEFAULT_PHASE)} -> {phase}")
     if phase:
         if phase not in SESSION_PHASES:
             raise ValueError(f"Invalid session phase '{phase}'. Allowed: {', '.join(SESSION_PHASES)}")
@@ -824,6 +1014,8 @@ def update_state(
         state["total_steps"] = len(steps)
 
     now = _utc_now_iso()
+    if step_status and step_status != step_entry.get("status"):
+        changes.append(f"step {target_step}: {step_entry.get('status')} -> {step_status}")
     if step_status:
         step_entry["status"] = step_status
         if step_status == "in-progress" and not step_entry.get("started"):
@@ -837,8 +1029,12 @@ def update_state(
         if retries > retry_limit:
             retry_exhausted = True
             step_entry["status"] = "failed"
+        changes.append(f"step {target_step}: retry {retries}/{retry_limit}"
+                       + (" (exhausted)" if retry_exhausted else ""))
 
     save_state(repo_root, slug, state)
+    for change in changes:
+        append_trace(repo_root, slug, change)
     # No repository-wide pointer: parallel sessions read their own bindings
     # [bug--session-state-cross-session-leak].
     return state, retry_exhausted

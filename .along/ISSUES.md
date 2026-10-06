@@ -6,7 +6,6 @@
 ## Backlog
 - [ ] `(bug)` [git-index-corruption](ISSUES/bug--git-index-corruption.md)
 - [ ] `(bug)` [release-tags-not-pushed](ISSUES/bug--release-tags-not-pushed.md)
-- [ ] `(bug)` [session-records-not-captured](ISSUES/bug--session-records-not-captured.md)
 - [ ] `(bug)` [stop-gates-breaker-deadlock](ISSUES/bug--stop-gates-breaker-deadlock.md)
 - [ ] `(bug)` [subcommand-help-as-argument](ISSUES/bug--subcommand-help-as-argument.md)
 - [ ] `(bug)` [worktree-cross-os-mount-guard](ISSUES/bug--worktree-cross-os-mount-guard.md)
@@ -68,9 +67,9 @@
 - [ ] `(feat)` [zero-step-state-recovery-and-drift-detection](ISSUES/feat--zero-step-state-recovery-and-drift-detection.md)
 
 ## Done (recent)
+- [x] `(bug)` [session-records-not-captured](ISSUES/done/bug--session-records-not-captured.md)
 - [x] `(bug)` [commit-blocked-after-wrap](ISSUES/done/bug--commit-blocked-after-wrap.md)
 - [x] `(bug)` [ci-windows-short-paths](ISSUES/done/bug--ci-windows-short-paths.md)
 - [x] `(task)` [release-v4-4-5](ISSUES/done/task--release-v4-4-5.md)
 - [x] `(task)` [along-update-dev-repo](ISSUES/done/task--along-update-dev-repo.md)
-- [x] `(debt)` [cached-runtime-venv](ISSUES/done/debt--cached-runtime-venv.md)
-<!-- 185 older completed issue(s) archived in .along/ISSUES/done/ -->
+<!-- 186 older completed issue(s) archived in .along/ISSUES/done/ -->

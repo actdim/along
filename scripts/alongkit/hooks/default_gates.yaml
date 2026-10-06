@@ -281,6 +281,17 @@ gates:
       handler: alongkit.repochecks.check_issue_lifecycle
       error: "Issue placement rejected by [gate: issue-lifecycle]."
 
+  - id: session_record_append_only
+    # git / ci only, base-aware: `along gates check`, `along commit` and CI compare each changed
+    # session log with HEAD (or the range base) via alongkit.gitgates.check_session_records.
+    enforcement: [git, ci]
+    title: "Session Record Append-Only"
+    description: "A committed session log never loses lines of its Blackboard Record; the Summary stays editable"
+    rule:
+      type: predicate
+      handler: alongkit.gitgates.check_session_records
+      error: "Session log rejected by [gate: session-record-append-only]."
+
   - id: no_tracked_secrets
     enforcement: [git, ci]
     title: "No Secrets In Tracked Files"

@@ -207,7 +207,7 @@ TASK / GOAL
 4. **Dual-Track UI & Artifact Projection**:
    - **Track 1 (Host IDE UI Projection)**: When running under Google Antigravity, project the Living Plan to `<appDataDir>/brain/<id>/implementation_plan.md` with `ArtifactMetadata` (`RequestFeedback: true`, `UserFacing: true`). This triggers Antigravity's native interactive design doc card with user checkboxes and the "Proceed" button.
    - **Track 2 (Permanent Along Memory)**: In all environments (Antigravity, Claude Code, OpenAI Codex, OpenCode), write the plan to disk at `.along/.session/<slug>/plan.md` (and `living_plan.md`) and present in chat for confirmation.
-5. **Plan Approval Gate** [gate: require-plan-approval]: source edits stay blocked until the user approves the plan. In Claude Code present it through plan mode (`ExitPlanMode`); the user's acceptance is recorded for this session automatically. Elsewhere, run `along plan approve <slug>` only after the user's explicit yes in chat. Never approve on your own judgment.
+5. **Plan Approval Gate** [gate: require-plan-approval]: source edits stay blocked until the user approves the plan. In Claude Code present it through plan mode (`ExitPlanMode`); the user's acceptance is recorded for this session automatically, plan text included. Elsewhere, run `along plan approve <slug>` only after the user's explicit yes in chat; it is refused while `plan.md` is still the scaffold, so write the plan into `plan.md` first (or pass `--plan-file <path>`). Never approve on your own judgment.
 
 ### Phase 3 to 5: Step Loop (Step N)
 For each step in the Living Plan:
@@ -242,7 +242,7 @@ When running in autonomous `/goal` mode:
      1. `## Initial Implementation Plan (Baseline)`
      2. `## Execution & Loop Trace (Fixes & Re-plans)`
      3. `## Verification Walkthrough & Gate Manifest`
-   - Run `along wrap <slug> --decisions <ADR...> | --no-decisions -m "..."`: it writes the blackboard record (plan, step table, trace, reviews) into the session log and then purges the blackboard and this session's binding. It refuses while steps are open or reviews are missing (`--force-reason "..."` records why). A manual `along scratch purge <slug>` follows the same rule (`--force --reason "..."`) and loses the record, so prefer `along wrap`. On failure, the blackboard is retained for diagnosis.
+   - Run `along wrap <slug> --decisions <ADR...> | --no-decisions -m "..."`: it writes the blackboard record (plan, step table, trace, reviews) into the session log and then purges the blackboard and this session's binding. It refuses while steps are open, reviews are missing or no plan was recorded (`--force-reason "..."` records why). A manual `along scratch purge <slug>` follows the same rule (`--force --reason "..."`) and archives the record into the session log as well, but does not close the issue, so prefer `along wrap`. On failure, the blackboard is retained for diagnosis.
 4. Present a single concise completion summary.
 
 ---

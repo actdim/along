@@ -128,7 +128,7 @@ Manages atomic issue files in `.along/ISSUES/` and recompiles the active board p
     - Side-effects: Automatically recompiles `.along/ISSUES.md` board projection and synchronizes affected milestones.
   - `along issue show <slug> [--json]` (alias: `along issue get`): Displays detailed summary of an issue, including frontmatter metadata, priority, status, milestone, and body excerpt.
     - Options: `--json` outputs structured JSON payload.
-  - `along issue done <slug> [options...]`: Marks the issue as completed, records `completed: YYYY-MM-DD`, and moves the file into `.along/ISSUES/done/`.
+  - `along issue done <slug> [options...]`: Marks the issue as completed, records `completed: YYYY-MM-DD`, and moves the file into `.along/ISSUES/done/`. In the same transaction the issue's blackboard (if any) is archived into today's session log `.along/SESSIONS/<YYYY>/<date>--<slug>.md` and, with status `done`, the key is added to its `issues_completed` (the log is created without a blackboard too); the blackboard is purged after the commit. See [Session Lifecycle](./topic--session-lifecycle.md).
     - Options: `--status {done,superseded,cancelled,duplicate}`, `--superseded-by <slug>`, `--duplicate-of <slug>`.
   - `along issue sync`: Recompiles `.along/ISSUES.md` deterministically from atomic files in `.along/ISSUES/` and `.along/ISSUES/done/`, then runs the entity reference integrity gate (`validate_entities`): dangling references or schema / enum violations that are absent at `HEAD` exit `1` in `enforce` mode and only warn in `shadow` mode; problems already present at `HEAD` are printed as a warning and never fail it.
   - `along issue list`: Lists all active in-progress and open issues in the terminal.
@@ -199,12 +199,12 @@ Manages session logs in `.along/SESSIONS/` and records engineering provenance.
 ### `along plan`
 Plan approval for this agent session ([gate: require-plan-approval]).
 - **Subcommands**:
-  - `along plan approve [<slug>]`: Records the user's approval of the presented plan for the bound issue (or for the next `along start` when none is bound). Run it only after the user's explicit yes; in Claude Code accepting a plan via `ExitPlanMode` records it automatically.
+  - `along plan approve [<slug>] [--plan-file <path>]`: Records the user's approval of the presented plan for the bound issue (or for the next `along start` when none is bound). Run it only after the user's explicit yes; in Claude Code accepting a plan via `ExitPlanMode` records it automatically, plan text included. `--plan-file` writes the approved plan into the blackboard `plan.md` (the scaffold becomes `## Revision 1`, later plans are appended as `## Revision N`). With an issue, approval is refused (exit 2) while `plan.md` is still the scaffold.
   - `along plan status`: Prints the session key, the resolved issue (`binding`, `single`, `ambiguous`, `elsewhere`, `none`), the phase and the approval.
 - **Usage**:
   ```bash
   along plan status
-  along plan approve token-refresh
+  along plan approve token-refresh --plan-file plan.md
   ```
 
 ### `along decision`
@@ -224,10 +224,10 @@ Manages ephemeral multi-agent session blackboard memory (`.along/.session/<slug>
   - `along scratch init <slug> [--title "Title"] [--steps N] [--restart] [--mode direct]`: Initializes session scratchpad directory, `state.json`, and `plan.md`. The blackboard is `role-based` (held to the along-team step loop by `[gate: team-step-active]` and `[gate: team-reviews-before-stop]`) unless `--mode direct` is given.
   - `along scratch state <slug> [--json]`: Displays current step progress, status, and retry counters.
   - `along scratch phase <slug> <inquiry|planning|execution> [--approve]`: Sets the session phase; `--approve` also marks the plan as approved.
-  - `along scratch approve <slug>` (alias: `plan-approve`): Grants plan approval and moves the session to the `execution` phase.
+  - `along scratch approve <slug>` (alias: `plan-approve`): Grants plan approval and moves the session to the `execution` phase. Refused while `plan.md` is the scaffold.
   - `along scratch update <slug> [--step N] [--step-status {pending,in-progress,passed,failed}] [--inc-retry] [--status {in-progress,completed,failed}]`: Updates execution state.
   - `along scratch fallback <slug> --reason "..."`: Switches the blackboard to single-agent (`direct`) execution and records the reason in `execution_trace.md`.
-  - `along scratch purge <slug> [--force --reason "..."]`: Deletes the blackboard and the bindings to it. Refuses (exit 2) while a role-based blackboard has steps that are not `passed` or passed steps without `reviews/step-N.md`, unless forced with a reason.
+  - `along scratch purge <slug> [--force --reason "..."]`: Archives the blackboard into today's session log of the issue, then deletes it and the bindings to it (direct blackboards included). Refuses (exit 2) while a role-based blackboard has steps that are not `passed` or passed steps without `reviews/step-N.md`, unless forced with a reason; the reason is written into the record and the trace.
 - **Usage**:
   ```bash
   along scratch init token-refresh --title "Token Refresh Step Loop" --steps 4
@@ -337,8 +337,8 @@ Transactional end-of-stage wrap engine.
   - `--dry-run`: Simulate wrap-up operations without writing or moving files.
   - `-n, --no-verify`: Skip pre-flight automated tests.
   - `-a, --agent "<name>"`: Explicit agent name.
-  - `-d, --decisions "ADR-a,ADR-b"` or `--no-decisions` (one is required): The answer to "were architectural decisions made?". The session log for today is written or extended with `issues_completed: [<type>--<slug>]`, the decisions, and the blackboard record (plan, step table, research, execution trace, reviews) before the blackboard is purged.
-  - `--force-reason "<text>"`: Wrap a role-based blackboard with open steps or missing reviews; the reason is recorded in the trace.
+  - `-d, --decisions "ADR-a,ADR-b"` or `--no-decisions` (one is required): The answer to "were architectural decisions made?". The session log for today is written or extended with `issues_completed: [<type>--<slug>]`, the decisions, and the blackboard record (plan, step table, research, execution trace, reviews). A second record of the same issue on the same day is appended as `## Blackboard Record (<n>, <ts>)`. The blackboard is purged only after the wrap transaction committed.
+  - `--force-reason "<text>"`: Wrap a role-based blackboard with open steps or missing reviews, or a blackboard whose `plan.md` is still the scaffold (refused otherwise, exit 2); the reason is recorded in the trace.
 - **Completion token**: the purge removes the session's binding; when this session had an approved plan for the slug, it keeps a completion token so the following `along commit -i <slug>` passes the plan gate without a new approval (see `along commit`).
 - **Usage**:
   ```bash

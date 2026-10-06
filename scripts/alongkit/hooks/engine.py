@@ -15,7 +15,7 @@ from .declarative import get_all_declarative_gates
 from .gates import BaseGate, CliSafetyGate, ProjectionProtectionGate, TypographyGate
 from .adapters import normalize
 from .models import GateDecision, GateResult, HookEvent, HookEventType
-from .predicates import record_tool_activity
+from .predicates import record_gate_denial, record_tool_activity
 
 
 #: Runtimes whose hook protocol can hand an ASK decision to the user
@@ -78,6 +78,7 @@ class HookEngine:
                 record_audit_entry(effective_root, event, result, gate_mode)
 
                 if self.config.is_enforcing(gate.name):
+                    record_gate_denial(event, effective_root, result.gate_name or gate.name, result.reason)
                     if result.decision in (GateDecision.ASK, GateDecision.FORCE_ASK):
                         # Runtimes with a native ask keep it; the rest cannot prompt.
                         if event.runtime not in ASK_CAPABLE_RUNTIMES:

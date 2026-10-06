@@ -422,15 +422,18 @@ To prevent multi-agent coordination data from leaking across sessions or clutter
 
 - **Location**: `.along/.session/<issue-slug>/` (automatically excluded in `.gitignore`).
 - **Artifacts**:
-  - `plan.md`: The active Living Plan updated across step loops.
-  - `scout_findings.json`: Distilled symbols, dependencies, and constraints.
-  - `step_reviews/`: Reviewer reports and verdicts per step.
-  - `blackboard.json`: Shared in-session state, mocks, and intermediate variables.
-- **Lifecycle & Automated Garbage Collection**:
-  1. *Allocated*: Created at the start of `/along-team` or autonomous goal execution.
-  2. *Updated*: Maintained dynamically during step execution.
-  3. *Distilled*: Key achievements, decisions, and diff summaries are extracted into `.along/SESSIONS/<YYYY>/<date>--<slug>.md`.
-  4. *Purged*: The entire `.along/.session/<slug>/` directory is automatically deleted during `/along-wrap`.
+  - `state.json`: Phase, approval, execution mode (`direct` / `role-based`), steps and retry counters.
+  - `plan.md`: The approved Living Plan; later plans are appended as `## Revision N`.
+  - `research.md`: Scout findings (symbols, constraints, patterns).
+  - `execution_trace.md`: Edits, test runs with results, gate denials, approvals, phase and step changes (written by the hooks and Along commands).
+  - `reviews/step-N.md`: Reviewer reports and verdicts per step.
+- **Lifecycle**:
+  1. *Allocated*: `along start` (direct) or `along scratch init` (role-based).
+  2. *Updated*: Plan capture at approval, trace by the hooks, step state by `along scratch update`.
+  3. *Archived*: `along wrap`, `along scratch purge` and `along issue done` write the Blackboard Record into `.along/SESSIONS/<YYYY>/<date>--<slug>.md` (append-only once committed).
+  4. *Purged*: Deleted only after the record is committed.
+
+See [Session Lifecycle](./topic--session-lifecycle.md).
 
 ---
 

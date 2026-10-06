@@ -521,6 +521,70 @@ def check_entity_references(repo_root: str, changed: Sequence[str], layer: str, 
             for location, message in sorted(after - before)]
 
 
+SESSION_RECORD_GATE = "session_record_append_only"
+_HUNK = re.compile(r"^@@ -(\d+)(?:,(\d+))? \+\d+(?:,\d+)? @@")
+
+
+def record_line_numbers(text: str) -> set:
+    """1-based line numbers inside `## Blackboard Record` sections of a session log.
+
+    A record runs from its heading to the next level-2 heading that is not another record;
+    headings inside code fences do not end it.
+    """
+    inside, fence, lines = False, False, set()
+    for number, line in enumerate(text.splitlines(), start=1):
+        if inside and line.lstrip().startswith(("```", "~~~")):
+            fence = not fence
+        if not fence and line.startswith("## "):
+            inside = line.startswith("## Blackboard Record")
+        if inside:
+            lines.add(number)
+    return lines
+
+
+def removed_line_numbers(diff_text: str) -> List[int]:
+    """Old-side line numbers a `-U0` diff of one file removes or rewrites."""
+    removed: List[int] = []
+    for line in diff_text.splitlines():
+        m = _HUNK.match(line)
+        if m:
+            start, count = int(m.group(1)), int(m.group(2) if m.group(2) is not None else 1)
+            removed.extend(range(start, start + count))
+    return removed
+
+
+def check_session_records(repo_root: str, changed: Sequence[str], layer: str, base: Optional[str],
+                          target: Optional[str] = None) -> List[Violation]:
+    """[gate: session-record-append-only] a change never removes Blackboard Record lines.
+
+    Compares each changed `.along/SESSIONS/**.md` that exists at `base` with the index
+    (`target` None, pre-commit) or the `target` commit (CI). Summary and other sections stay
+    editable. See [bug--session-records-not-captured] REQ-7.
+    """
+    if not base or SESSION_RECORD_GATE not in _definitions(layer):
+        return []
+    violations: List[Violation] = []
+    for path in sorted({p.replace("\\", "/") for p in changed if p}):
+        parts = path.split("/")
+        if not path.endswith(".md") or ".along" not in parts or "SESSIONS" not in parts[parts.index(".along"):]:
+            continue
+        before = _git_out(repo_root, "show", f"{base}:{path}")
+        protected = record_line_numbers(before) if before else set()
+        if not protected:
+            continue
+        args = ["diff", "-U0", "--no-color", "--no-ext-diff"]
+        args += ["--cached", base] if target is None else [base, target]
+        diff = _git_out(repo_root, *args, "--", path)
+        before_lines = before.splitlines()
+        for number in removed_line_numbers(diff):
+            if number in protected and number <= len(before_lines):
+                violations.append(Violation(
+                    SESSION_RECORD_GATE, f"{path}:{number}",
+                    f"removes a Blackboard Record line (append-only): {before_lines[number - 1][:120]!r}. "
+                    "Edit the Summary instead; a record is only ever appended to."))
+    return violations
+
+
 def _range_base(repo_root: str, commit_range: Optional[str]) -> Optional[str]:
     if not commit_range:
         return None
@@ -541,7 +605,8 @@ def check_pre_commit(repo_root: str) -> List[Violation]:
             + check_projections(repo_root, along_roots(staged), "index")
             + check_repo_state(repo_root, added, "git", _index_reader(repo_root))
             + check_rule_packs(added, "git", _index_reader(repo_root))
-            + check_entity_references(repo_root, staged, "git", "index", head))
+            + check_entity_references(repo_root, staged, "git", "index", head)
+            + check_session_records(repo_root, staged, "git", head))
 
 
 def check_commit_msg(repo_root: str, message_file: str) -> List[Violation]:
@@ -582,6 +647,8 @@ def check_ci(repo_root: str, commit_range: Optional[str] = None, links: bool = T
     violations += check_projections(repo_root, roots, "tree")
     violations += check_entity_references(repo_root, changed, "ci", "tree",
                                           _range_base(repo_root, commit_range))
+    violations += check_session_records(repo_root, changed, "ci", _range_base(repo_root, commit_range),
+                                        target="HEAD")
     tracked = _git_out(repo_root, "ls-files", "-z").split("\0")
     violations += check_repo_state(repo_root, tracked, "ci", _tree_reader(repo_root))
     violations += check_rule_packs(tracked, "ci", _tree_reader(repo_root))

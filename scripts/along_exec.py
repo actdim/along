@@ -44,7 +44,7 @@ from alongkit import bootstrap
 # installers and the documented skill commands invoke it.
 bootstrap.ensure_deps()
 
-from alongkit import circuit, entities, frontmatter, gates, lifecycle, proc, repo, session, textio
+from alongkit import circuit, entities, frontmatter, gates, lifecycle, proc, repo, session, textio, transaction
 from alongkit.version import CURRENT_PROTOCOL_VERSION
 
 TOOL_MAPPINGS = {
@@ -407,15 +407,39 @@ def _issue_done(repo_root: str, args: List[str], issues_dir: str, done_dir: str,
             adjusted_body_lines.append(sibling_link_re.sub(r'\1../\2', line))
         content = block.open_delim + block.raw + block.close_delim + "".join(adjusted_body_lines)
 
-    textio.write_text(dest_file, content, newline="\n", atomic=True)
-    os.remove(found_file)
-    print(f"-> Moved issue to done: {dest_file}")
+    # [bug--session-records-not-captured] REQ-4: the issue's blackboard (or, without one, the
+    # completion itself) goes into today's session log in the same transaction; the blackboard
+    # is purged once that committed.
+    _itype, bare_slug = entities.parse_key(filename[:-3])
+    has_blackboard = session.load_state(repo_root, bare_slug) is not None
+    tx = transaction.FileTransaction(repo_root, label=f"issue-done-{bare_slug}")
+    try:
+        tx.protect(found_file)
+        tx.protect(dest_file)
+        textio.write_text(dest_file, content, newline="\n", atomic=True)
+        os.remove(found_file)
+        print(f"-> Moved issue to done: {dest_file}")
 
-    # Update ISSUES.md projection with sliding window
-    issues_board = os.path.join(repo_root, ".along", "ISSUES.md")
-    if os.path.exists(issues_board):
-        entities.sync_issues_board(repo_root, recent_done_limit=RECENT_DONE_LIMIT)
-        print("-> Updated .along/ISSUES.md")
+        if has_blackboard:
+            session.append_trace(repo_root, bare_slug, "archived by issue done")
+        if has_blackboard or target_status == "done":
+            log_path = lifecycle.write_session_record(
+                repo_root, tx, bare_slug, today=today, completed=(target_status == "done"))
+            print(f"-> Recorded in session log: {repo.safe_relpath(log_path, repo_root)}")
+
+        # Update ISSUES.md projection with sliding window
+        issues_board = os.path.join(repo_root, ".along", "ISSUES.md")
+        if os.path.exists(issues_board):
+            tx.protect(issues_board)
+            entities.sync_issues_board(repo_root, recent_done_limit=RECENT_DONE_LIMIT)
+            print("-> Updated .along/ISSUES.md")
+        tx.commit()
+    except (OSError, ValueError, frontmatter.FrontmatterError) as exc:
+        print(f"[Error] issue done failed: {exc}", file=sys.stderr)
+        tx.rollback()
+        sys.exit(1)
+    if has_blackboard and lifecycle.purge_archived(repo_root, bare_slug, complete=True):
+        print(f"-> Purged session blackboard: .along/.session/{bare_slug}")
     sys.exit(0)
 
 
@@ -943,7 +967,9 @@ def handle_plan_command(repo_root: str, args: List[str]):
     See [feat--plan-approval-exit-plan-mode].
     """
     if not args or args[0] in ("-h", "--help", "help"):
-        print("Usage: along plan approve [<slug>]   Record the user's approval of the plan (run only after an explicit yes)")
+        print("Usage: along plan approve [<slug>] [--plan-file <path>]")
+        print("                                     Record the user's approval of the plan (run only after an explicit yes);")
+        print("                                     --plan-file writes the approved plan into the blackboard plan.md")
         print("       along plan status             Show this session's binding, phase and approval")
         sys.exit(0)
     sub = args[0].lower()
@@ -951,8 +977,32 @@ def handle_plan_command(repo_root: str, args: List[str]):
     if sub == "approve":
         slug = args[1].lower() if len(args) > 1 and not args[1].startswith("-") else None
         slug = slug or session.get_active_session_slug(repo_root, key)
+        plan_file = _flag_value(args, "--plan-file")
+        if "--plan-file" in args and not plan_file:
+            print("[Error] --plan-file needs a path.", file=sys.stderr)
+            sys.exit(2)
+        if plan_file and not slug:
+            print("[Error] --plan-file needs an issue: 'along start <slug>' first, or pass <slug>.", file=sys.stderr)
+            sys.exit(2)
         if slug:
+            # [bug--session-records-not-captured] REQ-1: the approved plan is recorded.
+            if plan_file:
+                try:
+                    plan_text = textio.read_text(plan_file, strict=False)
+                except OSError as exc:
+                    print(f"[Error] Cannot read --plan-file '{plan_file}': {exc}", file=sys.stderr)
+                    sys.exit(2)
+                rev = session.record_plan(repo_root, slug, plan_text, "plan approve --plan-file")
+                if rev:
+                    print(f"-> Recorded plan revision {rev} in .along/.session/{slug}/plan.md")
+            if not session.plan_recorded(repo_root, slug):
+                print(f"[Error] No plan recorded for '{slug}': .along/.session/{slug}/plan.md is still the scaffold.",
+                      file=sys.stderr)
+                print("  Write the approved plan to a file and pass '--plan-file <path>', or write it into plan.md.",
+                      file=sys.stderr)
+                sys.exit(2)
             session.set_session_phase(repo_root, "execution", slug=slug, plan_approved=True)
+            session.append_trace(repo_root, slug, "plan approved (along plan approve)")
             print(f"-> Plan approved for '{slug}' (session: {key or 'none'}).")
         elif key:
             session.record_plan_approval(repo_root, key)
@@ -1388,6 +1438,17 @@ def handle_doctor_command(repo_root: str, args: List[str]):
               "Run `along migrate --apply` (or `git rm --cached` them) and commit.")
         warnings += 1
 
+    # Orphan blackboards: no session bound, issue closed or missing
+    # [bug--session-records-not-captured] REQ-8.
+    orphans = lifecycle.orphan_blackboards(repo_root)
+    if orphans:
+        print(f"[WARN] {len(orphans)} orphan blackboard(s) in .along/.session/: "
+              + ", ".join(f"{slug} ({why})" for slug, why in orphans)
+              + ". Run `along scratch purge <slug>`: it archives the record into the session log first.")
+        warnings += 1
+    else:
+        print("[OK] No orphan blackboards.")
+
     # Check DECISIONS
     dec_dir = os.path.join(along_dir, "DECISIONS")
     dec_file = os.path.join(along_dir, "DECISIONS.md")
@@ -1554,6 +1615,11 @@ def handle_scratch_command(repo_root: str, args: List[str]):
         sys.exit(0)
 
     elif subcmd in ("approve", "plan-approve"):
+        if not session.plan_recorded(repo_root, slug):
+            print(f"[Error] No plan recorded for '{slug}': plan.md is still the scaffold. "
+                  f"Use 'along plan approve {slug} --plan-file <path>' or write the plan into plan.md.",
+                  file=sys.stderr)
+            sys.exit(2)
         st = session.approve_plan(repo_root, slug)
         print(f"-> Granted plan approval for session: {slug} (phase: execution, plan_approved: true)")
         print(session.format_state_summary(st))
@@ -1652,16 +1718,22 @@ def handle_scratch_command(repo_root: str, args: List[str]):
             print("  Finish the steps (with reviews/step-N.md), or 'along scratch purge <slug> --force --reason \"...\"'.",
                   file=sys.stderr)
             sys.exit(2)
+        reason = _flag_value(args, "--reason")
         if problems:
-            reason = _flag_value(args, "--reason")
             if not reason:
-                print("[Error] --force needs --reason \"...\"; it is kept in the session log by 'along wrap'.", file=sys.stderr)
+                print("[Error] --force needs --reason \"...\"; it is kept in the session log.", file=sys.stderr)
                 sys.exit(2)
-            print(f"-> Forced purge of '{slug}' with open problems ({'; '.join(problems)}): {reason}")
-        if session.purge_session(repo_root, slug):
-            print(f"-> Purged session blackboard: {session.get_session_dir(repo_root, slug)}")
-        else:
+            reason = f"open problems ({'; '.join(problems)}): {reason}"
+            print(f"-> Forced purge of '{slug}' with {reason}")
+        if not session.load_state(repo_root, slug):
             print(f"-> Session blackboard not found (already clean): {session.get_session_dir(repo_root, slug)}")
+            sys.exit(0)
+        # [bug--session-records-not-captured] REQ-3: the record goes into the session log first.
+        log_path = lifecycle.archive_and_purge(repo_root, slug, reason=reason, source="scratch purge")
+        if log_path:
+            print(f"-> Archived blackboard into {repo.safe_relpath(log_path, repo_root)}")
+        if not os.path.isdir(session.get_session_dir(repo_root, slug)):
+            print(f"-> Purged session blackboard: {session.get_session_dir(repo_root, slug)}")
         sys.exit(0)
 
 

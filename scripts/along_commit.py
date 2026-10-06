@@ -183,6 +183,16 @@ def main(argv=None):
             sys.exit(1)
         print("-> [Pre-Commit Quality Gate] Entity references intact.")
 
+    # 6. Blackboard Records of committed session logs are append-only
+    # [bug--session-records-not-captured] REQ-7.
+    if not parsed.skip_tests:
+        head = "HEAD" if proc.git(["rev-parse", "--verify", "-q", "HEAD"], cwd=repo_root).ok else None
+        cut = gitgates.check_session_records(repo_root, staged_files, "git", head)
+        if cut:
+            print(gitgates.format_report(cut, "Pre-Commit Quality Gate"), file=sys.stderr)
+            print("Commit aborted. Restore the removed Blackboard Record lines.", file=sys.stderr)
+            sys.exit(1)
+
     print(f"-> Committing {len(staged_files)} staged file(s):")
     for f in staged_files[:10]:
         print(f"   - {f}")

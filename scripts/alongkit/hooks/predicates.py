@@ -111,6 +111,11 @@ MUTATION_WHITELIST_PATTERNS: Tuple[str, ...] = (
     "living_plan.md",
 )
 
+#: Edits the execution trace leaves out: the blackboard itself and machine-local diagnostics.
+TRACE_EXCLUDED_PATTERNS: Tuple[str, ...] = (
+    ".along/.session/**",
+    ".along/diagnostics/**",
+)
 
 
 def _extract_target_file(event: HookEvent) -> str:
@@ -206,6 +211,19 @@ def save_activity_trace(repo_root: str, data: Dict[str, Any], key: Optional[str]
         pass
 
 
+def record_gate_denial(event: HookEvent, repo_root: Optional[str], gate: str, reason: Optional[str]) -> None:
+    """An enforced gate held the event: note it in the bound issue's execution trace.
+
+    See [bug--session-records-not-captured] REQ-2.
+    """
+    if not repo_root:
+        return
+    first = (reason or "").strip().splitlines()[0] if (reason or "").strip() else ""
+    first = first if len(first) <= 160 else first[:157] + "..."
+    session.trace_event(repo_root, event_session_key(event), f"denied [{gate}] {event.tool_name}: {first}",
+                        collapse=True)
+
+
 def record_tool_activity(event: HookEvent, repo_root: str) -> None:
     """Record file modifications and test runs to track lifecycle state.
 
@@ -217,11 +235,15 @@ def record_tool_activity(event: HookEvent, repo_root: str) -> None:
     if not repo_root:
         return
 
-    # Claude Code runs ExitPlanMode's PostToolUse only after the user accepted the plan.
-    # See [feat--plan-approval-exit-plan-mode].
+    # Claude Code runs ExitPlanMode's PostToolUse only after the user accepted the plan; the
+    # plan text (tool_input.plan) goes into the blackboard. See [feat--plan-approval-exit-plan-mode],
+    # [bug--session-records-not-captured].
     raw_tool = str((event.raw_payload or {}).get("tool_name") or "")
     if event.event_type == HookEventType.POST_TOOL_USE and raw_tool == "ExitPlanMode":
-        session.record_plan_approval(repo_root, event_session_key(event))
+        plan = (event.tool_args or {}).get("plan")
+        if not isinstance(plan, str):
+            plan = ((event.raw_payload or {}).get("tool_input") or {}).get("plan")
+        session.record_accepted_plan(repo_root, event_session_key(event), plan if isinstance(plan, str) else None)
         return
 
     now_iso = datetime.now(timezone.utc).isoformat()
@@ -234,6 +256,10 @@ def record_tool_activity(event: HookEvent, repo_root: str) -> None:
         if event.event_type != HookEventType.POST_TOOL_USE:
             return
         rel = _repo_relative(_extract_target_file(event), repo_root)
+        # Every repository edit goes into the bound issue's execution trace, except the
+        # blackboard and diagnostics themselves [bug--session-records-not-captured].
+        if rel and not _matches_pattern(rel, list(TRACE_EXCLUDED_PATTERNS)):
+            session.trace_event(repo_root, key, f"edit {repo.normalize_posix(rel)}", collapse=True)
         if rel and is_source_edit(rel):
             trace["last_edit_time"] = now_iso
             edited = trace.get("edited_files", [])
@@ -876,7 +902,11 @@ def check_test_before_stop(event: HookEvent, repo_root: str, options: Optional[D
 
 
 def check_wrap_before_stop(event: HookEvent, repo_root: str, **kwargs: Any) -> Optional[str]:
-    """Ensure session log is recorded if an issue was marked done."""
+    """Every issue completed today is listed in `issues_completed` of a session log of today.
+
+    The local date, as `along wrap` / `along issue done` write it (`entities.today_iso`).
+    See [bug--session-records-not-captured] REQ-6.
+    """
     if not repo_root:
         return None
 
@@ -884,41 +914,39 @@ def check_wrap_before_stop(event: HookEvent, repo_root: str, **kwargs: Any) -> O
     if not os.path.isdir(done_dir):
         return None
 
-    today_prefix = datetime.now(timezone.utc).strftime("%Y-%m-%d")
-    recent_done = False
+    today = entities.today_iso()
+    completed_today: List[str] = []
     try:
         for entry in os.scandir(done_dir):
             if entry.is_file() and entry.name.endswith(".md"):
-                content = textio.read_text(entry.path, strict=False)
-                parsed, _body, _err = frontmatter.try_parse(content)
-                if parsed:
-                    completed = str(parsed.get("completed", ""))
-                    if completed.startswith(today_prefix):
-                        recent_done = True
-                        break
+                parsed, _body, _err = frontmatter.try_parse(textio.read_text(entry.path, strict=False))
+                if parsed and parsed.get("status") == "done" and str(parsed.get("completed", "")).startswith(today):
+                    completed_today.append(entry.name[:-3])
     except (OSError, UnicodeDecodeError, ValueError):
         pass
+    if not completed_today:
+        return None
 
-    if recent_done:
-        # Verify a session log exists for today
-        sessions_dir = os.path.join(repo.state_dir(repo_root), "SESSIONS")
-        has_session_today = False
-        if os.path.isdir(sessions_dir):
-            for root, _dirs, files in os.walk(sessions_dir):
-                for f in files:
-                    if f.startswith(today_prefix) and f.endswith(".md"):
-                        has_session_today = True
-                        break
-                if has_session_today:
-                    break
-
-        if not has_session_today:
-            return (
-                f"Turn Completion Rejected [gate: wrap-before-stop]: Issue completed today ({today_prefix}), "
-                "but no matching session log was found in .along/SESSIONS/. "
-                "Execute '/along-wrap' or write the session log before ending."
-            )
-    return None
+    logged: set = set()
+    year_dir = os.path.join(repo.state_dir(repo_root), "SESSIONS", today.split("-")[0])
+    if os.path.isdir(year_dir):
+        for name in os.listdir(year_dir):
+            if name.startswith(today) and name.endswith(".md"):
+                try:
+                    fm, _body, _err = frontmatter.try_parse(textio.read_text(os.path.join(year_dir, name), strict=False))
+                except (OSError, UnicodeDecodeError):
+                    continue
+                logged.update(str(k) for k in ((fm or {}).get("issues_completed") or []))
+    missing = sorted(k for k in completed_today if k not in logged)
+    if not missing:
+        return None
+    first = entities.parse_key(missing[0])[1]
+    return (
+        f"Turn Completion Rejected [gate: wrap-before-stop]: issue(s) completed today ({today}) are not in "
+        f"'issues_completed' of any session log of today: {', '.join(missing)}. "
+        f"Record each one with 'along wrap <slug> --no-decisions -m \"...\"' (e.g. 'along wrap {first} ...'); "
+        "it also works for an issue already in done/."
+    )
 
 
 def check_projection_sync_before_stop(event: HookEvent, repo_root: str, **kwargs: Any) -> Optional[str]:

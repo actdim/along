@@ -50,6 +50,8 @@ class TestLifecycleWrap(unittest.TestCase):
             total_steps=2,
             step_titles=["Step 1", "Step 2"],
         )
+        # Wrap refuses a scaffold-only plan [bug--session-records-not-captured] REQ-5.
+        session.record_plan(self.root, "fixture-sample-task", "1. Fixture plan.", "test")
         self.assertTrue(
             os.path.isdir(session.get_session_dir(self.root, "fixture-sample-task"))
         )
