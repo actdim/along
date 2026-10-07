@@ -9,9 +9,9 @@ created: 2026-10-07
 updated: 2026-10-07
 agent: claude
 tags: [gates, tests, performance]
-milestone: v4.6.0-structured-state-and-blackboard-engine
+milestone: v4.5.0-multi-user-merge-automation
 blocked_by: []
-related: [feat--parallel-session-closeout, bug--lifecycle-test-false-pass, feat--gate-strictness-profiles]
+related: [feat--parallel-session-closeout, bug--lifecycle-test-false-pass, feat--gate-strictness-profiles, bug--inquiry-readonly-commands-blocked]
 ---
 
 # Test gate cost reduction
@@ -58,6 +58,11 @@ sessions.
   suite. Decide via a spike if the gain is unclear.
 - REQ-4: Coordinate with `feat--gate-strictness-profiles` REQ-2: `test_before_stop` stays
   on in every profile, but its cost must not scale with turn count.
+- REQ-6: Version-only and state-only changes keep a green run. After `along bump` (version
+  strings only) `along wrap` ran the full suite again (218 s, 2026-10-07) because the tree
+  hash changed. The release engine records its own green run for the post-bump tree (it ran
+  the gate on the pre-bump tree inside the same transaction), and `.along/` state / projection
+  changes stay out of the hash (as `feat--parallel-session-closeout` REQ-8 intends for closeout).
 - REQ-5: Docs: `docs/topic--runtime-hooks-and-gates.md` describes tree-hash reuse for the
   Stop gate and the doc test scope.
 

@@ -1,15 +1,22 @@
 # Active Issues
 
 ## Active
-<!-- No active issues -->
+- [ ] `(task)` [file-v4-5-fixes-update](ISSUES/task--file-v4-5-fixes-update.md)
 
 ## Backlog
+- [ ] `(bug)` [archive-drops-research-md](ISSUES/bug--archive-drops-research-md.md)
+- [ ] `(bug)` [history-append-blocked-after-wrap](ISSUES/bug--history-append-blocked-after-wrap.md)
+- [ ] `(bug)` [inquiry-readonly-commands-blocked](ISSUES/bug--inquiry-readonly-commands-blocked.md)
+- [ ] `(bug)` [plan-gate-blocks-help](ISSUES/bug--plan-gate-blocks-help.md)
 - [ ] `(bug)` [release-tags-not-pushed](ISSUES/bug--release-tags-not-pushed.md)
+- [ ] `(bug)` [uncommitted-issue-deleted-without-trace](ISSUES/bug--uncommitted-issue-deleted-without-trace.md)
 - [ ] `(bug)` [worktree-cross-os-mount-guard](ISSUES/bug--worktree-cross-os-mount-guard.md)
+- [ ] `(bug)` [wrapped-work-left-uncommitted](ISSUES/bug--wrapped-work-left-uncommitted.md)
 - [ ] `(debt)` [agents-md-core-slimming](ISSUES/debt--agents-md-core-slimming.md)
 - [ ] `(debt)` [along-core-extras-split](ISSUES/debt--along-core-extras-split.md)
 - [ ] `(debt)` [along-exec-argparse-migration](ISSUES/debt--along-exec-argparse-migration.md)
 - [ ] `(debt)` [constraints-superseded-adr-filtering](ISSUES/debt--constraints-superseded-adr-filtering.md)
+- [ ] `(debt)` [protocol-friction-cleanup](ISSUES/debt--protocol-friction-cleanup.md)
 - [ ] `(docs)` [anti-pattern-shell-code-probing](ISSUES/docs--anti-pattern-shell-code-probing.md)
 - [ ] `(docs)` [arxiv-academic-paper-preprint](ISSUES/docs--arxiv-academic-paper-preprint.md)
 - [ ] `(docs)` [engineering-deepdive-medium-devto](ISSUES/docs--engineering-deepdive-medium-devto.md)
@@ -53,6 +60,7 @@
 - [ ] `(feat)` [pi-harness-support](ISSUES/feat--pi-harness-support.md)
 - [ ] `(feat)` [planning-fields-and-ordering-gates](ISSUES/feat--planning-fields-and-ordering-gates.md)
 - [ ] `(feat)` [progressive-disclosure-and-context-scaling](ISSUES/feat--progressive-disclosure-and-context-scaling.md)
+- [ ] `(feat)` [release-ci-precondition-check](ISSUES/feat--release-ci-precondition-check.md)
 - [ ] `(feat)` [secret-scrubbing-in-hooks-and-diagnostics](ISSUES/feat--secret-scrubbing-in-hooks-and-diagnostics.md)
 - [ ] `(feat)` [structured-blackboard-state-machine](ISSUES/feat--structured-blackboard-state-machine.md)
 - [ ] `(feat)` [system-invariants-and-health-probes](ISSUES/feat--system-invariants-and-health-probes.md)
@@ -62,6 +70,7 @@
 - [ ] `(feat)` [tool-nature-classification](ISSUES/feat--tool-nature-classification.md)
 - [ ] `(feat)` [vps-runner-daemon](ISSUES/feat--vps-runner-daemon.md)
 - [ ] `(feat)` [zero-step-state-recovery-and-drift-detection](ISSUES/feat--zero-step-state-recovery-and-drift-detection.md)
+- [ ] `(plan-file-v4-5-fixes-update.tmp)` [plan-file-v4-5-fixes-update.tmp](ISSUES/plan-file-v4-5-fixes-update.tmp.md)
 
 ## Done (recent)
 - [x] `(task)` [release-v4-4-7](ISSUES/done/task--release-v4-4-7.md)
