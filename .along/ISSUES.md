@@ -1,7 +1,7 @@
 # Active Issues
 
 ## Active
-- [ ] `(task)` [release-v4-4-7](ISSUES/task--release-v4-4-7.md)
+<!-- No active issues -->
 
 ## Backlog
 - [ ] `(bug)` [release-tags-not-pushed](ISSUES/bug--release-tags-not-pushed.md)
@@ -64,9 +64,9 @@
 - [ ] `(feat)` [zero-step-state-recovery-and-drift-detection](ISSUES/feat--zero-step-state-recovery-and-drift-detection.md)
 
 ## Done (recent)
+- [x] `(task)` [release-v4-4-7](ISSUES/done/task--release-v4-4-7.md)
 - [x] `(bug)` [stop-gates-breaker-deadlock](ISSUES/done/bug--stop-gates-breaker-deadlock.md)
 - [x] `(bug)` [breaker-trips-on-test-output](ISSUES/done/bug--breaker-trips-on-test-output.md)
 - [x] `(bug)` [along-install-marker-ambiguous](ISSUES/done/bug--along-install-marker-ambiguous.md)
 - [x] `(feat)` [parallel-session-closeout](ISSUES/done/feat--parallel-session-closeout.md)
-- [x] `(bug)` [update-maintenance-friction](ISSUES/done/bug--update-maintenance-friction.md)
-<!-- 196 older completed issue(s) archived in .along/ISSUES/done/ -->
+<!-- 197 older completed issue(s) archived in .along/ISSUES/done/ -->
