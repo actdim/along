@@ -47,7 +47,16 @@ def main():
         os.environ.pop(var, None)
 
     loader = unittest.TestLoader()
-    suite = loader.discover(start_dir=tests_dir, pattern="test_*.py")
+    args = [arg for arg in sys.argv[1:] if not arg.startswith("-")]
+    if args:
+        suite = unittest.TestSuite()
+        for target in args:
+            if target.endswith(".py") or "*" in target:
+                suite.addTests(loader.discover(start_dir=tests_dir, pattern=target))
+            else:
+                suite.addTests(loader.loadTestsFromName(target))
+    else:
+        suite = loader.discover(start_dir=tests_dir, pattern="test_*.py")
     quiet = any(arg in ("-q", "--quiet") for arg in sys.argv[1:])
     runner = unittest.TextTestRunner(verbosity=1 if quiet else 2)
     result = runner.run(suite)

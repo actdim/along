@@ -172,7 +172,7 @@ def binding_root(repo_root: str) -> str:
     at the git repository top (a `.git` directory; submodules have a `.git` file) and
     never climbs to or above the home directory, whose `~/.along` is the global install.
     """
-    cur = os.path.abspath(repo_root)
+    cur = os.path.realpath(os.path.abspath(repo_root))
     best = cur
     while True:
         if _is_or_above_home(cur):
@@ -197,7 +197,7 @@ def binding_context(repo_root: str, binding: Optional[Dict[str, Any]]) -> Option
     if not binding:
         return None
     rel = binding.get("context") or "."
-    return os.path.normpath(os.path.join(binding_root(repo_root), rel))
+    return os.path.realpath(os.path.normpath(os.path.join(binding_root(repo_root), rel)))
 
 
 def _binding_file(repo_root: str, key: str) -> str:
@@ -251,7 +251,8 @@ def bind_session(repo_root: str, slug: str, key: Optional[str] = None,
     # A plan accepted before any slug was bound goes with its approval to the first slug.
     pending_plan = binding.pop("pending_plan", None)
     binding["slug"] = slug
-    rel_ctx = os.path.relpath(os.path.abspath(repo_root), binding_root(repo_root))
+    real_cur = os.path.realpath(os.path.abspath(repo_root))
+    rel_ctx = os.path.relpath(real_cur, binding_root(real_cur))
     binding["context"] = repo.normalize_posix(rel_ctx)
     saved = save_binding(repo_root, key, binding)
     if pending_plan and pending and approved is None:
@@ -788,8 +789,9 @@ def events_path(ctx: str, slug: str) -> str:
 def workspace_path(repo_root: str, rel: str) -> str:
     """`rel` (relative to `repo_root`) as a POSIX path relative to the workspace root
     (`binding_root`), the form every ledger entry uses."""
-    absolute = os.path.normpath(os.path.join(repo_root, rel))
-    return repo.normalize_posix(os.path.relpath(absolute, binding_root(repo_root)))
+    real_root = os.path.realpath(os.path.abspath(repo_root))
+    absolute = os.path.realpath(os.path.join(real_root, rel))
+    return repo.normalize_posix(os.path.relpath(absolute, binding_root(real_root)))
 
 
 def _ledger_errors_file(repo_root: str) -> str:

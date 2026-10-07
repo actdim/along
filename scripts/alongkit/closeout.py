@@ -41,8 +41,9 @@ def _git_text(cwd: str, *args: str) -> Optional[str]:
 
 
 def git_top(repo_root: str) -> Optional[str]:
-    out = _git_text(repo_root, "rev-parse", "--show-toplevel")
-    return os.path.normpath(out.strip()) if out and out.strip() else None
+    root = os.path.realpath(os.path.abspath(repo_root))
+    out = _git_text(root, "rev-parse", "--show-toplevel")
+    return os.path.realpath(out.strip()) if out and out.strip() else None
 
 
 def path_key(path: str) -> str:
@@ -54,8 +55,9 @@ def path_key(path: str) -> str:
 def git_changes(repo_root: str) -> Dict[str, str]:
     """{top-relative path: two-letter status} of every changed, untracked or deleted path
     (`git status --porcelain -z -uall`); a rename reports both its old and new path."""
-    top = git_top(repo_root)
-    out = _git_text(top or repo_root, "status", "--porcelain", "-z", "-uall") if top else None
+    real_root = os.path.realpath(os.path.abspath(repo_root))
+    top = git_top(real_root)
+    out = _git_text(top or real_root, "status", "--porcelain", "-z", "-uall") if top else None
     changes: Dict[str, str] = {}
     if not out:
         return changes
@@ -76,12 +78,14 @@ def git_changes(repo_root: str) -> Dict[str, str]:
 
 def operation_in_progress(repo_root: str) -> Optional[str]:
     """'merge', 'rebase', 'cherry-pick' or 'revert' when one is in progress, else None."""
+    real_root = os.path.realpath(os.path.abspath(repo_root))
+    top = git_top(real_root) or real_root
     for marker, name in _OPERATION_MARKERS:
-        path = _git_text(repo_root, "rev-parse", "--git-path", marker)
+        path = _git_text(real_root, "rev-parse", "--git-path", marker)
         if path and path.strip():
             candidate = path.strip()
             if not os.path.isabs(candidate):
-                candidate = os.path.join(git_top(repo_root) or repo_root, candidate)
+                candidate = os.path.join(top, candidate)
             if os.path.exists(candidate):
                 return name
     return None
@@ -89,12 +93,13 @@ def operation_in_progress(repo_root: str) -> Optional[str]:
 
 def conflicted_paths(top: str, changes: Dict[str, str]) -> List[str]:
     """Unmerged paths and changed text files that carry conflict markers."""
+    real_top = os.path.realpath(os.path.abspath(top))
     found: List[str] = []
     for path, code in sorted(changes.items()):
         if code in _UNMERGED_CODES:
             found.append(path)
             continue
-        full = os.path.join(top, *path.split("/"))
+        full = os.path.join(real_top, *path.split("/"))
         try:
             if not os.path.isfile(full) or os.path.getsize(full) > _MARKER_SCAN_LIMIT:
                 continue
@@ -113,11 +118,14 @@ def conflicted_paths(top: str, changes: Dict[str, str]) -> List[str]:
 
 def _contexts(repo_root: str) -> List[str]:
     """The repository context and every `.along/` context a binding points at."""
-    roots = [os.path.normpath(repo_root)]
-    for binding in session.list_bindings(repo_root):
-        ctx = session.binding_context(repo_root, binding)
-        if ctx and os.path.isdir(ctx) and all(not session._same_dir(ctx, r) for r in roots):
-            roots.append(os.path.normpath(ctx))
+    real_root = os.path.realpath(os.path.abspath(repo_root))
+    roots = [real_root]
+    for binding in session.list_bindings(real_root):
+        ctx = session.binding_context(real_root, binding)
+        if ctx:
+            real_ctx = os.path.realpath(os.path.abspath(ctx))
+            if os.path.isdir(real_ctx) and all(not session._same_dir(real_ctx, r) for r in roots):
+                roots.append(real_ctx)
     return roots
 
 
@@ -152,17 +160,20 @@ def closeout_status(repo_root: str) -> Dict[str, Any]:
     reasons. The repository part lists changed, unattributed and staged paths, an operation
     in progress and conflicted paths.
     """
-    top = git_top(repo_root) or os.path.normpath(repo_root)
-    changes = git_changes(repo_root)
+    real_root = os.path.realpath(os.path.abspath(repo_root))
+    top = git_top(real_root) or real_root
+    changes = git_changes(real_root)
     changed_keys = {path_key(p): p for p in changes}
-    prefix = repo.normalize_posix(os.path.relpath(session.binding_root(repo_root), top))
-    bindings = session.list_bindings(repo_root)
+    b_root = os.path.realpath(os.path.abspath(session.binding_root(real_root)))
+    prefix = repo.normalize_posix(os.path.relpath(b_root, top))
+    prefix = "" if prefix in ("", ".") else prefix
+    bindings = session.list_bindings(real_root)
 
     items: List[Dict[str, Any]] = []
-    for ctx in _contexts(repo_root):
+    for ctx in _contexts(real_root):
         slugs = {i["slug"] for i in entities.scan_issues(ctx) if i.get("status") == "in-progress"}
         slugs |= {str(b["slug"]) for b in bindings
-                  if b.get("slug") and session._same_dir(session.binding_context(repo_root, b) or repo_root, ctx)}
+                  if b.get("slug") and session._same_dir(session.binding_context(real_root, b) or real_root, ctx)}
         slugs |= set(_blackboard_slugs(ctx))
         for slug in sorted(slugs):
             items.append(_item(ctx, slug, bindings, prefix, changed_keys))
@@ -183,7 +194,7 @@ def closeout_status(repo_root: str) -> Dict[str, Any]:
         "changed": sorted(changes),
         "unattributed": sorted(p for p in changes if path_key(p) not in attributed),
         "staged": staged,
-        "operation": operation_in_progress(repo_root),
+        "operation": operation_in_progress(real_root),
         "conflicts": conflicted_paths(top, changes),
     }
     return {"repository": repository, "items": items}
@@ -258,7 +269,8 @@ _COMMIT_TYPES = {"feat": "feat", "bug": "fix", "debt": "refactor", "task": "chor
 
 
 def run_file(repo_root: str) -> str:
-    return os.path.join(repo.state_dir(repo_root), ".session", RUN_FILENAME)
+    real_root = os.path.realpath(os.path.abspath(repo_root))
+    return os.path.join(repo.state_dir(real_root), ".session", RUN_FILENAME)
 
 
 def load_run(repo_root: str) -> Optional[Dict[str, Any]]:
@@ -321,13 +333,15 @@ def _commit_message(keys: List[str], titles: Dict[str, str], projections: bool =
 
 
 def _commit(repo_root: str, top: str, message: str, key: str, files: List[str]) -> int:
-    script = repo.resolve_tool_script("along_commit.py", repo_root)
+    real_root = os.path.realpath(os.path.abspath(repo_root))
+    real_top = os.path.realpath(os.path.abspath(top))
+    script = repo.resolve_tool_script("along_commit.py", real_root)
     if not script:
         print("[Error] along_commit.py not found.", file=sys.stderr)
         return 1
-    paths = [os.path.join(top, *p.split("/")) for p in files]
+    paths = [os.path.join(real_top, *p.split("/")) for p in files]
     result = proc.run_capture([sys.executable, script, message, "-i", key, "--paths", *paths],
-                              cwd=repo_root, check=False, trip_on_anomaly=False)
+                              cwd=real_root, check=False, trip_on_anomaly=False)
     print(result.stdout.rstrip())
     if not result.ok:
         print(result.stderr.rstrip(), file=sys.stderr)
@@ -336,10 +350,11 @@ def _commit(repo_root: str, top: str, message: str, key: str, files: List[str]) 
 
 def content_fingerprint(top: str, paths: List[str]) -> Dict[str, Optional[str]]:
     """{path: blob id} of top-relative paths (None for a missing file), one `git hash-object`."""
-    existing = [p for p in paths if os.path.isfile(os.path.join(top, *p.split("/")))]
+    real_top = os.path.realpath(os.path.abspath(top))
+    existing = [p for p in paths if os.path.isfile(os.path.join(real_top, *p.split("/")))]
     out: Dict[str, Optional[str]] = {p: None for p in paths}
     if existing:
-        ids = (_git_text(top, "hash-object", "--", *existing) or "").split()
+        ids = (_git_text(real_top, "hash-object", "--", *existing) or "").split()
         if len(ids) == len(existing):
             out.update(dict(zip(existing, ids)))
     return out
@@ -355,14 +370,16 @@ def _entity_files(repo_root: str, top: str, key: str, today: str) -> List[str]:
     """Top-relative paths of an issue's entity files a wrap touched: the issue file at both
     places (the move) and today's session log."""
     from . import lifecycle
-    issue = entities.find_issue_by_slug(repo_root, key)
+    real_root = os.path.realpath(os.path.abspath(repo_root))
+    real_top = os.path.realpath(os.path.abspath(top))
+    issue = entities.find_issue_by_slug(real_root, key)
     if not issue:
         return []
     name = os.path.basename(issue["file_path"])
-    issues_dir = os.path.join(repo.state_dir(repo_root), "ISSUES")
+    issues_dir = os.path.join(repo.state_dir(real_root), "ISSUES")
     paths = [os.path.join(issues_dir, name), os.path.join(issues_dir, "done", name),
-             lifecycle.session_log_path(repo_root, issue["slug"], today)]
-    return [repo.normalize_posix(os.path.relpath(p, top)) for p in paths]
+             lifecycle.session_log_path(real_root, issue["slug"], today)]
+    return [repo.normalize_posix(os.path.relpath(os.path.realpath(p), real_top)) for p in paths]
 
 
 def run_closeout(repo_root: str, keys: Optional[List[str]] = None, ready: bool = False,
@@ -373,16 +390,17 @@ def run_closeout(repo_root: str, keys: Optional[List[str]] = None, ready: bool =
     """
     from . import gates, lifecycle
 
-    top = git_top(repo_root)
+    real_root = os.path.realpath(os.path.abspath(repo_root))
+    top = git_top(real_root)
     if not top:
         print("[Error] along session close needs a git repository.", file=sys.stderr)
         return 2
     key = session_key if session_key is not None else session.current_session_key()
-    run = load_run(repo_root)
+    run = load_run(real_root)
     if run and not dry_run:
         print(f"-> Resuming the closeout started {run.get('created')} for {', '.join(run['keys'])}.")
     else:
-        status = closeout_status(repo_root)
+        status = closeout_status(real_root)
         rep = status["repository"]
         if rep["operation"]:
             print(f"[Error] A {rep['operation']} is in progress: finish or abort it first.", file=sys.stderr)
@@ -429,7 +447,7 @@ def run_closeout(repo_root: str, keys: Optional[List[str]] = None, ready: bool =
             print(f"   not committed (unattributed): {path}")
         if dry_run:
             return 0
-        approved = set(session.closeout_approved(repo_root, key))
+        approved = set(session.closeout_approved(real_root, key))
         missing = [i["slug"] for i in chosen if i["slug"] not in approved]
         if missing:
             print(f"[Error] Closeout not approved for: {', '.join(missing)}. After the user's explicit yes, run "
@@ -437,58 +455,58 @@ def run_closeout(repo_root: str, keys: Optional[List[str]] = None, ready: bool =
             return 2
         titles = {}
         for item in chosen:
-            issue = entities.find_issue_by_slug(repo_root, item["slug"]) or {}
+            issue = entities.find_issue_by_slug(real_root, item["slug"]) or {}
             titles[item["key"]] = str((issue.get("frontmatter") or {}).get("title") or item["slug"])
         run = {"schema": RUN_SCHEMA, "created": session._utc_now_iso(), "session": key,
                "keys": [i["key"] for i in chosen], "titles": titles, "groups": plan["groups"],
                "tested": False, "wrapped": [], "entity_files": {}, "projections_done": False,
                "pushed": False, "today": entities.today_iso()}
-        _save_run(repo_root, run)
+        _save_run(real_root, run)
 
     # Tests once for the whole closeout, before anything is wrapped.
     if not run["tested"]:
-        if not gates.run_repository_tests(repo_root, "Closeout Quality Gate"):
+        if not gates.run_repository_tests(real_root, "Closeout Quality Gate"):
             print("[Error] Tests failed: nothing was wrapped or committed. Fix them and re-run "
                   "'along session close' (it resumes).", file=sys.stderr)
             return 1
         run["tested"] = True
-        _save_run(repo_root, run)
+        _save_run(real_root, run)
 
     # Fingerprint before the first wrap: what the wraps change is told apart from the work.
     if "pre_wrap" not in run:
-        run["pre_wrap"] = content_fingerprint(top, sorted(git_changes(repo_root)))
-        _save_run(repo_root, run)
+        run["pre_wrap"] = content_fingerprint(top, sorted(git_changes(real_root)))
+        _save_run(real_root, run)
 
     # Wrap each issue: archive with attribution, issue done, session log, HISTORY.
     for ikey in run["keys"]:
         if ikey in run["wrapped"]:
             continue
-        issue = entities.find_issue_by_slug(repo_root, ikey)
+        issue = entities.find_issue_by_slug(real_root, ikey)
         if issue and issue.get("status") not in entities.CLOSED_ISSUE_STATUSES:
-            code = lifecycle.execute_wrap(repo_root, ikey, no_verify=True, decisions=[],
+            code = lifecycle.execute_wrap(real_root, ikey, no_verify=True, decisions=[],
                                           summary=f"Closed out ({run['titles'].get(ikey, ikey)})")
             if code != 0:
-                _save_run(repo_root, run)
+                _save_run(real_root, run)
                 print(f"[Error] Wrap of {ikey} failed; re-run 'along session close' to continue.", file=sys.stderr)
                 return code
         run["wrapped"].append(ikey)
-        run["entity_files"][ikey] = _entity_files(repo_root, top, ikey, run["today"])
-        _save_run(repo_root, run)
+        run["entity_files"][ikey] = _entity_files(real_root, top, ikey, run["today"])
+        _save_run(real_root, run)
 
     # What the wraps changed (KB provenance, indexes, logs). When that is all Along state,
     # docs and projections, the green run carries over to the wrapped tree; anything else
     # (a parallel edit during the closeout) makes the commits run the tests again.
     if "byproducts" not in run:
         pre = run["pre_wrap"]
-        post = content_fingerprint(top, sorted(set(git_changes(repo_root)) | set(pre)))
+        post = content_fingerprint(top, sorted(set(git_changes(real_root)) | set(pre)))
         changed = sorted(p for p, blob in post.items() if pre.get(p, "absent") != blob)
         entity = {path_key(p) for files in run["entity_files"].values() for p in files}
         run["byproducts"] = [p for p in changed if path_key(p) not in entity]
         if all(_is_wrap_byproduct(p) for p in run["byproducts"]):
             from . import testruns
-            testruns.record_run(repo_root, True, testruns.tree_hash(repo_root),
+            testruns.record_run(real_root, True, testruns.tree_hash(real_root),
                                 "Closeout Quality Gate (carried over its wraps)")
-        _save_run(repo_root, run)
+        _save_run(real_root, run)
 
     # Commits: one per issue, then the shared ones, then the projections.
     for group in run["groups"]:
@@ -497,47 +515,50 @@ def run_closeout(repo_root: str, keys: Optional[List[str]] = None, ready: bool =
         files = list(group["files"])
         if len(group["keys"]) == 1:
             files += run["entity_files"].get(group["keys"][0], [])
-        changed = {path_key(p) for p in git_changes(repo_root)}
+        changed = {path_key(p) for p in git_changes(real_root)}
         files = [f for f in dict.fromkeys(files) if path_key(f) in changed]
         if files:
-            code = _commit(repo_root, top, _commit_message(group["keys"], run["titles"]),
+            code = _commit(real_root, top, _commit_message(group["keys"], run["titles"]),
                            entities.parse_key(group["keys"][0])[1], files)
             if code != 0:
-                _save_run(repo_root, run)
+                _save_run(real_root, run)
                 print("[Error] Commit failed; re-run 'along session close' to continue.", file=sys.stderr)
                 return code
         group["done"] = True
-        _save_run(repo_root, run)
+        _save_run(real_root, run)
     if not run["projections_done"]:
-        state_rel = repo.normalize_posix(os.path.relpath(repo.state_dir(repo_root), top))
-        root_rel = repo.normalize_posix(os.path.relpath(repo_root, top))
-        projections = [(f"{state_rel}/{p[len('.along/'):]}" if p.startswith(".along/")
-                        else (p if root_rel == "." else f"{root_rel}/{p}")) for p in PROJECTION_FILES]
+        state_real = os.path.realpath(repo.state_dir(real_root))
+        state_rel = repo.normalize_posix(os.path.relpath(state_real, top))
+        state_prefix = "" if state_rel in ("", ".") else state_rel
+        root_rel = repo.normalize_posix(os.path.relpath(real_root, top))
+        root_prefix = "" if root_rel in ("", ".") else root_rel
+        projections = [((f"{state_prefix}/{p[len('.along/'):]}".lstrip("/")) if p.startswith(".along/")
+                        else (f"{root_prefix}/{p}".lstrip("/") if root_prefix else p)) for p in PROJECTION_FILES]
         # Docs and state the wraps rewrote (KB provenance) go with the projections.
         projections += [p for p in run.get("byproducts", []) if _is_wrap_byproduct(p)]
-        changed = {path_key(p) for p in git_changes(repo_root)}
+        changed = {path_key(p) for p in git_changes(real_root)}
         projections = [p for p in dict.fromkeys(projections) if path_key(p) in changed]
         if projections:
-            code = _commit(repo_root, top, _commit_message(run["keys"], run["titles"], projections=True),
+            code = _commit(real_root, top, _commit_message(run["keys"], run["titles"], projections=True),
                            entities.parse_key(run["keys"][0])[1], projections)
             if code != 0:
-                _save_run(repo_root, run)
+                _save_run(real_root, run)
                 return code
         run["projections_done"] = True
-        _save_run(repo_root, run)
+        _save_run(real_root, run)
 
     if push and not run["pushed"]:
         result = proc.run_capture(["git", "push"], cwd=top, check=False, trip_on_anomaly=False)
         if not result.ok:
-            _save_run(repo_root, run)
+            _save_run(real_root, run)
             print(f"[Error] git push failed:\n{result.stderr}", file=sys.stderr)
             return 1
         run["pushed"] = True
         print("-> Pushed.")
 
-    session.consume_closeout_approval(repo_root, run.get("session"), [entities.parse_key(k)[1] for k in run["keys"]])
+    session.consume_closeout_approval(real_root, run.get("session"), [entities.parse_key(k)[1] for k in run["keys"]])
     try:
-        os.remove(run_file(repo_root))
+        os.remove(run_file(real_root))
     except OSError:
         pass
     print(f"-> [OK] Closed out {', '.join(run['keys'])}.")

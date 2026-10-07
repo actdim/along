@@ -308,6 +308,47 @@ class TestReadiness(CloseoutFixture):
         self.assertNotIn("src/shared.py", status["repository"]["unattributed"])
         self.assertEqual(alpha["sessions"][0]["key"], self.key_a)
 
+    def test_short_and_long_path_mismatch_resolved(self):
+        self.start("alpha", "sess-a")
+        self.edit("src/alpha.py", "sess-a")
+        self.ran_tests("sess-a")
+        from alongkit import closeout
+        canonical_top = os.path.realpath(self.root)
+        simulated_short_root = os.path.join(os.path.dirname(self.root), "SHORT~1")
+
+        orig_realpath = os.path.realpath
+
+        def fake_realpath(p):
+            norm = os.path.normpath(str(p))
+            if norm == os.path.normpath(simulated_short_root) or norm.startswith(os.path.normpath(simulated_short_root) + os.sep):
+                tail = os.path.relpath(norm, simulated_short_root)
+                target = canonical_top if tail == "." else os.path.join(canonical_top, tail)
+                return orig_realpath(target)
+            return orig_realpath(p)
+
+        with mock.patch("os.path.realpath", side_effect=fake_realpath):
+            status = closeout.closeout_status(simulated_short_root)
+            alpha = self.item(status, "feat--alpha")
+            self.assertEqual(alpha["verdict"], "ready")
+            self.assertIn("src/alpha.py", alpha["files"])
+            self.assertEqual(alpha["files"]["src/alpha.py"]["shared_with"], [])
+
+    def test_windows_short_path_compatibility(self):
+        if sys.platform != "win32":
+            return
+        import ctypes
+        buf = ctypes.create_unicode_buffer(500)
+        res = ctypes.windll.kernel32.GetShortPathNameW(self.root, buf, 500)
+        short_root = buf.value if res else self.root
+        self.start("alpha", "sess-a")
+        self.edit("src/alpha.py", "sess-a")
+        self.ran_tests("sess-a")
+        from alongkit import closeout
+        status = closeout.closeout_status(short_root)
+        alpha = self.item(status, "feat--alpha")
+        self.assertEqual(alpha["verdict"], "ready")
+        self.assertIn("src/alpha.py", alpha["files"])
+
     def test_blockers(self):
         self.start("alpha", "sess-a", body=AC_OPEN)
         self.start("beta", "sess-b", plan=False)
