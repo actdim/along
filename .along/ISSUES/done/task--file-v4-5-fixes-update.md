@@ -3,7 +3,8 @@ protocol: along
 protocol_version: "4.4.6"
 slug: file-v4-5-fixes-update
 type: task
-status: in-progress
+status: done
+completed: 2026-10-07
 priority: medium
 created: 2026-10-07
 updated: 2026-10-07
@@ -32,6 +33,12 @@ v4.4.6 in `~/.along`).
   (or the installer); `along doctor` reports the new version.
 
 ## Acceptance Criteria
-- [ ] Tickets filed and pushed
-- [ ] Global installation at v4.4.7
-- [ ] Automated tests passing
+- [x] Tickets filed and pushed (a1ed14f)
+- [x] Global installation at v4.4.7 (`along update --global --local-only`; check-only reports Global Version v4.4.7)
+- [x] Automated tests passing
+
+## Notes
+
+- a1ed14f carried a stray board line for a temporary plan file placed in `.along/ISSUES/`;
+  the board recompile during the update removed it (committed with the wrap). `along issue
+  sync` lists any `.md` in `.along/ISSUES/` as an issue, even without the `<type>--` prefix.

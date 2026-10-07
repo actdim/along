@@ -1,7 +1,7 @@
 # Active Issues
 
 ## Active
-- [ ] `(task)` [file-v4-5-fixes-update](ISSUES/task--file-v4-5-fixes-update.md)
+<!-- No active issues -->
 
 ## Backlog
 - [ ] `(bug)` [archive-drops-research-md](ISSUES/bug--archive-drops-research-md.md)
@@ -70,12 +70,11 @@
 - [ ] `(feat)` [tool-nature-classification](ISSUES/feat--tool-nature-classification.md)
 - [ ] `(feat)` [vps-runner-daemon](ISSUES/feat--vps-runner-daemon.md)
 - [ ] `(feat)` [zero-step-state-recovery-and-drift-detection](ISSUES/feat--zero-step-state-recovery-and-drift-detection.md)
-- [ ] `(plan-file-v4-5-fixes-update.tmp)` [plan-file-v4-5-fixes-update.tmp](ISSUES/plan-file-v4-5-fixes-update.tmp.md)
 
 ## Done (recent)
 - [x] `(task)` [release-v4-4-7](ISSUES/done/task--release-v4-4-7.md)
+- [x] `(task)` [file-v4-5-fixes-update](ISSUES/done/task--file-v4-5-fixes-update.md)
 - [x] `(bug)` [stop-gates-breaker-deadlock](ISSUES/done/bug--stop-gates-breaker-deadlock.md)
 - [x] `(bug)` [breaker-trips-on-test-output](ISSUES/done/bug--breaker-trips-on-test-output.md)
 - [x] `(bug)` [along-install-marker-ambiguous](ISSUES/done/bug--along-install-marker-ambiguous.md)
-- [x] `(feat)` [parallel-session-closeout](ISSUES/done/feat--parallel-session-closeout.md)
-<!-- 197 older completed issue(s) archived in .along/ISSUES/done/ -->
+<!-- 198 older completed issue(s) archived in .along/ISSUES/done/ -->
