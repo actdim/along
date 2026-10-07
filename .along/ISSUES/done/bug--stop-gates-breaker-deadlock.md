@@ -3,10 +3,11 @@ protocol: along
 protocol_version: "4.4.5"
 slug: stop-gates-breaker-deadlock
 type: bug
-status: open
+status: done
+completed: 2026-10-07
 priority: high
 created: 2026-10-05
-updated: 2026-10-05
+updated: 2026-10-07
 agent: claude-code
 tags: [hooks, gates, circuit-breaker]
 milestone: v4.5.0-multi-user-merge-automation
@@ -30,8 +31,17 @@ index by hand (`mv .git/index ...; git reset; along circuit reset`).
 - `check_circuit_breaker` holds write tools and all shell tools, including `along` state and
   sync commands.
 
+- Root cause of the 2026-10-05 trip: a false positive from test output, see
+  [bug--breaker-trips-on-test-output].
+
+## Resolution
+- `DeclarativeGate` downgrades a Stop gate denial to a reported pending step while the breaker
+  is tripped (one place for every Stop gate).
+- `check_circuit_breaker` lets read-only commands through and names the evidence (source
+  command, first output line) and the false-positive path (`along circuit verify`, `reset`).
+
 ## Acceptance Criteria
-- [ ] While the breaker is tripped, Stop gates that demand a command do not reject the turn
+- [x] While the breaker is tripped, Stop gates that demand a command do not reject the turn
       (they report the pending step instead)
-- [ ] Breaker message names the repair steps for its class (VCS corruption: index rebuild)
-- [ ] Automated tests passing
+- [x] Breaker message names the repair steps for its class (VCS corruption: index rebuild)
+- [x] Automated tests passing

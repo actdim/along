@@ -138,7 +138,7 @@ reader, so ADR search returned zero results in every released version.
 
 | Module | Owns |
 | :--- | :--- |
-| `alongkit/repo.py` | Repository root markers, nearest `.along/` discovery, engine resolution, directory walking and the shared ignore set. |
+| `alongkit/repo.py` | The installation definition (`is_installed`: Along state, never an `AGENTS.md`), root discovery (installation or `.git`), nearest `.along/` discovery, package doc roots, engine resolution, directory walking and the shared ignore set. |
 | `alongkit/frontmatter.py` | The single YAML front-matter reader and writer (`ruamel.yaml`, round-trip). |
 | `alongkit/entities.py` | Entity vocabulary, canonical keys, slugs, dates, ADR record parsing and formatting. |
 | `alongkit/proc.py` | Subprocess execution with UTF-8 fixed on both sides of the pipe. |
@@ -240,8 +240,8 @@ decides: append-only files are union-merged the way `.gitattributes` already mer
 across branches, derived projections keep the destination and drop the legacy copy for
 recompilation, and anything else keeps the destination with the legacy copy preserved
 beside it as `<name>.legacy.md`. Before the first change the state directories are copied
-to `.along/.migration-backup/<timestamp>/`, and the copy ignores itself so it never enters
-history.
+to `.along/.migration-backup/<timestamp>/` (machine-local state excluded, newest 5 snapshots
+kept), and the copy ignores itself so it never enters history.
 
 Where the release engine needs an in-memory transaction - undo everything, the tests
 failed - a migration needs the opposite: a durable copy that outlives the process, because

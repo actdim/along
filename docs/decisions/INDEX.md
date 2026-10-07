@@ -11,7 +11,7 @@ tags: [adr, architecture, decisions, index]
 This directory contains the project's Architectural Decision Records.
 Decisions are authored and maintained in `.along/DECISIONS/` and published here as first-class documentation.
 
-## Active Decisions (44)
+## Active Decisions (46)
 
 - **[code-graph-mcp-and-hybrid-kb-search](./ADR-2026-08-26--code-graph-mcp-and-hybrid-kb-search.md)** - Code Graph & Hybrid Knowledge Base Search MCP Integration
 - **[protocol-v120-knowledge-base-architecture](./ADR-2026-08-26--protocol-v120-knowledge-base-architecture.md)** - Protocol v1.2.0 & Knowledge Base (KB) Architecture Standard
@@ -57,6 +57,8 @@ Decisions are authored and maintained in `.along/DECISIONS/` and published here 
 - **[agent-session-bindings](./ADR-2026-10-01--agent-session-bindings.md)** - Agent-Session Issue Bindings and Plan Approval
 - **[single-vision-hybrid-reconcile](./ADR-2026-10-04--single-vision-hybrid-reconcile.md)** - One VISION per context: mechanical reconcile, agent restructure; git-bounded REF blocks
 - **[session-event-ledger-feeds-telemetry](./ADR-2026-10-05--session-event-ledger-feeds-telemetry.md)** - Session Event Ledger Is the Source of Truth; Telemetry Is a Projection
+- **[subproject-boundary-is-git-or-explicit-init](./ADR-2026-10-06--subproject-boundary-is-git-or-explicit-init.md)** - Subproject boundary is a nested .git or an explicit along init
+- **[along-installation-is-state-not-agents-md](./ADR-2026-10-07--along-installation-is-state-not-agents-md.md)** - An Along installation is Along state, never an AGENTS.md
 
 ## Superseded & Retired Decisions (2)
 

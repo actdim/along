@@ -195,17 +195,22 @@ class TestRepositoryPaths(unittest.TestCase):
     def test_root_markers_are_found_walking_upwards(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = os.path.realpath(tmp)
-            os.makedirs(os.path.join(root, ".along"))
+            os.makedirs(os.path.join(root, ".along", "ISSUES"))
             deep = os.path.join(root, "a", "b", "c")
             os.makedirs(deep)
+            # Neither a folder guide nor a stateless .along/ stops the walk
+            # [bug--along-install-marker-ambiguous].
+            with open(os.path.join(root, "a", "AGENTS.md"), "w", encoding="utf-8") as fh:
+                fh.write("# guide\n")
+            os.makedirs(os.path.join(root, "a", "b", ".along", "scripts"))
             self.assertEqual(os.path.realpath(repo.find_repo_root(deep)), root)
 
     def test_nearest_state_directory_wins(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = os.path.realpath(tmp)
-            os.makedirs(os.path.join(root, ".along"))
+            os.makedirs(os.path.join(root, ".along", "ISSUES"))
             sub = os.path.join(root, "packages", "auth")
-            os.makedirs(os.path.join(sub, ".along"))
+            os.makedirs(os.path.join(sub, ".along", "ISSUES"))
             self.assertEqual(os.path.realpath(repo.find_state_dir(sub)),
                              os.path.join(sub, ".along"))
 

@@ -38,7 +38,13 @@ General help and command listing are accessible via:
 ```bash
 along --help
 along <command> --help
+along <command> <subcommand> --help
 ```
+
+For the entity and repository commands (section 3), `-h` / `--help` anywhere after the
+subcommand, before a `--` separator, prints the usage for that subcommand, exits 0 and writes
+nothing. `run`, `kb`, `graph`, the tool engines and the lifecycle hooks pass `--help` on to the
+command they run. Entity names that start with `-` are rejected with exit code 2.
 
 ---
 
@@ -59,7 +65,9 @@ Executes the project build lifecycle hook.
 ### `along test`
 Executes automated test suites using quiet, token-efficient flags.
 - **Engine Script**: `.along/scripts/test.py`
-- **Auto-Detection Fallback**: Detects `pytest` (`pytest -q`), `npm` (`npm test -- --silent`), `dotnet` (`dotnet test -v q`), `cargo` (`cargo test -q`).
+- **Auto-Detection Fallback**: Detects `pytest` (`pytest -q`), `npm` (`npm test -- --silent`), `dotnet` (`dotnet test <solution or test project> -v q`, only with a `*.sln` / `*.slnx` or a test project referencing `Microsoft.NET.Test.Sdk` / `<IsTestProject>`; a library project alone detects nothing), `cargo` (`cargo test -q`).
+- **Enclosing hook**: a nested context without its own hook runs the nearest enclosing context's hook of the same git repository instead of synthesizing one; a folder with only an `AGENTS.md` uses the enclosing context.
+- **No tests is not a pass**: when the runner output shows zero executed tests (`Ran 0 tests`, `no tests ran`, `Total tests: 0`, `No test is available`, `No test files found`, ...), `along test` prints `FAIL: ... executed no tests` and exits `5`, and the run is not recorded green. Output that says nothing about test counts is judged by the exit code alone.
 - **Distilled Output** (`along test`, `along build`): When stdout is not a terminal (an agent or a pipe reads it), the output is distilled by `alongkit.distill`. A pass becomes `PASS: <cmd> completed successfully (code 0, <s>s)` plus the runner summary (`Ran N tests`, `OK`). A failure keeps the failure blocks: tracebacks, unittest `FAIL:` / `ERROR:` sections, pytest `E` lines, compiler `error:` lines, panics. Resolver chatter, deprecation notices, progress redraws and passing-test lines are dropped. The result is capped at 50 lines / 2 KB, with the runner summary always kept. The raw output is written to `.along/artifacts/lifecycle/<action>.log` (gitignored, overwritten per run). In a terminal the output streams as before.
   - `--raw` streams the full output, `--distill` forces distillation. Both flags are consumed by Along and not passed on; `--verbose` is left alone because pytest and cargo use it. `ALONG_OUTPUT=raw|distill` sets the mode for a whole session. `along dev` / `along debug` always stream.
 - **Usage**:
@@ -91,6 +99,8 @@ Executes project debugging or diagnostics profile.
 
 Entity commands manage the durable in-repo memory stored inside `.along/` (issues, decisions, sessions, scratchpads, and isolated worktrees).
 
+They work inside an Along installation only: the nearest folder (from the current directory upward) whose `.along/` holds Along state. A folder with only an `AGENTS.md` (a folder guide) or a stateless `.along/` is passed by, so a command run in a package folder writes to the installation above it. Outside any installation `issue`, `start`, `session`, `plan`, `decision`, `milestone`, `scratch`, `worktree`, `wrap` and `commit` exit `2` with "Along is not installed"; only `along init` creates an installation, and `along test|build|dev` there run the detected command without writing a hook.
+
 ### `along status`
 Displays an instant terminal summary of repository health, active in-flight issues, and recent completed sessions.
 - **Usage**:
@@ -103,9 +113,10 @@ Validates repository compliance with the Along protocol. Audits `.along/` direct
 - **Runtime section**: names the runtime (`claude-code`, `cowork`, `antigravity`, `codex`, ...), the gate enforcement level (`mechanical` only when Along hooks are registered for that runtime, otherwise `advisory`), the Python floor (3.10), a stale `.git/index.lock`, and a cross-OS or VM-mounted repository (worktrees unsafe). See the capability matrix in [Runtime Lifecycle Hooks & Mechanical Gates](./topic--runtime-hooks-and-gates.md).
 - **Vision & root notes**: warns about a root `VISION.md` next to `.along/`, an unresolved `along:imported-vision needs-restructure` section in `.along/VISION.md`, and root notes (`ROADMAP.md`, `ARCHITECTURE.md`, `SPEC.md`, `TODO.md`, `DESIGN.md`) that the agent must route into the Knowledge Base.
 - **Tracked diagnostics**: warns when files under any `.along/diagnostics/` are still tracked in git (committed before the directory ignored itself) and names `along migrate --apply` (or `git rm --cached`) as the fix.
+- **Nested installs**: warns about nested `.along/` contexts that sit in no nested git repository (possibly created per manifest folder by older versions) and lists them. It changes nothing: consolidating them into the root is a manual per-repository task. A deliberate nested context is silenced with `"subproject": {"intentional": true}` in its `.along/config.json`. See ADR `subproject-boundary-is-git-or-explicit-init`.
 - **Sessions**: warns about orphan blackboards (no session bound, issue closed or missing), session bindings older than 72 h or without a blackboard (`along session gc`), and issues in progress with no session bound. See [Parallel Sessions](./topic--parallel-sessions.md).
 - **Options**:
-  - `--entities`: Performs deep validation of the entity DAG graph, verifying parent/child relationships, `blocked_by` dependencies, and detecting circular references. References resolve against the current `.along/`, every enclosing `.along/` up to the git boundary, and every nested subproject `.along/` below it (nested git repositories and dependency/build dirs are not entered).
+  - `--entities`: Performs deep validation of the entity DAG graph, verifying parent/child relationships, `blocked_by` dependencies, and detecting circular references. References resolve against the current `.along/`, every enclosing `.along/` up to the git boundary, every nested subproject `.along/` below it, and every sibling `.along/` of the same git repository (nested git repositories and dependency/build dirs are not entered). Schema findings on archived issues (`.along/ISSUES/done/`) are warnings.
   - `--entities --fix`: Removes `milestone` fields of issues and session logs that resolve to no milestone, lists the changed files, then validates.
 - **Usage**:
   ```bash
@@ -135,6 +146,8 @@ Manages atomic issue files in `.along/ISSUES/` and recompiles the active board p
   - `along issue sync`: Recompiles `.along/ISSUES.md` deterministically from atomic files in `.along/ISSUES/` and `.along/ISSUES/done/`, then runs the entity reference integrity gate (`validate_entities`): dangling references or schema / enum violations that are absent at `HEAD` exit `1` in `enforce` mode and only warn in `shadow` mode; problems already present at `HEAD` are printed as a warning and never fail it.
   - `along issue list`: Lists all active in-progress and open issues in the terminal.
   - `along issue rename <old-key> <new-key>`: Renames an issue (type and/or slug; a bare slug keeps the type). Rewrites the file name and `slug`/`type`, then every inbound reference in the nearest `.along/`: `related`, `blocked_by`, `parent`, `superseded_by`, `duplicate_of` in issues, risks, spikes, checklists and ADRs, milestone `target_issues`, and session `issues_advanced` / `issues_completed`.
+  - `along issue cancel <slug>`: Same as `along issue done <slug> --status cancelled`.
+  - `along issue delete <slug>`: Removes an issue created by mistake: strips it from `related` / `blocked_by` lists and milestone `target_issues`, deletes the file and recompiles milestones and the board. Refused when a session log, a `parent` / `superseded_by` / `duplicate_of` reference or a commit message names it; cancel or supersede such an issue instead.
   - `along issue supersede <old-key> --by <new-key>`: Closes the old issue as `superseded` with `superseded_by: <new-key>` and moves it to `done/` (the file is kept, so session history stays valid). Dependency fields of other entities (`related`, `blocked_by`, `parent`, ...) are rewritten to the successor; session logs are left as they are.
   - `along issue create ... --milestone <m>` and `along issue update --milestone <m>` keep the milestone `target_issues` in sync (added on assignment, removed from the previous milestone on reassignment).
 - **Usage**:
@@ -166,7 +179,7 @@ Atomically marks an issue as `in-progress`, updates `updated: YYYY-MM-DD`, recom
 ### `along milestone`
 Tracks progress across high-level milestones and sprints in `.along/MILESTONES/`. Provides bidirectional synchronization with issues and dynamic progress tracking.
 - **Subcommands**:
-  - `along milestone sync [<slug>]`: Scans all active and completed issues in `.along/ISSUES/`, discovers issues declaring `milestone: <slug>`, dynamically updates `target_issues: [...]` in milestone frontmatter, recalculates `progress_pct = round(100 * done_count / total)`, and automatically transitions status to `completed` when all target issues are closed. If `<slug>` is omitted, synchronizes all milestones in `.along/MILESTONES/`.
+  - `along milestone sync [<slug>]`: Scans all active and completed issues in `.along/ISSUES/`, discovers issues declaring `milestone: <slug>`, dynamically updates `target_issues: [...]` in milestone frontmatter, recalculates `progress_pct = round(100 * done_count / total)`, and automatically transitions status to `completed` when all target issues are closed. An explicit `target_issues` entry stays as long as its issue exists and names no other milestone. If `<slug>` is omitted, synchronizes all milestones in `.along/MILESTONES/` except `completed` ones, which change only when named.
   - `along milestone list [--status <status>] [--json]`: Lists all milestones with progress statistics, completion percentages, and target issue counts.
     - Options: `--status` filters by status (`open`, `in-progress`, `completed`), `--json` outputs machine-readable JSON array.
   - `along milestone show <slug> [--json]`: Displays detailed milestone status, due date, progress percentage, and checklist of all target issues with individual completion states. Supports fuzzy query resolution (exact slug, version prefix such as `4.0`, or substring).
@@ -186,7 +199,7 @@ Manages session logs in `.along/SESSIONS/` and records engineering provenance.
 - **Subcommands**:
   - `along session create <slug> --summary "Summary" [options...]`: Initializes a new session log.
     - Options: `--issues "slug1,slug2"`, `--decisions "ADR-slug"`, `--agent <name>`, `--milestone <name>`, `--commit <sha>`.
-    - Front-matter is emitted through `ruamel.yaml`; `branch` and `commit` come from git (omitted outside a repository), and the body records test evidence only when the runtime hooks recorded a run.
+    - Front-matter is emitted through `ruamel.yaml`; `branch` and `commit` come from git (omitted outside a repository). Named issues are filed by their status: closed ones under `issues_completed`, the rest under `issues_advanced` (canonical keys); `## Work Completed` lists each with its title and status. The body records test evidence when a passing `along test` run was recorded for the current working tree (in this context or an enclosing one) or the runtime hooks recorded a run after the last edit.
   - `along session wrap <slug> [options...]`: Same as `along wrap` (see below), including the required `--decisions` / `--no-decisions` answer.
     - Options: `--status {done,superseded,cancelled,duplicate}`, `--summary "Summary"`, `--decisions "ADR-a,ADR-b"` or `--no-decisions`, `--force-reason "..."`, `--dry-run`, `-n`.
   - `along session bindings`: Lists agent-session bindings (session key, issue, approval, last update).
@@ -287,7 +300,7 @@ Manages the Systemic Anomaly Circuit Breaker and Human Escalation Gate.
   - `along circuit status [--json]`: Displays current circuit breaker state (`CLOSED` or `TRIPPED`) and active anomaly escalation report.
   - `along circuit trip [--class N] [-r MSG]`: Manually trips the circuit breaker for a specified anomaly class (1 through 5).
   - `along circuit reset [--force]`: Executes pre-flight health probe and resets breaker to `CLOSED` when healthy.
-  - `along circuit verify`: Executes environment health probe (checking `.git/index` size >= 12 bytes, absence of stale locks, and AST syntax parsing) without altering state.
+  - `along circuit verify`: Executes environment health probe (checking `.git/index` size >= 12 bytes, that `git status` reads the index, absence of stale locks, and AST syntax parsing) without altering state.
 - **Usage**:
   ```bash
   along circuit status
@@ -461,6 +474,7 @@ Self-update engine for the Along protocol and skills suite.
 - Reconciles local repository files, managed protocol blocks, and global user skills (`~/.claude/`, `~/.gemini/`, `~/.codex/`) against the latest upstream release from GitHub.
 - Automatically scaffolds and reconciles global runtime lifecycle hooks in user home configurations (`~/.gemini/config/hooks.json`, `~/.claude/settings.json`, and `~/.codex/hooks.json`) and recursively purges legacy local hooks and workaround scripts from consumer repositories.
 - Performs pre-flight hook cleanup and per-context exception isolation so that corrupt or locked files in one subproject do not abort the update for remaining contexts.
+- Refreshes existing contexts only: it never creates a context and never offers a package-manifest folder for `along init` (a manifest is not a subproject). Nested git repositories without a context are listed as a note.
 - **Out-of-Band Recovery**: If an agent session is ever locked due to a broken hook configuration (chicken-and-egg problem), running `along update` from an external OS terminal bypasses agent interception, cleans up broken local hooks, and restores the environment.
 - **Options**:
   - `--check-only`: Only inspect versions without making modifications.

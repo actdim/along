@@ -123,6 +123,14 @@ class TestDefaultWhitelist(_ContainmentFixture):
         mem = os.path.join(self.home, ".claude", "projects", "p", "memory", "m.md")
         self.assertIsNone(self.run_gate("write_to_file", {"TargetFile": mem}))
 
+    def test_claude_plan_dir_writable(self):
+        # Claude Code plan mode writes here [bug--runtime-plan-dir-containment].
+        plan = os.path.join(self.home, ".claude", "plans", "lively-plan.md")
+        self.assertIsNone(self.run_gate("write_to_file", {"TargetFile": plan}))
+        settings = os.path.join(self.home, ".claude", "settings.json")
+        res = self.run_gate("write_to_file", {"TargetFile": settings})
+        self.assertEqual(res.decision, GateDecision.DENY)
+
     def test_global_skill_dirs_read_only(self):
         skill = os.path.join(self.home, ".claude", "skills", "x", "SKILL.md")
         self.assertIsNone(self.run_gate("view_file", {"file_path": skill}))
@@ -194,7 +202,9 @@ class TestDeclaredScopes(_ContainmentFixture):
         _wc_issue(self.ws, "scoped", extra="allowed_roots: [../sibling]\nwrite_scope: [lib]\n")
         _wc_issue(self.ws, "idle", status="open", extra="allowed_roots: [/elsewhere]\n")
         roots, scope = containment.issue_scope(self.ws)
-        self.assertEqual((roots, scope), (["../sibling"], ["lib"]))
+        # Entries resolve against the issue's own context [bug--subproject-model-overdetection].
+        self.assertEqual((roots, scope), ([containment.canonical("../sibling", self.ws)],
+                                          [containment.canonical("lib", self.ws)]))
         self.assertIsNone(self.run_gate("view_file", {"file_path": os.path.join(self.sibling, "x")}))
         res = self.run_gate("write_to_file", {"TargetFile": os.path.join(self.ws, "src", "x.py")})
         self.assertEqual(res.decision, GateDecision.DENY)
@@ -249,8 +259,8 @@ class TestStartScopeFlags(unittest.TestCase):
             res = subprocess.run(cmd, cwd=ws, capture_output=True, text=True)
             self.assertEqual(res.returncode, 0, res.stderr + res.stdout)
             roots, scope = containment.issue_scope(ws)
-            self.assertEqual(roots, ["../contracts"])
-            self.assertEqual(scope, ["packages/auth"])
+            self.assertEqual(roots, [containment.canonical("../contracts", ws)])
+            self.assertEqual(scope, [containment.canonical("packages/auth", ws)])
             bad = subprocess.run(cmd[:5] + ["--allow-root"], cwd=ws, capture_output=True, text=True)
             self.assertEqual(bad.returncode, 2)
         finally:

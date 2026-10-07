@@ -23,21 +23,33 @@ import os
 import re
 from typing import Iterable, Iterator, List, Optional, Tuple
 
-# A directory is a repository root when it carries any of these markers.
-# The union of what the five former copies checked, so no caller loses a root it
-# used to find. `.along` first: an Along-initialized subproject wins over an
-# enclosing plain git repository, which is what the nearest-context-boundary rule
-# in AGENTS.md requires.
-ROOT_MARKERS: tuple = (".along", ".git", "AGENTS.md")
+# A directory is a repository root when it holds an Along installation (see `is_installed`)
+# or a `.git`. An installed subproject wins over an enclosing plain git repository, which is
+# what the nearest-context-boundary rule in AGENTS.md requires. `AGENTS.md` is no marker: a
+# nested AGENTS.md is a folder guide (progressive disclosure), not a context.
+# [ADR-2026-10-07--along-installation-is-state-not-agents-md]
+ROOT_MARKERS: tuple = (".git",)
 
 # Legacy state directory name, still readable for repositories initialized before v2.0.0.
 STATE_DIR = ".along"
 LEGACY_STATE_DIR = ".agents"
 
-#: What the runtime hooks write into a `.along/` on their own. A `.along/` holding nothing
-#: else is hook output left behind in some directory, not an Along context, so it never
-#: activates the gates and never makes a subproject. See [bug--hook-activation-and-gate-deadlock].
-RUNTIME_ONLY_ENTRIES: frozenset = frozenset({"diagnostics", ".gitignore"})
+#: Entries that only Along state has. A `.along/` holding at least one of them is an Along
+#: installation; one holding only what Along writes on its own (diagnostics, synthesized
+#: lifecycle hooks, artifacts, blackboards, migration backups) or nothing at all is not, so a
+#: folder never becomes a context by side effect. [bug--along-install-marker-ambiguous]
+STATE_ENTRIES: frozenset = frozenset({
+    "ISSUES", "ISSUES.md", "DECISIONS", "DECISIONS.md", "MILESTONES", "SESSIONS",
+    "HISTORY.md", "VISION.md", "GLOSSARY.md", "CONSTRAINTS.md", "RISKS", "SPIKES",
+    "CHECKLISTS", ".protocol-version", "KB",
+})
+
+#: What Along writes into a `.along/` on its own; never an installation by itself.
+#: See [bug--hook-activation-and-gate-deadlock].
+RUNTIME_ONLY_ENTRIES: frozenset = frozenset({
+    "diagnostics", ".gitignore", "scripts", "artifacts", ".session", ".migration-backup",
+    "worktrees",
+})
 
 #: Along state inside a legacy `.agents/`; that name is also a third-party convention
 #: (`.agents/skills/`), so only these entries make it an Along context.
@@ -64,8 +76,9 @@ def _same_path(a: str, b: str) -> bool:
 def is_along_state_dir(path: str) -> bool:
     """True when `path` is an Along state directory, not hook output or a foreign `.agents/`.
 
-    An empty `.along/` counts (someone created it on purpose); one holding only
-    RUNTIME_ONLY_ENTRIES does not. The global `~/.along` is never a context.
+    It must hold Along state (`STATE_ENTRIES`); an empty `.along/` or one with only what
+    Along writes on its own (`RUNTIME_ONLY_ENTRIES`) does not count. The global `~/.along`
+    is never a context. [bug--along-install-marker-ambiguous]
     """
     if not os.path.isdir(path) or _same_path(path, global_along_dir()):
         return False
@@ -73,11 +86,9 @@ def is_along_state_dir(path: str) -> bool:
         entries = os.listdir(path)
     except OSError:
         return False
-    if not entries:
-        return True
     if os.path.basename(os.path.normpath(path)) == LEGACY_STATE_DIR:
         return any(e in LEGACY_STATE_ENTRIES for e in entries)
-    return any(e not in RUNTIME_ONLY_ENTRIES for e in entries)
+    return any(e in STATE_ENTRIES for e in entries)
 
 
 def _pointer_from_agents_md(directory: str) -> Optional[str]:
@@ -199,15 +210,18 @@ def engines_dir() -> str:
 
 def find_repo_root(start_dir: Optional[str] = None,
                    markers: Iterable[str] = ROOT_MARKERS) -> str:
-    """Walk upwards from `start_dir` to the nearest directory carrying a root marker.
+    """Walk upwards from `start_dir` to the nearest Along installation or root marker (`.git`).
 
-    Falls back to `start_dir` itself (absolute) when no marker is found, so callers
-    always receive a usable path instead of None.
+    A folder with only an `AGENTS.md`, or with a `.along/` that holds no Along state, is
+    passed by. Falls back to `start_dir` itself (absolute) when nothing is found, so callers
+    always receive a usable path instead of None. [bug--along-install-marker-ambiguous]
     """
     origin = os.path.abspath(start_dir or os.getcwd())
     cur = origin
     markers = tuple(markers)
     while True:
+        if is_installed(cur):
+            return cur
         for marker in markers:
             if os.path.exists(os.path.join(cur, marker)):
                 return cur
@@ -215,6 +229,16 @@ def find_repo_root(start_dir: Optional[str] = None,
         if parent == cur:
             return origin
         cur = parent
+
+
+def is_installed(directory: str) -> bool:
+    """Along is installed in `directory`: it owns Along state (`.along/` with state entries,
+    a legacy `.agents/` with state, or a declared root pointer). Never an `AGENTS.md` alone.
+
+    Only `along init` creates an installation; every other command works inside one.
+    [ADR-2026-10-07--along-installation-is-state-not-agents-md]
+    """
+    return context_state_dir(directory) is not None
 
 
 def _is_within(path: str, root: str) -> bool:
@@ -301,10 +325,8 @@ def diagnostics_dir(repo_root: Optional[str]) -> str:
     directory under `~/.along/diagnostics/workspaces/`, so diagnostics never create a
     `.along/` in whatever directory a session happens to sit in.
     """
-    if repo_root:
-        sdir = state_dir(repo_root)
-        if os.path.isdir(sdir):
-            return os.path.join(sdir, "diagnostics")
+    if repo_root and is_installed(repo_root):
+        return os.path.join(state_dir(repo_root), "diagnostics")
     name = re.sub(r"[^A-Za-z0-9._-]+", "-", os.path.abspath(repo_root or os.getcwd())).strip("-")
     return os.path.join(global_along_dir(), "diagnostics", "workspaces", name[-120:] or "default")
 
@@ -448,32 +470,164 @@ STANDARD_MANIFESTS: tuple = (
     "package.json", "Cargo.toml", "pyproject.toml",
     "pom.xml", "build.gradle", "build.gradle.kts",
     "go.mod", "setup.py", "requirements.txt",
-    "Directory.Build.props",
 )
+
+#: Files that make a directory the root of a multi-project workspace. A manifest below such a
+#: root is a project of the workspace, never a context boundary: the workspace keeps one
+#: `.along/` at its root. [ADR-2026-10-06--subproject-boundary-is-git-or-explicit-init]
+MONOREPO_ROOT_MARKERS: tuple = (
+    "Directory.Build.props", "Directory.Packages.props", "pnpm-workspace.yaml",
+    "lerna.json", "nx.json", "turbo.json", "go.work",
+)
+_SOLUTION_SUFFIXES: tuple = (".sln", ".slnx")
+
+
+def _file_mentions(path: str, needle: str) -> bool:
+    try:
+        with open(path, "r", encoding="utf-8", errors="replace") as handle:
+            return needle in handle.read()
+    except OSError:
+        return False
+
+
+def monorepo_root_markers(path: str) -> List[str]:
+    """The workspace-root markers present in `path` (empty when it is not a workspace root).
+
+    Solutions (`*.sln`, `*.slnx`), `MONOREPO_ROOT_MARKERS`, Cargo `[workspace]`,
+    `[tool.uv.workspace]` and a `package.json` with `workspaces`.
+    """
+    try:
+        names = os.listdir(path)
+    except OSError:
+        return []
+    found = [n for n in sorted(names) if n in MONOREPO_ROOT_MARKERS or n.endswith(_SOLUTION_SUFFIXES)]
+    if "Cargo.toml" in names and _file_mentions(os.path.join(path, "Cargo.toml"), "[workspace]"):
+        found.append("Cargo.toml [workspace]")
+    if "pyproject.toml" in names and _file_mentions(os.path.join(path, "pyproject.toml"), "[tool.uv.workspace]"):
+        found.append("pyproject.toml [tool.uv.workspace]")
+    if "package.json" in names and _file_mentions(os.path.join(path, "package.json"), '"workspaces"'):
+        found.append("package.json workspaces")
+    return found
+
+
+def is_intentional_subproject(context_dir: str) -> bool:
+    """`<context>/.along/config.json` declares `"subproject": {"intentional": true}`."""
+    try:
+        with open(os.path.join(context_dir, STATE_DIR, "config.json"), "r", encoding="utf-8") as handle:
+            data = json.load(handle)
+    except (OSError, ValueError):
+        return False
+    sub = data.get("subproject") if isinstance(data, dict) else None
+    return isinstance(sub, dict) and sub.get("intentional") is True
+
+
+def find_unmarked_nested_contexts(root: str) -> List[str]:
+    """Nested `.along/` contexts below `root` that sit in no nested git repository and are not
+    marked intentional.
+
+    Older versions initialized a context per manifest folder; Along cannot tell those from a
+    deliberate install, so it only reports them (`along doctor`) and never moves or deletes
+    them. [ADR-2026-10-06--subproject-boundary-is-git-or-explicit-init]
+    """
+    root = os.path.abspath(root)
+    found: List[str] = []
+    ignored = set(IGNORED_DIRS) | set(PROVIDER_DIRS)
+    for current, dirs, _files in os.walk(root):
+        if current != root:
+            if os.path.exists(os.path.join(current, ".git")):
+                dirs[:] = []
+                continue
+            if is_along_state_dir(os.path.join(current, STATE_DIR)) and not is_intentional_subproject(current):
+                found.append(os.path.abspath(current))
+        dirs[:] = [d for d in dirs if d not in ignored and not d.startswith(".")]
+    found.sort(key=lambda p: (len(p.split(os.sep)), p))
+    return found
+
+
+def find_nested_git_roots(root: str) -> List[str]:
+    """Directories below `root` holding a `.git` (repository, submodule or worktree).
+
+    These are the only folders that can be a subproject without the user saying so.
+    The walk does not descend into a nested repository, nor into ignored and hidden dirs.
+    """
+    root = os.path.abspath(root)
+    found: List[str] = []
+    ignored = set(IGNORED_DIRS) | set(PROVIDER_DIRS)
+    for current, dirs, _files in os.walk(root):
+        if current != root and os.path.exists(os.path.join(current, ".git")):
+            found.append(os.path.abspath(current))
+            dirs[:] = []
+            continue
+        dirs[:] = [d for d in dirs if d not in ignored and not d.startswith(".")]
+    found.sort(key=lambda p: (len(p.split(os.sep)), p))
+    return found
 
 
 def find_agent_contexts(root: str) -> List[str]:
-    """Walk `root` downwards to find all Along agent contexts (directories containing
-    .along/, .agents/, or AGENTS.md), respecting IGNORED_DIRS and PROVIDER_DIRS.
+    """Walk `root` downwards to find all Along installations (`is_installed`: a `.along/` or
+    legacy `.agents/` with Along state, or a declared root), respecting IGNORED_DIRS and
+    PROVIDER_DIRS.
 
-    A `.along/` holding only hook output and a foreign `.agents/` do not count.
+    A folder with only an `AGENTS.md` is a folder guide, not a context: `along update` writes
+    no protocol block into it. [bug--along-install-marker-ambiguous]
     """
     root = os.path.abspath(root)
     contexts = []
     ignored = set(IGNORED_DIRS) | set(PROVIDER_DIRS)
 
-    for current, dirs, files in os.walk(root):
+    for current, dirs, _files in os.walk(root):
         dirs[:] = [d for d in dirs if d not in ignored and not d.startswith(".")]
-
-        has_agents_md = "AGENTS.md" in files
-        has_along_dir = is_along_state_dir(os.path.join(current, STATE_DIR))
-        has_legacy_dir = is_along_state_dir(os.path.join(current, LEGACY_STATE_DIR))
-
-        if has_agents_md or has_along_dir or has_legacy_dir:
+        if is_installed(current):
             contexts.append(os.path.abspath(current))
 
     contexts.sort(key=lambda p: (len(p.split(os.sep)), p))
     return contexts
+
+
+def find_package_doc_roots(root: str) -> List[str]:
+    """Package documentation roots below `root`: a folder with `docs/` plus an `AGENTS.md`,
+    an `llms.txt` (or `.well-known/llms.txt`) or a package manifest. No `.along/` needed:
+    a package ships its docs and guide, the board stays with the context.
+    Nested git repositories and ignored or hidden dirs are not entered.
+    [bug--along-install-marker-ambiguous] REQ-4
+    """
+    root = os.path.abspath(root)
+    found: List[str] = []
+    ignored = set(IGNORED_DIRS) | set(PROVIDER_DIRS)
+    manifests = set(STANDARD_MANIFESTS)
+    for current, dirs, files in os.walk(root):
+        if current != root:
+            if os.path.exists(os.path.join(current, ".git")):
+                dirs[:] = []
+                continue
+            if "docs" in dirs and ("AGENTS.md" in files or "llms.txt" in files
+                                   or os.path.isfile(os.path.join(current, ".well-known", "llms.txt"))
+                                   or any(f in manifests or f.endswith(".csproj") for f in files)):
+                found.append(os.path.abspath(current))
+        dirs[:] = [d for d in dirs if d not in ignored and not d.startswith(".") and d != "docs"]
+    found.sort(key=lambda p: (len(p.split(os.sep)), p))
+    return found
+
+
+def find_managed_agents_md_dirs(root: str) -> List[str]:
+    """Folders below `root` whose AGENTS.md carries an Along-managed protocol block.
+
+    Not contexts by themselves (see `find_agent_contexts`): older versions wrote that block
+    into nested folders, so cleanup code looks there for leftovers Along wrote.
+    """
+    root = os.path.abspath(root)
+    found: List[str] = []
+    ignored = set(IGNORED_DIRS) | set(PROVIDER_DIRS)
+    for current, dirs, files in os.walk(root):
+        dirs[:] = [d for d in dirs if d not in ignored and not d.startswith(".")]
+        if "AGENTS.md" in files:
+            try:
+                with open(os.path.join(current, "AGENTS.md"), "r", encoding="utf-8", errors="replace") as handle:
+                    if "BEGIN ALONG-PROTOCOL" in handle.read(_POINTER_SCAN_BYTES):
+                        found.append(os.path.abspath(current))
+            except OSError:
+                continue
+    return found
 
 
 def find_manifest_projects(root: str,

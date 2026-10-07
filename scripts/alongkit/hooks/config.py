@@ -653,7 +653,9 @@ def purge_local_along_hooks(repo_root: str, recursive: bool = True, dry_run: boo
     contexts = [os.path.abspath(repo_root)]
     if recursive:
         try:
-            for c in repo.find_agent_contexts(repo_root):
+            # Installations, plus folders an older Along version initialized (a managed protocol
+            # block in their AGENTS.md): both may hold hooks Along wrote and must remove.
+            for c in repo.find_agent_contexts(repo_root) + repo.find_managed_agents_md_dirs(repo_root):
                 abs_c = os.path.abspath(c)
                 if abs_c not in contexts:
                     contexts.append(abs_c)

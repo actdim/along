@@ -3,10 +3,11 @@ protocol: along
 protocol_version: "4.4.5"
 slug: subcommand-help-as-argument
 type: bug
-status: open
+status: done
+completed: 2026-10-06
 priority: high
 created: 2026-10-05
-updated: 2026-10-05
+updated: 2026-10-06
 agent: claude-code
 tags: [cli, help]
 milestone: v4.5.0-multi-user-merge-automation
@@ -30,9 +31,18 @@ related: []
 Not covered by [bug--cli-help-missing-subcommands], which fixed the router help listing.
 
 ## Acceptance Criteria
-- [ ] `-h` / `--help` anywhere after a subcommand prints that subcommand's usage, exits 0
+- [x] `-h` / `--help` anywhere after a subcommand prints that subcommand's usage, exits 0
       and writes nothing (all routers in `scripts/along_exec.py`)
-- [ ] Entity names starting with `-` are rejected by create/rename commands
-- [ ] Test sweeps every subcommand with `--help` against a hermetic fixture and asserts a clean
+- [x] Entity names starting with `-` are rejected by create/rename commands
+- [x] Test sweeps every subcommand with `--help` against a hermetic fixture and asserts a clean
       tree
-- [ ] Automated tests passing
+- [x] Automated tests passing
+
+## Resolution
+`main()` in `scripts/along_exec.py` checks every native router for `-h` / `--help` before a `--`
+(`_wants_help`). `_print_router_help` captures that router's usage and prints the lines for the
+named subcommand, or the full usage when it has none. `status` and `doctor` now have usage, and
+`issue` lists usage for each subcommand. `_require_entity_name` exits 2 on names that start with
+`-` in decision/milestone/session create, scratch, worktree create, start and issue rename.
+`run`, `kb`, `graph`, tool engines and lifecycle hooks still pass `--help` through. Tests:
+`tests/test_subcommand_help.py`.

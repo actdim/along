@@ -270,6 +270,12 @@ def main():
 
     args = parser.parse_args()
     repo_root = repo.find_repo_root(args.repo_root)
+    # Synthesizing writes Along state: only into an installation, never a fresh .along/
+    # [bug--along-install-marker-ambiguous].
+    if args.synthesize and not args.check and not repo.is_installed(repo_root):
+        print(f"[Error] Along is not installed in {repo_root} (no .along/ state): run 'along init' there.",
+              file=sys.stderr)
+        sys.exit(2)
 
     do_synthesize = args.synthesize and not args.check
     results = run_history_sync(repo_root, synthesize=do_synthesize, limit=args.limit)

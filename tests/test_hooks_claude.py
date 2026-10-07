@@ -138,7 +138,10 @@ class TestClaudeCodeEndToEnd(unittest.TestCase):
 
         with tempfile.TemporaryDirectory() as tmp:
             along_dir = os.path.join(tmp, ".along")
+            # An installation without an issue board: issue anchoring has nothing to check.
             os.makedirs(along_dir, exist_ok=True)
+            with open(os.path.join(along_dir, "HISTORY.md"), "w", encoding="utf-8") as fh:
+                fh.write("# History\n")
             session.approve_plan(tmp)
             res = proc.run_capture(
                 [sys.executable, script_path, "--runtime", "claude", "--event", "PreToolUse", "--repo-root", tmp],
@@ -163,7 +166,7 @@ class TestClaudeCodeEndToEnd(unittest.TestCase):
 
         with tempfile.TemporaryDirectory() as tmp:
             along_dir = os.path.join(tmp, ".along")
-            os.makedirs(along_dir, exist_ok=True)
+            os.makedirs(os.path.join(along_dir, "ISSUES"), exist_ok=True)
             res = proc.run_capture(
                 [sys.executable, script_path, "--runtime", "claude", "--event", "PreToolUse", "--repo-root", tmp],
                 stdin_text=input_payload,
@@ -188,7 +191,7 @@ class TestClaudeCodeEndToEnd(unittest.TestCase):
 
         with tempfile.TemporaryDirectory() as tmp:
             along_dir = os.path.join(tmp, ".along")
-            os.makedirs(along_dir, exist_ok=True)
+            os.makedirs(os.path.join(along_dir, "ISSUES"), exist_ok=True)
             res = proc.run_capture(
                 [sys.executable, script_path, "--runtime", "claude", "--event", "PreToolUse", "--repo-root", tmp],
                 stdin_text=input_payload,
@@ -208,7 +211,7 @@ class TestClaudeCodeEndToEnd(unittest.TestCase):
 
         with tempfile.TemporaryDirectory() as tmp:
             along_dir = os.path.join(tmp, ".along")
-            os.makedirs(along_dir, exist_ok=True)
+            os.makedirs(os.path.join(along_dir, "ISSUES"), exist_ok=True)
             # cli_safety is currently shadow by default; pass --mode enforce
             res = proc.run_capture(
                 [
@@ -266,10 +269,10 @@ class TestSessionRootFromProjectDir(unittest.TestCase):
     def _workspace(self, tmp):
         project = os.path.join(tmp, "project")
         nested = os.path.join(project, "src", "apps", "webapp")
-        os.makedirs(os.path.join(project, ".along"))
-        os.makedirs(os.path.join(nested, ".along"))
+        os.makedirs(os.path.join(project, ".along", "ISSUES"))
+        os.makedirs(os.path.join(nested, ".along", "ISSUES"))
         outside = os.path.join(tmp, "other-repo")
-        os.makedirs(os.path.join(outside, ".along"))
+        os.makedirs(os.path.join(outside, ".along", "ISSUES"))
         return project, nested, outside
 
     def test_project_dir_wins_over_nested_cwd(self):

@@ -111,6 +111,13 @@ def _safe_trip_breaker(r_root: Optional[str], anomaly: Any) -> None:
         if real_root and os.path.abspath(r_root) == os.path.abspath(real_root):
             return
     try:
+        if anomaly.anomaly_class == circuit.AnomalyClass.CLASS_1_VCS_CORRUPTION \
+                and not circuit.vcs_anomaly_confirmed(r_root):
+            # Git reads the repository fine: the signature was transient or quoted.
+            # [bug--breaker-trips-on-test-output] REQ-4
+            print(f"[Circuit Breaker] Not tripped: '{anomaly.signature}' seen, but 'git status' "
+                  "succeeds in the repository.", file=sys.stderr)
+            return
         circuit.trip_breaker(r_root, anomaly)
     except (OSError, UnicodeDecodeError):
         pass

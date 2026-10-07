@@ -191,7 +191,8 @@ def attach_rules(repo_root: str, on_conflict: str = "preserve"):
                 if on_conflict == "overwrite":
                     import datetime
                     ts = datetime.datetime.now().strftime("%Y-%m-%d-%H%M%S")
-                    backup_base = os.path.join(repo_root, ".along", ".migration-backup", ts)
+                    from .migration import backup_root
+                    backup_base = os.path.join(backup_root(os.path.join(repo_root, ".along")), ts)
                     backup_file = os.path.join(backup_base, "rules", rule)
                     os.makedirs(os.path.dirname(backup_file), exist_ok=True)
                     shutil.copy2(dst, backup_file)
@@ -426,7 +427,8 @@ def restore_rule(repo_root: str, rule: Optional[str] = None, force: bool = False
         
     import datetime
     timestamp = datetime.datetime.now().strftime("%Y-%m-%d-%H%M%S")
-    backup_base = os.path.join(repo_root, ".along", ".migration-backup", timestamp)
+    from .migration import backup_root
+    backup_base = os.path.join(backup_root(os.path.join(repo_root, ".along")), timestamp)
     
     restored: List[str] = []
     for item in targets:

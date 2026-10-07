@@ -201,7 +201,7 @@ def _issue_create(repo_root: str, args: List[str], issues_dir: str, today: str):
         print(f"[Error] Invalid issue type '{itype}'. Allowed types: {', '.join(entities.ISSUE_TYPES)}", file=sys.stderr)
         sys.exit(1)
 
-    islug = args[2].lower()
+    islug = _require_entity_name(args[2].lower(), "along issue create <type> <slug> --title \"Title\"")
     if not entities.is_valid_slug(islug):
         print(f"[Error] Invalid issue slug '{islug}'. Slug must be 2-5 lowercase kebab-case words (e.g. my-feature-name).", file=sys.stderr)
         sys.exit(1)
@@ -317,7 +317,7 @@ def _issue_done(repo_root: str, args: List[str], issues_dir: str, done_dir: str,
     if len(args) < 2:
         print("[Error] Usage: along_exec.py issue done <slug> [--status done|superseded|cancelled|duplicate] [--superseded-by <key>] [--duplicate-of <key>]", file=sys.stderr)
         sys.exit(1)
-    islug = args[1].lower()
+    islug = _require_entity_name(args[1].lower(), "along issue done|cancel <slug> [--status ...]")
     target_status = "done"
     superseded_by = None
     duplicate_of = None
@@ -510,6 +510,8 @@ def _issue_rename(repo_root: str, args: List[str]):
     if len(args) < 3:
         print("[Error] Usage: along issue rename <old-key> <new-key>", file=sys.stderr)
         sys.exit(1)
+    for name in args[1:3]:
+        _require_entity_name(name, "along issue rename <old-key> <new-key>")
     try:
         result = entities.rename_issue(repo_root, args[1].lower(), args[2].lower())
     except ValueError as exc:
@@ -536,6 +538,22 @@ def _issue_supersede(repo_root: str, args: List[str]):
         sys.exit(1)
     print(f"-> Superseded {result['old_key']} by {result['new_key']}: "
           f"{repo.normalize_posix(repo.safe_relpath(result['file_path'], repo_root))}")
+    _report_rewritten(repo_root, result["rewritten"])
+    sys.exit(0)
+
+
+def _issue_delete(repo_root: str, args: List[str]):
+    """`along issue delete <slug>`: remove an issue created by mistake [bug--cli-entity-sync-defects]."""
+    if len(args) < 2:
+        print("[Error] Usage: along issue delete <slug>", file=sys.stderr)
+        sys.exit(1)
+    slug = _require_entity_name(args[1].lower(), "along issue delete <slug>")
+    try:
+        result = entities.delete_issue(repo_root, slug)
+    except ValueError as exc:
+        print(f"[Error] {exc}", file=sys.stderr)
+        sys.exit(1)
+    print(f"-> Deleted {result['key']}: {repo.normalize_posix(repo.safe_relpath(result['file_path'], repo_root))}")
     _report_rewritten(repo_root, result["rewritten"])
     sys.exit(0)
 
@@ -672,7 +690,19 @@ def _issue_show(repo_root: str, args: List[str]):
 
 def handle_issue_command(repo_root: str, args: List[str]):
     if not args or args[0] in ("-h", "--help", "help"):
-        print("Usage: along_exec.py issue [create|update|done|reopen|sync|list|show|rename|supersede] [args...]")
+        print("Usage: along_exec.py issue [create|update|done|cancel|delete|reopen|sync|list|show|rename|supersede] [args...]")
+        print("  create <type> <slug> --title \"Title\" [--priority high|medium|low] [--tags \"t1,t2\"] [--agent <name>] [--milestone <name>|--no-milestone]")
+        print("  update <slug> [--milestone <name>] [--priority <high|medium|low>] [--status <status>] [--tags <t1,t2>] [--title <title>]")
+        print("  done   <slug> [--status done|superseded|cancelled|duplicate] [--superseded-by <key>] [--duplicate-of <key>]")
+        print("  cancel <slug>             Close as cancelled (moved to done/)")
+        print("  delete <slug>             Remove an issue created by mistake (refused once sessions, commits")
+        print("                            or parent/superseded_by/duplicate_of references name it)")
+        print("  reopen <slug>")
+        print("  sync                      Recompile the .along/ISSUES.md board")
+        print("  list")
+        print("  show   <slug> [--json]")
+        print("  rename <old-key> <new-key>")
+        print("  supersede <old-key> --by <new-key>")
         sys.exit(0)
 
     subcmd = args[0].lower()
@@ -686,6 +716,9 @@ def handle_issue_command(repo_root: str, args: List[str]):
         "create": lambda: _issue_create(repo_root, args, issues_dir, today),
         "done": lambda: _issue_done(repo_root, args, issues_dir, done_dir, today),
         "close": lambda: _issue_done(repo_root, args, issues_dir, done_dir, today),
+        "cancel": lambda: _issue_done(repo_root, args[:2] + ["--status", "cancelled"] + args[2:],
+                                      issues_dir, done_dir, today),
+        "delete": lambda: _issue_delete(repo_root, args),
         "reopen": lambda: _issue_reopen(repo_root, args, issues_dir, done_dir, today),
         "sync": lambda: _issue_sync(repo_root),
         "list": lambda: _issue_list(issues_dir),
@@ -816,7 +849,8 @@ def handle_milestone_command(repo_root: str, args: List[str]):
         if len(args) < 2:
             print("[Error] Usage: along milestone create <slug> --title \"Title\" [--due YYYY-MM-DD]", file=sys.stderr)
             sys.exit(1)
-        mslug = args[1].lower().strip()
+        mslug = _require_entity_name(args[1].lower().strip(),
+                                     "along milestone create <slug> --title \"Title\" [--due YYYY-MM-DD]")
         title = mslug.replace("-", " ").capitalize()
         due_date = None
 
@@ -897,7 +931,7 @@ def handle_start_command(repo_root: str, args: List[str]):
             continue
         i += 1
 
-    slug = args[0].lower()
+    slug = _require_entity_name(args[0].lower(), "along start <slug> [--approved] [--worktree]")
     issue = entities.find_issue_by_slug(repo_root, slug)
     if not issue:
         print(f"[Error] Issue '{slug}' not found in .along/ISSUES/.", file=sys.stderr)
@@ -967,7 +1001,23 @@ def _tests_evidence_line(repo_root: str) -> str:
     The CLI does not run tests, so it never claims they passed. When the runtime hooks
     recorded a test run after the last edit, the log says so and leaves the result to the
     author. See [bug--session-create-unsafe-yaml].
+
+    A green `along test` run recorded for the current working tree counts too, in this
+    context or an enclosing one (a run from the root covers a subproject's log).
+    [bug--cli-entity-sync-defects] REQ-2
     """
+    from alongkit import testruns
+    roots = [repo_root]
+    found = repo.find_context(os.path.dirname(os.path.abspath(repo_root)))
+    while found and len(roots) < 8:
+        roots.append(found[0])
+        found = repo.find_context(os.path.dirname(found[0]))
+    tree = testruns.tree_hash(repo_root)
+    for root in roots:
+        run = testruns.green_run_for(root, tree) if tree else None
+        if run:
+            return (f"- Tests: a passing `along test` run was recorded for this working tree at "
+                    f"{run.get('ts', '?')}; state the command here.")
     try:
         from alongkit.hooks.predicates import load_activity_trace
         trace = load_activity_trace(repo_root, session.current_session_key())
@@ -981,10 +1031,43 @@ def _tests_evidence_line(repo_root: str) -> str:
     return "- Tests: no test run recorded for this session; state the command and its result here."
 
 
+def _work_completed_lines(repo_root: str, keys: List[str]) -> str:
+    """One line per named issue (key, title, status) instead of a placeholder."""
+    lines = []
+    for key in keys:
+        iss = entities.find_issue_by_slug(repo_root, key)
+        if not iss:
+            lines.append(f"- `{key}` (not found in .along/ISSUES/)")
+            continue
+        title = iss["frontmatter"].get("title")
+        if not title:
+            try:
+                _fm, body = frontmatter.parse(textio.read_text(iss["file_path"]), path=iss["file_path"])
+            except (OSError, UnicodeDecodeError, ValueError):
+                body = ""
+            title = next((ln[2:].strip() for ln in body.splitlines() if ln.startswith("# ")), iss["slug"])
+        lines.append(f"- `{key}`: {title} ({iss['status']})")
+    return "\n".join(lines) or "- No issue named (`--issues`); describe the work here."
+
+
 def _render_session_log(repo_root: str, *, today: str, slug: str, agent: str, summary: str,
                         milestone: Optional[str], issues: List[str], decisions: List[str],
                         commit: Optional[str] = None) -> str:
-    """Session log document with front-matter emitted by ruamel, never by string formatting."""
+    """Session log document with front-matter emitted by ruamel, never by string formatting.
+
+    Issues are filed by their actual status: closed ones under `issues_completed`, the rest
+    under `issues_advanced`, as canonical keys. [bug--cli-entity-sync-defects] REQ-2
+    """
+    advanced: List[str] = []
+    completed: List[str] = []
+    for ref in issues:
+        iss = entities.find_issue_by_slug(repo_root, ref)
+        if not iss:
+            advanced.append(ref)
+            continue
+        key = entities.canonical_key(iss["type"], iss["slug"])
+        closed = iss["done"] or iss["status"] in entities.CLOSED_ISSUE_STATUSES
+        (completed if closed else advanced).append(key)
     branch, head = _git_head_facts(repo_root)
     fm: Dict[str, Any] = {
         "protocol": "along",
@@ -1001,8 +1084,8 @@ def _render_session_log(repo_root: str, *, today: str, slug: str, agent: str, su
     if milestone:
         fm["milestone"] = milestone
     fm.update({
-        "issues_advanced": [],
-        "issues_completed": list(issues),
+        "issues_advanced": advanced,
+        "issues_completed": completed,
         "decisions": list(decisions),
         "risks_logged": [],
         "spikes_conducted": [],
@@ -1010,7 +1093,7 @@ def _render_session_log(repo_root: str, *, today: str, slug: str, agent: str, su
     body = (
         f"# Session: {slug.replace('-', ' ').capitalize()}\n\n"
         f"## Summary\n{summary}\n\n"
-        "## Work Completed\n- Document key tasks and achievements.\n\n"
+        f"## Work Completed\n{_work_completed_lines(repo_root, completed + advanced)}\n\n"
         "## Code Review & Blast Radius\n"
         f"{_tests_evidence_line(repo_root)}\n"
     )
@@ -1149,13 +1232,14 @@ def handle_session_command(repo_root: str, args: List[str]):
     today = datetime.now().strftime("%Y-%m-%d")
     year = datetime.now().strftime("%Y")
     sessions_dir = os.path.join(repo_root, ".along", "SESSIONS", year)
-    os.makedirs(sessions_dir, exist_ok=True)
 
     if subcmd == "create":
         if len(args) < 2:
             print("[Error] Usage: along_exec.py session create <slug> --summary \"Summary\"", file=sys.stderr)
             sys.exit(1)
-        slug = args[1].lower()
+        slug = _require_entity_name(args[1].lower(), "along session create <slug> --summary \"Summary\"")
+        # Only after the name is valid: a rejected name leaves no directory behind.
+        os.makedirs(sessions_dir, exist_ok=True)
         summary = "Work session"
         issues = []
         decisions = []
@@ -1221,7 +1305,7 @@ def handle_session_command(repo_root: str, args: List[str]):
         if len(args) < 2:
             print("[Error] Usage: along session wrap <slug> [--status done|superseded|cancelled|duplicate] [--summary \"Summary\"] [--dry-run] [-n]", file=sys.stderr)
             sys.exit(1)
-        islug = args[1]
+        islug = _require_entity_name(args[1], "along session wrap <slug> [--status ...] [--summary \"Summary\"]")
         status = "done"
         summary = None
         dry_run = False
@@ -1304,7 +1388,7 @@ def handle_decision_command(repo_root: str, args: List[str]):
             print("[Error] Usage: along_exec.py decision create <slug> --title \"Title\" --context \"Why\" --decision \"What\" --consequences \"Consequences\"", file=sys.stderr)
             sys.exit(1)
         first_arg = args[1].lstrip("#")
-        slug = first_arg.lower()
+        slug = _require_entity_name(first_arg.lower(), "along decision create <slug> --title \"Title\"")
         title = slug.replace("-", " ").capitalize()
         context = ""
         decision = ""
@@ -1362,6 +1446,9 @@ def handle_decision_command(repo_root: str, args: List[str]):
 
 
 def handle_status_command(repo_root: str, args: List[str]):
+    if args and args[0] in ("-h", "--help", "help"):
+        print("Usage: along status    Show repository root, active issues and Along state")
+        sys.exit(0)
     print("=== Along Repository Status ===")
     print(f"Repo Root: {repo_root}")
     along_dir = os.path.join(repo_root, ".along")
@@ -1463,6 +1550,11 @@ def _doctor_runtime_checks(repo_root: str, errors: int, warnings: int) -> Tuple[
 
 
 def handle_doctor_command(repo_root: str, args: List[str]):
+    if args and args[0] in ("-h", "--help", "help"):
+        print("Usage: along doctor [entities|--entities] [--fix]")
+        print("  (no args)            Report protocol, hooks, runtime, bindings and blackboard health")
+        print("  entities [--fix]     Validate entity schemas and references; --fix drops dangling milestone fields")
+        sys.exit(0)
     check_entities = "--entities" in args or (bool(args) and args[0].lower() == "entities")
     if check_entities:
         print("=== Along Entity Graph Validation (Doctor) ===")
@@ -1595,6 +1687,17 @@ def handle_doctor_command(repo_root: str, args: List[str]):
         print("[FAIL] Missing AGENTS.md at repository root.")
         errors += 1
 
+    # Nested contexts outside any nested git repository: possibly created per manifest folder
+    # by older versions. Reported only; consolidation is the repository owner's decision.
+    nested = repo.find_unmarked_nested_contexts(repo_root)
+    if nested:
+        shown = ", ".join(repo.normalize_posix(os.path.relpath(p, repo_root)) for p in nested[:10])
+        more = f" (+{len(nested) - 10} more)" if len(nested) > 10 else ""
+        print(f"[WARN] {len(nested)} nested .along/ without .git found (possibly created by older Along "
+              f"versions): {shown}{more}. Consolidate them into the root by hand, or mark an intentional "
+              "one with '\"subproject\": {\"intentional\": true}' in its .along/config.json.")
+        warnings += 1
+
     # Check VISION: one file in .along/, no unresolved imported section, no root copy
     from alongkit import scaffold
     if scaffold.find_root_file(repo_root, scaffold.VISION_FILENAME) and os.path.isdir(along_dir):
@@ -1686,7 +1789,7 @@ def handle_scratch_command(repo_root: str, args: List[str]):
     if len(args) < 2:
         print("[Error] Usage: along scratch [init|state|update|approve|phase|purge] <slug> [options]", file=sys.stderr)
         sys.exit(1)
-    slug = args[1].lower()
+    slug = _require_entity_name(args[1].lower(), f"along scratch {subcmd} <slug> [options]")
 
     if subcmd == "init":
         title = None
@@ -1996,7 +2099,7 @@ def handle_worktree_command(repo_root: str, args: List[str]):
         if not sub_args:
             print("[Error] Usage: along worktree create <slug> [--branch <name>] [--base-ref <ref>]", file=sys.stderr)
             sys.exit(1)
-        slug = sub_args[0]
+        slug = _require_entity_name(sub_args[0], "along worktree create <slug> [--branch <name>] [--base-ref <ref>]")
         branch = None
         base_ref = None
         i = 1
@@ -2622,6 +2725,79 @@ def handle_run_command(repo_root: Optional[str], args: List[str]):
     sys.exit(code)
 
 
+HELP_FLAGS = ("-h", "--help")
+
+
+def _wants_help(args: List[str]) -> bool:
+    """True when -h/--help appears anywhere before a `--` separator."""
+    for arg in args:
+        if arg == "--":
+            return False
+        if arg in HELP_FLAGS:
+            return True
+    return False
+
+
+#: Commands that read or write the Along board of a context. They work inside an installation
+#: only: just `along init` starts one, so nothing else ever creates a `.along/` by side effect.
+#: [bug--along-install-marker-ambiguous]
+_BOARD_COMMANDS = frozenset({
+    "issue", "milestone", "milestones", "start", "begin", "session", "plan", "decision",
+    "scratch", "worktree", "wrap", "commit",
+})
+
+
+def _require_installation(cmd: str, repo_root: str) -> None:
+    """Exit 2 when a board command runs where Along is not installed."""
+    if cmd in _BOARD_COMMANDS and not repo.is_installed(repo_root):
+        print(f"[Error] Along is not installed in {repo_root} (no .along/ with Along state). "
+              "Run 'along init' there, or run the command inside an installed context.",
+              file=sys.stderr)
+        sys.exit(2)
+
+
+def _require_entity_name(name: str, usage: str) -> str:
+    """Exit 2 when an entity name looks like a flag ([bug--subcommand-help-as-argument])."""
+    if not name or name.startswith("-"):
+        print(f"[Error] Invalid name '{name}': entity names cannot start with '-'.", file=sys.stderr)
+        print(f"Usage: {usage}", file=sys.stderr)
+        sys.exit(2)
+    return name
+
+
+def _print_router_help(cmd: str, handler, repo_root: str, args: List[str]) -> None:
+    """Print a router's usage (narrowed to the named subcommand) and exit 0, writing nothing.
+
+    Routers check -h/--help only in args[0]; elsewhere it was taken as a slug
+    ([bug--subcommand-help-as-argument]).
+    """
+    import contextlib
+    import io
+
+    buf = io.StringIO()
+    with contextlib.redirect_stdout(buf):
+        try:
+            handler(repo_root, ["--help"])
+        except SystemExit:
+            pass
+    lines = buf.getvalue().splitlines()
+    sub = args[0].lower() if args and args[0] not in HELP_FLAGS else None
+    matched = []
+    if sub:
+        for line in lines:
+            tokens = [t for t in line.split() if t != "Usage:"][:3]
+            if sub in tokens:
+                matched.append(line)
+    if matched:
+        if not any("Usage:" in line for line in matched):
+            print(f"Usage: along {cmd} {sub} [args...]")
+        print("\n".join(matched))
+        print(f"Run 'along {cmd} --help' for all subcommands.")
+    else:
+        print("\n".join(lines))
+    sys.exit(0)
+
+
 def main():
     if len(sys.argv) < 2 or sys.argv[1] in ("-h", "--help", "help"):
         print_help()
@@ -2630,6 +2806,33 @@ def main():
     cmd = sys.argv[1].lower().strip()
     extra_args = sys.argv[2:]
     repo_root = find_repo_root()
+
+    # Routers that parse their own arguments; run/kb/graph/tools pass args through to child commands.
+    native_routers = {
+        "status": handle_status_command,
+        "doctor": handle_doctor_command,
+        "circuit": handle_circuit_command,
+        "telemetry": handle_telemetry_command,
+        "issue": handle_issue_command,
+        "milestone": handle_milestone_command,
+        "milestones": handle_milestone_command,
+        "start": handle_start_command,
+        "begin": handle_start_command,
+        "session": handle_session_command,
+        "plan": handle_plan_command,
+        "decision": handle_decision_command,
+        "scratch": handle_scratch_command,
+        "worktree": handle_worktree_command,
+        "git": handle_git_command,
+        "gates": handle_gates_command,
+        "rules": handle_rules_command,
+        "budget": handle_budget_command,
+        "context-budget": handle_budget_command,
+        "patch": handle_patch_command,
+    }
+    if cmd in native_routers and _wants_help(extra_args):
+        _print_router_help(cmd, native_routers[cmd], repo_root, extra_args)
+    _require_installation(cmd, repo_root)
 
     # 1. Native Entity Management Subcommands
     if cmd == "status":
@@ -2717,6 +2920,13 @@ def main():
     if cmd in LIFECYCLE_ACTIONS:
         output_mode, extra_args = resolve_output_mode(cmd, extra_args)
         script_file = get_lifecycle_script_path(repo_root, cmd)
+        if not os.path.exists(script_file):
+            # A nested context without a hook runs the enclosing context's hook instead of
+            # synthesizing one that may test nothing [bug--lifecycle-test-false-pass] REQ-3.
+            enclosing = lifecycle.enclosing_hook(repo_root, cmd)
+            if enclosing:
+                repo_root, script_file = enclosing
+                print(f"-> No .along/scripts/{cmd} hook here; using the enclosing context's: {script_file}")
 
         if os.path.exists(script_file):
             if gates.is_unconfigured_hook(script_file):
@@ -2729,6 +2939,17 @@ def main():
 
         # Auto-Detection and Non-Destructive Synthesis
         detected_cmd, verified = detect_lifecycle_action(repo_root, cmd)
+
+        # A hook is Along state: written only into an installation. Elsewhere the detected
+        # command runs once and nothing is created [bug--along-install-marker-ambiguous].
+        if not repo.is_installed(repo_root):
+            if not (detected_cmd and verified):
+                print(f"[Error] No {cmd} command detected in {repo_root}, and Along is not installed "
+                      "there (no hook is written outside an installation).", file=sys.stderr)
+                sys.exit(2)
+            print(f"-> Along is not installed in {repo_root}: running {detected_cmd} without writing a hook.")
+            sys.exit(run_lifecycle_command(cmd, shlex.split(detected_cmd) + extra_args,
+                                           repo_root, output_mode))
 
         if detected_cmd and verified:
             status_tag = "verified"

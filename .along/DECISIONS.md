@@ -3,7 +3,7 @@
 
 Compiled index of Architectural Decision Records stored in `.along/DECISIONS/`.
 
-## Active Decisions (44)
+## Active Decisions (46)
 
 - [Code Graph & Hybrid Knowledge Base Search MCP Integration](DECISIONS/ADR-2026-08-26--code-graph-mcp-and-hybrid-kb-search.md)
 - [Protocol v1.2.0 & Knowledge Base (KB) Architecture Standard](DECISIONS/ADR-2026-08-26--protocol-v120-knowledge-base-architecture.md)
@@ -49,6 +49,8 @@ Compiled index of Architectural Decision Records stored in `.along/DECISIONS/`.
 - [Agent-Session Issue Bindings and Plan Approval](DECISIONS/ADR-2026-10-01--agent-session-bindings.md)
 - [One VISION per context: mechanical reconcile, agent restructure; git-bounded REF blocks](DECISIONS/ADR-2026-10-04--single-vision-hybrid-reconcile.md)
 - [Session Event Ledger Is the Source of Truth; Telemetry Is a Projection](DECISIONS/ADR-2026-10-05--session-event-ledger-feeds-telemetry.md)
+- [Subproject boundary is a nested .git or an explicit along init](DECISIONS/ADR-2026-10-06--subproject-boundary-is-git-or-explicit-init.md)
+- [An Along installation is Along state, never an AGENTS.md](DECISIONS/ADR-2026-10-07--along-installation-is-state-not-agents-md.md)
 
 ## Superseded & Retired Decisions (2)
 

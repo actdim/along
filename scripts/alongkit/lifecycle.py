@@ -106,7 +106,78 @@ def resolve_output_mode(action: str, args: Sequence[str],
 
 
 def raw_log_path(repo_root: str, action: str) -> str:
-    return os.path.join(repo_root, ".along", "artifacts", "lifecycle", f"{action}.log")
+    """`<state>/artifacts/lifecycle/<action>.log` in an installation, else under the
+    per-workspace diagnostics in `~/.along`: a run never creates a `.along/` by side effect
+    [bug--along-install-marker-ambiguous]."""
+    if repo.is_installed(repo_root):
+        return os.path.join(repo.state_dir(repo_root), "artifacts", "lifecycle", f"{action}.log")
+    return os.path.join(repo.diagnostics_dir(repo_root), "lifecycle", f"{action}.log")
+
+
+#: Runner summaries that count executed tests: the number is summed over every match.
+_TEST_COUNT_RES = (
+    re.compile(r"^Ran (\d+) tests? in ", re.MULTILINE),                    # unittest
+    re.compile(r"\b(\d+) passed\b"),                                       # pytest, vitest, jest
+    re.compile(r"\b(\d+) failed\b"),
+    re.compile(r"Total tests:\s*(\d+)"),                                   # dotnet (vstest)
+    re.compile(r"Passed!\s*-\s*Failed:\s*\d+,\s*Passed:\s*(\d+)"),         # dotnet summary
+    re.compile(r"^running (\d+) tests?$", re.MULTILINE),                   # cargo
+    re.compile(r"\b(\d+) passing\b"),                                      # mocha
+    re.compile(r"^\s*total:\s*(\d+)\s*$", re.MULTILINE | re.IGNORECASE),   # dotnet (MTP)
+)
+#: Runner output that proves tests ran without giving a count.
+_TESTS_RAN_RES = (
+    re.compile(r"^ok\s+\S+", re.MULTILINE),                                # go test (per package)
+    re.compile(r"^--- PASS", re.MULTILINE),                                # go test -v
+)
+#: Test runners that always print a summary when tests run: silence after exit 0 means none ran.
+_KNOWN_RUNNER_RE = re.compile(
+    r"\bpytest\b|-m\s+(?:pytest|unittest)\b|\bdotnet\s+test\b|\bcargo\s+test\b|\bgo\s+test\b"
+    r"|\bvitest\b|\bjest\b", re.IGNORECASE)
+_HOOK_RUNNING_RE = re.compile(r"^-> Running: (.+)$", re.MULTILINE)
+#: Runner messages that say no test ran.
+_NO_TESTS_RES = (
+    re.compile(r"no tests ran", re.IGNORECASE),
+    re.compile(r"No test files found", re.IGNORECASE),
+    re.compile(r"No tests found", re.IGNORECASE),
+    re.compile(r"No test is available", re.IGNORECASE),
+    re.compile(r"\[no test files\]"),
+)
+
+
+def executed_tests(output: str) -> Optional[int]:
+    """How many tests the runner output says ran: None when it says nothing about it.
+
+    0 means the output shows a run without tests (counts of zero, or a "no tests" message
+    and no positive count). [bug--lifecycle-test-false-pass] REQ-1
+    """
+    counts = [int(m.group(1)) for rx in _TEST_COUNT_RES for m in rx.finditer(output or "")]
+    if any(counts):
+        return sum(counts)
+    ran = sum(len(rx.findall(output or "")) for rx in _TESTS_RAN_RES)
+    if ran:
+        return ran
+    if counts or any(rx.search(output or "") for rx in _NO_TESTS_RES):
+        return 0
+    return None
+
+
+def tests_ran(cmd: Sequence[str], output: str) -> Optional[int]:
+    """`executed_tests`, where a known runner's silence also counts as zero.
+
+    The runner is the command itself or, for a synthesized hook, its `-> Running:` line.
+    A known runner (pytest, unittest, dotnet test, cargo test, go test, vitest, jest) always
+    prints a summary when tests run. [bug--along-install-marker-ambiguous] REQ-5
+    """
+    count = executed_tests(output)
+    if count is not None:
+        return count
+    commands = [" ".join(cmd)] + _HOOK_RUNNING_RE.findall(output or "")
+    return 0 if any(_KNOWN_RUNNER_RE.search(c) for c in commands) else None
+
+
+#: Exit code of a test run that executed no tests (pytest uses 5 for the same case).
+NO_TESTS_EXIT_CODE = 5
 
 
 def run_lifecycle_command(action: str, cmd: Sequence[str], repo_root: str, mode: str) -> int:
@@ -114,7 +185,8 @@ def run_lifecycle_command(action: str, cmd: Sequence[str], repo_root: str, mode:
     output in `.along/artifacts/lifecycle/<action>.log` (overwritten per run).
 
     A test run and its result go into the execution trace of the session's bound issue
-    [bug--session-records-not-captured].
+    [bug--session-records-not-captured]. A test run whose output shows that no test ran
+    is a failure, never recorded green [bug--lifecycle-test-false-pass].
     """
     tree = testruns.tree_hash(repo_root) if action == "test" else None
     code = _run_lifecycle_command(action, cmd, repo_root, mode)
@@ -126,9 +198,42 @@ def run_lifecycle_command(action: str, cmd: Sequence[str], repo_root: str, mode:
     return code
 
 
+def _no_tests_message(cmd: Sequence[str]) -> str:
+    return (f"FAIL: {' '.join(cmd)} exited 0 but executed no tests: nothing is verified. "
+            "Point the test hook (.along/scripts/test.py) at the test projects or the solution.")
+
+
+def _run_tee(cmd: Sequence[str], cwd: str) -> Tuple[int, str]:
+    """Stream a command's combined output to stdout while keeping its tail for inspection."""
+    import collections
+    import subprocess
+
+    tail: "collections.deque[str]" = collections.deque(maxlen=400)
+    try:
+        child = subprocess.Popen(list(cmd), cwd=cwd, env=proc.child_env(), stdout=subprocess.PIPE,
+                                 stderr=subprocess.STDOUT, text=True, encoding="utf-8",
+                                 errors="replace")
+    except OSError as exc:
+        print(f"[Error] Could not start {cmd[0]}: {exc}", file=sys.stderr)
+        return 127, ""
+    if child.stdout is None:
+        return child.wait(), ""
+    for line in child.stdout:
+        sys.stdout.write(line)
+        sys.stdout.flush()
+        tail.append(line)
+    return child.wait(), "".join(tail)
+
+
 def _run_lifecycle_command(action: str, cmd: Sequence[str], repo_root: str, mode: str) -> int:
     if mode != "distill":
-        return proc.run_passthrough(list(cmd), cwd=repo_root)
+        if action != "test":
+            return proc.run_passthrough(list(cmd), cwd=repo_root)
+        code, output = _run_tee(cmd, repo_root)
+        if code == 0 and tests_ran(cmd, output) == 0:
+            print(_no_tests_message(cmd))
+            return NO_TESTS_EXIT_CODE
+        return code
 
     log_path = raw_log_path(repo_root, action)
     rel_log = repo.safe_relpath(log_path, repo_root).replace("\\", "/")
@@ -142,10 +247,15 @@ def _run_lifecycle_command(action: str, cmd: Sequence[str], repo_root: str, mode
         saved = True
     except OSError:
         saved = False
-    print(result.observation or "")
+    code = result.returncode
+    if action == "test" and code == 0 and tests_ran(cmd, raw) == 0:
+        print(_no_tests_message(cmd))
+        code = NO_TESTS_EXIT_CODE
+    else:
+        print(result.observation or "")
     if saved:
         print(f"(raw output: {rel_log}; rerun with --raw to stream it)")
-    return result.returncode
+    return code
 
 
 def synthesize_lifecycle_script(script_path: str, content: str) -> None:
@@ -158,6 +268,36 @@ def synthesize_lifecycle_script(script_path: str, content: str) -> None:
     except OSError:
         pass
     print(f"-> Created lifecycle hook: {script_path}")
+
+
+def _is_dotnet_test_project(path: str) -> bool:
+    try:
+        text = textio.read_text(path, strict=False)
+    except (OSError, UnicodeDecodeError):
+        return False
+    return "Microsoft.NET.Test.Sdk" in text or re.search(r"<IsTestProject>\s*true", text, re.IGNORECASE) is not None
+
+
+def enclosing_hook(repo_root: str, action: str) -> Optional[Tuple[str, str]]:
+    """(context root, hook path) of the nearest enclosing context of the same git repository
+    that has a hook for `action`, or None.
+
+    A nested context without its own hook runs the enclosing one instead of synthesizing a
+    hook that may test nothing. [bug--lifecycle-test-false-pass] REQ-3
+    """
+    root = os.path.abspath(repo_root)
+    if os.path.exists(os.path.join(root, ".git")):
+        return None
+    found = repo.find_context(os.path.dirname(root))
+    while found:
+        ctx = found[0]
+        script = get_lifecycle_script_path(ctx, action)
+        if os.path.exists(script):
+            return ctx, script
+        if os.path.exists(os.path.join(ctx, ".git")):
+            return None
+        found = repo.find_context(os.path.dirname(ctx))
+    return None
 
 
 def detect_lifecycle_action(repo_root: str, action: str) -> Tuple[Optional[str], bool]:
@@ -190,11 +330,20 @@ def detect_lifecycle_action(repo_root: str, action: str) -> Tuple[Optional[str],
             return "cargo run", True
 
     # 3. .NET
-    if bool(glob.glob(os.path.join(repo_root, "*.csproj"))) or os.path.exists(os.path.join(repo_root, "Directory.Build.props")):
+    solutions = sorted(glob.glob(os.path.join(repo_root, "*.sln")) + glob.glob(os.path.join(repo_root, "*.slnx")))
+    projects = sorted(glob.glob(os.path.join(repo_root, "*.csproj")))
+    if solutions or projects or os.path.exists(os.path.join(repo_root, "Directory.Build.props")):
         if action == "build":
             return "dotnet build -v q", True
         elif action == "test":
-            return "dotnet test -v q", True
+            # Only a solution or a test project runs tests; a library project alone ran
+            # nothing and reported success [bug--lifecycle-test-false-pass] REQ-2.
+            target = (solutions[:1] or [p for p in projects if _is_dotnet_test_project(p)][:1])
+            if not target:
+                print("[Warning] No .NET solution or test project (Microsoft.NET.Test.Sdk / "
+                      "<IsTestProject>) in this folder: no test command detected.", file=sys.stderr)
+                return None, False
+            return f"dotnet test {shlex.quote(os.path.basename(target[0]))} -v q", True
         elif action == "dev":
             return "dotnet run", True
 
@@ -227,7 +376,8 @@ def find_repo_root(start_dir=None):
     except ImportError:
         cur = os.path.abspath(start_dir or os.path.dirname(__file__))
         while True:
-            for marker in (".along", ".git", "AGENTS.md"):
+            for marker in (".git", os.path.join(".along", "ISSUES"), os.path.join(".along", "ISSUES.md"),
+                           os.path.join(".along", "HISTORY.md")):
                 if os.path.exists(os.path.join(cur, marker)):
                     return cur
             parent = os.path.dirname(cur)
@@ -262,7 +412,8 @@ def find_repo_root(start_dir=None):
     except ImportError:
         cur = os.path.abspath(start_dir or os.path.dirname(__file__))
         while True:
-            for marker in (".along", ".git", "AGENTS.md"):
+            for marker in (".git", os.path.join(".along", "ISSUES"), os.path.join(".along", "ISSUES.md"),
+                           os.path.join(".along", "HISTORY.md")):
                 if os.path.exists(os.path.join(cur, marker)):
                     return cur
             parent = os.path.dirname(cur)

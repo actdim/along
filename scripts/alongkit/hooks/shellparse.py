@@ -465,8 +465,7 @@ def _segment_is_read_only(segment: str) -> bool:
     if first == "git":
         return _git_is_read_only(tokens[1:])
     if first == "along" or first.endswith("along_exec.py"):
-        joined = " ".join(rest)
-        return any(joined == sub or joined.startswith(sub + " ") for sub in _ALONG_READ)
+        return _is_read_subcommand(" ".join(rest))
     if first in ("pytest", "along-test", "along_test"):
         return True
     if first in ("npm", "pnpm", "yarn"):
@@ -486,18 +485,36 @@ def _segment_is_read_only(segment: str) -> bool:
         if script.endswith(".along/scripts/test.py"):
             return True
         if script.endswith("along_exec.py"):
-            joined = " ".join(rest[1:])
-            return any(joined == sub or joined.startswith(sub + " ") for sub in _ALONG_READ)
+            return _is_read_subcommand(" ".join(rest[1:]))
         return False
     return False
 
 
+def _is_read_subcommand(joined: str) -> bool:
+    """True when the words after the Along CLI name a read-only subcommand.
+
+    `doctor --fix` writes (it drops dangling milestone fields), so it is not read-only
+    [bug--update-maintenance-friction] REQ-2.
+    """
+    if not any(joined == sub or joined.startswith(sub + " ") for sub in _ALONG_READ):
+        return False
+    return not (joined.split()[:1] == ["doctor"] and "--fix" in joined.split())
+
+
 #: Along subcommands that only move Along's own state (entities, blackboards, projections).
 #: The plan gate lets them through so an agent can create and start an issue before any plan
-#: exists; `commit`, `bump`, `hook install` and `update` are not among them.
+#: exists; `commit` and `bump` are not among them.
 _ALONG_STATE = (
     "issue", "start", "scratch", "plan", "decision", "milestone", "session", "wrap",
     "kb-sync", "kb sync", "glossary", "risk", "spike", "checklist",
+)
+
+#: Along maintenance subcommands: they keep the installation itself current (protocol block,
+#: migrations, hooks, merge drivers, rule packs), not a product change, so the plan gate lets
+#: them through too. Removal (`uninstall`) is not maintenance. [bug--update-maintenance-friction]
+_ALONG_MAINTENANCE = (
+    "update", "init", "migrate", "doctor", "hook install", "git setup", "git sync",
+    "rules attach", "rules restore",
 )
 
 #: `along commit` is not a state command: it passes the plan gate without an approval only for
@@ -535,8 +552,15 @@ def _is_state_subcommand(sub: str) -> bool:
     return any(sub == s or sub.startswith(s + " ") for s in _ALONG_STATE)
 
 
+def _is_maintenance_subcommand(sub: str) -> bool:
+    words = sub.split()
+    if "uninstall" in words or "--uninstall" in words:
+        return False
+    return any(sub == s or sub.startswith(s + " ") for s in _ALONG_MAINTENANCE)
+
+
 def is_along_state_command(command: str) -> bool:
-    """True when every segment runs an Along state subcommand (or is read-only)."""
+    """True when every segment runs an Along state or maintenance subcommand (or is read-only)."""
     segments = split_segments(command or "")
     if not segments:
         return False
@@ -545,7 +569,7 @@ def is_along_state_command(command: str) -> bool:
             return False
         tokens = _tokens(seg)
         sub = _along_subcommand(tokens) if tokens else None
-        if sub is not None and _is_state_subcommand(sub):
+        if sub is not None and (_is_state_subcommand(sub) or _is_maintenance_subcommand(sub)):
             continue
         if not _segment_is_read_only(seg):
             return False

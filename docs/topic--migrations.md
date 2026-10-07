@@ -69,7 +69,10 @@ behavioral test in `tests/test_migration.py`:
 3. **A backup precedes the first change.** `.along/` and `.agents/` are copied to
    `.along/.migration-backup/<timestamp>/` before anything is modified, and the path is
    printed. The backup directory ignores itself via its own `.gitignore`, so it never
-   reaches history and never edits the user's.
+   reaches history and never edits the user's. Machine-local state (`diagnostics/`,
+   `.session/`, `artifacts/`, `worktrees/`) is not copied, and only the newest 5 snapshots
+   are kept (`migration.BACKUP_SKIP`, `migration.BACKUP_KEEP`). Rule-pack backups
+   (`along rules restore`, `rules attach` on conflict) land in the same self-ignoring directory.
 4. **Undecodable files are skipped and reported.** Markdown was read with
    `errors="ignore"` and written back, which deleted every byte that was not valid UTF-8.
    Reads are strict; a file that fails to decode is listed in the report and left alone.

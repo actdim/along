@@ -10,8 +10,8 @@ escape, and compared case-insensitively where the filesystem is):
 
 - write: the workspace root (or only its `write_scope` subfolders plus `.along/` when a
   write scope is declared), the system temp dir, the runtime's brain artifacts
-  (`~/.gemini/antigravity/brain/<conversation-id>/`) and Claude Code project memory
-  (`~/.claude/projects/`).
+  (`~/.gemini/antigravity/brain/<conversation-id>/`), Claude Code project memory
+  (`~/.claude/projects/`) and Claude Code plan files (`~/.claude/plans/`).
 - read: everything writable, plus declared `allowed_roots`, the main checkout of a git
   worktree, and the global skill/config dirs (`~/.gemini`, `~/.claude`, `~/.codex`,
   `~/.along`), which are read-only.
@@ -70,6 +70,8 @@ SECRET_DIRS: Tuple[str, ...] = (
 )
 BRAIN_DIR = (".gemini", "antigravity", "brain")
 CLAUDE_PROJECTS_DIR = (".claude", "projects")
+#: Claude Code plan mode writes its plan here [bug--runtime-plan-dir-containment].
+CLAUDE_PLANS_DIR = (".claude", "plans")
 
 _GLOB_CHARS = re.compile(r"[*?\[{]")
 
@@ -150,11 +152,16 @@ def _worktree_main_checkout(root: str) -> Optional[str]:
 
 
 def issue_scope(repo_root: str, session_key: Optional[str] = None) -> Tuple[List[str], List[str]]:
-    """(allowed_roots, write_scope) declared by the session's issue, else by in-progress issues."""
-    issues_dir = os.path.join(repo.state_dir(repo_root), "ISSUES")
+    """(allowed_roots, write_scope) declared by the session's issue, else by in-progress issues.
+
+    A session bound to an issue of a subproject context reads that issue in its own context;
+    its relative entries resolve against that context, and a declared write scope always keeps
+    the issue's own context writable. [bug--subproject-model-overdetection] REQ-8
+    """
+    ctx, active = session.resolve_bound(repo_root, session_key)
+    issues_dir = os.path.join(repo.state_dir(ctx), "ISSUES")
     if not os.path.isdir(issues_dir):
         return [], []
-    active = session.get_active_session_slug(repo_root, session_key)
     roots: List[str] = []
     scope: List[str] = []
     try:
@@ -172,8 +179,10 @@ def issue_scope(repo_root: str, session_key: Optional[str] = None) -> Tuple[List
             continue
         if not mapping or mapping.get("status") != "in-progress":
             continue
-        roots += _as_list(mapping.get("allowed_roots"))
-        scope += _as_list(mapping.get("write_scope"))
+        roots += [canonical(p, ctx) for p in _as_list(mapping.get("allowed_roots"))]
+        scope += [canonical(p, ctx) for p in _as_list(mapping.get("write_scope"))]
+    if scope and canonical(ctx) != canonical(repo_root):
+        scope.append(canonical(ctx))
     return roots, scope
 
 
@@ -194,6 +203,7 @@ def build_policy(repo_root: str, options: Optional[Dict[str, Any]] = None,
         canonical(temp_dir or tempfile.gettempdir()),
         canonical(brain),
         canonical(os.path.join(home_dir, *CLAUDE_PROJECTS_DIR)),
+        canonical(os.path.join(home_dir, *CLAUDE_PLANS_DIR)),
     ]
     read_roots = [canonical(os.path.join(home_dir, d)) for d in GLOBAL_READ_DIRS]
     main = _worktree_main_checkout(root)

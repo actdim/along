@@ -274,7 +274,10 @@ class TestCodexEndToEnd(unittest.TestCase):
 
         with tempfile.TemporaryDirectory() as tmp:
             along_dir = os.path.join(tmp, ".along")
+            # An installation without an issue board: issue anchoring has nothing to check.
             os.makedirs(along_dir, exist_ok=True)
+            with open(os.path.join(along_dir, "HISTORY.md"), "w", encoding="utf-8") as fh:
+                fh.write("# History\n")
             session.approve_plan(tmp)
             res = proc.run_capture(
                 [sys.executable, script_path, "--runtime", "codex", "--event", "PreToolUse", "--repo-root", tmp],
@@ -303,7 +306,7 @@ class TestCodexEndToEnd(unittest.TestCase):
 
         with tempfile.TemporaryDirectory() as tmp:
             along_dir = os.path.join(tmp, ".along")
-            os.makedirs(along_dir, exist_ok=True)
+            os.makedirs(os.path.join(along_dir, "ISSUES"), exist_ok=True)
             res = proc.run_capture(
                 [sys.executable, script_path, "--runtime", "codex", "--event", "PreToolUse", "--repo-root", tmp],
                 stdin_text=input_payload,
@@ -328,7 +331,7 @@ class TestCodexEndToEnd(unittest.TestCase):
 
         with tempfile.TemporaryDirectory() as tmp:
             along_dir = os.path.join(tmp, ".along")
-            os.makedirs(along_dir, exist_ok=True)
+            os.makedirs(os.path.join(along_dir, "ISSUES"), exist_ok=True)
             res = proc.run_capture(
                 [sys.executable, script_path, "--runtime", "codex", "--event", "PreToolUse", "--repo-root", tmp],
                 stdin_text=input_payload,
@@ -348,7 +351,7 @@ class TestCodexEndToEnd(unittest.TestCase):
 
         with tempfile.TemporaryDirectory() as tmp:
             along_dir = os.path.join(tmp, ".along")
-            os.makedirs(along_dir, exist_ok=True)
+            os.makedirs(os.path.join(along_dir, "ISSUES"), exist_ok=True)
             res = proc.run_capture(
                 [
                     sys.executable,

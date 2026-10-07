@@ -124,7 +124,7 @@ class TestAlongRunCliProxy(unittest.TestCase):
         script_path = os.path.join(SCRIPTS_DIR, "along_exec.py")
         with tempfile.TemporaryDirectory() as tmp:
             along_dir = os.path.join(tmp, ".along")
-            os.makedirs(along_dir, exist_ok=True)
+            os.makedirs(os.path.join(along_dir, "ISSUES"), exist_ok=True)
             res = proc.run_capture(
                 [sys.executable, script_path, "run", sys.executable, "-c", "print('proxy-test-ok')"],
                 cwd=tmp,
@@ -136,7 +136,7 @@ class TestAlongRunCliProxy(unittest.TestCase):
         script_path = os.path.join(SCRIPTS_DIR, "along_exec.py")
         with tempfile.TemporaryDirectory() as tmp:
             along_dir = os.path.join(tmp, ".along")
-            os.makedirs(along_dir, exist_ok=True)
+            os.makedirs(os.path.join(along_dir, "ISSUES"), exist_ok=True)
             env = dict(os.environ)
             env["ALONG_HOOK_MODE"] = "enforce"
             res = proc.run_capture(
@@ -151,7 +151,7 @@ class TestAlongRunCliProxy(unittest.TestCase):
         script_path = os.path.join(SCRIPTS_DIR, "along_hook.py")
         with tempfile.TemporaryDirectory() as tmp:
             along_dir = os.path.join(tmp, ".along")
-            os.makedirs(along_dir, exist_ok=True)
+            os.makedirs(os.path.join(along_dir, "ISSUES"), exist_ok=True)
             res = proc.run_capture(
                 [sys.executable, script_path, "run", sys.executable, "-c", "print('hook-run-ok')"],
                 cwd=tmp,
@@ -246,7 +246,7 @@ class TestInstallCursorHooks(unittest.TestCase):
     def test_cli_along_hook_eval_with_positional_payload_denied(self):
         script_path = os.path.join(SCRIPTS_DIR, "along_hook.py")
         with tempfile.TemporaryDirectory() as tmp:
-            os.makedirs(os.path.join(tmp, ".along"), exist_ok=True)
+            os.makedirs(os.path.join(tmp, ".along", "ISSUES"), exist_ok=True)
             payload = json.dumps({"tool_name": "run_command", "tool_args": {"CommandLine": "git commit -m \"feat: bad message\""}})
             res = proc.run_capture(
                 [sys.executable, script_path, "eval", "PreToolUse", payload, "--repo-root", tmp],
@@ -257,7 +257,7 @@ class TestInstallCursorHooks(unittest.TestCase):
     def test_cli_along_hook_eval_stdin_pipe(self):
         script_path = os.path.join(SCRIPTS_DIR, "along_hook.py")
         with tempfile.TemporaryDirectory() as tmp:
-            os.makedirs(os.path.join(tmp, ".along"), exist_ok=True)
+            os.makedirs(os.path.join(tmp, ".along", "ISSUES"), exist_ok=True)
             payload = json.dumps({"tool_name": "run_command", "tool_args": {"CommandLine": "dir"}})
             res = proc.run_capture(
                 [sys.executable, script_path, "eval", "PreToolUse", "--repo-root", tmp],

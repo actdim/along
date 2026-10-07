@@ -142,16 +142,31 @@ class DeclarativeGate(BaseGate):
                     if isinstance(res, GateResult):
                         if not res.gate_name:
                             res.gate_name = self.name
-                        return res
+                        return self._yield_to_breaker(res, event, effective_root)
                     elif res:
-                        return GateResult(
+                        return self._yield_to_breaker(GateResult(
                             decision=GateDecision.DENY,
                             reason=str(res) or rule.error_message,
                             gate_name=self.name,
                             exit_code=2,
-                        )
+                        ), event, effective_root)
 
         return GateResult(decision=GateDecision.ALLOW, gate_name=self.name)
+
+    def _yield_to_breaker(self, result: GateResult, event: HookEvent,
+                          repo_root: Optional[str]) -> GateResult:
+        """A Stop gate does not reject the turn while the circuit breaker is tripped.
+
+        Its demand (sync, wrap, tests) needs commands the breaker holds, so rejecting would
+        trap the agent. The pending step is reported instead [bug--stop-gates-breaker-deadlock].
+        """
+        if event.event_type != HookEventType.STOP or result.decision != GateDecision.DENY or not repo_root:
+            return result
+        from .. import circuit
+        if not circuit.is_breaker_tripped(repo_root):
+            return result
+        print(f"[Pending, circuit breaker tripped] {result.reason}", file=sys.stderr)
+        return GateResult(decision=GateDecision.ALLOW, reason=result.reason, gate_name=self.name)
 
 
 def parse_gate_dict(raw: Dict[str, Any]) -> DeclarativeGateDefinition:

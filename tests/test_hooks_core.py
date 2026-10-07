@@ -243,7 +243,10 @@ class TestEngineGovernanceAndAudit(unittest.TestCase):
     def test_shadow_mode_permits_execution_and_logs(self):
         with tempfile.TemporaryDirectory() as tmp:
             along_dir = os.path.join(tmp, ".along")
+            # An installation without an issue board: only the typography gate speaks.
             os.makedirs(along_dir, exist_ok=True)
+            with open(os.path.join(along_dir, "HISTORY.md"), "w", encoding="utf-8") as fh:
+                fh.write("# History\n")
 
             config = HooksConfig(
                 mode=HookMode.SHADOW,
@@ -278,7 +281,7 @@ class TestEngineGovernanceAndAudit(unittest.TestCase):
     def test_enforce_mode_blocks_execution(self):
         with tempfile.TemporaryDirectory() as tmp:
             along_dir = os.path.join(tmp, ".along")
-            os.makedirs(along_dir, exist_ok=True)
+            os.makedirs(os.path.join(along_dir, "ISSUES"), exist_ok=True)
 
             config = HooksConfig(
                 mode=HookMode.ENFORCE,
@@ -317,7 +320,7 @@ class TestAlongHookCliE2E(unittest.TestCase):
 
         with tempfile.TemporaryDirectory() as tmp:
             along_dir = os.path.join(tmp, ".along")
-            os.makedirs(along_dir, exist_ok=True)
+            os.makedirs(os.path.join(along_dir, "ISSUES"), exist_ok=True)
             res = proc.run_capture(
                 [sys.executable, script_path, "--runtime", "antigravity", "--event", "PreToolUse", "--repo-root", tmp],
                 stdin_text=input_payload,

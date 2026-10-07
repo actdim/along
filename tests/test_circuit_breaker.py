@@ -351,5 +351,122 @@ class TestProcIntegration(unittest.TestCase):
             self.assertTrue(is_breaker_tripped(root))
 
 
+def _git_repo(root: str) -> None:
+    """Make `root` a git repository with one commit (so `.git/index` exists)."""
+    proc.git(["init", "-q"], cwd=root)
+    proc.git(["config", "user.name", "Test Agent"], cwd=root)
+    proc.git(["config", "user.email", "test@example.com"], cwd=root)
+    textio.write_text(os.path.join(root, "hello.txt"), "hello\n")
+    proc.git(["add", "hello.txt"], cwd=root)
+    proc.git(["commit", "-q", "-m", "init"], cwd=root)
+
+
+def _class_1(signature: str = "fatal: .git/index: bad signature") -> AnomalyMatch:
+    return AnomalyMatch(
+        anomaly_class=AnomalyClass.CLASS_1_VCS_CORRUPTION,
+        signature=signature,
+        detail="fatal: .git/index: bad signature",
+        impact="Git index corrupted",
+        remediation=circuit.REMEDIATION_CLASS_1,
+        source="python .along/scripts/test.py",
+    )
+
+
+class TestFalseTripFromTestOutput(unittest.TestCase):
+    """[bug--breaker-trips-on-test-output]: quoted VCS signatures never trip the breaker."""
+
+    def test_class_1_ignores_output_of_non_git_commands(self):
+        out = "fatal: .git/index: bad signature\nFAILED (failures=1)"
+        self.assertIsNone(classify_anomaly(stderr=out, returncode=1, cmd=[sys.executable, "test.py"]))
+        found = classify_anomaly(stderr=out, returncode=128, cmd=["git", "status"])
+        self.assertIsNotNone(found)
+        self.assertEqual(found.anomaly_class, AnomalyClass.CLASS_1_VCS_CORRUPTION)
+        self.assertEqual(found.source, "git status")
+        self.assertIsNotNone(classify_anomaly(stderr=out, returncode=128, cmd=["C:/Git/cmd/git.exe", "add"]))
+
+    def test_class_1_matches_git_message_lines_only(self):
+        # The escalation report quotes the signature mid-line; that is not git speaking.
+        report = format_escalation_report(_class_1())
+        self.assertIsNone(classify_anomaly(stderr=report, returncode=1))
+        real = "error: bad signature 0x00000000\nfatal: index file corrupt"
+        self.assertIsNotNone(classify_anomaly(stderr=real, returncode=128, cmd="git status"))
+
+    def test_failing_suite_quoting_signature_does_not_trip(self):
+        from alongkit import gates
+        with repo_fixture() as root:
+            hook = os.path.join(root, ".along", "scripts", "test.py")
+            os.makedirs(os.path.dirname(hook), exist_ok=True)
+            textio.write_text(hook, "import sys\n"
+                                    "print('fatal: .git/index: bad signature', file=sys.stderr)\n"
+                                    "sys.exit(1)\n")
+            self.assertFalse(gates.run_repository_tests(root, label="T"))
+            self.assertFalse(is_breaker_tripped(root))
+
+    def test_class_1_not_tripped_while_git_reads_the_repository(self):
+        with repo_fixture() as root:
+            _git_repo(root)
+            proc._safe_trip_breaker(root, _class_1())
+            self.assertFalse(is_breaker_tripped(root))
+
+    def test_class_1_tripped_when_git_confirms_corruption(self):
+        with repo_fixture() as root:
+            _git_repo(root)
+            with open(os.path.join(root, ".git", "index"), "wb") as f:
+                f.write(b"XXXX" + b"\x00" * 64)
+            proc._safe_trip_breaker(root, _class_1())
+            self.assertTrue(is_breaker_tripped(root))
+            healthy, issues = run_health_probe(root)
+            self.assertFalse(healthy)
+            self.assertTrue(any("git status fails" in iss for iss in issues))
+
+    def test_reset_keeps_cleared_anomaly_in_history(self):
+        with repo_fixture() as root:
+            trip_breaker(root, _class_1())
+            ok, _ = reset_breaker(root, force=True)
+            self.assertTrue(ok)
+            data = circuit.load_circuit_state(root)
+            self.assertIsNone(data["anomaly"])
+            last = data["history"][-1]
+            self.assertEqual(last["source"], "python .along/scripts/test.py")
+            self.assertTrue(last["forced"])
+            self.assertTrue(last["resolved_at"])
+
+
+class TestBreakerDeadlock(unittest.TestCase):
+    """[bug--stop-gates-breaker-deadlock]: a tripped breaker never traps the agent."""
+
+    def _shell(self, command: str) -> HookEvent:
+        return HookEvent(event_type=HookEventType.PRE_TOOL_USE, tool_name="bash",
+                         tool_args={"command": command})
+
+    def test_read_only_commands_pass_while_tripped(self):
+        with repo_fixture() as root:
+            trip_breaker(root, _class_1())
+            self.assertIsNone(check_circuit_breaker(self._shell("git status"), root))
+            self.assertIsNone(check_circuit_breaker(self._shell("along circuit verify"), root))
+            blocked = check_circuit_breaker(self._shell("git reset --hard"), root)
+            self.assertIsNotNone(blocked)
+            self.assertIn("python .along/scripts/test.py", blocked)
+            self.assertIn("along circuit verify", blocked)
+
+    def test_stop_gate_reports_instead_of_rejecting_while_tripped(self):
+        from alongkit.hooks.declarative import (DeclarativeGate, DeclarativeGateDefinition,
+                                                DeclarativeRule)
+        from alongkit.hooks.models import GateDecision
+        defn = DeclarativeGateDefinition(
+            id="needs_sync", title="t", description="d", event_type=HookEventType.STOP,
+            rules=[DeclarativeRule(rule_type="predicate",
+                                   handler=lambda event, **kw: "Run 'along issue sync'.")],
+        )
+        with repo_fixture() as root:
+            gate = DeclarativeGate(defn, repo_root=root)
+            stop = HookEvent(event_type=HookEventType.STOP)
+            self.assertEqual(gate.evaluate(stop).decision, GateDecision.DENY)
+            trip_breaker(root, _class_1())
+            result = gate.evaluate(stop)
+            self.assertEqual(result.decision, GateDecision.ALLOW)
+            self.assertIn("along issue sync", result.reason)
+
+
 if __name__ == "__main__":
     unittest.main()

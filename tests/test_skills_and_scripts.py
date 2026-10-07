@@ -1046,8 +1046,11 @@ class TestAlongSkillsAndScripts(unittest.TestCase):
             self.assertTrue(os.path.exists(os.path.join(sub_dir, "docs", "topic--domain-model.md")), "Subproject 02-domain-model must migrate to sub-app/docs/topic--domain-model.md")
             self.assertFalse(os.path.exists(os.path.join(sub_dir, ".along", "KB")), "Subproject .along/KB must be purged")
 
-            # Uninitialized package detected
-            self.assertIn("uninit-lib", res.stdout, "along_update stdout should mention uninitialized subproject")
+            # A package manifest alone is not a subproject: no init hint, no new context
+            # [ADR-2026-10-06--subproject-boundary-is-git-or-explicit-init]
+            self.assertNotIn("uninitialized subproject", res.stdout, "a manifest folder must not be offered for init")
+            self.assertNotIn("/along-init' in this directory", res.stdout)
+            self.assertFalse(os.path.exists(os.path.join(uninit_dir, ".along")))
 
         finally:
             shutil.rmtree(temp_dir, ignore_errors=True)
@@ -1710,7 +1713,7 @@ class TestAlongSkillsAndScripts(unittest.TestCase):
 
             # Also create a nested subproject with its own .along/ and docs/
             sub_dir = os.path.join(temp_dir, "src", "services", "sub-service")
-            os.makedirs(os.path.join(sub_dir, ".along"), exist_ok=True)
+            os.makedirs(os.path.join(sub_dir, ".along", "ISSUES"), exist_ok=True)
             os.makedirs(os.path.join(sub_dir, "docs"), exist_ok=True)
             with open(os.path.join(sub_dir, "README.md"), "w", encoding="utf-8") as f:
                 f.write("# Sub Service\n\n> Microservice for data processing.\n")
@@ -1844,7 +1847,7 @@ class TestAlongSkillsAndScripts(unittest.TestCase):
         temp_dir = tempfile.mkdtemp(prefix="along-repo-discovery-")
         try:
             # 1. Root context
-            os.makedirs(os.path.join(temp_dir, ".along"), exist_ok=True)
+            os.makedirs(os.path.join(temp_dir, ".along", "ISSUES"), exist_ok=True)
 
             # 2. Subproject 1: .NET-style nested folder with AGENTS.md and .csproj
             net_proj = os.path.join(temp_dir, "src", "Services", "Billing")
@@ -1873,7 +1876,8 @@ class TestAlongSkillsAndScripts(unittest.TestCase):
             abs_ignored = os.path.abspath(ignored_proj)
 
             self.assertIn(abs_root, contexts)
-            self.assertIn(abs_net, contexts)
+            # A nested AGENTS.md is a folder guide, not a context [bug--along-install-marker-ambiguous].
+            self.assertNotIn(abs_net, contexts)
             self.assertNotIn(abs_ignored, contexts, "Ignored directories must not be discovered as contexts")
 
             # Test find_manifest_projects

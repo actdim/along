@@ -8,5 +8,8 @@ gates:
   - id: require_plan_approval
     enforce_unbound: true
 
+  # The suite tests Markdown too (protocol and AGENTS.md budgets, skill manifests), so a
+  # documentation edit needs a test run here as well.
   - id: test_before_stop
     enforce_unbound: true
+    count_docs: true

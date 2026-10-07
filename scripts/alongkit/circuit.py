@@ -16,7 +16,7 @@ if __name__ == "__main__":
     )
 
 import ast
-from dataclasses import asdict, dataclass
+from dataclasses import asdict, dataclass, replace
 from datetime import datetime, timezone
 from enum import Enum
 import json
@@ -50,6 +50,8 @@ class AnomalyMatch:
     impact: str
     remediation: Tuple[str, ...]
     timestamp: str = ""
+    #: The command whose result tripped the breaker, so a false trip can be traced.
+    source: str = ""
 
     def to_dict(self) -> Dict[str, Any]:
         return {
@@ -59,6 +61,7 @@ class AnomalyMatch:
             "impact": self.impact,
             "remediation": list(self.remediation),
             "timestamp": self.timestamp,
+            "source": self.source,
         }
 
     @classmethod
@@ -76,6 +79,7 @@ class AnomalyMatch:
             impact=data.get("impact", ""),
             remediation=tuple(data.get("remediation", [])),
             timestamp=data.get("timestamp", ""),
+            source=data.get("source", "") or "",
         )
 
 
@@ -113,14 +117,28 @@ REMEDIATION_CLASS_5: Tuple[str, ...] = (
     "Verify source compiles with 'python -m py_compile <file>' before resuming.",
 )
 
+#: Git's own message lines (`fatal:` / `error:` at line start), never a substring anywhere:
+#: test and tool output quotes these signatures as data [bug--breaker-trips-on-test-output].
+_GIT_LINE = r"(?im)^\s*(?:fatal|error):[^\n]*?"
+
 CLASS_1_PATTERNS: List[Tuple[re.Pattern, str]] = [
-    (re.compile(r"index file smaller than expected", re.IGNORECASE), "fatal: .git/index: index file smaller than expected"),
-    (re.compile(r"bad signature", re.IGNORECASE), "fatal: .git/index: bad signature"),
-    (re.compile(r"Unable to create '.*index\.lock': File exists", re.IGNORECASE), "fatal: Unable to create '.git/index.lock': File exists"),
-    (re.compile(r"corrupt loose object", re.IGNORECASE), "corrupt loose object in Git repository"),
-    (re.compile(r"error: inflate: data stream error", re.IGNORECASE), "data stream error in Git object database"),
-    (re.compile(r"fatal: loose object .* is corrupt", re.IGNORECASE), "loose object corruption detected by Git"),
+    (re.compile(_GIT_LINE + r"index file smaller than expected"), "fatal: .git/index: index file smaller than expected"),
+    (re.compile(_GIT_LINE + r"bad signature"), "fatal: .git/index: bad signature"),
+    (re.compile(_GIT_LINE + r"index file corrupt"), "fatal: index file corrupt"),
+    (re.compile(_GIT_LINE + r"Unable to create '[^'\n]*index\.lock': File exists"), "fatal: Unable to create '.git/index.lock': File exists"),
+    (re.compile(_GIT_LINE + r"corrupt loose object"), "corrupt loose object in Git repository"),
+    (re.compile(_GIT_LINE + r"inflate: data stream error"), "data stream error in Git object database"),
+    (re.compile(_GIT_LINE + r"loose object [^\n]* is corrupt"), "loose object corruption detected by Git"),
 ]
+
+
+def _is_git_command(cmd: Optional[Union[str, Sequence[str]]]) -> bool:
+    """True when `cmd` runs git itself (`git`, `git.exe`, a full path to either)."""
+    if not cmd:
+        return False
+    first = cmd.split()[0] if isinstance(cmd, str) else str(cmd[0]) if len(cmd) else ""
+    name = os.path.basename(first.strip("\"'").replace("\\", "/")).lower()
+    return name in ("git", "git.exe")
 
 CLASS_2_PATTERNS: List[Tuple[re.Pattern, str]] = [
     (re.compile(r"The process cannot access the file because it is being used by another process", re.IGNORECASE), "Windows file sharing lock (EBUSY)"),
@@ -153,19 +171,35 @@ def classify_anomaly(
     returncode: int = 0,
     cmd: Optional[Union[str, Sequence[str]]] = None,
 ) -> Optional[AnomalyMatch]:
-    """Inspect command execution results and classify into 5 Systemic Anomaly classes."""
-    combined = f"{stderr}\n{stdout}"
+    """Inspect command execution results and classify into 5 Systemic Anomaly classes.
+
+    Class 1 (VCS corruption) reads the output only of git itself, or of an unnamed command
+    (`cmd=None`, the caller vouches for the source): a test suite or another tool may print
+    git's signatures as data [bug--breaker-trips-on-test-output].
+    """
     cmd_str = ""
     if cmd:
         if isinstance(cmd, str):
             cmd_str = cmd
         else:
             cmd_str = " ".join(str(part) for part in cmd)
+    found = _classify(stdout, stderr, returncode, cmd, cmd_str)
+    return replace(found, source=cmd_str.strip()[:200]) if found and cmd_str else found
+
+
+def _classify(
+    stdout: str,
+    stderr: str,
+    returncode: int,
+    cmd: Optional[Union[str, Sequence[str]]],
+    cmd_str: str,
+) -> Optional[AnomalyMatch]:
+    combined = f"{stderr}\n{stdout}"
 
     now_iso = datetime.now(timezone.utc).isoformat()
 
     # Check Class 1: VCS Corruption
-    for pat, sig in CLASS_1_PATTERNS:
+    for pat, sig in (CLASS_1_PATTERNS if cmd is None or _is_git_command(cmd) else ()):
         if pat.search(combined):
             return AnomalyMatch(
                 anomaly_class=AnomalyClass.CLASS_1_VCS_CORRUPTION,
@@ -239,13 +273,21 @@ def format_escalation_report(anomaly: AnomalyMatch) -> str:
         f"Class: {anomaly.anomaly_class.value}",
         f"Signature: {anomaly.signature}",
         f"Impact: {anomaly.impact}",
+    ]
+    # The evidence: lets a human (and the agent) tell a real fault from a quoted signature.
+    if anomaly.source:
+        lines.append(f"Source: {anomaly.source}")
+    if anomaly.detail:
+        lines.append(f"Evidence: {anomaly.detail.splitlines()[0][:200]}")
+    lines.extend([
         "",
         "Prescribed Human Remediation:",
-    ]
+    ])
     for idx, rem in enumerate(anomaly.remediation, 1):
         lines.append(f"{idx}. {rem}")
     lines.extend([
         "",
+        "False positive? Run 'along circuit verify'; when it reports healthy, 'along circuit reset'.",
         "Agent Action: Execution halted. Awaiting human confirmation.",
         "======================================================================",
     ])
@@ -331,6 +373,30 @@ def trip_breaker(repo_root: str, anomaly: AnomalyMatch) -> str:
 # Pre-Flight Health Probe & Resumption
 # ---------------------------------------------------------------------------
 
+def _git_status_probe(repo_root: str) -> Tuple[bool, Optional[AnomalyMatch]]:
+    """Run `git status` in `repo_root`: (git succeeded, Class 1 anomaly its output shows)."""
+    from . import proc
+    res = proc.run_capture(["git", "status", "--porcelain"], cwd=repo_root, timeout=60,
+                           trip_on_anomaly=False)
+    if res.ok:
+        return True, None
+    found = classify_anomaly(stdout=res.stdout, stderr=res.stderr, returncode=res.returncode,
+                             cmd=["git", "status"])
+    if found and found.anomaly_class == AnomalyClass.CLASS_1_VCS_CORRUPTION:
+        return False, found
+    return False, None
+
+
+def vcs_anomaly_confirmed(repo_root: str) -> bool:
+    """True unless an independent `git status` in `repo_root` succeeds.
+
+    A Class 1 signature seen once may be stale or quoted; the breaker trips for VCS
+    corruption only when git itself still fails [bug--breaker-trips-on-test-output] REQ-4.
+    """
+    ok, _ = _git_status_probe(repo_root)
+    return not ok
+
+
 def run_health_probe(repo_root: str) -> Tuple[bool, List[str]]:
     """Verify repository and environment health prior to resetting breaker."""
     issues: List[str] = []
@@ -353,6 +419,11 @@ def run_health_probe(repo_root: str) -> Tuple[bool, List[str]]:
                 issues.append(f"Cannot read git index '{idx_path}': {e}")
         else:
             issues.append("Missing .git/index file.")
+
+        # Size alone misses a full-size index with a bad signature: ask git itself.
+        _ok, git_anomaly = _git_status_probe(repo_root)
+        if git_anomaly:
+            issues.append(f"git status fails: {git_anomaly.detail.splitlines()[0] if git_anomaly.detail else git_anomaly.signature}")
 
     # 2. Check Python syntax of tracked modified files
     # Shared trace plus one per agent session [bug--activity-trace-shared-across-sessions].
@@ -393,8 +464,16 @@ def reset_breaker(repo_root: str, force: bool = False) -> Tuple[bool, str]:
             return False, f"Cannot reset circuit breaker: health probe failed:\n- {issue_str}"
 
     state_data = load_circuit_state(repo_root)
+    resolved_at = datetime.now(timezone.utc).isoformat()
+    # Keep the cleared record: a false trip is diagnosed from it after the reset.
+    if isinstance(state_data.get("anomaly"), dict):
+        history = state_data.get("history")
+        history = history if isinstance(history, list) else []
+        history.append({**state_data["anomaly"], "tripped_at": state_data.get("tripped_at"),
+                        "resolved_at": resolved_at, "forced": force})
+        state_data["history"] = history[-10:]
     state_data["state"] = CircuitState.CLOSED.value
-    state_data["resolved_at"] = datetime.now(timezone.utc).isoformat()
+    state_data["resolved_at"] = resolved_at
     state_data["anomaly"] = None
     save_circuit_state(repo_root, state_data)
     return True, "Circuit breaker reset successfully. Environment verified healthy."

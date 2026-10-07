@@ -551,15 +551,17 @@ class TestUpdateAndHooksHardening(unittest.TestCase):
         with hermetic.repo_fixture(prefix="test-update-iso-") as tmp:
             root_agents = os.path.join(tmp, "AGENTS.md")
             textio.write_text(root_agents, "<!-- BEGIN ALONG-PROTOCOL root -->\nALONG-PROTOCOL v3.8.0\n<!-- END ALONG-PROTOCOL -->\n")
+            # An installation is Along state, not an AGENTS.md [bug--along-install-marker-ambiguous].
+            os.makedirs(os.path.join(tmp, ".along", "ISSUES"), exist_ok=True)
 
             # Subproject 1: valid context
             sub1 = os.path.join(tmp, "sub1")
-            os.makedirs(sub1, exist_ok=True)
+            os.makedirs(os.path.join(sub1, ".along", "ISSUES"), exist_ok=True)
             textio.write_text(os.path.join(sub1, "AGENTS.md"), "<!-- BEGIN ALONG-PROTOCOL ref=../AGENTS.md -->\n<!-- END ALONG-PROTOCOL -->\n")
 
             # Subproject 2: valid context
             sub2 = os.path.join(tmp, "sub2")
-            os.makedirs(sub2, exist_ok=True)
+            os.makedirs(os.path.join(sub2, ".along", "ISSUES"), exist_ok=True)
             textio.write_text(os.path.join(sub2, "AGENTS.md"), "<!-- BEGIN ALONG-PROTOCOL ref=../AGENTS.md -->\n<!-- END ALONG-PROTOCOL -->\n")
 
             # Patch apply_migration_to_context to raise on sub1

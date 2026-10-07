@@ -167,6 +167,38 @@ def _matches_pattern(path: str, patterns: List[str]) -> bool:
     return False
 
 
+def _matches_in_context(rel_target: str, repo_root: str, patterns: List[str]) -> bool:
+    """`_matches_pattern`, also against the path relative to the subproject context owning it.
+
+    The patterns are context-relative (`.along/ISSUES/**`, `docs/**`), so a subproject's own
+    Along state and docs match like the root's. A plain `**/` prefix would not do: `fnmatch`
+    `*` crosses `/`. [bug--subproject-model-overdetection] REQ-6
+    """
+    if _matches_pattern(rel_target, patterns):
+        return True
+    ctx = subproject_context(repo_root, repo.normalize_posix(rel_target))
+    if not ctx:
+        return False
+    sub_rel = repo.normalize_posix(os.path.relpath(os.path.join(repo_root, rel_target), ctx))
+    return not sub_rel.startswith("..") and _matches_pattern(sub_rel, patterns)
+
+
+def _bound_scope_covers(repo_root: str, key: Optional[str], rel_target: str) -> bool:
+    """The session's bound issue declares `rel_target` in its `write_scope` / `allowed_roots`.
+
+    Entries are written by `along start --write-scope/--allow-root` and resolve against the
+    issue's own context. [bug--subproject-model-overdetection] REQ-8
+    """
+    from . import containment
+    ctx, slug = session.resolve_bound(repo_root, key)
+    fm = _issue_frontmatter(ctx, slug) if slug else None
+    if not fm:
+        return False
+    entries = containment._as_list(fm.get("write_scope")) + containment._as_list(fm.get("allowed_roots"))
+    target = containment.canonical(os.path.join(repo_root, rel_target))
+    return any(containment.is_within(target, containment.canonical(e, ctx)) for e in entries)
+
+
 # ---------------------------------------------------------------------------
 # Activity Trace Tracker (Session-level state)
 # ---------------------------------------------------------------------------
@@ -273,6 +305,9 @@ def record_tool_activity(event: HookEvent, repo_root: str) -> None:
                 edited.append(rel)
             trace["edited_files"] = edited[-200:]
             save_activity_trace(repo_root, trace, key)
+        elif rel and is_doc_edit(rel):
+            trace["last_doc_edit_time"] = now_iso
+            save_activity_trace(repo_root, trace, key)
 
     # Track test executions
     elif event.tool_name in ("run_command", "execute_command", "bash", "shell"):
@@ -325,9 +360,21 @@ def is_source_edit(rel: str) -> bool:
     """
     parts = repo.normalize_posix(rel).lower().split("/")
     if ".along" not in parts:
-        return True
+        return not is_doc_edit(rel)
     idx = parts.index(".along")
     return len(parts) > idx + 2 and parts[idx + 1] == "scripts"
+
+
+def is_doc_edit(rel: str) -> bool:
+    """True for documentation outside `.along/`: Markdown anywhere, or anything under a `docs/`.
+
+    Not a source edit for test_before_stop unless the gate sets `count_docs: true`.
+    [bug--lifecycle-test-false-pass] REQ-4
+    """
+    parts = repo.normalize_posix(rel).lower().split("/")
+    if ".along" in parts:
+        return False
+    return parts[-1].endswith(".md") or "docs" in parts[:-1]
 
 
 def is_rule_pack_path(rel: str) -> bool:
@@ -656,8 +703,8 @@ def check_mutation_authorization(event: HookEvent, repo_root: str, options: Opti
         if rel_target is None:
             return None
 
-        # Check whitelisted session/planning/diagnostics paths
-        if _matches_pattern(rel_target, list(MUTATION_WHITELIST_PATTERNS)):
+        # Check whitelisted session/planning/diagnostics paths (in any context)
+        if _matches_in_context(rel_target, repo_root, list(MUTATION_WHITELIST_PATTERNS)):
             return None
     else:
         # Other / unknown tools: do not block
@@ -749,7 +796,7 @@ def check_active_issue(event: HookEvent, repo_root: str, exclude_paths: Optional
     if rel_target is None:
         return None
 
-    if _matches_pattern(rel_target, excludes):
+    if _matches_in_context(rel_target, repo_root, excludes):
         return None
 
     # A file of a subproject with its own .along/ is anchored by that subproject's issue
@@ -765,13 +812,16 @@ def check_active_issue(event: HookEvent, repo_root: str, exclude_paths: Optional
 
     # Verify this session's bound issue first
     active_slug, how = session.resolve_active_session(repo_root, key)
+    if how == "elsewhere" and _bound_scope_covers(repo_root, key, rel_target):
+        return None
     if how == "elsewhere":
         bctx, bslug = session.resolve_bound(repo_root, key)
         where = repo.normalize_posix(os.path.relpath(bctx, repo_root)) if bctx else "?"
         return (
             f"Mandatory Issue Anchoring Violation [gate: require-active-issue]: this session is bound to "
             f"'{bslug}' in '{where}/.along/', and '{rel_target}' is outside that subproject. Bind an issue "
-            f"of this .along/ (or an umbrella issue) with 'along start <slug>'."
+            f"of this .along/ (or an umbrella issue) with 'along start <slug>', or declare the folder in "
+            f"the bound issue's scope ('along start {bslug} --write-scope <path>')."
         )
     if how == "ambiguous":
         return (
@@ -896,6 +946,11 @@ def check_test_before_stop(event: HookEvent, repo_root: str, options: Optional[D
 
     trace = load_activity_trace(repo_root, key)
     edit_time = trace.get("last_edit_time")
+    # Documentation edits count only where the repository tests its docs (gate option
+    # `count_docs: true`) [bug--lifecycle-test-false-pass] REQ-4.
+    doc_time = trace.get("last_doc_edit_time")
+    if (options or {}).get("count_docs") and doc_time and (edit_time is None or doc_time > edit_time):
+        edit_time = doc_time
     test_time = trace.get("last_test_time")
 
     if edit_time is not None:
@@ -1131,12 +1186,13 @@ def check_subproject_boundary(event: HookEvent, repo_root: str, **kwargs: Any) -
         root_norm = repo.normalize_posix(repo_root)
         if cwd != root_norm and cwd.startswith(root_norm + "/"):
             subpath = cwd[len(root_norm) + 1:]
-            # Check if subproject has manifest; the root's own (declared) state dir is no subproject.
+            # Only a folder with its own .along/ is a subproject; a package manifest alone is
+            # not [ADR-2026-10-06--subproject-boundary-is-git-or-explicit-init]. The root's own
+            # (declared) state dir is no subproject either.
             sub_along = os.path.join(cwd, ".along")
-            sub_pkg = os.path.join(cwd, "package.json")
             own_state = os.path.normcase(os.path.abspath(sub_along)) == \
                 os.path.normcase(os.path.abspath(repo.state_dir(repo_root)))
-            if not own_state and (repo.is_along_state_dir(sub_along) or os.path.isfile(sub_pkg)):
+            if not own_state and repo.is_along_state_dir(sub_along):
                 return (
                     f"Subproject Boundary Violation [gate: subproject-boundary]: "
                     f"Cannot write to root '{rel_path}' while working inside subproject '{subpath}'. "
@@ -1251,16 +1307,25 @@ def check_circuit_breaker(event: HookEvent, repo_root: str, **kwargs: Any) -> Op
     cmd = _extract_command(event)
     if cmd and re.search(r"\b(along|along_exec\.py)\s+circuit\b", cmd):
         return None
+    # Read-only inspection (git status, along doctor, cat) cannot worsen the fault and is how a
+    # false trip is diagnosed [bug--stop-gates-breaker-deadlock].
+    if cmd and cmd.strip() and shellparse.is_read_only_command(cmd):
+        return None
 
     from .. import circuit
     state, anomaly = circuit.get_breaker_state(repo_root)
     if state == circuit.CircuitState.TRIPPED:
         sig = anomaly.signature if anomaly else "Environment failure"
         cls_name = anomaly.anomaly_class.value if anomaly else "Systemic Anomaly"
+        evidence = ""
+        if anomaly and (anomaly.source or anomaly.detail):
+            first = anomaly.detail.splitlines()[0][:160] if anomaly.detail else ""
+            evidence = f" Evidence: source '{anomaly.source or 'unknown'}', output '{first}'."
         return (
             f"Circuit Breaker Violation [gate: circuit-breaker]: Tool execution is blocked because "
-            f"the systemic anomaly circuit breaker is TRIPPED ({cls_name}: {sig}). "
-            "Human remediation is required. Run 'along circuit status' or 'along circuit reset' to recover."
+            f"the systemic anomaly circuit breaker is TRIPPED ({cls_name}: {sig}).{evidence} "
+            "Read-only commands still run. Human remediation is required: run 'along circuit status'; "
+            "if the evidence is not a real fault, 'along circuit verify' then 'along circuit reset'."
         )
     return None
 

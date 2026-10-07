@@ -1303,7 +1303,10 @@ def _kb_sync_subprojects(
     strict_sections: bool,
 ):
     if not is_subproject:
+        # Installed contexts and package doc roots (docs/ + AGENTS.md | llms.txt | manifest):
+        # a package's docs compile without a .along/ of its own [bug--along-install-marker-ambiguous].
         all_contexts = repo.find_agent_contexts(repo_root)
+        all_contexts += [p for p in repo.find_package_doc_roots(repo_root) if p not in all_contexts]
         abs_root = os.path.abspath(repo_root)
         for ctx in all_contexts:
             if os.path.abspath(ctx) == abs_root:

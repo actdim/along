@@ -22,8 +22,9 @@ sequence of intentions rather than of file operations:
   only prints it. Nothing else in the engine calls `shutil` or `os.remove`.
 - `adopt` never deletes a destination. What happens on a collision is decided by
   `classify`, per file class, and every outcome keeps both bodies on disk.
-- `ensure_backup` copies the whole state directory aside before the first
-  modification of an existing file, and says where it went.
+- `ensure_backup` copies the state directory (machine-local state excluded, see
+  `BACKUP_SKIP`) aside before the first modification of an existing file, says where it
+  went, and keeps the newest `BACKUP_KEEP` snapshots.
 
 The transaction in `alongkit.transaction` covers a mutation that must be undone in
 full when a later step fails. A migration is not that: it is expected to be run,
@@ -61,6 +62,44 @@ PROJECTION_FILES = ("ISSUES.md", "DASHBOARD.md", "dashboard.html", "INDEX.md")
 
 #: Where the pre-migration copy of the state directory goes, relative to `.along/`.
 BACKUP_DIRNAME = ".migration-backup"
+
+#: Newest backup snapshots kept; older ones are pruned once a new one is written.
+BACKUP_KEEP = 5
+
+#: Machine-local state a backup does not copy: per-machine diagnostics, session blackboards,
+#: lifecycle artifacts and worktrees are rebuilt, not migrated, and copying them made every
+#: applying run slow. [bug--update-maintenance-friction]
+BACKUP_SKIP = (BACKUP_DIRNAME, "diagnostics", ".session", "artifacts", "worktrees")
+
+
+def backup_root(state_dir: str) -> str:
+    """Create `<state_dir>/.migration-backup/` with its self-ignore file and return it.
+
+    Every writer of the directory goes through here, so the backups stay out of the user's
+    history without editing their `.gitignore`.
+    """
+    root = os.path.join(state_dir, BACKUP_DIRNAME)
+    os.makedirs(root, exist_ok=True)
+    ignore = os.path.join(root, ".gitignore")
+    if not os.path.isfile(ignore):
+        textio.write_text(ignore, "*\n")
+    return root
+
+
+def prune_backups(state_dir: str, keep: int = BACKUP_KEEP) -> List[str]:
+    """Remove all but the `keep` newest snapshots; return the removed snapshot names.
+
+    Snapshot names are `YYYY-MM-DD-HHMMSS` timestamps, so name order is age order.
+    """
+    root = os.path.join(state_dir, BACKUP_DIRNAME)
+    if keep < 1 or not os.path.isdir(root):
+        return []
+    snapshots = sorted(name for name in os.listdir(root)
+                       if os.path.isdir(os.path.join(root, name)))
+    removed = snapshots[:-keep] if len(snapshots) > keep else []
+    for name in removed:
+        shutil.rmtree(os.path.join(root, name), ignore_errors=True)
+    return removed
 
 #: Records the protocol version the repository was last migrated to, inside `.along/`.
 STATE_FILENAME = ".protocol-version"
@@ -270,16 +309,18 @@ class Migration:
             self._print(f"   [would] back up {', '.join(self.rel(s) for s in sources)} "
                         f"to {self.rel(self.backup_dir)}")
             return self.backup_dir
+        # The backup lives inside `.along/`, so it must exclude itself from its own copy.
+        backup_root(self.state_dir)
         os.makedirs(self.backup_dir, exist_ok=True)
-        # The backup lives inside `.along/`, so it must exclude itself from its own copy
-        # and keep itself out of the user's history without editing their `.gitignore`.
-        textio.write_text(os.path.join(self.state_dir, BACKUP_DIRNAME, ".gitignore"), "*\n")
         for source in sources:
             shutil.copytree(source, os.path.join(self.backup_dir, os.path.basename(source)),
-                            ignore=shutil.ignore_patterns(BACKUP_DIRNAME),
+                            ignore=shutil.ignore_patterns(*BACKUP_SKIP),
                             dirs_exist_ok=True)
         self._print(f"   [backup] {', '.join(self.rel(s) for s in sources)} -> "
                     f"{self.rel(self.backup_dir)}")
+        pruned = prune_backups(self.state_dir)
+        if pruned:
+            self._print(f"   [backup] pruned {len(pruned)} older snapshot(s), kept {BACKUP_KEEP}")
         return self.backup_dir
 
     # -- primitive mutations -----------------------------------------------

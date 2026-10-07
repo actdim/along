@@ -257,7 +257,20 @@ def install_global_from_local(repo_root, dry_run=False):
 safe_relpath = repo.safe_relpath
 
 
-find_existing_agent_contexts = repo.find_agent_contexts
+def find_existing_agent_contexts(repo_root):
+    """Installed contexts below `repo_root` (`repo.find_agent_contexts`), plus `repo_root`
+    itself when its AGENTS.md carries the managed protocol block: an early install that kept
+    no `.along/` state is still refreshed. A nested AGENTS.md is a folder guide, never a
+    context. [bug--along-install-marker-ambiguous]
+    """
+    contexts = repo.find_agent_contexts(repo_root)
+    root = os.path.abspath(repo_root)
+    agents_md = os.path.join(root, "AGENTS.md")
+    if root not in contexts and os.path.isfile(agents_md):
+        with open(agents_md, "r", encoding="utf-8", errors="replace") as handle:
+            if "BEGIN ALONG-PROTOCOL" in handle.read():
+                contexts.insert(0, root)
+    return contexts
 
 def apply_migration_to_context(ctx_dir, protocol_text, migrate_script, is_root=True, ancestor_root=None, dry_run=False, no_hooks=False):
     context_ok = True
@@ -389,10 +402,15 @@ def apply_migration_to_context(ctx_dir, protocol_text, migrate_script, is_root=T
 
 
 def find_uninitialized_subprojects(repo_root, contexts):
+    """Nested git repositories (repository, submodule, worktree) without an Along context.
+
+    A package manifest is not a subproject: only a nested `.git` can be one without the user
+    saying so. [ADR-2026-10-06--subproject-boundary-is-git-or-explicit-init]
+    """
     context_set = set(os.path.abspath(c) for c in contexts)
     abs_repo = os.path.abspath(repo_root)
-    all_projects = repo.find_manifest_projects(repo_root)
-    uninit = [p for p in all_projects if p != abs_repo and p not in context_set]
+    nested = repo.find_nested_git_roots(repo_root)
+    uninit = [p for p in nested if p != abs_repo and p not in context_set]
     uninit.sort(key=lambda p: (len(p.split(os.sep)), p))
     return uninit
 
@@ -638,13 +656,14 @@ def run_update(repo_root, check_only=False, dry_run=False, force=False, local_on
         print("   5. /along-dash         : Launch executive dashboard & dependency graph")
         print("==================================================")
 
-    # Check for uninitialized subprojects with manifests
+    # Nested git repositories without a context: informational only. The update never
+    # creates a context, and a package manifest alone is not a subproject.
     uninit = find_uninitialized_subprojects(repo_root, contexts)
     if uninit:
-        print(f"\n-> Note: Discovered {len(uninit)} uninitialized subproject(s) with package manifests:")
+        print(f"\n-> Note: {len(uninit)} nested git repositor(y/ies) without an Along context:")
         for u in uninit:
             rel = safe_relpath(u, repo_root)
-            print(f"     - {rel} (run '/along-init' in this directory to initialize context)")
+            print(f"     - {rel} (run 'along init' there only if it should keep its own board)")
 
     if not all_contexts_ok or not sync_ok:
         print("\n[Error] Update completed with errors.\n", file=sys.stderr)

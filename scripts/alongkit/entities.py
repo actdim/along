@@ -1117,6 +1117,11 @@ def sync_milestones(repo_root: str, target_slug: Optional[str] = None) -> List[D
 
     Scans all issues in .along/ISSUES/ and .along/ISSUES/done/, associates them
     with milestones, and recomputes progress statistics deterministically.
+
+    An issue belongs to a milestone when its `milestone:` field names it, or when the
+    milestone lists it explicitly in `target_issues` and the issue names no other milestone.
+    Entries that resolve to no issue are dropped. A `completed` milestone is left alone
+    unless it is named as `target_slug`. [bug--cli-entity-sync-defects] REQ-1
     """
     from . import frontmatter, textio
 
@@ -1130,8 +1135,13 @@ def sync_milestones(repo_root: str, target_slug: Optional[str] = None) -> List[D
         if not target_m:
             raise ValueError(f"Milestone '{target_slug}' not found.")
 
-    milestones_to_sync = [target_m] if target_m else all_milestones
+    milestones_to_sync = [target_m] if target_m else [
+        m for m in all_milestones if m["status"] != "completed"]
     all_issues = scan_issues(repo_root, include_done=True)
+    by_ref: Dict[str, Dict[str, Any]] = {}
+    for iss in all_issues:
+        by_ref[canonical_key(iss["type"], iss["slug"])] = iss
+        by_ref.setdefault(iss["slug"], iss)
 
     results = []
     for m in milestones_to_sync:
@@ -1145,6 +1155,14 @@ def sync_milestones(repo_root: str, target_slug: Optional[str] = None) -> List[D
                 continue
             iss_m_str = str(iss_m).strip()
             if iss_m_str in (m_slug, m_stem):
+                assigned_issues.append(iss)
+        explicit = m["frontmatter"].get("target_issues") or []
+        for ref in ([explicit] if isinstance(explicit, str) else explicit):
+            iss = by_ref.get(str(ref).strip()) or by_ref.get(parse_key(str(ref).strip())[1])
+            if not iss or iss in assigned_issues:
+                continue
+            other = str(iss["frontmatter"].get("milestone") or "").strip()
+            if not other or other in (m_slug, m_stem):
                 assigned_issues.append(iss)
 
         assigned_keys = sorted(list({
@@ -1307,13 +1325,26 @@ def descendant_entity_keys(repo_root: str) -> set:
     nested git repository: a submodule is its own boundary, as `.git` is for the ancestor
     walk. [bug--entity-refs-ignore-nested-contexts]
     """
+    return _nested_context_keys(repo_root)
+
+
+def _nested_context_keys(start: str, skip: Optional[str] = None) -> set:
+    """Entity keys of every `.along/` context strictly below `start`.
+
+    Skips dependency, build and hidden directories, does not enter a nested git repository,
+    and prunes the `skip` subtree (a context whose keys the caller already has).
+    """
     from . import repo
 
     keys: set = set()
-    root = os.path.abspath(repo_root)
+    root = os.path.abspath(start)
+    skip_norm = os.path.normcase(os.path.abspath(skip)) if skip else None
     ignored = set(repo.IGNORED_DIRS) | set(repo.PROVIDER_DIRS)
     for current, dirs, _files in os.walk(root):
         if current != root:
+            if skip_norm and os.path.normcase(os.path.abspath(current)) == skip_norm:
+                dirs[:] = []
+                continue
             if os.path.exists(os.path.join(current, ".git")):
                 dirs[:] = []
                 continue
@@ -1324,7 +1355,35 @@ def descendant_entity_keys(repo_root: str) -> set:
     return keys
 
 
+def sibling_entity_keys(repo_root: str) -> set:
+    """Entity keys of the other `.along/` contexts of the same git repository.
+
+    Sibling subprojects (`apps/webapp` -> `apps/server`) reference each other. The walk starts
+    at the git top (the nearest enclosing directory holding `.git`) and skips `repo_root`'s own
+    subtree, which `descendant_entity_keys` covers; the top's own `.along/` is an ancestor.
+    Empty when `repo_root` is the git top or no git top exists.
+    [bug--subproject-model-overdetection] REQ-7
+    """
+    root = os.path.abspath(repo_root)
+    if os.path.exists(os.path.join(root, ".git")):
+        return set()
+    current = os.path.dirname(root)
+    while current and current != os.path.dirname(current):
+        if os.path.exists(os.path.join(current, ".git")):
+            return _nested_context_keys(current, skip=root)
+        current = os.path.dirname(current)
+    return set()
+
+
 _DANGLING_MILESTONE = "dangling milestone reference: "
+_ARCHIVED_SUFFIX = " (archived issue)"
+
+
+def _archived_reporter(warnings: List[Tuple[str, str]]):
+    """Append `(rel, message)` to `warnings`, marking the message as an archived issue's."""
+    def report(finding: Tuple[str, str]) -> None:
+        warnings.append((finding[0], finding[1] + _ARCHIVED_SUFFIX))
+    return report
 
 
 def drop_dangling_milestones(repo_root: str, dry_run: bool = False) -> List[str]:
@@ -1336,7 +1395,9 @@ def drop_dangling_milestones(repo_root: str, dry_run: bool = False) -> List[str]
     """
     from . import frontmatter, repo, textio
 
-    targets = sorted({rel for rel, msg in validate_entities(repo_root)["errors"]
+    report = validate_entities(repo_root)
+    # Archived issues report a dangling milestone as a warning; it is cleaned up all the same.
+    targets = sorted({rel for rel, msg in report["errors"] + report["warnings"]
                       if msg.startswith(_DANGLING_MILESTONE)})
     changed: List[str] = []
     for rel in targets:
@@ -1352,7 +1413,7 @@ def drop_dangling_milestones(repo_root: str, dry_run: bool = False) -> List[str]
 
 
 def validate_entities(repo_root: str, ancestors: bool = True,
-                      descendants: bool = True) -> Dict[str, Any]:
+                      descendants: bool = True, siblings: bool = True) -> Dict[str, Any]:
     """Validate entity schemas, enums, mandatory fields, and graph references.
 
     Checks:
@@ -1364,8 +1425,9 @@ def validate_entities(repo_root: str, ancestors: bool = True,
 
     References also resolve against enclosing `.along/` contexts (`ancestor_entity_keys`)
     unless `ancestors` is False, and against nested subproject contexts
-    (`descendant_entity_keys`) unless `descendants` is False. Every dangling reference
-    message starts with "dangling ".
+    (`descendant_entity_keys`) unless `descendants` is False, and against the other contexts
+    of the same git repository (`sibling_entity_keys`) unless `siblings` is False. Every
+    dangling reference message starts with "dangling ".
     """
     from . import frontmatter, repo, semver, textio
 
@@ -1378,6 +1440,8 @@ def validate_entities(repo_root: str, ancestors: bool = True,
         external |= ancestor_entity_keys(repo_root)
     if descendants:
         external |= descendant_entity_keys(repo_root)
+    if siblings:
+        external |= sibling_entity_keys(repo_root)
 
     all_issues = scan_issues(repo_root, include_done=True)
     known_issue_slugs = {iss["slug"] for iss in all_issues}
@@ -1416,52 +1480,56 @@ def validate_entities(repo_root: str, ancestors: bool = True,
         fm = iss["frontmatter"]
         fpath = iss["file_path"]
         rel = os.path.relpath(fpath, repo_root)
+        # Archived issues were written against an older schema: their schema findings warn
+        # instead of failing update and sync. Dangling issue references below stay errors,
+        # they guard against deleting a referenced entity. [bug--update-maintenance-friction]
+        schema = _archived_reporter(warnings) if iss["done"] else errors.append
 
         if not fm:
-            errors.append((rel, "missing or unparseable YAML front-matter"))
+            schema((rel, "missing or unparseable YAML front-matter"))
             continue
 
         if fm.get("protocol") != "along":
-            errors.append((rel, f"missing or invalid protocol: '{fm.get('protocol')}' (expected 'along')"))
+            schema((rel, f"missing or invalid protocol: '{fm.get('protocol')}' (expected 'along')"))
 
         islug = fm.get("slug")
         if not islug:
-            errors.append((rel, "missing mandatory field: 'slug'"))
+            schema((rel, "missing mandatory field: 'slug'"))
         else:
             fname = os.path.basename(fpath)
             expected_key = canonical_key(iss["type"], islug)
             if fname[:-3] != expected_key and fname[:-3] != islug and not fname.endswith(f"--{islug}.md"):
-                errors.append((rel, f"slug '{islug}' does not match filename '{fname}'"))
+                schema((rel, f"slug '{islug}' does not match filename '{fname}'"))
 
         itype = fm.get("type")
         if not itype or itype not in ISSUE_TYPES:
-            errors.append((rel, f"invalid type: '{itype}' (allowed: {', '.join(ISSUE_TYPES)})"))
+            schema((rel, f"invalid type: '{itype}' (allowed: {', '.join(ISSUE_TYPES)})"))
 
         istatus = fm.get("status")
         if not istatus or istatus not in ISSUE_STATUSES:
-            errors.append((rel, f"invalid status: '{istatus}' (allowed: {', '.join(ISSUE_STATUSES)})"))
+            schema((rel, f"invalid status: '{istatus}' (allowed: {', '.join(ISSUE_STATUSES)})"))
 
         priority = fm.get("priority")
         if not priority or priority not in PRIORITIES:
-            errors.append((rel, f"invalid priority: '{priority}' (allowed: {', '.join(PRIORITIES)})"))
+            schema((rel, f"invalid priority: '{priority}' (allowed: {', '.join(PRIORITIES)})"))
 
         created = fm.get("created")
         if not created or not is_iso_date(created):
-            errors.append((rel, f"missing or invalid created date: '{created}' (expected YYYY-MM-DD)"))
+            schema((rel, f"missing or invalid created date: '{created}' (expected YYYY-MM-DD)"))
 
         updated = fm.get("updated")
         if not updated or not is_iso_date(updated):
-            errors.append((rel, f"missing or invalid updated date: '{updated}' (expected YYYY-MM-DD)"))
+            schema((rel, f"missing or invalid updated date: '{updated}' (expected YYYY-MM-DD)"))
 
         if iss["done"] or istatus in CLOSED_ISSUE_STATUSES:
             completed = fm.get("completed")
             if not completed or not is_iso_date(completed):
-                errors.append((rel, f"missing or invalid completed date on closed issue: '{completed}' (expected YYYY-MM-DD)"))
+                schema((rel, f"missing or invalid completed date on closed issue: '{completed}' (expected YYYY-MM-DD)"))
 
         # References
         mslug = fm.get("milestone")
         if mslug and str(mslug).strip() and str(mslug).strip() not in known_milestone_slugs:
-            errors.append((rel, f"dangling milestone reference: '{mslug}'"))
+            schema((rel, f"dangling milestone reference: '{mslug}'"))
 
         parent = fm.get("parent")
         if parent and str(parent).strip() and not _resolve_ref(parent, known_entity_keys):
@@ -1897,6 +1965,73 @@ def supersede_issue(repo_root: str, old: str, by: str) -> Dict[str, Any]:
     sync_milestones(repo_root)
     sync_issues_board(repo_root)
     return {"old_key": old_key, "new_key": new_key, "file_path": dest, "rewritten": changed}
+
+
+_DELETE_LIST_FIELDS: Tuple[str, ...] = ("related", "blocked_by", "target_issues")
+_DELETE_BLOCKING_FIELDS: Tuple[str, ...] = ("parent", "superseded_by", "duplicate_of")
+
+
+def delete_issue(repo_root: str, key: str) -> Dict[str, Any]:
+    """Delete an issue created by mistake, with every list reference to it.
+
+    Refused when a session log names it (history), when an entity points at it through
+    `parent`, `superseded_by` or `duplicate_of` (re-point those first), or when a commit
+    message mentions its slug: such an issue is cancelled (`along issue cancel`), not deleted.
+    Otherwise strips it from `related` / `blocked_by` lists and milestone `target_issues`,
+    removes the file and recompiles milestones and the board.
+    [bug--cli-entity-sync-defects] REQ-3
+    """
+    from . import frontmatter, proc, repo, textio
+
+    issue = _require_issue(repo_root, key)
+    old_key = canonical_key(issue["type"], issue["slug"])
+    old_slug = issue["slug"]
+    sdir = repo.state_dir(repo_root)
+
+    def points_at(ref: Any) -> bool:
+        return _rewrite_ref(ref, old_key, old_slug, old_key) is not None
+
+    def refs(fm: Dict[str, Any], field_name: str) -> List[Any]:
+        value = fm.get(field_name)
+        return value if isinstance(value, list) else [value]
+
+    holders: List[str] = []
+    edits: List[Tuple[str, str, Dict[str, Any]]] = []
+    files = [p for d in _REFERENCING_DIRS + ("MILESTONES",) for p in _entity_files(sdir, d)]
+    for fpath in files + _entity_files(sdir, "SESSIONS"):
+        if os.path.normcase(os.path.abspath(fpath)) == os.path.normcase(os.path.abspath(issue["file_path"])):
+            continue
+        try:
+            content = textio.read_text(fpath)
+        except OSError:
+            continue
+        fm, _, _ = frontmatter.try_parse(content, path=fpath)
+        if not fm:
+            continue
+        rel = repo.normalize_posix(os.path.relpath(fpath, repo_root))
+        blocking = SESSION_REFERENCE_FIELDS + _DELETE_BLOCKING_FIELDS
+        if any(points_at(r) for f in blocking for r in refs(fm, f)):
+            holders.append(rel)
+            continue
+        updates = {f: [r for r in fm[f] if not points_at(r)] for f in _DELETE_LIST_FIELDS
+                   if isinstance(fm.get(f), list) and any(points_at(r) for r in fm[f])}
+        if updates:
+            edits.append((fpath, content, updates))
+    if holders:
+        raise ValueError(f"'{old_key}' is referenced by {', '.join(holders)}: cancel it "
+                         f"('along issue cancel {old_slug}') or supersede it instead.")
+    log = proc.run_capture(["git", "log", "--all", "-F", f"--grep={old_slug}", "-n", "1", "--format=%h"],
+                           cwd=repo_root, check=False, trip_on_anomaly=False)
+    if log.ok and log.stdout.strip():
+        raise ValueError(f"Commit {log.stdout.strip()} mentions '{old_slug}': cancel it "
+                         f"('along issue cancel {old_slug}') instead of deleting it.")
+
+    for fpath, content, updates in edits:
+        textio.write_text(fpath, frontmatter.update(content, updates, path=fpath), newline="\n")
+    os.remove(issue["file_path"])
+    sync_milestones(repo_root)
+    sync_issues_board(repo_root)
+    return {"key": old_key, "file_path": issue["file_path"], "rewritten": [e[0] for e in edits]}
 
 
 def milestone_open_issues(repo_root: str, milestone: Dict[str, Any]) -> Tuple[List[str], int]:
