@@ -2,6 +2,16 @@
 
 All notable changes to this project, newest first.
 
+## v4.4.7 - 2026-10-07
+
+- docs(issues): file feat--test-gate-cost-reduction (Stop gate reuses green runs by tree hash, scoped doc tests under count_docs, suite speed); refine feat--tool-class-model, feat--tool-nature-classification, feat--agent-run-protocol-and-observability (refs #test-gate-cost-reduction)
+- fix: land the 2026-10-06/07 session batch: stop gates no longer deadlock on the breaker and the breaker ignores test output; install marker disambiguated; CLI entity sync defects; lifecycle test false pass (executed test count, doc edits via count_docs); runtime plan dir containment; subcommand --help no longer taken as an argument; subproject boundary is a nested git or explicit init (ADR-2026-10-06); update maintenance commands pass the plan gate; Along installation is state, not AGENTS.md (ADR-2026-10-07); session logs, done issues and projections; orphan blackboards archived into session logs (refs #stop-gates-breaker-deadlock #breaker-trips-on-test-output #along-install-marker-ambiguous #cli-entity-sync-defects #lifecycle-test-false-pass #runtime-plan-dir-containment #subcommand-help-as-argument #subproject-model-overdetection #update-maintenance-friction) (refs #release-v4-4-7)
+- feat(session): close parallel sessions in one step: session event ledger per issue (attribution of edits, test runs, plans, approvals; telemetry projection per ADR-2026-10-05--session-event-ledger-feeds-telemetry); test runs reused by working-tree hash; readiness via along session list; closeout approval (along plan approve --closeout); along session close (tests once, wrap, commits by attribution, push once, resumable); along issue reopen; doctor reports stale bindings and unbound work (refs #parallel-session-closeout)
+- fix(session): session record captured and never lost: approved plan recorded in plan.md (ExitPlanMode tool_input.plan, plan approve --plan-file, scaffold refused, revisions kept); direct-mode execution trace from hooks and Along commands (edits, test results, gate denials, approvals, phase and step changes, bounded); one archive path for wrap, scratch purge and issue done, purge after the transaction commit; wrap-before-stop per completed issue; append-only Blackboard Record gate (git, ci, along commit); doctor reports orphan blackboards (refs #session-records-not-captured)
+- fix(hooks): narrow the commit gate after wrap to completion tokens: along wrap leaves a token to the session whose plan for the slug was approved; along commit -i <slug> passes the plan gate only on that token and consumes it; held commits say why; an unbound session no longer inherits an orphan blackboard's approval (b7d1379 blanket allow removed) (refs #commit-blocked-after-wrap)
+- fix(ci): resolve windows 8.3 short paths against git canonical top in gates and predicates (refs #ci-windows-short-paths)
+- docs(issues): spec feat--tool-nature-classification: one rule model for shell and agent tools, three levels of nature, ask-and-record flow, versioned layers (built-in, rule packs, Along-managed user pack, repository), trusted fail-closed classifier plugins, phased plan (refs #tool-nature-classification)
+
 ## v4.4.6 - 2026-10-05
 
 - chore(issues): file bug--subcommand-help-as-argument (decision create --help made an ADR named --help) (refs #subcommand-help-as-argument)

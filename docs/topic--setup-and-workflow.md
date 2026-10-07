@@ -187,7 +187,7 @@ along init
 *(Or invoke `/along-init` directly inside your AI agent prompt: the skill runs `along init` and then does the judgment steps.)*
 
 ### What `along init` Configures:
-1. `AGENTS.md`: Generates the root protocol context with the managed `ALONG-PROTOCOL v4.4.6` block (a short REF block in a nested folder of the same git repository; a hand-written file keeps its text under `## Project specifics`).
+1. `AGENTS.md`: Generates the root protocol context with the managed `ALONG-PROTOCOL v4.4.7` block (a short REF block in a nested folder of the same git repository; a hand-written file keeps its text under `## Project specifics`).
 2. `CLAUDE.md`: Scaffolds the standard `@AGENTS.md` import line.
 3. `.gitattributes`: Configures `merge=union` for `.along/HISTORY.md` and `.along/DECISIONS.md` to prevent merge collisions across branches.
 4. `.along/`: Creates the persistent repository memory skeleton (`ISSUES/`, `DECISIONS/`, `MILESTONES/`, `RISKS/`, `SPIKES/`, `CHECKLISTS/`, `SESSIONS/`, `docs/`).
