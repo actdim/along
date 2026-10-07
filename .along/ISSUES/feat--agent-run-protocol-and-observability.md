@@ -6,12 +6,12 @@ type: feat
 status: open
 priority: high
 created: 2026-09-23
-updated: 2026-09-23
+updated: 2026-10-05
 agent: antigravity
 tags: [aep, arp, protocol, observability, runtime, opentelemetry, telegram, epic]
 milestone: v5.0.0-agent-run-protocol-and-observability
 blocked_by: []
-related: []
+related: [feat--parallel-session-closeout]
 ---
 
 # Agent Run Protocol (AEP/ARP) & Observability Engine (Epic)
@@ -44,6 +44,12 @@ Establish Along as an execution control plane and observability layer for autono
 
 ### 4. Repo-Local Containment
 - While runner daemons and global hooks are installed globally (`~/.along/`), all runs, session links, diffs, and execution history are anchored strictly inside the target repository `.along/` boundary.
+
+### 5. Session Event Ledger as Input (2026-10-05)
+- `ADR-2026-10-05--session-event-ledger-feeds-telemetry`: the durable session event ledger built by
+  `[feat--parallel-session-closeout]` is the source of truth; telemetry is a fail-open projection of it.
+- Reuse its versioned event schema and its single capture point (PostToolUse hook) instead of a
+  second capture path; replaying ledger events into spans for sessions without a runner belongs here.
 
 ## Child Issues
 - `[feat--agent-run-protocol-core]`: Protocol specification, OpenTelemetry engine, and pluggable OTLP sinks.

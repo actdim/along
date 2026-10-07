@@ -116,6 +116,19 @@ class of each call through the layers of the repository the session works in (ne
 per-repository gate options in `.along/rules/gates.yaml`; `load_config` gains the global
 user-pack layer.
 
+Which repository's rules apply when a hook fires (reuses `repo.find_hook_root` and
+`subproject_context`):
+1. File edit: the nearest `.along/` of the target file (a subproject edit follows the
+   subproject's rules).
+2. Shell command: the nearest `.along/` of the directory the command runs in, following `cd`
+   and `git -C <dir>` inside the command when the path can be resolved.
+3. No resolvable target (MCP tools, commands without a path): the session's repository (the
+   one its bound issue belongs to).
+4. Layer merge for the chosen repository, nearest wins: built-in -> rule packs -> global user
+   pack -> repository -> nested subproject.
+5. A tool acting on a remote system (`gh` against GitHub) is classified by the rules of the
+   local repository where the hook fired, not by the remote it talks to.
+
 ## Example: `gh` introduced into a repository
 1. In the inquiry phase the agent runs `gh pr list`; no rule for `gh` -> held, "unclassified".
 2. The agent asks; the verb `list` suggests `read-only`. The user answers "depends on
