@@ -2,6 +2,16 @@
 
 All notable changes to this project, newest first.
 
+## v4.4.8 - 2026-10-08
+
+- docs(issues): track canonical path gate expansion and record session (refs #canonical-path-gate-expansion)
+- fix: preserve lexical path form in root discovery and installation while maintaining semantic canonicalization (refs #lexical-path-root-resolution)
+- debt: enforce canonical path resolution across repository engines and test fixtures (refs #canonical-windows-paths)
+- fix(ci): resolve windows 8.3 short paths against canonical git top in closeout engine (refs #ci-windows-closeout-short-paths)
+- chore(along): wrap file-v4-5-fixes-update: session log, history, board (drops the stray temp plan line), dashboard-ui protocol version 4.4.7 after the global update; refine bug--history-append-blocked-after-wrap (wrap appends only with --summary) (refs #file-v4-5-fixes-update)
+- docs(issues): file v4.5.0 fixes from the 2026-10-07 closeout: archive-drops-research-md, wrapped-work-left-uncommitted, history-append-blocked-after-wrap, uncommitted-issue-deleted-without-trace, plan-gate-blocks-help, inquiry-readonly-commands-blocked, release-ci-precondition-check, protocol-friction-cleanup; test-gate-cost-reduction gains REQ-6 (version-only changes keep a green run) and moves to v4.5.0 (refs #file-v4-5-fixes-update)
+- chore(release): wrap release-v4-4-7 closeout: session log, task moved to done, board (refs #release-v4-4-7)
+
 ## v4.4.7 - 2026-10-07
 
 - docs(issues): file feat--test-gate-cost-reduction (Stop gate reuses green runs by tree hash, scoped doc tests under count_docs, suite speed); refine feat--tool-class-model, feat--tool-nature-classification, feat--agent-run-protocol-and-observability (refs #test-gate-cost-reduction)
