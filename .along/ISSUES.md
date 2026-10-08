@@ -15,6 +15,7 @@
 - [ ] `(debt)` [agents-md-core-slimming](ISSUES/debt--agents-md-core-slimming.md)
 - [ ] `(debt)` [along-core-extras-split](ISSUES/debt--along-core-extras-split.md)
 - [ ] `(debt)` [along-exec-argparse-migration](ISSUES/debt--along-exec-argparse-migration.md)
+- [ ] `(debt)` [canonical-path-gate-expansion](ISSUES/debt--canonical-path-gate-expansion.md)
 - [ ] `(debt)` [constraints-superseded-adr-filtering](ISSUES/debt--constraints-superseded-adr-filtering.md)
 - [ ] `(debt)` [protocol-friction-cleanup](ISSUES/debt--protocol-friction-cleanup.md)
 - [ ] `(docs)` [anti-pattern-shell-code-probing](ISSUES/docs--anti-pattern-shell-code-probing.md)

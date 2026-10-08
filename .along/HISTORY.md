@@ -160,3 +160,4 @@ _Index of sessions (newest last). One line per session:_
 2026-10-07 - ci-windows-closeout-short-paths - antigravity - Fix Windows 8.3 short path mismatch in parallel closeout engine - [Session Log](./SESSIONS/2026/2026-10-07--ci-windows-closeout-short-paths.md)
 2026-10-08 - canonical-windows-paths - antigravity - Enforce canonical path resolution across repository engines and test fixtures - [Session Log](./SESSIONS/2026/2026-10-08--canonical-windows-paths.md)
 2026-10-08 - lexical-path-root-resolution - antigravity - fix: preserve lexical path form in root discovery and installation while maintaining semantic canonicalization - [Session Log](./SESSIONS/2026/2026-10-08--lexical-path-root-resolution.md)
+2026-10-08 - systemic-path-hardening-followup - antigravity - Record path hardening debt ticket and prepare v4.4.8 release - [.along/SESSIONS/2026/2026-10-08--systemic-path-hardening-followup.md](./SESSIONS/2026/2026-10-08--systemic-path-hardening-followup.md)
