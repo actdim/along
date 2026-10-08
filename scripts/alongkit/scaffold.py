@@ -224,7 +224,7 @@ def rebase_relative_links(text: str, from_dir: str, to_dir: str) -> str:
                 or link.target.startswith(("file://", "/"))):
             return None
         absolute = os.path.normpath(os.path.join(from_dir, path_part))
-        return repo.normalize_posix(os.path.relpath(absolute, to_dir)) + link.anchor
+        return repo.canonical_relpath(absolute, to_dir) + link.anchor
 
     rebased, _ = markdown.rewrite_links(text, transform)
     return rebased
@@ -307,8 +307,8 @@ def rewrite_vision_links(ctx_dir: str, root_vision: str, along_vision: str, mig,
             if resolved is None or os.path.normcase(resolved) != root_vision:
                 return None
             if inside_state:
-                return repo.normalize_posix(os.path.relpath(along_vision, file_dir)) + link.anchor
-            return repo.normalize_posix(os.path.relpath(docs_index, file_dir))
+                return repo.canonical_relpath(along_vision, file_dir) + link.anchor
+            return repo.canonical_relpath(docs_index, file_dir)
 
         updated, count = markdown.rewrite_links(content, transform)
         if count:

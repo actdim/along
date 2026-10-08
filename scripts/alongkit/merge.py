@@ -519,7 +519,7 @@ def resync(repo_root: str, kb_script: Optional[str] = None) -> List[str]:
     Returns the list of projections recompiled. Only the nearest `.along/` context is
     compiled here; subproject boards named in the marker are compiled from their own root.
     """
-    from . import entities, proc
+    from . import entities, proc, repo
 
     done: List[str] = []
     roots = {os.path.abspath(repo_root)}
@@ -534,12 +534,12 @@ def resync(repo_root: str, kb_script: Optional[str] = None) -> List[str]:
         if not os.path.isdir(os.path.join(root, ".along")):
             continue
         entities.sync_issues_board(root)
-        done.append(os.path.relpath(os.path.join(root, ".along", "ISSUES.md"), repo_root))
+        done.append(repo.canonical_relpath(os.path.join(root, ".along", "ISSUES.md"), repo_root))
         if os.path.isdir(os.path.join(root, ".along", "DECISIONS")):
             entities.compile_decisions_board(root)
             entities.sync_constraints(root)
-            done.append(os.path.relpath(os.path.join(root, ".along", "DECISIONS.md"), repo_root))
-            done.append(os.path.relpath(os.path.join(root, ".along", "CONSTRAINTS.md"), repo_root))
+            done.append(repo.canonical_relpath(os.path.join(root, ".along", "DECISIONS.md"), repo_root))
+            done.append(repo.canonical_relpath(os.path.join(root, ".along", "CONSTRAINTS.md"), repo_root))
 
     if kb_script and os.path.isdir(os.path.join(repo_root, "docs")):
         result = proc.run_capture([sys.executable, kb_script], cwd=repo_root, check=False,

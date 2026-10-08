@@ -43,7 +43,7 @@ import tempfile
 from dataclasses import dataclass
 from typing import Dict, Iterable, List, Optional, Sequence, Tuple
 
-from . import proc
+from . import proc, repo
 
 HOOK_NAMES: Tuple[str, ...] = ("pre-commit", "commit-msg")
 HOOK_MARKER = "# along-git-hook:"
@@ -473,7 +473,7 @@ def baseline_entity_problems(repo_root: str, base: str = "HEAD") -> Optional[set
     if not top or not _git_out(real_root, "rev-parse", "--verify", "-q", base).strip():
         return None
     real_top = os.path.realpath(os.path.abspath(top))
-    prefix = os.path.relpath(real_root, real_top).replace("\\", "/")
+    prefix = repo.canonical_relpath(real_root, real_top)
     prefix = "" if prefix == "." else prefix
     dirs = _entity_dirs_at(real_top, base)
     if dirs is None:
@@ -601,12 +601,16 @@ def check_pre_commit(repo_root: str) -> List[Violation]:
     staged = _git_out(repo_root, "diff", "--cached", "--name-only").splitlines()
     added = _git_out(repo_root, "diff", "--cached", "--name-only", "-z", "--diff-filter=ACMR").split("\0")
     head = "HEAD" if _git_out(repo_root, "rev-parse", "--verify", "-q", "HEAD") else None
-    return (check_diff(diff, repo_root, "git")
-            + check_projections(repo_root, along_roots(staged), "index")
-            + check_repo_state(repo_root, added, "git", _index_reader(repo_root))
-            + check_rule_packs(added, "git", _index_reader(repo_root))
-            + check_entity_references(repo_root, staged, "git", "index", head)
-            + check_session_records(repo_root, staged, "git", head))
+    violations = (check_diff(diff, repo_root, "git")
+                  + check_projections(repo_root, along_roots(staged), "index")
+                  + check_repo_state(repo_root, added, "git", _index_reader(repo_root))
+                  + check_rule_packs(added, "git", _index_reader(repo_root))
+                  + check_entity_references(repo_root, staged, "git", "index", head)
+                  + check_session_records(repo_root, staged, "git", head))
+    from . import gates
+    for pv in gates.check_canonical_paths(repo_root):
+        violations.append(Violation("canonical_paths", f"{pv.path}:{pv.line}", pv.message))
+    return violations
 
 
 def check_commit_msg(repo_root: str, message_file: str) -> List[Violation]:
@@ -660,6 +664,9 @@ def check_ci(repo_root: str, commit_range: Optional[str] = None, links: bool = T
             tail = (result.stdout + result.stderr).strip().splitlines()[-5:]
             violations.append(Violation("link_integrity", "docs/",
                                         "along kb-sync --check failed: " + " | ".join(tail)))
+    from . import gates
+    for pv in gates.check_canonical_paths(repo_root):
+        violations.append(Violation("canonical_paths", f"{pv.path}:{pv.line}", pv.message))
     return violations
 
 

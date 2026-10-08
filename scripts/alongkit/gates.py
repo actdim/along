@@ -218,6 +218,14 @@ class ExceptionViolation:
     message: str
 
 
+@dataclass(frozen=True)
+class PathViolation:
+    """A violation of the canonical path quality gate."""
+    path: str
+    line: int
+    message: str
+
+
 ENTITY_INTEGRITY_GATE = "entity_reference_integrity"
 
 
@@ -402,6 +410,90 @@ def exception_handling_gate(repo_root: str, label: str = "Quality Gate") -> bool
     return False
 
 
+def find_relpath_violations_in_code(source: str, filename: str = "<unknown>") -> List[PathViolation]:
+    """Parse Python source and detect raw os.path.relpath calls.
+
+    Repository engines must use repo.canonical_relpath or repo.safe_relpath
+    to avoid 8.3 short name and symlink mismatches on Windows.
+    """
+    try:
+        tree = ast.parse(source, filename=filename)
+    except SyntaxError:
+        return []
+
+    lines = source.splitlines()
+    violations: List[PathViolation] = []
+    for node in ast.walk(tree):
+        if not isinstance(node, ast.Call):
+            continue
+        func = node.func
+        is_relpath = False
+        if (isinstance(func, ast.Attribute) and func.attr == "relpath" and
+            isinstance(func.value, ast.Attribute) and func.value.attr == "path" and
+            isinstance(func.value.value, ast.Name) and func.value.value.id == "os"):
+            is_relpath = True
+        elif isinstance(func, ast.Name) and func.id == "relpath":
+            is_relpath = True
+
+        if is_relpath:
+            line_idx = getattr(node, "lineno", 1) - 1
+            if line_idx < len(lines) and "along: allow-relpath" in lines[line_idx]:
+                continue
+            violations.append(
+                PathViolation(
+                    path=filename,
+                    line=node.lineno,
+                    message="raw os.path.relpath is forbidden; use repo.canonical_relpath or repo.safe_relpath",
+                )
+            )
+    violations.sort(key=lambda v: v.line)
+    return violations
+
+
+def check_canonical_paths(repo_root: str,
+                          target_dirs: Optional[List[str]] = None) -> List[PathViolation]:
+    """Inspect Python files in target directories for raw os.path.relpath calls.
+
+    Defaults to scanning scripts/alongkit/ (excluding repo.py which defines the primitives).
+    """
+    if target_dirs is None:
+        target_dirs = [os.path.join("scripts", "alongkit")]
+
+    violations: List[PathViolation] = []
+    for target in target_dirs:
+        target_path = os.path.join(repo_root, target)
+        if not os.path.exists(target_path):
+            continue
+        for root, dirs, files in os.walk(target_path):
+            dirs[:] = [d for d in dirs if d not in repo.IGNORED_DIRS and d != "__pycache__"]
+            for file in sorted(files):
+                if not file.endswith(".py") or file == "repo.py":
+                    continue
+                file_path = os.path.join(root, file)
+                rel_path = repo.safe_relpath(file_path, repo_root).replace("\\", "/")
+                try:
+                    with open(file_path, "r", encoding="utf-8", errors="replace") as f:
+                        code = f.read()
+                    violations.extend(find_relpath_violations_in_code(code, rel_path))
+                except (OSError, UnicodeDecodeError):
+                    pass
+
+    return violations
+
+
+def canonical_path_gate(repo_root: str, label: str = "Quality Gate") -> bool:
+    """Quality gate enforcing canonical path usage across scripts/alongkit/."""
+    violations = check_canonical_paths(repo_root)
+    if not violations:
+        print(f"-> [{label}] Canonical path usage clean (zero raw os.path.relpath calls).")
+        return True
+
+    print(f"[Error] {label}: raw os.path.relpath detected ({len(violations)} violation(s)):", file=sys.stderr)
+    for v in violations:
+        print(f"   - {v.path}:{v.line}: {v.message}", file=sys.stderr)
+    return False
+
+
 def syntax_gate(repo_root: str, label: str = "Quality Gate",
                 target_dirs: Optional[List[str]] = None) -> bool:
     """Pre-flight syntax validation gate.
@@ -497,7 +589,7 @@ def _empty_changed_files(repo_root: str) -> Tuple[List[str], Optional[str]]:
             continue
         # Porcelain paths are relative to the git top, not to a subproject context.
         full_path = os.path.normpath(os.path.join(top, payload))
-        rel = os.path.relpath(full_path, root).replace("\\", "/")
+        rel = repo.canonical_relpath(full_path, root)
         if rel.startswith("../") or not empty(full_path):
             continue
         found.append(rel)
@@ -521,7 +613,7 @@ def zero_byte_working_tree_audit(repo_root: str) -> Tuple[List[str], List[str]]:
     for rel in found:
         truncated = False
         if top:
-            top_rel = os.path.relpath(os.path.join(root, rel), top).replace("\\", "/")
+            top_rel = repo.canonical_relpath(os.path.join(root, rel), top)
             size = proc.git(["cat-file", "-s", f"HEAD:{top_rel}"], cwd=root)
             truncated = size.ok and size.out.strip().isdigit() and int(size.out.strip()) > 0
         (blocking if truncated or rel in edited else warnings).append(rel)

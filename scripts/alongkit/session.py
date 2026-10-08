@@ -155,13 +155,7 @@ def _is_or_above_home(path: str) -> bool:
     home = os.path.expanduser("~")
     if _same_dir(path, home):
         return True
-    try:
-        rel = os.path.relpath(home, path)
-        if not rel.startswith("..") and rel != ".":
-            return True
-    except (OSError, ValueError):
-        pass
-    return False
+    return repo.is_within(home, path)
 
 
 def binding_root(repo_root: str) -> str:
@@ -251,9 +245,7 @@ def bind_session(repo_root: str, slug: str, key: Optional[str] = None,
     # A plan accepted before any slug was bound goes with its approval to the first slug.
     pending_plan = binding.pop("pending_plan", None)
     binding["slug"] = slug
-    real_cur = os.path.realpath(os.path.abspath(repo_root))
-    rel_ctx = os.path.relpath(real_cur, binding_root(real_cur))
-    binding["context"] = repo.normalize_posix(rel_ctx)
+    binding["context"] = repo.canonical_relpath(repo_root, binding_root(repo_root))
     saved = save_binding(repo_root, key, binding)
     if pending_plan and pending and approved is None:
         record_plan(repo_root, slug, pending_plan, "ExitPlanMode")
@@ -791,7 +783,7 @@ def workspace_path(repo_root: str, rel: str) -> str:
     (`binding_root`), the form every ledger entry uses."""
     real_root = os.path.realpath(os.path.abspath(repo_root))
     absolute = os.path.realpath(os.path.join(real_root, rel))
-    return repo.normalize_posix(os.path.relpath(absolute, binding_root(real_root)))
+    return repo.canonical_relpath(absolute, binding_root(real_root))
 
 
 def _ledger_errors_file(repo_root: str) -> str:

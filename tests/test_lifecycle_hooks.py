@@ -32,7 +32,7 @@ SCRIPTS_DIR = os.path.join(REPO_ROOT, "scripts")
 if SCRIPTS_DIR not in sys.path:
     sys.path.insert(0, SCRIPTS_DIR)
 
-from alongkit import lifecycle, proc
+from alongkit import lifecycle, proc, repo
 import hermetic
 
 
@@ -170,7 +170,7 @@ class TestLifecycleHooks(unittest.TestCase):
             res = proc.run_capture([sys.executable, hook_file], cwd=nested_dir)
             self.assertEqual(res.returncode, 0, f"Hook failed: {res.stderr}")
             # CWD of the executed process must be fixture_root
-            self.assertIn(f"CWD:{os.path.abspath(fixture_root)}", res.stdout)
+            self.assertIn(f"CWD:{repo.canonical_path(fixture_root)}", res.stdout)
 
     def test_05_arguments_with_spaces_and_metacharacters_preserved(self):
         """REQ-1 & REQ-5: Arguments containing spaces and shell metacharacters are passed verbatim."""

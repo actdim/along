@@ -372,7 +372,7 @@ def scan_decisions(repo_root: str) -> List[Dict[str, Any]]:
                 if sup_m:
                     sup_by = sup_m.group("target")
 
-            rel_path = os.path.relpath(fpath, repo_root).replace("\\", "/")
+            rel_path = repo.canonical_relpath(fpath, repo_root)
             decisions.append({
                 "category": "decision",
                 "category_label": "ADR",
@@ -1479,7 +1479,7 @@ def validate_entities(repo_root: str, ancestors: bool = True,
         scanned += 1
         fm = iss["frontmatter"]
         fpath = iss["file_path"]
-        rel = os.path.relpath(fpath, repo_root)
+        rel = repo.canonical_relpath(fpath, repo_root)
         # Archived issues were written against an older schema: their schema findings warn
         # instead of failing update and sync. Dangling issue references below stay errors,
         # they guard against deleting a referenced entity. [bug--update-maintenance-friction]
@@ -1565,7 +1565,7 @@ def validate_entities(repo_root: str, ancestors: bool = True,
         scanned += 1
         fm = m["frontmatter"]
         fpath = m["file_path"]
-        rel = os.path.relpath(fpath, repo_root)
+        rel = repo.canonical_relpath(fpath, repo_root)
 
         if not fm:
             errors.append((rel, "missing or unparseable YAML front-matter"))
@@ -1628,7 +1628,7 @@ def validate_entities(repo_root: str, ancestors: bool = True,
                 continue
             scanned += 1
             fpath = os.path.join(checklists_dir, fname)
-            rel = os.path.relpath(fpath, repo_root)
+            rel = repo.canonical_relpath(fpath, repo_root)
             try:
                 c = textio.read_text(fpath)
                 fm, _, _ = frontmatter.try_parse(c, path=fpath)
@@ -1654,7 +1654,7 @@ def validate_entities(repo_root: str, ancestors: bool = True,
                 continue
             scanned += 1
             fpath = os.path.join(risks_dir, fname)
-            rel = os.path.relpath(fpath, repo_root)
+            rel = repo.canonical_relpath(fpath, repo_root)
             try:
                 c = textio.read_text(fpath)
                 fm, _, _ = frontmatter.try_parse(c, path=fpath)
@@ -1683,7 +1683,7 @@ def validate_entities(repo_root: str, ancestors: bool = True,
                 continue
             scanned += 1
             fpath = os.path.join(spikes_dir, fname)
-            rel = os.path.relpath(fpath, repo_root)
+            rel = repo.canonical_relpath(fpath, repo_root)
             try:
                 c = textio.read_text(fpath)
                 fm, _, _ = frontmatter.try_parse(c, path=fpath)
@@ -1711,7 +1711,7 @@ def validate_entities(repo_root: str, ancestors: bool = True,
                     continue
                 scanned += 1
                 fpath = os.path.join(root, fname)
-                rel = os.path.relpath(fpath, repo_root)
+                rel = repo.canonical_relpath(fpath, repo_root)
                 try:
                     c = textio.read_text(fpath)
                     fm, _, _ = frontmatter.try_parse(c, path=fpath)
@@ -1745,7 +1745,7 @@ def validate_entities(repo_root: str, ancestors: bool = True,
                 continue
             scanned += 1
             fpath = os.path.join(dec_dir, fname)
-            rel = os.path.relpath(fpath, repo_root)
+            rel = repo.canonical_relpath(fpath, repo_root)
             try:
                 c = textio.read_text(fpath)
                 fm, _, _ = frontmatter.try_parse(c, path=fpath)
@@ -2008,7 +2008,7 @@ def delete_issue(repo_root: str, key: str) -> Dict[str, Any]:
         fm, _, _ = frontmatter.try_parse(content, path=fpath)
         if not fm:
             continue
-        rel = repo.normalize_posix(os.path.relpath(fpath, repo_root))
+        rel = repo.canonical_relpath(fpath, repo_root)
         blocking = SESSION_REFERENCE_FIELDS + _DELETE_BLOCKING_FIELDS
         if any(points_at(r) for f in blocking for r in refs(fm, f)):
             holders.append(rel)

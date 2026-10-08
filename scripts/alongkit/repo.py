@@ -69,8 +69,17 @@ def global_along_dir() -> str:
     return os.path.join(os.path.expanduser("~"), ".along")
 
 
+def canonical_path(path: str) -> str:
+    """Resolve symlinks, 8.3 short names, and relative references into a canonical path."""
+    if not path:
+        return ""
+    return os.path.realpath(os.path.abspath(path))
+
+
 def _same_path(a: str, b: str) -> bool:
-    return os.path.normcase(os.path.abspath(a)) == os.path.normcase(os.path.abspath(b))
+    if not a or not b:
+        return False
+    return os.path.normcase(canonical_path(a)) == os.path.normcase(canonical_path(b))
 
 
 def is_along_state_dir(path: str) -> bool:
@@ -164,8 +173,8 @@ def find_context(start_dir: Optional[str] = None) -> Optional[Tuple[str, str]]:
     carrying the declaration, not the directory the state lives in. The walk stops below the
     home directory: home and its ancestors hold the per-user install, never a project.
     """
-    cur = os.path.abspath(start_dir or os.getcwd())
-    home = os.path.expanduser("~")
+    cur = canonical_path(start_dir or os.getcwd())
+    home = canonical_path(os.path.expanduser("~"))
     while True:
         if is_within(home, cur):
             return None
@@ -216,7 +225,7 @@ def find_repo_root(start_dir: Optional[str] = None,
     passed by. Falls back to `start_dir` itself (absolute) when nothing is found, so callers
     always receive a usable path instead of None. [bug--along-install-marker-ambiguous]
     """
-    origin = os.path.abspath(start_dir or os.getcwd())
+    origin = canonical_path(start_dir or os.getcwd())
     cur = origin
     markers = tuple(markers)
     while True:
@@ -243,14 +252,16 @@ def is_installed(directory: str) -> bool:
 
 def _is_within(path: str, root: str) -> bool:
     try:
-        return os.path.commonpath([os.path.normcase(path), os.path.normcase(root)]) == os.path.normcase(root)
+        norm_p = os.path.normcase(canonical_path(path))
+        norm_r = os.path.normcase(canonical_path(root))
+        return os.path.commonpath([norm_p, norm_r]) == norm_r
     except ValueError:          # different drives on Windows
         return False
 
 
 def is_within(path: str, root: str) -> bool:
     """True when absolute `path` is `root` or lies below it (False across Windows drives)."""
-    return _is_within(os.path.abspath(path), os.path.abspath(root))
+    return _is_within(path, root)
 
 
 def find_session_root(cwd: Optional[str] = None, project_dir: Optional[str] = None) -> str:
@@ -261,10 +272,10 @@ def find_session_root(cwd: Optional[str] = None, project_dir: Optional[str] = No
     `CLAUDE_PROJECT_DIR`) and the cwd lies inside it, the project's root wins, so a nested
     context never narrows the session's scope. Nearest-context placement stays path-based.
     """
-    origin = os.path.abspath(cwd or os.getcwd())
+    origin = canonical_path(cwd or os.getcwd())
     if project_dir:
-        project = os.path.abspath(project_dir)
-        if os.path.isdir(project) and _is_within(origin, project):
+        project = canonical_path(project_dir)
+        if os.path.isdir(project) and is_within(origin, project):
             return find_repo_root(project)
     return find_repo_root(origin)
 
@@ -276,11 +287,11 @@ def find_hook_root(cwd: Optional[str] = None, project_dir: Optional[str] = None)
     Along context counts (a real `.along/`, or a declared root), never a bare `AGENTS.md`
     or `.git`, so repositories that never adopted Along are left alone.
     """
-    origin = os.path.abspath(cwd or os.getcwd())
+    origin = canonical_path(cwd or os.getcwd())
     starts = []
     if project_dir:
-        project = os.path.abspath(project_dir)
-        if os.path.isdir(project) and _is_within(origin, project):
+        project = canonical_path(project_dir)
+        if os.path.isdir(project) and is_within(origin, project):
             starts.append(project)
     starts.append(origin)
     for start in starts:
@@ -389,20 +400,42 @@ def resolve_tool_script(script_name: str, repo_root: Optional[str] = None,
     for directory in tool_search_path(repo_root, skill_folder):
         candidate = os.path.join(directory, script_name)
         if os.path.isfile(candidate):
-            return os.path.abspath(candidate)
+            return canonical_path(candidate)
     return None
 
 
 def safe_relpath(path: str, start: str) -> str:
     """`os.path.relpath` that degrades to the absolute path instead of raising.
 
+    Resolves symlinks and 8.3 short names before computing the relative path,
+    preventing path traversal artifacts when short and long paths are mixed.
     On Windows, `relpath` raises ValueError across drives (C: versus D:), which is
     a normal situation when scanning dependencies resolved into a user-profile cache.
     """
+    if not path:
+        return ""
+    if not start:
+        return path
     try:
-        return os.path.relpath(path, start)
+        return os.path.relpath(canonical_path(path), canonical_path(start))
     except ValueError:
         return path
+
+
+def canonical_relpath(path: str, start: str) -> str:
+    """Compute relative path with canonicalization and POSIX forward slashes.
+
+    Degrades to POSIX-normalized absolute path if paths reside on different drives.
+    """
+    if not path:
+        return ""
+    if not start:
+        return normalize_posix(canonical_path(path))
+    try:
+        rel = os.path.relpath(canonical_path(path), canonical_path(start))
+        return normalize_posix(rel)
+    except ValueError:
+        return normalize_posix(canonical_path(path))
 
 
 def normalize_posix(path_str: str) -> str:

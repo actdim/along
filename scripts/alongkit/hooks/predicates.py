@@ -179,7 +179,7 @@ def _matches_in_context(rel_target: str, repo_root: str, patterns: List[str]) ->
     ctx = subproject_context(repo_root, repo.normalize_posix(rel_target))
     if not ctx:
         return False
-    sub_rel = repo.normalize_posix(os.path.relpath(os.path.join(repo_root, rel_target), ctx))
+    sub_rel = repo.canonical_relpath(os.path.join(repo_root, rel_target), ctx)
     return not sub_rel.startswith("..") and _matches_pattern(sub_rel, patterns)
 
 
@@ -336,13 +336,10 @@ def _repo_relative(target: str, repo_root: str) -> Optional[str]:
     sdir = os.path.normpath(repo.state_dir(repo_root))
     if os.path.normcase(sdir) != os.path.normcase(os.path.normpath(os.path.join(repo_root, repo.STATE_DIR))) \
             and repo.is_within(abs_target, sdir):
-        inner = repo.normalize_posix(os.path.relpath(abs_target, sdir))
+        inner = repo.canonical_relpath(abs_target, sdir)
         return repo.STATE_DIR if inner == "." else f"{repo.STATE_DIR}/{inner}"
     if os.path.isabs(target):
-        try:
-            rel = os.path.relpath(target, repo_root)
-        except ValueError:
-            return None
+        rel = repo.safe_relpath(target, repo_root)
         if rel.startswith("..") or os.path.isabs(rel):
             return None
         return repo.normalize_posix(rel)
@@ -816,7 +813,7 @@ def check_active_issue(event: HookEvent, repo_root: str, exclude_paths: Optional
         return None
     if how == "elsewhere":
         bctx, bslug = session.resolve_bound(repo_root, key)
-        where = repo.normalize_posix(os.path.relpath(bctx, repo_root)) if bctx else "?"
+        where = repo.canonical_relpath(bctx, repo_root) if bctx else "?"
         return (
             f"Mandatory Issue Anchoring Violation [gate: require-active-issue]: this session is bound to "
             f"'{bslug}' in '{where}/.along/', and '{rel_target}' is outside that subproject. Bind an issue "
@@ -1047,7 +1044,7 @@ def _entity_files_changed(repo_root: str) -> bool:
     """True when git reports a changed entity file under the state dir (or git cannot say)."""
     real_root = os.path.realpath(repo_root)
     sdir = repo.state_dir(real_root)
-    rel = repo.normalize_posix(os.path.relpath(sdir, real_root))
+    rel = repo.canonical_relpath(sdir, real_root)
     result = proc.run_capture(["git", "status", "--porcelain", "-uall", "--", rel], cwd=real_root,
                               check=False, trip_on_anomaly=False)
     if not result.ok:
@@ -1100,11 +1097,7 @@ def subproject_context(repo_root: str, rel_target: str) -> Optional[str]:
         return None
     if os.path.normcase(os.path.abspath(sdir)) == os.path.normcase(os.path.abspath(repo.state_dir(root))):
         return None
-    try:
-        inside = not os.path.relpath(ctx, root).startswith("..")
-    except ValueError:
-        return None
-    return ctx if inside else None
+    return ctx if repo.is_within(ctx, root) else None
 
 
 def _issue_frontmatter(context_root: str, slug: str, include_done: bool = False) -> Optional[Dict[str, Any]]:
@@ -1165,10 +1158,10 @@ def check_subproject_boundary(event: HookEvent, repo_root: str, **kwargs: Any) -
     if rel and not rel.lower().startswith(".along/"):
         ctx = subproject_context(repo_root, rel)
         if ctx:
-            sub_rel = repo.normalize_posix(os.path.relpath(os.path.join(repo_root, rel), ctx))
+            sub_rel = repo.canonical_relpath(os.path.join(repo_root, rel), ctx)
             if not sub_rel.lower().startswith(".along/") and \
                     not _subproject_issue_ok(ctx, repo_root, event_session_key(event)):
-                sub = repo.normalize_posix(os.path.relpath(ctx, repo_root))
+                sub = repo.canonical_relpath(ctx, repo_root)
                 return (
                     f"Subproject Boundary Violation [gate: subproject-boundary]: '{rel}' belongs to subproject "
                     f"'{sub}', which has its own .along/. Work on it under an issue of '{sub}/.along/' "

@@ -46,7 +46,7 @@ import re
 from dataclasses import dataclass
 from typing import Dict, Iterable, List, Optional, Sequence, Tuple
 
-from . import entities, textio
+from . import entities, repo, textio
 
 #: Written next to the engines, in the Along user home rather than a provider home:
 #: one install may touch four providers and there is exactly one manifest for it.
@@ -406,7 +406,7 @@ def _copy_pairs(source_dir: str, dest_dir: str,
         return {}
     pairs = {}
     for path in walk_tree(source_dir, suffixes):
-        rel = os.path.relpath(path, source_dir)
+        rel = repo.safe_relpath(path, source_dir)
         pairs[os.path.join(dest_dir, rel)] = path
     return pairs
 
@@ -428,7 +428,7 @@ def engine_files(source_root: str) -> Dict[str, str]:
             pairs[name] = path
     package = os.path.join(scripts_dir, "alongkit")
     for path in walk_tree(package, (".py", ".yaml", ".json")):
-        pairs[os.path.join("alongkit", os.path.relpath(path, package))] = path
+        pairs[os.path.join("alongkit", repo.safe_relpath(path, package))] = path
     return pairs
 
 

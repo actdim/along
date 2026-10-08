@@ -165,7 +165,7 @@ def closeout_status(repo_root: str) -> Dict[str, Any]:
     changes = git_changes(real_root)
     changed_keys = {path_key(p): p for p in changes}
     b_root = os.path.realpath(os.path.abspath(session.binding_root(real_root)))
-    prefix = repo.normalize_posix(os.path.relpath(b_root, top))
+    prefix = repo.canonical_relpath(b_root, top)
     prefix = "" if prefix in ("", ".") else prefix
     bindings = session.list_bindings(real_root)
 
@@ -379,7 +379,7 @@ def _entity_files(repo_root: str, top: str, key: str, today: str) -> List[str]:
     issues_dir = os.path.join(repo.state_dir(real_root), "ISSUES")
     paths = [os.path.join(issues_dir, name), os.path.join(issues_dir, "done", name),
              lifecycle.session_log_path(real_root, issue["slug"], today)]
-    return [repo.normalize_posix(os.path.relpath(os.path.realpath(p), real_top)) for p in paths]
+    return [repo.canonical_relpath(p, real_top) for p in paths]
 
 
 def run_closeout(repo_root: str, keys: Optional[List[str]] = None, ready: bool = False,
@@ -528,9 +528,9 @@ def run_closeout(repo_root: str, keys: Optional[List[str]] = None, ready: bool =
         _save_run(real_root, run)
     if not run["projections_done"]:
         state_real = os.path.realpath(repo.state_dir(real_root))
-        state_rel = repo.normalize_posix(os.path.relpath(state_real, top))
+        state_rel = repo.canonical_relpath(state_real, top)
         state_prefix = "" if state_rel in ("", ".") else state_rel
-        root_rel = repo.normalize_posix(os.path.relpath(real_root, top))
+        root_rel = repo.canonical_relpath(real_root, top)
         root_prefix = "" if root_rel in ("", ".") else root_rel
         projections = [((f"{state_prefix}/{p[len('.along/'):]}".lstrip("/")) if p.startswith(".along/")
                         else (f"{root_prefix}/{p}".lstrip("/") if root_prefix else p)) for p in PROJECTION_FILES]

@@ -47,7 +47,7 @@ def measure_file(path: str, repo_root: str = "") -> Optional[Dict[str, Any]]:
             content = f.read()
         char_count = len(content)
         lines = len(content.splitlines())
-        rel_path = os.path.relpath(path, repo_root).replace(os.sep, "/") if repo_root else path.replace(os.sep, "/")
+        rel_path = repo.canonical_relpath(path, repo_root) if repo_root else repo.normalize_posix(path)
         return {
             "path": rel_path,
             "bytes": size_bytes,

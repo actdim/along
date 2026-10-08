@@ -15,7 +15,7 @@ import re
 import shutil
 from typing import Any, Dict, List, Optional, Set, Tuple
 
-from . import textio
+from . import repo, textio
 
 RULE_SIGNATURES = {
     "Directory.Packages.props": ["platforms/monorepo.md"],
@@ -187,7 +187,7 @@ def attach_rules(repo_root: str, on_conflict: str = "preserve"):
                     is_dirty = True
 
             if is_dirty:
-                rel_dst = os.path.relpath(dst, repo_root).replace("\\", "/")
+                rel_dst = repo.canonical_relpath(dst, repo_root)
                 if on_conflict == "overwrite":
                     import datetime
                     ts = datetime.datetime.now().strftime("%Y-%m-%d-%H%M%S")
@@ -224,7 +224,7 @@ def attach_rules(repo_root: str, on_conflict: str = "preserve"):
                     continue
                 
                 if p not in installed_files:
-                    rel_rule = os.path.relpath(p, local_rules_dir).replace("\\", "/")
+                    rel_rule = repo.canonical_relpath(p, local_rules_dir)
                     try:
                         is_modified = _is_locally_modified(textio.read_text(p), global_rules_dir, rel_rule)
                     except (OSError, UnicodeDecodeError, ValueError):
@@ -232,11 +232,11 @@ def attach_rules(repo_root: str, on_conflict: str = "preserve"):
                         is_modified = True
 
                     if is_modified:
-                        print(f"   [WARN] Retaining modified unlisted rule: {os.path.relpath(p, repo_root)}")
+                        print(f"   [WARN] Retaining modified unlisted rule: {repo.canonical_relpath(p, repo_root)}")
                         continue
                         
                     os.remove(p)
-                    print(f"   [INFO] Pruned obsolete rule: {os.path.relpath(p, repo_root)}")
+                    print(f"   [INFO] Pruned obsolete rule: {repo.canonical_relpath(p, repo_root)}")
                     
         # Remove empty directories
         for root, dirs, files in os.walk(local_rules_dir, topdown=False):
@@ -353,7 +353,7 @@ def audit_rules(repo_root: str) -> List[Dict[str, Any]]:
         for root, dirs, files in os.walk(local_rules_dir):
             for f in files:
                 p = os.path.join(root, f)
-                rel_rule = os.path.relpath(p, local_rules_dir).replace("\\", "/")
+                rel_rule = repo.canonical_relpath(p, local_rules_dir)
                 if f in ("gates.yaml", "gates.yml", ".gitkeep"):
                     results.append({
                         "rule": rel_rule,

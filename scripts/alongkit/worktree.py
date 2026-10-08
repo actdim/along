@@ -201,7 +201,7 @@ def link_environment(repo_root: str, worktree_path: str, slug: str) -> Tuple[Lis
         for pkg in os.listdir(packages_dir):
             pkg_dep = os.path.join(packages_dir, pkg, "node_modules")
             if os.path.isdir(pkg_dep) and not is_link(pkg_dep):
-                rel_dep = os.path.relpath(pkg_dep, repo_root_abs).replace("\\", "/")
+                rel_dep = repo.canonical_relpath(pkg_dep, repo_root_abs)
                 target_link = os.path.join(worktree_abs, rel_dep)
                 if not os.path.exists(target_link) and not is_link(target_link):
                     if link_directory(pkg_dep, target_link):
@@ -228,7 +228,7 @@ def link_environment(repo_root: str, worktree_path: str, slug: str) -> Tuple[Lis
     if not os.path.exists(worktree_session) and not is_link(worktree_session):
         os.makedirs(os.path.dirname(worktree_session), exist_ok=True)
         if link_directory(primary_session, worktree_session):
-            rel_sess = os.path.relpath(worktree_session, worktree_abs).replace("\\", "/")
+            rel_sess = repo.canonical_relpath(worktree_session, worktree_abs)
             linked_dirs.append(rel_sess)
 
     return linked_dirs, copied_files
@@ -272,7 +272,7 @@ def _flush_session_state(repo_root: str, worktree_path: str, slug: str) -> None:
     for root, _, files in os.walk(worktree_session):
         for f in files:
             src_file = os.path.join(root, f)
-            rel_path = os.path.relpath(src_file, worktree_session)
+            rel_path = repo.safe_relpath(src_file, worktree_session)
             dst_file = os.path.join(primary_session, rel_path)
             os.makedirs(os.path.dirname(dst_file), exist_ok=True)
             try:

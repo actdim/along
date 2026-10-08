@@ -114,9 +114,29 @@ FIXTURE_DECISIONS = (
 )
 
 
+def to_short_path(path: str) -> str:
+    """Return 8.3 short path representation on Windows, or original path on other platforms.
+
+    Used by fixtures to simulate Windows CI runner environments (such as GitHub Actions
+    `RUNNER~1` paths) on local developer machines.
+    """
+    if sys.platform != "win32":
+        return path
+    try:
+        import ctypes
+        buf = ctypes.create_unicode_buffer(500)
+        res = ctypes.windll.kernel32.GetShortPathNameW(path, buf, 500)
+        if res > 0 and buf.value:
+            return buf.value
+    except (OSError, ValueError, AttributeError):
+        pass
+    return path
+
+
 def make_repo_fixture(prefix: str = "along-fixture-",
                       protocol_version: str | None = None,
-                      with_docs: bool = True) -> str:
+                      with_docs: bool = True,
+                      simulate_short_path: bool = True) -> str:
     """Create a throwaway repository that looks like a current Along project.
 
     Returns its path; the caller removes it (or uses `repo_fixture()`, which does).
@@ -124,7 +144,8 @@ def make_repo_fixture(prefix: str = "along-fixture-",
     a real index or history.
     """
     version = protocol_version or CURRENT_PROTOCOL_VERSION
-    root = tempfile.mkdtemp(prefix=prefix)
+    raw_root = tempfile.mkdtemp(prefix=prefix)
+    root = to_short_path(raw_root) if simulate_short_path else raw_root
     put = textio.write_text
 
     put(os.path.join(root, "AGENTS.md"),
@@ -161,10 +182,12 @@ def make_repo_fixture(prefix: str = "along-fixture-",
 @contextlib.contextmanager
 def repo_fixture(prefix: str = "along-fixture-",
                  protocol_version: str | None = None,
-                 with_docs: bool = True):
+                 with_docs: bool = True,
+                 simulate_short_path: bool = True):
     """`make_repo_fixture` as a context manager that always cleans up."""
     root = make_repo_fixture(prefix=prefix, protocol_version=protocol_version,
-                             with_docs=with_docs)
+                             with_docs=with_docs,
+                             simulate_short_path=simulate_short_path)
     try:
         yield root
     finally:
@@ -181,8 +204,9 @@ def isolated_home() -> str:
     """One empty throwaway home directory per test process, removed at exit."""
     global _ISOLATED_HOME
     if _ISOLATED_HOME is None or not os.path.isdir(_ISOLATED_HOME):
-        _ISOLATED_HOME = tempfile.mkdtemp(prefix="along-home-")
-        atexit.register(shutil.rmtree, _ISOLATED_HOME, True)
+        raw = tempfile.mkdtemp(prefix="along-home-")
+        _ISOLATED_HOME = to_short_path(raw)
+        atexit.register(shutil.rmtree, raw, True)
     return _ISOLATED_HOME
 
 

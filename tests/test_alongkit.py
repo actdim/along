@@ -228,6 +228,76 @@ class TestRepositoryPaths(unittest.TestCase):
         other = "Z:\\elsewhere\\pkg" if sys.platform == "win32" else "/elsewhere/pkg"
         self.assertIsInstance(repo.safe_relpath(other, REPO_ROOT), str)
 
+    def test_canonical_path_basic_behavior(self):
+        self.assertEqual(repo.canonical_path(""), "")
+        with tempfile.TemporaryDirectory() as tmp:
+            canonical_tmp = repo.canonical_path(tmp)
+            self.assertTrue(os.path.isabs(canonical_tmp))
+            self.assertEqual(canonical_tmp, os.path.realpath(os.path.abspath(tmp)))
+
+    def test_canonical_relpath_and_safe_relpath_basic(self):
+        self.assertEqual(repo.canonical_relpath("", REPO_ROOT), "")
+        self.assertEqual(repo.safe_relpath("", REPO_ROOT), "")
+        with tempfile.TemporaryDirectory() as tmp:
+            sub = os.path.join(tmp, "a", "b")
+            os.makedirs(sub)
+            target = os.path.join(sub, "test.txt")
+            with open(target, "w", encoding="utf-8") as fh:
+                fh.write("hello\n")
+
+            self.assertEqual(repo.canonical_relpath(target, tmp), "a/b/test.txt")
+            self.assertEqual(repo.safe_relpath(target, tmp), os.path.join("a", "b", "test.txt"))
+            self.assertEqual(repo.canonical_relpath(tmp, tmp), ".")
+            self.assertEqual(repo.safe_relpath(tmp, tmp), ".")
+
+    def test_canonical_relpath_and_safe_relpath_cross_drive(self):
+        if sys.platform != "win32":
+            return
+        c_path = "C:\\Windows\\System32\\drivers"
+        z_path = "Z:\\nonexistent\\drive\\path"
+        rel_c = repo.canonical_relpath(z_path, c_path)
+        self.assertEqual(rel_c, "Z:/nonexistent/drive/path")
+        rel_s = repo.safe_relpath(z_path, c_path)
+        self.assertEqual(rel_s, z_path)
+
+    def test_windows_8dot3_short_path_resolution(self):
+        if sys.platform != "win32":
+            return
+        import ctypes
+        with tempfile.TemporaryDirectory(prefix="along_path_test_") as tmp:
+            buf = ctypes.create_unicode_buffer(500)
+            ctypes.windll.kernel32.GetShortPathNameW(tmp, buf, 500)
+            short_tmp = buf.value
+            if not short_tmp:
+                self.skipTest("8.3 short paths disabled on host volume")
+
+            sub_dir = os.path.join(tmp, "sub_directory")
+            os.makedirs(sub_dir)
+            file_long = os.path.join(sub_dir, "nested_file.txt")
+            with open(file_long, "w", encoding="utf-8") as fh:
+                fh.write("content\n")
+
+            file_short = os.path.join(short_tmp, "sub_directory", "nested_file.txt")
+
+            # canonical_path resolves short and long to identical path
+            self.assertEqual(repo.canonical_path(short_tmp), repo.canonical_path(tmp))
+            self.assertEqual(repo.canonical_path(file_short), repo.canonical_path(file_long))
+
+            # _same_path recognizes equality across short and long representations
+            self.assertTrue(repo._same_path(short_tmp, tmp))
+            self.assertTrue(repo._same_path(file_short, file_long))
+
+            # is_within recognizes hierarchy across short and long representations
+            self.assertTrue(repo.is_within(file_long, short_tmp))
+            self.assertTrue(repo.is_within(file_short, tmp))
+            self.assertFalse(repo.is_within(short_tmp, file_long))
+
+            # safe_relpath and canonical_relpath produce clean relative paths without traversal artifacts
+            self.assertEqual(repo.canonical_relpath(file_long, short_tmp), "sub_directory/nested_file.txt")
+            self.assertEqual(repo.canonical_relpath(file_short, tmp), "sub_directory/nested_file.txt")
+            self.assertEqual(repo.safe_relpath(file_long, short_tmp), os.path.join("sub_directory", "nested_file.txt"))
+            self.assertEqual(repo.safe_relpath(file_short, tmp), os.path.join("sub_directory", "nested_file.txt"))
+
     def test_walker_skips_ignored_directories(self):
         with tempfile.TemporaryDirectory() as tmp:
             os.makedirs(os.path.join(tmp, "node_modules"))
@@ -823,6 +893,45 @@ class TestExceptionHandlingGate(unittest.TestCase):
 
     def test_exception_handling_gate_passes_on_repo(self):
         self.assertTrue(gates.exception_handling_gate(REPO_ROOT))
+
+
+class TestCanonicalPathGate(unittest.TestCase):
+    """Pin the AST lint gate forbidding raw os.path.relpath in alongkit."""
+
+    def test_raw_os_path_relpath_is_flagged(self):
+        code = "import os\nx = os.path.relpath('a', 'b')\n"
+        violations = gates.find_relpath_violations_in_code(code, "test.py")
+        self.assertEqual(len(violations), 1)
+        self.assertIn("raw os.path.relpath is forbidden", violations[0].message)
+        self.assertEqual(violations[0].line, 2)
+
+    def test_bare_relpath_is_flagged(self):
+        code = "from os.path import relpath\nx = relpath('a', 'b')\n"
+        violations = gates.find_relpath_violations_in_code(code, "test.py")
+        self.assertEqual(len(violations), 1)
+        self.assertIn("raw os.path.relpath is forbidden", violations[0].message)
+        self.assertEqual(violations[0].line, 2)
+
+    def test_allow_pragma_is_honored(self):
+        code = "import os\nx = os.path.relpath('a', 'b')  # along: allow-relpath\n"
+        violations = gates.find_relpath_violations_in_code(code, "test.py")
+        self.assertEqual(len(violations), 0)
+
+    def test_canonical_relpath_and_safe_relpath_are_allowed(self):
+        code = "from alongkit import repo\nx = repo.canonical_relpath('a', 'b')\ny = repo.safe_relpath('a', 'b')\n"
+        violations = gates.find_relpath_violations_in_code(code, "test.py")
+        self.assertEqual(len(violations), 0)
+
+    def test_alongkit_package_has_zero_relpath_violations(self):
+        violations = gates.check_canonical_paths(REPO_ROOT)
+        self.assertEqual(
+            violations,
+            [],
+            f"Banned raw os.path.relpath calls found in alongkit: {[f'{v.path}:{v.line}: {v.message}' for v in violations]}"
+        )
+
+    def test_canonical_path_gate_passes_on_repo(self):
+        self.assertTrue(gates.canonical_path_gate(REPO_ROOT))
 
 
 class TestSyncConstraints(unittest.TestCase):

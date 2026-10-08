@@ -449,7 +449,7 @@ class Migration:
             outcomes["moved"] = 1
             return outcomes
         for root, _, files in os.walk(src_dir):
-            relative = os.path.relpath(root, src_dir)
+            relative = repo.safe_relpath(root, src_dir)
             target_dir = dst_dir if relative == "." else os.path.join(dst_dir, relative)
             self.makedirs(target_dir)
             for name in sorted(files):
