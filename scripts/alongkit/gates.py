@@ -39,7 +39,7 @@ import os
 import sys
 from typing import List, Optional, Tuple
 
-from . import proc, repo, sanitizer, session, testruns
+from . import bootstrap, proc, repo, sanitizer, session, testruns, textio
 
 
 def detect_test_command(repo_root: str) -> Optional[List[str]]:
@@ -618,5 +618,37 @@ def zero_byte_working_tree_audit(repo_root: str) -> Tuple[List[str], List[str]]:
             truncated = size.ok and size.out.strip().isdigit() and int(size.out.strip()) > 0
         (blocking if truncated or rel in edited else warnings).append(rel)
     return blocking, warnings
+
+
+DEFAULT_DOC_TESTS: Tuple[str, ...] = (
+    "test_context_budget.py",
+    "test_sanitizer.py",
+    "test_kb_sync.py",
+    "test_kb_search.py",
+    "test_skills_and_scripts.py",
+)
+
+
+def get_doc_tests(repo_root: str) -> List[str]:
+    """Return declared doc_tests from .along/rules/gates.yaml (under test_before_stop),
+    or the default Markdown-facing test set if none declared.
+    [feat--test-gate-cost-reduction] REQ-2.
+    """
+    gates_file = os.path.join(repo.state_dir(repo_root), "rules", "gates.yaml")
+    if os.path.isfile(gates_file):
+        try:
+            ruamel = bootstrap.require("ruamel.yaml")
+            yaml = ruamel.YAML(typ="safe")
+            content = textio.read_text(gates_file, strict=False)
+            data = yaml.load(content)
+            if isinstance(data, dict):
+                for g in data.get("gates", []):
+                    if isinstance(g, dict) and g.get("id") == "test_before_stop":
+                        declared = g.get("doc_tests")
+                        if isinstance(declared, list) and declared:
+                            return [str(t).strip() for t in declared if str(t).strip()]
+        except (OSError, ValueError, KeyError, AttributeError):
+            pass
+    return list(DEFAULT_DOC_TESTS)
 
 

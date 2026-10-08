@@ -49,7 +49,7 @@ from alongkit import bootstrap
 bootstrap.ensure_deps()
 
 
-from alongkit import (entities, frontmatter, gates, proc, repo, sanitizer, semver, textio,
+from alongkit import (entities, frontmatter, gates, proc, repo, sanitizer, semver, testruns, textio,
                       transaction)
 
 #: Label every gate and abort message carries, so the source of a failure is unambiguous.
@@ -703,6 +703,13 @@ def main():
                 print(f"   {rel}")
             print("-> [Notice] Use --commit (-c) to create the release commit and tag.")
             tx.commit()
+
+        if complete and not skip_verify:
+            # [feat--test-gate-cost-reduction] REQ-6: record a green run on the post-bump tree
+            # so along wrap can reuse it without re-running the full suite.
+            post_tree = testruns.tree_hash(repo_root)
+            if post_tree:
+                testruns.record_run(repo_root, True, post_tree, "along bump")
     except ReleaseAborted as exc:
         report_rollback(tx, str(exc))
         sys.exit(1)

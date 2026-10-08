@@ -12,13 +12,14 @@ gate, and the resolved dependencies set up here. Pass `-q` / `--quiet` for dot o
 
 import sys
 import os
+import time
 import unittest
 
 # The engines depend on ruamel.yaml. Resolve it before the suite imports them, so
 # `python .along/scripts/test.py` works from a bare interpreter as documented.
 sys.path.insert(0, os.path.join(
     os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))), "scripts"))
-from alongkit import bootstrap, gates
+from alongkit import bootstrap, gates, testruns
 
 # The suite also needs the `dev` group (the dashboard stack), which the shared runtime
 # environment `~/.along/venv` does not carry: run inside the project environment first.
@@ -27,6 +28,30 @@ bootstrap.ensure_project_env(
     os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))),
     ("ruamel.yaml", "fastapi", "pydantic"))
 bootstrap.ensure_deps()
+
+
+class TimingTestResult(unittest.TextTestResult):
+    """Tracks per-test elapsed time [feat--test-gate-cost-reduction] REQ-3."""
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.durations = []
+        self._test_start_times = {}
+
+    def startTest(self, test):
+        super().startTest(test)
+        self._test_start_times[test.id()] = time.monotonic()
+
+    def stopTest(self, test):
+        super().stopTest(test)
+        start = self._test_start_times.pop(test.id(), None)
+        if start is not None:
+            self.durations.append((time.monotonic() - start, test.id()))
+
+
+class TimingTestRunner(unittest.TextTestRunner):
+    resultclass = TimingTestResult
+
 
 def main():
     repo_root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -46,9 +71,18 @@ def main():
     for var in session.SESSION_ENV_VARS:
         os.environ.pop(var, None)
 
+    is_doc = any(arg in ("--doc", "--doc-tests") for arg in sys.argv[1:])
     loader = unittest.TestLoader()
     args = [arg for arg in sys.argv[1:] if not arg.startswith("-")]
-    if args:
+    if is_doc:
+        doc_targets = gates.get_doc_tests(repo_root)
+        suite = unittest.TestSuite()
+        for target in doc_targets:
+            if target.endswith(".py") or "*" in target:
+                suite.addTests(loader.discover(start_dir=tests_dir, pattern=target))
+            else:
+                suite.addTests(loader.loadTestsFromName(target))
+    elif args:
         suite = unittest.TestSuite()
         for target in args:
             if target.endswith(".py") or "*" in target:
@@ -58,9 +92,29 @@ def main():
     else:
         suite = loader.discover(start_dir=tests_dir, pattern="test_*.py")
     quiet = any(arg in ("-q", "--quiet") for arg in sys.argv[1:])
-    runner = unittest.TextTestRunner(verbosity=1 if quiet else 2)
+    runner = TimingTestRunner(verbosity=1 if quiet else 2)
     result = runner.run(suite)
-    
+
+    durations = sorted(getattr(result, "durations", []), key=lambda x: x[0], reverse=True)
+    slowest_limit = 5
+    for a in sys.argv[1:]:
+        if a.startswith("--slowest="):
+            try:
+                slowest_limit = int(a.split("=")[1])
+            except ValueError:
+                pass
+    if durations and slowest_limit > 0:
+        top = durations[:slowest_limit]
+        print(f"\nSlowest tests (top {len(top)}):")
+        for dur, tid in top:
+            print(f"  {dur:6.2f}s  {tid}")
+
+    # [feat--test-gate-cost-reduction] REQ-1 & REQ-6: record green run for full suite
+    if result.wasSuccessful() and not is_doc and not args:
+        tree = testruns.tree_hash(repo_root)
+        if tree:
+            testruns.record_run(repo_root, True, tree, "test.py")
+
     sys.exit(0 if result.wasSuccessful() else 1)
 
 if __name__ == "__main__":

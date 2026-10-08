@@ -157,6 +157,12 @@ class TestDocEditsAndTestBeforeStop(unittest.TestCase):
             HookEvent(event_type=HookEventType.STOP, workspace_root=self.tmp), repo_root=self.tmp,
             options={"enforce_unbound": True, **options})
 
+    def _run_test(self, cmd: str = "python .along/scripts/test.py") -> None:
+        predicates.record_tool_activity(HookEvent(
+            event_type=HookEventType.PRE_TOOL_USE, tool_name="run_command",
+            tool_args={"CommandLine": cmd},
+            workspace_root=self.tmp), repo_root=self.tmp)
+
     def test_classification(self):
         for rel in ("README.md", "docs/topic--x.md", "pkg/docs/diagram.svg", "CHANGELOG.md"):
             self.assertTrue(predicates.is_doc_edit(rel), rel)
@@ -169,6 +175,74 @@ class TestDocEditsAndTestBeforeStop(unittest.TestCase):
         self.assertIsNone(self._stop())
         self.assertIn("test-before-stop", self._stop(count_docs=True))
         self._edit("src/app.py")
+        self.assertIn("test-before-stop", self._stop())
+
+    def test_doc_only_edit_satisfied_by_doc_scoped_test(self):
+        self._edit("docs/topic--x.md")
+        self.assertIn("test-before-stop", self._stop(count_docs=True, doc_tests=["test_doc.py"]))
+        self._run_test("python .along/scripts/test.py --doc")
+        self.assertIsNone(self._stop(count_docs=True, doc_tests=["test_doc.py"]))
+
+    def test_doc_scoped_test_does_not_satisfy_source_edit(self):
+        self._edit("src/app.py")
+        self._run_test("python .along/scripts/test.py --doc")
+        err = self._stop(count_docs=True, doc_tests=["test_doc.py"])
+        self.assertIsNotNone(err)
+        self.assertIn("Source files were modified", err or "")
+        self._run_test("python .along/scripts/test.py")
+        self.assertIsNone(self._stop(count_docs=True, doc_tests=["test_doc.py"]))
+
+
+class TestTreeHashReuse(unittest.TestCase):
+    """[feat--test-gate-cost-reduction] REQ-1: tree-hash green run reuse in test_before_stop."""
+
+    def setUp(self):
+        self.env = mock.patch.dict(os.environ, CLEAN_ENV, clear=True)
+        self.env.start()
+        self.tmp = tempfile.mkdtemp(prefix="along-tree-reuse-")
+        subprocess.run(["git", "init", "-q"], cwd=self.tmp, check=True)
+        subprocess.run(["git", "config", "user.name", "Test"], cwd=self.tmp, check=True)
+        subprocess.run(["git", "config", "user.email", "test@example.com"], cwd=self.tmp, check=True)
+        os.makedirs(os.path.join(self.tmp, ".along", "scripts"))
+        with open(os.path.join(self.tmp, ".along", "scripts", "test.py"), "w", encoding="utf-8") as f:
+            f.write("# hook\n")
+        os.makedirs(os.path.join(self.tmp, "src"))
+        with open(os.path.join(self.tmp, "src", "app.py"), "w", encoding="utf-8") as f:
+            f.write("v1\n")
+        subprocess.run(["git", "add", "."], cwd=self.tmp, check=True)
+        subprocess.run(["git", "commit", "-m", "init", "-q"], cwd=self.tmp, check=True)
+
+    def tearDown(self):
+        self.env.stop()
+        shutil.rmtree(self.tmp, ignore_errors=True)
+
+    def _edit(self, rel: str, content: str = "x\n") -> None:
+        full = os.path.join(self.tmp, rel)
+        os.makedirs(os.path.dirname(full), exist_ok=True)
+        with open(full, "w", encoding="utf-8") as f:
+            f.write(content)
+        predicates.record_tool_activity(HookEvent(
+            event_type=HookEventType.POST_TOOL_USE, tool_name="write_to_file",
+            tool_args={"TargetFile": full, "CodeContent": content},
+            workspace_root=self.tmp), repo_root=self.tmp)
+
+    def _stop(self, **options):
+        return predicates.check_test_before_stop(
+            HookEvent(event_type=HookEventType.STOP, workspace_root=self.tmp), repo_root=self.tmp,
+            options={"enforce_unbound": True, **options})
+
+    def test_tree_hash_green_run_reused_and_reverted_edit(self):
+        tree = testruns.tree_hash(self.tmp)
+        self.assertIsNotNone(tree)
+        testruns.record_run(self.tmp, True, tree, "test")
+
+        self._edit("src/app.py", "v2\n")
+        self.assertIn("test-before-stop", self._stop())
+
+        self._edit("src/app.py", "v1\n")
+        self.assertIsNone(self._stop())
+
+        self._edit("src/app.py", "v3\n")
         self.assertIn("test-before-stop", self._stop())
 
 

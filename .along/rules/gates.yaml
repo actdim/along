@@ -13,3 +13,9 @@ gates:
   - id: test_before_stop
     enforce_unbound: true
     count_docs: true
+    doc_tests:
+      - test_context_budget.py
+      - test_sanitizer.py
+      - test_kb_sync.py
+      - test_kb_search.py
+      - test_skills_and_scripts.py

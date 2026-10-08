@@ -15,7 +15,7 @@ import os
 import re
 from typing import Any, Dict, List, Optional, Tuple
 
-from .. import attribution, entities, frontmatter, kb, proc, repo, sanitizer, session, textio, typography
+from .. import attribution, entities, frontmatter, kb, proc, repo, sanitizer, session, testruns, textio, typography
 from . import shellparse
 from .models import GateDecision, GateResult, HookEvent, HookEventType
 
@@ -314,9 +314,14 @@ def record_tool_activity(event: HookEvent, repo_root: str) -> None:
         cmd = _extract_command(event)
         if not cmd or event.event_type != HookEventType.PRE_TOOL_USE:
             return
+        is_doc_cmd = bool(re.search(r"--doc(?:-tests)?\b", cmd))
         if any(p.search(cmd) for p in LIFECYCLE_TEST_PATTERNS) or (
                 not has_lifecycle_test_hook(repo_root) and any(p.search(cmd) for p in TEST_COMMAND_PATTERNS)):
-            trace["last_test_time"] = now_iso
+            if is_doc_cmd:
+                trace["last_doc_test_time"] = now_iso
+            else:
+                trace["last_test_time"] = now_iso
+                trace["last_doc_test_time"] = now_iso
             save_activity_trace(repo_root, trace, key)
         elif any(p.search(cmd) for p in TEST_COMMAND_PATTERNS):
             trace["last_raw_test_time"] = now_iso
@@ -941,27 +946,54 @@ def check_test_before_stop(event: HookEvent, repo_root: str, options: Optional[D
     if circuit.get_breaker_state(repo_root)[0] == circuit.CircuitState.TRIPPED:
         return None
 
+    # [feat--test-gate-cost-reduction] REQ-1: if the working tree has a recorded green run,
+    # the gate passes without checking timestamps (covers clean / reverted trees and runs
+    # recorded by agent runs, commit, wrap, or closeout).
+    tree = testruns.tree_hash(repo_root)
+    if tree and testruns.green_run_for(repo_root, tree):
+        return None
+
     trace = load_activity_trace(repo_root, key)
     edit_time = trace.get("last_edit_time")
-    # Documentation edits count only where the repository tests its docs (gate option
-    # `count_docs: true`) [bug--lifecycle-test-false-pass] REQ-4.
     doc_time = trace.get("last_doc_edit_time")
-    if (options or {}).get("count_docs") and doc_time and (edit_time is None or doc_time > edit_time):
-        edit_time = doc_time
     test_time = trace.get("last_test_time")
+    doc_test_time = trace.get("last_doc_test_time")
 
-    if edit_time is not None:
-        if test_time is None or test_time < edit_time:
-            raw = trace.get("last_raw_test_time")
-            hint = ""
-            if raw and raw >= edit_time:
-                hint = (" A raw test runner ran after the edit, but this repository has a lifecycle "
-                        "test hook, and only it counts.")
-            return (
-                "Turn Completion Rejected [gate: test-before-stop]: Source files were modified in this session, "
-                f"but automated tests have not been executed afterward.{hint} "
-                "Run tests via 'along test' or 'python .along/scripts/test.py' before completing."
-            )
+    # [feat--test-gate-cost-reduction] REQ-2: Doc-only edits under count_docs: true
+    # are satisfied by a scoped run of Markdown-facing tests.
+    count_docs = bool((options or {}).get("count_docs"))
+    has_source_edits = (edit_time is not None) and (test_time is None or test_time < edit_time)
+
+    if count_docs and doc_time:
+        has_doc_edits = (test_time is None or doc_time > test_time) and (doc_test_time is None or doc_time > doc_test_time)
+    else:
+        has_doc_edits = False
+
+    if has_source_edits:
+        raw = trace.get("last_raw_test_time")
+        hint = ""
+        if raw and raw >= edit_time:
+            hint = (" A raw test runner ran after the edit, but this repository has a lifecycle "
+                    "test hook, and only it counts.")
+        return (
+            "Turn Completion Rejected [gate: test-before-stop]: Source files were modified in this session, "
+            f"but automated tests have not been executed afterward.{hint} "
+            "Run tests via 'along test' or 'python .along/scripts/test.py' before completing."
+        )
+
+    if has_doc_edits:
+        raw = trace.get("last_raw_test_time")
+        hint = ""
+        if raw and raw >= doc_time:
+            hint = (" A raw test runner ran after the edit, but this repository has a lifecycle "
+                    "test hook, and only it counts.")
+        doc_hint = " (or doc-scoped tests via 'along test --doc')" if (options or {}).get("doc_tests") else ""
+        return (
+            "Turn Completion Rejected [gate: test-before-stop]: Documentation files were modified in this session, "
+            f"but automated tests have not been executed afterward.{hint} "
+            f"Run tests via 'along test'{doc_hint} before completing."
+        )
+
     return None
 
 
