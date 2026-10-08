@@ -374,7 +374,7 @@ def find_repo_root(start_dir=None):
         from alongkit.repo import find_repo_root as resolver
         return resolver(start_dir)
     except ImportError:
-        cur = os.path.realpath(os.path.abspath(start_dir or os.path.dirname(__file__)))
+        cur = os.path.abspath(start_dir or os.path.dirname(__file__))
         while True:
             for marker in (".git", os.path.join(".along", "ISSUES"), os.path.join(".along", "ISSUES.md"),
                            os.path.join(".along", "HISTORY.md")):
@@ -382,7 +382,7 @@ def find_repo_root(start_dir=None):
                     return cur
             parent = os.path.dirname(cur)
             if parent == cur:
-                return os.path.realpath(os.path.abspath(start_dir or os.path.dirname(__file__)))
+                return os.path.abspath(start_dir or os.path.dirname(__file__))
             cur = parent
 
 def main():
@@ -410,7 +410,7 @@ def find_repo_root(start_dir=None):
         from alongkit.repo import find_repo_root as resolver
         return resolver(start_dir)
     except ImportError:
-        cur = os.path.realpath(os.path.abspath(start_dir or os.path.dirname(__file__)))
+        cur = os.path.abspath(start_dir or os.path.dirname(__file__))
         while True:
             for marker in (".git", os.path.join(".along", "ISSUES"), os.path.join(".along", "ISSUES.md"),
                            os.path.join(".along", "HISTORY.md")):
@@ -418,7 +418,7 @@ def find_repo_root(start_dir=None):
                     return cur
             parent = os.path.dirname(cur)
             if parent == cur:
-                return os.path.realpath(os.path.abspath(start_dir or os.path.dirname(__file__)))
+                return os.path.abspath(start_dir or os.path.dirname(__file__))
             cur = parent
 
 def main():

@@ -483,13 +483,13 @@ def list_worktrees(repo_root: str) -> List[Dict[str, Any]]:
             current_entry = {"path": line.split(" ", 1)[1].strip()}
         elif line.startswith("branch "):
             current_entry["branch"] = line.split(" ", 1)[1].strip()
-            git_worktrees[os.path.normcase(os.path.abspath(current_entry["path"]))] = current_entry
+            git_worktrees[os.path.normcase(repo.canonical_path(current_entry["path"]))] = current_entry
         elif not line:
             if "path" in current_entry:
-                git_worktrees[os.path.normcase(os.path.abspath(current_entry["path"]))] = current_entry
+                git_worktrees[os.path.normcase(repo.canonical_path(current_entry["path"]))] = current_entry
             current_entry = {}
     if "path" in current_entry:
-        git_worktrees[os.path.normcase(os.path.abspath(current_entry["path"]))] = current_entry
+        git_worktrees[os.path.normcase(repo.canonical_path(current_entry["path"]))] = current_entry
 
     for item in sorted(os.listdir(worktrees_dir)):
         if item.startswith(".") or item.startswith("_"):
@@ -506,7 +506,7 @@ def list_worktrees(repo_root: str) -> List[Dict[str, Any]]:
             except (OSError, json.JSONDecodeError):
                 pass
 
-        norm_key = os.path.normcase(os.path.abspath(wpath))
+        norm_key = os.path.normcase(repo.canonical_path(wpath))
         git_info = git_worktrees.get(norm_key, {})
         branch = manifest.get("branch") or git_info.get("branch", f"along/{item}")
         if branch.startswith("refs/heads/"):

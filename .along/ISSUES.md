@@ -73,8 +73,8 @@
 
 ## Done (recent)
 - [x] `(debt)` [canonical-windows-paths](ISSUES/done/debt--canonical-windows-paths.md)
+- [x] `(bug)` [lexical-path-root-resolution](ISSUES/done/bug--lexical-path-root-resolution.md)
 - [x] `(task)` [release-v4-4-7](ISSUES/done/task--release-v4-4-7.md)
 - [x] `(task)` [file-v4-5-fixes-update](ISSUES/done/task--file-v4-5-fixes-update.md)
 - [x] `(bug)` [stop-gates-breaker-deadlock](ISSUES/done/bug--stop-gates-breaker-deadlock.md)
-- [x] `(bug)` [ci-windows-closeout-short-paths](ISSUES/done/bug--ci-windows-closeout-short-paths.md)
-<!-- 200 older completed issue(s) archived in .along/ISSUES/done/ -->
+<!-- 201 older completed issue(s) archived in .along/ISSUES/done/ -->

@@ -173,8 +173,8 @@ def find_context(start_dir: Optional[str] = None) -> Optional[Tuple[str, str]]:
     carrying the declaration, not the directory the state lives in. The walk stops below the
     home directory: home and its ancestors hold the per-user install, never a project.
     """
-    cur = canonical_path(start_dir or os.getcwd())
-    home = canonical_path(os.path.expanduser("~"))
+    cur = os.path.abspath(start_dir or os.getcwd())
+    home = os.path.expanduser("~")
     while True:
         if is_within(home, cur):
             return None
@@ -225,7 +225,7 @@ def find_repo_root(start_dir: Optional[str] = None,
     passed by. Falls back to `start_dir` itself (absolute) when nothing is found, so callers
     always receive a usable path instead of None. [bug--along-install-marker-ambiguous]
     """
-    origin = canonical_path(start_dir or os.getcwd())
+    origin = os.path.abspath(start_dir or os.getcwd())
     cur = origin
     markers = tuple(markers)
     while True:
@@ -272,9 +272,9 @@ def find_session_root(cwd: Optional[str] = None, project_dir: Optional[str] = No
     `CLAUDE_PROJECT_DIR`) and the cwd lies inside it, the project's root wins, so a nested
     context never narrows the session's scope. Nearest-context placement stays path-based.
     """
-    origin = canonical_path(cwd or os.getcwd())
+    origin = os.path.abspath(cwd or os.getcwd())
     if project_dir:
-        project = canonical_path(project_dir)
+        project = os.path.abspath(project_dir)
         if os.path.isdir(project) and is_within(origin, project):
             return find_repo_root(project)
     return find_repo_root(origin)
@@ -287,10 +287,10 @@ def find_hook_root(cwd: Optional[str] = None, project_dir: Optional[str] = None)
     Along context counts (a real `.along/`, or a declared root), never a bare `AGENTS.md`
     or `.git`, so repositories that never adopted Along are left alone.
     """
-    origin = canonical_path(cwd or os.getcwd())
+    origin = os.path.abspath(cwd or os.getcwd())
     starts = []
     if project_dir:
-        project = canonical_path(project_dir)
+        project = os.path.abspath(project_dir)
         if os.path.isdir(project) and is_within(origin, project):
             starts.append(project)
     starts.append(origin)

@@ -89,11 +89,7 @@ def allow_response(runtime: str, event_name: str) -> Tuple[int, str]:
 
 
 def _inside(path: str, root: str) -> bool:
-    try:
-        return os.path.commonpath([os.path.normcase(os.path.abspath(path)),
-                                   os.path.normcase(os.path.abspath(root))]) == os.path.normcase(os.path.abspath(root))
-    except ValueError:
-        return False
+    return repo.is_within(path, root)
 
 
 def _is_or_above_home(path: str) -> bool:

@@ -170,7 +170,10 @@ class TestLifecycleHooks(unittest.TestCase):
             res = proc.run_capture([sys.executable, hook_file], cwd=nested_dir)
             self.assertEqual(res.returncode, 0, f"Hook failed: {res.stderr}")
             # CWD of the executed process must be fixture_root
-            self.assertIn(f"CWD:{repo.canonical_path(fixture_root)}", res.stdout)
+            self.assertTrue(
+                f"CWD:{fixture_root}" in res.stdout or f"CWD:{repo.canonical_path(fixture_root)}" in res.stdout,
+                f"Expected CWD of {fixture_root} in {res.stdout}"
+            )
 
     def test_05_arguments_with_spaces_and_metacharacters_preserved(self):
         """REQ-1 & REQ-5: Arguments containing spaces and shell metacharacters are passed verbatim."""

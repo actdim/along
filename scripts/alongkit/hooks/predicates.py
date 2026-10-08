@@ -334,7 +334,7 @@ def _repo_relative(target: str, repo_root: str) -> Optional[str]:
         return None
     abs_target = os.path.normpath(target if os.path.isabs(target) else os.path.join(repo_root, target))
     sdir = os.path.normpath(repo.state_dir(repo_root))
-    if os.path.normcase(sdir) != os.path.normcase(os.path.normpath(os.path.join(repo_root, repo.STATE_DIR))) \
+    if not repo._same_path(sdir, os.path.join(repo_root, repo.STATE_DIR)) \
             and repo.is_within(abs_target, sdir):
         inner = repo.canonical_relpath(abs_target, sdir)
         return repo.STATE_DIR if inner == "." else f"{repo.STATE_DIR}/{inner}"
@@ -1092,12 +1092,11 @@ def subproject_context(repo_root: str, rel_target: str) -> Optional[str]:
     if not found:
         return None
     ctx, sdir = found
-    root = os.path.abspath(repo_root)
-    if os.path.normcase(os.path.abspath(ctx)) == os.path.normcase(root):
+    if repo._same_path(ctx, repo_root):
         return None
-    if os.path.normcase(os.path.abspath(sdir)) == os.path.normcase(os.path.abspath(repo.state_dir(root))):
+    if repo._same_path(sdir, repo.state_dir(repo_root)):
         return None
-    return ctx if repo.is_within(ctx, root) else None
+    return ctx if repo.is_within(ctx, repo_root) else None
 
 
 def _issue_frontmatter(context_root: str, slug: str, include_done: bool = False) -> Optional[Dict[str, Any]]:
@@ -1183,8 +1182,7 @@ def check_subproject_boundary(event: HookEvent, repo_root: str, **kwargs: Any) -
             # not [ADR-2026-10-06--subproject-boundary-is-git-or-explicit-init]. The root's own
             # (declared) state dir is no subproject either.
             sub_along = os.path.join(cwd, ".along")
-            own_state = os.path.normcase(os.path.abspath(sub_along)) == \
-                os.path.normcase(os.path.abspath(repo.state_dir(repo_root)))
+            own_state = repo._same_path(sub_along, repo.state_dir(repo_root))
             if not own_state and repo.is_along_state_dir(sub_along):
                 return (
                     f"Subproject Boundary Violation [gate: subproject-boundary]: "
