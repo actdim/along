@@ -3,10 +3,11 @@ protocol: along
 protocol_version: "4.2.0"
 slug: constraints-superseded-adr-filtering
 type: debt
-status: open
+status: done
+completed: 2026-10-10
 priority: medium
 created: 2026-09-27
-updated: 2026-09-29
+updated: 2026-10-10
 agent: cowork
 tags: [adr, projections, drift]
 milestone: v4.5.0-multi-user-merge-automation

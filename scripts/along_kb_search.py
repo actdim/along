@@ -55,10 +55,10 @@ def collect_all_entries(repo_root, verbose=False):
         if verbose:
             print(f"   [WARN] skipped {rel_file}: {exc}", file=sys.stderr)
 
-    # 1. Curated Knowledge Base (docs/*.md)
+    # 1. Curated Knowledge Base (docs/*.md, excluding generated mirrors like docs/decisions/)
     if os.path.exists(docs_dir):
         for f in sorted(os.listdir(docs_dir)):
-            if not f.endswith(".md") or f == "INDEX.md":
+            if not f.endswith(".md") or f == "INDEX.md" or f == "decisions":
                 continue
             fp = os.path.join(docs_dir, f)
             if not os.path.isfile(fp):

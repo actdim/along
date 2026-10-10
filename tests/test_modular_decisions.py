@@ -196,6 +196,24 @@ class TestModularDecisionsCompilation(unittest.TestCase):
             self.assertNotIn("Second Architectural Choice", content)
             self.assertNotIn("Use in-memory dict.", content)
 
+    def test_sync_constraints_excludes_deprecated_and_rejected(self):
+        with hermetic.repo_fixture() as fixture:
+            dec_dir = os.path.join(fixture, ".along", "DECISIONS")
+            os.makedirs(dec_dir, exist_ok=True)
+            adr_acc = SAMPLE_ADR_1
+            adr_dep = SAMPLE_ADR_1.replace("first-architectural-choice", "deprecated-choice").replace("status: accepted", "status: deprecated")
+            adr_rej = SAMPLE_ADR_1.replace("first-architectural-choice", "rejected-choice").replace("status: accepted", "status: rejected")
+
+            textio.write_text(os.path.join(dec_dir, "ADR-2026-09-01--first-architectural-choice.md"), adr_acc)
+            textio.write_text(os.path.join(dec_dir, "ADR-2026-09-02--deprecated-choice.md"), adr_dep)
+            textio.write_text(os.path.join(dec_dir, "ADR-2026-09-03--rejected-choice.md"), adr_rej)
+
+            constraints_file = entities.sync_constraints(fixture)
+            content = textio.read_text(constraints_file)
+            self.assertIn("First Architectural Choice", content)
+            self.assertNotIn("deprecated-choice", content)
+            self.assertNotIn("rejected-choice", content)
+
 
 class TestModularDecisionsCreation(unittest.TestCase):
 
@@ -256,6 +274,34 @@ class TestModularDecisionsCLI(unittest.TestCase):
             self.assertTrue(res_sync.ok, f"decision sync failed: {res_sync.stderr}")
             self.assertIn("Recompiled .along/DECISIONS.md projection board", res_sync.stdout)
 
+    def test_cli_decision_sync_check(self):
+        with hermetic.repo_fixture() as fixture:
+            exec_script = os.path.join(SCRIPTS_DIR, "along_exec.py")
+            dec_dir = os.path.join(fixture, ".along", "DECISIONS")
+            os.makedirs(dec_dir, exist_ok=True)
+
+            textio.write_text(os.path.join(dec_dir, "ADR-2026-09-01--first-architectural-choice.md"), SAMPLE_ADR_1)
+            textio.write_text(os.path.join(dec_dir, "ADR-2026-09-05--second-architectural-choice.md"), SAMPLE_ADR_2)
+            textio.write_text(os.path.join(dec_dir, "ADR-2026-09-10--third-architectural-choice.md"), SAMPLE_ADR_3)
+
+            # Clean check
+            res_clean = proc.run_python([exec_script, "decision", "sync", "--check"], cwd=fixture)
+            self.assertTrue(res_clean.ok, f"sync --check failed unexpectedly: {res_clean.stderr}")
+            self.assertIn("No decision conflicts detected", res_clean.stdout)
+
+            # Introduce conflict by making second-architectural-choice active and third-architectural-choice superseding it
+            conflicting_adr_2 = SAMPLE_ADR_2.replace("status: superseded", "status: accepted")
+            conflicting_adr_3 = SAMPLE_ADR_3.replace(
+                "Context: In-memory dict is insufficient.",
+                "Context: In-memory dict is insufficient. Supersedes second-architectural-choice."
+            )
+            textio.write_text(os.path.join(dec_dir, "ADR-2026-09-05--second-architectural-choice.md"), conflicting_adr_2)
+            textio.write_text(os.path.join(dec_dir, "ADR-2026-09-10--third-architectural-choice.md"), conflicting_adr_3)
+
+            res_conflict = proc.run_python([exec_script, "decision", "sync", "--check"], cwd=fixture)
+            self.assertFalse(res_conflict.ok, "sync --check should have failed on conflict")
+            self.assertIn("Decision conflict(s) detected", res_conflict.stderr)
+
 
 class TestModularDecisionsValidation(unittest.TestCase):
 
@@ -294,6 +340,150 @@ superseded_by: nonexistent-target-slug
 
             report = entities.validate_entities(fixture)
             self.assertTrue(report["clean"], f"Validation failed: {report['errors']}")
+
+
+class TestModularDecisionsConflicts(unittest.TestCase):
+
+    def test_check_decision_conflicts_flags_unsuperseded(self):
+        with hermetic.repo_fixture() as fixture:
+            dec_dir = os.path.join(fixture, ".along", "DECISIONS")
+            os.makedirs(dec_dir, exist_ok=True)
+            adr_old = """---
+protocol: along
+title: "Legacy Cache Engine"
+date: 2026-09-01
+status: accepted
+type: decision
+slug: legacy-cache-engine
+tags: [architecture, caching]
+---
+
+# ADR-2026-09-01--legacy-cache-engine - Legacy Cache Engine
+
+- Date: 2026-09-01
+- Status: accepted
+- Context: Need caching.
+- Decision: Use in-process dictionary cache.
+- Consequences: Cache not shared.
+"""
+            adr_new = """---
+protocol: along
+title: "Distributed Cache Engine"
+date: 2026-09-05
+status: accepted
+type: decision
+slug: distributed-cache-engine
+tags: [architecture, caching]
+---
+
+# ADR-2026-09-05--distributed-cache-engine - Distributed Cache Engine
+
+- Date: 2026-09-05
+- Status: accepted
+- Context: In-process cache does not scale. Supersedes legacy-cache-engine.
+- Decision: Use Redis distributed cache.
+- Consequences: Shared cache.
+"""
+            textio.write_text(os.path.join(dec_dir, "ADR-2026-09-01--legacy-cache-engine.md"), adr_old)
+            textio.write_text(os.path.join(dec_dir, "ADR-2026-09-05--distributed-cache-engine.md"), adr_new)
+
+            conflicts = entities.check_decision_conflicts(fixture)
+            self.assertEqual(len(conflicts), 1)
+            self.assertIn("legacy-cache-engine", conflicts[0]["message"])
+            self.assertIn("distributed-cache-engine", conflicts[0]["message"])
+
+    def test_check_decision_conflicts_exempts_complementary(self):
+        with hermetic.repo_fixture() as fixture:
+            dec_dir = os.path.join(fixture, ".along", "DECISIONS")
+            os.makedirs(dec_dir, exist_ok=True)
+            adr_old = """---
+protocol: along
+title: "Core Service Engine"
+date: 2026-09-01
+status: accepted
+type: decision
+slug: core-service-engine
+tags: [architecture, backend]
+---
+
+# ADR-2026-09-01--core-service-engine - Core Service Engine
+
+- Date: 2026-09-01
+- Status: accepted
+- Context: Need core backend.
+- Decision: Standard backend runner.
+- Consequences: Simple backend.
+"""
+            adr_new = """---
+protocol: along
+title: "Telemetry Service Plugin"
+date: 2026-09-05
+status: accepted
+type: decision
+slug: telemetry-service-plugin
+tags: [architecture, backend]
+---
+
+# ADR-2026-09-05--telemetry-service-plugin - Telemetry Service Plugin
+
+- Date: 2026-09-05
+- Status: accepted
+- Context: This decision complements core-service-engine with telemetry metrics.
+- Decision: Add metrics exporter.
+- Consequences: Telemetry available.
+"""
+            textio.write_text(os.path.join(dec_dir, "ADR-2026-09-01--core-service-engine.md"), adr_old)
+            textio.write_text(os.path.join(dec_dir, "ADR-2026-09-05--telemetry-service-plugin.md"), adr_new)
+
+            conflicts = entities.check_decision_conflicts(fixture)
+            self.assertEqual(len(conflicts), 0)
+
+    def test_check_decision_conflicts_resolved_by_supersession(self):
+        with hermetic.repo_fixture() as fixture:
+            dec_dir = os.path.join(fixture, ".along", "DECISIONS")
+            os.makedirs(dec_dir, exist_ok=True)
+            adr_old = """---
+protocol: along
+title: "Legacy Cache Engine"
+date: 2026-09-01
+status: superseded
+superseded_by: distributed-cache-engine
+type: decision
+slug: legacy-cache-engine
+tags: [architecture, caching]
+---
+
+# ADR-2026-09-01--legacy-cache-engine - Legacy Cache Engine
+
+- Date: 2026-09-01
+- Status: superseded by ADR-2026-09-05--distributed-cache-engine
+- Context: Need caching.
+- Decision: Use in-process dictionary cache.
+- Consequences: Cache not shared.
+"""
+            adr_new = """---
+protocol: along
+title: "Distributed Cache Engine"
+date: 2026-09-05
+status: accepted
+type: decision
+slug: distributed-cache-engine
+tags: [architecture, caching]
+---
+
+# ADR-2026-09-05--distributed-cache-engine - Distributed Cache Engine
+
+- Date: 2026-09-05
+- Status: accepted
+- Context: Supersedes legacy-cache-engine.
+- Decision: Use Redis distributed cache.
+- Consequences: Shared cache.
+"""
+            textio.write_text(os.path.join(dec_dir, "ADR-2026-09-01--legacy-cache-engine.md"), adr_old)
+            textio.write_text(os.path.join(dec_dir, "ADR-2026-09-05--distributed-cache-engine.md"), adr_new)
+
+            conflicts = entities.check_decision_conflicts(fixture)
+            self.assertEqual(len(conflicts), 0)
 
 
 if __name__ == "__main__":
