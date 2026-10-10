@@ -4,19 +4,14 @@
 <!-- No active issues -->
 
 ## Backlog
-- [ ] `(bug)` [archive-drops-research-md](ISSUES/bug--archive-drops-research-md.md)
 - [ ] `(bug)` [history-append-blocked-after-wrap](ISSUES/bug--history-append-blocked-after-wrap.md)
-- [ ] `(bug)` [inquiry-readonly-commands-blocked](ISSUES/bug--inquiry-readonly-commands-blocked.md)
-- [ ] `(bug)` [plan-gate-blocks-help](ISSUES/bug--plan-gate-blocks-help.md)
 - [ ] `(bug)` [release-tags-not-pushed](ISSUES/bug--release-tags-not-pushed.md)
 - [ ] `(bug)` [uncommitted-issue-deleted-without-trace](ISSUES/bug--uncommitted-issue-deleted-without-trace.md)
 - [ ] `(bug)` [worktree-cross-os-mount-guard](ISSUES/bug--worktree-cross-os-mount-guard.md)
-- [ ] `(bug)` [wrapped-work-left-uncommitted](ISSUES/bug--wrapped-work-left-uncommitted.md)
 - [ ] `(debt)` [agents-md-core-slimming](ISSUES/debt--agents-md-core-slimming.md)
 - [ ] `(debt)` [along-core-extras-split](ISSUES/debt--along-core-extras-split.md)
 - [ ] `(debt)` [along-exec-argparse-migration](ISSUES/debt--along-exec-argparse-migration.md)
 - [ ] `(debt)` [canonical-path-gate-expansion](ISSUES/debt--canonical-path-gate-expansion.md)
-- [ ] `(debt)` [constraints-superseded-adr-filtering](ISSUES/debt--constraints-superseded-adr-filtering.md)
 - [ ] `(debt)` [protocol-friction-cleanup](ISSUES/debt--protocol-friction-cleanup.md)
 - [ ] `(docs)` [anti-pattern-shell-code-probing](ISSUES/docs--anti-pattern-shell-code-probing.md)
 - [ ] `(docs)` [arxiv-academic-paper-preprint](ISSUES/docs--arxiv-academic-paper-preprint.md)
@@ -44,7 +39,6 @@
 - [ ] `(feat)` [dart-flutter-ecosystem-support](ISSUES/feat--dart-flutter-ecosystem-support.md)
 - [ ] `(feat)` [deepseek-harness-bridge](ISSUES/feat--deepseek-harness-bridge.md)
 - [ ] `(feat)` [dev-environment-setup-and-editable-install](ISSUES/feat--dev-environment-setup-and-editable-install.md)
-- [ ] `(feat)` [docs-semantic-conflict-resolution](ISSUES/feat--docs-semantic-conflict-resolution.md)
 - [ ] `(feat)` [empirical-benchmark-harness-and-metrics](ISSUES/feat--empirical-benchmark-harness-and-metrics.md)
 - [ ] `(feat)` [enterprise-governance-and-cloud-infrastructure](ISSUES/feat--enterprise-governance-and-cloud-infrastructure.md)
 - [ ] `(feat)` [enterprise-governance-and-compliance-pack](ISSUES/feat--enterprise-governance-and-compliance-pack.md)
@@ -72,9 +66,9 @@
 - [ ] `(feat)` [zero-step-state-recovery-and-drift-detection](ISSUES/feat--zero-step-state-recovery-and-drift-detection.md)
 
 ## Done (recent)
-- [x] `(feat)` [test-gate-cost-reduction](ISSUES/done/feat--test-gate-cost-reduction.md)
-- [x] `(debt)` [canonical-windows-paths](ISSUES/done/debt--canonical-windows-paths.md)
-- [x] `(bug)` [lexical-path-root-resolution](ISSUES/done/bug--lexical-path-root-resolution.md)
-- [x] `(task)` [release-v4-4-7](ISSUES/done/task--release-v4-4-7.md)
-- [x] `(task)` [file-v4-5-fixes-update](ISSUES/done/task--file-v4-5-fixes-update.md)
-<!-- 202 older completed issue(s) archived in .along/ISSUES/done/ -->
+- [x] `(debt)` [constraints-superseded-adr-filtering](ISSUES/done/debt--constraints-superseded-adr-filtering.md)
+- [x] `(bug)` [archive-drops-research-md](ISSUES/done/bug--archive-drops-research-md.md)
+- [x] `(feat)` [docs-semantic-conflict-resolution](ISSUES/done/feat--docs-semantic-conflict-resolution.md)
+- [x] `(bug)` [wrapped-work-left-uncommitted](ISSUES/done/bug--wrapped-work-left-uncommitted.md)
+- [x] `(bug)` [plan-gate-blocks-help](ISSUES/done/bug--plan-gate-blocks-help.md)
+<!-- 208 older completed issue(s) archived in .along/ISSUES/done/ -->

@@ -6,22 +6,20 @@ type: index
 tags: [adr, architecture, decisions, index]
 ---
 
+<!-- Generated projection from .along/DECISIONS. Do not edit by hand. Run: along decision sync -->
+
 # Architectural Decision Records (ADRs)
 
 This directory contains the project's Architectural Decision Records.
 Decisions are authored and maintained in `.along/DECISIONS/` and published here as first-class documentation.
 
-## Active Decisions (46)
+## Active Decisions (42)
 
-- **[code-graph-mcp-and-hybrid-kb-search](./ADR-2026-08-26--code-graph-mcp-and-hybrid-kb-search.md)** - Code Graph & Hybrid Knowledge Base Search MCP Integration
-- **[protocol-v120-knowledge-base-architecture](./ADR-2026-08-26--protocol-v120-knowledge-base-architecture.md)** - Protocol v1.2.0 & Knowledge Base (KB) Architecture Standard
 - **[along-v200-rebranding-and-namespace-isolation](./ADR-2026-08-27--along-v200-rebranding-and-namespace-isolation.md)** - Along v2.0.0: Rebranding, Isolated .along/ Directory, along-* Skill Prefixes, and protocol: along Metadata
 - **[autonomous-multi-mode-dashboard-and-analytics-engine](./ADR-2026-08-27--autonomous-multi-mode-dashboard-and-analytics-engine.md)** - Autonomous Multi-Mode Repository Dashboard & Analytics Engine
 - **[entity-relationships-unidirectional-graph-and-canonical-slugs](./ADR-2026-08-27--entity-relationships-unidirectional-graph-and-canonical-slugs.md)** - Entity Relationships, Unidirectional Graph Storage & Canonical Slug Invariance
 - **[mandatory-code-review-and-blast-radius-impact-gate](./ADR-2026-08-27--mandatory-code-review-and-blast-radius-impact-gate.md)** - Mandatory Agentic Code Review & Blast Radius Impact Assessment Gate
-- **[protocol-v150-automated-entities-and-intent-heuristics](./ADR-2026-08-27--protocol-v150-automated-entities-and-intent-heuristics.md)** - Protocol v1.5.0: Automated Entity Ecosystem & Zero-Friction Intent Recognition
 - **[unified-along-wrap-commit-and-lifecycle-runners](./ADR-2026-08-27--unified-along-wrap-commit-and-lifecycle-runners.md)** - Unified /along-wrap, Smart /along-commit, and Lifecycle Execution Suite (/along-build, /along-test, /along-dev)
-- **[universal-version-bumping-and-scripts-ecosystem](./ADR-2026-08-27--universal-version-bumping-and-scripts-ecosystem.md)** - Universal Project Version Bumping & Repository Scripts Ecosystem (.along/scripts/)
 - **[frontend-dynstruct-architecture-and-msgmesh-adapters](./ADR-2026-08-28--frontend-dynstruct-architecture-and-msgmesh-adapters.md)** - Frontend Architecture: Dynstruct Component Architecture, MessageMesh Integration, and NSwag Adapters
 - **[llm-wiki-docs-architecture-and-singular-skills-refactoring](./ADR-2026-08-30--llm-wiki-docs-architecture-and-singular-skills-refactoring.md)** - LLM-Wiki Knowledge Base Architecture in docs/, .archive/ Isolation & Singular Domain-First Skills Refactoring
 - **[multi-agent-protocol-along-team-and-goal-integration](./ADR-2026-08-30--multi-agent-protocol-along-team-and-goal-integration.md)** - Multi-Agent Development Protocol (along-team), Sequential State Machine, Living Plan, and /goal Integration
@@ -60,7 +58,11 @@ Decisions are authored and maintained in `.along/DECISIONS/` and published here 
 - **[subproject-boundary-is-git-or-explicit-init](./ADR-2026-10-06--subproject-boundary-is-git-or-explicit-init.md)** - Subproject boundary is a nested .git or an explicit along init
 - **[along-installation-is-state-not-agents-md](./ADR-2026-10-07--along-installation-is-state-not-agents-md.md)** - An Along installation is Along state, never an AGENTS.md
 
-## Superseded & Retired Decisions (2)
+## Superseded & Retired Decisions (6)
 
 - **[single-file-append-only-decisions](./ADR-2026-08-15--single-file-append-only-decisions.md)** - Single-file append-only DECISIONS.md over multi-file MADR/Nygard *(superseded by bounded-context-budget-and-active-projections)*
+- **[code-graph-mcp-and-hybrid-kb-search](./ADR-2026-08-26--code-graph-mcp-and-hybrid-kb-search.md)** - Code Graph & Hybrid Knowledge Base Search MCP Integration *(superseded by decouple-code-review-graph-from-mcp-to-direct-cli)*
+- **[protocol-v120-knowledge-base-architecture](./ADR-2026-08-26--protocol-v120-knowledge-base-architecture.md)** - Protocol v1.2.0 & Knowledge Base (KB) Architecture Standard *(superseded by llm-wiki-docs-architecture-and-singular-skills-refactoring)*
+- **[protocol-v150-automated-entities-and-intent-heuristics](./ADR-2026-08-27--protocol-v150-automated-entities-and-intent-heuristics.md)** - Protocol v1.5.0: Automated Entity Ecosystem & Zero-Friction Intent Recognition *(superseded by entity-relationships-unidirectional-graph-and-canonical-slugs)*
+- **[universal-version-bumping-and-scripts-ecosystem](./ADR-2026-08-27--universal-version-bumping-and-scripts-ecosystem.md)** - Universal Project Version Bumping & Repository Scripts Ecosystem (.along/scripts/) *(superseded by version-ssot-consolidation-and-dynamic-packaging)*
 - **[windows-git-concurrency-and-index-lock-mitigation](./ADR-2026-09-06--windows-git-concurrency-and-index-lock-mitigation.md)** - Windows Git Concurrency Hardening: Disabling Optional Locks and Preload Races *(superseded by revert-git-stat-cache-workarounds)*
