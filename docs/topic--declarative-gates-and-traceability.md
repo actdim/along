@@ -75,7 +75,7 @@ Gates are declared in YAML format with standard schema fields:
 - `remediation`: Explicit remediation message returned to the agent on violation.
 - `enforcement`: Layers that enforce the gate, any of `runtime` (agent hooks, the default), `git` (opt-in `along hooks install --git`), `ci` (`along gates check --ci`). An unknown layer is a schema error. `alongkit.gitgates` reads its patterns (issue binding, anti-stub) from the same entries, so the layers cannot disagree. `along hook verify` prints the resulting matrix.
 
-The 25 canonical gates defined in the catalogue:
+The 26 canonical gates defined in the catalogue:
 1. `commit_issue_binding`: Intercepts `git commit` to require issue binding: `[<type>--<slug>]` or `(refs #<slug>)`, the form `/along-commit` appends. In git/CI mode, subjects starting with `release: `, `Merge `, `Revert "`, `fixup! `, `squash! ` are exempt.
 2. `commit_no_conflict_markers`: Intercepts `git commit` and inspects the lines the commit would add (`git diff --cached`, or `git diff HEAD` for `commit -a`) for unresolved merge conflict markers at line start (`<<<<<<< `, `=======`, `>>>>>>> `). The commit message itself is not inspected, so a Markdown rule of `=======` in a message is allowed. No file class is exempt: `merge=union` files never receive markers from git, so a marker there is a real conflict too.
 3. `anti_stub_injection`: Intercepts file mutation tools to forbid stub markers and lazy truncation skeletons.
@@ -111,6 +111,8 @@ The managed rule pack gate also spans all three layers:
 
 25. `rule_pack_protection`: Managed rule packs (`.along/rules/**/*.md` in any `.along/`) belong to `along rules attach`. Runtime: denies file-tool writes to them and shell commands whose non-read-only segment names one (`along rules ...` is exempt); `.along/rules/gates.yaml` stays editable. Git/CI: `alongkit.gitgates.check_rule_packs` runs `repochecks.check_rule_pack_integrity` over staged (or tracked) rule packs, which must carry the managed header with a body matching its `sha256`. The gate's catalogue rule is the runtime predicate, so the repository-state loop does not run it. Project guidelines go to `docs/topic--<slug>.md` or `AGENTS.md` "Project specifics"; `along rules restore` reverts a pack.
 
+26. `wrapped_work_uncommitted` [gate: wrapped_work_uncommitted]: Intercepts session termination (`Stop`) to warn when the active session wrapped an issue but attributed files remain uncommitted on disk. Non-blocking: runs in `shadow` mode by default, emitting guidance on committing attributed files.
+
 Gate options: keys of a gate entry other than the definition keys (`id`, `title`, `description`, `event`, `tools`, `match_args`, `rule(s)`, `enforcement`, `enabled`) are passed to predicate handlers as `options=`. A `.along/rules/gates.yaml` entry whose `id` names a built-in gate is merged into it: keys it sets win and the rest is inherited, so an entry can just add options or set `enabled: false`:
 
 ```yaml
@@ -133,7 +135,7 @@ gates:
 While regex gates evaluate single tool calls in isolation, complex invariants require session state:
 - `record_tool_activity()`: Records executed commands and modified paths into `.along/diagnostics/activity_trace.jsonl`.
 - `load_activity_trace()`: Reconstructs session tool call history to evaluate post-conditions.
-- Predicate functions (`check_require_active_issue`, `check_test_before_stop`, `check_wrap_before_stop`, `check_projection_sync_before_stop`, `check_subproject_boundary`) return a violation message string or `None`.
+- Predicate functions (`check_require_active_issue`, `check_test_before_stop`, `check_wrap_before_stop`, `check_uncommitted_wrap_before_stop`, `check_projection_sync_before_stop`, `check_subproject_boundary`) return a violation message string or `None`.
 
 ### 2.3 Bi-Directional Traceability Scanner (`alongkit.hooks.traceability`)
 
