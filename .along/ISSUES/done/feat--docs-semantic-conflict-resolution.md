@@ -3,10 +3,11 @@ protocol: along
 protocol_version: "3.8.0"
 slug: docs-semantic-conflict-resolution
 type: feat
-status: open
+status: done
+completed: 2026-10-09
 priority: medium
 created: 2026-09-21
-updated: 2026-09-29
+updated: 2026-10-09
 agent: antigravity
 tags: [git, merge, docs, wiki, kb, markdown, llm]
 milestone: v4.5.0-multi-user-merge-automation
@@ -57,8 +58,8 @@ This issue implements a semantic documentation conflict resolution engine:
 - Test broken link detection and recovery.
 
 ## Acceptance Criteria
-- [ ] `along resolve --docs` reliably detects and resolves structural markdown conflicts.
-- [ ] Conflicting heading additions from parallel branches are cleanly combined without manual intervention.
-- [ ] Merged markdown files pass typography gates and link integrity verification.
-- [ ] `along kb sync` runs automatically after successful documentation conflict resolution.
-- [ ] Hermetic unit tests in `tests/test_along_resolve_docs.py` pass cleanly.
+- [x] `along resolve --docs` reliably detects and resolves structural markdown conflicts.
+- [x] Conflicting heading additions from parallel branches are cleanly combined without manual intervention.
+- [x] Merged markdown files pass typography gates and link integrity verification.
+- [x] `along kb sync` runs automatically after successful documentation conflict resolution.
+- [x] Hermetic unit tests in `tests/test_along_resolve_docs.py` pass cleanly.

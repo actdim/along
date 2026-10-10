@@ -29,6 +29,8 @@ import re
 from dataclasses import dataclass
 from typing import Callable, Iterator, List, Optional, Tuple
 
+from . import repo
+
 #: `[text](target)` with the parts a rewriter needs to reassemble the link.
 LINK_RE = re.compile(r"(?P<prefix>\[(?P<text>[^\]]*)\]\()(?P<target>[^)]*)(?P<suffix>\))")
 
@@ -195,3 +197,118 @@ def resolve_target(target: str, from_file: str, repo_root: str) -> Optional[str]
 
     from_dir = os.path.dirname(os.path.abspath(from_file))
     return os.path.normpath(os.path.join(from_dir, base))
+
+
+def extract_heading_anchors(text: str) -> set[str]:
+    """Extract all GitHub-compatible heading anchors from text outside fenced code."""
+    anchors: set[str] = set()
+    counts: dict[str, int] = {}
+    heading_re = re.compile(r"^ {0,3}#{1,6}\s+(.+)$")
+    for _, line in iter_lines_outside_fences(text):
+        m = heading_re.match(line)
+        if m:
+            raw_title = m.group(1).strip()
+            title = re.sub(r"\s+#+\s*$", "", raw_title)
+            base_slug = github_heading_anchor(title)
+            if not base_slug:
+                continue
+            cnt = counts.get(base_slug, 0)
+            slug = base_slug if cnt == 0 else f"{base_slug}-{cnt}"
+            counts[base_slug] = cnt + 1
+            anchors.add(slug)
+    return anchors
+
+
+def find_broken_links(text: str, file_path: str, repo_root: str) -> List[dict]:
+    """Verify that all markdown links in text resolve to valid files and heading anchors.
+
+    Checks:
+    - Relative files exist on disk.
+    - Intra-document (#anchor) and cross-document (file.md#anchor) heading anchors exist.
+    - file:// pseudo-schemes are reported as broken.
+    - Stable Entry Point Rule: relative links in files outside .along/ must not point directly into .along/.
+    """
+    broken: List[dict] = []
+    repo_root = os.path.abspath(repo_root)
+    file_path = os.path.abspath(file_path)
+    current_anchors = extract_heading_anchors(text)
+    target_cache: dict[str, set[str]] = {}
+
+    for link in find_links(text, skip_external=False):
+        raw_target = link.target.strip()
+        if not raw_target:
+            continue
+
+        if is_external(raw_target) and not raw_target.startswith("#"):
+            continue
+
+        if is_placeholder(raw_target):
+            continue
+
+        if raw_target.startswith("file://"):
+            broken.append({
+                "link": link,
+                "reason": "Forbidden file:// pseudo-scheme",
+                "target": raw_target,
+                "line": link.line,
+            })
+            continue
+
+        # Check intra-document anchor: #anchor
+        if raw_target.startswith("#"):
+            anchor_slug = raw_target[1:].strip().lower()
+            if anchor_slug and anchor_slug not in current_anchors:
+                broken.append({
+                    "link": link,
+                    "reason": f"Dangling heading anchor: {raw_target}",
+                    "target": raw_target,
+                    "line": link.line,
+                })
+            continue
+
+        # Cross-document link
+        resolved = resolve_target(raw_target, file_path, repo_root)
+        if resolved is None or not os.path.exists(resolved):
+            broken.append({
+                "link": link,
+                "reason": f"Target file does not exist: {raw_target}",
+                "target": raw_target,
+                "line": link.line,
+            })
+            continue
+
+        # Stable entry point rule: files outside .along/ must not link directly into .along/
+        from_rel = repo.safe_relpath(file_path, repo_root).replace("\\", "/")
+        target_rel = repo.safe_relpath(resolved, repo_root).replace("\\", "/")
+        if not from_rel.startswith(".along/") and (target_rel.startswith(".along/") or "/.along/" in target_rel):
+            broken.append({
+                "link": link,
+                "reason": f"Stable entry point violation: relative link into .along/ from {from_rel}",
+                "target": raw_target,
+                "line": link.line,
+            })
+            continue
+
+        # Check cross-file anchor if present
+        if link.anchor:
+            anchor_slug = link.anchor[1:].strip().lower()
+            if anchor_slug:
+                if resolved not in target_cache:
+                    if resolved.endswith(".md") and os.path.isfile(resolved):
+                        try:
+                            with open(resolved, "r", encoding="utf-8", errors="replace") as f:
+                                target_cache[resolved] = extract_heading_anchors(f.read())
+                        except OSError:
+                            target_cache[resolved] = set()
+                    else:
+                        target_cache[resolved] = set()
+                if anchor_slug not in target_cache[resolved]:
+                    broken.append({
+                        "link": link,
+                        "reason": f"Dangling heading anchor {link.anchor} in target {target_rel}",
+                        "target": raw_target,
+                        "line": link.line,
+                    })
+
+    return broken
+
