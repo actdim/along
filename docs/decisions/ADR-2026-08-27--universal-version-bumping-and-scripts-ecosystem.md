@@ -3,14 +3,15 @@ protocol: along
 slug: universal-version-bumping-and-scripts-ecosystem
 title: "Universal Project Version Bumping & Repository Scripts Ecosystem (.along/scripts/)"
 date: 2026-08-27
-status: accepted
+status: superseded
+superseded_by: version-ssot-consolidation-and-dynamic-packaging
 tags: [adr, architecture, decision]
 ---
 
 # ADR-2026-08-27--universal-version-bumping-and-scripts-ecosystem - Universal Project Version Bumping & Repository Scripts Ecosystem (.along/scripts/)
 
 - Date: 2026-08-27
-- Status: accepted
+- Status: superseded by ADR-2026-09-09--version-ssot-consolidation-and-dynamic-packaging
 - Context: `along-bump-version` was initially hardcoded for `actdim/along` internal development, failing when executed in external consumer repositories (Node, Python, Rust, .NET).
 - Decision:
   1. Transform `/along-bump-version` (`along_bump_version.py`) into a universal release engine.

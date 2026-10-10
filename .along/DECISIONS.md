@@ -3,17 +3,13 @@
 
 Compiled index of Architectural Decision Records stored in `.along/DECISIONS/`.
 
-## Active Decisions (46)
+## Active Decisions (42)
 
-- [Code Graph & Hybrid Knowledge Base Search MCP Integration](DECISIONS/ADR-2026-08-26--code-graph-mcp-and-hybrid-kb-search.md)
-- [Protocol v1.2.0 & Knowledge Base (KB) Architecture Standard](DECISIONS/ADR-2026-08-26--protocol-v120-knowledge-base-architecture.md)
 - [Along v2.0.0: Rebranding, Isolated .along/ Directory, along-* Skill Prefixes, and protocol: along Metadata](DECISIONS/ADR-2026-08-27--along-v200-rebranding-and-namespace-isolation.md)
 - [Autonomous Multi-Mode Repository Dashboard & Analytics Engine](DECISIONS/ADR-2026-08-27--autonomous-multi-mode-dashboard-and-analytics-engine.md)
 - [Entity Relationships, Unidirectional Graph Storage & Canonical Slug Invariance](DECISIONS/ADR-2026-08-27--entity-relationships-unidirectional-graph-and-canonical-slugs.md)
 - [Mandatory Agentic Code Review & Blast Radius Impact Assessment Gate](DECISIONS/ADR-2026-08-27--mandatory-code-review-and-blast-radius-impact-gate.md)
-- [Protocol v1.5.0: Automated Entity Ecosystem & Zero-Friction Intent Recognition](DECISIONS/ADR-2026-08-27--protocol-v150-automated-entities-and-intent-heuristics.md)
 - [Unified /along-wrap, Smart /along-commit, and Lifecycle Execution Suite (/along-build, /along-test, /along-dev)](DECISIONS/ADR-2026-08-27--unified-along-wrap-commit-and-lifecycle-runners.md)
-- [Universal Project Version Bumping & Repository Scripts Ecosystem (.along/scripts/)](DECISIONS/ADR-2026-08-27--universal-version-bumping-and-scripts-ecosystem.md)
 - [Frontend Architecture: Dynstruct Component Architecture, MessageMesh Integration, and NSwag Adapters](DECISIONS/ADR-2026-08-28--frontend-dynstruct-architecture-and-msgmesh-adapters.md)
 - [LLM-Wiki Knowledge Base Architecture in docs/, .archive/ Isolation & Singular Domain-First Skills Refactoring](DECISIONS/ADR-2026-08-30--llm-wiki-docs-architecture-and-singular-skills-refactoring.md)
 - [Multi-Agent Development Protocol (along-team), Sequential State Machine, Living Plan, and /goal Integration](DECISIONS/ADR-2026-08-30--multi-agent-protocol-along-team-and-goal-integration.md)
@@ -52,7 +48,11 @@ Compiled index of Architectural Decision Records stored in `.along/DECISIONS/`.
 - [Subproject boundary is a nested .git or an explicit along init](DECISIONS/ADR-2026-10-06--subproject-boundary-is-git-or-explicit-init.md)
 - [An Along installation is Along state, never an AGENTS.md](DECISIONS/ADR-2026-10-07--along-installation-is-state-not-agents-md.md)
 
-## Superseded & Retired Decisions (2)
+## Superseded & Retired Decisions (6)
 
 - [Single-file append-only DECISIONS.md over multi-file MADR/Nygard](DECISIONS/ADR-2026-08-15--single-file-append-only-decisions.md) *(superseded by bounded-context-budget-and-active-projections)*
+- [Code Graph & Hybrid Knowledge Base Search MCP Integration](DECISIONS/ADR-2026-08-26--code-graph-mcp-and-hybrid-kb-search.md) *(superseded by decouple-code-review-graph-from-mcp-to-direct-cli)*
+- [Protocol v1.2.0 & Knowledge Base (KB) Architecture Standard](DECISIONS/ADR-2026-08-26--protocol-v120-knowledge-base-architecture.md) *(superseded by llm-wiki-docs-architecture-and-singular-skills-refactoring)*
+- [Protocol v1.5.0: Automated Entity Ecosystem & Zero-Friction Intent Recognition](DECISIONS/ADR-2026-08-27--protocol-v150-automated-entities-and-intent-heuristics.md) *(superseded by entity-relationships-unidirectional-graph-and-canonical-slugs)*
+- [Universal Project Version Bumping & Repository Scripts Ecosystem (.along/scripts/)](DECISIONS/ADR-2026-08-27--universal-version-bumping-and-scripts-ecosystem.md) *(superseded by version-ssot-consolidation-and-dynamic-packaging)*
 - [Windows Git Concurrency Hardening: Disabling Optional Locks and Preload Races](DECISIONS/ADR-2026-09-06--windows-git-concurrency-and-index-lock-mitigation.md) *(superseded by revert-git-stat-cache-workarounds)*
