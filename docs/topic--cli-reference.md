@@ -204,8 +204,8 @@ Manages session logs in `.along/SESSIONS/` and records engineering provenance.
     - Options: `--status {done,superseded,cancelled,duplicate}`, `--summary "Summary"`, `--decisions "ADR-a,ADR-b"` or `--no-decisions`, `--force-reason "..."`, `--dry-run`, `-n`.
   - `along session bindings`: Lists agent-session bindings (session key, issue, approval, last update).
   - `along session gc [--dry-run]`: Removes bindings older than 72 hours or pointing at a purged blackboard.
-  - `along session list [--json]`: Readiness of every issue in progress, every bound issue and every blackboard: sessions and their last event, attributed files (exclusive / shared with which issues, still uncommitted), last edit vs last test run, acceptance criteria ticked / total, plan recorded, verdict `ready` / `blocked` with reasons; for the repository: changed, unattributed and staged paths, a merge / rebase in progress, conflict markers.
-  - `along session close <slug>... | --ready [--dry-run] [--push]`: Closes out finished work in one step. Needs the user's approval recorded with `along plan approve --closeout` in this session. Refuses during a merge / rebase / cherry-pick, with conflicts or with staged files. Plans the commits first, runs the tests once (nothing is touched when they fail), wraps each issue, then commits by attribution: one commit per issue (its files, issue move, session log), one combined commit per set of issues sharing files (all refs), the projections last. Files also attributed to an issue not closed now are held back; unattributed changes are never committed. `--push` pushes once at the end. Idempotent: a re-run (`along session close`) resumes from `.along/.session/.closeout.json`. Issues that are not ready are listed and left untouched.
+  - `along session list [--json]`: Readiness of every issue in progress, every bound issue and every blackboard: sessions and their last event, attributed files (exclusive / shared with which issues, still uncommitted), last edit vs last test run, acceptance criteria ticked / total, plan recorded, verdict `ready` / `blocked` with reasons; for the repository: uncommitted changes grouped by wrapped issue, truly unattributed and staged paths, a merge / rebase in progress, conflict markers.
+  - `along session close <slug>... | --ready [--dry-run] [--push]`: Closes out finished work in one step. Needs the user's approval recorded with `along plan approve --closeout` in this session. Refuses during a merge / rebase / cherry-pick, with conflicts or with staged files. Plans the commits first, runs the tests once (nothing is touched when they fail), wraps each issue, then commits by attribution: one commit per issue (its files, issue move, session log), one combined commit per set of issues sharing files (all refs), the projections last. Files also attributed to an issue not closed now are held back; unattributed changes are never committed. Also supports already wrapped done issues (`along session close <done-slug>`), reading attributed files from their session log and committing them without re-wrapping. `--push` pushes once at the end. Idempotent: a re-run (`along session close`) resumes from `.along/.session/.closeout.json`. Issues that are not ready are listed and left untouched.
 - **Usage**:
   ```bash
   along session list
@@ -360,6 +360,7 @@ Transactional end-of-stage wrap engine.
   - `-a, --agent "<name>"`: Explicit agent name.
   - `-d, --decisions "ADR-a,ADR-b"` or `--no-decisions` (one is required): The answer to "were architectural decisions made?". The session log for today is written or extended with `issues_completed: [<type>--<slug>]`, the decisions, and the blackboard record (plan, step table, research, execution trace, reviews). A second record of the same issue on the same day is appended as `## Blackboard Record (<n>, <ts>)`. The blackboard is purged only after the wrap transaction committed.
   - `--force-reason "<text>"`: Wrap a role-based blackboard with open steps or missing reviews, or a blackboard whose `plan.md` is still the scaffold (refused otherwise, exit 2); the reason is recorded in the trace.
+- **Uncommitted work warning**: when files attributed to the issue remain uncommitted after wrap, warns with the list of paths and emits the exact `along commit -i <slug> --paths ...` command.
 - **Completion token**: the purge removes the session's binding; when this session had an approved plan for the slug, it keeps a completion token so the following `along commit -i <slug>` passes the plan gate without a new approval (see `along commit`).
 - **Usage**:
   ```bash
@@ -648,6 +649,28 @@ Intercepts shell commands, validating CLI safety, typography, and circuit breake
 along run pytest -q
 along run npm test
 ```
+
+### `along resolve`
+Semantic conflict auto-resolution engine for documentation and markdown files (`feat--docs-semantic-conflict-resolution`).
+- Detects unmerged markdown files (`UU`, `AA`, `UD`, `DU` in `docs/**/*.md`, `README.md`, `AGENTS.md`) and reconciles structural conflicts outside fenced code blocks.
+- **Reconciliation heuristics**:
+  - Non-overlapping headings/sections under common context combined in deterministic order.
+  - Task checklists (`- [ ]`, `- [x]`) and bullet lists merged via set-union with `[x]` completion priority.
+  - Markdown table rows merged and deduplicated while preserving headers.
+  - Link integrity validation (`find_broken_links`) and clean ASCII typography verification.
+  - Automatically recompiles the Knowledge Base via `along kb sync` after successful resolution.
+- **Options**:
+  - `--docs`: Target unmerged documentation files across `docs/` and root markdown (default).
+  - `--check`, `--dry-run`: Test resolution and report outcomes without writing changes to disk.
+  - `--strict`: Fail with exit code 1 if any conflict cannot be cleanly resolved or broken links remain.
+  - `--no-kb-sync`: Skip post-merge `along kb sync` execution.
+  - `files`: Optional explicit markdown file paths to resolve.
+- **Usage**:
+  ```bash
+  along resolve --docs
+  along resolve --check
+  along resolve --strict docs/topic--architecture.md
+  ```
 
 ---
 
