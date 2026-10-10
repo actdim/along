@@ -82,6 +82,7 @@ TOOL_MAPPINGS = {
     "wrap": "along_wrap.py",
     "hook": "along_hook.py",
     "hooks": "along_hook.py",
+    "resolve": "along_resolve.py",
 }
 
 LIFECYCLE_ACTIONS = {"build", "test", "dev", "debug"}
@@ -186,6 +187,7 @@ Along Protocol Tools:
   graph-impact   Determine blast radius and affected flows for symbol or file
   graph-arch     Architectural overview, coupling hotspots, and bridge nodes
   patch          Deterministic AST code patching (replace-func)
+  resolve        Semantic conflict auto-resolution engine for docs and markdown
 """)
 
 RECENT_DONE_LIMIT = entities.RECENT_DONE_LIMIT
@@ -412,6 +414,13 @@ def _issue_done(repo_root: str, args: List[str], issues_dir: str, done_dir: str,
     # is purged once that committed.
     _itype, bare_slug = entities.parse_key(filename[:-3])
     has_blackboard = session.load_state(repo_root, bare_slug) is not None
+    if has_blackboard:
+        unrecorded = session.unrecorded_files(repo_root, bare_slug)
+        if unrecorded:
+            print(f"[Error] issue done failed: blackboard '{bare_slug}' contains unknown non-scaffold file(s):", file=sys.stderr)
+            for f in unrecorded:
+                print(f"  - {f}", file=sys.stderr)
+            sys.exit(2)
     tx = transaction.FileTransaction(repo_root, label=f"issue-done-{bare_slug}")
     try:
         tx.protect(found_file)
@@ -1365,9 +1374,30 @@ def handle_decision_command(repo_root: str, args: List[str]):
     from datetime import datetime
     today = datetime.now().strftime("%Y-%m-%d")
 
-    from alongkit import entities
+    from alongkit import entities, repo, textio
 
     if subcmd == "sync":
+        check_mode = "--check" in args
+        if check_mode:
+            conflicts = entities.check_decision_conflicts(repo_root)
+            if conflicts:
+                print("[Error] Decision conflict(s) detected [gate: decision-conflict]:", file=sys.stderr)
+                for c in conflicts:
+                    print(f"  - {c['message']}", file=sys.stderr)
+                sys.exit(1)
+            sdir = repo.state_dir(repo_root)
+            con_path = os.path.join(sdir, "CONSTRAINTS.md")
+            if os.path.isfile(con_path):
+                con_text = textio.read_text(con_path, strict=False)
+                decisions = entities.scan_decisions(repo_root)
+                superseded_slugs = [d["slug"] for d in decisions if (d.get("status") or "").lower() not in entities.ACTIVE_DECISION_STATUSES]
+                found_superseded = [s for s in superseded_slugs if s in con_text]
+                if found_superseded:
+                    print(f"[Error] CONSTRAINTS.md contains superseded decision(s): {', '.join(found_superseded)}", file=sys.stderr)
+                    sys.exit(1)
+            print("-> [OK] No decision conflicts detected across active ADRs.")
+            sys.exit(0)
+
         entities.compile_decisions_board(repo_root)
         entities.sync_constraints(repo_root)
         try:
@@ -1657,6 +1687,23 @@ def handle_doctor_command(repo_root: str, args: List[str]):
         print(f"[WARN] {len(unbound)} issue(s) in progress with no session bound: {', '.join(unbound)}. "
               "Resume with `along start <slug>`, close them out (`along session list`), or set them back "
               "to open (`along issue update <slug> --status open`).")
+        warnings += 1
+
+    # Check uncommitted changes belonging to wrapped issues [bug--wrapped-work-left-uncommitted] REQ-2
+    from alongkit import closeout
+    c_status = closeout.closeout_status(repo_root)
+    wrapped_work = c_status["repository"].get("wrapped", {})
+    if wrapped_work:
+        total_wrapped_files = sum(len(files) for files in wrapped_work.values())
+        print(f"[WARN] {total_wrapped_files} uncommitted file(s) belong to wrapped issue(s):")
+        for wkey, wfiles in sorted(wrapped_work.items()):
+            wslug = entities.parse_key(wkey)[1]
+            print(f"  - {wkey} ({len(wfiles)} file(s)):")
+            for wf in wfiles:
+                print(f"      {wf}")
+            paths_arg = " ".join(wfiles)
+            print(f"    Commit with: along commit -i {wslug} --paths {paths_arg}")
+            print(f"    Or close out: along session close {wslug}")
         warnings += 1
 
     # Check DECISIONS
@@ -1949,6 +1996,12 @@ def handle_scratch_command(repo_root: str, args: List[str]):
         if not session.load_state(repo_root, slug):
             print(f"-> Session blackboard not found (already clean): {session.get_session_dir(repo_root, slug)}")
             sys.exit(0)
+        unrecorded = session.unrecorded_files(repo_root, slug)
+        if unrecorded:
+            print(f"[Error] Refusing to purge blackboard '{slug}': unknown non-scaffold file(s):", file=sys.stderr)
+            for f in unrecorded:
+                print(f"  - {f}", file=sys.stderr)
+            sys.exit(2)
         # [bug--session-records-not-captured] REQ-3: the record goes into the session log first.
         log_path = lifecycle.archive_and_purge(repo_root, slug, reason=reason, source="scratch purge")
         if log_path:
