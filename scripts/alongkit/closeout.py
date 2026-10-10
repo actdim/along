@@ -150,6 +150,110 @@ def _to_top(path: str, prefix: str) -> str:
     return path if prefix in ("", ".") else f"{prefix}/{path}"
 
 
+def _parse_attributed_files_table(content: str) -> Dict[str, Dict[str, Any]]:
+    files: Dict[str, Dict[str, Any]] = {}
+    lines = content.splitlines()
+    in_table = False
+    for line in lines:
+        stripped = line.strip()
+        if stripped.startswith("### Attributed Files"):
+            in_table = True
+            continue
+        if in_table:
+            if stripped.startswith("### ") or (stripped.startswith("## ") and not stripped.startswith("### ")):
+                break
+            if not stripped.startswith("|"):
+                continue
+            cells = [c.strip() for c in stripped.split("|")[1:-1]]
+            if len(cells) >= 2:
+                raw_path = cells[0].strip("` ")
+                if raw_path.lower() in ("path", "---") or raw_path.startswith("---"):
+                    continue
+                kind = cells[1].strip() if len(cells) > 1 else "source"
+                files[raw_path] = {"path_kind": kind}
+    return files
+
+
+def done_issues_attribution(repo_root: str) -> Dict[str, Dict[str, Any]]:
+    """{done_issue_key: {"slug": slug, "session_log": log_path, "files": {path: info}, "entity_files": [paths]}}
+
+    Parses `### Attributed Files` tables from session logs and issue files in .along/ISSUES/done/.
+    [bug--wrapped-work-left-uncommitted] REQ-2.
+    """
+    real_root = os.path.realpath(os.path.abspath(repo_root))
+    top = git_top(real_root) or real_root
+    res: Dict[str, Dict[str, Any]] = {}
+
+    for ctx in _contexts(real_root):
+        sdir = repo.state_dir(ctx)
+        done_dir = os.path.join(sdir, "ISSUES", "done")
+        if not os.path.isdir(done_dir):
+            continue
+
+        sessions_dir = os.path.join(sdir, "SESSIONS")
+        logs_by_slug: Dict[str, List[str]] = {}
+        if os.path.isdir(sessions_dir):
+            for yentry in os.scandir(sessions_dir):
+                if yentry.is_dir() and not yentry.name.startswith("."):
+                    for lentry in os.scandir(yentry.path):
+                        if lentry.is_file() and lentry.name.endswith(".md"):
+                            parts = lentry.name[:-3].split("--", 1)
+                            if len(parts) == 2:
+                                logs_by_slug.setdefault(parts[1], []).append(lentry.path)
+
+        for entry in os.scandir(done_dir):
+            if not entry.is_file() or not entry.name.endswith(".md"):
+                continue
+            try:
+                content = textio.read_text(entry.path, strict=False)
+                parsed, _body, _err = frontmatter.try_parse(content)
+            except (OSError, UnicodeDecodeError):
+                continue
+            if not parsed:
+                continue
+            slug = str(parsed.get("slug") or "")
+            if not slug:
+                continue
+            itype = str(parsed.get("type") or "task")
+            key = entities.canonical_key(itype, slug)
+
+            files: Dict[str, Dict[str, Any]] = {}
+            if session.load_state(ctx, slug) is not None:
+                for p, info in session.attributed_files(ctx, slug).items():
+                    top_p = repo.canonical_relpath(os.path.join(ctx, p), top)
+                    files[top_p] = info
+
+            log_files = sorted(logs_by_slug.get(slug, []), reverse=True)
+            for lpath in log_files:
+                try:
+                    ltext = textio.read_text(lpath, strict=False)
+                except (OSError, UnicodeDecodeError):
+                    continue
+                parsed_files = _parse_attributed_files_table(ltext)
+                for p, info in parsed_files.items():
+                    top_p = repo.canonical_relpath(os.path.join(ctx, p), top)
+                    if top_p not in files:
+                        files[top_p] = info
+
+            entity_files: List[str] = [
+                repo.canonical_relpath(entry.path, top),
+                repo.canonical_relpath(os.path.join(sdir, "ISSUES", entry.name), top),
+            ]
+            for lpath in log_files:
+                entity_files.append(repo.canonical_relpath(lpath, top))
+
+            res[key] = {
+                "key": key,
+                "slug": slug,
+                "context": ctx,
+                "session_log": log_files[0] if log_files else None,
+                "files": files,
+                "entity_files": sorted(dict.fromkeys(entity_files)),
+            }
+
+    return res
+
+
 def closeout_status(repo_root: str) -> Dict[str, Any]:
     """Readiness of every in-progress issue, every bound issue and every blackboard.
 
@@ -188,11 +292,27 @@ def closeout_status(repo_root: str) -> Dict[str, Any]:
             info["shared_with"] = [k for k in owners.get(path_key(path), []) if k != item["key"]]
 
     attributed = set(owners)
+    unattributed_candidates = [p for p in changes if path_key(p) not in attributed]
+
+    done_attr = done_issues_attribution(real_root)
+    wrapped_owners: Dict[str, str] = {}
+    wrapped_groups: Dict[str, List[str]] = {}
+    for dkey, dinfo in done_attr.items():
+        all_dpaths = {path_key(p) for p in list(dinfo["files"].keys()) + dinfo["entity_files"]}
+        matched = [p for p in unattributed_candidates if path_key(p) in all_dpaths]
+        if matched:
+            wrapped_groups[dkey] = sorted(matched)
+            for m in matched:
+                wrapped_owners[path_key(m)] = dkey
+
+    really_unattributed = sorted(p for p in unattributed_candidates if path_key(p) not in wrapped_owners)
+
     staged = sorted(p for p, code in changes.items() if code[0] not in " ?")
     repository = {
         "top": repo.normalize_posix(top),
         "changed": sorted(changes),
-        "unattributed": sorted(p for p in changes if path_key(p) not in attributed),
+        "unattributed": really_unattributed,
+        "wrapped": wrapped_groups,
         "staged": staged,
         "operation": operation_in_progress(real_root),
         "conflicts": conflicted_paths(top, changes),
@@ -379,7 +499,14 @@ def _entity_files(repo_root: str, top: str, key: str, today: str) -> List[str]:
     issues_dir = os.path.join(repo.state_dir(real_root), "ISSUES")
     paths = [os.path.join(issues_dir, name), os.path.join(issues_dir, "done", name),
              lifecycle.session_log_path(real_root, issue["slug"], today)]
-    return [repo.canonical_relpath(p, real_top) for p in paths]
+    sessions_dir = os.path.join(repo.state_dir(real_root), "SESSIONS")
+    if os.path.isdir(sessions_dir):
+        for yentry in os.scandir(sessions_dir):
+            if yentry.is_dir() and not yentry.name.startswith("."):
+                for lentry in os.scandir(yentry.path):
+                    if lentry.is_file() and lentry.name.endswith(f"--{issue['slug']}.md"):
+                        paths.append(lentry.path)
+    return [repo.canonical_relpath(p, real_top) for p in dict.fromkeys(paths)]
 
 
 def run_closeout(repo_root: str, keys: Optional[List[str]] = None, ready: bool = False,
@@ -417,8 +544,39 @@ def run_closeout(repo_root: str, keys: Optional[List[str]] = None, ready: bool =
             for name in keys or []:
                 item = by_key.get(name) or by_slug.get(entities.parse_key(name)[1])
                 if not item:
-                    print(f"[Error] '{name}' is not in progress, bound or on a blackboard here.", file=sys.stderr)
-                    return 2
+                    # Check if name is a wrapped/done issue [bug--wrapped-work-left-uncommitted] REQ-3
+                    clean_type, clean_slug = entities.parse_key(name)
+                    slug_candidate = clean_slug or name
+                    done_attr = done_issues_attribution(real_root)
+                    done_item = None
+                    for dkey, dinfo in done_attr.items():
+                        if dkey == name or dinfo["slug"] == slug_candidate:
+                            done_item = dinfo
+                            break
+                    if done_item:
+                        changed_keys = {path_key(p): p for p in git_changes(real_root)}
+                        dfiles = done_item["files"]
+                        changed_files = sorted(changed_keys[path_key(p)] for p in dfiles if path_key(p) in changed_keys)
+                        item = {
+                            "key": done_item["key"],
+                            "slug": done_item["slug"],
+                            "context": done_item["context"],
+                            "status": "done",
+                            "sessions": [],
+                            "files": dfiles,
+                            "changed_files": changed_files,
+                            "last_edit": None,
+                            "last_test": {"ts": "carried-over", "ok": True},
+                            "criteria": [1, 1],
+                            "plan_recorded": True,
+                            "ledger_errors": None,
+                            "verdict": "ready",
+                            "reasons": [],
+                        }
+                        status["items"].append(item)
+                    else:
+                        print(f"[Error] '{name}' is not in progress, bound or on a blackboard here.", file=sys.stderr)
+                        return 2
                 wanted.append(item)
         not_ready = [i for i in wanted if i["verdict"] != "ready"]
         for item in not_ready:
@@ -447,7 +605,7 @@ def run_closeout(repo_root: str, keys: Optional[List[str]] = None, ready: bool =
             print(f"   not committed (unattributed): {path}")
         if dry_run:
             return 0
-        approved = set(session.closeout_approved(real_root, key))
+        approved = set(session.closeout_approved(real_root, key)) | set(session.completion_tokens(real_root, key))
         missing = [i["slug"] for i in chosen if i["slug"] not in approved]
         if missing:
             print(f"[Error] Closeout not approved for: {', '.join(missing)}. After the user's explicit yes, run "
@@ -557,6 +715,8 @@ def run_closeout(repo_root: str, keys: Optional[List[str]] = None, ready: bool =
         print("-> Pushed.")
 
     session.consume_closeout_approval(real_root, run.get("session"), [entities.parse_key(k)[1] for k in run["keys"]])
+    for k in run["keys"]:
+        session.consume_completion_token(real_root, run.get("session"), entities.parse_key(k)[1])
     try:
         os.remove(run_file(real_root))
     except OSError:
@@ -589,6 +749,12 @@ def format_closeout_status(status: Dict[str, Any]) -> str:
                      + f"; plan {'recorded' if item['plan_recorded'] else 'missing'}")
         for reason in item["reasons"]:
             lines.append(f"    blocked: {reason}")
+    if rep.get("wrapped"):
+        lines.append("Uncommitted changes from wrapped issue(s):")
+        for dkey, wpaths in sorted(rep["wrapped"].items()):
+            lines.append(f"  - {dkey}:")
+            for wp in wpaths:
+                lines.append(f"      {wp}")
     if rep["unattributed"]:
         lines.append("Unattributed changes (never committed by a closeout):")
         lines.extend(f"  {p}" for p in rep["unattributed"])
