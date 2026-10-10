@@ -51,7 +51,7 @@ RISK_SEVERITIES: tuple = ("critical", "high", "medium", "low")
 RISK_STATUSES: tuple = ("active", "mitigated", "resolved")
 SPIKE_STATUSES: tuple = ("hypothesis", "evaluating", "concluded")
 CHECKLIST_CATEGORIES: tuple = ("pre-commit", "stage-completion", "release", "security")
-DECISION_STATUSES: tuple = ("accepted", "superseded", "retired", "proposed", "rejected", "active")
+DECISION_STATUSES: tuple = ("accepted", "superseded", "retired", "proposed", "rejected", "deprecated", "active")
 ACTIVE_DECISION_STATUSES: tuple = ("accepted", "active")
 
 #: Front-matter keys that must be present on a closed issue.
@@ -586,6 +586,91 @@ def sync_constraints(repo_root: str) -> str:
     constraints_file = os.path.join(sdir, "CONSTRAINTS.md")
     textio.write_text(constraints_file, content)
     return constraints_file
+
+
+GENERIC_DECISION_TAGS: frozenset = frozenset({"adr", "architecture", "decision"})
+
+
+def check_decision_conflicts(repo_root: str) -> List[Dict[str, Any]]:
+    """Flag pairs of active (accepted) ADRs with conflicting statements.
+
+    Heuristic (REQ-3): two accepted ADRs reference conflicting statements or artefacts:
+    1. The newer ADR explicitly names the older ADR in its `supersedes` list or in a
+       `Supersedes:` / `Replaces:` statement, but the older ADR is still status: accepted.
+    2. The two ADRs share specific domain tags (excluding generic adr/architecture/decision
+       boilerplate), and the newer ADR references the older ADR's slug.
+    3. The newer ADR mentions the older ADR's slug in a supersession or replacement context.
+
+    Exemption: if the newer ADR explicitly indicates a complementary relationship
+    (e.g. 'complements', 'complements <older>').
+    """
+    decisions = scan_decisions(repo_root)
+    if not decisions:
+        return []
+    active = [d for d in decisions if (d.get("status") or "").lower() in ACTIVE_DECISION_STATUSES]
+    active.sort(key=lambda d: (d.get("date") or "", d.get("filename") or d.get("slug") or ""))
+
+    conflicts: List[Dict[str, Any]] = []
+    for i in range(len(active)):
+        older = active[i]
+        older_slug = older.get("slug")
+        older_fname = older.get("filename", "")
+        if not older_slug:
+            continue
+        older_tags = set(older.get("tags") or [])
+        for j in range(i + 1, len(active)):
+            newer = active[j]
+            newer_slug = newer.get("slug")
+            newer_fname = newer.get("filename", "")
+            if not newer_slug or newer_slug == older_slug:
+                continue
+            newer_tags = set(newer.get("tags") or [])
+            shared_all_tags = older_tags & newer_tags
+            shared_domain_tags = shared_all_tags - GENERIC_DECISION_TAGS
+
+            newer_body = newer.get("body", "")
+            newer_fm = newer.get("frontmatter") or {}
+            supersedes_list = newer_fm.get("supersedes") or []
+            if isinstance(supersedes_list, str):
+                supersedes_list = [supersedes_list]
+
+            is_explicit_supersedes = older_slug in supersedes_list or bool(
+                re.search(rf"\b(?:[Ss]upersedes|[Rr]eplaces):\s*.*?\b{re.escape(older_slug)}\b", newer_body)
+            )
+
+            mentions_older = (
+                older_slug in newer_body
+                or is_explicit_supersedes
+                or (older_fname and older_fname in newer_body)
+            )
+            if not mentions_older:
+                continue
+
+            if "complements" in newer_body.lower() or "complementary" in newer_body.lower():
+                continue
+
+            # Flag conflict if explicitly superseded, shares domain tags, or mentions in replacement context
+            in_replacement_context = bool(
+                re.search(rf"\b(?:supersed\w+|replace\w+|previously\s+in)\b.*?\b{re.escape(older_slug)}\b",
+                          newer_body, re.IGNORECASE)
+                or re.search(rf"\b{re.escape(older_slug)}\b.*?\b(?:supersed\w+|replace\w+)\b",
+                             newer_body, re.IGNORECASE)
+            )
+
+            if is_explicit_supersedes or shared_domain_tags or in_replacement_context:
+                reported_tags = sorted(shared_domain_tags) if shared_domain_tags else sorted(shared_all_tags)
+                conflicts.append({
+                    "older_slug": older_slug,
+                    "newer_slug": newer_slug,
+                    "shared_tags": reported_tags,
+                    "rel": f".along/DECISIONS/{newer_fname}" if newer_fname else f".along/DECISIONS/{newer_slug}.md",
+                    "message": (
+                        f"Active ADR '{newer_slug}' references '{older_slug}' "
+                        f"(tags: {', '.join(reported_tags)}), but '{older_slug}' is still status: accepted. "
+                        f"Mark '{older_slug}' as superseded or record explicit supersession."
+                    ),
+                })
+    return conflicts
 
 
 # ---------------------------------------------------------------------------
@@ -1774,6 +1859,10 @@ def validate_entities(repo_root: str, ancestors: bool = True,
             if sup_by and str(sup_by).strip():
                 if not _resolve_ref(sup_by, known_entity_keys):
                     errors.append((rel, f"dangling superseded_by reference: '{sup_by}'"))
+
+        conflicts = check_decision_conflicts(repo_root)
+        for c in conflicts:
+            errors.append((c.get("rel", "DECISIONS"), f"decision conflict: {c['message']}"))
 
     return {
         "clean": len(errors) == 0,
