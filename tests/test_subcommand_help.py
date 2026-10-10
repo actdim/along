@@ -19,6 +19,10 @@ if not os.environ.get("ALONG_TEST_RUNNER"):
         "    python .along/scripts/test.py"
     )
 
+TESTS_DIR = os.path.dirname(os.path.abspath(__file__))
+if TESTS_DIR not in sys.path:
+    sys.path.insert(0, TESTS_DIR)
+
 import hermetic
 from alongkit import proc
 
@@ -138,6 +142,16 @@ class TestSubcommandHelp(unittest.TestCase):
         res = self._run("decision", "create", "--", "--help")
         self.assertNotEqual(res.returncode, 0)
         self.assertIn("cannot start with '-'", res.stderr)
+
+    def test_commit_and_bump_help_print_usage_and_write_nothing(self):
+        before = _snapshot(self.repo)
+        for argv in (["commit", "--help"], ["commit", "-h"],
+                     ["bump", "--help"], ["bump", "-h"]):
+            with self.subTest(argv=" ".join(argv)):
+                res = self._run(*argv)
+                self.assertEqual(res.returncode, 0, f"stdout={res.stdout!r} stderr={res.stderr!r}")
+                self.assertTrue("usage" in res.stdout.lower())
+                self.assertEqual(_snapshot(self.repo), before, "help must not write to the repository")
 
 
 if __name__ == "__main__":
