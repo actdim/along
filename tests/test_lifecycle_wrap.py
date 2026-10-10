@@ -23,6 +23,7 @@ if not os.environ.get("ALONG_TEST_RUNNER"):
         "    python .along/scripts/test.py"
     )
 
+import io
 import shutil
 import subprocess
 import tempfile
@@ -96,6 +97,42 @@ class TestLifecycleWrap(unittest.TestCase):
         self.assertFalse(
             os.path.isdir(session.get_session_dir(self.root, "fixture-sample-task"))
         )
+
+    def test_01b_wrap_preserves_edited_research_in_session_log(self):
+        sdir = session.get_session_dir(self.root, "fixture-sample-task")
+        research_file = os.path.join(sdir, "research.md")
+        textio.write_text(research_file, "# Research & Findings: fixture-sample-task\n\n## Custom Research\n- discovered critical behavior\n")
+        code = lifecycle.execute_wrap(
+            self.root,
+            "fixture-sample-task",
+            status="done",
+            no_verify=True,
+        )
+        self.assertEqual(code, 0)
+        today = entities.today_iso()
+        year = today.split("-")[0]
+        sess_file = os.path.join(self.root, ".along", "SESSIONS", year, f"{today}--fixture-sample-task.md")
+        self.assertTrue(os.path.isfile(sess_file))
+        log = textio.read_text(sess_file)
+        self.assertIn("### Research", log)
+        self.assertIn("discovered critical behavior", log)
+
+    def test_01c_wrap_aborts_on_unknown_non_scaffold_file(self):
+        sdir = session.get_session_dir(self.root, "fixture-sample-task")
+        mystery_file = os.path.join(sdir, "mystery.txt")
+        textio.write_text(mystery_file, "mystery data\n")
+        code = lifecycle.execute_wrap(
+            self.root,
+            "fixture-sample-task",
+            status="done",
+            no_verify=True,
+        )
+        self.assertEqual(code, 2)
+        # Blackboard is not purged
+        self.assertTrue(os.path.isdir(sdir))
+        # Source issue is not moved
+        src_issue = os.path.join(self.root, ".along", "ISSUES", "task--fixture-sample-task.md")
+        self.assertTrue(os.path.isfile(src_issue))
 
     def test_02_wrap_with_history_summary(self):
         """Providing --summary appends a formatted line to .along/HISTORY.md."""
@@ -381,6 +418,33 @@ class TestLifecycleWrap(unittest.TestCase):
         )
         self.assertFalse(res.ok)
         self.assertIn("invalid choice", res.stderr.lower())
+
+    def test_16_wrap_warns_on_uncommitted_attributed_files(self):
+        """[bug--wrapped-work-left-uncommitted] REQ-1: wrap warns if attributed files remain uncommitted."""
+        proc.run_capture(["git", "init", "-q"], cwd=self.root)
+        proc.run_capture(["git", "config", "user.email", "t@example.com"], cwd=self.root)
+        proc.run_capture(["git", "config", "user.name", "T"], cwd=self.root)
+        proc.run_capture(["git", "add", "-A"], cwd=self.root)
+        proc.run_capture(["git", "commit", "-q", "-m", "init"], cwd=self.root)
+
+        session.append_event(self.root, "fixture-sample-task", "sess-1", "edit", "src/module.py")
+        os.makedirs(os.path.join(self.root, "src"), exist_ok=True)
+        textio.write_text(os.path.join(self.root, "src", "module.py"), "print('hello')\n")
+
+        with patch("sys.stdout", new_callable=io.StringIO) as mock_stdout:
+            code = lifecycle.execute_wrap(
+                self.root,
+                "fixture-sample-task",
+                status="done",
+                no_verify=True,
+                decisions=[],
+            )
+            out = mock_stdout.getvalue()
+
+        self.assertEqual(code, 0)
+        self.assertIn("[Warning] Issue 'fixture-sample-task' wrapped with uncommitted attributed files:", out)
+        self.assertIn("src/module.py", out)
+        self.assertIn("along commit -i fixture-sample-task --paths", out)
 
 
 if __name__ == "__main__":

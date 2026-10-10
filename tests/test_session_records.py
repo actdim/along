@@ -344,6 +344,48 @@ class TestArchiveAndPurge(ArchiveFixture):
         fm, _body = frontmatter.parse(self.log_text())
         self.assertEqual(fm["issues_completed"], ["task--fixture-sample-task"])
 
+    def test_edited_research_is_preserved_in_session_log(self):
+        session.record_plan(self.root, self.SLUG, "1. plan with research", "test")
+        research_file = os.path.join(self.sdir, "research.md")
+        textio.write_text(research_file, "# Research & Findings: " + self.SLUG + "\n\n## Custom Findings\n- found key logic in foo.py\n")
+        res = self.run_exec(["scratch", "purge", self.SLUG])
+        self.assertTrue(res.ok, res.stderr)
+        self.assertFalse(os.path.isdir(self.sdir))
+        log = self.log_text()
+        self.assertIn("### Research", log)
+        self.assertIn("found key logic in foo.py", log)
+
+    def test_notes_md_is_preserved_in_session_log(self):
+        session.record_plan(self.root, self.SLUG, "1. plan with notes", "test")
+        notes_file = os.path.join(self.sdir, "notes.md")
+        textio.write_text(notes_file, "# Notes\n\nSome important notes for the task.\n")
+        res = self.run_exec(["scratch", "purge", self.SLUG])
+        self.assertTrue(res.ok, res.stderr)
+        self.assertFalse(os.path.isdir(self.sdir))
+        log = self.log_text()
+        self.assertIn("### Notes", log)
+        self.assertIn("Some important notes for the task.", log)
+
+    def test_unknown_non_scaffold_file_blocks_scratch_purge(self):
+        session.record_plan(self.root, self.SLUG, "1. plan", "test")
+        mystery_file = os.path.join(self.sdir, "mystery.txt")
+        textio.write_text(mystery_file, "untracked mystery content\n")
+        res = self.run_exec(["scratch", "purge", self.SLUG])
+        self.assertFalse(res.ok)
+        self.assertTrue(os.path.isdir(self.sdir))
+        self.assertIn("unknown non-scaffold file", res.stderr)
+        self.assertIn("mystery.txt", res.stderr)
+
+    def test_unknown_non_scaffold_file_blocks_issue_done(self):
+        session.record_plan(self.root, self.SLUG, "1. plan", "test")
+        mystery_file = os.path.join(self.sdir, "mystery.txt")
+        textio.write_text(mystery_file, "untracked mystery content\n")
+        res = self.run_exec(["issue", "done", self.SLUG])
+        self.assertFalse(res.ok)
+        self.assertTrue(os.path.isdir(self.sdir))
+        self.assertIn("unknown non-scaffold file", res.stderr)
+        self.assertIn("mystery.txt", res.stderr)
+
 
 class TestWrapBeforeStop(ArchiveFixture):
     """REQ-6: every issue completed today is in a session log of today."""
@@ -383,6 +425,30 @@ class TestWrapBeforeStop(ArchiveFixture):
         lifecycle.write_session_record(self.root, tx, "alpha", today=entities.today_iso(), completed=True)
         tx.commit()
         self.assertIsNone(self.check())
+
+    def test_uncommitted_wrap_before_stop_warns(self):
+        """[bug--wrapped-work-left-uncommitted] REQ-4: Stop-gate warning for wrapped uncommitted work."""
+        from alongkit.hooks.predicates import check_uncommitted_wrap_before_stop
+        from alongkit import lifecycle, proc
+        proc.run_capture(["git", "init", "-q"], cwd=self.root)
+        proc.run_capture(["git", "config", "user.email", "t@example.com"], cwd=self.root)
+        proc.run_capture(["git", "config", "user.name", "T"], cwd=self.root)
+        proc.run_capture(["git", "add", "-A"], cwd=self.root)
+        proc.run_capture(["git", "commit", "-q", "-m", "init"], cwd=self.root)
+
+        session.init_session(self.root, self.SLUG)
+        session.record_plan(self.root, self.SLUG, "1. Plan", "test")
+        session.append_event(self.root, self.SLUG, "sess-1", "edit", "src/file.py")
+        os.makedirs(os.path.join(self.root, "src"), exist_ok=True)
+        textio.write_text(os.path.join(self.root, "src", "file.py"), "code = 1\n")
+
+        code = lifecycle.execute_wrap(self.root, self.SLUG, status="done", no_verify=True, decisions=[])
+        self.assertEqual(code, 0)
+
+        warn = check_uncommitted_wrap_before_stop(None, self.root)
+        self.assertIsNotNone(warn)
+        self.assertIn("Session wrapped issue(s) but attributed files remain uncommitted", warn)
+        self.assertIn(self.SLUG, warn)
 
 
 class TestDoctorOrphans(ArchiveFixture):
