@@ -32,9 +32,32 @@ from __future__ import annotations
 import ast
 import re
 import shlex
+import tempfile
 from typing import List, Optional, Tuple
 
 _NULL_TARGETS = ("/dev/null", "nul", "$null")
+_SYS_TEMP = tempfile.gettempdir().replace("\\", "/").lower()
+
+
+def _is_safe_redirect(target: str) -> bool:
+    """True when redirection target points to a null device, temp directory,
+    blackboard, scratchpad, or artifact directory that mutates no repository source."""
+    t = target.strip("'\"").strip().rstrip(";})")
+    tl = t.replace("\\", "/").lower()
+    if not tl:
+        return False
+    if tl in _NULL_TARGETS:
+        return True
+    if tl.startswith(("$env:temp", "$env:tmp", "%temp%", "%tmp%", "/tmp", "/var/tmp", "$tmpdir", "${tmpdir}")):
+        return True
+    if tl.startswith(_SYS_TEMP):
+        return True
+    if tl.startswith((".along/artifacts", ".along/.session", ".along/diagnostics", ".along/scratch", "scratch/")):
+        return True
+    if "/.along/artifacts/" in tl or "/.along/.session/" in tl or "/.along/diagnostics/" in tl:
+        return True
+    return False
+
 
 #: First words that only read (POSIX and PowerShell/cmd spellings).
 _READ_COMMANDS = frozenset({
@@ -44,6 +67,10 @@ _READ_COMMANDS = frozenset({
     "comm", "false",
     "get-childitem", "get-content", "select-string", "get-location", "set-location",
     "write-output", "write-host",
+    "test-path", "select-object", "select", "measure-object", "measure",
+    "od", "date",
+    "compare-object", "out-string", "out-null", "out-host",
+    "get-command", "gcm", "get-member", "gm",
 })
 
 #: Subcommands that only read in every form (`--output` aside, checked separately).
@@ -95,6 +122,9 @@ _GIT_BRANCH_LIST_VALUE_PREFIXES = ("--format=", "--sort=", "--color=", "--column
 _ALONG_READ = (
     "test", "status", "doctor", "budget", "context-budget", "kb-search", "scratch state",
     "worktree list", "worktree status", "hook verify",
+    "session list", "plan status", "scratch list", "issue list", "milestone list",
+    "decision list", "rules status", "rules diff", "circuit status", "telemetry status",
+    "version",
 )
 #: `find` primaries that run commands or write files.
 _FIND_WRITE = frozenset({
@@ -138,24 +168,69 @@ def _substitution(command: str, i: int) -> Optional[Tuple[str, int]]:
     return None
 
 
+def _arithmetic_expansion(command: str, i: int) -> Optional[Tuple[str, int]]:
+    """(inner expression, index after closing '))') for bash arithmetic expansion '$((...))';
+    None when unterminated."""
+    if not command.startswith("$((", i):
+        return None
+    depth = 0
+    quote = ""
+    j = i + 1
+    while j < len(command):
+        ch = command[j]
+        if quote:
+            if ch == quote:
+                quote = ""
+        elif ch in ("'", '"'):
+            quote = ch
+        elif ch == "(":
+            depth += 1
+        elif ch == ")":
+            depth -= 1
+            if depth == 0:
+                return command[i + 3:j - 1], j + 1
+        j += 1
+    return None
+
+
 def split_segments(command: str) -> Optional[List[str]]:
-    """Split on control operators outside quotes. Command substitutions are classified on their
-    own and stand in as a plain word when read-only. None when the command is not simple
-    enough to classify (unbalanced quotes, a substitution that may write)."""
+    """Split on control operators outside quotes. Command substitutions and arithmetic
+    expansions are classified on their own and stand in as a plain word when read-only.
+    Script blocks inside balanced braces '{ ... }' are not split. None when the command is
+    not simple enough to classify (unbalanced quotes/braces, a substitution that may write)."""
     segments: List[str] = []
     buf: List[str] = []
     quote = ""
+    brace_depth = 0
     i = 0
     n = len(command)
     while i < n:
         ch = command[i]
-        if (ch == "`" or command.startswith("$(", i)) and quote != "'":
-            sub = _substitution(command, i)
-            if sub is None or not is_read_only_command(sub[0]):
-                return None
-            buf.append("SUBST")
-            i = sub[1]
-            continue
+        if quote != "'":
+            if command.startswith("$((", i):
+                arith = _arithmetic_expansion(command, i)
+                if arith is None:
+                    return None
+                inner = arith[0]
+                k = 0
+                while k < len(inner):
+                    if inner[k] == "`" or inner.startswith("$(", k):
+                        sub = _substitution(inner, k)
+                        if sub is None or not is_read_only_command(sub[0]):
+                            return None
+                        k = sub[1]
+                        continue
+                    k += 1
+                buf.append("SUBST")
+                i = arith[1]
+                continue
+            if ch == "`" or command.startswith("$(", i):
+                sub = _substitution(command, i)
+                if sub is None or not is_read_only_command(sub[0]):
+                    return None
+                buf.append("SUBST")
+                i = sub[1]
+                continue
         if quote:
             if ch == quote:
                 quote = ""
@@ -167,25 +242,39 @@ def split_segments(command: str) -> Optional[List[str]]:
             buf.append(ch)
             i += 1
             continue
-        two = command[i:i + 2]
-        if two in ("&&", "||"):
-            segments.append("".join(buf))
-            buf = []
-            i += 2
-            continue
-        if ch in (";", "|", "\n", "\r"):
-            segments.append("".join(buf))
-            buf = []
+
+        if ch == "{":
+            brace_depth += 1
+            buf.append(ch)
             i += 1
             continue
-        if ch == "&" and not (buf and buf[-1] == ">") and not command.startswith("&>", i):
-            segments.append("".join(buf))
-            buf = []
+        if ch == "}":
+            if brace_depth > 0:
+                brace_depth -= 1
+            buf.append(ch)
             i += 1
             continue
+
+        if brace_depth == 0:
+            two = command[i:i + 2]
+            if two in ("&&", "||"):
+                segments.append("".join(buf))
+                buf = []
+                i += 2
+                continue
+            if ch in (";", "|", "\n", "\r"):
+                segments.append("".join(buf))
+                buf = []
+                i += 1
+                continue
+            if ch == "&" and not (buf and buf[-1] == ">") and not command.startswith("&>", i):
+                segments.append("".join(buf))
+                buf = []
+                i += 1
+                continue
         buf.append(ch)
         i += 1
-    if quote:
+    if quote or brace_depth != 0:
         return None
     segments.append("".join(buf))
     return [s.strip() for s in segments if s.strip()]
@@ -215,8 +304,13 @@ def _has_write_redirect(segment: str) -> bool:
                 i = j + 1
                 continue
             rest = segment[j:].lstrip()
-            target = rest.split()[0] if rest.split() else ""
-            if target.strip("'\"").lower() not in _NULL_TARGETS:
+            if rest.startswith(('"', "'")):
+                q = rest[0]
+                end = rest.find(q, 1)
+                target = rest[1:end] if end != -1 else rest[1:]
+            else:
+                target = rest.split()[0] if rest.split() else ""
+            if not _is_safe_redirect(target):
                 return True
             i = j
             continue
@@ -430,75 +524,48 @@ def _awk_is_read_only(args: List[str]) -> bool:
     return program is not None and not _AWK_WRITE.search(program)
 
 
-def _segment_is_read_only(segment: str) -> bool:
-    if _has_write_redirect(segment):
-        return False
-    tokens = _tokens(segment)
-    if not tokens:
-        return tokens is not None
+def _along_words(tokens: List[str]) -> Optional[List[str]]:
+    """Lower-cased argument tokens after Along CLI / script, or None if not the Along CLI."""
     tokens = _strip_wrappers(tokens)
-    while tokens and tokens[0].lower() in _SHELL_LEAD_KEYWORDS:
-        tokens = _strip_wrappers(tokens[1:])
     if not tokens:
-        return True
+        return None
     first = tokens[0].lower()
-    rest = [t.lower() for t in tokens[1:]]
-
-    if first in _SHELL_CLOSE_KEYWORDS:
-        return not rest
-    if first == "for":
-        # `for NAME in WORDS`: substitutions among the words were already classified.
-        return len(rest) >= 1 and (len(rest) == 1 or rest[1] == "in")
-    if first in _READ_COMMANDS:
-        return True
-    if first == "sed":
-        return _sed_is_read_only(tokens[1:])
-    if first in _AWK_NAMES:
-        return _awk_is_read_only(tokens[1:])
-    if first == "find":
-        return not any(t in _FIND_WRITE for t in rest)
-    if first == "sort":
-        return not any(t.startswith("--output") or (t.startswith("-") and not t.startswith("--")
-                                                    and "o" in t) for t in rest)
-    if first == "uniq":
-        return len([t for t in rest if not t.startswith("-")]) <= 1
-    if first == "git":
-        return _git_is_read_only(tokens[1:])
-    if first == "along" or first.endswith("along_exec.py"):
-        return _is_read_subcommand(" ".join(rest))
-    if first in ("pytest", "along-test", "along_test"):
-        return True
-    if first in ("npm", "pnpm", "yarn"):
-        return rest[:1] == ["test"] or rest[:2] == ["run", "test"] or rest[:2] == ["run", "test:quiet"]
-    if first in ("cargo", "dotnet", "go"):
-        return rest[:1] == ["test"]
-    if _is_python(first):
-        if not rest:
-            return False
-        if rest[0] in ("-v", "--version"):
-            return True
-        if rest[0] == "-c":
-            return len(tokens) == 3 and _python_c_is_read_only(tokens[2])
-        if rest[0] == "-m":
-            return len(rest) > 1 and rest[1] in ("pytest", "unittest")
-        script = rest[0].replace("\\", "/")
-        if script.endswith(".along/scripts/test.py"):
-            return True
-        if script.endswith("along_exec.py"):
-            return _is_read_subcommand(" ".join(rest[1:]))
-        return False
-    return False
+    first_base = first.replace("\\", "/").rsplit("/", 1)[-1]
+    if first == "along" or first_base in ("along_exec.py", "along.ps1"):
+        return [t.lower() for t in tokens[1:]]
+    if first.startswith("along-"):
+        sub = first[6:]
+        return [sub] + [t.lower() for t in tokens[1:]]
+    if first_base.startswith("along_") and first_base.endswith(".py"):
+        sub = first_base[6:-3].replace("_", "-")
+        return [sub] + [t.lower() for t in tokens[1:]]
+    if _is_python(first) and len(tokens) > 1:
+        script = tokens[1].replace("\\", "/")
+        s_base = script.rsplit("/", 1)[-1].lower()
+        if s_base == "along_exec.py":
+            return [t.lower() for t in tokens[2:]]
+        if s_base.startswith("along_") and s_base.endswith(".py"):
+            sub = s_base[6:-3].replace("_", "-")
+            return [sub] + [t.lower() for t in tokens[2:]]
+        if "/.along/scripts/" in script:
+            sub = s_base[:-3] if s_base.endswith(".py") else s_base
+            return [sub] + [t.lower() for t in tokens[2:]]
+    return None
 
 
 def _is_read_subcommand(joined: str) -> bool:
     """True when the words after the Along CLI name a read-only subcommand.
 
     `doctor --fix` writes (it drops dangling milestone fields), so it is not read-only
-    [bug--update-maintenance-friction] REQ-2.
+    [bug--update-maintenance-friction] REQ-2. `--help` / `-h` is always read-only
+    [bug--plan-gate-blocks-help] REQ-1.
     """
+    words = joined.split()
+    if any(w in ("--help", "-h") for w in words) or words[:1] == ["help"]:
+        return True
     if not any(joined == sub or joined.startswith(sub + " ") for sub in _ALONG_READ):
         return False
-    return not (joined.split()[:1] == ["doctor"] and "--fix" in joined.split())
+    return not (words[:1] == ["doctor"] and "--fix" in words)
 
 
 #: Along subcommands that only move Along's own state (entities, blackboards, projections).
@@ -522,18 +589,157 @@ _ALONG_MAINTENANCE = (
 #: rewrites files takes the command out. See [bug--commit-blocked-after-wrap].
 _COMMIT_REWRITE_FLAGS = ("--fix-typography",)
 
+_BLOCK_COMMANDS = frozenset({
+    "foreach-object", "foreach", "%", "measure-command", "where-object", "where", "?",
+})
 
-def _along_words(tokens: List[str]) -> Optional[List[str]]:
-    """Lower-cased argument tokens after `along` / `along_exec.py`, or None if not the Along CLI."""
-    tokens = _strip_wrappers(tokens)
-    if not tokens:
+
+def _split_script_block(segment: str) -> Optional[Tuple[str, str, str]]:
+    """(prefix, body, suffix) for the outermost script block '{ ... }' outside quotes,
+    or None if no block argument exists."""
+    quote = ""
+    i = 0
+    n = len(segment)
+    start = -1
+    while i < n:
+        ch = segment[i]
+        if quote:
+            if ch == quote:
+                quote = ""
+            i += 1
+            continue
+        if ch in ("'", '"'):
+            quote = ch
+            i += 1
+            continue
+        if ch == "{":
+            if i == 0 or segment[i - 1] in " \t;,(":
+                start = i
+                break
+        i += 1
+    if start == -1:
         return None
-    first = tokens[0].lower()
-    if first == "along" or first.endswith("along_exec.py") or first.endswith("along.ps1"):
-        return [t.lower() for t in tokens[1:]]
-    if _is_python(first) and len(tokens) > 1 and tokens[1].replace("\\", "/").lower().endswith("along_exec.py"):
-        return [t.lower() for t in tokens[2:]]
+    depth = 0
+    j = start
+    while j < n:
+        ch = segment[j]
+        if quote:
+            if ch == quote:
+                quote = ""
+            j += 1
+            continue
+        if ch in ("'", '"'):
+            quote = ch
+            j += 1
+            continue
+        if ch == "{":
+            depth += 1
+        elif ch == "}":
+            depth -= 1
+            if depth == 0:
+                return segment[:start].strip(), segment[start + 1:j].strip(), segment[j + 1:].strip()
+        j += 1
     return None
+
+
+def _is_ps_var_or_property(token: str) -> bool:
+    """True for PowerShell pipeline variable/property reads ($_, $_.Name, $var.Property)."""
+    t = token.rstrip(";")
+    return bool(re.match(r"^\$(_|[A-Za-z_][A-Za-z0-9_]*)(\.[A-Za-z_][A-Za-z0-9_]*)*$", t, re.IGNORECASE))
+
+
+def _segment_is_read_only(segment: str) -> bool:
+    if _has_write_redirect(segment):
+        return False
+
+    # Check script block argument (e.g. ForEach-Object { ... }, Measure-Command { ... })
+    block = _split_script_block(segment)
+    if block is not None:
+        prefix, body, suffix = block
+        if not is_read_only_command(body):
+            return False
+        if not prefix:
+            return not suffix or _segment_is_read_only(suffix)
+        p_tokens = _tokens(prefix)
+        if not p_tokens:
+            return False
+        p_tokens = _strip_wrappers(p_tokens)
+        if not p_tokens:
+            return not suffix or _segment_is_read_only(suffix)
+        p_first = p_tokens[0].lower()
+        if p_first in _BLOCK_COMMANDS or p_first in _READ_COMMANDS:
+            return not suffix or _segment_is_read_only(suffix)
+        return False
+
+    tokens = _tokens(segment)
+    if not tokens:
+        return tokens is not None
+    tokens = _strip_wrappers(tokens)
+    while tokens and tokens[0].lower() in _SHELL_LEAD_KEYWORDS:
+        tokens = _strip_wrappers(tokens[1:])
+    if not tokens:
+        return True
+
+    # Standalone pipeline variable or property expressions ($_.Name, $_.FullName)
+    if all(_is_ps_var_or_property(t) for t in tokens):
+        return True
+
+    # Along CLI invocation check
+    words = _along_words(tokens)
+    if words is not None:
+        if any(w in ("--help", "-h") for w in words) or words[:1] == ["help"]:
+            return True
+        joined = " ".join(words)
+        if _is_read_subcommand(joined):
+            return True
+        if words[:1] == ["test"]:
+            return True
+
+    first = tokens[0].lower()
+    rest = [t.lower() for t in tokens[1:]]
+
+    if first in _SHELL_CLOSE_KEYWORDS:
+        return not rest
+    if first == "for":
+        # `for NAME in WORDS`: substitutions among the words were already classified.
+        return len(rest) >= 1 and (len(rest) == 1 or rest[1] == "in")
+    if first in _READ_COMMANDS:
+        return True
+    if first == "sed":
+        return _sed_is_read_only(tokens[1:])
+    if first in _AWK_NAMES:
+        return _awk_is_read_only(tokens[1:])
+    if first == "find":
+        return not any(t in _FIND_WRITE for t in rest)
+    if first == "sort":
+        return not any(t.startswith("--output") or (t.startswith("-") and not t.startswith("--")
+                                                    and "o" in t) for t in rest)
+    if first == "uniq":
+        return len([t for t in rest if not t.startswith("-")]) <= 1
+    if first == "git":
+        return _git_is_read_only(tokens[1:])
+    if first in ("pytest", "along-test", "along_test"):
+        return True
+    if first in ("npm", "pnpm", "yarn"):
+        return rest[:1] == ["test"] or rest[:2] == ["run", "test"] or rest[:2] == ["run", "test:quiet"]
+    if first in ("cargo", "dotnet", "go"):
+        return rest[:1] == ["test"]
+    if _is_python(first):
+        if not rest:
+            return False
+        if rest[0] in ("-v", "--version"):
+            return True
+        if rest[0] == "-c":
+            return len(tokens) == 3 and _python_c_is_read_only(tokens[2])
+        if rest[0] == "-m":
+            return len(rest) > 1 and rest[1] in ("pytest", "unittest")
+        script = rest[0].replace("\\", "/")
+        if script.endswith(".along/scripts/test.py"):
+            return True
+        if script.endswith("along_exec.py"):
+            return _is_read_subcommand(" ".join(rest[1:]))
+        return False
+    return False
 
 
 def _along_subcommand(tokens: List[str]) -> Optional[str]:
