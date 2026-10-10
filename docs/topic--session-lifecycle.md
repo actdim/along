@@ -76,7 +76,10 @@ Every way a blackboard leaves the repository writes it into the issue's session 
 - `along wrap` refuses a blackboard whose plan was never recorded, unless
   `--force-reason "..."` says why; the reason is kept in the trace.
 - Template placeholders (scaffold plan, empty research headings, the generic step list) are not
-  written as content: a missing plan shows as `No plan recorded.`
+  written as content: a missing plan shows as `No plan recorded.` Non-scaffold findings (`research.md`)
+  and notes (`notes.md`) are preserved under `### Research` and `### Notes`.
+- Purge operations refuse across all commands (`along wrap`, `along scratch purge`, `along issue done`,
+  `along session close`) if an unknown non-scaffold file is present in the blackboard.
 - A second record of the same issue on the same day is appended as
   `## Blackboard Record (<n>, <timestamp>)`.
 

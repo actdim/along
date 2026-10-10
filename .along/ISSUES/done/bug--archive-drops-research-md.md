@@ -3,10 +3,11 @@ protocol: along
 protocol_version: "4.4.6"
 slug: archive-drops-research-md
 type: bug
-status: open
+status: done
+completed: 2026-10-10
 priority: high
 created: 2026-10-07
-updated: 2026-10-07
+updated: 2026-10-10
 agent: claude
 tags: [session, archive, blackboard]
 milestone: v4.5.0-multi-user-merge-automation
