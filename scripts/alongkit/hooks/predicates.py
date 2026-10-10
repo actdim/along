@@ -1045,6 +1045,48 @@ def check_wrap_before_stop(event: HookEvent, repo_root: str, **kwargs: Any) -> O
     )
 
 
+def check_uncommitted_wrap_before_stop(event: HookEvent, repo_root: str, **kwargs: Any) -> Optional[str]:
+    """Warn if a session completed/wrapped an issue but attributed files remain uncommitted.
+
+    [bug--wrapped-work-left-uncommitted] REQ-4. Evaluated as an optional Stop-gate warning.
+    """
+    if not repo_root:
+        return None
+    from .. import closeout
+    sid = event_session_key(event) if event else session.current_session_key()
+    tokens = session.completion_tokens(repo_root, sid) if sid else []
+    done_attr = closeout.done_issues_attribution(repo_root)
+    changes = closeout.git_changes(repo_root)
+    if not changes:
+        return None
+    changed_keys = {closeout.path_key(p): p for p in changes}
+
+    dirty_tokens: List[str] = []
+    if tokens:
+        for tok in tokens:
+            dinfo = next((info for info in done_attr.values() if info["slug"] == tok), None)
+            if dinfo:
+                dfiles = list(dinfo["files"].keys()) + dinfo["entity_files"]
+                if any(closeout.path_key(p) in changed_keys for p in dfiles):
+                    dirty_tokens.append(tok)
+            else:
+                dirty_tokens.append(tok)
+    else:
+        for dkey, dinfo in done_attr.items():
+            dfiles = list(dinfo["files"].keys()) + dinfo["entity_files"]
+            if any(closeout.path_key(p) in changed_keys for p in dfiles):
+                dirty_tokens.append(dinfo["slug"])
+
+    if not dirty_tokens:
+        return None
+
+    first = sorted(set(dirty_tokens))[0]
+    return (
+        f"Session wrapped issue(s) but attributed files remain uncommitted: {', '.join(sorted(set(dirty_tokens)))}. "
+        f"Commit them with 'along commit -i {first} --paths ...' or close out with 'along session close {first}'."
+    )
+
+
 def check_projection_sync_before_stop(event: HookEvent, repo_root: str, **kwargs: Any) -> Optional[str]:
     """Ensure projections (ISSUES.md, docs/INDEX.md) are updated when atomic sources change."""
     if not repo_root:
