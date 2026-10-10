@@ -116,8 +116,22 @@ READ_ONLY = (
     "git notes list",
     "git --no-pager log -1",
     "git -C ../other status",
-    "git -P diff",
     "git status -sb | head -1",
+    # [bug--inquiry-readonly-commands-blocked]: audit inspection, powershell blocks, safe redirects.
+    "Test-Path .along/.migration-backup/x; git status --porcelain -u | Select-Object -First 20",
+    "Get-Content a.json; Get-Content b.md -TotalCount 25; Get-ChildItem dir | ForEach-Object { $_.Name; Get-Content $_.FullName }",
+    "along session list; along plan status; git status --short | Measure-Object | Select-Object Count",
+    "Measure-Command { python .along/scripts/test.py -q *> $env:TEMP\\t.txt } | Select-Object TotalSeconds",
+    "tail -c 1 .along/HISTORY.md | od -c | head -1",
+    "s=$(date +%s); python .along/scripts/test.py -q 2>&1 | grep -E \"^Ran |^OK\"; echo $(( $(date +%s) - s ))",
+    # [bug--plan-gate-blocks-help]: --help and -h invocations of along CLI and scripts.
+    "along commit --help",
+    "along bump --help",
+    "python scripts/along_commit.py --help",
+    "python scripts/along_commit.py -h",
+    "python scripts/along_version_bump.py --help",
+    "python .along/scripts/test.py -h",
+    "along start --help",
 )
 
 MUTATING = (
@@ -207,6 +221,12 @@ MUTATING = (
     "git diff --ext-diff",
     "git fetch --tags",
     "git push origin v4.4.5",
+    # [bug--inquiry-readonly-commands-blocked]: script blocks and arithmetic with mutating bodies.
+    "ForEach-Object { rm -rf src }",
+    "ForEach-Object { $_.Name; Remove-Item $_.FullName }",
+    "Measure-Command { Remove-Item src }",
+    "Measure-Command { python .along/scripts/test.py -q > src/a.py }",
+    "echo $(( $(rm -rf src) + 1 ))",
 )
 
 
@@ -258,12 +278,16 @@ class TestPlanApprovalGateEndToEnd(unittest.TestCase):
     def test_review_evidence_is_denied(self):
         for cmd in ("rm -rf src", "ls && rm -rf src", "rm -rf src; pytest", "echo hi > src/a.py",
                     "ls & rm -rf src", "git branch -D main",
+                    "ForEach-Object { rm -rf src }", "Measure-Command { Remove-Item src }",
                     "python -c \"print(1); import shutil; shutil.rmtree('src')\""):
             with self.subTest(cmd=cmd):
                 self.assertEqual(self._decide(cmd), GateDecision.DENY)
 
     def test_plain_reads_are_allowed(self):
-        for cmd in ("ls", "git status", "pytest -q"):
+        for cmd in ("ls", "git status", "pytest -q",
+                    "along commit --help", "along bump --help", "python scripts/along_commit.py -h",
+                    "Test-Path .along/.migration-backup/x; git status --porcelain -u | Select-Object -First 20",
+                    "Measure-Command { python .along/scripts/test.py -q *> $env:TEMP\\t.txt } | Select-Object TotalSeconds"):
             with self.subTest(cmd=cmd):
                 self.assertEqual(self._decide(cmd), GateDecision.ALLOW)
 

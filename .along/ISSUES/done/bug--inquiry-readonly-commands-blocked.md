@@ -3,10 +3,11 @@ protocol: along
 protocol_version: "4.4.6"
 slug: inquiry-readonly-commands-blocked
 type: bug
-status: open
+status: done
+completed: 2026-10-09
 priority: high
 created: 2026-10-07
-updated: 2026-10-07
+updated: 2026-10-09
 agent: claude
 tags: [gates, shellparse, powershell]
 milestone: v4.5.0-multi-user-merge-automation
@@ -50,6 +51,6 @@ is rejected in inquiry, so an audit cannot measure the suite.
   `feat--tool-nature-classification` (this bug is the near-term fix).
 
 ## Acceptance Criteria
-- [ ] All examples above classified read-only (hermetic tests)
-- [ ] `along test` passes the plan gate without a plan
-- [ ] Automated tests passing
+- [x] All examples above classified read-only (hermetic tests)
+- [x] `along test` passes the plan gate without a plan
+- [x] Automated tests passing
