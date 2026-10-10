@@ -32,6 +32,7 @@ STEP_STATUSES: tuple = ("pending", "in-progress", "passed", "failed")
 SESSION_STATUSES: tuple = ("in-progress", "completed", "failed")
 SESSION_PHASES: tuple = ("inquiry", "planning", "execution")
 DEFAULT_PHASE: str = "inquiry"
+STATE_FILENAME: str = "state.json"
 
 
 
@@ -983,8 +984,14 @@ _SCAFFOLD_RESEARCH_LINE = re.compile(
     r"^(# Research & Findings:.*|## Target Symbols and Files|## Constraints & Risks|## Architectural Patterns)$")
 
 
-def _is_scaffold_research(text: str) -> bool:
+def is_scaffold_research(text: Optional[str]) -> bool:
+    """True when research.md holds only the default scaffold headings (or is empty)."""
+    if not text:
+        return True
     return all(_SCAFFOLD_RESEARCH_LINE.match(line.strip()) for line in text.splitlines() if line.strip())
+
+
+_is_scaffold_research = is_scaffold_research
 
 
 def _is_scaffold_steps(steps: List[Dict[str, Any]]) -> bool:
@@ -1046,13 +1053,21 @@ def render_blackboard_markdown(repo_root: str, slug: str, reason: Optional[str] 
         out.append("")
     for title, name in (("Plan", PLAN_FILENAME), ("Research", "research.md"), ("Execution Trace", TRACE_FILENAME)):
         text = _read(name)
-        if name == PLAN_FILENAME and is_scaffold_plan(text):
-            out.append(f"### {title}\n\nNo plan recorded.\n")
-            continue
-        if name == "research.md" and _is_scaffold_research(text):
+        if name == PLAN_FILENAME:
+            if not text or is_scaffold_plan(text):
+                living_text = _read("living_plan.md")
+                if living_text and not is_scaffold_plan(living_text):
+                    text = living_text
+            if not text or is_scaffold_plan(text):
+                out.append(f"### {title}\n\nNo plan recorded.\n")
+                continue
+        if name == "research.md" and is_scaffold_research(text):
             continue
         if text:
             out.append(f"### {title}\n\n{_demote(text)}\n")
+    notes_text = _read("notes.md")
+    if notes_text:
+        out.append(f"### Notes\n\n{_demote(notes_text)}\n")
     rdir = os.path.join(sdir, "reviews")
     if os.path.isdir(rdir):
         for name in sorted(os.listdir(rdir)):
@@ -1060,6 +1075,52 @@ def render_blackboard_markdown(repo_root: str, slug: str, reason: Optional[str] 
             if name.endswith(".md") and text:
                 out.append(f"### Review {name[:-3]}\n\n{_demote(text)}\n")
     return "\n".join(out).rstrip() + "\n"
+
+
+def unrecorded_files(repo_root: str, slug: str) -> List[str]:
+    """Relative paths of any files in the blackboard that would be deleted unrecorded.
+
+    A file is considered recorded or safely accounted for if:
+    - state.json (engine state, rendered in header and steps table)
+    - events.jsonl (engine ledger, rendered in Attributed Files)
+    - plan.md, living_plan.md (rendered under Plan or recognized scaffold)
+    - research.md (rendered under Research if edited, or recognized scaffold)
+    - execution_trace.md (rendered under Execution Trace)
+    - notes.md (rendered under Notes)
+    - reviews/*.md (rendered under Review <step>)
+
+    Any other file (e.g. unknown scripts, data dumps, non-md reviews) is unrecorded.
+    """
+    sdir = get_session_dir(repo_root, slug)
+    if not os.path.isdir(sdir):
+        return []
+    unrecorded: List[str] = []
+    known_root = {
+        STATE_FILENAME,
+        EVENTS_FILENAME,
+        PLAN_FILENAME,
+        "living_plan.md",
+        "research.md",
+        TRACE_FILENAME,
+        "notes.md",
+    }
+    for root, dirs, files in os.walk(sdir):
+        dirs.sort()
+        files.sort()
+        for f in files:
+            full_path = os.path.join(root, f)
+            rel_path = repo.canonical_relpath(full_path, sdir)
+            if "/" not in rel_path:
+                if rel_path in known_root:
+                    continue
+                unrecorded.append(rel_path)
+            else:
+                parts = rel_path.split("/")
+                if parts[0] == "reviews" and len(parts) == 2 and parts[1].endswith(".md"):
+                    continue
+                unrecorded.append(rel_path)
+    return unrecorded
+
 
 
 def record_fallback(repo_root: str, slug: str, reason: str) -> Dict[str, Any]:
@@ -1263,6 +1324,12 @@ def purge_session(repo_root: str, slug: str, key: Optional[str] = None, complete
     a completion token for `slug` when it had an approved plan for it.
     True if the blackboard was purged, False if it did not exist.
     """
+    unrecorded = unrecorded_files(repo_root, slug)
+    if unrecorded:
+        raise RuntimeError(
+            f"Refusing to purge blackboard '{slug}': unknown non-scaffold file(s): "
+            f"{', '.join(unrecorded)}"
+        )
     if complete:
         record_completion_token(repo_root, key or current_session_key(), slug)
     unbind_slug(repo_root, slug)
