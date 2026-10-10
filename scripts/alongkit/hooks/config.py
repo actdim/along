@@ -33,6 +33,7 @@ DEFAULT_GATE_MODES: Dict[str, str] = {
     "typography": HookMode.ENFORCE,
     "projection_protection": HookMode.ENFORCE,
     "cli_safety": HookMode.ENFORCE,
+    "wrapped_work_uncommitted": HookMode.SHADOW,
 }
 
 
