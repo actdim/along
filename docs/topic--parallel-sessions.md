@@ -54,6 +54,10 @@ run failed, criteria are unticked, its blackboard or issue is missing, or its le
 written. For the repository it lists unattributed changes, staged files, a merge or rebase in
 progress and conflict markers.
 
+Uncommitted files left behind by issues that were previously wrapped are grouped separately by their
+done issue key (with commit and closeout commands suggested in `along session list` and `along doctor`),
+rather than being mixed into generic unattributed changes.
+
 `along session list` cannot know whether a parallel agent is still typing: the last-event time of
 each session is shown, and the user decides.
 
@@ -96,6 +100,10 @@ again.
 Never committed: unattributed changes, and files that are also attributed to an issue that is not
 being closed now (held back until that issue closes). Issues that are not ready are listed with
 their blockers and left untouched.
+
+Done issues with uncommitted attributed files: `along session close <done-slug>` can also be invoked
+directly for an issue that was already wrapped. It reconstructs the attributed file list from the
+issue's session log (`## Attributed Files` table) and commits those files cleanly without re-wrapping.
 
 ## 4. When something fails
 

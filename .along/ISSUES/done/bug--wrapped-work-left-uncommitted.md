@@ -3,10 +3,11 @@ protocol: along
 protocol_version: "4.4.6"
 slug: wrapped-work-left-uncommitted
 type: bug
-status: open
+status: done
+completed: 2026-10-09
 priority: high
 created: 2026-10-07
-updated: 2026-10-07
+updated: 2026-10-09
 agent: claude
 tags: [session, closeout, commit]
 milestone: v4.5.0-multi-user-merge-automation
@@ -38,6 +39,6 @@ not the Stop gates, not `along doctor`.
 - REQ-4: Optional Stop-gate warning (not block) for a session that wrapped but did not commit.
 
 ## Acceptance Criteria
-- [ ] Hermetic test: wrap with dirty attributed files prints the warning and command
-- [ ] Unattributed changes grouped by done issue in session list
-- [ ] Automated tests passing
+- [x] Hermetic test: wrap with dirty attributed files prints the warning and command
+- [x] Unattributed changes grouped by done issue in session list
+- [x] Automated tests passing

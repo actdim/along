@@ -175,6 +175,15 @@ gates:
       handler: alongkit.hooks.predicates.check_wrap_before_stop
       error: "Turn completion rejected by [gate: wrap-before-stop]: An issue was completed or moved to 'done/', but no session log exists in '.along/SESSIONS/' for today. Run '/along-wrap' before ending."
 
+  - id: wrapped_work_uncommitted
+    title: "Wrapped Work Uncommitted Warning"
+    description: "Warns if a session wrapped an issue but attributed files remain uncommitted"
+    event: Stop
+    rule:
+      type: predicate
+      handler: alongkit.hooks.predicates.check_uncommitted_wrap_before_stop
+      error: "Wrapped work left uncommitted [gate: wrapped-work-uncommitted]."
+
   - id: projection_sync_before_stop
     title: "Projection Synchronization Before Turn Termination"
     description: "Blocks turn completion if atomic issues or docs changed without projection recompilation"
