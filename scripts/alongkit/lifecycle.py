@@ -561,6 +561,12 @@ def archive_and_purge(repo_root: str, slug: str, *, reason: Optional[str] = None
     """
     if not session.load_state(repo_root, slug):
         return None
+    unrecorded = session.unrecorded_files(repo_root, slug)
+    if unrecorded:
+        raise RuntimeError(
+            f"Refusing to purge blackboard '{slug}': unknown non-scaffold file(s): "
+            f"{', '.join(unrecorded)}"
+        )
     today = today or entities.today_iso()
     session.append_trace(repo_root, slug, f"archived by {source}" + (f": {reason}" if reason else ""))
     own = tx is None
@@ -606,9 +612,48 @@ def purge_archived(repo_root: str, slug: str, complete: bool = False) -> bool:
     """Purge a blackboard whose record is committed; a failed delete only warns (nothing is lost)."""
     try:
         return session.purge_session(repo_root, slug, complete=complete)
-    except OSError as exc:
+    except (OSError, RuntimeError) as exc:
         print(f"[Warning] Blackboard '.along/.session/{slug}' archived but not deleted: {exc}", file=sys.stderr)
         return False
+
+
+def _warn_uncommitted_work(
+    repo_root: str,
+    slug: str,
+    attributed_map: Dict[str, Any],
+    dest_file: Optional[str] = None,
+    log_path: Optional[str] = None,
+) -> List[str]:
+    """Warn when files attributed to `slug` remain uncommitted [bug--wrapped-work-left-uncommitted] REQ-1."""
+    from . import closeout
+    top = closeout.git_top(repo_root)
+    if not top:
+        return []
+    changes = closeout.git_changes(repo_root)
+    if not changes:
+        return []
+    changed_keys = {closeout.path_key(p): p for p in changes}
+
+    attributed_paths = [repo.canonical_relpath(os.path.join(repo_root, p), top) for p in attributed_map]
+    dirty_attributed = [changed_keys[closeout.path_key(p)] for p in attributed_paths if closeout.path_key(p) in changed_keys]
+    if not dirty_attributed:
+        return []
+
+    dirty_entities: List[str] = []
+    for path in (dest_file, log_path):
+        if path and os.path.exists(path):
+            top_rel = repo.canonical_relpath(path, top)
+            pk = closeout.path_key(top_rel)
+            if pk in changed_keys:
+                dirty_entities.append(changed_keys[pk])
+
+    uncommitted = sorted(dict.fromkeys(dirty_attributed + dirty_entities))
+    print(f"[Warning] Issue '{slug}' wrapped with uncommitted attributed files:")
+    for p in uncommitted:
+        print(f"  - {p}")
+    paths_str = " ".join(uncommitted)
+    print(f"Commit them with:\n  along commit -i {slug} --paths {paths_str}")
+    return uncommitted
 
 
 def execute_wrap(
@@ -679,6 +724,17 @@ def execute_wrap(
             return 2
         if not dry_run:
             session.append_trace(repo_root, clean_slug, f"Wrapped without a recorded plan: {force_reason}")
+
+    if has_blackboard:
+        unrecorded = session.unrecorded_files(repo_root, clean_slug)
+        if unrecorded:
+            print(
+                f"[Error] Wrap aborted: blackboard '{clean_slug}' contains unknown non-scaffold file(s):\n"
+                + "\n".join(f"  - {f}" for f in unrecorded)
+                + "\n  Remove or record these files before wrapping.",
+                file=sys.stderr,
+            )
+            return 2
 
     # 1. Pre-Flight Test Gate
     if not no_verify and not dry_run:
@@ -792,6 +848,7 @@ def execute_wrap(
 
         # Session log with the blackboard record; the blackboard is purged only after the
         # transaction committed [bug--session-records-not-captured].
+        log_path: Optional[str] = None
         if decisions is not None or has_blackboard:
             log_path = write_session_record(
                 repo_root, tx, clean_slug, today=today, issue=issue, completed=(status == "done"),
@@ -823,9 +880,11 @@ def execute_wrap(
         tx.commit()
         # This session keeps a completion token for the commit that follows
         # [bug--commit-blocked-after-wrap].
+        attributed_map = session.attributed_files(repo_root, clean_slug)
         if purge_archived(repo_root, clean_slug, complete=True):
             print(f"-> Purged session blackboard: .along/.session/{clean_slug}")
         print(f"-> [OK] Successfully wrapped up '{clean_slug}'.")
+        _warn_uncommitted_work(repo_root, clean_slug, attributed_map, dest_file, log_path)
         return 0
 
     except (OSError, RuntimeError, ValueError, KeyError, frontmatter.FrontmatterError) as exc:
