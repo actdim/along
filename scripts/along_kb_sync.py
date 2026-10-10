@@ -940,6 +940,8 @@ def sync_decisions_to_docs(repo_root: str, check_only: bool = False) -> str:
         "tags: [adr, architecture, decisions, index]",
         "---",
         "",
+        "<!-- Generated projection from .along/DECISIONS. Do not edit by hand. Run: along decision sync -->",
+        "",
         "# Architectural Decision Records (ADRs)",
         "",
         "This directory contains the project's Architectural Decision Records.",
