@@ -518,6 +518,44 @@ class TestReopenAndDoctor(unittest.TestCase):
         self.assertIn("stale session binding(s)", res.stdout)
         self.assertIn(f"issue(s) in progress with no session bound: {slug}", res.stdout)
 
+    def test_unattributed_changes_grouped_by_done_issue_and_doctor_reports(self):
+        """[bug--wrapped-work-left-uncommitted] REQ-2: group uncommitted changes by done issue."""
+        from alongkit import closeout, lifecycle, proc
+        proc.run_capture(["git", "init", "-q"], cwd=self.root)
+        proc.run_capture(["git", "config", "user.email", "t@example.com"], cwd=self.root)
+        proc.run_capture(["git", "config", "user.name", "T"], cwd=self.root)
+        proc.run_capture(["git", "add", "-A"], cwd=self.root)
+        proc.run_capture(["git", "commit", "-q", "-m", "init"], cwd=self.root)
+
+        slug = "fixture-sample-task"
+        session.init_session(self.root, slug)
+        session.record_plan(self.root, slug, "1. Plan", "test")
+        session.append_event(self.root, slug, "sess-1", "edit", "src/work.py")
+        os.makedirs(os.path.join(self.root, "src"), exist_ok=True)
+        textio.write_text(os.path.join(self.root, "src", "work.py"), "code = 1\n")
+        textio.write_text(os.path.join(self.root, "src", "unrelated.py"), "u = 2\n")
+
+        code = lifecycle.execute_wrap(self.root, slug, status="done", no_verify=True, decisions=[])
+        self.assertEqual(code, 0)
+
+        status = closeout.closeout_status(self.root)
+        rep = status["repository"]
+        self.assertIn("task--fixture-sample-task", rep["wrapped"])
+        self.assertIn("src/work.py", rep["wrapped"]["task--fixture-sample-task"])
+        self.assertNotIn("src/work.py", rep["unattributed"])
+        self.assertIn("src/unrelated.py", rep["unattributed"])
+
+        formatted = closeout.format_closeout_status(status)
+        self.assertIn("Uncommitted changes from wrapped issue(s):", formatted)
+        self.assertIn("task--fixture-sample-task", formatted)
+        self.assertIn("src/work.py", formatted)
+
+        doc_res = _run_exec(self.root, ["doctor"])
+        self.assertIn("uncommitted file(s) belong to wrapped issue(s):", doc_res.stdout)
+        self.assertIn("task--fixture-sample-task", doc_res.stdout)
+        self.assertIn("src/work.py", doc_res.stdout)
+        self.assertIn(f"along commit -i {slug} --paths", doc_res.stdout)
+
 
 class TestCloseoutScenario(unittest.TestCase):
     """Two sessions, two issues, one shared file, one unrelated change, one issue not ready:
@@ -674,6 +712,23 @@ class TestCloseoutScenario(unittest.TestCase):
         self.assertEqual(self.close(ready=True, dry_run=True), 0)
         self.assertEqual(_co_git(self.root, "status", "--porcelain", "-uall"), before)
         self.assertFalse(os.path.isfile(closeout.run_file(self.root)))
+
+    def test_closeout_wrapped_issue_commits_attributed_files(self):
+        """[bug--wrapped-work-left-uncommitted] REQ-3: along session close on a done slug commits files."""
+        from alongkit import closeout, lifecycle
+        code = lifecycle.execute_wrap(self.root, "alpha", status="done", no_verify=True, decisions=[])
+        self.assertEqual(code, 0)
+        self.assertFalse(os.path.isdir(session.get_session_dir(self.root, "alpha")))
+
+        session.record_closeout_approval(self.root, self.closer, ["alpha"])
+
+        close_code = self.close(keys=["alpha"])
+        self.assertEqual(close_code, 0)
+
+        subjects = [s for s, files in self.commits()]
+        self.assertTrue(any("alpha" in s for s in subjects))
+        changes = closeout.git_changes(self.root)
+        self.assertNotIn("src/alpha.py", changes)
 
 
 if __name__ == "__main__":
