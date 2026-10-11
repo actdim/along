@@ -450,6 +450,13 @@ class TestWrapBeforeStop(ArchiveFixture):
         self.assertIn("Session wrapped issue(s) but attributed files remain uncommitted", warn)
         self.assertIn(self.SLUG, warn)
 
+        # [bug--stop-hook-shadow-list-scope]: another session sees one summary line only.
+        other = HookEvent(event_type=HookEventType.STOP, tool_name="", tool_args={},
+                          workspace_root=self.root, runtime="generic", conversation_id="sess-other")
+        warn_other = check_uncommitted_wrap_before_stop(other, self.root)
+        self.assertNotIn(self.SLUG, warn_other)
+        self.assertIn("1 other session issue(s) have uncommitted attributed files", warn_other)
+
 
 class TestDoctorOrphans(ArchiveFixture):
     """REQ-8: orphan blackboards are reported."""

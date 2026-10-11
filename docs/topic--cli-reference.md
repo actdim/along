@@ -65,9 +65,10 @@ Executes the project build lifecycle hook.
 ### `along test`
 Executes automated test suites using quiet, token-efficient flags.
 - **Engine Script**: `.along/scripts/test.py`
-- **Auto-Detection Fallback**: Detects `pytest` (`pytest -q`), `npm` (`npm test -- --silent`), `dotnet` (`dotnet test <solution or test project> -v q`, only with a `*.sln` / `*.slnx` or a test project referencing `Microsoft.NET.Test.Sdk` / `<IsTestProject>`; a library project alone detects nothing), `cargo` (`cargo test -q`).
+- **Auto-Detection Fallback**: Detects `pytest` (`pytest -q`), `npm` (`npm test`, only when `package.json` has a `test` script; no `--silent` is added), `dotnet` (`dotnet test <solution or test project> -v q`, only with a `*.sln` / `*.slnx` or a test project referencing `Microsoft.NET.Test.Sdk` / `<IsTestProject>`; a library project alone detects nothing), `cargo` (`cargo test -q`).
 - **Enclosing hook**: a nested context without its own hook runs the nearest enclosing context's hook of the same git repository instead of synthesizing one; a folder with only an `AGENTS.md` uses the enclosing context.
-- **No tests is not a pass**: when the runner output shows zero executed tests (`Ran 0 tests`, `no tests ran`, `Total tests: 0`, `No test is available`, `No test files found`, ...), `along test` prints `FAIL: ... executed no tests` and exits `5`, and the run is not recorded green. Output that says nothing about test counts is judged by the exit code alone.
+- **No tests is not a pass**: when the runner output shows zero executed tests (`Ran 0 tests`, `no tests ran`, `Total tests: 0`, `No test is available`, `No test files found`, ...), `along test` prints `FAIL: ... executed no tests` and exits `5`, and the run is not recorded green. Output that says nothing about test counts is judged by the exit code alone. Executed-test counting strips ANSI colour codes first, and `npm test` resolves to the `package.json` `test` script for runner detection.
+- **Test policy**: the `verify` block of `.along/config.json` (`{"tests": "required" | "none", "reason": "", "tracked_by": "", "checks": []}`) decides what the wrap / commit / bump test gate demands. `required` (the default): tests must actually run; a run that exits `0` without executing tests fails, and a hook that cannot run (missing npm script, runner not found, runner config missing) is reported as `Test hook misconfigured: ... Fix .along/scripts/test.py or set verify.tests = "none"`. `none`: needs a `reason` and a `tracked_by` issue key that exists (resolved across contexts), and runs the declared `checks` (`build`, `lint`, `typecheck`) via `.along/scripts/<check>.py` instead (`build` may use the detected build command). With no declared policy and no test command the gate is skipped as before; a declared `required` with no test command is misconfigured. See [Setup and Workflow](./topic--setup-and-workflow.md).
 - **Distilled Output** (`along test`, `along build`): When stdout is not a terminal (an agent or a pipe reads it), the output is distilled by `alongkit.distill`. A pass becomes `PASS: <cmd> completed successfully (code 0, <s>s)` plus the runner summary (`Ran N tests`, `OK`). A failure keeps the failure blocks: tracebacks, unittest `FAIL:` / `ERROR:` sections, pytest `E` lines, compiler `error:` lines, panics. Resolver chatter, deprecation notices, progress redraws and passing-test lines are dropped. The result is capped at 50 lines / 2 KB, with the runner summary always kept. The raw output is written to `.along/artifacts/lifecycle/<action>.log` (gitignored, overwritten per run). In a terminal the output streams as before.
   - `--raw` streams the full output, `--distill` forces distillation. Both flags are consumed by Along and not passed on; `--verbose` is left alone because pytest and cargo use it. `ALONG_OUTPUT=raw|distill` sets the mode for a whole session. `along dev` / `along debug` always stream.
 - **Usage**:
@@ -102,7 +103,7 @@ Entity commands manage the durable in-repo memory stored inside `.along/` (issue
 They work inside an Along installation only: the nearest folder (from the current directory upward) whose `.along/` holds Along state. A folder with only an `AGENTS.md` (a folder guide) or a stateless `.along/` is passed by, so a command run in a package folder writes to the installation above it. Outside any installation `issue`, `start`, `session`, `plan`, `decision`, `milestone`, `scratch`, `worktree`, `wrap` and `commit` exit `2` with "Along is not installed"; only `along init` creates an installation, and `along test|build|dev` there run the detected command without writing a hook.
 
 ### `along status`
-Displays an instant terminal summary of repository health, active in-flight issues, and recent completed sessions.
+Displays an instant terminal summary of repository health, active in-flight issues, and recent completed sessions, plus the test policy line (e.g. `tests: required (default)` or `tests: none - <reason> (<tracked_by>)`).
 - **Usage**:
   ```bash
   along status
@@ -115,8 +116,9 @@ Validates repository compliance with the Along protocol. Audits `.along/` direct
 - **Tracked diagnostics**: warns when files under any `.along/diagnostics/` are still tracked in git (committed before the directory ignored itself) and names `along migrate --apply` (or `git rm --cached`) as the fix.
 - **Nested installs**: warns about nested `.along/` contexts that sit in no nested git repository (possibly created per manifest folder by older versions) and lists them. It changes nothing: consolidating them into the root is a manual per-repository task. A deliberate nested context is silenced with `"subproject": {"intentional": true}` in its `.along/config.json`. See ADR `subproject-boundary-is-git-or-explicit-init`.
 - **Sessions**: warns about orphan blackboards (no session bound, issue closed or missing), session bindings older than 72 h or without a blackboard (`along session gc`), and issues in progress with no session bound. See [Parallel Sessions](./topic--parallel-sessions.md).
+- **Verification & gates**: prints the test policy line (`Verify: tests: ...`, see `along test`; `tests: none` is a warning, an invalid policy such as a missing `reason` / `tracked_by` an error), warns about gates shadowed by repository config and names the most-bypassed gates (see `along gates stats`).
 - **Options**:
-  - `--entities`: Performs deep validation of the entity DAG graph, verifying parent/child relationships, `blocked_by` dependencies, and detecting circular references. References resolve against the current `.along/`, every enclosing `.along/` up to the git boundary, every nested subproject `.along/` below it, and every sibling `.along/` of the same git repository (nested git repositories and dependency/build dirs are not entered). Schema findings on archived issues (`.along/ISSUES/done/`) are warnings.
+  - `--entities`: Performs deep validation of the entity DAG graph, verifying parent/child relationships, `blocked_by` dependencies, and detecting circular references. References resolve against the current `.along/`, every enclosing `.along/` up to the outermost context below home (crossing nested git / submodule boundaries), every nested subproject `.along/` below it, and every sibling `.along/` of the same git repository (nested git repositories and dependency/build dirs are not entered). Schema findings on archived issues (`.along/ISSUES/done/`) are warnings.
   - `--entities --fix`: Removes `milestone` fields of issues and session logs that resolve to no milestone, lists the changed files, then validates.
 - **Usage**:
   ```bash
@@ -143,7 +145,7 @@ Manages atomic issue files in `.along/ISSUES/` and recompiles the active board p
   - `along issue done <slug> [options...]`: Marks the issue as completed, records `completed: YYYY-MM-DD`, and moves the file into `.along/ISSUES/done/`. In the same transaction the issue's blackboard (if any) is archived into today's session log `.along/SESSIONS/<YYYY>/<date>--<slug>.md` and, with status `done`, the key is added to its `issues_completed` (the log is created without a blackboard too); the blackboard is purged after the commit. See [Session Lifecycle](./topic--session-lifecycle.md).
     - Options: `--status {done,superseded,cancelled,duplicate}`, `--superseded-by <slug>`, `--duplicate-of <slug>`.
   - `along issue reopen <slug>`: Moves a closed issue from `.along/ISSUES/done/` back to `.along/ISSUES/`, sets `status: open`, removes `completed` / `superseded_by` / `duplicate_of`, restores sibling links and recompiles `.along/ISSUES.md` (one transaction). Session logs that list it as completed stay as they are. Resume with `along start <slug>`.
-  - `along issue sync`: Recompiles `.along/ISSUES.md` deterministically from atomic files in `.along/ISSUES/` and `.along/ISSUES/done/`, then runs the entity reference integrity gate (`validate_entities`): dangling references or schema / enum violations that are absent at `HEAD` exit `1` in `enforce` mode and only warn in `shadow` mode; problems already present at `HEAD` are printed as a warning and never fail it.
+  - `along issue sync`: Recompiles `.along/ISSUES.md` deterministically from atomic files in `.along/ISSUES/` and `.along/ISSUES/done/`, then runs the entity reference integrity gate (`validate_entities`): dangling references or schema / enum violations that are absent at `HEAD` exit `1` in `enforce` mode and only warn in `shadow` mode; problems already present at `HEAD` are printed as a warning and never fail it. A `parent` found in an enclosing context is printed as `<key>: parent <parent> (found in <ctx>)`.
   - `along issue list`: Lists all active in-progress and open issues in the terminal.
   - `along issue rename <old-key> <new-key>`: Renames an issue (type and/or slug; a bare slug keeps the type). Rewrites the file name and `slug`/`type`, then every inbound reference in the nearest `.along/`: `related`, `blocked_by`, `parent`, `superseded_by`, `duplicate_of` in issues, risks, spikes, checklists and ADRs, milestone `target_issues`, and session `issues_advanced` / `issues_completed`.
   - `along issue cancel <slug>`: Same as `along issue done <slug> --status cancelled`.
@@ -163,9 +165,9 @@ Manages atomic issue files in `.along/ISSUES/` and recompiles the active board p
   ```
 
 ### `along start`
-Atomically marks an issue as `in-progress`, updates `updated: YYYY-MM-DD`, recompiles the active board projection (`.along/ISSUES.md`), initializes the session blackboard (`.along/.session/<slug>/`) and binds this agent session to the issue (`.along/.session/bindings/<runtime>--<session_id>.json`). The plan is not approved by starting: the blackboard is in `phase: planning` until the user approves (Claude Code `ExitPlanMode`, or `along plan approve` after an explicit yes). An approval recorded earlier in the same session carries over.
+Atomically marks an issue as `in-progress`, updates `updated: YYYY-MM-DD`, recompiles the active board projection (`.along/ISSUES.md`), initializes the session blackboard (`.along/.session/<slug>/`) and binds this agent session to the issue (`.along/.session/bindings/<runtime>--<session_id>.json`). The plan is not approved by starting: the blackboard is in `phase: planning` until the user approves (Claude Code `ExitPlanMode`, or `along plan approve` after an explicit yes). An `ExitPlanMode` approval carries over to a newly started slug until the user's next message (the plan is recorded under the new slug).
 - **Options**:
-  - `--approved`: Mark the plan approved at once (scripted and runner use only).
+  - `--approved`: Mark the plan approved at once (scripted and runner use only). Held to the same check as `along plan approve`: refused when the plan changed after the user's last message.
   - `--worktree`: Enforces git worktree workspace isolation. Verifies environment readiness, provisions an isolated worktree at `.along/worktrees/<slug>` on branch `along/<slug>`, links heavy dependencies (`node_modules`, `.venv`) via NTFS junctions on Windows or symlinks on POSIX, copies untracked configuration (`.env*`), and points agent execution to the worktree path.
   - `--allow-root <path>` (repeatable): Adds `path` to the issue's `allowed_roots` frontmatter: extra read-only roots for `[gate: workspace-containment]` (for example a sibling contracts repository).
   - `--write-scope <path>` (repeatable): Adds `path` to the issue's `write_scope` frontmatter: once set, workspace writes are limited to these subfolders plus `.along/`.
@@ -219,7 +221,7 @@ Manages session logs in `.along/SESSIONS/` and records engineering provenance.
 ### `along plan`
 Plan approval for this agent session ([gate: require-plan-approval]).
 - **Subcommands**:
-  - `along plan approve [<slug>] [--plan-file <path>]`: Records the user's approval of the presented plan for the bound issue (or for the next `along start` when none is bound). Run it only after the user's explicit yes; in Claude Code accepting a plan via `ExitPlanMode` records it automatically, plan text included. `--plan-file` writes the approved plan into the blackboard `plan.md` (the scaffold becomes `## Revision 1`, later plans are appended as `## Revision N`). With an issue, approval is refused (exit 2) while `plan.md` is still the scaffold.
+  - `along plan approve [<slug>] [--plan-file <path>]`: Records the user's approval of the presented plan for the bound issue (or for the next `along start` when none is bound). Run it only after the user's explicit yes; in Claude Code accepting a plan via `ExitPlanMode` records it automatically, plan text included. `--plan-file` writes the approved plan into the blackboard `plan.md` (the scaffold becomes `## Revision 1`, later plans are appended as `## Revision N`). With an issue, approval is refused (exit 2) while `plan.md` is still the scaffold. Where the runtime records user messages (Claude Code `UserPromptSubmit` hook), approval is also refused when the plan file changed after the user's last message ("plan changed after the user's last message; show it and wait for a reply"); with no recorded message it passes as `approved_via: cli-unverified`. The binding records `approved_via` (`exit-plan-mode` | `cli` | `cli-unverified`), `approved_at` and `plan_sha256`.
   - `along plan approve --closeout <slug>... | --closeout --ready`: Records the user's approval to close these issues out (`--ready`: every issue `along session list` shows ready) in this session's binding; works from a fresh session. `along session close` and `along commit -i <slug>` of those issues pass with it; the closeout consumes it; it lapses after 72 h. Run it only after the user's explicit yes.
   - `along plan status`: Prints the session key, the resolved issue (`binding`, `single`, `ambiguous`, `elsewhere`, `none`), the phase and the approval.
 - **Usage**:
@@ -247,8 +249,9 @@ Manages ephemeral multi-agent session blackboard memory (`.along/.session/<slug>
   - `along scratch phase <slug> <inquiry|planning|execution> [--approve]`: Sets the session phase; `--approve` also marks the plan as approved.
   - `along scratch approve <slug>` (alias: `plan-approve`): Grants plan approval and moves the session to the `execution` phase. Refused while `plan.md` is the scaffold.
   - `along scratch update <slug> [--step N] [--step-status {pending,in-progress,passed,failed}] [--inc-retry] [--status {in-progress,completed,failed}]`: Updates execution state.
-  - `along scratch fallback <slug> --reason "..."`: Switches the blackboard to single-agent (`direct`) execution and records the reason in `execution_trace.md`.
-  - `along scratch purge <slug> [--force --reason "..."]`: Archives the blackboard into today's session log of the issue, then deletes it and the bindings to it (direct blackboards included). Refuses (exit 2) while a role-based blackboard has steps that are not `passed` or passed steps without `reviews/step-N.md`, unless forced with a reason; the reason is written into the record and the trace.
+  - `along scratch fallback <slug> --reason "..."`: Switches the blackboard to single-agent (`direct`) execution and records the reason in `execution_trace.md`. A bypass: where user messages are recorded, a team-step gate must have failed in this session and the user must have replied after that failure.
+  - `approve`, `phase --approve` and `update --approve` follow the `along plan approve` check (refused when the plan changed after the user's last message).
+  - `along scratch purge <slug> [--force --reason "..."]`: Archives the blackboard into today's session log of the issue, then deletes it and the bindings to it (direct blackboards included). Refuses (exit 2) while a role-based blackboard has steps that are not `passed` or passed steps without `reviews/step-N.md`, unless forced with a reason; the reason is written into the record and the trace. `--force` is a bypass held to the same rules as `fallback`.
 - **Usage**:
   ```bash
   along scratch init token-refresh --title "Token Refresh Step Loop" --steps 4
@@ -327,6 +330,7 @@ Audits repository token footprint and context budgets against protocol limits.
 - **Options**:
   - `--check`: Exits with status code 1 if any measured file exceeds configured budget thresholds (e.g. `AGENTS.md` exceeding 14 KB).
   - `--json`: Outputs structured JSON report for CI/CD gates.
+- **AGENTS.md limits**: `agents_md_bytes` (14336) measures `AGENTS.md` without its "Project specifics" section; `project_specifics_bytes` (4096) is a soft limit on that section that only warns, with the hint to move details into `docs/topic--*.md`. Both are overridable in the `budget` block of `.along/config.json`.
 - **Usage**:
   ```bash
   along budget
@@ -352,14 +356,15 @@ Protocol tools provide specialized repository maintenance, release management, a
 ### `along wrap`
 Transactional end-of-stage wrap engine.
 - Validates quality gates, inspects git diffs, updates active issue status, moves files to `done/`, writes session logs, recompiles projections, and appends to `HISTORY.md`.
+- **Check-then-write**: every check (team steps, plan, tests, zero-byte audit, entity graph) runs before the first write; a failed wrap leaves the tree unchanged. KB sync runs after the transaction commits and only warns on failure.
 - **Options**:
   - `-s, --status <status>`: Closing status (`done`, `superseded`, `cancelled`, `duplicate`). Default: `done`.
   - `-m, --summary "<text>"`: One-line summary for `.along/HISTORY.md` index.
   - `--dry-run`: Simulate wrap-up operations without writing or moving files.
-  - `-n, --no-verify`: Skip pre-flight automated tests.
+  - `-n, --no-verify --reason "<text>"`: Skip pre-flight automated tests (`--force-reason` also serves as the reason). A recorded bypass, see [Runtime Lifecycle Hooks & Mechanical Gates](./topic--runtime-hooks-and-gates.md).
   - `-a, --agent "<name>"`: Explicit agent name.
   - `-d, --decisions "ADR-a,ADR-b"` or `--no-decisions` (one is required): The answer to "were architectural decisions made?". The session log for today is written or extended with `issues_completed: [<type>--<slug>]`, the decisions, and the blackboard record (plan, step table, research, execution trace, reviews). A second record of the same issue on the same day is appended as `## Blackboard Record (<n>, <ts>)`. The blackboard is purged only after the wrap transaction committed.
-  - `--force-reason "<text>"`: Wrap a role-based blackboard with open steps or missing reviews, or a blackboard whose `plan.md` is still the scaffold (refused otherwise, exit 2); the reason is recorded in the trace.
+  - `--force-reason "<text>"`: Wrap a role-based blackboard with open steps or missing reviews, or a blackboard whose `plan.md` is still the scaffold (refused otherwise, exit 2); it also passes the entity-reference-integrity gate. The reason is recorded in the trace and the session log; when a check is actually forced it is a recorded bypass.
 - **Uncommitted work warning**: when files attributed to the issue remain uncommitted after wrap, warns with the list of paths and emits the exact `along commit -i <slug> --paths ...` command.
 - **Completion token**: the purge removes the session's binding; when this session had an approved plan for the slug, it keeps a completion token so the following `along commit -i <slug>` passes the plan gate without a new approval (see `along commit`).
 - **Usage**:
@@ -425,11 +430,12 @@ Conventional Commits generator with active issue binding and typography validati
   - `-i <slug>`: Explicitly specifies target issue slug (otherwise auto-detected from active issue).
   - `-m "<message>"`: Commit message body.
   - `--fix-typography`: Automatically rewrites non-ASCII typography violations before committing.
-  - `--no-verify`: Skips pre-commit test gate.
+  - `-n, --no-verify --reason "<text>"`: Skips the pre-commit gates. A recorded bypass: the commit carries an `Along-Bypass: <gate>; <verified|unverified>; <reason>` trailer.
   - `-a, --all` / `--paths <file>...`: Stage the whole tree / only these paths. Prefer `--paths` when other sessions have uncommitted work in the tree.
   - `-p, --push`: Push after the commit.
 - **After `along wrap`**: the plan gate passes `along commit -i <slug>` only for the session that wrapped `<slug>` with an approved plan (completion token), or that holds a closeout approval for it (`along plan approve --closeout`); the commit uses the token up. `-i` is required on this path; `--fix-typography`, a write redirect or a chained mutation take the command off it.
 - **Test reuse**: the pre-commit test gate (also of `along wrap` and `along bump`) skips the suite when the last run on the same working tree was green (tree hash without `.along/` state, KB projections and `__pycache__`; `.along/scripts/` counts). `along test` always runs. Runs are kept in `.along/diagnostics/test_runs.json`.
+- **Docs-only skip**: `along commit` skips the test gate when the change touches only `*.md`, `docs/**`, `.along/**` (not `.along/scripts/`), `llms*.txt` or a version-only `package.json` change.
 - **Usage**:
   ```bash
   along commit -i token-refresh -m "feat(auth): implement refresh token rotation"
@@ -444,7 +450,7 @@ Multi-stack project version incrementer and release packager.
   - `-c`, `--commit`: Automatically creates release commit.
   - `-p`, `--push`: Pushes release commit and tag to remote.
   - `--fix-typography`: Automatically repairs typography before releasing.
-  - `-n`, `--no-verify`: Bypasses pre-mutation quality gates.
+  - `-n`, `--no-verify --reason "<text>"`: Bypasses pre-mutation quality gates (a recorded bypass; the reason is required).
   - `--carry-over <milestone>`: Moves still-open issues of the released milestone to `<milestone>` (issue `milestone` field and both `target_issues` lists) instead of aborting.
 - **Milestone reconciliation**: The milestone whose slug names the new version is set to `completed` only when all its issues (by `milestone` field or `target_issues`) are closed (`done`, `superseded`, `cancelled`, `duplicate`). Otherwise the release aborts inside the transaction and lists the open issues. `progress_pct` is closed / total.
 - **Usage**:
@@ -619,9 +625,11 @@ Runs the commit-time gate subset (catalogue entries with `git` or `ci` in `enfor
   - `along gates check --hook pre-commit`: Added lines of the staged diff (typography in `.md`/`.py`/`.sh`/`.ps1`/`.bat`, conflict markers, anti-stub) and freshness of staged `.along/` boards (`ISSUES.md`, `DECISIONS.md`, `CONSTRAINTS.md`). Only added lines count, so existing debt elsewhere never blocks a commit.
   - `along gates check --hook commit-msg <file>`: Issue binding and AI co-author trailers in the message.
   - `along gates check --ci [--range R] [--no-links] [--json]`: Every non-merge commit message in the range, the range diff, projection freshness of the checkout, and link integrity (`along kb-sync --check`). The range defaults to `origin/$GITHUB_BASE_REF...HEAD` for PRs, `$ALONG_CI_BEFORE..HEAD` for pushes, else `HEAD^..HEAD`. Used by `.github/workflows/tests.yml`.
+  - `along gates stats [--since YYYY-MM-DD]`: Per-gate blocked / warned / bypassed counts aggregated from `.along/diagnostics/hooks_audit.jsonl` (`mode: shadow` decisions count as warnings, `decision: bypass` entries as bypasses). Read-only.
 - **Usage**:
   ```bash
   along gates check --ci --range origin/main...HEAD
+  along gates stats --since 2026-10-01
   ```
 
 ### `along run`

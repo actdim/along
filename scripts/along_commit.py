@@ -27,7 +27,7 @@ from alongkit import bootstrap
 bootstrap.ensure_deps()
 
 
-from alongkit import attribution, entities, gates, gitgates, proc, repo, session
+from alongkit import attribution, bypass, entities, gates, gitgates, proc, repo, session, verify
 
 
 # Both gates live in alongkit.gates, shared with the release engine, which used to
@@ -41,6 +41,44 @@ def get_active_issue(repo_root, explicit_slug=None, strict=False):
         repo_root, explicit_slug=explicit_slug, strict=strict
     )
     return issue
+
+
+def _abort(repo_root, message):
+    """Abort the commit; the failure is what a later `-n --reason` bypass must follow."""
+    bypass.record_failure(repo_root, bypass.PRE_COMMIT)
+    print(message, file=sys.stderr)
+    sys.exit(1)
+
+
+def _planned_commit_paths(repo_root, parsed):
+    """Repo-relative paths this commit will contain (before staging), [] when git cannot say."""
+    if parsed.all_files or parsed.paths:
+        args = ["status", "--porcelain", "-z", "--untracked-files=all"]
+        if parsed.paths:
+            args += ["--", *parsed.paths]
+        res = proc.git(args, cwd=repo_root)
+        if not res.ok:
+            return []
+        paths = []
+        entries = (res.stdout or "").split("\0")
+        i = 0
+        while i < len(entries):
+            entry = entries[i]
+            i += 1
+            if len(entry) < 4:
+                continue
+            paths.append(entry[3:])
+            if entry[0] in ("R", "C"):
+                i += 1  # the rename source follows
+        return paths
+    res = proc.git(["diff", "--cached", "--name-only"], cwd=repo_root)
+    return [p.strip() for p in (res.stdout or "").splitlines() if p.strip()] if res.ok else []
+
+
+def _staged_or_worktree_diff(repo_root, path):
+    """Diff of `path` against HEAD (staged and unstaged), '' when unavailable."""
+    res = proc.git(["diff", "HEAD", "--", path], cwd=repo_root)
+    return res.stdout if res.ok else ""
 
 
 def format_commit_message(raw_msg, active_issue):
@@ -76,7 +114,9 @@ def parse_args(argv=None):
     parser.add_argument("-a", "--all", dest="all_files", action="store_true", help="Stage all changes (git add -A) before committing")
     parser.add_argument("--paths", nargs="+", help="Specific paths to stage before committing")
     parser.add_argument("-p", "--push", action="store_true", help="Push to remote after successful commit")
-    parser.add_argument("-n", "--no-verify", dest="skip_tests", action="store_true", help="Skip pre-commit gates")
+    parser.add_argument("-n", "--no-verify", dest="skip_tests", action="store_true",
+                        help="Skip pre-commit gates (needs --reason; recorded as an Along-Bypass trailer)")
+    parser.add_argument("--reason", dest="bypass_reason", help="Why the user accepts skipping the gates (-n)")
     parser.add_argument("--fix-typography", action="store_true", help="Fix typography automatically before committing")
     parser.add_argument("--strict", action="store_true", help="Fail if active issue cannot be determined unambiguously")
     return parser.parse_args(argv)
@@ -100,31 +140,40 @@ def main(argv=None):
     print(f"   Target: {repo_root}")
     print("==================================================")
 
+    # A bypass is the user's decision, with a reason, and it is recorded
+    # [feat--gate-friction-and-bypass-accountability] REQ-3.
+    bypass_trailer = None
+    if parsed.skip_tests:
+        bypass_trailer = bypass.guard(repo_root, bypass.PRE_COMMIT, parsed.bypass_reason, slug=parsed.issue)
+        if not bypass_trailer:
+            sys.exit(2)
+
     # 1. Pre-Commit Syntax Gate
     if not parsed.skip_tests:
         if not gates.syntax_gate(repo_root, "Pre-Commit Quality Gate"):
-            print("Commit aborted. Fix syntax errors before committing.", file=sys.stderr)
-            sys.exit(1)
+            _abort(repo_root, "Commit aborted. Fix syntax errors before committing.")
 
     # 2. Pre-Commit Markdown Link Integrity Gate
     if not parsed.skip_tests:
         if not gates.link_integrity_gate(repo_root, "Pre-Commit Quality Gate", strict=parsed.strict):
-            print("Commit aborted. Fix broken Markdown links before committing.", file=sys.stderr)
-            sys.exit(1)
+            _abort(repo_root, "Commit aborted. Fix broken Markdown links before committing.")
 
-    # 3. Mandatory Pre-Commit Tests
+    # 3. Mandatory Pre-Commit Tests, under the declared verify policy. A change of only
+    # documentation / Along state skips them with a note [bug--test-gate-no-tests-policy].
     if not parsed.skip_tests:
-        if not gates.run_repository_tests(repo_root, "Pre-Commit Quality Gate"):
-            print("Commit aborted. Fix failing tests before committing.", file=sys.stderr)
-            sys.exit(1)
+        planned = _planned_commit_paths(repo_root, parsed)
+        if planned and verify.docs_only_change(repo_root, planned, lambda p: _staged_or_worktree_diff(repo_root, p)):
+            print("-> [Pre-Commit Quality Gate] Only documentation / Along state changes: tests skipped.")
+        else:
+            outcome = gates.run_test_gate(repo_root, "Pre-Commit Quality Gate")
+            if outcome not in (gates.TESTS_PASSED, gates.TESTS_SKIPPED):
+                _abort(repo_root, f"Commit aborted: {gates.test_gate_abort_reason(outcome)}.")
 
     # 4. Pre-commit typography check. Reports and aborts; --fix-typography rewrites.
     if not parsed.skip_tests:
         if not typography_gate(repo_root, "Pre-Commit Quality Gate",
                                allow_fix=parsed.fix_typography):
-            print("Commit aborted. Clean the typography before committing.",
-                  file=sys.stderr)
-            sys.exit(1)
+            _abort(repo_root, "Commit aborted. Clean the typography before committing.")
 
     # 3. Extract active issue context deterministically from SSOT
     try:
@@ -179,8 +228,7 @@ def main(argv=None):
         broken = gitgates.check_entity_references(repo_root, staged_files, "git", "index", head)
         if broken:
             print(gitgates.format_report(broken, "Pre-Commit Quality Gate"), file=sys.stderr)
-            print("Commit aborted. Fix the entity references before committing.", file=sys.stderr)
-            sys.exit(1)
+            _abort(repo_root, "Commit aborted. Fix the entity references before committing.")
         print("-> [Pre-Commit Quality Gate] Entity references intact.")
 
     # 6. Blackboard Records of committed session logs are append-only
@@ -190,8 +238,10 @@ def main(argv=None):
         cut = gitgates.check_session_records(repo_root, staged_files, "git", head)
         if cut:
             print(gitgates.format_report(cut, "Pre-Commit Quality Gate"), file=sys.stderr)
-            print("Commit aborted. Restore the removed Blackboard Record lines.", file=sys.stderr)
-            sys.exit(1)
+            _abort(repo_root, "Commit aborted. Restore the removed Blackboard Record lines.")
+
+    if bypass_trailer:
+        final_msg = f"{final_msg}\n\n{bypass_trailer}"
 
     print(f"-> Committing {len(staged_files)} staged file(s):")
     for f in staged_files[:10]:

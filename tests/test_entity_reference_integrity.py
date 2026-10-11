@@ -202,6 +202,83 @@ class TestNestedContexts(_ErRepo):
         self.assertNotIn("feat--dependency-task", keys)
 
 
+class TestCrossContextParent(_ErRepo):
+    """[bug--cross-context-parent-dangling]: a child in a nested repository names the
+    workspace umbrella above it, across the `.git` boundary."""
+
+    def setUp(self):
+        super().setUp()
+        _er_write(self.root, ".along/ISSUES/task--umbrella.md", _er_issue("umbrella", itype="task"))
+        self.sub = os.path.join(self.root, "sub")
+        os.makedirs(self.sub)
+        _er_git(self.sub, "init", "-q")
+        _er_git(self.sub, "config", "user.email", "t@example.com")
+        _er_git(self.sub, "config", "user.name", "t")
+        _er_git(self.sub, "config", "core.autocrlf", "false")
+        os.makedirs(os.path.join(self.sub, ".along", "ISSUES", "done"))
+
+    def _child(self, ctx, slug="child", itype="bug", parent="task--umbrella"):
+        return _er_write(ctx, f".along/ISSUES/{itype}--{slug}.md",
+                         _er_issue(slug, itype=itype, milestone="", extra=f"parent: {parent}\n"))
+
+    def _messages(self, ctx):
+        return [msg for _, msg in entities.validate_entities(ctx)["errors"]]
+
+    def test_parent_in_root_resolves_from_a_nested_repository(self):
+        self._child(self.sub)
+        self.assertEqual(self._messages(self.sub), [])
+        self.assertIn("task--umbrella", entities.ancestor_entity_keys(self.sub))
+        with mock.patch.dict(os.environ, {"ALONG_HOOK_MODE": "enforce"}):
+            self.assertTrue(gates.entity_integrity_gate(self.sub, "T"))
+
+    def test_commit_snapshot_check_sees_the_enclosing_workspace(self):
+        self._child(self.sub)
+        _er_git(self.sub, "add", "-A")
+        staged = _er_git(self.sub, "diff", "--cached", "--name-only").stdout.splitlines()
+        self.assertEqual(gitgates.check_entity_references(self.sub, staged, "git", "index", None), [])
+
+    def test_issue_sync_passes_and_names_the_context(self):
+        self._child(self.sub)
+        env = dict(os.environ, ALONG_HOOK_MODE="enforce")
+        result = subprocess.run([sys.executable, EXEC, "issue", "sync"], cwd=self.sub, env=env,
+                                capture_output=True, text=True, encoding="utf-8")
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertIn("bug--child: parent task--umbrella (found in ..)", result.stdout)
+
+    def test_parent_in_the_same_context_passes(self):
+        _er_write(self.sub, ".along/ISSUES/task--local-umbrella.md", _er_issue("local-umbrella", itype="task", milestone=""))
+        self._child(self.sub, parent="task--local-umbrella")
+        self.assertEqual(self._messages(self.sub), [])
+
+    def test_parent_missing_everywhere_dangles(self):
+        self._child(self.sub, parent="task--nowhere")
+        self.assertEqual(self._messages(self.sub), ["dangling parent reference: 'task--nowhere'"])
+
+    def test_self_parent_resolves_to_the_enclosing_context_only(self):
+        self._child(self.sub, slug="umbrella", itype="task", parent="task--umbrella")
+        self.assertEqual(self._messages(self.sub), [])
+        os.remove(os.path.join(self.root, ".along", "ISSUES", "task--umbrella.md"))
+        messages = self._messages(self.sub)
+        self.assertEqual(len(messages), 1)
+        self.assertTrue(messages[0].startswith("invalid self-parent reference: 'task--umbrella'"))
+        self.assertTrue(entities.is_integrity_error(messages[0]))
+
+    def test_three_levels_resolve_through_every_context(self):
+        subsub = os.path.join(self.sub, "subsub")
+        os.makedirs(os.path.join(subsub, ".git"))
+        os.makedirs(os.path.join(subsub, ".along", "ISSUES", "done"))
+        self._child(self.sub, slug="mid", itype="task", parent="task--umbrella")
+        self._child(subsub, slug="leaf", parent="task--mid")
+        self._child(subsub, slug="leaf-two", parent="task--umbrella")
+        self.assertEqual(self._messages(subsub), [])
+
+    def test_root_qualifier_resolves_only_in_the_outermost_context(self):
+        _er_write(self.sub, ".along/ISSUES/task--only-here.md", _er_issue("only-here", itype="task", milestone=""))
+        self._child(self.sub, parent="root:task--umbrella")
+        self._child(self.sub, slug="other", parent="root:task--only-here")
+        self.assertEqual(self._messages(self.sub), ["dangling parent reference: 'root:task--only-here'"])
+
+
 class TestPreexistingProblemsDoNotBlock(_ErRepo):
     """[bug--entity-gate-blocks-preexisting-problems]."""
 

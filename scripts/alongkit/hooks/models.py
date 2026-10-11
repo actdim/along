@@ -20,6 +20,9 @@ class HookEventType(str, Enum):
     PRE_INVOCATION = "PreInvocation"
     POST_INVOCATION = "PostInvocation"
     STOP = "Stop"
+    #: The user sent a message; recorded so a CLI plan approval or a gate bypass can be
+    #: checked against it. Never blocks. [bug--plan-approval-self-and-lost]
+    USER_PROMPT_SUBMIT = "UserPromptSubmit"
 
 
 class GateDecision(str, Enum):

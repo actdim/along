@@ -151,11 +151,57 @@ class TestPlanApproval(SessionFixture):
         self.assertFalse(session.is_plan_approved(self.root, key=self.key_b))
 
     def test_approval_before_start_carries_to_first_slug_only(self):
-        session.record_plan_approval(self.root, self.key_a)
+        # A CLI approval does not carry past the first slug.
+        session.record_plan_approval(self.root, self.key_a, session.APPROVED_VIA_CLI)
         self.start("alpha", self.key_a)
         self.assertTrue(session.is_plan_approved(self.root, key=self.key_a))
         self.start("gamma", self.key_a)
         self.assertFalse(session.is_plan_approved(self.root, key=self.key_a))
+
+    def test_exit_plan_mode_approval_survives_along_start_until_the_next_user_message(self):
+        # [bug--plan-approval-self-and-lost] REQ-4: bound to X, the user approves in plan
+        # mode, then the agent runs `along start Y`.
+        self.start("alpha", self.key_a)
+        session.record_user_prompt(self.root, self.key_a, "2026-01-01T00:00:00Z")
+        session.record_accepted_plan(self.root, self.key_a, "1. Do the thing.")
+        self.start("gamma", self.key_a)
+        self.assertTrue(session.is_plan_approved(self.root, key=self.key_a))
+        self.assertTrue(session.plan_recorded(self.root, "gamma"))
+        # A newer user message ends the carry-over.
+        session.record_user_prompt(self.root, self.key_a, "2999-01-01T00:00:00Z")
+        self.start("delta", self.key_a)
+        self.assertFalse(session.is_plan_approved(self.root, key=self.key_a))
+
+
+class TestCliApprovalAgainstUserMessage(SessionFixture):
+    """[bug--plan-approval-self-and-lost] REQ-2: no self-approval."""
+
+    def setUp(self):
+        super().setUp()
+        self.plan = os.path.join(self.root, "plan.md")
+        with open(self.plan, "w", encoding="utf-8") as f:
+            f.write("1. Plan.\n")
+
+    def test_plan_newer_than_the_last_user_message_is_refused(self):
+        session.record_user_prompt(self.root, self.key_a, "2000-01-01T00:00:00Z")
+        refusal, via = session.check_cli_approval(self.root, self.key_a, self.plan)
+        self.assertIn("plan changed after the user's last message", refusal)
+
+    def test_plan_older_than_the_last_user_message_is_accepted(self):
+        session.record_user_prompt(self.root, self.key_a, "2999-01-01T00:00:00Z")
+        self.assertEqual(session.check_cli_approval(self.root, self.key_a, self.plan),
+                         (None, session.APPROVED_VIA_CLI))
+
+    def test_no_recorded_user_message_is_allowed_but_unverified(self):
+        self.assertEqual(session.check_cli_approval(self.root, self.key_a, self.plan),
+                         (None, session.APPROVED_VIA_CLI_UNVERIFIED))
+
+    def test_user_prompt_hook_records_the_timestamp_without_binding(self):
+        event = HookEvent(event_type=HookEventType.USER_PROMPT_SUBMIT, tool_name="", tool_args={},
+                          workspace_root=self.root, runtime="claude", conversation_id="sess-a")
+        record_tool_activity(event, self.root)
+        self.assertIsNotNone(session.last_user_prompt_at(self.root, self.key_a))
+        self.assertIsNone(session.load_binding(self.root, self.key_a))
 
     def test_along_state_commands_pass_the_plan_gate(self):
         # `along commit` is not a state command: without an approved plan it passes only on a

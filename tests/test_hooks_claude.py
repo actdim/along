@@ -379,13 +379,14 @@ class TestInstallClaudeHooks(unittest.TestCase):
     def test_manifest_uses_nested_schema(self):
         """Claude Code ignores flat {matcher, command} entries [bug--claude-hook-manifest-flat-schema]."""
         manifest = get_claude_hook_manifest()
-        for event in ("PreToolUse", "PostToolUse", "Stop"):
+        for event in ("PreToolUse", "PostToolUse", "Stop", "UserPromptSubmit"):
             entry = manifest[event][0]
             self.assertNotIn("command", entry)
             self.assertEqual(entry["hooks"][0]["type"], "command")
             self.assertIn(f"--event {event}", entry["hooks"][0]["command"])
             self.assertIsInstance(entry["hooks"][0]["timeout"], int)
         self.assertNotIn("matcher", manifest["Stop"][0])
+        self.assertNotIn("matcher", manifest["UserPromptSubmit"][0])
         self.assertIn("ExitPlanMode", manifest["PostToolUse"][0]["matcher"])
         self.assertIn("Read", manifest["PreToolUse"][0]["matcher"])
 

@@ -27,7 +27,7 @@ Also, when relevant: `.along/VISION.md`, `.along/GLOSSARY.md`. These reflect the
 
 ## Mandatory Issue Anchoring
 - **No Code Without Issue** [gate: require-active-issue]: Before modifying source code, agents MUST identify or create an issue in `.along/ISSUES/<type>--<slug>.md` and set `status: in-progress`.
-- **Session Binding & Plan Approval** [gate: require-plan-approval]: `along start <slug>` binds THIS agent session to the issue; parallel sessions keep their own bindings. Source edits unlock after the user approves the plan (Claude Code: `ExitPlanMode`; elsewhere `along plan approve` only after the user's explicit yes). `along plan status` shows the binding.
+- **Session Binding & Plan Approval** [gate: require-plan-approval]: `along start <slug>` binds THIS agent session to the issue; parallel sessions keep their own bindings. Source edits unlock after the user approves the plan (`EnterPlanMode` -> `ExitPlanMode`; else show the plan, `along plan approve` only after the user's reply). `along plan status` shows the binding.
 - **Exemptions**: Read-only Q&A and 1-line micro-edits (typo fixes, comments) do not require issues.
 - **Commit Binding** [gate: commit-issue-binding]: Every commit via `/along-commit` MUST bind to the active issue slug.
 - **No AI Co-Authors** [gate: commit-no-ai-coauthor]: Commit messages MUST NOT carry `Co-Authored-By:` trailers naming an AI agent (GitHub lists the vendor as a contributor). `along hook install` turns runtime attribution off; opt out via `.along/config.json` `commits.allow_ai_coauthor: true`.
@@ -89,6 +89,7 @@ When a stage or session completes, agents MUST execute in this order:
   - Anchor edits on minimal unique chunks. Restore unintended deletions immediately.
 - **Clean ASCII** [gate: typography]: ASCII punctuation only (no typographic dashes, quotes, ellipsis, bullets, NBSP/zero-width chars or BOM); `along sanitize --write` fixes them.
 - **Markdown** [gate: code-fence-language]: Every code fence names a language.
+- **Bypass Is The User's Call**: `-n`, `--force-reason`, `scratch fallback` need `--reason` and the user's reply after the failure; each bypass is recorded (`along gates stats`).
 - **File Content Via Tools Only** [gate: cli_safety]: Create/edit files with the agent's file tools. NEVER carry content in heredocs, `python -c`, or inline shell. Write scripts to a file first.
 - **Verify Written Files**: After writing/patching, confirm parsing (`python -m compileall -q`, `bash -n`, etc.) before moving on.
 - **Hermetic Tests**: Tests MUST target throwaway fixtures (`tempfile.mkdtemp()`), never the live repository. Read-only access to live state is allowed. Keep a meta-test that verifies `git status --porcelain -u` stays clean.

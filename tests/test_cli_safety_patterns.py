@@ -74,5 +74,39 @@ class TestCliSafetyMatrix(unittest.TestCase):
         self.assertTrue(HooksConfig().is_enforcing("cli_safety"))
 
 
+#: [bug--cli-safety-redirect-false-positive]: (command, writes a file with echo/printf?)
+ECHO_WRITER_TABLE = (
+    ('for d in a b; do grep -l x "$d" 2>/dev/null | while read f; do echo "$f -> ok"; done; done', False),
+    ('echo "a -> b" | cat', False),
+    ("echo 'x > y'", False),
+    ("echo done 2>&1", False),
+    ("echo err >&2", False),
+    ("echo hi > /dev/null", False),
+    ("echo hi &>/dev/null", False),
+    ("echo hi >/dev/null 2>&1", False),
+    ("echo hi > $null", False),
+    ("echo hi 2> err.log", False),
+    ("ls > out.txt", False),
+    ("printf '%s\\n' x | sort", False),
+    ("echo hello > notes.md", True),
+    ("printf 'a\\n' >> src/app.py", True),
+    ("echo x 1> f.txt", True),
+    ("echo x &> f.txt", True),
+    ("ls; echo x > \"my file.txt\"", True),
+    ("if true; then echo x > f.txt; fi", True),
+    ("echo x | tee out.txt", True),
+    ("echo x | tee /dev/null", False),
+    ("Write-Output 'x' > out.txt", True),
+)
+
+
+class TestEchoWriterTable(unittest.TestCase):
+    def test_table(self):
+        for command, expected in ECHO_WRITER_TABLE:
+            with self.subTest(command=command):
+                blocked = check_cli_safety(_cmd(command), REPO_ROOT)
+                self.assertEqual(blocked is not None and "echo/printf" in blocked, expected, blocked)
+
+
 if __name__ == "__main__":
     unittest.main(verbosity=2)

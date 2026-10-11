@@ -28,12 +28,14 @@ along wrap <slug> -s superseded --no-decisions
 
 ### Command Flags:
 - `-d`, `--decisions "ADR-a,ADR-b"` or `--no-decisions` (one is required): Answer "were architectural decisions made in this session?". Create the ADRs first (`along decision create`). `--no-decisions` is an explicit confirmation, not a default.
-- `--force-reason "<text>"`: Wrap a role-based (along-team) blackboard although steps are open or reviews are missing; the reason is recorded.
+- `--force-reason "<text>"`: Wrap a role-based (along-team) blackboard although steps are open or reviews are missing, a scaffold plan, or entity-reference-integrity findings; the reason is written to the trace and the session log, and a check actually forced is a recorded bypass.
 - `-s`, `--status <done|superseded|cancelled|duplicate>`: Terminal status to set in the issue front-matter (default: `done`).
 - `-m`, `--summary "<text>"`: One-line summary appended to `.along/HISTORY.md`.
 - `--dry-run`: Inspect planned actions without writing or moving files.
-- `-n`, `--no-verify`: Skip pre-flight automated tests.
+- `-n`, `--no-verify`: Skip pre-flight automated tests. Requires `--reason "..."` (or `--force-reason`); where user messages are recorded, the test gate must have failed in this session and the user must have replied after the failure. The bypass is logged.
 - `-a`, `--agent "<name>"`: Explicit agent name (defaults to detected agent).
+
+All checks (team steps, plan, tests, zero-byte audit, entity graph) run before the first write: a failed wrap leaves the tree unchanged. KB sync runs after the transaction commits and only warns on failure.
 
 ---
 

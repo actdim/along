@@ -240,8 +240,22 @@ Every invocation enforces `shell=False` and passes command arguments as pre-spli
 
 When an AI agent runs `/along-test` or `/along-build` in a repository that lacks `.along/scripts/`:
 1. Along scans repository manifests to identify the active ecosystem (Node.js, Rust, .NET, Python, Go).
-2. If recognized, Along synthesizes a verified hook file (e.g. `.along/scripts/test.py`) with quiet flags (`-q`, `--silent`) and writes a `# Status: verified` header tag.
+2. If recognized, Along synthesizes a verified hook file (e.g. `.along/scripts/test.py`) with quiet flags (`-q`, `-v q`) and writes a `# Status: verified` header tag. Node gets `npm test` only when `package.json` has a `test` script, and no `--silent` (the test gate counts executed tests from the runner summary).
 3. If the ecosystem cannot be inferred, Along generates a safe template marked `# Status: unconfigured`, prompting the developer or agent to customize the command.
+
+### Test Policy (`verify`)
+
+The wrap / commit / bump test gate follows the `verify` block of `.along/config.json`:
+
+```json
+{ "verify": { "tests": "none", "reason": "prototype, no test harness yet", "tracked_by": "debt--add-test-harness", "checks": ["build", "lint"] } }
+```
+
+- `tests: "required"` (the default): tests must actually run. A run that exits `0` without executing tests fails; a hook that cannot run (missing npm script, runner not found, runner config missing) is reported as `Test hook misconfigured: ... Fix .along/scripts/test.py or set verify.tests = "none"`.
+- `tests: "none"`: needs a `reason` and a `tracked_by` key of an existing issue (resolved across contexts), so the missing tests stay on the board. The declared `checks` (`build`, `lint`, `typecheck`) run instead via `.along/scripts/<check>.py`; `build` may fall back to the detected build command.
+- No declared policy and no test command keeps the old skip; a declared `required` with no test command is misconfigured.
+- `along commit` skips the test gate when the change touches only `*.md`, `docs/**`, `.along/**` (not `.along/scripts/`), `llms*.txt` or a version-only `package.json` change.
+- `along status`, `along doctor` and the dashboard metrics (`verify_policy`) show the policy line, e.g. `tests: none - <reason> (<tracked_by>)`.
 
 ### Typography: checking and repairing
 
@@ -269,7 +283,7 @@ Along provides terminal utilities for inspecting repository state, verifying pro
 
 - **`along status`**: Quick terminal overview of repository health, active issues, and recent sessions.
 - **`along doctor [--entities]`**: Comprehensive repository health check validating directory structure, `.gitattributes`, ADR headers, and entity DAG dependencies.
-- **`along budget [--check]`**: Audits context footprint across root protocol files (`AGENTS.md`, `CLAUDE.md`, `.along/ISSUES.md`, `.along/CONSTRAINTS.md`) against strict limits (14 KB for `AGENTS.md`), exiting with code 1 on budget breach.
+- **`along budget [--check]`**: Audits context footprint across root protocol files (`AGENTS.md`, `CLAUDE.md`, `.along/ISSUES.md`, `.along/CONSTRAINTS.md`) against strict limits (14 KB for `AGENTS.md`, measured without its "Project specifics" section; that section has a 4 KB soft limit that only warns), exiting with code 1 on budget breach. Limits are overridable in the `budget` block of `.along/config.json`.
 
 For full command syntax, flags, exit codes, and subcommands, see the [Along CLI Command Reference](./topic--cli-reference.md).
 
@@ -292,7 +306,7 @@ Steps 2 to 4 are transactional. A failure in any of them, or in staging, restore
 byte for byte and prints what it put back; the transaction closes once the commit exists,
 because past that point a rollback would discard committed work. `--fix-typography` opts
 into repairing the findings from step 1 and is itself covered by the rollback. `-n` /
-`--no-verify` is the one documented way past the gates.
+`--no-verify --reason "..."` is the one documented way past the gates; it is a recorded bypass.
 
 A release writes nothing outside the repository. Installing skills for your providers is
 `/along-update` or `install.ps1` / `install.sh`, run deliberately.

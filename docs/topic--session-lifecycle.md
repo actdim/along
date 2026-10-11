@@ -37,11 +37,17 @@ The plan the user approved is part of the record:
 
 - **Claude Code**: accepting a plan with `ExitPlanMode` stores its text in `plan.md` of the bound
   issue. A plan accepted before `along start` waits in the session binding and goes to the first
-  issue started.
+  issue started; an accepted plan also carries to a newly started slug until the user's next
+  message (the plan is recorded under the new slug).
 - **Elsewhere**: after the user's explicit yes, write the plan to a file and run
   `along plan approve <slug> --plan-file <path>`, or write it into `plan.md` yourself and run
   `along plan approve <slug>`.
 - Approval is refused while `plan.md` is still the scaffold `along start` created.
+- Where user messages are recorded (Claude Code `UserPromptSubmit` hook, in
+  `.along/.session/prompts/<key>.json`), a CLI approval is refused when the plan file changed
+  after the user's last message: show the plan and wait for a reply. With no recorded message
+  it passes as `approved_via: cli-unverified`. The binding records `approved_via`
+  (`exit-plan-mode`, `cli`, `cli-unverified`), `approved_at` and `plan_sha256`.
 - A revised plan is appended as the next `## Revision N`; earlier revisions stay.
 
 ```bash
@@ -74,7 +80,11 @@ Every way a blackboard leaves the repository writes it into the issue's session 
 | `along scratch purge <slug> [--force --reason "..."]` | record, with the reason when forced | purged after the log is written |
 
 - `along wrap` refuses a blackboard whose plan was never recorded, unless
-  `--force-reason "..."` says why; the reason is kept in the trace.
+  `--force-reason "..."` says why; the reason is kept in the trace and the session log.
+- `along wrap` runs every check (team steps, plan, tests, zero-byte audit, entity graph) before
+  its first write, so a failed wrap leaves the tree unchanged. `--force-reason` also passes the
+  entity-reference-integrity gate. KB sync runs after the transaction commits and only warns
+  when it fails.
 - Template placeholders (scaffold plan, empty research headings, the generic step list) are not
   written as content: a missing plan shows as `No plan recorded.` Non-scaffold findings (`research.md`)
   and notes (`notes.md`) are preserved under `### Research` and `### Notes`.

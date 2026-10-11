@@ -13,10 +13,11 @@ import fnmatch
 import json
 import os
 import re
+import sys
 from typing import Any, Dict, List, Optional, Tuple
 
 from .. import attribution, entities, frontmatter, kb, proc, repo, sanitizer, session, testruns, textio, typography
-from . import shellparse
+from . import shellparse, shellwrite
 from .models import GateDecision, GateResult, HookEvent, HookEventType
 
 
@@ -58,9 +59,9 @@ DANGEROUS_CLI_PATTERNS: List[Tuple[re.Pattern, str]] = [
      "Inline PowerShell file writer (Set-Content/Add-Content)"),
     (re.compile(r"\[(?:System\.)?IO\.File\]::(?:Write|Append)", re.IGNORECASE), "Inline .NET file writer ([IO.File]::Write*)"),
     (re.compile(r"(?:^|[|;&({\n])\s*New-Item\b[^\n|;]*\s-Value\b", re.IGNORECASE), "Inline file writer (New-Item -Value)"),
-    (re.compile(r"(?:^|[|;&({\n])\s*(?:echo|printf|Write-Output)\b[^\n|;&]*?(?<![0-9&])>{1,2}[ \t]*"
-                r"(?!&|/dev/null\b|\$null\b|NUL\b)[\"']?[\w./\\~$-]", re.IGNORECASE),
-     "Inline shell file writer (echo/printf > file)"),
+    # Quote-aware: a `>` inside quotes, stderr / null redirects and pipes are no file write
+    # [bug--cli-safety-redirect-false-positive].
+    (shellwrite.InlineEchoWriter(), "Inline shell file writer (echo/printf > file)"),
     (re.compile(r"(?:^|[|;&({\n])\s*(?:sed\s+(?:-[a-zA-Z]*i|--in-place)\b|perl\s+-[a-zA-Z]*i)", re.IGNORECASE),
      "In-place shell edit (sed -i / perl -i)"),
     (re.compile(r"python\d*(?:\.exe)?\s+-c\s+.*open\(.*['\"][wa]['\"].*\)", re.DOTALL | re.IGNORECASE), "Inline Python file writer"),
@@ -254,6 +255,9 @@ def record_gate_denial(event: HookEvent, repo_root: Optional[str], gate: str, re
     first = first if len(first) <= 160 else first[:157] + "..."
     session.trace_event(repo_root, event_session_key(event), f"denied [{gate}] {event.tool_name}: {first}",
                         collapse=True)
+    # A later bypass flag for this gate must follow a failure the user saw.
+    from .. import bypass
+    bypass.record_hook_denial(repo_root, gate, event_session_key(event))
 
 
 def record_tool_activity(event: HookEvent, repo_root: str) -> None:
@@ -265,6 +269,12 @@ def record_tool_activity(event: HookEvent, repo_root: str) -> None:
     through. See [bug--hook-activation-and-gate-deadlock].
     """
     if not repo_root:
+        return
+
+    # The user's last message: CLI approvals and bypasses are checked against it.
+    # [bug--plan-approval-self-and-lost]
+    if event.event_type == HookEventType.USER_PROMPT_SUBMIT:
+        session.record_user_prompt(repo_root, event_session_key(event))
         return
 
     # Claude Code runs ExitPlanMode's PostToolUse only after the user accepted the plan; the
@@ -681,8 +691,7 @@ def check_mutation_authorization(event: HookEvent, repo_root: str, options: Opti
         cmd = _extract_command(event).strip()
         if not cmd:
             return None
-        if shellparse.is_read_only_command(cmd) or shellparse.is_along_state_command(cmd) \
-                or shellparse.is_verification_command(cmd):
+        if shellparse.is_plan_gate_exempt(cmd):
             return None
         # `along wrap` left this session a completion token for the issue it commits, or the
         # user approved closing it out [feat--parallel-session-closeout] REQ-6.
@@ -732,8 +741,8 @@ def check_mutation_authorization(event: HookEvent, repo_root: str, options: Opti
     reason = (
         f"Inquiry Read-Only Invariance [gate: require-plan-approval]: "
         f"No approved plan for {target} (phase: '{phase}', plan_approved: {str(approved).lower()}). "
-        "Present the implementation plan to the user first. Approval is recorded when the user "
-        "accepts it (Claude Code: ExitPlanMode), or by 'along plan approve' after the user's explicit yes. "
+        "Call EnterPlanMode, write the plan, then ExitPlanMode. If plan mode is unavailable, show the "
+        "plan in chat and wait for the user's reply; run 'along plan approve' only after that reply. "
         "Use 'along start <slug>' to bind this session to an issue."
     )
     if tool in ("run_command", "execute_command", "bash", "shell") and shellparse.is_along_commit(cmd):
@@ -1061,54 +1070,88 @@ def check_uncommitted_wrap_before_stop(event: HookEvent, repo_root: str, **kwarg
         return None
     changed_keys = {closeout.path_key(p): p for p in changes}
 
-    dirty_tokens: List[str] = []
-    if tokens:
-        for tok in tokens:
-            dinfo = next((info for info in done_attr.values() if info["slug"] == tok), None)
-            if dinfo:
-                dfiles = list(dinfo["files"].keys()) + dinfo["entity_files"]
-                if any(closeout.path_key(p) in changed_keys for p in dfiles):
-                    dirty_tokens.append(tok)
-            else:
-                dirty_tokens.append(tok)
-    else:
-        for dkey, dinfo in done_attr.items():
-            dfiles = list(dinfo["files"].keys()) + dinfo["entity_files"]
-            if any(closeout.path_key(p) in changed_keys for p in dfiles):
-                dirty_tokens.append(dinfo["slug"])
+    # Only this session's issues are listed in full; other sessions' leftovers collapse to
+    # one line. [bug--stop-hook-shadow-list-scope]
+    bound = session.load_binding(repo_root, sid).get("slug") if sid and session.load_binding(repo_root, sid) else None
+    own_slugs = set(tokens) | ({str(bound)} if bound else set())
 
-    if not dirty_tokens:
+    def dirty(dinfo: Dict[str, Any]) -> bool:
+        dfiles = list(dinfo["files"].keys()) + dinfo["entity_files"]
+        return any(closeout.path_key(p) in changed_keys for p in dfiles)
+
+    def touched_by_this_session(dinfo: Dict[str, Any]) -> bool:
+        return bool(sid) and any(sid in (meta or {}).get("sessions", []) for meta in dinfo["files"].values()
+                                 if isinstance(meta, dict))
+
+    mine: List[str] = []
+    others: List[str] = []
+    for tok in tokens:
+        if not any(info["slug"] == tok for info in done_attr.values()):
+            mine.append(tok)
+    for dinfo in done_attr.values():
+        if not dirty(dinfo):
+            continue
+        # Without a session id nothing tells sessions apart: every issue is listed.
+        if not sid or dinfo["slug"] in own_slugs or touched_by_this_session(dinfo):
+            mine.append(dinfo["slug"])
+        else:
+            others.append(dinfo["slug"])
+
+    mine = sorted(set(mine))
+    others = sorted(set(others) - set(mine))
+    if not mine and not others:
         return None
-
-    first = sorted(set(dirty_tokens))[0]
-    return (
-        f"Session wrapped issue(s) but attributed files remain uncommitted: {', '.join(sorted(set(dirty_tokens)))}. "
-        f"Commit them with 'along commit -i {first} --paths ...' or close out with 'along session close {first}'."
-    )
+    parts = []
+    if mine:
+        first = mine[0]
+        parts.append(
+            f"Session wrapped issue(s) but attributed files remain uncommitted: {', '.join(mine)}. "
+            f"Commit them with 'along commit -i {first} --paths ...' or close out with 'along session close {first}'.")
+    if others:
+        parts.append(f"{len(others)} other session issue(s) have uncommitted attributed files ('along session list').")
+    return " ".join(parts)
 
 
 def check_projection_sync_before_stop(event: HookEvent, repo_root: str, **kwargs: Any) -> Optional[str]:
-    """Ensure projections (ISSUES.md, docs/INDEX.md) are updated when atomic sources change."""
+    """Keep every context's ISSUES.md equal to the board compiled from its issue files.
+
+    Recompiling is mechanical, so the hook does it itself instead of rejecting the turn: a
+    rejection could demand a write that another gate (or plan mode) forbids at that moment.
+    Staleness is judged by content, not mtimes, so a checkout or `touch` does not count.
+    Never blocks. [feat--gate-friction-and-bypass-accountability] REQ-2
+    """
     if not repo_root:
         return None
-
-    issues_proj = os.path.join(repo.state_dir(repo_root), "ISSUES.md")
-    issues_dir = _issues_dir(repo_root)
-
-    if os.path.isfile(issues_proj) and os.path.isdir(issues_dir):
-        proj_mtime = os.path.getmtime(issues_proj)
-        for root, _dirs, files in os.walk(issues_dir):
-            for f in files:
-                if f.endswith(".md"):
-                    p = os.path.join(root, f)
-                    if os.path.getmtime(p) > proj_mtime + 2.0:  # Allow 2s tolerance
-                        return (
-                            "Turn Completion Rejected [gate: projection-sync-before-stop]: "
-                            "Atomic issues were modified after the latest .along/ISSUES.md projection. "
-                            "Run 'along issue sync' to recompile before ending."
-                        )
-
+    try:
+        contexts = [os.path.abspath(repo_root)]
+        contexts += [c for c in repo.find_agent_contexts(repo_root) if c not in contexts]
+    except OSError:
+        return None
+    synced = []
+    for ctx in contexts:
+        try:
+            if _resync_issues_board(ctx):
+                synced.append(repo.safe_relpath(os.path.join(repo.state_dir(ctx), "ISSUES.md"), repo_root))
+        except (OSError, UnicodeDecodeError, ValueError, frontmatter.FrontmatterError):
+            # A projection refresh never blocks the stop; `along issue sync` reports the cause.
+            continue
+    if synced:
+        print("[ALONG HOOK] Auto-synced stale projection(s): " + ", ".join(
+            p.replace(os.sep, "/") for p in synced), file=sys.stderr)
     return None
+
+
+def _resync_issues_board(ctx: str) -> bool:
+    """Rewrite ctx's ISSUES.md when it differs from the compiled board; True if rewritten."""
+    if not os.path.isdir(_issues_dir(ctx)):
+        return False
+    board = os.path.join(repo.state_dir(ctx), "ISSUES.md")
+    compiled = entities.compile_issues_board(ctx)
+    current = textio.read_text(board) if os.path.isfile(board) else None
+    if current is not None and current.replace("\r\n", "\n").strip() == compiled.replace("\r\n", "\n").strip():
+        return False
+    entities.sync_issues_board(ctx)
+    return True
 
 
 _ENTITY_DIRS = ("ISSUES/", "MILESTONES/", "RISKS/", "SPIKES/", "CHECKLISTS/", "DECISIONS/", "SESSIONS/")
@@ -1188,8 +1231,48 @@ def _issue_frontmatter(context_root: str, slug: str, include_done: bool = False)
     return None
 
 
+def _ref_slug(ref: Any) -> str:
+    """Bare slug of an entity reference (`[root:task--x]` -> 'x')."""
+    clean = str(ref).strip().strip("[]")
+    if ":" in clean:
+        clean = clean.split(":", 1)[1]
+    return entities.parse_key(clean)[1]
+
+
+def _parent_chain_slugs(context_root: str, fm: Optional[Dict[str, Any]], limit: int = 16) -> List[str]:
+    """Slugs of the `parent` chain of an issue in `context_root`, nearest first.
+
+    Each parent resolves in the nearest context of the chain from `context_root` upward
+    (ISSUES/ and ISSUES/done/); a parent with the issue's own slug resolves above its context
+    [bug--cross-context-parent-dangling]. Any depth, cycles stop the walk.
+    """
+    contexts = [owner for owner, _sdir in repo.context_chain(context_root)] or [context_root]
+    chain: List[str] = []
+    cur_owner, cur_slug = context_root, str((fm or {}).get("slug") or "")
+    while fm and len(chain) < limit:
+        parent = fm.get("parent")
+        if not parent or not str(parent).strip():
+            break
+        pslug = _ref_slug(parent)
+        if pslug in chain:
+            break
+        chain.append(pslug)
+        nxt = None
+        for owner in contexts:
+            if pslug == cur_slug and repo._same_path(owner, cur_owner):
+                continue
+            if repo.is_within(cur_owner, owner) or repo._same_path(owner, cur_owner):
+                found = _issue_frontmatter(owner, pslug, include_done=True)
+                if found:
+                    nxt, cur_owner, cur_slug = found, owner, pslug
+                    break
+        fm = nxt
+    return chain
+
+
 def _subproject_issue_ok(context_root: str, repo_root: str, key: Optional[str]) -> bool:
-    """The session works on an issue of `context_root`, or on a root umbrella with a child there."""
+    """The session works on an issue of `context_root`, or on an umbrella issue whose child
+    (at any depth, ISSUES/ or done/) lives there."""
     slug, _how = session.resolve_active_session(context_root, key)
     if slug:
         fm = _issue_frontmatter(context_root, slug)
@@ -1199,19 +1282,40 @@ def _subproject_issue_ok(context_root: str, repo_root: str, key: Optional[str]) 
     root_fm = _issue_frontmatter(repo_root, root_slug) if root_slug else None
     if not root_fm:
         return False
-    root_key = f"{root_fm.get('type', '')}--{root_slug}"
     issues_dir = _issues_dir(context_root)
-    if not os.path.isdir(issues_dir):
-        return False
-    for name in os.listdir(issues_dir):
-        if name.endswith(".md"):
+    for d in (issues_dir, os.path.join(issues_dir, "done")):
+        if not os.path.isdir(d):
+            continue
+        for name in os.listdir(d):
+            if not name.endswith(".md"):
+                continue
             try:
-                child, _b, _e = frontmatter.try_parse(textio.read_text(os.path.join(issues_dir, name), strict=False))
+                child, _b, _e = frontmatter.try_parse(textio.read_text(os.path.join(d, name), strict=False))
             except (OSError, UnicodeDecodeError, ValueError):
                 continue
-            if child and str(child.get("parent") or "") in (root_key, root_slug):
+            if child and root_slug in _parent_chain_slugs(context_root, child):
                 return True
     return False
+
+
+def _bound_subproject_owns_root_entity(repo_root: str, rel_path: str, key: Optional[str]) -> Optional[str]:
+    """Subproject path when the session is bound to a subproject issue and `rel_path` (an
+    entity of the root `.along/`) is not on that issue's parent chain; else None.
+
+    Decided from the target file and the binding, never from the shell cwd.
+    [bug--subproject-boundary-cwd-context]
+    """
+    ctx, slug = session.resolve_bound(repo_root, key)
+    if not slug or repo._same_path(ctx, repo_root) or not repo.is_within(ctx, repo_root):
+        return None
+    if not repo.is_along_state_dir(os.path.join(ctx, repo.STATE_DIR)):
+        return None
+    stem = os.path.basename(rel_path)
+    stem = stem[:-3] if stem.endswith(".md") else stem
+    bound_fm = _issue_frontmatter(ctx, str(slug), include_done=True)
+    if entities.parse_key(stem)[1] in _parent_chain_slugs(ctx, bound_fm):
+        return None
+    return repo.canonical_relpath(ctx, repo_root)
 
 
 def check_subproject_boundary(event: HookEvent, repo_root: str, **kwargs: Any) -> Optional[str]:
@@ -1246,23 +1350,19 @@ def check_subproject_boundary(event: HookEvent, repo_root: str, **kwargs: Any) -
     if rel_path is None:
         return None
 
-    # If writing directly to root .along/ but the path indicates working inside a subproject
-    if rel_path.startswith(".along/"):
-        cwd = repo.normalize_posix(os.getcwd())
-        root_norm = repo.normalize_posix(repo_root)
-        if cwd != root_norm and cwd.startswith(root_norm + "/"):
-            subpath = cwd[len(root_norm) + 1:]
-            # Only a folder with its own .along/ is a subproject; a package manifest alone is
-            # not [ADR-2026-10-06--subproject-boundary-is-git-or-explicit-init]. The root's own
-            # (declared) state dir is no subproject either.
-            sub_along = os.path.join(cwd, ".along")
-            own_state = repo._same_path(sub_along, repo.state_dir(repo_root))
-            if not own_state and repo.is_along_state_dir(sub_along):
-                return (
-                    f"Subproject Boundary Violation [gate: subproject-boundary]: "
-                    f"Cannot write to root '{rel_path}' while working inside subproject '{subpath}'. "
-                    f"Entities must be created in nearest '{subpath}/.along/'."
-                )
+    # A root entity written while the session works on a subproject issue: allowed for that
+    # issue's parent chain (the umbrella), else it belongs in the subproject's .along/.
+    # Decided from the target path and the binding, not the shell cwd
+    # [bug--subproject-boundary-cwd-context].
+    if rel_path.startswith(".along/") and not rel_path.startswith(".along/.session/"):
+        subpath = _bound_subproject_owns_root_entity(repo_root, rel_path, event_session_key(event))
+        if subpath:
+            return (
+                f"Subproject Boundary Violation [gate: subproject-boundary]: "
+                f"Cannot write root '{rel_path}' while this session works on an issue of subproject "
+                f"'{subpath}'. Entities of that work belong in '{subpath}/.along/'; root entities "
+                f"on the bound issue's parent chain (its umbrella) are allowed."
+            )
     return None
 
 

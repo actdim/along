@@ -1337,16 +1337,37 @@ def get_issue_summary(repo_root: str, slug: str) -> Optional[Dict[str, Any]]:
 # Entity Schema & Graph Validation (REQ-6)
 # ---------------------------------------------------------------------------
 
-def _resolve_ref(ref: Any, known: set) -> bool:
-    if not ref:
-        return False
+#: Reference qualifier that resolves only in the outermost (workspace root) context.
+ROOT_QUALIFIER = "root"
+
+
+def _ref_key(ref: Any) -> Tuple[str, str]:
+    """(qualifier, key) of a reference: `root:task--x` -> ('root', 'task--x')."""
     clean = str(ref).strip().strip("[]")
     if ":" in clean:
-        clean = clean.split(":", 1)[1]
+        qualifier, clean = clean.split(":", 1)
+        return qualifier.strip().lower(), clean.strip()
+    return "", clean
+
+
+def _resolve_ref(ref: Any, known: set, root_keys: Optional[set] = None) -> bool:
+    """True when `ref` names a key in `known` (a `root:` ref: in `root_keys`, when given)."""
+    if not ref:
+        return False
+    qualifier, clean = _ref_key(ref)
+    if qualifier == ROOT_QUALIFIER and root_keys is not None:
+        known = root_keys
     if clean in known:
         return True
     _, slug = parse_key(clean)
     return slug in known
+
+
+def _is_self_ref(ref: Any, own_type: str, own_slug: str) -> bool:
+    qualifier, clean = _ref_key(ref)
+    if qualifier == ROOT_QUALIFIER:
+        return False
+    return clean in (own_slug, canonical_key(own_type, own_slug))
 
 
 def is_integrity_error(message: str) -> bool:
@@ -1379,26 +1400,73 @@ def _context_entity_keys(along_dir: str, keys: set) -> None:
                 keys.add(f"decision--{bare}")
 
 
-def ancestor_entity_keys(repo_root: str) -> set:
-    """Entity keys of every enclosing `.along/` context up to the git boundary.
+def ancestor_contexts(repo_root: str) -> List[Tuple[str, str]]:
+    """(owner, state dir) of every enclosing context above `repo_root`, nearest first.
 
-    A subproject entity may reference an issue, milestone or ADR of the monorepo root.
-    The walk stops at the first directory holding `.git`; a `repo_root` that is itself
-    a git root has no ancestors.
+    The walk crosses `.git` boundaries: a child issue in a submodule or nested repository
+    names the workspace umbrella above it ("Multi-Subproject Work"). It stops below home.
+    [bug--cross-context-parent-dangling]
+    """
+    from . import repo
+
+    root = os.path.normcase(os.path.abspath(repo_root))
+    return [(owner, sdir) for owner, sdir in repo.context_chain(repo_root)
+            if os.path.normcase(os.path.abspath(owner)) != root]
+
+
+def ancestor_entity_keys(repo_root: str) -> set:
+    """Entity keys of every enclosing `.along/` context (`ancestor_contexts`).
+
+    A subproject entity may reference an issue, milestone or ADR of the workspace root,
+    across a nested repository or submodule boundary. Each context contributes ISSUES/
+    and ISSUES/done/ and the other entity directories.
     """
     keys: set = set()
-    root = os.path.abspath(repo_root)
-    if os.path.exists(os.path.join(root, ".git")):
-        return keys
-    current = os.path.dirname(root)
-    while current and current != os.path.dirname(current):
-        candidate = os.path.join(current, ".along")
-        if os.path.isdir(candidate):
-            _context_entity_keys(candidate, keys)
-        if os.path.exists(os.path.join(current, ".git")):
-            break
-        current = os.path.dirname(current)
+    for _owner, sdir in ancestor_contexts(repo_root):
+        _context_entity_keys(sdir, keys)
     return keys
+
+
+def cross_context_parents(repo_root: str) -> List[Tuple[str, str, str]]:
+    """(issue key, parent, owner dir) for each local issue whose parent lives in an
+    enclosing context (or is a self-key resolved there). [bug--cross-context-parent-dangling]
+    """
+    found: List[Tuple[str, str, str]] = []
+    outer = ancestor_contexts(repo_root)
+    if not outer:
+        return found
+    issues = scan_issues(repo_root, include_done=True)
+    local = {canonical_key(i["type"], i["slug"]) for i in issues} | {i["slug"] for i in issues}
+    for iss in issues:
+        parent = (iss.get("frontmatter") or {}).get("parent")
+        if not parent or not str(parent).strip():
+            continue
+        own_key = canonical_key(iss["type"], iss["slug"])
+        if _resolve_ref(parent, local) and not _is_self_ref(parent, iss["type"], iss["slug"]):
+            continue
+        for owner, sdir in outer:
+            keys: set = set()
+            _context_entity_keys(sdir, keys)
+            if _resolve_ref(parent, keys):
+                found.append((own_key, str(parent), owner))
+                break
+    return found
+
+
+def reference_context(repo_root: str, ref: Any) -> Optional[str]:
+    """Owner directory of the context a reference resolves in, nearest first, or None.
+
+    Used to report where a cross-context reference was found (`along issue sync`).
+    """
+    from . import repo
+
+    _qualifier, clean = _ref_key(ref)
+    for owner, sdir in repo.context_chain(repo_root):
+        keys: set = set()
+        _context_entity_keys(sdir, keys)
+        if _resolve_ref(clean, keys):
+            return owner
+    return None
 
 
 def descendant_entity_keys(repo_root: str) -> set:
@@ -1498,7 +1566,9 @@ def drop_dangling_milestones(repo_root: str, dry_run: bool = False) -> List[str]
 
 
 def validate_entities(repo_root: str, ancestors: bool = True,
-                      descendants: bool = True, siblings: bool = True) -> Dict[str, Any]:
+                      descendants: bool = True, siblings: bool = True,
+                      outer_keys: Optional[set] = None,
+                      outer_root_keys: Optional[set] = None) -> Dict[str, Any]:
     """Validate entity schemas, enums, mandatory fields, and graph references.
 
     Checks:
@@ -1513,6 +1583,14 @@ def validate_entities(repo_root: str, ancestors: bool = True,
     (`descendant_entity_keys`) unless `descendants` is False, and against the other contexts
     of the same git repository (`sibling_entity_keys`) unless `siblings` is False. Every
     dangling reference message starts with "dangling ".
+
+    `outer_keys` are keys of contexts above a snapshot (`gitgates` validates a copy of the git
+    top, whose enclosing workspace lives only in the working tree); they count as ancestor
+    keys. `outer_root_keys` are the outermost context's keys for `root:` references.
+
+    A `parent` naming the issue itself resolves in the ancestor contexts only (a subproject
+    child that shares the umbrella's key), else it is an "invalid self-parent" error.
+    [bug--cross-context-parent-dangling]
     """
     from . import frontmatter, repo, semver, textio
 
@@ -1521,8 +1599,16 @@ def validate_entities(repo_root: str, ancestors: bool = True,
     warnings: List[Tuple[str, str]] = []
     scanned = 0
     external: set = set()
+    ancestor_keys: set = set(outer_keys or ())
+    root_keys: Optional[set] = set(outer_root_keys) if outer_root_keys is not None else None
     if ancestors:
-        external |= ancestor_entity_keys(repo_root)
+        outer = ancestor_contexts(repo_root)
+        for _owner, asdir in outer:
+            _context_entity_keys(asdir, ancestor_keys)
+        if outer and root_keys is None:
+            root_keys = set()
+            _context_entity_keys(outer[-1][1], root_keys)
+    external |= ancestor_keys
     if descendants:
         external |= descendant_entity_keys(repo_root)
     if siblings:
@@ -1558,6 +1644,9 @@ def validate_entities(repo_root: str, ancestors: bool = True,
                         bare = slug.split("--", 1)[1]
                         known_entity_keys.add(bare)
                         known_entity_keys.add(f"decision--{bare}")
+    # No enclosing context: this one is the workspace root, `root:` resolves locally.
+    if root_keys is None:
+        root_keys = known_entity_keys
 
     # 1. Validate Issues
     for iss in all_issues:
@@ -1617,29 +1706,34 @@ def validate_entities(repo_root: str, ancestors: bool = True,
             schema((rel, f"dangling milestone reference: '{mslug}'"))
 
         parent = fm.get("parent")
-        if parent and str(parent).strip() and not _resolve_ref(parent, known_entity_keys):
-            errors.append((rel, f"dangling parent reference: '{parent}'"))
+        if parent and str(parent).strip():
+            if islug and _is_self_ref(parent, iss["type"], str(islug)):
+                if not _resolve_ref(parent, ancestor_keys):
+                    errors.append((rel, f"invalid self-parent reference: '{parent}' "
+                                        "(no enclosing context has an issue with this key)"))
+            elif not _resolve_ref(parent, known_entity_keys, root_keys):
+                errors.append((rel, f"dangling parent reference: '{parent}'"))
 
         blocked_by = fm.get("blocked_by")
         if isinstance(blocked_by, list):
             for b in blocked_by:
-                if b and not _resolve_ref(b, known_entity_keys):
+                if b and not _resolve_ref(b, known_entity_keys, root_keys):
                     errors.append((rel, f"dangling blocked_by reference: '{b}'"))
 
         related = fm.get("related")
         if isinstance(related, list):
             for r in related:
-                if r and not _resolve_ref(r, known_entity_keys):
+                if r and not _resolve_ref(r, known_entity_keys, root_keys):
                     errors.append((rel, f"dangling related reference: '{r}'"))
 
         superseded_by = fm.get("superseded_by")
         if superseded_by and str(superseded_by).strip():
-            if not _resolve_ref(superseded_by, known_entity_keys):
+            if not _resolve_ref(superseded_by, known_entity_keys, root_keys):
                 errors.append((rel, f"dangling superseded_by reference: '{superseded_by}'"))
 
         duplicate_of = fm.get("duplicate_of")
         if duplicate_of and str(duplicate_of).strip():
-            if not _resolve_ref(duplicate_of, known_entity_keys):
+            if not _resolve_ref(duplicate_of, known_entity_keys, root_keys):
                 errors.append((rel, f"dangling duplicate_of reference: '{duplicate_of}'"))
 
     # 2. Validate Milestones

@@ -51,6 +51,7 @@ class DashboardMetricsSchema(BaseModel):
     by_priority: PriorityBreakdown = Field(default_factory=PriorityBreakdown)
     scan_timestamp: str = ""
     protocol_version: str = CURRENT_PROTOCOL_VERSION
+    verify_policy: str = "tests: required (default)"
 
 
 class FullDashboardDataSchema(BaseModel):

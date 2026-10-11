@@ -239,7 +239,7 @@ class TestGatesPrecedeMutations(ReleaseEngineFixtureCase):
 
     def test_no_verify_is_the_only_way_to_skip_the_gates(self):
         self.install_test_hook(1)
-        result = self.run_release("patch", "--no-verify")
+        result = self.run_release("patch", "--no-verify", "--reason", "fixture")
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertIsNone(self.gate_saw(), "--no-verify still ran the test hook")
         self.assertEqual(self.read(self.version_file).strip(), "1.4.3")

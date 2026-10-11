@@ -3,7 +3,7 @@
 
 Compiled index of Architectural Decision Records stored in `.along/DECISIONS/`.
 
-## Active Decisions (42)
+## Active Decisions (43)
 
 - [Along v2.0.0: Rebranding, Isolated .along/ Directory, along-* Skill Prefixes, and protocol: along Metadata](DECISIONS/ADR-2026-08-27--along-v200-rebranding-and-namespace-isolation.md)
 - [Autonomous Multi-Mode Repository Dashboard & Analytics Engine](DECISIONS/ADR-2026-08-27--autonomous-multi-mode-dashboard-and-analytics-engine.md)
@@ -47,6 +47,7 @@ Compiled index of Architectural Decision Records stored in `.along/DECISIONS/`.
 - [Session Event Ledger Is the Source of Truth; Telemetry Is a Projection](DECISIONS/ADR-2026-10-05--session-event-ledger-feeds-telemetry.md)
 - [Subproject boundary is a nested .git or an explicit along init](DECISIONS/ADR-2026-10-06--subproject-boundary-is-git-or-explicit-init.md)
 - [An Along installation is Along state, never an AGENTS.md](DECISIONS/ADR-2026-10-07--along-installation-is-state-not-agents-md.md)
+- [Gate friction fixes of 2026-10-11](DECISIONS/ADR-2026-10-11--gate-friction-fixes.md)
 
 ## Superseded & Retired Decisions (6)
 

@@ -83,6 +83,8 @@ TOOL_MAPPINGS = {
     "hook": "along_hook.py",
     "hooks": "along_hook.py",
     "resolve": "along_resolve.py",
+    "conflict-check": "along_conflict_check.py",
+    "conflictcheck": "along_conflict_check.py",
 }
 
 LIFECYCLE_ACTIONS = {"build", "test", "dev", "debug"}
@@ -187,7 +189,8 @@ Along Protocol Tools:
   graph-impact   Determine blast radius and affected flows for symbol or file
   graph-arch     Architectural overview, coupling hotspots, and bridge nodes
   patch          Deterministic AST code patching (replace-func)
-  resolve        Semantic conflict auto-resolution engine for docs and markdown
+  resolve        Semantic and test-gated conflict resolution (--docs, --code)
+  conflict-check Predict branch merge conflict risks and AST symbol collisions
 """)
 
 RECENT_DONE_LIMIT = entities.RECENT_DONE_LIMIT
@@ -510,6 +513,8 @@ def _issue_reopen(repo_root: str, args: List[str], issues_dir: str, done_dir: st
 def _issue_sync(repo_root: str):
     entities.sync_issues_board(repo_root, recent_done_limit=RECENT_DONE_LIMIT)
     print(f"-> Recompiled .along/ISSUES.md projection (capped to {RECENT_DONE_LIMIT} recent completed issues).")
+    for key, parent, owner in entities.cross_context_parents(repo_root):
+        print(f"   {key}: parent {parent} (found in {repo.safe_relpath(owner, repo_root) or owner})")
     if not gates.entity_integrity_gate(repo_root, "Issue Sync"):
         sys.exit(1)
     sys.exit(0)
@@ -963,10 +968,18 @@ def handle_start_command(repo_root: str, args: List[str]):
     sdir = session.get_session_dir(repo_root, issue["slug"])
     key = session.current_session_key()
     # Starting an issue is not a plan approval: approval comes from the user (ExitPlanMode,
-    # or 'along plan approve' after an explicit yes); --approved is for scripted runs.
-    # See [feat--plan-approval-exit-plan-mode] and [bug--session-state-cross-session-leak].
+    # or 'along plan approve' after an explicit yes); --approved is for scripted runs and is
+    # held to the same check as 'along plan approve' [bug--plan-approval-self-and-lost].
+    if "--approved" in args:
+        refusal, via = session.check_cli_approval(repo_root, key, os.path.join(sdir, "plan.md"))
+        if refusal:
+            print(f"[Error] --approved refused: {refusal}.", file=sys.stderr)
+            sys.exit(2)
     binding = session.bind_session(repo_root, issue["slug"], key=key,
                                    approved=True if "--approved" in args else None)
+    if "--approved" in args:
+        session.mark_approval(repo_root, key, via)
+        session.append_trace(repo_root, issue["slug"], f"plan approved (along start --approved; approved_via: {via})")
     approved = "--approved" in args or session.is_plan_approved(repo_root, slug=issue["slug"], key=key)
     st = session.set_session_phase(repo_root, "execution" if approved else "planning",
                                    slug=issue["slug"], plan_approved=approved)
@@ -977,8 +990,9 @@ def handle_start_command(repo_root: str, args: List[str]):
     else:
         print("-> No agent session id in the environment; gates fall back to the single in-progress issue.")
     if not approved:
-        print("-> Present the plan to the user. Edits unlock after approval "
-              "(Claude Code: ExitPlanMode; otherwise 'along plan approve' after the user's explicit yes).")
+        print("-> Edits unlock after the user approves the plan. Call EnterPlanMode, write the plan, then "
+              "ExitPlanMode. If plan mode is unavailable, show the plan in chat and wait for the user's reply; "
+              "run 'along plan approve' only after that reply.")
 
     if "--worktree" in args:
         from alongkit import worktree
@@ -1154,6 +1168,19 @@ def handle_plan_command(repo_root: str, args: List[str]):
         if plan_file and not slug:
             print("[Error] --plan-file needs an issue: 'along start <slug>' first, or pass <slug>.", file=sys.stderr)
             sys.exit(2)
+        # The agent can run this itself: it counts only after a user message newer than the
+        # plan. [bug--plan-approval-self-and-lost] REQ-2
+        if slug:
+            plan_path = plan_file or os.path.join(session.get_session_dir(repo_root, slug), "plan.md")
+        else:
+            plan_path = None
+        refusal, via = session.check_cli_approval(repo_root, key, plan_path)
+        if refusal:
+            print(f"[Error] Plan approval refused: {refusal}.", file=sys.stderr)
+            print("  Call EnterPlanMode, write the plan, then ExitPlanMode. If plan mode is unavailable, show "
+                  "the plan in chat and wait for the user's reply; run 'along plan approve' only after that reply.",
+                  file=sys.stderr)
+            sys.exit(2)
         if slug:
             # [bug--session-records-not-captured] REQ-1: the approved plan is recorded.
             if plan_file:
@@ -1172,11 +1199,15 @@ def handle_plan_command(repo_root: str, args: List[str]):
                       file=sys.stderr)
                 sys.exit(2)
             session.set_session_phase(repo_root, "execution", slug=slug, plan_approved=True)
-            session.append_trace(repo_root, slug, "plan approved (along plan approve)")
+            plan_now = textio.read_text(os.path.join(session.get_session_dir(repo_root, slug), "plan.md"), strict=False)
+            session.mark_approval(repo_root, key, via, plan_now)
+            sha = session.plan_sha256(plan_now)
+            session.append_trace(repo_root, slug, f"plan approved (along plan approve) approved_via: {via}"
+                                 + (f", plan_sha256: {sha[:12]}" if sha else ""))
             session.append_event(repo_root, slug, key, "approve")
-            print(f"-> Plan approved for '{slug}' (session: {key or 'none'}).")
+            print(f"-> Plan approved for '{slug}' (session: {key or 'none'}, via: {via}).")
         elif key:
-            session.record_plan_approval(repo_root, key)
+            session.record_plan_approval(repo_root, key, via)
             print(f"-> Plan approved for session {key}; it applies to the next 'along start <slug>'.")
         else:
             print("[Error] No issue bound and no agent session id; run 'along start <slug>' first.", file=sys.stderr)
@@ -1191,6 +1222,21 @@ def handle_plan_command(repo_root: str, args: List[str]):
         sys.exit(0)
     print(f"[Error] Unknown plan subcommand '{sub}'. Use: approve, status.", file=sys.stderr)
     sys.exit(2)
+
+
+def _cli_approval_or_exit(repo_root: str, slug: str) -> str:
+    """Hold a CLI plan approval of `slug` to the user's last message; its `approved_via`.
+
+    [bug--plan-approval-self-and-lost] REQ-2
+    """
+    key = session.current_session_key()
+    refusal, via = session.check_cli_approval(
+        repo_root, key, os.path.join(session.get_session_dir(repo_root, slug), "plan.md"))
+    if refusal:
+        print(f"[Error] Plan approval refused: {refusal}.", file=sys.stderr)
+        sys.exit(2)
+    session.append_trace(repo_root, slug, f"plan approved (along scratch; approved_via: {via})")
+    return via
 
 
 def handle_session_command(repo_root: str, args: List[str]):
@@ -1359,6 +1405,8 @@ def handle_session_command(repo_root: str, args: List[str]):
             agent=explicit_agent,
             decisions=decisions,
             force_reason=_flag_value(args, "--force-reason"),
+            guard_bypass=True,
+            bypass_reason=_flag_value(args, "--reason"),
         )
         sys.exit(code)
 
@@ -1496,6 +1544,10 @@ def handle_status_command(repo_root: str, args: List[str]):
     print(f"\nActive Issues ({len(active_issues)}):")
     for iss in active_issues:
         print(f"  - {iss}")
+
+    # Declared test policy [bug--test-gate-no-tests-policy]
+    from alongkit import verify
+    print(f"\nVerify: {verify.load_policy(repo_root).describe()}")
 
     # Latest session
     sessions_dir = os.path.join(along_dir, "SESSIONS")
@@ -1804,6 +1856,31 @@ def handle_doctor_command(repo_root: str, args: List[str]):
         print(f"[WARN] Could not check circuit breaker status: {exc}")
         warnings += 1
 
+    # Declared test policy: `tests: none` stays visible as debt [bug--test-gate-no-tests-policy].
+    from alongkit import verify
+    policy = verify.load_policy(repo_root)
+    problems = verify.policy_problems(repo_root, policy)
+    if problems:
+        print("[FAIL] Verify policy invalid: " + "; ".join(problems))
+        errors += 1
+    elif policy.tests == verify.TESTS_NONE:
+        print(f"[WARN] Verify: {policy.describe()}")
+        warnings += 1
+    else:
+        print(f"[OK] Verify: {policy.describe()}")
+
+    # Gate friction [feat--gate-friction-and-bypass-accountability] REQ-4, REQ-5.
+    from alongkit import gatestats
+    from alongkit.hooks import config as hook_config
+    shadowed = hook_config.load_config(repo_root).overridden_gates()
+    if shadowed:
+        print(f"[WARN] Gates set to shadow by config: {', '.join(shadowed)}")
+        warnings += 1
+    for row in gatestats.most_bypassed(gatestats.collect(repo_root)):
+        print(f"[WARN] Gate '{row.gate}' bypassed {row.bypassed}x vs blocked {row.blocked}x "
+              f"({row.bypass_ratio * 100:.0f}%): review whether it is wrong or too strict ('along gates stats').")
+        warnings += 1
+
     errors, warnings = _doctor_runtime_checks(repo_root, errors, warnings)
 
     print(f"\nDoctor Summary: {errors} errors, {warnings} warnings.")
@@ -1888,6 +1965,7 @@ def handle_scratch_command(repo_root: str, args: List[str]):
                   f"Use 'along plan approve {slug} --plan-file <path>' or write the plan into plan.md.",
                   file=sys.stderr)
             sys.exit(2)
+        _cli_approval_or_exit(repo_root, slug)
         st = session.approve_plan(repo_root, slug)
         print(f"-> Granted plan approval for session: {slug} (phase: execution, plan_approved: true)")
         print(session.format_state_summary(st))
@@ -1899,6 +1977,8 @@ def handle_scratch_command(repo_root: str, args: List[str]):
             sys.exit(1)
         phase_val = args[2].lower()
         approve_flag = "--approve" in args
+        if approve_flag:
+            _cli_approval_or_exit(repo_root, slug)
         try:
             st = session.set_session_phase(repo_root, phase_val, slug=slug, plan_approved=True if approve_flag else None)
         except ValueError as exc:
@@ -1949,6 +2029,8 @@ def handle_scratch_command(repo_root: str, args: List[str]):
                 i += 1
             else:
                 i += 1
+        if plan_approved:
+            _cli_approval_or_exit(repo_root, slug)
         st, retry_exhausted = session.update_state(
             repo_root, slug,
             current_step=current_step,
@@ -1973,13 +2055,19 @@ def handle_scratch_command(repo_root: str, args: List[str]):
         if not reason:
             print("[Error] Usage: along scratch fallback <slug> --reason \"why one agent does all roles\"", file=sys.stderr)
             sys.exit(2)
+        # Leaving the step loop is the user's decision [feat--gate-friction-and-bypass-accountability] REQ-3.
+        from alongkit import bypass
+        if not bypass.guard(repo_root, bypass.TEAM_STEPS, reason, slug=slug):
+            sys.exit(2)
         session.record_fallback(repo_root, slug, reason)
         print(f"-> '{slug}' now runs single-agent (direct); reason recorded in {session.TRACE_FILENAME}.")
         sys.exit(0)
 
     elif subcmd == "purge":
+        from alongkit import bypass
         problems = session.completion_problems(repo_root, slug)
         if problems and "--force" not in args:
+            bypass.record_failure(repo_root, bypass.TEAM_STEPS)
             print(f"[Error] Refusing to purge role-based blackboard '{slug}':", file=sys.stderr)
             for p in problems:
                 print(f"  - {p}", file=sys.stderr)
@@ -1990,6 +2078,8 @@ def handle_scratch_command(repo_root: str, args: List[str]):
         if problems:
             if not reason:
                 print("[Error] --force needs --reason \"...\"; it is kept in the session log.", file=sys.stderr)
+                sys.exit(2)
+            if not bypass.guard(repo_root, bypass.TEAM_STEPS, reason, slug=slug):
                 sys.exit(2)
             reason = f"open problems ({'; '.join(problems)}): {reason}"
             print(f"-> Forced purge of '{slug}' with {reason}")
@@ -2082,11 +2172,18 @@ def handle_gates_command(repo_root: str, args: List[str]):
     if not args or args[0] in ("-h", "--help", "help"):
         print("Usage: along gates check [--hook {pre-commit,commit-msg}] [--ci] [--range COMMIT_RANGE] [--no-links] [--json] [hook_args...]")
         print("  Run the commit-time gate subset outside agent runtimes (git hooks, CI).")
+        print("       along gates stats [--since YYYY-MM-DD]")
+        print("  Per-gate counts of blocks, shadow warnings and recorded bypasses.")
         sys.exit(0)
 
     subcmd = args[0].lower()
+    if subcmd == "stats":
+        # [feat--gate-friction-and-bypass-accountability] REQ-5
+        from alongkit import gatestats
+        print(gatestats.format_table(gatestats.collect(repo_root, _flag_value(args, "--since"))))
+        sys.exit(0)
     if subcmd != "check":
-        print(f"[Error] Unknown gates subcommand: {subcmd}. Use check.", file=sys.stderr)
+        print(f"[Error] Unknown gates subcommand: {subcmd}. Use check or stats.", file=sys.stderr)
         sys.exit(2)
 
     check_args = args[1:]
@@ -2336,7 +2433,8 @@ def handle_budget_command(repo_root: str, args: List[str]):
     as_json = "--json" in args
     check_mode = "--check" in args
 
-    report = budget.measure_context(repo_root)
+    # Limits are configurable per repo [debt--agents-md-budget-project-specifics].
+    report = budget.measure_context(repo_root, limits=budget.config_limits(repo_root))
 
     if as_json:
         import json

@@ -102,6 +102,36 @@ class TestSubprojectBoundary(Workspace):
         self.start(self.root, "feat--umbrella")
         self.assertIsNone(check_subproject_boundary(_write_event(self.root, "webapp/src/form.ts"), self.root))
 
+    def test_root_umbrella_edit_is_independent_of_cwd(self):
+        # [bug--subproject-boundary-cwd-context]: the same edit gives the same result for any cwd.
+        _put_issue(self.root, "task--umbrella")
+        _put_issue(self.web, "bug--child", parent="task--umbrella")
+        self.start(self.root, "task--umbrella")
+        edit = _write_event(self.root, ".along/ISSUES/task--umbrella.md")
+        for cwd in (self.root, self.web, os.path.join(self.web, "src")):
+            with self.subTest(cwd=cwd), mock.patch("os.getcwd", return_value=cwd):
+                self.assertIsNone(check_subproject_boundary(edit, self.root))
+
+    def test_subproject_session_writes_root_umbrella_but_not_other_root_entities(self):
+        _put_issue(self.root, "task--umbrella")
+        _put_issue(self.web, "bug--child", parent="task--umbrella")
+        self.start(self.web, "bug--child")
+        for cwd in (self.root, self.web):
+            with self.subTest(cwd=cwd), mock.patch("os.getcwd", return_value=cwd):
+                self.assertIsNone(check_subproject_boundary(
+                    _write_event(self.root, ".along/ISSUES/task--umbrella.md"), self.root))
+                self.assertIn("subproject-boundary", check_subproject_boundary(
+                    _write_event(self.root, ".along/ISSUES/feat--stray.md"), self.root))
+
+    def test_umbrella_covers_a_grandchild_context(self):
+        deep = os.path.join(self.web, "pkg")
+        os.makedirs(os.path.join(deep, ".along", "ISSUES"))
+        _put_issue(self.root, "task--umbrella")
+        _put_issue(self.web, "task--mid", status="open", parent="task--umbrella")
+        _put_issue(deep, "bug--leaf", status="open", parent="task--mid")
+        self.start(self.root, "task--umbrella")
+        self.assertIsNone(check_subproject_boundary(_write_event(self.root, "webapp/pkg/src/a.ts"), self.root))
+
     def test_subproject_session_may_not_edit_root_files(self):
         _put_issue(self.web, "feat--web-form")
         _put_issue(self.root, "feat--someone-else")

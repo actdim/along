@@ -386,16 +386,40 @@ def _snapshot_from_commit(repo_root: str, commit: str, roots: Sequence[str], des
     os.remove(archive)
 
 
-def entity_problems(snapshot_root: str, roots: Sequence[str]) -> set:
-    """{(location, message)} from `validate_entities` over every context in a snapshot."""
+def outer_context_keys(repo_top: str) -> Tuple[set, Optional[set]]:
+    """(keys, outermost keys) of the working-tree contexts enclosing the git top `repo_top`.
+
+    A snapshot holds only the repository's own `.along/` dirs; a submodule's umbrella issue
+    lives above it, so its keys come from the working tree. (set(), None) without one.
+    [bug--cross-context-parent-dangling]
+    """
     from . import entities
+    keys: set = set()
+    outer = entities.ancestor_contexts(repo_top)
+    for _owner, sdir in outer:
+        entities._context_entity_keys(sdir, keys)
+    root_keys: Optional[set] = None
+    if outer:
+        root_keys = set()
+        entities._context_entity_keys(outer[-1][1], root_keys)
+    return keys, root_keys
+
+
+def entity_problems(snapshot_root: str, roots: Sequence[str], outer: Optional[Tuple[set, Optional[set]]] = None) -> set:
+    """{(location, message)} from `validate_entities` over every context in a snapshot.
+
+    `outer` is `outer_context_keys` of the real repository: contexts above the git top.
+    """
+    from . import entities
+    outer_keys, outer_root = outer if outer else (set(), None)
     problems = set()
     for root in roots:
         ctx = os.path.join(snapshot_root, root)
         if not os.path.isdir(os.path.join(ctx, ".along")):
             continue
         prefix = root + "/" if root else ""
-        for rel, message in entities.validate_entities(ctx)["errors"]:
+        result = entities.validate_entities(ctx, outer_keys=outer_keys, outer_root_keys=outer_root)
+        for rel, message in result["errors"]:
             if entities.is_integrity_error(message):
                 problems.add((prefix + rel.replace("\\", "/"), message))
     return problems
@@ -412,7 +436,8 @@ def _entity_snapshot(repo_root: str, roots: Sequence[str], source: str) -> set:
             _snapshot_from_tree(repo_root, roots, tmp)
         elif source:
             _snapshot_from_commit(repo_root, source, roots, tmp)
-        return entity_problems(tmp, roots)
+        top = _git_out(repo_root, "rev-parse", "--show-toplevel").strip() or repo_root
+        return entity_problems(tmp, roots, outer_context_keys(os.path.abspath(top)))
     finally:
         shutil.rmtree(tmp, ignore_errors=True)
 
@@ -485,8 +510,10 @@ def baseline_entity_problems(repo_root: str, base: str = "HEAD") -> Optional[set
         ctx = os.path.join(tmp, prefix) if prefix else tmp
         if not os.path.isdir(os.path.join(ctx, ".along")):
             return set()
+        outer_keys, outer_root = outer_context_keys(real_top)
+        result = entities.validate_entities(ctx, outer_keys=outer_keys, outer_root_keys=outer_root)
         return {(rel.replace("\\", "/"), message)
-                for rel, message in entities.validate_entities(ctx)["errors"]
+                for rel, message in result["errors"]
                 if entities.is_integrity_error(message)}
     finally:
         shutil.rmtree(tmp, ignore_errors=True)

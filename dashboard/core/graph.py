@@ -1,6 +1,6 @@
 import json
 from pathlib import Path
-from typing import Dict, Any, List, Tuple
+from typing import Dict, Any, List, Optional, Tuple
 
 
 def load_architecture_data(repo_root: Path) -> Dict[str, Any]:
@@ -34,6 +34,43 @@ def load_architecture_data(repo_root: Path) -> Dict[str, Any]:
         "cross_community_edges": fallback_edges,
         "warnings": [],
     }
+
+
+def _local_issue_id(collector, ref: str) -> Optional[str]:
+    """Id of the local issue a reference names (canonical key or bare slug), else None."""
+    clean = str(ref).strip().strip("[]").split(":", 1)[-1]
+    for candidate in collector.issues:
+        if clean in (candidate.id, candidate.slug):
+            return candidate.id
+    return None
+
+
+def _external_parent_node(collector, ref: str, nodes: List[Dict[str, Any]], seen_nodes: set) -> Optional[str]:
+    """Add (once) a node for a parent found in an enclosing context; its id, or None."""
+    try:
+        from alongkit import entities, repo
+    except ImportError:
+        return None
+    owner = entities.reference_context(str(collector.repo_root), ref)
+    if not owner:
+        return None
+    clean = str(ref).strip().strip("[]").split(":", 1)[-1]
+    node_id = f"external:{clean}"
+    if node_id not in seen_nodes:
+        seen_nodes.add(node_id)
+        context = repo.safe_relpath(owner, str(collector.repo_root)).replace("\\", "/")
+        nodes.append({
+            "id": node_id,
+            "label": f"{clean} ({context})",
+            "type": "issue",
+            "issue_type": clean.split("--", 1)[0] if "--" in clean else "",
+            "status": "external",
+            "priority": "",
+            "slug": clean,
+            "file_path": "",
+            "context": context,
+        })
+    return node_id
 
 
 def build_entity_dag_graph(collector) -> Dict[str, Any]:
@@ -228,8 +265,13 @@ def build_entity_dag_graph(collector) -> Dict[str, Any]:
     # C. Parent-child relationships
     for iss in collector.issues:
         if iss.parent:
-            parent_id = iss.parent if "--" in iss.parent else f"feat--{iss.parent}"
-            add_edge(parent_id, iss.id, "parent_of", "child")
+            parent_id = _local_issue_id(collector, iss.parent)
+            if parent_id is None or parent_id == iss.id:
+                # The umbrella lives in an enclosing context: show it as an external node
+                # instead of dropping the edge. [bug--cross-context-parent-dangling]
+                parent_id = _external_parent_node(collector, iss.parent, nodes, seen_nodes)
+            if parent_id:
+                add_edge(parent_id, iss.id, "parent_of", "child")
 
         if iss.superseded_by:
             target_id = None

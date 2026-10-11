@@ -67,8 +67,19 @@ def detect_test_command(repo_root: str) -> Optional[List[str]]:
             print(f"[Warning] cannot read package.json: {exc}", file=sys.stderr)
             return None
         if isinstance(package.get("scripts"), dict) and "test" in package["scripts"]:
-            return ["npm", "test", "--", "--silent"]
+            # No `--silent`: executed tests are counted from the runner summary.
+            return ["npm", "test"]
     return None
+
+
+#: Outcomes of `run_test_gate`.
+TESTS_PASSED = "passed"
+TESTS_FAILED = "failed"
+TESTS_MISCONFIGURED = "misconfigured"
+TESTS_NONE_EXECUTED = "no-tests"
+TESTS_POLICY_INVALID = "policy-invalid"
+TESTS_SKIPPED = "skipped"
+_GATE_OK = (TESTS_PASSED, TESTS_SKIPPED)
 
 
 UNCONFIGURED_MARKER = "# Status: unconfigured"
@@ -86,16 +97,56 @@ def is_unconfigured_hook(path: str) -> bool:
 
 
 def run_repository_tests(repo_root: str, label: str = "Quality Gate") -> bool:
-    """Run the repository's tests, printing the outcome. True when they passed or none exist."""
+    """Run the repository's tests, printing the outcome. True when the gate passes."""
+    return run_test_gate(repo_root, label) in _GATE_OK
+
+
+def test_gate_abort_reason(outcome: str) -> str:
+    """One line for a caller that aborts on `outcome` (commit, wrap, closeout, bump)."""
+    return {
+        TESTS_MISCONFIGURED: "the test hook is misconfigured (see above)",
+        TESTS_NONE_EXECUTED: "the test run executed no tests (see above)",
+        TESTS_POLICY_INVALID: "the verify policy in .along/config.json is invalid (see above)",
+    }.get(outcome, "automated tests failed")
+
+
+def run_test_gate(repo_root: str, label: str = "Quality Gate") -> str:
+    """Run the repository's test gate under its verify policy; one of the TESTS_* outcomes.
+
+    `verify.tests = "none"` runs the declared checks instead. Under `required` (default) a
+    run that exits 0 without executing tests fails, and a hook that cannot run at all is
+    reported as misconfigured, not as failing tests. [bug--test-gate-no-tests-policy]
+    """
+    from . import lifecycle, verify
+
+    policy = verify.load_policy(repo_root)
+    problems = verify.policy_problems(repo_root, policy)
+    if problems:
+        print(f"[Error] {label}: invalid verify policy in .along/config.json:\n"
+              + "\n".join(f"  - {p}" for p in problems), file=sys.stderr)
+        return TESTS_POLICY_INVALID
+    if policy.tests == verify.TESTS_NONE:
+        print(f"-> [{label}] {policy.describe()}")
+        return TESTS_PASSED if verify.run_checks(repo_root, policy.checks, label) else TESTS_FAILED
+
     cmd = detect_test_command(repo_root)
     if not cmd:
-        return True
+        if policy.declared:
+            print(f"[Error] {label}: verify.tests is \"required\" but no test command was found. "
+                  "Add .along/scripts/test.py, or set verify.tests = \"none\".", file=sys.stderr)
+            return TESTS_MISCONFIGURED
+        return TESTS_SKIPPED
     if is_unconfigured_hook(cmd[-1]):
         # [bug--unconfigured-test-hook-reports-pass]: the placeholder exits 0 without
         # running anything, which must not read as a pass.
+        if policy.declared:
+            print(f"[Error] {label}: .along/scripts/test.py is the unconfigured placeholder while "
+                  "verify.tests is \"required\".", file=sys.stderr)
+            return TESTS_MISCONFIGURED
         print(f"[Warning] {label}: tests are not configured (.along/scripts/test.py is the "
-              "unconfigured placeholder); nothing was verified.", file=sys.stderr)
-        return True
+              "unconfigured placeholder); nothing was verified. Declare verify.tests in "
+              ".along/config.json.", file=sys.stderr)
+        return TESTS_SKIPPED
 
     # [feat--parallel-session-closeout] REQ-8: one run per completion; a green run on the
     # same tree (Along state and KB projections aside) is reused.
@@ -104,24 +155,35 @@ def run_repository_tests(repo_root: str, label: str = "Quality Gate") -> bool:
     if reused:
         print(f"-> [{label}] Tests passed on this tree at {reused.get('ts')} ({reused.get('source')}); "
               "not running them again.")
-        return True
+        return TESTS_PASSED
 
     print(f"-> [{label}] Running automated tests: {' '.join(cmd)}")
     # No anomaly classification: a failing suite prints fixture signatures such as
     # "bad signature" [bug--breaker-trips-on-test-output].
     res = proc.run_capture(cmd, cwd=repo_root, trip_on_anomaly=False)
-    testruns.record_run(repo_root, res.ok, tree, label)
-    session.trace_test_run(repo_root, res.ok, label)
-    if res.ok:
+    output = res.stdout + "\n" + res.stderr
+    executed = lifecycle.tests_ran(cmd, output, repo_root) if res.ok else None
+    passed = res.ok and executed != 0
+    testruns.record_run(repo_root, passed, tree, label)
+    session.trace_test_run(repo_root, passed, label)
+    if passed:
         print(f"-> [{label}] All tests passed successfully.")
-        return True
+        return TESTS_PASSED
 
-    print(f"[Error] {label}: automated tests failed.\n", file=sys.stderr)
+    if res.ok:
+        print(f"[Error] {label}: {' '.join(cmd)} exited 0 but executed no tests: nothing is verified. "
+              "Point .along/scripts/test.py at the tests, or set verify.tests = \"none\".", file=sys.stderr)
+        return TESTS_NONE_EXECUTED
+    detail = verify.misconfiguration(output, res.returncode)
+    if detail:
+        print(f"[Error] {label}: {verify.misconfiguration_message(detail)}", file=sys.stderr)
+    else:
+        print(f"[Error] {label}: automated tests failed.\n", file=sys.stderr)
     if res.stdout:
         print(res.stdout, file=sys.stderr)
     if res.stderr:
         print(res.stderr, file=sys.stderr)
-    return False
+    return TESTS_MISCONFIGURED if detail else TESTS_FAILED
 
 
 def link_integrity_gate(repo_root: str, label: str = "Quality Gate", strict: bool = True) -> bool:

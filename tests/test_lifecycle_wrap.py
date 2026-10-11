@@ -309,13 +309,48 @@ class TestLifecycleWrap(unittest.TestCase):
         self.assertFalse(os.path.isfile(dest_issue))
         self.assertEqual(textio.read_text(src_issue), orig_content)
 
+    def _tree_snapshot(self):
+        snap = {}
+        for base, _dirs, files in os.walk(self.root):
+            for name in files:
+                path = os.path.join(base, name)
+                with open(path, "rb") as handle:
+                    snap[os.path.relpath(path, self.root)] = handle.read()
+        return snap
+
+    def _add_dangling_issue(self):
+        textio.write_text(os.path.join(self.root, ".along", "ISSUES", "bug--broken-ref.md"),
+                          "---\nprotocol: along\nslug: broken-ref\ntype: bug\nstatus: open\npriority: low\n"
+                          "created: 2026-10-11\nupdated: 2026-10-11\nparent: task--nowhere\n---\n\n# broken\n")
+
+    def test_07b_graph_failure_changes_nothing_on_disk(self):
+        """[bug--wrap-not-transactional]: checks run before any write."""
+        self._add_dangling_issue()
+        before = self._tree_snapshot()
+        with patch.dict(os.environ, {"ALONG_HOOK_MODE": "enforce"}):
+            code = lifecycle.execute_wrap(self.root, "fixture-sample-task", no_verify=True, decisions=[])
+        self.assertEqual(code, 1)
+        self.assertEqual(self._tree_snapshot(), before)
+
+    def test_07c_force_reason_passes_the_graph_gate_and_is_logged(self):
+        self._add_dangling_issue()
+        with patch.dict(os.environ, {"ALONG_HOOK_MODE": "enforce"}):
+            code = lifecycle.execute_wrap(self.root, "fixture-sample-task", no_verify=True, decisions=[],
+                                          force_reason="umbrella lives in another repo")
+        self.assertEqual(code, 0)
+        today = entities.today_iso()
+        log = textio.read_text(os.path.join(self.root, ".along", "SESSIONS", today[:4],
+                                            f"{today}--fixture-sample-task.md"))
+        self.assertIn("entity-reference-integrity", log)
+        self.assertIn("umbrella lives in another repo", log)
+
     def test_08_cli_router_invocation(self):
         """along_exec.py wrap dispatches cleanly via TOOL_MAPPINGS to along_wrap.py."""
         along_exec = os.path.join(SCRIPTS_DIR, "along_exec.py")
         dest_issue = os.path.join(self.root, ".along", "ISSUES", "done", "task--fixture-sample-task.md")
 
         res = proc.run_python(
-            [along_exec, "wrap", "fixture-sample-task", "-n", "--no-decisions"],
+            [along_exec, "wrap", "fixture-sample-task", "-n", "--reason", "fixture", "--no-decisions"],
             cwd=self.root,
         )
         self.assertTrue(res.ok, f"STDOUT: {res.stdout}\nSTDERR: {res.stderr}")
@@ -327,7 +362,7 @@ class TestLifecycleWrap(unittest.TestCase):
         dest_issue = os.path.join(self.root, ".along", "ISSUES", "done", "task--fixture-sample-task.md")
 
         res = proc.run_python(
-            [along_exec, "session", "wrap", "fixture-sample-task", "-n", "--no-decisions"],
+            [along_exec, "session", "wrap", "fixture-sample-task", "-n", "--reason", "fixture", "--no-decisions"],
             cwd=self.root,
         )
         self.assertTrue(res.ok, f"STDOUT: {res.stdout}\nSTDERR: {res.stderr}")
@@ -341,7 +376,7 @@ class TestLifecycleWrap(unittest.TestCase):
 
         dest_issue = os.path.join(self.root, ".along", "ISSUES", "done", "task--fixture-sample-task.md")
         res = proc.run_python(
-            [along_wrap, "fixture-sample-task", "-s", "superseded", "-m", "Direct wrap summary", "-n", "--no-decisions"],
+            [along_wrap, "fixture-sample-task", "-s", "superseded", "-m", "Direct wrap summary", "-n", "--reason", "fixture", "--no-decisions"],
             cwd=self.root,
         )
         self.assertTrue(res.ok, f"STDOUT: {res.stdout}\nSTDERR: {res.stderr}")
@@ -360,7 +395,7 @@ class TestLifecycleWrap(unittest.TestCase):
         dest_issue = os.path.join(self.root, ".along", "ISSUES", "done", "task--fixture-sample-task.md")
         res = proc.run_python(
             [along_exec, "session", "wrap", "fixture-sample-task", "-s", "cancelled", "-m", "Cancelled summary", "-n",
-             "--no-decisions"],
+             "--reason", "fixture", "--no-decisions"],
             cwd=self.root,
         )
         self.assertTrue(res.ok, f"STDOUT: {res.stdout}\nSTDERR: {res.stderr}")

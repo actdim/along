@@ -2319,7 +2319,8 @@ class TestAlongSkillsAndScripts(unittest.TestCase):
             self.assertIn("Fix syntax errors before committing", (res.stderr or "") + (res.stdout or ""))
 
             # Bypass flag (-n / --no-verify) allows skipping
-            res_bypass = proc.run_capture([sys.executable, commit_tool, "-a", "-m", "bypass commit", "-n"], cwd=fixture)
+            res_bypass = proc.run_capture([sys.executable, commit_tool, "-a", "-m", "bypass commit", "-n",
+                                           "--reason", "fixture"], cwd=fixture)
             self.assertEqual(res_bypass.returncode, 0)
 
             # Link integrity gate respects strict mode

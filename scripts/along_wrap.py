@@ -85,7 +85,12 @@ def main(argv=None) -> int:
     parser.add_argument(
         "--force-reason",
         default=None,
-        help="Wrap a role-based blackboard with open steps or missing reviews; the reason goes to the log",
+        help="Wrap past failed checks (open steps, missing plan, entity graph); the reason goes to the log",
+    )
+    parser.add_argument(
+        "--reason",
+        default=None,
+        help="Why the user accepts skipping the tests (-n); recorded as a bypass",
     )
 
     args = parser.parse_args(argv if argv is not None else sys.argv[1:])
@@ -102,6 +107,8 @@ def main(argv=None) -> int:
         agent=args.agent,
         decisions=decisions,
         force_reason=args.force_reason,
+        guard_bypass=True,
+        bypass_reason=args.reason,
     )
     if code == 0:
         # Not verifiable mechanically, so the engine only reminds (skills/along-wrap Phase A).

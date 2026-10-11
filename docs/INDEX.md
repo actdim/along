@@ -4,7 +4,7 @@ slug: INDEX
 title: ActDim Along - Knowledge Base Topic Index
 type: index
 created: 2026-09-10
-updated: 2026-10-10
+updated: 2026-10-11
 tags: [index, kb, topics, map]
 ---
 
@@ -50,6 +50,7 @@ flowchart TD
     T_ARCHITECTURE -.->|references| T_CLI_REFERENCE
     T_ARCHITECTURE -.->|references| T_SETUP_AND_WORKFLOW
     T_ARCHITECTURE -.->|references| T_SESSION_LIFECYCLE
+    T_CLI_REFERENCE -.->|references| T_SETUP_AND_WORKFLOW
     T_CLI_REFERENCE -.->|references| T_RUNTIME_HOOKS_AND_GATES
     T_CLI_REFERENCE -.->|references| T_PARALLEL_SESSIONS
     T_CLI_REFERENCE -.->|references| T_SESSION_LIFECYCLE

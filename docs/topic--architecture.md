@@ -489,4 +489,4 @@ flowchart TD
    - Native binaries: Executed directly.
 3. **Safe Execution without Shell Injection**: All lifecycle commands avoid `shell=True`. Arguments are pre-split or passed as discrete argv lists, preserving spaces and special characters.
 4. **Nearest-Boundary Monorepo Localization**: In modular codebases and Git submodules, the dispatcher locates the nearest `.along/scripts/` hook before falling back to workspace root.
-5. **Non-Destructive Auto-Synthesis**: When hooks are absent, Along analyzes project manifests (`package.json`, `Cargo.toml`, `*.csproj`, `pyproject.toml`, `go.mod`), injects quiet flags (`-q`, `--silent`), and synthesizes an executable `.along/scripts/<action>.py` hook marked with `# Status: verified`.
+5. **Non-Destructive Auto-Synthesis**: When hooks are absent, Along analyzes project manifests (`package.json`, `Cargo.toml`, `*.csproj`, `pyproject.toml`, `go.mod`), injects quiet flags (`-q`, `-v q`; never `--silent` for `npm test`, since the test gate counts executed tests from the runner summary), and synthesizes an executable `.along/scripts/<action>.py` hook marked with `# Status: verified`.

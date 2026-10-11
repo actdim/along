@@ -623,9 +623,10 @@ def run_closeout(repo_root: str, keys: Optional[List[str]] = None, ready: bool =
 
     # Tests once for the whole closeout, before anything is wrapped.
     if not run["tested"]:
-        if not gates.run_repository_tests(real_root, "Closeout Quality Gate"):
-            print("[Error] Tests failed: nothing was wrapped or committed. Fix them and re-run "
-                  "'along session close' (it resumes).", file=sys.stderr)
+        outcome = gates.run_test_gate(real_root, "Closeout Quality Gate")
+        if outcome not in (gates.TESTS_PASSED, gates.TESTS_SKIPPED):
+            print(f"[Error] Test gate failed ({gates.test_gate_abort_reason(outcome)}): nothing was "
+                  "wrapped or committed. Fix it and re-run 'along session close' (it resumes).", file=sys.stderr)
             return 1
         run["tested"] = True
         _save_run(real_root, run)

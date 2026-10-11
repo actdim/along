@@ -49,8 +49,8 @@ from alongkit import bootstrap
 bootstrap.ensure_deps()
 
 
-from alongkit import (entities, frontmatter, gates, proc, repo, sanitizer, semver, testruns, textio,
-                      transaction)
+from alongkit import (bypass, entities, frontmatter, gates, proc, repo, sanitizer, semver, testruns,
+                      textio, transaction)
 
 #: Label every gate and abort message carries, so the source of a failure is unambiguous.
 GATE_LABEL = "Release Quality Gate"
@@ -387,8 +387,9 @@ def release_preflight(repo_root, skip_verify=False, fix_typography=False):
         print("-> [Notice] --no-verify: tests, typography, and link gates skipped.")
         return []
 
-    if not gates.run_repository_tests(repo_root, GATE_LABEL):
-        raise ReleaseAborted("automated tests failed")
+    outcome = gates.run_test_gate(repo_root, GATE_LABEL)
+    if outcome not in (gates.TESTS_PASSED, gates.TESTS_SKIPPED):
+        raise ReleaseAborted(gates.test_gate_abort_reason(outcome))
 
     report = gates.run_sanitizer(repo_root, verbose=False)
     for skipped in report.skipped:
@@ -643,7 +644,7 @@ def main():
 
     if bump_arg in ["-h", "--help"]:
         print("Usage: python along_version_bump.py [patch|minor|major|<version>] "
-              "[-c|--commit] [-p|--push] [--fix-typography] [-n|--no-verify] "
+              "[-c|--commit] [-p|--push] [--fix-typography] [-n|--no-verify --reason \"...\"] "
               "[--carry-over <milestone>]")
         sys.exit(0)
 
@@ -655,6 +656,14 @@ def main():
             print("[Error] --carry-over needs a milestone slug.", file=sys.stderr)
             sys.exit(2)
         carry_over = argv[idx + 1]
+        del argv[idx:idx + 2]
+    bypass_reason = None
+    if "--reason" in argv:
+        idx = argv.index("--reason")
+        if idx + 1 >= len(argv):
+            print("[Error] --reason needs a text.", file=sys.stderr)
+            sys.exit(2)
+        bypass_reason = argv[idx + 1]
         del argv[idx:idx + 2]
     sys.argv[1:] = argv
     bump_arg = sys.argv[1] if len(sys.argv) > 1 else "patch"
@@ -672,11 +681,20 @@ def main():
     print(f"   Requested Bump:    {bump_arg_clean}")
     print("==================================================")
 
+    # A skipped release gate is the user's decision, with a reason, and it is recorded
+    # [feat--gate-friction-and-bypass-accountability] REQ-3.
+    if skip_verify and not bypass.guard(repo_root, bypass.RELEASE_GATES, bypass_reason):
+        sys.exit(2)
+
     tx = transaction.FileTransaction(repo_root, "release")
     try:
         # Gates first, on the untouched tree.
-        pending_typography = release_preflight(repo_root, skip_verify=skip_verify,
-                                               fix_typography=fix_typography)
+        try:
+            pending_typography = release_preflight(repo_root, skip_verify=skip_verify,
+                                                   fix_typography=fix_typography)
+        except ReleaseAborted:
+            bypass.record_failure(repo_root, bypass.RELEASE_GATES)
+            raise
 
         # Mutations, all of them recorded on the transaction.
         for path in pending_typography:

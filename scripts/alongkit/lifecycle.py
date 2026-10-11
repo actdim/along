@@ -150,8 +150,14 @@ def executed_tests(output: str) -> Optional[int]:
 
     0 means the output shows a run without tests (counts of zero, or a "no tests" message
     and no positive count). [bug--lifecycle-test-false-pass] REQ-1
+
+    Colour codes are stripped first: `\\x1b[32m5 passed` is a count too, whatever flags the
+    runner got. [bug--test-gate-no-tests-policy]
     """
-    counts = [int(m.group(1)) for rx in _TEST_COUNT_RES for m in rx.finditer(output or "")]
+    from .distill import _ANSI_RE
+
+    output = _ANSI_RE.sub("", output or "")
+    counts = [int(m.group(1)) for rx in _TEST_COUNT_RES for m in rx.finditer(output)]
     if any(counts):
         return sum(counts)
     ran = sum(len(rx.findall(output or "")) for rx in _TESTS_RAN_RES)
@@ -162,10 +168,11 @@ def executed_tests(output: str) -> Optional[int]:
     return None
 
 
-def tests_ran(cmd: Sequence[str], output: str) -> Optional[int]:
+def tests_ran(cmd: Sequence[str], output: str, repo_root: Optional[str] = None) -> Optional[int]:
     """`executed_tests`, where a known runner's silence also counts as zero.
 
-    The runner is the command itself or, for a synthesized hook, its `-> Running:` line.
+    The runner is the command itself or, for a synthesized hook, its `-> Running:` line;
+    `npm test` / `npm run test` resolve to the package.json script when `repo_root` is given.
     A known runner (pytest, unittest, dotnet test, cargo test, go test, vitest, jest) always
     prints a summary when tests run. [bug--along-install-marker-ambiguous] REQ-5
     """
@@ -173,7 +180,25 @@ def tests_ran(cmd: Sequence[str], output: str) -> Optional[int]:
     if count is not None:
         return count
     commands = [" ".join(cmd)] + _HOOK_RUNNING_RE.findall(output or "")
+    if repo_root:
+        commands += [s for s in (_package_test_script(repo_root, c) for c in commands) if s]
     return 0 if any(_KNOWN_RUNNER_RE.search(c) for c in commands) else None
+
+
+_PACKAGE_TEST_RE = re.compile(r"\b(?:npm|pnpm|yarn|bun)(?:\.cmd)?\s+(?:run\s+)?test\b")
+
+
+def _package_test_script(repo_root: str, command: str) -> Optional[str]:
+    """The package.json `test` script a `npm test` command runs, else None."""
+    if not _PACKAGE_TEST_RE.search(command):
+        return None
+    try:
+        with open(os.path.join(repo_root, "package.json"), "r", encoding="utf-8") as handle:
+            scripts = json.load(handle).get("scripts") or {}
+    except (OSError, ValueError, AttributeError):
+        return None
+    script = scripts.get("test") if isinstance(scripts, dict) else None
+    return str(script) if script else None
 
 
 #: Exit code of a test run that executed no tests (pytest uses 5 for the same case).
@@ -188,6 +213,19 @@ def run_lifecycle_command(action: str, cmd: Sequence[str], repo_root: str, mode:
     [bug--session-records-not-captured]. A test run whose output shows that no test ran
     is a failure, never recorded green [bug--lifecycle-test-false-pass].
     """
+    from . import verify
+
+    if action == "test":
+        # A declared `tests: none` policy runs its checks instead [bug--test-gate-no-tests-policy].
+        policy = verify.load_policy(repo_root)
+        if policy.tests == verify.TESTS_NONE:
+            problems = verify.policy_problems(repo_root, policy)
+            if problems:
+                print("[Error] Invalid verify policy in .along/config.json:\n"
+                      + "\n".join(f"  - {p}" for p in problems), file=sys.stderr)
+                return 1
+            print(f"-> {policy.describe()}")
+            return 0 if verify.run_checks(repo_root, policy.checks, "along test") else 1
     tree = testruns.tree_hash(repo_root) if action == "test" else None
     code = _run_lifecycle_command(action, cmd, repo_root, mode)
     if action == "test":
@@ -196,6 +234,15 @@ def run_lifecycle_command(action: str, cmd: Sequence[str], repo_root: str, mode:
         testruns.record_run(repo_root, code == 0, tree, "along test")
         session.trace_test_run(repo_root, code == 0, "along test")
     return code
+
+
+def _print_misconfiguration(output: str, code: int) -> None:
+    """Name a test hook that could not run at all, so it does not read as failing tests."""
+    from . import verify
+
+    detail = verify.misconfiguration(output, code)
+    if detail:
+        print(f"[Error] {verify.misconfiguration_message(detail)}", file=sys.stderr)
 
 
 def _no_tests_message(cmd: Sequence[str]) -> str:
@@ -230,9 +277,10 @@ def _run_lifecycle_command(action: str, cmd: Sequence[str], repo_root: str, mode
         if action != "test":
             return proc.run_passthrough(list(cmd), cwd=repo_root)
         code, output = _run_tee(cmd, repo_root)
-        if code == 0 and tests_ran(cmd, output) == 0:
+        if code == 0 and tests_ran(cmd, output, repo_root) == 0:
             print(_no_tests_message(cmd))
             return NO_TESTS_EXIT_CODE
+        _print_misconfiguration(output, code)
         return code
 
     log_path = raw_log_path(repo_root, action)
@@ -248,11 +296,13 @@ def _run_lifecycle_command(action: str, cmd: Sequence[str], repo_root: str, mode
     except OSError:
         saved = False
     code = result.returncode
-    if action == "test" and code == 0 and tests_ran(cmd, raw) == 0:
+    if action == "test" and code == 0 and tests_ran(cmd, raw, repo_root) == 0:
         print(_no_tests_message(cmd))
         code = NO_TESTS_EXIT_CODE
     else:
         print(result.observation or "")
+        if action == "test":
+            _print_misconfiguration(raw, code)
     if saved:
         print(f"(raw output: {rel_log}; rerun with --raw to stream it)")
     return code
@@ -311,8 +361,11 @@ def detect_lifecycle_action(repo_root: str, action: str) -> Tuple[Optional[str],
             scripts = data.get("scripts", {})
             if action == "build" and "build" in scripts:
                 return "npm run build", True
-            elif action == "test":
-                return "npm test -- --silent" if "test" in scripts else "npm test", True
+            elif action == "test" and "test" in scripts:
+                # No `--silent`: the gate counts executed tests from the runner summary.
+                # Without a `test` script there is no Node test command to verify.
+                # [bug--test-gate-no-tests-policy]
+                return "npm test", True
             elif action == "dev":
                 cmd = "npm run dev" if "dev" in scripts else ("npm start" if "start" in scripts else None)
                 if cmd:
@@ -666,8 +719,15 @@ def execute_wrap(
     agent: Optional[str] = None,
     decisions: Optional[List[str]] = None,
     force_reason: Optional[str] = None,
+    guard_bypass: bool = False,
+    bypass_reason: Optional[str] = None,
 ) -> int:
     """Execute automated session and issue wrap-up.
+
+    `guard_bypass` (set by the `along wrap` CLI) holds `no_verify` and a used
+    `force_reason` to `alongkit.bypass`: a reason, the user's reply after the failure, and a
+    record. Internal callers (closeout, after its own test run) leave it off.
+    [feat--gate-friction-and-bypass-accountability] REQ-3
 
     `decisions` is the answer to "were architectural decisions made?": a list of ADR keys,
     or [] for an explicit no. When given, the session log for today is written (or
@@ -705,25 +765,51 @@ def execute_wrap(
     src_file = issue["file_path"]
     is_already_done = issue.get("done", False) or "done" in os.path.normpath(src_file).split(os.sep)
 
+    # Every check runs before the first write (plan -> validate -> apply); forced checks are
+    # recorded inside the transaction. [bug--wrap-not-transactional]
+    forced: List[str] = []
+    from . import bypass
+    guarded = {"done": False}
+
+    def _check_failed() -> None:
+        if guard_bypass and not dry_run:
+            bypass.record_failure(repo_root, bypass.WRAP_CHECKS)
+
+    def _force_allowed() -> bool:
+        """A check is about to be forced: the CLI holds --force-reason to the bypass rules once."""
+        if not guard_bypass or dry_run or guarded["done"]:
+            return True
+        guarded["done"] = True
+        return bypass.guard(repo_root, bypass.WRAP_CHECKS, force_reason, slug=clean_slug) is not None
+
+    if guard_bypass and no_verify and not dry_run:
+        if not bypass.guard(repo_root, bypass.TESTS, bypass_reason or force_reason, slug=clean_slug):
+            return 2
+
     # 0. along-team step discipline
     problems = session.completion_problems(repo_root, clean_slug)
     if problems and not force_reason:
+        _check_failed()
         print(f"[Error] Wrap aborted: role-based blackboard '{clean_slug}' is not complete:\n"
               + "\n".join(f"  - {p}" for p in problems)
               + "\n  Finish the steps with reviews/step-N.md, or pass --force-reason \"...\".", file=sys.stderr)
         return 2
+    if problems and not _force_allowed():
+        return 2
     if problems:
-        session.append_trace(repo_root, clean_slug, f"Wrapped with open steps ({'; '.join(problems)}): {force_reason}")
+        forced.append(f"Wrapped with open steps ({'; '.join(problems)}): {force_reason}")
     # [bug--session-records-not-captured] REQ-5: a blackboard is never archived without its plan.
     has_blackboard = session.load_state(repo_root, clean_slug) is not None
     if has_blackboard and not session.plan_recorded(repo_root, clean_slug):
         if not force_reason:
+            _check_failed()
             print(f"[Error] Wrap aborted: no plan recorded for '{clean_slug}' (.along/.session/{clean_slug}/plan.md "
                   "is the scaffold).\n  Record the approved plan ('along plan approve <slug> --plan-file <path>', "
                   "or write it into plan.md), or pass --force-reason \"...\".", file=sys.stderr)
             return 2
-        if not dry_run:
-            session.append_trace(repo_root, clean_slug, f"Wrapped without a recorded plan: {force_reason}")
+        if not _force_allowed():
+            return 2
+        forced.append(f"Wrapped without a recorded plan: {force_reason}")
 
     if has_blackboard:
         unrecorded = session.unrecorded_files(repo_root, clean_slug)
@@ -738,11 +824,12 @@ def execute_wrap(
 
     # 1. Pre-Flight Test Gate
     if not no_verify and not dry_run:
-        if not gates.run_repository_tests(repo_root, label="Wrap Quality Gate"):
-            print(
-                "[Error] Wrap aborted: automated tests failed. Fix failing tests before wrapping up.",
-                file=sys.stderr,
-            )
+        outcome = gates.run_test_gate(repo_root, label="Wrap Quality Gate")
+        if outcome not in (gates.TESTS_PASSED, gates.TESTS_SKIPPED):
+            if guard_bypass:
+                bypass.record_failure(repo_root, bypass.TESTS)
+            print(f"[Error] Wrap aborted: {gates.test_gate_abort_reason(outcome)}. "
+                  "Nothing was changed.", file=sys.stderr)
             return 1
 
     # 2. Working tree zero-byte audit
@@ -758,6 +845,19 @@ def execute_wrap(
                 file=sys.stderr,
             )
             return 1
+
+    # [gate: entity-reference-integrity] before any write. Closing an issue changes only its
+    # status and folder, never its key, so the current graph decides. --force-reason passes
+    # it and the reason goes to the session log. [bug--wrap-not-transactional] REQ-1, REQ-3
+    if not dry_run and not gates.entity_integrity_gate(repo_root, "Wrap Quality Gate"):
+        if not force_reason:
+            _check_failed()
+            print("[Error] Wrap aborted before any change: the entity graph has new dangling references "
+                  "or schema violations. Fix them, or pass --force-reason \"...\".", file=sys.stderr)
+            return 1
+        if not _force_allowed():
+            return 2
+        forced.append(f"Wrapped past [gate: entity-reference-integrity]: {force_reason}")
 
     done_dir = os.path.join(repo.state_dir(repo_root), "ISSUES", "done")
     dest_file = os.path.join(done_dir, os.path.basename(src_file))
@@ -834,25 +934,20 @@ def execute_wrap(
         textio.write_text(board_file, board_content, newline="\n")
         print(f"-> Updated {repo.safe_relpath(board_file, repo_root)}")
 
-        # [gate: entity-reference-integrity]: enforce mode rolls the wrap back.
-        if not gates.entity_integrity_gate(repo_root, "Wrap Quality Gate"):
-            raise RuntimeError("entity graph has dangling references or schema violations")
-
-        # Synchronize Knowledge Base
-        kb_script = repo.resolve_tool_script("along_kb_sync.py", repo_root)
-        if kb_script:
-            kb_res = proc.run_python([kb_script, repo_root], cwd=repo_root)
-            if not kb_res.ok:
-                raise RuntimeError(f"Knowledge Base sync failed:\n{kb_res.stderr or kb_res.stdout}")
-            print("-> Synchronized Knowledge Base.")
+        # Forced checks go to the blackboard trace (rendered into the session log).
+        if forced and has_blackboard:
+            tx.protect(os.path.join(session.get_session_dir(repo_root, clean_slug), session.TRACE_FILENAME))
+            for note in forced:
+                session.append_trace(repo_root, clean_slug, note)
 
         # Session log with the blackboard record; the blackboard is purged only after the
         # transaction committed [bug--session-records-not-captured].
         log_path: Optional[str] = None
-        if decisions is not None or has_blackboard:
+        if decisions is not None or has_blackboard or forced:
             log_path = write_session_record(
                 repo_root, tx, clean_slug, today=today, issue=issue, completed=(status == "done"),
                 summary=summary, agent=agent, decisions=decisions,
+                reason="; ".join(forced) if forced else None,
             )
             print(f"-> Wrote session log: {repo.safe_relpath(log_path, repo_root)}")
 
@@ -878,6 +973,17 @@ def execute_wrap(
                 print(f"-> Appended history entry to {repo.safe_relpath(history_file, repo_root)}")
 
         tx.commit()
+        # Knowledge Base projections are regenerable and written by a subprocess the
+        # transaction cannot undo, so they run after the commit; a failure warns.
+        # [bug--wrap-not-transactional] REQ-2
+        kb_script = repo.resolve_tool_script("along_kb_sync.py", repo_root)
+        if kb_script:
+            kb_res = proc.run_python([kb_script, repo_root], cwd=repo_root)
+            if kb_res.ok:
+                print("-> Synchronized Knowledge Base.")
+            else:
+                print(f"[Warning] Knowledge Base sync failed; run 'along kb-sync':\n{kb_res.stderr or kb_res.stdout}",
+                      file=sys.stderr)
         # This session keeps a completion token for the commit that follows
         # [bug--commit-blocked-after-wrap].
         attributed_map = session.attributed_files(repo_root, clean_slug)

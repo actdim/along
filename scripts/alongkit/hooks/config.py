@@ -37,6 +37,31 @@ DEFAULT_GATE_MODES: Dict[str, str] = {
 }
 
 
+#: Gate tiers [feat--gate-friction-and-bypass-accountability] REQ-4:
+#: - invariant: hard safety and state-integrity rules; always enforced, a repo config or
+#:   ALONG_HOOK_MODE cannot shadow or disable them, and no bypass flag covers them;
+#: - advisory: report only, always shadow;
+#: - process (every other gate): enforced by default, shadowable per repo, and bypassable
+#:   through `alongkit.bypass` with a reason the user accepted.
+#: The catalogue (default_gates.yaml) carries the same `tier:` per gate; a test keeps them equal.
+TIER_INVARIANT = "invariant"
+TIER_PROCESS = "process"
+TIER_ADVISORY = "advisory"
+GATE_TIERS: Dict[str, str] = {
+    "workspace_containment": TIER_INVARIANT,
+    "no_tracked_secrets": TIER_INVARIANT,
+    "projection_protection": TIER_INVARIANT,
+    "rule_pack_protection": TIER_INVARIANT,
+    "circuit_breaker": TIER_INVARIANT,
+    "wrapped_work_uncommitted": TIER_ADVISORY,
+    "projection_sync_before_stop": TIER_ADVISORY,
+}
+
+
+def gate_tier(gate_name: str) -> str:
+    return GATE_TIERS.get(gate_name, TIER_PROCESS)
+
+
 @dataclass
 class HooksConfig:
     """Runtime configuration for hook execution."""
@@ -45,10 +70,22 @@ class HooksConfig:
     record_transcript: bool = False
 
     def get_gate_mode(self, gate_name: str) -> str:
-        """Resolve mode for an individual gate."""
+        """Resolve mode for an individual gate; the tier wins over any override."""
+        tier = gate_tier(gate_name)
+        if tier == TIER_INVARIANT:
+            return HookMode.ENFORCE
+        if tier == TIER_ADVISORY:
+            return HookMode.SHADOW
         if gate_name in self.gates:
             return self.gates[gate_name]
         return self.mode
+
+    def overridden_gates(self) -> Dict[str, str]:
+        """Gates a repo config or env set to shadow (process tier only)."""
+        names = set(self.gates) | ({n for n in GATE_TIERS} if self.mode == HookMode.SHADOW else set())
+        return {n: self.get_gate_mode(n) for n in sorted(names)
+                if gate_tier(n) == TIER_PROCESS and self.get_gate_mode(n) == HookMode.SHADOW
+                and DEFAULT_GATE_MODES.get(n) != HookMode.SHADOW}
 
     def is_enforcing(self, gate_name: str) -> bool:
         """True if the gate should actively block on violation."""
@@ -312,6 +349,9 @@ def get_claude_hook_manifest(is_global: bool = False) -> Dict[str, Any]:
         "PreToolUse": [_claude_entry("PreToolUse", CLAUDE_PRE_TOOL_MATCHER, is_global)],
         "PostToolUse": [_claude_entry("PostToolUse", CLAUDE_POST_TOOL_MATCHER, is_global)],
         "Stop": [_claude_entry("Stop", None, is_global)],
+        # Timestamp of the user's last message: CLI plan approval and gate bypasses are
+        # checked against it. [bug--plan-approval-self-and-lost]
+        "UserPromptSubmit": [_claude_entry("UserPromptSubmit", None, is_global)],
     }
 
 

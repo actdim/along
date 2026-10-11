@@ -11,6 +11,7 @@ Measures bytes, character counts, and estimated tokens across:
 from __future__ import annotations
 
 import os
+import re
 import sys
 from typing import Any, Dict, List, Optional
 
@@ -25,11 +26,57 @@ from . import repo, version
 CHARS_PER_TOKEN = 3.8
 
 DEFAULT_BUDGET_LIMITS = {
+    # AGENTS.md without its "Project specifics" section: the protocol Along owns.
     "agents_md_bytes": 14336,          # 14 KB (measured: ~10.6 KB)
+    # The repository's own "Project specifics" section: a soft limit (warns, never fails);
+    # past it, move details into docs/topic--*.md and link them.
+    # [debt--agents-md-budget-project-specifics]
+    "project_specifics_bytes": 4096,
     "issues_md_bytes": 8192,           # 8 KB (measured: ~6.9 KB with extended backlog)
     "constraints_md_bytes": 16384,      # 16 KB (measured: ~12.3 KB)
     "mandatory_session_bytes": 36864,  # 36 KB (measured: ~29 KB)
 }
+
+
+def project_specifics_bytes(agents_md: str) -> int:
+    """UTF-8 size of the "Project specifics" section of AGENTS.md outside the managed block.
+
+    The section runs from its heading to the next top-level heading or the managed block,
+    whichever comes first. [debt--agents-md-budget-project-specifics]
+    """
+    from .scaffold import MANAGED_BLOCK_RE, _SPECIFICS_HEADING_RE
+
+    try:
+        with open(agents_md, "r", encoding="utf-8", errors="replace") as handle:
+            text = handle.read()
+    except OSError:
+        return 0
+    outside = MANAGED_BLOCK_RE.sub("", text)
+    match = _SPECIFICS_HEADING_RE.search(outside)
+    if not match:
+        return 0
+    level = len(match.group(0)) - len(match.group(0).lstrip("#"))
+    rest = outside[match.start():]
+    end = re.search(rf"^#{{1,{level}}}[ \t]+\S", rest[len(match.group(0)):], re.MULTILINE)
+    section = rest[:len(match.group(0)) + end.start()] if end else rest
+    return len(section.encode("utf-8"))
+
+
+def config_limits(repo_root: str) -> Dict[str, int]:
+    """`budget` overrides from `.along/config.json` (positive integers only)."""
+    import json
+
+    path = os.path.join(repo.state_dir(repo_root), "config.json")
+    try:
+        with open(path, "r", encoding="utf-8") as handle:
+            data = json.load(handle)
+    except (OSError, ValueError):
+        return {}
+    block = data.get("budget") if isinstance(data, dict) else None
+    if not isinstance(block, dict):
+        return {}
+    return {k: int(v) for k, v in block.items()
+            if k in DEFAULT_BUDGET_LIMITS and isinstance(v, int) and not isinstance(v, bool) and v > 0}
 
 
 def estimate_tokens(char_count: int) -> int:
@@ -149,11 +196,21 @@ def measure_context(repo_root: str,
 
     # Budget checks
     checks: Dict[str, Dict[str, Any]] = {}
-    actual_agents = agents_info["bytes"] if agents_info else 0
+    total_agents = agents_info["bytes"] if agents_info else 0
+    specifics = project_specifics_bytes(os.path.join(repo_root, "AGENTS.md")) if agents_info else 0
+    actual_agents = total_agents - specifics
     checks["agents_md_bytes"] = {
         "limit": effective_limits["agents_md_bytes"],
         "actual": actual_agents,
         "passed": actual_agents <= effective_limits["agents_md_bytes"],
+        "hint": "the managed protocol block is over budget; run 'along update' or report it",
+    }
+    checks["project_specifics_bytes"] = {
+        "limit": effective_limits["project_specifics_bytes"],
+        "actual": specifics,
+        "passed": True,
+        "warn": specifics > effective_limits["project_specifics_bytes"],
+        "hint": "move details of 'Project specifics' into docs/topic--*.md and link them",
     }
 
     actual_issues = issues_info["bytes"] if issues_info else 0
@@ -230,8 +287,10 @@ def format_budget_text(report: Dict[str, Any]) -> str:
         "=== Budget Compliance ===",
     ])
     for check_name, c in checks.items():
-        status = "[PASS]" if c["passed"] else "[FAIL]"
+        status = "[FAIL]" if not c["passed"] else ("[WARN]" if c.get("warn") else "[PASS]")
         lines.append(f"   {status} {check_name:<25} actual: {c['actual']:>7,} B  (limit: {c['limit']:>7,} B)")
+        if status != "[PASS]" and c.get("hint"):
+            lines.append(f"          -> {c['hint']}")
 
     overall = "ALL BUDGET CHECKS PASSED" if report["all_passed"] else "BUDGET OVERRUN DETECTED"
     lines.append(f"\nResult: {overall}")

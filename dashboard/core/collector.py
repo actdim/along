@@ -39,6 +39,13 @@ from ..schemas.metrics import (
 parse_frontmatter = _frontmatter.parse
 
 
+def _verify_policy(repo_root: str) -> str:
+    """The declared test policy line, e.g. 'tests: none - reason (debt--x)'.
+    [bug--test-gate-no-tests-policy]"""
+    from alongkit import verify
+    return verify.load_policy(repo_root).describe()
+
+
 def find_agents_dir(start_dir: str = ".") -> Path:
     """Find nearest .along (or fallback .agents) directory starting from start_dir and walking upwards."""
     current = Path(start_dir).resolve()
@@ -493,6 +500,7 @@ class EntityCollector:
             by_priority=by_priority,
             scan_timestamp=datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
             protocol_version=CURRENT_PROTOCOL_VERSION,
+            verify_policy=_verify_policy(str(self.repo_root)),
         )
 
     def to_full_data(self) -> FullDashboardDataSchema:

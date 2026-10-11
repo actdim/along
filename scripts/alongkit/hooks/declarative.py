@@ -268,7 +268,17 @@ def parse_gate_dict(raw: Dict[str, Any]) -> DeclarativeGateDefinition:
 def merge_override(base: DeclarativeGateDefinition, override: DeclarativeGateDefinition,
                    raw: Dict[str, Any]) -> DeclarativeGateDefinition:
     """Repo entry for a built-in gate: keys it sets win, the rest is inherited, so
-    `{id: workspace_containment, allowed_roots: [...]}` only adds options."""
+    `{id: workspace_containment, allowed_roots: [...]}` only adds options.
+
+    An invariant gate cannot be disabled by a repo entry; its options still merge.
+    [feat--gate-friction-and-bypass-accountability] REQ-4"""
+    from .config import TIER_INVARIANT, gate_tier
+
+    enabled = override.enabled
+    if not enabled and gate_tier(base.id) == TIER_INVARIANT:
+        sys.stderr.write(f"[Along] Ignoring 'enabled: false' for invariant gate '{base.id}' "
+                         "in .along/rules/gates.yaml.\n")
+        enabled = True
     return replace(
         base,
         title=override.title if "title" in raw else base.title,
@@ -279,7 +289,7 @@ def merge_override(base: DeclarativeGateDefinition, override: DeclarativeGateDef
         rules=override.rules if ("rule" in raw or "rules" in raw) else base.rules,
         enforcement=override.enforcement if "enforcement" in raw else base.enforcement,
         options={**base.options, **override.options},
-        enabled=override.enabled,
+        enabled=enabled,
     )
 
 

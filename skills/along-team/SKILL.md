@@ -59,7 +59,7 @@ All roles map to abstract orchestration primitives rather than provider-specific
 
 ## Single-Agent Degradation Path (Ralph-Style Execution)
 
-When subagent spawning is unavailable (OpenAI Codex, OpenCode) or disabled/throttled (Google Antigravity, Claude Code), the state machine executes in **Single-Agent Sequential Mode** (Ralph Loop pattern). The blackboard stays `role-based` and the step gates still apply. Dropping the loop entirely (no steps, no reviews) is allowed only with a recorded reason: `along scratch fallback <slug> --reason "..."` (written to `execution_trace.md`):
+When subagent spawning is unavailable (OpenAI Codex, OpenCode) or disabled/throttled (Google Antigravity, Claude Code), the state machine executes in **Single-Agent Sequential Mode** (Ralph Loop pattern). The blackboard stays `role-based` and the step gates still apply. Dropping the loop entirely (no steps, no reviews) is allowed only with a recorded reason: `along scratch fallback <slug> --reason "..."` (written to `execution_trace.md`). It is a recorded bypass: where user messages are recorded (Claude Code), a team-step gate must have failed in this session and the user must have replied after that failure, so show the failure and wait for the user's decision first:
 
 1. **Deterministic Phase Boundaries**: The single agent explicitly announces each phase in output:
    - `=== PHASE 0: SUPERVISOR (REQUIREMENT EXTRACTION) ===`
@@ -207,7 +207,7 @@ TASK / GOAL
 4. **Dual-Track UI & Artifact Projection**:
    - **Track 1 (Host IDE UI Projection)**: When running under Google Antigravity, project the Living Plan to `<appDataDir>/brain/<id>/implementation_plan.md` with `ArtifactMetadata` (`RequestFeedback: true`, `UserFacing: true`). This triggers Antigravity's native interactive design doc card with user checkboxes and the "Proceed" button.
    - **Track 2 (Permanent Along Memory)**: In all environments (Antigravity, Claude Code, OpenAI Codex, OpenCode), write the plan to disk at `.along/.session/<slug>/plan.md` (and `living_plan.md`) and present in chat for confirmation.
-5. **Plan Approval Gate** [gate: require-plan-approval]: source edits stay blocked until the user approves the plan. In Claude Code present it through plan mode (`ExitPlanMode`); the user's acceptance is recorded for this session automatically, plan text included. Elsewhere, run `along plan approve <slug>` only after the user's explicit yes in chat; it is refused while `plan.md` is still the scaffold, so write the plan into `plan.md` first (or pass `--plan-file <path>`). Never approve on your own judgment.
+5. **Plan Approval Gate** [gate: require-plan-approval]: source edits stay blocked until the user approves the plan. In Claude Code present it through plan mode (`ExitPlanMode`); the user's acceptance is recorded for this session automatically, plan text included. If plan mode is unavailable, show the plan in chat and wait for the user's reply; run `along plan approve <slug>` only after that reply. It is refused while `plan.md` is still the scaffold, so write the plan into `plan.md` first (or pass `--plan-file <path>`), and refused when the plan file changed after the user's last message (show the revised plan and wait again). Never approve on your own judgment.
 
 ### Phase 3 to 5: Step Loop (Step N)
 For each step in the Living Plan:

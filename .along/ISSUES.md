@@ -1,10 +1,9 @@
 # Active Issues
 
 ## Active
-<!-- No active issues -->
+- [ ] `(bug)` [history-append-blocked-after-wrap](ISSUES/bug--history-append-blocked-after-wrap.md)
 
 ## Backlog
-- [ ] `(bug)` [history-append-blocked-after-wrap](ISSUES/bug--history-append-blocked-after-wrap.md)
 - [ ] `(bug)` [release-tags-not-pushed](ISSUES/bug--release-tags-not-pushed.md)
 - [ ] `(bug)` [uncommitted-issue-deleted-without-trace](ISSUES/bug--uncommitted-issue-deleted-without-trace.md)
 - [ ] `(bug)` [worktree-cross-os-mount-guard](ISSUES/bug--worktree-cross-os-mount-guard.md)
@@ -59,16 +58,15 @@
 - [ ] `(feat)` [secret-scrubbing-in-hooks-and-diagnostics](ISSUES/feat--secret-scrubbing-in-hooks-and-diagnostics.md)
 - [ ] `(feat)` [structured-blackboard-state-machine](ISSUES/feat--structured-blackboard-state-machine.md)
 - [ ] `(feat)` [system-invariants-and-health-probes](ISSUES/feat--system-invariants-and-health-probes.md)
-- [ ] `(feat)` [test-gated-code-merge-pipeline](ISSUES/feat--test-gated-code-merge-pipeline.md)
 - [ ] `(feat)` [tool-class-model](ISSUES/feat--tool-class-model.md)
 - [ ] `(feat)` [tool-nature-classification](ISSUES/feat--tool-nature-classification.md)
 - [ ] `(feat)` [vps-runner-daemon](ISSUES/feat--vps-runner-daemon.md)
 - [ ] `(feat)` [zero-step-state-recovery-and-drift-detection](ISSUES/feat--zero-step-state-recovery-and-drift-detection.md)
 
 ## Done (recent)
-- [x] `(debt)` [constraints-superseded-adr-filtering](ISSUES/done/debt--constraints-superseded-adr-filtering.md)
-- [x] `(bug)` [archive-drops-research-md](ISSUES/done/bug--archive-drops-research-md.md)
-- [x] `(feat)` [docs-semantic-conflict-resolution](ISSUES/done/feat--docs-semantic-conflict-resolution.md)
-- [x] `(bug)` [wrapped-work-left-uncommitted](ISSUES/done/bug--wrapped-work-left-uncommitted.md)
-- [x] `(bug)` [plan-gate-blocks-help](ISSUES/done/bug--plan-gate-blocks-help.md)
-<!-- 208 older completed issue(s) archived in .along/ISSUES/done/ -->
+- [x] `(task)` [field-report-fixes](ISSUES/done/task--field-report-fixes.md)
+- [x] `(feat)` [test-gated-code-merge-pipeline](ISSUES/done/feat--test-gated-code-merge-pipeline.md)
+- [x] `(feat)` [gate-friction-and-bypass-accountability](ISSUES/done/feat--gate-friction-and-bypass-accountability.md)
+- [x] `(debt)` [agents-md-budget-project-specifics](ISSUES/done/debt--agents-md-budget-project-specifics.md)
+- [x] `(bug)` [wrap-not-transactional](ISSUES/done/bug--wrap-not-transactional.md)
+<!-- 219 older completed issue(s) archived in .along/ISSUES/done/ -->

@@ -314,6 +314,11 @@ To prevent link breakage and dependency graph drift, Along enforces **Canonical 
 2. **Unidirectional Graph Storage**:
    - In YAML front-matter, relationships are stored unidirectionally (`blocked_by: []`, `related: []`, `parent: <slug>`).
    - Reciprocal relationships (`blocks`, `children`) and full DAG topologies are computed dynamically by graph parsers and the Along dashboard engine, eliminating LLM synchronization drift.
+3. **Cross-Context Resolution**:
+   - Reference fields (`parent`, `blocked_by`, `related`, `superseded_by`, `duplicate_of`) resolve along the chain of enclosing `.along/` contexts up to the outermost one below home, crossing nested `.git` / submodule boundaries (`repo.context_chain`, `entities.ancestor_contexts`); each context is searched in `ISSUES/` and `ISSUES/done/`. A child issue in a submodule can therefore name the workspace umbrella above it.
+   - A `parent` equal to the issue's own key (a child sharing the umbrella's key) resolves only in enclosing contexts; otherwise it is the error `invalid self-parent reference`.
+   - The qualifier `root:<key>` (e.g. `parent: root:feat--identity-platform`) resolves only in the outermost context.
+   - `along issue sync` prints `<key>: parent <parent> (found in <ctx>)` for each cross-context parent; commit-time snapshot checks add the working-tree keys of contexts above the git top; the dashboard graph shows an external parent as a node with status `external`.
 
 ---
 

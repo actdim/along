@@ -232,7 +232,7 @@ class TestAlongCommitStaging(unittest.TestCase):
             orig_cwd = os.getcwd()
             try:
                 os.chdir(root)
-                along_commit.main(["test commit a", "-n"])
+                along_commit.main(["test commit a", "-n", "--reason", "fixture"])
             finally:
                 os.chdir(orig_cwd)
 
@@ -251,7 +251,7 @@ class TestAlongCommitStaging(unittest.TestCase):
             orig_cwd = os.getcwd()
             try:
                 os.chdir(root)
-                along_commit.main(["test commit all", "-a", "-n"])
+                along_commit.main(["test commit all", "-a", "-n", "--reason", "fixture"])
             finally:
                 os.chdir(orig_cwd)
 
@@ -270,7 +270,7 @@ class TestAlongCommitStaging(unittest.TestCase):
             orig_cwd = os.getcwd()
             try:
                 os.chdir(root)
-                along_commit.main(["test commit e", "--paths", "file_e.txt", "-n"])
+                along_commit.main(["test commit e", "--paths", "file_e.txt", "-n", "--reason", "fixture"])
             finally:
                 os.chdir(orig_cwd)
 
@@ -288,7 +288,7 @@ class TestAlongCommitStaging(unittest.TestCase):
             try:
                 os.chdir(root)
                 with self.assertRaises(SystemExit) as ctx:
-                    along_commit.main(["test commit nothing staged", "-n"])
+                    along_commit.main(["test commit nothing staged", "-n", "--reason", "fixture"])
                 self.assertEqual(ctx.exception.code, 1)
             finally:
                 os.chdir(orig_cwd)
@@ -311,7 +311,7 @@ class TestAlongCommitStaging(unittest.TestCase):
             try:
                 os.chdir(root)
                 with mock.patch.dict(os.environ, {"ALONG_SESSION_ID": "sess-t"}):
-                    along_commit.main(["fix: t", "-i", "bug--work", "--paths", "file_t.txt", "-n"])
+                    along_commit.main(["fix: t", "-i", "bug--work", "--paths", "file_t.txt", "-n", "--reason", "fixture"])
             finally:
                 os.chdir(orig_cwd)
             self.assertEqual(session.completion_tokens(root, key), [])
@@ -328,7 +328,7 @@ class TestAlongCommitStaging(unittest.TestCase):
             try:
                 os.chdir(root)
                 with self.assertRaises(SystemExit) as ctx:
-                    along_commit.main(["test commit with push", "-p", "-n"])
+                    along_commit.main(["test commit with push", "-p", "-n", "--reason", "fixture"])
                 self.assertNotEqual(ctx.exception.code, 0)
             finally:
                 os.chdir(orig_cwd)

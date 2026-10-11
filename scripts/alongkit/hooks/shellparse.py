@@ -124,8 +124,10 @@ _ALONG_READ = (
     "worktree list", "worktree status", "hook verify",
     "session list", "plan status", "scratch list", "issue list", "milestone list",
     "decision list", "rules status", "rules diff", "circuit status", "telemetry status",
-    "version",
+    "version", "issue show", "milestone show", "kb search", "gates check", "gates stats", "sanitize",
 )
+#: Flags that turn `along sanitize` from a report into a rewrite.
+_SANITIZE_WRITE_FLAGS = frozenset({"--write", "--fix"})
 #: `find` primaries that run commands or write files.
 _FIND_WRITE = frozenset({
     "-exec", "-execdir", "-ok", "-okdir", "-delete", "-fprint", "-fprint0", "-fprintf", "-fls",
@@ -565,6 +567,10 @@ def _is_read_subcommand(joined: str) -> bool:
         return True
     if not any(joined == sub or joined.startswith(sub + " ") for sub in _ALONG_READ):
         return False
+    if words[:1] == ["sanitize"]:
+        # Report mode is the default; only --write / --fix rewrite files.
+        # [feat--gate-friction-and-bypass-accountability] REQ-1
+        return not any(w in _SANITIZE_WRITE_FLAGS for w in words)
     return not (words[:1] == ["doctor"] and "--fix" in words)
 
 
@@ -906,6 +912,30 @@ def is_verification_command(command: str) -> bool:
     if not segments:
         return False
     return all(_segment_is_read_only(seg) or _segment_is_verification(seg) for seg in segments)
+
+
+def _segment_is_state(segment: str) -> bool:
+    """An Along state or maintenance subcommand without a write redirect."""
+    if _has_write_redirect(segment):
+        return False
+    tokens = _tokens(segment)
+    sub = _along_subcommand(tokens) if tokens else None
+    return sub is not None and (_is_state_subcommand(sub) or _is_maintenance_subcommand(sub))
+
+
+def is_plan_gate_exempt(command: str) -> bool:
+    """True when every segment is read-only, an Along state/maintenance command, or a
+    verification run - judged per segment, so `along issue sync && npm run build` passes.
+
+    [feat--gate-friction-and-bypass-accountability] REQ-1
+    """
+    if not command or not command.strip():
+        return True
+    segments = split_segments(command)
+    if not segments:
+        return False
+    return all(_segment_is_read_only(seg) or _segment_is_state(seg) or _segment_is_verification(seg)
+               for seg in segments)
 
 
 def classify(command: str) -> Tuple[bool, List[str]]:

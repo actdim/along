@@ -66,12 +66,14 @@ class TestContextBudgetEngine(unittest.TestCase):
         self.assertTrue(report["all_passed"], "Live repo must satisfy all context budget limits")
 
     def test_agents_md_hard_size_limit(self):
-        """AGENTS.md MUST stay under 14 KB (REQ-4 of debt--agents-md-context-budget-pruning)."""
+        """AGENTS.md without "Project specifics" MUST stay under 14 KB (REQ-4 of
+        debt--agents-md-context-budget-pruning; specifics are budgeted apart since
+        debt--agents-md-budget-project-specifics)."""
         agents_md = os.path.join(REPO_ROOT, "AGENTS.md")
-        size = os.path.getsize(agents_md)
+        size = os.path.getsize(agents_md) - budget.project_specifics_bytes(agents_md)
         self.assertLess(
             size, 14336,
-            f"AGENTS.md is {size} bytes, exceeds 14 KB budget ceiling (14336 B)"
+            f"AGENTS.md (without Project specifics) is {size} bytes, exceeds 14 KB budget ceiling (14336 B)"
         )
 
     def test_protocol_md_hard_size_limit(self):
@@ -82,6 +84,37 @@ class TestContextBudgetEngine(unittest.TestCase):
             size, 14336,
             f"protocol.md is {size} bytes, exceeds 14 KB budget ceiling (14336 B)"
         )
+
+
+class TestProjectSpecificsBudget(unittest.TestCase):
+    """[debt--agents-md-budget-project-specifics]."""
+
+    def test_specifics_count_apart_and_only_warn(self):
+        with hermetic.repo_fixture() as fixture:
+            agents = os.path.join(fixture, "AGENTS.md")
+            with open(agents, "a", encoding="utf-8") as f:
+                f.write("- detail line that belongs in docs/topic--x.md\n" * 400)
+            specifics = budget.project_specifics_bytes(agents)
+            self.assertGreater(specifics, 16000)
+            report = budget.measure_context(fixture)
+            self.assertTrue(report["checks"]["agents_md_bytes"]["passed"])
+            self.assertLess(report["checks"]["agents_md_bytes"]["actual"], 1000)
+            self.assertTrue(report["checks"]["project_specifics_bytes"]["warn"])
+            self.assertTrue(report["all_passed"])
+            text = budget.format_budget_text(report)
+            self.assertIn("[WARN] project_specifics_bytes", text)
+            self.assertIn("docs/topic--*.md", text)
+
+    def test_limits_are_configurable(self):
+        with hermetic.repo_fixture() as fixture:
+            with open(os.path.join(fixture, ".along", "config.json"), "w", encoding="utf-8") as f:
+                json.dump({"budget": {"agents_md_bytes": 10, "project_specifics_bytes": True}}, f)
+            limits = budget.config_limits(fixture)
+            self.assertEqual(limits, {"agents_md_bytes": 10})
+            exec_script = os.path.join(SCRIPTS_DIR, "along_exec.py")
+            res = proc.run_python([exec_script, "context-budget", "--check"], cwd=fixture)
+            self.assertEqual(res.returncode, 1, res.stdout)
+            self.assertIn("managed protocol block is over budget", res.stdout)
 
 
 class TestContextBudgetCLI(unittest.TestCase):

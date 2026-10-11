@@ -101,14 +101,15 @@ class TestBoundaryIgnoresBareManifest(Workspace):
     """REQ-5: a `package.json` folder without `.along/` is not a subproject."""
 
     def test_root_entity_write_from_manifest_folder(self):
+        # The shell cwd no longer decides [bug--subproject-boundary-cwd-context]; an unbound
+        # session may write root entities from anywhere.
         lib = os.path.join(self.root, "lib")
         os.makedirs(lib)
         textio.write_text(os.path.join(lib, "package.json"), "{}\n")
         edit = _write_event(self.root, ".along/ISSUES/feat--root-new.md")
-        with mock.patch("os.getcwd", return_value=lib):
-            self.assertIsNone(check_subproject_boundary(edit, self.root))
-        with mock.patch("os.getcwd", return_value=self.web):
-            self.assertIn("subproject-boundary", check_subproject_boundary(edit, self.root))
+        for cwd in (lib, self.web, self.root):
+            with self.subTest(cwd=cwd), mock.patch("os.getcwd", return_value=cwd):
+                self.assertIsNone(check_subproject_boundary(edit, self.root))
 
 
 class TestSiblingReferences(unittest.TestCase):

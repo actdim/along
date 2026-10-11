@@ -291,6 +291,32 @@ class TestPlanApprovalGateEndToEnd(unittest.TestCase):
             with self.subTest(cmd=cmd):
                 self.assertEqual(self._decide(cmd), GateDecision.ALLOW)
 
+    def test_mixed_read_state_and_verification_segments_are_allowed(self):
+        # [feat--gate-friction-and-bypass-accountability] REQ-1: judged per segment.
+        for cmd in ("along issue sync && along sanitize .along/ISSUES && along plan status",
+                    "along issue sync && npm run build",
+                    "along issue show x; along milestone show m; along kb search foo",
+                    "along gates check pre-commit | head -5"):
+            with self.subTest(cmd=cmd):
+                self.assertEqual(self._decide(cmd), GateDecision.ALLOW)
+
+    def test_rewriting_sanitize_and_mixed_writes_stay_denied(self):
+        for cmd in ("along sanitize --write", "along sanitize --fix docs",
+                    "along issue sync && rm -rf src", "npm run build && echo x > src/a.py"):
+            with self.subTest(cmd=cmd):
+                self.assertEqual(self._decide(cmd), GateDecision.DENY)
+
+
+class TestAlongReadSubcommands(unittest.TestCase):
+    def test_check_mode_sanitize_and_show_commands_are_read_only(self):
+        for cmd in ("along sanitize", "along sanitize --check docs", "along issue show x",
+                    "along milestone show m", "along kb search foo", "along gates check ci"):
+            with self.subTest(cmd=cmd):
+                self.assertTrue(is_read_only_command(cmd))
+        for cmd in ("along sanitize --write", "along sanitize --fix"):
+            with self.subTest(cmd=cmd):
+                self.assertFalse(is_read_only_command(cmd))
+
 
 if __name__ == "__main__":
     unittest.main(verbosity=2)

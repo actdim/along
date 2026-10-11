@@ -35,5 +35,5 @@ along bump 1.5.0
 - `-p`, `--push`: Automatically push release commit and tags to remote repository (`git push`).
 - `-cp`, `-pc`: Combine commit and push in one command (`along bump patch -cp`).
 - `--fix-typography`: Apply the ASCII replacements the release gate found. Without it the gate reports findings by file and line and aborts the release; a release never rewrites the tree on its own. The repair is applied inside the transaction, so a later abort restores it too.
-- `-n`, `--no-verify`: Skip the tests, typography, and link gates. The one documented way past them; the release still rolls back on a later failure.
+- `-n`, `--no-verify`: Skip the tests, typography, and link gates. The one documented way past them; the release still rolls back on a later failure. Requires `--reason "..."`; where user messages are recorded, the gates must have failed in this session and the user must have replied after the failure. The bypass is logged.
 - Command: `/along-version-bump`

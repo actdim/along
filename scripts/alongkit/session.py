@@ -225,14 +225,17 @@ def bind_session(repo_root: str, slug: str, key: Optional[str] = None,
     """Bind the agent session `key` (default: this process's session) to `slug`.
 
     A plan approval recorded before any slug was bound (ExitPlanMode at the start of a
-    session) carries over to the first slug; binding a different slug later drops it.
-    Returns the binding, or None when the session id is unknown.
+    session) carries over to the first slug. An ExitPlanMode approval also carries to a
+    later slug while no user message arrived after it (the user approved that plan, then
+    the agent ran `along start`) [bug--plan-approval-self-and-lost] REQ-4; otherwise binding
+    a different slug drops it. Returns the binding, or None when the session id is unknown.
     """
     key = key or current_session_key()
     if not key:
         return None
     binding = load_binding(repo_root, key) or {"created": _utc_now_iso()}
     pending = binding.get("plan_approved") and not binding.get("approved_slug")
+    carried_plan: Optional[str] = None
     if approved is not None:
         binding["plan_approved"] = bool(approved)
         binding["approved_slug"] = slug if approved else None
@@ -241,8 +244,12 @@ def bind_session(repo_root: str, slug: str, key: Optional[str] = None,
     elif pending:
         binding["approved_slug"] = slug
     elif binding.get("approved_slug") != slug:
-        binding["plan_approved"] = False
-        binding["approved_slug"] = None
+        if _exit_plan_approval_current(repo_root, key, binding):
+            binding["approved_slug"] = slug
+            carried_plan = binding.get("approved_plan")
+        else:
+            binding["plan_approved"] = False
+            binding["approved_slug"] = None
     # A plan accepted before any slug was bound goes with its approval to the first slug.
     pending_plan = binding.pop("pending_plan", None)
     binding["slug"] = slug
@@ -250,11 +257,117 @@ def bind_session(repo_root: str, slug: str, key: Optional[str] = None,
     saved = save_binding(repo_root, key, binding)
     if pending_plan and pending and approved is None:
         record_plan(repo_root, slug, pending_plan, "ExitPlanMode")
+    elif carried_plan and approved is None and load_state(repo_root, slug) is not None \
+            and not plan_recorded(repo_root, slug):
+        record_plan(repo_root, slug, carried_plan, "ExitPlanMode (carried)")
     return saved
 
 
-def record_plan_approval(repo_root: str, key: Optional[str]) -> Optional[Dict[str, Any]]:
-    """The user approved a plan in session `key`: approve its bound slug, or the next one."""
+#: How a plan approval was given: the runtime's own accept dialog (ExitPlanMode), the CLI
+#: after a user message newer than the plan, or the CLI where no user message is on record.
+APPROVED_VIA_EXIT_PLAN_MODE = "exit-plan-mode"
+APPROVED_VIA_CLI = "cli"
+APPROVED_VIA_CLI_UNVERIFIED = "cli-unverified"
+PROMPTS_DIRNAME = "prompts"
+
+
+def _prompt_file(repo_root: str, key: str) -> str:
+    safe = re.sub(r"[^A-Za-z0-9_.-]", "_", key)
+    return os.path.join(repo.state_dir(binding_root(repo_root)), ".session", PROMPTS_DIRNAME, f"{safe}.json")
+
+
+def record_user_prompt(repo_root: str, key: Optional[str], when: Optional[str] = None) -> Optional[str]:
+    """Remember when the user of session `key` last sent a message (UserPromptSubmit).
+
+    Kept apart from the binding, so an unbound session stays unbound.
+    [bug--plan-approval-self-and-lost]
+    """
+    if not key:
+        return None
+    stamp = when or _utc_now_iso()
+    path = _prompt_file(repo_root, key)
+    os.makedirs(os.path.dirname(path), exist_ok=True)
+    textio.write_text(path, json.dumps({"key": key, "last_user_prompt_at": stamp}) + "\n", newline="\n")
+    return stamp
+
+
+def last_user_prompt_at(repo_root: str, key: Optional[str]) -> Optional[str]:
+    """ISO timestamp of the session's last user message, or None when none is on record."""
+    if not key:
+        return None
+    path = _prompt_file(repo_root, key)
+    try:
+        data = json.loads(textio.read_text(path, strict=False)) if os.path.isfile(path) else {}
+    except (OSError, UnicodeDecodeError, json.JSONDecodeError):
+        return None
+    value = data.get("last_user_prompt_at") if isinstance(data, dict) else None
+    return str(value) if value else None
+
+
+def _iso_to_epoch(value: str) -> Optional[float]:
+    try:
+        return datetime.fromisoformat(str(value).replace("Z", "+00:00")).timestamp()
+    except (TypeError, ValueError):
+        return None
+
+
+def check_cli_approval(repo_root: str, key: Optional[str], plan_path: Optional[str]) -> Tuple[Optional[str], str]:
+    """(refusal, approved_via) for a plan approval given through the CLI.
+
+    The agent can run `along plan approve` itself; the approval counts only when the user
+    sent a message after the plan last changed. A refusal is a message; None means allowed.
+    Without a recorded user message (runtime without a UserPromptSubmit hook) the approval
+    is allowed and marked unverified. [bug--plan-approval-self-and-lost] REQ-2
+    """
+    last = last_user_prompt_at(repo_root, key)
+    if not last:
+        return None, APPROVED_VIA_CLI_UNVERIFIED
+    last_epoch = _iso_to_epoch(last)
+    if not plan_path or not os.path.isfile(plan_path):
+        return ("no plan to approve: write the plan, show it to the user and wait for a reply", APPROVED_VIA_CLI)
+    if last_epoch is not None and os.path.getmtime(plan_path) > last_epoch:
+        return ("plan changed after the user's last message; show it and wait for a reply "
+                "before 'along plan approve'", APPROVED_VIA_CLI)
+    return None, APPROVED_VIA_CLI
+
+
+def plan_sha256(text: Optional[str]) -> Optional[str]:
+    import hashlib
+    if not text or not text.strip():
+        return None
+    return hashlib.sha256(text.strip().encode("utf-8")).hexdigest()
+
+
+def _exit_plan_approval_current(repo_root: str, key: str, binding: Dict[str, Any]) -> bool:
+    """An ExitPlanMode approval with no user message after it: it carries to a new slug."""
+    if not binding.get("plan_approved") or binding.get("approved_via") != APPROVED_VIA_EXIT_PLAN_MODE:
+        return False
+    approved = _iso_to_epoch(binding.get("approved_at") or "")
+    last = last_user_prompt_at(repo_root, key)
+    last_epoch = _iso_to_epoch(last) if last else None
+    return approved is not None and (last_epoch is None or last_epoch <= approved)
+
+
+def mark_approval(repo_root: str, key: Optional[str], via: str, plan_text: Optional[str] = None) -> None:
+    """Record how the binding's current approval was given (`approved_via`, plan hash)."""
+    if not key:
+        return
+    binding = load_binding(repo_root, key)
+    if not binding:
+        return
+    binding["approved_via"] = via
+    sha = plan_sha256(plan_text)
+    if sha:
+        binding["plan_sha256"] = sha
+    save_binding(repo_root, key, binding)
+
+
+def record_plan_approval(repo_root: str, key: Optional[str], via: str = APPROVED_VIA_EXIT_PLAN_MODE,
+                         plan_text: Optional[str] = None) -> Optional[Dict[str, Any]]:
+    """The user approved a plan in session `key`: approve its bound slug, or the next one.
+
+    Records how (`approved_via`), when, and the plan hash. [bug--plan-approval-self-and-lost]
+    """
     if not key:
         return None
     binding = load_binding(repo_root, key) or {"created": _utc_now_iso()}
@@ -262,6 +375,12 @@ def record_plan_approval(repo_root: str, key: Optional[str]) -> Optional[Dict[st
     binding["plan_approved"] = True
     binding["approved_slug"] = slug
     binding["approved_at"] = _utc_now_iso()
+    binding["approved_via"] = via
+    sha = plan_sha256(plan_text)
+    if sha:
+        binding["plan_sha256"] = sha
+        if via == APPROVED_VIA_EXIT_PLAN_MODE:
+            binding["approved_plan"] = plan_text.strip() if plan_text else None
     saved = save_binding(repo_root, key, binding)
     ctx = binding_context(repo_root, binding) if slug else None
     if slug and ctx and load_state(ctx, slug):
@@ -287,10 +406,12 @@ def record_accepted_plan(repo_root: str, key: Optional[str], plan_text: Optional
             binding.setdefault("created", _utc_now_iso())
             binding["pending_plan"] = plan_text.strip()
             save_binding(repo_root, key, binding)
-    saved = record_plan_approval(repo_root, key)
+    saved = record_plan_approval(repo_root, key, APPROVED_VIA_EXIT_PLAN_MODE, plan_text)
     ctx = binding_context(repo_root, binding) or repo_root
     if slug and load_state(ctx, str(slug)):
-        append_trace(ctx, str(slug), "plan approved (ExitPlanMode)")
+        sha = plan_sha256(plan_text)
+        append_trace(ctx, str(slug), "plan approved (ExitPlanMode) approved_via: exit-plan-mode"
+                     + (f", plan_sha256: {sha[:12]}" if sha else ""))
         append_event(ctx, str(slug), key, "approve")
     return saved
 

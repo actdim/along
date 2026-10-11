@@ -32,4 +32,6 @@ along commit "fix null reference in auth handler" --push
 - `--strict`: Abort if the active issue cannot be determined unambiguously instead of committing without refs.
 - `-p`, `--push`: Automatically execute `git push` after successful commit.
 - `--fix-typography`: Apply the ASCII replacements the gate found, then continue. Without it the gate only reports and the commit is aborted.
-- `-n`, `--no-verify`: Skip pre-commit quality gates (syntax, link integrity, tests, typography).
+- `-n`, `--no-verify`: Skip pre-commit quality gates (syntax, link integrity, tests, typography). Requires `--reason "..."`. Where user messages are recorded, the gate must have failed in this session and the user must have replied after the failure; the bypass is logged and the commit carries an `Along-Bypass: <gate>; <verified|unverified>; <reason>` trailer.
+- `--reason "<text>"`: Why the user accepts skipping the gates (with `-n`).
+- Docs-only changes (`*.md`, `docs/**`, `.along/**` except `.along/scripts/`, `llms*.txt`, a version-only `package.json` change) skip the test gate.

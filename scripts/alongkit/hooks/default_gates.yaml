@@ -66,6 +66,7 @@ gates:
       error: "CLI Safety Gate Violation [gate: cli-safety]."
 
   - id: projection_protection
+    tier: invariant
     enforcement: [runtime, git, ci]
     title: "Projection View Protection"
     description: "Blocks direct edits to compiled projections (.along/ISSUES.md, docs/INDEX.md)"
@@ -77,6 +78,7 @@ gates:
       error: "Manual edit to compiled projection rejected by [gate: projection-protection]."
 
   - id: rule_pack_protection
+    tier: invariant
     # runtime: file tools and shell commands that write .along/rules/**/*.md (`along rules ...`
     # excepted). git / ci: alongkit.gitgates.check_rule_packs - a staged or tracked rule pack
     # carries the managed header and its body matches the header hash.
@@ -176,6 +178,7 @@ gates:
       error: "Turn completion rejected by [gate: wrap-before-stop]: An issue was completed or moved to 'done/', but no session log exists in '.along/SESSIONS/' for today. Run '/along-wrap' before ending."
 
   - id: wrapped_work_uncommitted
+    tier: advisory
     title: "Wrapped Work Uncommitted Warning"
     description: "Warns if a session wrapped an issue but attributed files remain uncommitted"
     event: Stop
@@ -185,13 +188,14 @@ gates:
       error: "Wrapped work left uncommitted [gate: wrapped-work-uncommitted]."
 
   - id: projection_sync_before_stop
+    tier: advisory
     title: "Projection Synchronization Before Turn Termination"
-    description: "Blocks turn completion if atomic issues or docs changed without projection recompilation"
+    description: "Recompiles a stale ISSUES.md (content differs from the compiled board) itself at turn end; never blocks"
     event: Stop
     rule:
       type: predicate
       handler: alongkit.hooks.predicates.check_projection_sync_before_stop
-      error: "Turn completion rejected by [gate: projection-sync-before-stop]: Atomic issues or docs were modified without recompiling projections. Run 'along issue sync' or 'along kb sync'."
+      error: "[gate: projection-sync-before-stop] could not refresh projections. Run 'along issue sync'."
 
   - id: entity_reference_integrity
     # runtime: Stop once entity files changed; also run by `along wrap` and
@@ -217,6 +221,7 @@ gates:
       error: "Subproject boundary violation detected by [gate: subproject-boundary]: Entities must be localized in the nearest subproject .along/ directory, not root."
 
   - id: workspace_containment
+    tier: invariant
     title: "Workspace Containment"
     description: "Keeps file, search and shell-cwd paths inside the workspace; writes outside are denied, reads outside undeclared roots ask (interactive) or are denied (autonomous)"
     event: PreToolUse
@@ -302,6 +307,7 @@ gates:
       error: "Session log rejected by [gate: session-record-append-only]."
 
   - id: no_tracked_secrets
+    tier: invariant
     enforcement: [git, ci]
     title: "No Secrets In Tracked Files"
     description: "Tracked content carries no private keys or well-known API token shapes"
@@ -321,6 +327,7 @@ gates:
       error: "Worktree environment readiness violation detected by [gate: worktree-env-readiness]."
 
   - id: circuit_breaker
+    tier: invariant
     title: "Systemic Anomaly Circuit Breaker"
     description: "Blocks modifying tools and shell commands when the circuit breaker is tripped"
     event: PreToolUse

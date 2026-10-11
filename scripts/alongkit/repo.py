@@ -186,6 +186,28 @@ def find_context(start_dir: Optional[str] = None) -> Optional[Tuple[str, str]]:
             return None
         cur = parent
 
+
+def context_chain(start_dir: Optional[str] = None) -> List[Tuple[str, str]]:
+    """Every Along context from the nearest at or above `start_dir` up to the outermost.
+
+    A list of (owner directory, state directory), nearest first. Unlike `binding_root` the
+    walk does not stop at a `.git` boundary: a submodule or nested repository is its own
+    subproject, yet its issues name the workspace umbrella above it ("Multi-Subproject
+    Work"). Like `find_context` it stops below the home directory.
+    [bug--cross-context-parent-dangling]
+    """
+    chain: List[Tuple[str, str]] = []
+    cur = os.path.abspath(start_dir or os.getcwd())
+    while True:
+        found = find_context(cur)
+        if not found:
+            return chain
+        chain.append(found)
+        parent = os.path.dirname(found[0])
+        if parent == found[0]:
+            return chain
+        cur = parent
+
 # Where a globally installed copy of the engines may live. Kept in one place so
 # `resolve_tool_script` and the installers agree.
 GLOBAL_TOOL_DIRS: tuple = (

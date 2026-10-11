@@ -239,10 +239,14 @@ class TestCatalogueAndOverrides(_ContainmentFixture):
         self.assertEqual(res.decision, GateDecision.ASK)
         self.assertEqual(res.gate_name, "workspace_containment")
 
-    def test_repo_override_can_disable(self):
+    def test_repo_override_cannot_disable_an_invariant_gate(self):
+        # workspace_containment is an invariant gate: a repo entry cannot disable it
+        # [feat--gate-friction-and-bypass-accountability] REQ-4; a process gate still can.
         _wc_write(os.path.join(self.ws, ".along", "rules", "gates.yaml"),
-                  "gates:\n  - id: workspace_containment\n    enabled: false\n")
-        self.assertNotIn("workspace_containment", self._gates())
+                  "gates:\n  - id: workspace_containment\n    enabled: false\n"
+                  "  - id: fast_retrieval\n    enabled: false\n")
+        self.assertIn("workspace_containment", self._gates())
+        self.assertNotIn("fast_retrieval", self._gates())
         self.assertIn("typography", self._gates())
 
 

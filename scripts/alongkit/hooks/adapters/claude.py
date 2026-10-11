@@ -22,6 +22,7 @@ EVENT_TYPE_MAP: Dict[str, HookEventType] = {
     "post_tool_use": HookEventType.POST_TOOL_USE,
     "Stop": HookEventType.STOP,
     "stop": HookEventType.STOP,
+    "UserPromptSubmit": HookEventType.USER_PROMPT_SUBMIT,
 }
 
 TOOL_NAME_MAP: Dict[str, str] = {

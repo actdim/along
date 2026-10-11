@@ -333,7 +333,7 @@ def main() -> int:
     parser.add_argument(
         "--event",
         default="PreToolUse",
-        choices=["PreToolUse", "PostToolUse", "PreInvocation", "PostInvocation", "Stop"],
+        choices=["PreToolUse", "PostToolUse", "PreInvocation", "PostInvocation", "Stop", "UserPromptSubmit"],
         help="Lifecycle event trigger name",
     )
     parser.add_argument(
