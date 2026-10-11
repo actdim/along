@@ -2,6 +2,11 @@
 
 All notable changes to this project, newest first.
 
+## v4.4.10 - 2026-10-11
+
+- fix(gates): cross-context entity refs, test policy, transactional wrap, path-based subproject boundary, plan approval check, quote-aware CLI safety, scoped stop hook, AGENTS.md budget split; gate tiers, recorded bypasses and gate stats (refs #field-report-fixes)
+- feat(merge): test-gated code conflict resolution and pre-merge predictor (refs #test-gated-code-merge-pipeline)
+
 ## v4.4.9 - 2026-10-10
 
 - chore(decisions): update ADR projections and dashboard docs (refs #constraints-superseded-adr-filtering)
