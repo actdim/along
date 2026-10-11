@@ -3,10 +3,10 @@ protocol: along
 protocol_version: "4.4.6"
 slug: history-append-blocked-after-wrap
 type: bug
-status: open
+status: in-progress
 priority: medium
 created: 2026-10-07
-updated: 2026-10-07
+updated: 2026-10-11
 agent: claude
 tags: [wrap, history, gates]
 milestone: v4.5.0-multi-user-merge-automation

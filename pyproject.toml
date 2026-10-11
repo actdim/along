@@ -67,6 +67,7 @@ packages = ["scripts/alongkit"]
 # rather than as a directory, which would nest a second copy of `alongkit` itself;
 # `test_engine_manifest_matches_scripts_dir` asserts this list stays complete.
 "scripts/along_commit.py" = "alongkit/engines/along_commit.py"
+"scripts/along_conflict_check.py" = "alongkit/engines/along_conflict_check.py"
 "scripts/along_dash.py" = "alongkit/engines/along_dash.py"
 "scripts/along_dep_scan.py" = "alongkit/engines/along_dep_scan.py"
 "scripts/along_exec.py" = "alongkit/engines/along_exec.py"

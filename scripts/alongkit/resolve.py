@@ -51,16 +51,17 @@ _BULLET_RE = re.compile(r"^(\s*[-*+]\s+)(.*)$")
 _NUMBERED_RE = re.compile(r"^(\s*\d+\.\s+)(.*)$")
 
 
-def parse_conflict_hunks(text: str) -> Tuple[List[Union[str, ConflictHunk]], bool]:
+def parse_conflict_hunks(text: str, is_markdown: bool = True) -> Tuple[List[Union[str, ConflictHunk]], bool]:
     """Parse text into literal string chunks and ConflictHunk objects.
 
-    Uses FenceTracker so that conflict marker syntax inside markdown code blocks
-    is treated as verbatim code content rather than active merge markers.
+    When is_markdown is True, uses FenceTracker so that conflict marker syntax
+    inside markdown code blocks is treated as verbatim code content rather than active
+    merge markers. When is_markdown is False, parses conflict markers across all lines.
     Setext heading underlines (=======) outside conflict hunks are also preserved.
     """
     chunks: List[Union[str, ConflictHunk]] = []
     lines = text.splitlines(keepends=True)
-    tracker = markdown.FenceTracker()
+    tracker = markdown.FenceTracker() if is_markdown else None
 
     state = "OUTSIDE"
     start_line = 0
@@ -73,20 +74,21 @@ def parse_conflict_hunks(text: str) -> Tuple[List[Union[str, ConflictHunk]], boo
     current_plain: List[str] = []
 
     for idx, line in enumerate(lines, 1):
-        is_fence_boundary = tracker.process_line(line)
+        if tracker is not None:
+            is_fence_boundary = tracker.process_line(line)
 
-        # Code fence lines and lines inside code fences cannot be conflict markers
-        if is_fence_boundary or tracker.in_fence:
-            if state == "OUTSIDE":
-                current_plain.append(line)
-            elif state == "OURS":
-                ours_lines.append(line)
-            elif state == "BASE":
-                if base_lines is not None:
-                    base_lines.append(line)
-            elif state == "THEIRS":
-                theirs_lines.append(line)
-            continue
+            # Code fence lines and lines inside code fences cannot be conflict markers
+            if is_fence_boundary or tracker.in_fence:
+                if state == "OUTSIDE":
+                    current_plain.append(line)
+                elif state == "OURS":
+                    ours_lines.append(line)
+                elif state == "BASE":
+                    if base_lines is not None:
+                        base_lines.append(line)
+                elif state == "THEIRS":
+                    theirs_lines.append(line)
+                continue
 
         raw = line.rstrip("\r\n")
 

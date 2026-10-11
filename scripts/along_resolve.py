@@ -22,7 +22,7 @@ from alongkit import bootstrap
 # Ensure runtime dependencies
 bootstrap.ensure_deps()
 
-from alongkit import proc, repo, resolve, textio
+from alongkit import proc, repo, resolve, resolve_code, textio
 
 
 def resolve_file(abs_path: str, repo_root: str, dry_run: bool = False,
@@ -59,8 +59,43 @@ def run_resolve(args: argparse.Namespace) -> int:
     if args.files:
         for f in args.files:
             target_files.append(os.path.abspath(f) if os.path.isabs(f) else os.path.join(repo_root, f))
-    elif args.docs or not args.files:
-        # Default or --docs: search unmerged docs
+
+    # Detect whether code mode is requested or inferred from file arguments
+    is_code_mode = args.code
+    if not is_code_mode and not args.docs and target_files:
+        if any(resolve_code.is_source_code_file(f) for f in target_files):
+            is_code_mode = True
+
+    if is_code_mode:
+        if not target_files:
+            unmerged = resolve_code.get_unmerged_code_files(repo_root)
+            for u in unmerged:
+                target_files.append(os.path.join(repo_root, u))
+
+        if not target_files:
+            print("No conflicted source code files detected.")
+            return 0
+
+        print(f"-> Along Resolve: Processing {len(target_files)} source code file(s)...")
+        success, notes = resolve_code.resolve_and_verify_code(
+            repo_root,
+            target_files=target_files,
+            dry_run=args.dry_run,
+            strict=args.strict,
+            run_tests=not args.no_tests,
+        )
+        for n in notes:
+            print(f"   {n}")
+
+        if success:
+            print("-> [OK] Source code conflicts cleanly resolved and verified.")
+            return 0
+        else:
+            print("-> [FAIL] Source code conflict resolution failed quality gates.")
+            return 1
+
+    # Documentation mode (default or --docs)
+    if not target_files:
         unmerged = resolve.get_unmerged_docs(repo_root)
         for u in unmerged:
             target_files.append(os.path.join(repo_root, u))
@@ -103,11 +138,19 @@ def run_resolve(args: argparse.Namespace) -> int:
 
 def main() -> None:
     parser = argparse.ArgumentParser(
-        description="Semantic conflict auto-resolution engine for documentation and markdown."
+        description="Semantic and test-gated conflict auto-resolution engine for docs and source code."
     )
     parser.add_argument(
-        "--docs", action="store_true", default=True,
+        "--docs", action="store_true", default=False,
         help="Resolve unmerged documentation files in docs/ and root markdown."
+    )
+    parser.add_argument(
+        "--code", action="store_true", default=False,
+        help="Resolve unmerged source code files with test-gated verification."
+    )
+    parser.add_argument(
+        "--no-tests", action="store_true", default=False,
+        help="Skip running test runner during code conflict resolution verification."
     )
     parser.add_argument(
         "--check", "--dry-run", dest="dry_run", action="store_true",
@@ -123,10 +166,13 @@ def main() -> None:
     )
     parser.add_argument(
         "files", nargs="*",
-        help="Specific markdown files to resolve (optional)."
+        help="Specific files to resolve (optional)."
     )
 
     args = parser.parse_args()
+    if not args.code and not args.docs and not args.files:
+        args.docs = True
+
     sys.exit(run_resolve(args))
 
 
