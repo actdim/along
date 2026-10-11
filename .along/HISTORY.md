@@ -169,3 +169,4 @@ _Index of sessions (newest last). One line per session:_
 2026-10-10 - constraints-superseded-adr-filtering - antigravity - filter superseded ADRs from CONSTRAINTS.md, add decision conflict detection and sync check - [Session Log](./SESSIONS/2026/2026-10-10--constraints-superseded-adr-filtering.md)
 2026-10-11 - test-gated-code-merge-pipeline - antigravity - feat(merge): test-gated code conflict resolution and pre-merge predictor - [Session Log](./SESSIONS/2026/2026-10-11--test-gated-code-merge-pipeline.md)
 2026-10-11 - field-report-fixes - claude-code - Fixed 8 field-reported gate/entity defects and added gate tiers, recorded human-authorized bypasses and gate stats - [Session Log](./SESSIONS/2026/2026-10-11--field-report-fixes.md)
+2026-10-11 - release-v4-4-10 - claude-code - Released v4.4.10 and updated the global installation - [Session Log](./SESSIONS/2026/2026-10-11--release-v4-4-10.md)

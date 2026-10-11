@@ -29,3 +29,7 @@ _Domain terms for Along and repository tracking. Add or refine terms whenever in
 - **Closeout** - `along session close`: tests once, wraps every ready issue, commits by attribution (one commit per issue, combined commits for shared files, projections last), pushes once; resumable from `.along/.session/.closeout.json`.
 - **Closeout approval** - `closeout: {slugs, approved_at}` in a session binding, recorded by `along plan approve --closeout` after the user's yes; lets that session close out and commit those issues.
 - **Orphan blackboard** - A blackboard no session is bound to whose issue is closed or missing; reported by `along doctor`, archived and removed by `along scratch purge`.
+- **Context chain** - The enclosing `.along/` contexts from the nearest up to the outermost below home (`repo.context_chain`), crossing nested `.git` boundaries; entity references resolve along it (ADR-2026-10-11--gate-friction-fixes).
+- **Gate tier** - `invariant` (always enforced, never shadowed, disabled or bypassed), `process` (enforced by default, bypassable with a recorded reason) or `advisory` (warn only); `hooks.config.GATE_TIERS`.
+- **Bypass** - Skipping a process gate with `-n` / `--force-reason` / `scratch fallback`: needs `--reason` and, where user messages are recorded, the user's reply after the gate failed; written to the trace, `hooks_audit.jsonl` and an `Along-Bypass:` commit trailer.
+- **Verify policy** - `.along/config.json` `verify`: `tests: required` (tests must run) or `tests: none` with `reason`, `tracked_by` and replacement `checks`.

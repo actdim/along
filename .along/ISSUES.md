@@ -64,9 +64,9 @@
 - [ ] `(feat)` [zero-step-state-recovery-and-drift-detection](ISSUES/feat--zero-step-state-recovery-and-drift-detection.md)
 
 ## Done (recent)
+- [x] `(task)` [release-v4-4-10](ISSUES/done/task--release-v4-4-10.md)
 - [x] `(task)` [field-report-fixes](ISSUES/done/task--field-report-fixes.md)
 - [x] `(feat)` [test-gated-code-merge-pipeline](ISSUES/done/feat--test-gated-code-merge-pipeline.md)
 - [x] `(feat)` [gate-friction-and-bypass-accountability](ISSUES/done/feat--gate-friction-and-bypass-accountability.md)
 - [x] `(debt)` [agents-md-budget-project-specifics](ISSUES/done/debt--agents-md-budget-project-specifics.md)
-- [x] `(bug)` [wrap-not-transactional](ISSUES/done/bug--wrap-not-transactional.md)
-<!-- 219 older completed issue(s) archived in .along/ISSUES/done/ -->
+<!-- 220 older completed issue(s) archived in .along/ISSUES/done/ -->
