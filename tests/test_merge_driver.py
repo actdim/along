@@ -233,6 +233,7 @@ class TestEndToEndMerge(unittest.TestCase):
         self.assertEqual(again["config_changed"], [])
         self.assertFalse(again["gitattributes_changed"])
         self.assertTrue(merge.is_configured(merge.status(self.repo)))
+        self.assertEqual(_run_git(self.repo, "config", "--local", "--get", "push.followTags").stdout.strip(), "true")
 
     def test_concurrent_branches_merge_without_conflicts(self):
         from alongkit import entities

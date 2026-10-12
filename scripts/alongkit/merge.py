@@ -445,6 +445,7 @@ def desired_config() -> Dict[str, str]:
         f"merge.{DRIVER_PROJECTION}.driver": driver_command("projection"),
         f"merge.{DRIVER_FRONTMATTER}.name": "Along YAML front-matter 3-way merge driver",
         f"merge.{DRIVER_FRONTMATTER}.driver": driver_command("frontmatter"),
+        "push.followTags": "true",
     }
 
 

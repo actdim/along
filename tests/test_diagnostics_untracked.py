@@ -197,6 +197,20 @@ class TestDoctorReport(GitRepoCase):
         _du_git(self.root, "commit", "-q", "--no-verify", "-m", "init")
         self.assertNotIn("diagnostics file(s) tracked", self.doctor())
 
+    def test_doctor_checks_push_follow_tags(self):
+        report = self.doctor()
+        self.assertIn("push.followTags is not configured", report)
+
+        _du_git(self.root, "config", "--local", "push.followTags", "true")
+        report2 = self.doctor()
+        self.assertIn("Git push.followTags is configured", report2)
+
+    def test_doctor_warns_on_untagged_release_commit(self):
+        _du_git(self.root, "commit", "--allow-empty", "-m", "release: v1.0.0 - initial release")
+        report = self.doctor()
+        self.assertIn("Release commit", report)
+        self.assertIn("has no matching annotated tag 'v1.0.0'", report)
+
 
 if __name__ == "__main__":
     unittest.main()

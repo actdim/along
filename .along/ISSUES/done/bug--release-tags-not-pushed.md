@@ -3,10 +3,11 @@ protocol: along
 protocol_version: "4.4.5"
 slug: release-tags-not-pushed
 type: bug
-status: open
+status: done
+completed: 2026-10-12
 priority: high
 created: 2026-10-05
-updated: 2026-10-05
+updated: 2026-10-12
 agent: claude-code
 tags: [release, version-bump, git]
 blocked_by: []
