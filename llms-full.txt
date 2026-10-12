@@ -1437,6 +1437,22 @@ Attaches engineering guidelines and rule packs to the project.
   along rules restore platforms/web.md
   ```
 
+### `along tool`
+Inspects, classifies, and manages operational tool nature and rules for shell commands and agent tools.
+- **Subcommands**:
+  - `along tool classify <pattern> <class> [--global]`: Records a declarative classification rule for a tool or command pattern. Valid classes: `read-only`, `verification`, `workspace-write`, `external`, `destructive`. Without `--global`, writes to repository rules (`.along/rules/gates.yaml` under `tools:` or `.along/tool_rules.yaml`). With `--global`, writes to the personal user pack (`~/.along/user-pack/tool_rules.yaml`) backed by git with automated commit.
+  - `along tool list [--json]`: Lists all classified tools, defaults, rule counts, and contributing layers across built-in, rule pack, user pack, and repository configurations.
+  - `along tool explain "<command>"`: Normalizes and explains how a command (or compound command) is classified, displaying the winning layer, rule match conditions, and per-segment breakdown.
+- **Usage**:
+  ```bash
+  along tool classify "kubectl get" read-only
+  along tool classify "kubectl" destructive
+  along tool classify "mytool" read-only --global
+  along tool list
+  along tool explain "git status"
+  along tool explain "git status && rm -rf src"
+  ```
+
 ### `along budget` (alias `along context-budget`)
 Audits repository token footprint and context budgets against protocol limits.
 - **Options**:
@@ -3102,6 +3118,34 @@ Several agent sessions may work in one repository at once, so gates never read a
 - **Gate tiers** (`hooks.config.GATE_TIERS`): `invariant` gates (`workspace_containment`, `no_tracked_secrets`, `projection_protection`, `rule_pack_protection`, `circuit_breaker`) always enforce, cannot be shadowed or disabled by repository config and have no bypass. `advisory` gates (`wrapped_work_uncommitted`, `projection_sync_before_stop`) always run in shadow. All other gates are `process` gates that follow the configured mode.
 - **Bypass accountability** (`alongkit.bypass`): `along commit -n --reason`, `along wrap -n --reason` (or `--force-reason`), `along wrap --force-reason` (when a check is actually forced), `along bump -n --reason`, `along scratch fallback --reason` and `along scratch purge --force --reason` need a non-empty reason. Where user messages are recorded (Claude Code `UserPromptSubmit`), the gate must have failed in this session and the user must have replied after the failure; otherwise the bypass is allowed and marked `unverified`. Every bypass goes to the session trace and to `.along/diagnostics/hooks_audit.jsonl` (`decision: bypass`); a commit also carries an `Along-Bypass: <gate>; <verified|unverified>; <reason>` trailer.
 - **Gate stats** (`alongkit.gatestats`): `along gates stats [--since YYYY-MM-DD]` prints per-gate blocked / warned / bypassed counts from `hooks_audit.jsonl`. `along doctor` warns about gates set to shadow by config and about the most-bypassed gates (a gate bypassed about as often as it blocks is wrong or too strict).
+
+### 2.11 Tool Nature Classification & Layered Rules (`alongkit.hooks.toolnature`)
+Agent tool calls and shell command segments are classified into five operational natures plus an unclassified state:
+- `read-only`: Reads repository, filesystem, or tool state without side effects (`cat`, `git status`, `along kb search`, file reads).
+- `verification`: Runs test suites, type checkers, linters, or builds that write throwaway artifacts or build caches without mutating source code (`pytest`, `along test`, `tsc`, `ruff check`).
+- `workspace-write`: Modifies files, branches, or workspace state (`write_to_file`, `git commit`, `along wrap`).
+- `external`: Interacts with external systems, networks, remote APIs, or cloud infrastructure (`curl`, `gh pr create`, `docker push`).
+- `destructive`: Permanently removes or destroys data or history (`git reset --hard`, `rm -rf`, `dropdb`). Always prompts for user confirmation.
+- `unknown`: Unclassified tool or command invocation. The `require_plan_approval` gate holds the execution and prompts the agent to ask the user for classification.
+
+**Resolution Mechanics & Rule Hierarchy**:
+1. **Layered Resolution** (nearest / highest precedence wins):
+   - Repository layer: `.along/rules/gates.yaml` (`tools:` mapping) or `.along/tool_rules.yaml`.
+   - Global user pack: `~/.along/user-pack/tool_rules.yaml` (managed via Git, audited by `along doctor`).
+   - Rule packs: `.along/rules/**/*.yaml`.
+   - Built-in defaults: `alongkit.hooks.toolnature.DEFAULT_TOOL_RULES`.
+2. **Compound Command Analysis**:
+   - Shell command lines are split into pipelines (`|`) and chained segments (`&&`, `||`, `;`).
+   - Each segment is normalized and classified independently.
+   - The overall command takes the most dangerous nature among all segments (danger order: `read-only` < `verification` < `workspace-write` < `external` < `destructive`, with `unknown` causing gate hold).
+   - Shell output write redirections (`>`, `>>`) elevate `read-only` and `verification` commands to `workspace-write` unless targeted at null devices (`/dev/null`, `NUL`) or temporary directories.
+3. **Declarative Rule Engine & Code Classifiers**:
+   - Rules match normalized calls by tool, wildcard/piped subcommand patterns (`subcommand: "diff|status"` or `status*`), required flags (`flags`, `any_flags`), forbidden flags (`no_flags`), flag values (`flag_value`), or argument regex (`arg_regex`).
+   - Dynamic code classifiers handle complex command syntax for `git`, `python`, `sed`, `awk`, `find`, and `along`.
+4. **CLI Management**:
+   - `along tool classify "<tool_or_pattern>" <class> [--global]`: Persists a rule override to the repository or global user pack.
+   - `along tool list`: Displays all active rules and their declaring layer.
+   - `along tool explain "<command>"`: Provides segment-by-segment classification details and danger ranking.
 
 ---
 

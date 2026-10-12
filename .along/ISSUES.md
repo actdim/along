@@ -54,14 +54,13 @@
 - [ ] `(feat)` [structured-blackboard-state-machine](ISSUES/feat--structured-blackboard-state-machine.md)
 - [ ] `(feat)` [system-invariants-and-health-probes](ISSUES/feat--system-invariants-and-health-probes.md)
 - [ ] `(feat)` [tool-class-model](ISSUES/feat--tool-class-model.md)
-- [ ] `(feat)` [tool-nature-classification](ISSUES/feat--tool-nature-classification.md)
 - [ ] `(feat)` [vps-runner-daemon](ISSUES/feat--vps-runner-daemon.md)
 - [ ] `(feat)` [zero-step-state-recovery-and-drift-detection](ISSUES/feat--zero-step-state-recovery-and-drift-detection.md)
 
 ## Done (recent)
+- [x] `(feat)` [tool-nature-classification](ISSUES/done/feat--tool-nature-classification.md)
 - [x] `(feat)` [secret-scrubbing-in-hooks-and-diagnostics](ISSUES/done/feat--secret-scrubbing-in-hooks-and-diagnostics.md)
 - [x] `(feat)` [release-ci-precondition-check](ISSUES/done/feat--release-ci-precondition-check.md)
 - [x] `(bug)` [wrap-docs-only-test-skip](ISSUES/done/bug--wrap-docs-only-test-skip.md)
 - [x] `(bug)` [worktree-cross-os-mount-guard](ISSUES/done/bug--worktree-cross-os-mount-guard.md)
-- [x] `(bug)` [uncommitted-issue-deleted-without-trace](ISSUES/done/bug--uncommitted-issue-deleted-without-trace.md)
-<!-- 228 older completed issue(s) archived in .along/ISSUES/done/ -->
+<!-- 229 older completed issue(s) archived in .along/ISSUES/done/ -->

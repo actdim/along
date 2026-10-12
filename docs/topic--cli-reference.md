@@ -325,6 +325,22 @@ Attaches engineering guidelines and rule packs to the project.
   along rules restore platforms/web.md
   ```
 
+### `along tool`
+Inspects, classifies, and manages operational tool nature and rules for shell commands and agent tools.
+- **Subcommands**:
+  - `along tool classify <pattern> <class> [--global]`: Records a declarative classification rule for a tool or command pattern. Valid classes: `read-only`, `verification`, `workspace-write`, `external`, `destructive`. Without `--global`, writes to repository rules (`.along/rules/gates.yaml` under `tools:` or `.along/tool_rules.yaml`). With `--global`, writes to the personal user pack (`~/.along/user-pack/tool_rules.yaml`) backed by git with automated commit.
+  - `along tool list [--json]`: Lists all classified tools, defaults, rule counts, and contributing layers across built-in, rule pack, user pack, and repository configurations.
+  - `along tool explain "<command>"`: Normalizes and explains how a command (or compound command) is classified, displaying the winning layer, rule match conditions, and per-segment breakdown.
+- **Usage**:
+  ```bash
+  along tool classify "kubectl get" read-only
+  along tool classify "kubectl" destructive
+  along tool classify "mytool" read-only --global
+  along tool list
+  along tool explain "git status"
+  along tool explain "git status && rm -rf src"
+  ```
+
 ### `along budget` (alias `along context-budget`)
 Audits repository token footprint and context budgets against protocol limits.
 - **Options**:

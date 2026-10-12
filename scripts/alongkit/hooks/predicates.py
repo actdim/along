@@ -30,7 +30,7 @@ SAFE_READ_TOOLS: Tuple[str, ...] = (
     "view_file", "read_file", "view_image", "grep_search", "find_by_name",
     "list_dir", "list_directory", "read_url_content", "search_web",
     "manage_task", "schedule", "send_message", "ask_question",
-    "call_mcp_tool", "list_resources", "read_resource",
+    "list_resources", "read_resource",
 )
 
 
@@ -753,8 +753,24 @@ def check_mutation_authorization(event: HookEvent, repo_root: str, options: Opti
     if tool in SAFE_READ_TOOLS:
         return None
 
+    cmd = ""
+    # Check file modification tools
+    if tool in ("write_to_file", "write_file", "replace_file_content", "edit_file", "patch_file", "create_file"):
+        target = _extract_target_file(event)
+        if not target or not repo_root:
+            return None
+
+        # Outside the repository root (brain artifacts, temporary directories): not ours.
+        rel_target = _repo_relative(target, repo_root)
+        if rel_target is None:
+            return None
+
+        # Check whitelisted session/planning/diagnostics paths (in any context)
+        if _matches_in_context(rel_target, repo_root, list(MUTATION_WHITELIST_PATTERNS)):
+            return None
+
     # Check shell commands
-    if tool in ("run_command", "execute_command", "bash", "shell"):
+    elif tool in ("run_command", "execute_command", "bash", "shell"):
         cmd = _extract_command(event).strip()
         if not cmd:
             return None
@@ -770,28 +786,52 @@ def check_mutation_authorization(event: HookEvent, repo_root: str, options: Opti
                     or commit_slug in session.closeout_approved(repo_root, ckey):
                 return None
 
-    # Check file modification tools
-    elif tool in ("write_to_file", "write_file", "replace_file_content", "edit_file", "patch_file", "create_file"):
-        target = _extract_target_file(event)
-        if not target or not repo_root:
-            return None
+    # Classify tool nature
+    from . import toolnature
+    nature_res = toolnature.classify_event(event, repo_root=repo_root)
+    t_class = nature_res.tool_class
 
-        # Outside the repository root (brain artifacts, temporary directories): not ours.
-        rel_target = _repo_relative(target, repo_root)
-        if rel_target is None:
-            return None
-
-        # Check whitelisted session/planning/diagnostics paths (in any context)
-        if _matches_in_context(rel_target, repo_root, list(MUTATION_WHITELIST_PATTERNS)):
-            return None
-    else:
-        # Other / unknown tools: do not block
+    # Read-only and verification: allowed in every phase
+    if t_class in (toolnature.ToolClass.READ_ONLY, toolnature.ToolClass.VERIFICATION):
         return None
 
-    # Non-whitelisted file mutation or shell command. Verify this session's phase and approval.
+    # Sessions not bound to an issue are not held unless enforce_unbound: true
     key = event_session_key(event)
     if not _enforce_unbound(options) and is_unbound(repo_root, key):
         return None
+
+    # Unknown tools: hold with unclassified reason directing the agent to ask user
+    if t_class == toolnature.ToolClass.UNKNOWN:
+        pat = nature_res.unclassified_pattern or (cmd.split()[0] if cmd else tool)
+        reason = (
+            f"Unclassified Tool Nature [gate: require-plan-approval]: Tool or command '{pat}' has unclassified nature. "
+            f"Ask the user for its nature (read-only, verification, workspace-write, external, destructive) "
+            f"and record it via 'along tool classify \"{pat}\" <class>'."
+        )
+        if event.runtime == "antigravity":
+            return GateResult(
+                decision=GateDecision.ASK,
+                reason=reason,
+                gate_name="require_plan_approval",
+            )
+        return reason
+
+    # Destructive tools: always asked
+    if t_class == toolnature.ToolClass.DESTRUCTIVE:
+        desc = nature_res.rule_desc or "destructive operation"
+        reason = (
+            f"Destructive Action [gate: require-plan-approval]: Tool or command '{cmd or tool}' is classified as destructive ({desc}). "
+            "Execution requires explicit confirmation."
+        )
+        if event.runtime == "antigravity":
+            return GateResult(
+                decision=GateDecision.ASK,
+                reason=reason,
+                gate_name="require_plan_approval",
+            )
+        return reason
+
+    # Workspace-write and external: require plan approval (allow if approved or in execution phase)
     slug, how = session.resolve_active_session(repo_root, key)
     approved = session.is_plan_approved(repo_root, slug=slug, key=key)
     phase = session.get_session_phase(repo_root, slug=slug, key=key)

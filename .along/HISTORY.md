@@ -178,3 +178,4 @@ _Index of sessions (newest last). One line per session:_
 2026-10-12 - worktree-cross-os-mount-guard - antigravity - Refuse worktree creation on cross-OS mounted repositories - [Session Log](./SESSIONS/2026/2026-10-12--worktree-cross-os-mount-guard.md)
 2026-10-12 - secret-scrubbing-in-hooks-and-diagnostics - antigravity - Scrub secrets in lifecycle hooks audit logging and diagnostics - [Session Log](./SESSIONS/2026/2026-10-12--secret-scrubbing-in-hooks-and-diagnostics.md)
 2026-10-12 - release-ci-precondition-check - antigravity - Check CI status of released commit before version bump - [Session Log](./SESSIONS/2026/2026-10-12--release-ci-precondition-check.md)
+2026-10-12 - tool-nature-classification - antigravity - Classify tools by nature with versioned layered rules - [Session Log](./SESSIONS/2026/2026-10-12--tool-nature-classification.md)

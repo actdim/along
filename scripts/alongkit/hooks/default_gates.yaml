@@ -353,7 +353,7 @@ gates:
     title: "Inquiry Read-Only Mode & Plan Approval Enforcement"
     description: "Blocks modifying repository files and executing state-mutating commands in inquiry phase without an approved plan"
     event: PreToolUse
-    tools: [write_to_file, write_file, replace_file_content, edit_file, patch_file, create_file, run_command, execute_command, bash, shell]
+    tools: []
     # Read-only and verification commands (build, test, lint, typecheck) always pass. Sessions
     # not bound to an issue are not held unless enforce_unbound: true (.along/rules/gates.yaml).
     enforce_unbound: false

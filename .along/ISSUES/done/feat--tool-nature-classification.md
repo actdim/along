@@ -3,10 +3,11 @@ protocol: along
 protocol_version: "4.4.5"
 slug: tool-nature-classification
 type: feat
-status: open
+status: done
+completed: 2026-10-12
 priority: high
 created: 2026-10-05
-updated: 2026-10-05
+updated: 2026-10-12
 agent: claude-code
 tags: [hooks, gates, config, rule-packs]
 milestone: v4.5.0-multi-user-merge-automation
@@ -165,12 +166,12 @@ tools:
    classifier that declarative rules cannot express.
 
 ## Acceptance Criteria
-- [ ] Phase 1: classes returned for every shell segment; built-in rules in data; repository
+- [x] Phase 1: classes returned for every shell segment; built-in rules in data; repository
       tool rules honoured by `require_plan_approval`; existing classification tests still pass
-- [ ] Phase 2: unknown shell commands and agent tools held with an "ask the nature" reason;
+- [x] Phase 2: unknown shell commands and agent tools held with an "ask the nature" reason;
       `along tool classify|list|explain`
-- [ ] Phase 3: `~/.along/user-pack/` git-backed, auto-commit on classify, doctor warnings
-- [ ] Phase 4: plugin interface, `along tool trust` with hash pinning, fail-closed, examples
+- [x] Phase 3: `~/.along/user-pack/` git-backed, auto-commit on classify, doctor warnings
+- [x] Phase 4: plugin interface, `along tool trust` with hash pinning, fail-closed, examples
       run by doctor
-- [ ] Docs: `docs/topic--runtime-hooks-and-gates.md`, `docs/topic--cli-reference.md`
-- [ ] Automated tests passing (hermetic fixtures for every layer)
+- [x] Docs: `docs/topic--runtime-hooks-and-gates.md`, `docs/topic--cli-reference.md`
+- [x] Automated tests passing (hermetic fixtures for every layer)

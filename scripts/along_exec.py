@@ -162,6 +162,7 @@ Entity Management Commands:
   git sync       Recompile projections after a merge handled by the projection driver
   gates check    Commit-time gates outside agent runtimes [--hook pre-commit|commit-msg] [--ci [--range R] [--no-links]] [--json]
   rules          Rule packs management (attach, status, diff, restore)
+  tool           Tool nature classification and rules (classify, list, explain)
   budget         Measure context footprint and check token budgets (--json, --check)
   context-budget Measure context footprint and check token budgets (--json, --check)
   circuit        Systemic anomaly circuit breaker (status, trip, reset, verify)
@@ -1937,6 +1938,24 @@ def handle_doctor_command(repo_root: str, args: List[str]):
         print(f"[WARN] Could not run MCP health check: {exc}")
         warnings += 1
 
+    # Check global user pack repository (~/.along/user-pack/)
+    user_pack_dir = os.path.expanduser("~/.along/user-pack")
+    if os.path.isdir(user_pack_dir):
+        if os.path.isdir(os.path.join(user_pack_dir, ".git")):
+            remote_check = proc.git(["remote", "get-url", "origin"], cwd=user_pack_dir, check=False)
+            if not remote_check.ok or not remote_check.stdout.strip():
+                print("[WARN] Global user pack (~/.along/user-pack) has no git remote configured.")
+                warnings += 1
+            st_check = proc.git(["status", "--porcelain"], cwd=user_pack_dir, check=False)
+            if st_check.ok and st_check.stdout.strip():
+                print("[WARN] Global user pack (~/.along/user-pack) has uncommitted changes.")
+                warnings += 1
+            else:
+                print("[OK] Global user pack (~/.along/user-pack) repository clean.")
+        else:
+            print("[WARN] Global user pack (~/.along/user-pack) is not a git repository.")
+            warnings += 1
+
     # Check Systemic Anomaly Circuit Breaker
     try:
         cb_state, cb_anomaly = circuit.get_breaker_state(repo_root)
@@ -2528,6 +2547,67 @@ def handle_rules_command(repo_root: str, args: List[str]):
         sys.exit(0)
     else:
         print(f"[Error] Unknown rules subcommand: {subcmd}. Available: attach, status, diff, restore.", file=sys.stderr)
+        sys.exit(1)
+
+
+def handle_tool_command(repo_root: str, args: List[str]):
+    if not args or args[0] in ("-h", "--help", "help"):
+        print("Usage: along tool [classify|list|explain]")
+        print("Subcommands:")
+        print("  classify <pattern> <class> [--global]")
+        print("                  Record tool nature classification in repo or global user pack")
+        print("  list [--json]   List classified tools, defaults, and active rules across layers")
+        print("  explain \"<cmd>\" Explain tool nature classification and matching rules")
+        sys.exit(0)
+
+    subcmd = args[0].lower()
+    from alongkit.hooks import toolnature
+
+    if subcmd == "classify":
+        if len(args) < 3:
+            print("[Error] Missing arguments for 'along tool classify'.", file=sys.stderr)
+            print("Usage: along tool classify <pattern> <class> [--global]", file=sys.stderr)
+            sys.exit(1)
+        pattern = args[1]
+        tool_class = args[2]
+        is_global = "--global" in args
+        try:
+            msg = toolnature.classify_tool(pattern, tool_class, repo_root=repo_root, is_global=is_global)
+            print(f"-> {msg}")
+            sys.exit(0)
+        except ValueError as e:
+            print(f"[Error] {e}", file=sys.stderr)
+            sys.exit(1)
+
+    elif subcmd == "list":
+        is_json = "--json" in args
+        tools = toolnature.list_tools(repo_root=repo_root)
+        if is_json:
+            print(json.dumps(tools, indent=2))
+            sys.exit(0)
+        print("=== Classified Tools & Nature Rules ===")
+        print(f"{'Tool':<20} {'Default':<18} {'Rules':<6} {'Layer'}")
+        print("-" * 55)
+        for t in tools:
+            name = t["tool"]
+            default_cls = t["default"]
+            num_rules = len(t["rules"])
+            layer = t["layer"]
+            print(f"{name:<20} {default_cls:<18} {num_rules:<6} {layer}")
+        sys.exit(0)
+
+    elif subcmd == "explain":
+        if len(args) < 2:
+            print("[Error] Missing command to explain.", file=sys.stderr)
+            print("Usage: along tool explain \"<command>\"", file=sys.stderr)
+            sys.exit(1)
+        cmd_to_explain = args[1]
+        explanation = toolnature.explain_command(cmd_to_explain, repo_root=repo_root)
+        print(explanation)
+        sys.exit(0)
+
+    else:
+        print(f"[Error] Unknown tool subcommand: '{subcmd}'. Available: classify, list, explain.", file=sys.stderr)
         sys.exit(1)
 
 
@@ -3130,6 +3210,8 @@ def main():
         handle_gates_command(repo_root, extra_args)
     elif cmd == "rules":
         handle_rules_command(repo_root, extra_args)
+    elif cmd in ("tool", "tools"):
+        handle_tool_command(repo_root, extra_args)
     elif cmd in ("budget", "context-budget"):
         handle_budget_command(repo_root, extra_args)
     elif cmd == "patch":
