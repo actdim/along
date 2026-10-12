@@ -3,10 +3,11 @@ protocol: along
 protocol_version: "4.1.0"
 slug: state-centric-execution-and-skill-state-comparison
 type: docs
-status: open
+status: done
+completed: 2026-10-12
 priority: medium
 created: 2026-09-27
-updated: 2026-09-29
+updated: 2026-10-12
 agent: antigravity
 tags: [comparisons, architecture, skill-state, execution-state, provenance, memory]
 milestone: v4.5.0-multi-user-merge-automation
