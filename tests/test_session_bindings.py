@@ -371,19 +371,10 @@ class TestCommandNatureAndConfirmation(SessionFixture):
         self.assertTrue(session.is_destructive_confirmed(self.root, key=self.key_a))
         self.assertIsNone(check_mutation_authorization(event, self.root))
 
-        # Tool executes: PostToolUse consumes the authorization
-        post_event = HookEvent(
-            event_type=HookEventType.POST_TOOL_USE,
-            tool_name="run_command",
-            tool_args={"CommandLine": "git reset --hard HEAD~1"},
-            workspace_root=self.root,
-            runtime="claude",
-            conversation_id="sess-a",
-        )
-        record_tool_activity(post_event, self.root)
+        # Confirmation is consumed immediately during PreToolUse authorization
         self.assertFalse(session.is_destructive_confirmed(self.root, key=self.key_a))
 
-        # Subsequent destructive attempt is held again
+        # Subsequent destructive attempt without new confirmation is held immediately
         held_again = check_mutation_authorization(event, self.root)
         self.assertIsNotNone(held_again)
         self.assertIn("confirm-destructive", str(held_again))

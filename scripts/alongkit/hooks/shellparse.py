@@ -329,10 +329,7 @@ def _tokens(segment: str) -> Optional[List[str]]:
 
 
 _DANGEROUS_ENV_VARS = frozenset({
-    "GIT_SSH_COMMAND",
-    "GIT_SSH",
-    "GIT_ASKPASS",
-    "GIT_EXTERNAL_DIFF",
+    "PATH",
     "LD_PRELOAD",
     "LD_LIBRARY_PATH",
     "DYLD_INSERT_LIBRARIES",
@@ -341,6 +338,7 @@ _DANGEROUS_ENV_VARS = frozenset({
     "EDITOR",
     "VISUAL",
     "PYTHONPATH",
+    "PYTHONHOME",
     "PYTHONSTARTUP",
     "BASH_ENV",
     "ENV",
@@ -350,13 +348,15 @@ _DANGEROUS_ENV_VARS = frozenset({
     "NODE_OPTIONS",
     "PROMPT_COMMAND",
     "IFS",
+    "SHELL",
+    "COMSPEC",
 })
 
 
 def is_dangerous_env_var(var_name: str) -> bool:
     """True when environment variable can hijack command execution or security posture."""
     vu = var_name.strip().upper()
-    return vu in _DANGEROUS_ENV_VARS or vu.startswith("GIT_CONFIG")
+    return vu == "PATH" or vu.startswith("GIT_") or vu in _DANGEROUS_ENV_VARS
 
 
 def _strip_wrappers(tokens: List[str]) -> List[str]:

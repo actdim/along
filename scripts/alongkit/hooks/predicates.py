@@ -840,6 +840,7 @@ def check_mutation_authorization(event: HookEvent, repo_root: str, options: Opti
         desc = nature_res.rule_desc or "destructive operation"
         destructive_confirmed = session.is_destructive_confirmed(repo_root, slug=slug, key=key)
         if approved and (phase == "execution" or not slug) and destructive_confirmed:
+            session.consume_destructive_confirmation(repo_root, slug=slug, key=key)
             return None
         reason = (
             f"Destructive Action [gate: require-plan-approval]: Tool or command '{cmd or tool}' is classified as destructive ({desc}). "

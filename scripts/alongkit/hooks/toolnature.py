@@ -24,7 +24,8 @@ import fnmatch
 import os
 import re
 import shlex
-from typing import Any, Callable, Dict, List, Optional, Tuple
+import tempfile
+from typing import Any, Callable, Dict, List, Optional, Set, Tuple
 
 from .. import bootstrap, proc, repo, textio
 from . import shellparse
@@ -448,38 +449,59 @@ def _is_safe_git_c_key(key: str) -> bool:
     return False
 
 
+def _extract_git_global_options(raw_cmd: str) -> List[Tuple[str, Optional[str]]]:
+    """Extract (opt_name, opt_val) for git global options preceding the git subcommand."""
+    raw_toks = shellparse._tokens(raw_cmd) or []
+    toks = shellparse._strip_wrappers(raw_toks)
+    git_idx = -1
+    for idx, t in enumerate(toks):
+        t_base = os.path.basename(t.lower())
+        if t_base.endswith(".exe"):
+            t_base = t_base[:-4]
+        if t_base == "git":
+            git_idx = idx
+            break
+    if git_idx < 0:
+        return []
+
+    global_opts: List[Tuple[str, Optional[str]]] = []
+    opts_with_val = {"-c", "--config-env", "--git-dir", "--work-tree", "--namespace", "--exec-path", "--upload-pack", "--receive-pack"}
+
+    i = git_idx + 1
+    n = len(toks)
+    while i < n:
+        tok = toks[i]
+        if not tok.startswith("-"):
+            # First non-flag token after git is the subcommand! Stop here.
+            break
+        if "=" in tok:
+            opt_name, opt_val = tok.split("=", 1)
+            global_opts.append((opt_name, opt_val))
+        elif tok.startswith("-c") and len(tok) > 2:
+            global_opts.append(("-c", tok[2:]))
+        elif tok.lower() in opts_with_val:
+            opt_val = toks[i + 1] if i + 1 < n and not toks[i + 1].startswith("-") else None
+            global_opts.append((tok, opt_val))
+            if opt_val is not None:
+                i += 1
+        else:
+            global_opts.append((tok, None))
+        i += 1
+
+    return global_opts
+
+
 def _classify_git(call: NormalizedCall) -> Optional[str]:
     """Git code classifier handling complex modal subcommands, global flags and destructive commands."""
-    # Check for dangerous global git execution flags (-c allowlist, --upload-pack, etc.)
-    for flag, val in call.flag_values.items():
-        flag_l = flag.lower()
-        if flag_l == "-c":
-            cfg_k = (val or "").split("=", 1)[0].strip()
+    # Check ONLY git global options preceding the subcommand
+    for opt_name, opt_val in _extract_git_global_options(call.raw_cmd):
+        opt_l = opt_name.lower()
+        if opt_l == "-c":
+            cfg_k = (opt_val or "").split("=", 1)[0].strip()
             if not _is_safe_git_c_key(cfg_k):
                 return ToolClass.DESTRUCTIVE
-        if flag_l in ("--upload-pack", "--receive-pack") or flag_l.startswith("--config-env"):
+        elif opt_l in ("--upload-pack", "--receive-pack") or opt_l.startswith(("--upload-pack", "--receive-pack", "--config-env")):
             return ToolClass.DESTRUCTIVE
-    for f in call.flags:
-        f_l = f.lower()
-        if f_l in ("--upload-pack", "--receive-pack") or f_l.startswith("--config-env"):
-            return ToolClass.DESTRUCTIVE
-
-    raw_toks = shellparse._tokens(call.raw_cmd) or []
-    i = 0
-    while i < len(raw_toks):
-        tok = raw_toks[i]
-        if tok == "-c" and i + 1 < len(raw_toks):
-            cfg_k = raw_toks[i + 1].split("=", 1)[0].strip()
-            if not _is_safe_git_c_key(cfg_k):
-                return ToolClass.DESTRUCTIVE
-            i += 1
-        elif tok.startswith("-c") and len(tok) > 2 and not tok.startswith("--"):
-            cfg_k = tok[2:].split("=", 1)[0].strip()
-            if not _is_safe_git_c_key(cfg_k):
-                return ToolClass.DESTRUCTIVE
-        elif tok.lower().startswith(("--upload-pack=", "--receive-pack=", "--config-env")):
-            return ToolClass.DESTRUCTIVE
-        i += 1
 
     sub = (call.subcommand or "").split()
     subcmd = sub[0] if sub else ""
@@ -593,6 +615,53 @@ def _classify_python(call: NormalizedCall, repo_root: Optional[str] = None) -> O
 _CMD_FLAG_RE = re.compile(r"^/[a-zA-Z](?::\w+)?$")
 
 
+def _expand_system_path(raw_path: str) -> str:
+    """Expand PowerShell $env:NAME, standard %VAR% / $VAR, and user home ~ in paths."""
+    p = raw_path.strip("\"'")
+    p = re.sub(
+        r"\$env:([A-Za-z_][A-Za-z0-9_]*)",
+        lambda m: os.environ.get(m.group(1), os.environ.get(m.group(1).upper(), m.group(0))),
+        p,
+        flags=re.IGNORECASE,
+    )
+    p = os.path.expandvars(p)
+    p = os.path.expanduser(p)
+    return p
+
+
+def _is_temp_dir_path(target_path: str) -> bool:
+    """True when target_path resolves to a file or folder inside a system temporary directory."""
+    if not target_path:
+        return False
+    try:
+        t_norm = os.path.normcase(os.path.abspath(target_path))
+    except (ValueError, OSError):
+        return False
+
+    temp_roots: Set[str] = set()
+    for cand in (
+        tempfile.gettempdir(),
+        os.environ.get("TEMP"),
+        os.environ.get("TMP"),
+        os.environ.get("TMPDIR"),
+        "/tmp",
+        "/var/tmp",
+    ):
+        if cand:
+            try:
+                temp_roots.add(os.path.normcase(os.path.abspath(cand)))
+            except (ValueError, OSError):
+                pass
+
+    for tr in temp_roots:
+        if t_norm == tr:
+            # Targeting the temp root itself (e.g. rm -rf /tmp) is dangerous
+            return False
+        if repo.is_within(t_norm, tr):
+            return True
+    return False
+
+
 def _classify_deletion(call: NormalizedCall, repo_root: Optional[str] = None) -> Optional[str]:
     """Deletion classifier checking normalized target paths against repository root."""
     args: List[str] = []
@@ -624,6 +693,10 @@ def _classify_deletion(call: NormalizedCall, repo_root: Optional[str] = None) ->
     for t in targets:
         t_raw = t.strip("\"'")
         if not t_raw:
+            continue
+
+        exp_t = _expand_system_path(t_raw)
+        if _is_temp_dir_path(exp_t):
             continue
 
         # Wildcards
@@ -775,12 +848,16 @@ def _classify_out_file(call: NormalizedCall, repo_root: Optional[str] = None) ->
         tl = t_raw.replace("\\", "/").lower()
         if tl in ("/dev/null", "nul", "$null"):
             return ToolClass.READ_ONLY
+        exp_t = _expand_system_path(t_raw)
+        if _is_temp_dir_path(exp_t):
+            continue
+
         if t_raw in ("~", "$HOME", "%USERPROFILE%") or t_raw.startswith(("~/", "~\\", "$HOME/", "$HOME\\", "%USERPROFILE%\\")):
-            exp = os.path.normcase(os.path.abspath(os.path.expanduser(os.path.expandvars(t_raw))))
-            if exp == user_home or not repo.is_within(exp, root_norm):
+            exp_home = os.path.normcase(os.path.abspath(exp_t))
+            if exp_home == user_home or not repo.is_within(exp_home, root_norm):
                 return ToolClass.DESTRUCTIVE
         try:
-            abs_t = os.path.normcase(os.path.abspath(os.path.join(root, t_raw)))
+            abs_t = os.path.normcase(os.path.abspath(os.path.join(root, exp_t)))
         except (ValueError, OSError):
             return ToolClass.DESTRUCTIVE
         if abs_t == root_norm or not repo.is_within(abs_t, root_norm):
@@ -860,17 +937,53 @@ def normalize_segment(segment: str) -> NormalizedCall:
     return _parse_tokens_into_call(tool, tokens[1:], raw_cmd=seg, write_redir=write_redir)
 
 
+_GENERIC_VAL_OPTIONS = frozenset({
+    "-x", "--method", "-o", "--output", "-u", "--url",
+    "-i", "--issue", "-t", "--type", "--field-separator", "--file", "--input",
+})
+
+_POWERSHELL_VAL_OPTIONS = frozenset({
+    "-encoding", "-filepath", "-literalpath", "-path", "-destination", "-width", "-inputobject",
+    "-delimiter", "-pattern", "-filter", "-include", "-exclude", "-name", "-value",
+})
+
+_FIND_VAL_OPTIONS = frozenset({
+    "-name", "-iname", "-path", "-ipath", "-regex", "-type", "-perm", "-size", "-mtime", "-atime", "-ctime",
+})
+
+_GH_VAL_OPTIONS = frozenset({
+    "-x", "--method", "-f", "-F", "--field", "--raw-field", "--input", "-r", "--repo", "-q", "--jq", "-t", "--template",
+})
+
+_GIT_VAL_OPTIONS = frozenset({
+    "-m", "--message", "-f", "--file", "--author",
+})
+
+
+def _tool_val_options(tool: str) -> Set[str]:
+    opts = set(_GENERIC_VAL_OPTIONS)
+    tl = tool.lower()
+    if tl in ("gh",):
+        opts |= _GH_VAL_OPTIONS
+    elif tl in ("git",):
+        opts |= _GIT_VAL_OPTIONS
+    elif tl in ("find",):
+        opts |= _FIND_VAL_OPTIONS
+    elif tl in (
+        "out-file", "set-content", "add-content", "get-content", "remove-item",
+        "copy-item", "move-item", "new-item", "select-string", "where-object",
+        "select-object", "measure-object", "get-childitem",
+    ) or "-" in tl:
+        opts |= _POWERSHELL_VAL_OPTIONS
+    return opts
+
+
 def _parse_tokens_into_call(tool: str, rest_tokens: List[str], raw_cmd: str, write_redir: bool) -> NormalizedCall:
     flags: List[str] = []
     flag_values: Dict[str, str] = {}
     positionals: List[str] = []
 
-    val_options = (
-        "-x", "--method", "-m", "-c", "-o", "--output", "-f", "--input", "-u", "--url",
-        "-i", "--issue", "-t", "--type", "--field-separator", "--file", "--with", "-p", "--python",
-        "-encoding", "-filepath", "-literalpath", "-path", "-destination", "-width", "-inputobject",
-        "-delimiter", "-pattern", "-filter", "-include", "-exclude", "-name", "-value",
-    )
+    val_options = _tool_val_options(tool)
 
     i = 0
     n = len(rest_tokens)
@@ -891,7 +1004,11 @@ def _parse_tokens_into_call(tool: str, rest_tokens: List[str], raw_cmd: str, wri
                 flags.append(tok)
                 if i + 1 < n and not rest_tokens[i + 1].startswith("-"):
                     flag_values[tok] = rest_tokens[i + 1]
-                    if tok.lower() in val_options:
+                    takes_value = tok.lower() in val_options
+                    if not takes_value and tool == "git" and len(positionals) == 0:
+                        if tok.lower() in ("-c", "--config-env", "--git-dir", "--work-tree", "--namespace", "--exec-path"):
+                            takes_value = True
+                    if takes_value:
                         i += 1
         else:
             positionals.append(tok)
@@ -1134,24 +1251,79 @@ def _safe_rule_class(layer_name: str, candidate_class: str, builtin_class: str) 
 
 
 def extract_dangerous_env_overrides(segment: str, raw_tokens: Optional[List[str]] = None) -> List[str]:
-    """Identify dangerous execution-hijacking environment variables set or passed in a command segment."""
+    """Identify dangerous execution-hijacking environment variables set or passed in a command segment.
+
+    Dangerous environment variables are checked ONLY in assignment positions before the command:
+    - POSIX leading assignments: VAR=val ... cmd
+    - env command arguments: env [opts] VAR=val ... cmd
+    - export / set commands: export VAR=val, set VAR=val
+    - PowerShell env assignments: $env:VAR = val
+    """
     dangerous: List[str] = []
+    seg_stripped = segment.strip()
+
+    # 1. PowerShell assignment statement: $env:VAR = val or $env:VAR='val'
+    pwsh_m = re.match(r"^\$env:([A-Za-z_][A-Za-z0-9_]*)\s*=", seg_stripped, re.IGNORECASE)
+    if pwsh_m:
+        var_name = pwsh_m.group(1)
+        if shellparse.is_dangerous_env_var(var_name):
+            dangerous.append(f"$env:{var_name}")
+        return dangerous
+
     tokens = raw_tokens if raw_tokens is not None else (shellparse._tokens(segment) or [])
-    for tok in tokens:
-        if "=" in tok:
-            candidate = tok.split("=", 1)[0].strip()
-            if candidate.startswith("-"):
-                candidate = candidate.lstrip("-")
-            if shellparse.is_dangerous_env_var(candidate):
-                dangerous.append(candidate)
-    for m in re.finditer(r"\$env:([A-Za-z_][A-Za-z0-9_]*)\b", segment, re.IGNORECASE):
-        v = m.group(1)
-        if shellparse.is_dangerous_env_var(v):
-            dangerous.append(f"$env:{v}")
-    for m in re.finditer(r"\b(?:export|set)\s+([A-Za-z_][A-Za-z0-9_]*)\s*=", segment, re.IGNORECASE):
-        v = m.group(1)
-        if shellparse.is_dangerous_env_var(v):
-            dangerous.append(v)
+    if not tokens:
+        return dangerous
+
+    # 2. POSIX leading assignments before the command: VAR=val ... cmd
+    i = 0
+    while i < len(tokens):
+        tok = tokens[i]
+        if re.match(r"^[A-Za-z_][A-Za-z0-9_]*=", tok):
+            var_name = tok.split("=", 1)[0]
+            if shellparse.is_dangerous_env_var(var_name):
+                dangerous.append(var_name)
+            i += 1
+        else:
+            break
+
+    # If we reached a command name after any leading assignments:
+    if i < len(tokens):
+        first_cmd = tokens[i].lower()
+        if first_cmd.endswith(".exe"):
+            first_cmd = first_cmd[:-4]
+
+        # 3. env command: env [-i] [-u var] VAR=val ... cmd
+        if first_cmd == "env":
+            j = i + 1
+            while j < len(tokens):
+                tok = tokens[j]
+                if tok.startswith("-"):
+                    if tok in ("-u", "--unset") and j + 1 < len(tokens) and not tokens[j + 1].startswith("-"):
+                        j += 2
+                    else:
+                        j += 1
+                    continue
+                if re.match(r"^[A-Za-z_][A-Za-z0-9_]*=", tok):
+                    var_name = tok.split("=", 1)[0]
+                    if shellparse.is_dangerous_env_var(var_name):
+                        dangerous.append(var_name)
+                    j += 1
+                else:
+                    break
+        # 4. export / set builtin commands: export VAR=val, set VAR=val
+        elif first_cmd in ("export", "set"):
+            for tok in tokens[i + 1:]:
+                clean_tok = tok.strip("\"'")
+                if clean_tok.startswith("-"):
+                    continue
+                if "=" in clean_tok:
+                    var_name = clean_tok.split("=", 1)[0].strip()
+                else:
+                    var_name = clean_tok.strip()
+                if re.match(r"^[A-Za-z_][A-Za-z0-9_]*$", var_name):
+                    if shellparse.is_dangerous_env_var(var_name):
+                        dangerous.append(var_name)
+
     return dangerous
 
 

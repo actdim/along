@@ -292,7 +292,7 @@ CLAUDE_HOOK_TIMEOUT: int = 30
 CLAUDE_PRE_TOOL_MATCHER: str = "Write|Edit|MultiEdit|NotebookEdit|Bash|PowerShell|Read|Grep|Glob"
 
 #: PostToolUse: edits (activity trace) and ExitPlanMode (the user accepted a plan).
-CLAUDE_POST_TOOL_MATCHER: str = "Write|Edit|MultiEdit|NotebookEdit|ExitPlanMode"
+CLAUDE_POST_TOOL_MATCHER: str = "Write|Edit|MultiEdit|NotebookEdit|ExitPlanMode|Bash|PowerShell"
 
 
 def hook_entry_commands(item: Any) -> List[str]:

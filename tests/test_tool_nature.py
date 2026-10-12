@@ -177,6 +177,21 @@ class TestToolNatureClassification(unittest.TestCase):
         res_pwsh_env = classify_command("$env:GIT_SSH_COMMAND = 'evil'; git status")
         self.assertEqual(res_pwsh_env.tool_class, ToolClass.DESTRUCTIVE)
 
+        res_path_env = classify_command("PATH=/tmp/evil:$PATH git status")
+        self.assertEqual(res_path_env.tool_class, ToolClass.DESTRUCTIVE)
+
+        res_git_pager = classify_command("GIT_PAGER=cat git log")
+        self.assertEqual(res_git_pager.tool_class, ToolClass.DESTRUCTIVE)
+
+        res_echo_env = classify_command("echo $env:EDITOR")
+        self.assertEqual(res_echo_env.tool_class, ToolClass.READ_ONLY)
+
+        res_grep_env = classify_command("grep EDITOR= file")
+        self.assertEqual(res_grep_env.tool_class, ToolClass.READ_ONLY)
+
+        res_echo_export = classify_command('echo "export PAGER=less"')
+        self.assertEqual(res_echo_export.tool_class, ToolClass.READ_ONLY)
+
     def test_git_dangerous_configs_and_flags(self):
         """Dangerous git -c options and flags must classify as DESTRUCTIVE."""
         res_fs = classify_command("git -c core.fsmonitor='rm -rf ~' status")
@@ -220,6 +235,15 @@ class TestToolNatureClassification(unittest.TestCase):
 
         res_filter = classify_command("git -c filter.clean=evil status")
         self.assertEqual(res_filter.tool_class, ToolClass.DESTRUCTIVE)
+
+        res_grep_c = classify_command("git grep -c foo")
+        self.assertEqual(res_grep_c.tool_class, ToolClass.READ_ONLY)
+
+        res_commit_c = classify_command("git commit -c HEAD")
+        self.assertEqual(res_commit_c.tool_class, ToolClass.WORKSPACE_WRITE)
+
+        res_diff_c = classify_command("git diff -c")
+        self.assertEqual(res_diff_c.tool_class, ToolClass.READ_ONLY)
 
     def test_gh_command_boundaries(self):
         """gh pr review and mutation flags must classify as EXTERNAL, not read-only."""
@@ -304,6 +328,18 @@ class TestToolNatureClassification(unittest.TestCase):
 
         res_git = classify_command("Out-File -FilePath .git/config")
         self.assertEqual(res_git.tool_class, ToolClass.DESTRUCTIVE)
+
+        res_temp_out = classify_command("Out-File -FilePath $env:TEMP/scratch.txt")
+        self.assertEqual(res_temp_out.tool_class, ToolClass.WORKSPACE_WRITE)
+
+        res_temp_rm = classify_command("Remove-Item $env:TEMP/scratch.txt")
+        self.assertEqual(res_temp_rm.tool_class, ToolClass.WORKSPACE_WRITE)
+
+        res_mkdir_p = classify_command("mkdir -p my_sub_dir")
+        self.assertEqual(res_mkdir_p.tool_class, ToolClass.WORKSPACE_WRITE)
+
+        res_find_name = classify_command("find . -name test.txt")
+        self.assertEqual(res_find_name.tool_class, ToolClass.READ_ONLY)
 
     def test_sudo_and_python_script_boundaries(self):
         """sudo elevates privileges and external python scripts classify as DESTRUCTIVE."""
