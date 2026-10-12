@@ -3,10 +3,11 @@ protocol: along
 protocol_version: "4.2.0"
 slug: along-exec-argparse-migration
 type: debt
-status: open
+status: done
+completed: 2026-10-12
 priority: medium
 created: 2026-09-27
-updated: 2026-09-29
+updated: 2026-10-12
 agent: cowork
 tags: [cli, refactor, dx]
 milestone: v4.5.0-multi-user-merge-automation
@@ -29,6 +30,6 @@ related: [bug--session-create-unsafe-yaml]
 
 ## Acceptance Criteria
 
-- [ ] Misspelled flags fail loudly
-- [ ] All documented invocations still parse
-- [ ] Automated tests passing
+- [x] Misspelled flags fail loudly
+- [x] All documented invocations still parse
+- [x] Automated tests passing
