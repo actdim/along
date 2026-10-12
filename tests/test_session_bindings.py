@@ -311,5 +311,60 @@ class TestCompletionTokens(SessionFixture):
         self.assertEqual(session.gc_bindings(self.root, now=future), [self.key_a])
 
 
+class TestCommandNatureAndConfirmation(SessionFixture):
+    """Regression suite for command nature authorization and plan confirmation flags."""
+
+    def test_external_command_passes_with_plan_approval(self):
+        self.start("alpha", self.key_a)
+        event = HookEvent(
+            event_type=HookEventType.PRE_TOOL_USE,
+            tool_name="run_command",
+            tool_args={"CommandLine": "git push origin main"},
+            workspace_root=self.root,
+            runtime="claude",
+            conversation_id="sess-a",
+        )
+        held = check_mutation_authorization(event, self.root)
+        self.assertIsNotNone(held)
+        self.assertIn("require-plan-approval", str(held))
+
+        # Approve plan
+        session.record_plan_approval(self.root, self.key_a)
+        session.update_state(self.root, "alpha", phase="execution", plan_approved=True)
+        self.assertIsNone(check_mutation_authorization(event, self.root))
+
+    def test_destructive_command_requires_explicit_confirmation(self):
+        self.start("alpha", self.key_a)
+        session.record_plan_approval(self.root, self.key_a)
+        session.update_state(self.root, "alpha", phase="execution", plan_approved=True)
+
+        event = HookEvent(
+            event_type=HookEventType.PRE_TOOL_USE,
+            tool_name="run_command",
+            tool_args={"CommandLine": "git reset --hard HEAD~1"},
+            workspace_root=self.root,
+            runtime="claude",
+            conversation_id="sess-a",
+        )
+        held = check_mutation_authorization(event, self.root)
+        self.assertIsNotNone(held)
+        self.assertIn("confirm-destructive", str(held))
+
+        # Confirm destructive
+        session.confirm_destructive(self.root, self.key_a)
+        self.assertIsNone(check_mutation_authorization(event, self.root))
+
+    def test_external_confirmation_flag(self):
+        self.start("alpha", self.key_a)
+        self.assertFalse(session.is_external_confirmed(self.root, key=self.key_a))
+        session.confirm_external(self.root, self.key_a)
+        self.assertTrue(session.is_external_confirmed(self.root, key=self.key_a))
+
+    def test_exact_canonical_slug_matching_no_bare_slug_bleed(self):
+        self.start("feat--auth", self.key_a, approved=True)
+        self.assertTrue(session.is_plan_approved(self.root, slug="feat--auth", key=self.key_a))
+        self.assertFalse(session.is_plan_approved(self.root, slug="bug--auth", key=self.key_a))
+
+
 if __name__ == "__main__":
     unittest.main(verbosity=2)

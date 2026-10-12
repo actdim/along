@@ -204,14 +204,6 @@ def ensure_deps(dependencies: Sequence[str] = RUNTIME_DEPENDENCIES,
             if c_idx + 1 < len(orig):
                 code_str = orig[c_idx + 1]
                 trailing_args = list(sys.argv[1:])
-        if not code_str:
-            # Fallback for synthetic test environments or custom wrappers
-            if len(sys.argv) > 1 and sys.argv[1] == "-c" and len(sys.argv) > 2:
-                code_str = sys.argv[2]
-                trailing_args = list(sys.argv[3:])
-            elif len(sys.argv) > 1:
-                code_str = sys.argv[1]
-                trailing_args = list(sys.argv[2:])
 
     script = os.path.abspath(sys.argv[0]) if (sys.argv and sys.argv[0] and not is_inline) else ""
     if is_inline and not code_str:

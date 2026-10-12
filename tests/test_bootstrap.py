@@ -52,7 +52,8 @@ class TestBootstrapInline(unittest.TestCase):
                 mock.patch.object(bootstrap, "_build_venv", return_value=False), \
                 mock.patch("shutil.which", return_value="uv"), \
                 mock.patch.dict(os.environ, {bootstrap.VENV_ENV: self.venv_dir}), \
-                mock.patch.object(sys, "argv", ["-c", "-c", "import alongkit"]):
+                mock.patch.object(sys, "argv", ["-c"]), \
+                mock.patch.object(sys, "orig_argv", ["python", "-c", "import alongkit"]):
             os.environ.pop(bootstrap.GUARD_ENV, None)
             with self.assertRaises(SystemExit):
                 bootstrap.ensure_deps(dependencies=["ruamel.yaml>=0.18"])
@@ -79,7 +80,8 @@ class TestBootstrapInline(unittest.TestCase):
                 mock.patch.object(bootstrap, "_reexec", side_effect=fake_reexec), \
                 mock.patch("shutil.which", return_value="uv"), \
                 mock.patch.dict(os.environ, {bootstrap.VENV_ENV: self.venv_dir}), \
-                mock.patch.object(sys, "argv", ["-c", "-c", "print(42)"]):
+                mock.patch.object(sys, "argv", ["-c"]), \
+                mock.patch.object(sys, "orig_argv", ["python", "-c", "print(42)"]):
             os.environ.pop(bootstrap.GUARD_ENV, None)
             with self.assertRaises(SystemExit):
                 bootstrap.ensure_deps()
@@ -94,7 +96,8 @@ class TestBootstrapInline(unittest.TestCase):
         with mock.patch.object(bootstrap, "have_deps", return_value=False), \
                 mock.patch("shutil.which", return_value=None), \
                 mock.patch.dict(os.environ, {bootstrap.VENV_ENV: self.venv_dir}), \
-                mock.patch.object(sys, "argv", ["-c", "-c", "import alongkit"]):
+                mock.patch.object(sys, "argv", ["-c"]), \
+                mock.patch.object(sys, "orig_argv", ["python", "-c", "import alongkit"]):
             os.environ.pop(bootstrap.GUARD_ENV, None)
             with self.assertRaises(SystemExit) as ctx:
                 bootstrap.ensure_deps(missing_exit_code=2)

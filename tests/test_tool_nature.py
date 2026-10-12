@@ -173,6 +173,21 @@ class TestToolNatureClassification(unittest.TestCase):
         res_pager = classify_command("git -c core.pager=evil diff")
         self.assertEqual(res_pager.tool_class, ToolClass.DESTRUCTIVE)
 
+        res_cred = classify_command("git -c credential.helper=evil status")
+        self.assertEqual(res_cred.tool_class, ToolClass.DESTRUCTIVE)
+
+        res_inc = classify_command("git -c include.path=/etc/gitconfig status")
+        self.assertEqual(res_inc.tool_class, ToolClass.DESTRUCTIVE)
+
+        res_diff = classify_command("git -c diff.external=evil diff")
+        self.assertEqual(res_diff.tool_class, ToolClass.DESTRUCTIVE)
+
+        res_hooks = classify_command("git -c core.hooksPath=/tmp status")
+        self.assertEqual(res_hooks.tool_class, ToolClass.DESTRUCTIVE)
+
+        res_cfg_env = classify_command("git --config-env=core.pager=PAGER diff")
+        self.assertEqual(res_cfg_env.tool_class, ToolClass.DESTRUCTIVE)
+
         res_upload = classify_command("git --upload-pack=evil fetch")
         self.assertEqual(res_upload.tool_class, ToolClass.DESTRUCTIVE)
 
@@ -190,19 +205,60 @@ class TestToolNatureClassification(unittest.TestCase):
         res_api_field = classify_command("gh api --field key=val repos/foo")
         self.assertEqual(res_api_field.tool_class, ToolClass.EXTERNAL)
 
+        res_api_post = classify_command("gh api -X POST repos/foo")
+        self.assertEqual(res_api_post.tool_class, ToolClass.EXTERNAL)
+
+        res_api_delete = classify_command("gh api -X DELETE repos/foo/1")
+        self.assertEqual(res_api_delete.tool_class, ToolClass.EXTERNAL)
+
         res_api_read = classify_command("gh api repos/foo")
         self.assertEqual(res_api_read.tool_class, ToolClass.READ_ONLY)
 
+        res_api_get = classify_command("gh api repos/foo -X GET")
+        self.assertEqual(res_api_get.tool_class, ToolClass.READ_ONLY)
+
     def test_destructive_path_indicators(self):
-        """Deletion commands targeting home, root, or wildcards must classify as DESTRUCTIVE."""
+        """Deletion commands targeting home, root, outside repo, or wildcards must classify as DESTRUCTIVE."""
         res_home = classify_command("rm -rf ~")
         self.assertEqual(res_home.tool_class, ToolClass.DESTRUCTIVE)
+
+        res_home_slash = classify_command("rm -rf ~/")
+        self.assertEqual(res_home_slash.tool_class, ToolClass.DESTRUCTIVE)
+
+        res_home_ssh = classify_command("rm -rf ~/.ssh")
+        self.assertEqual(res_home_ssh.tool_class, ToolClass.DESTRUCTIVE)
+
+        res_etc = classify_command("rm -rf /etc")
+        self.assertEqual(res_etc.tool_class, ToolClass.DESTRUCTIVE)
+
+        res_parent = classify_command("rm -rf ../other-repo")
+        self.assertEqual(res_parent.tool_class, ToolClass.DESTRUCTIVE)
+
+        res_wild = classify_command("rm -rf *")
+        self.assertEqual(res_wild.tool_class, ToolClass.DESTRUCTIVE)
 
         res_pwsh_home = classify_command("Remove-Item -Recurse -Force ~")
         self.assertEqual(res_pwsh_home.tool_class, ToolClass.DESTRUCTIVE)
 
+        res_pwsh_users = classify_command("Remove-Item -Recurse C:\\Users")
+        self.assertEqual(res_pwsh_users.tool_class, ToolClass.DESTRUCTIVE)
+
         res_local = classify_command("rm temp.txt")
         self.assertEqual(res_local.tool_class, ToolClass.WORKSPACE_WRITE)
+
+    def test_sudo_and_python_script_boundaries(self):
+        """sudo elevates privileges and external python scripts classify as DESTRUCTIVE."""
+        res_sudo = classify_command("sudo cat /etc/shadow")
+        self.assertEqual(res_sudo.tool_class, ToolClass.DESTRUCTIVE)
+
+        res_py_ext = classify_command("python /tmp/evil.py")
+        self.assertEqual(res_py_ext.tool_class, ToolClass.DESTRUCTIVE)
+
+        res_py_dev = classify_command("python .along/scripts/dev.py")
+        self.assertEqual(res_py_dev.tool_class, ToolClass.WORKSPACE_WRITE)
+
+        res_py_test = classify_command("python .along/scripts/test.py")
+        self.assertEqual(res_py_test.tool_class, ToolClass.VERIFICATION)
 
     def test_repo_rules_cannot_downgrade_dangerous_commands(self):
         """Repository tool rules cannot downgrade built-in destructive or external commands to read-only."""

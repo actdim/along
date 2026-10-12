@@ -386,13 +386,8 @@ def is_doc_edit(rel: str) -> bool:
     parts = repo.normalize_posix(rel).lower().split("/")
     if ".along" in parts or not parts:
         return False
-    base = parts[-1]
-    norm = "/".join(parts)
-    if norm in ("agents.md", "claude.md", "gemini.md") or base in ("agents.md", "claude.md", "protocol.md"):
-        return False
-    if "skills" in parts or norm.startswith("skills/"):
-        return False
-    return base.endswith(".md") or "docs" in parts[:-1]
+    from .. import verify
+    return verify.is_doc_only_path(rel)
 
 
 def is_rule_pack_path(rel: str) -> bool:
@@ -566,26 +561,27 @@ def check_doc_manual_lock(event: HookEvent, repo_root: str, **kwargs: Any) -> Op
                             affects = [affects]
                         norm_target = repo.normalize_posix(rel_target).lstrip("/")
                         affects_norm = [repo.normalize_posix(str(a)).lstrip("/") for a in affects]
-                        target_doc = i_fm.get("target_doc") or ""
-                        if norm_target in affects_norm or rel_target in affects or any(a.endswith(os.path.basename(rel_target)) for a in affects) or (target_doc and os.path.basename(rel_target) in str(target_doc)):
+                        target_doc = fm.get("target_doc") or fm.get("path")
+                        target_doc_norm = repo.normalize_posix(str(target_doc)).lstrip("/") if target_doc else ""
+                        if norm_target in affects_norm or (target_doc_norm and target_doc_norm == norm_target):
                             is_targeted = True
                 except (OSError, UnicodeDecodeError, ValueError):
                     pass
-        if is_targeted and (not key or session.is_plan_approved(repo_root, slug=active_slug, key=key)):
+        if is_targeted:
             return None
-    elif not key:
-        # In test environments or runtimes without session tracking, verify an active doc issue exists
-        issues_dir = _issues_dir(repo_root)
-        if os.path.isdir(issues_dir):
-            doc_issue_cand = os.path.join(issues_dir, f"docs--{slug}.md")
-            if os.path.isfile(doc_issue_cand):
-                try:
-                    i_raw = textio.read_text(doc_issue_cand, strict=False)
-                    i_fm, _, _ = frontmatter.try_parse(i_raw)
-                    if i_fm and i_fm.get("status") == "in-progress":
-                        return None
-                except (OSError, UnicodeDecodeError, ValueError):
-                    pass
+
+    # Also check if an active docs issue for this slug exists in .along/ISSUES/
+    issues_dir = _issues_dir(repo_root)
+    if os.path.isdir(issues_dir):
+        doc_issue_cand = os.path.join(issues_dir, f"docs--{slug}.md")
+        if os.path.isfile(doc_issue_cand):
+            try:
+                i_raw = textio.read_text(doc_issue_cand, strict=False)
+                i_fm, _, _ = frontmatter.try_parse(i_raw)
+                if i_fm and i_fm.get("status") == "in-progress":
+                    return None
+            except (OSError, UnicodeDecodeError, ValueError):
+                pass
 
     return (
         f"Manual Document Lock Violation [gate: doc-manual-lock]: "
@@ -825,8 +821,30 @@ def check_mutation_authorization(event: HookEvent, repo_root: str, options: Opti
     if t_class in (toolnature.ToolClass.READ_ONLY, toolnature.ToolClass.VERIFICATION):
         return None
 
-    # Sessions not bound to an issue are not held unless enforce_unbound: true
     key = event_session_key(event)
+    slug, how = session.resolve_active_session(repo_root, key)
+    approved = session.is_plan_approved(repo_root, slug=slug, key=key)
+    phase = session.get_session_phase(repo_root, slug=slug, key=key)
+
+    # Destructive tools: require confirmation
+    if t_class == toolnature.ToolClass.DESTRUCTIVE:
+        desc = nature_res.rule_desc or "destructive operation"
+        destructive_confirmed = session.is_destructive_confirmed(repo_root, slug=slug, key=key)
+        if approved and (phase == "execution" or not slug) and destructive_confirmed:
+            return None
+        reason = (
+            f"Destructive Action [gate: require-plan-approval]: Tool or command '{cmd or tool}' is classified as destructive ({desc}). "
+            "Execution requires explicit confirmation. In interactive environments approve prompt, or run 'along plan approve --confirm-destructive' after the user's explicit yes."
+        )
+        if event.runtime == "antigravity":
+            return GateResult(
+                decision=GateDecision.ASK,
+                reason=reason,
+                gate_name="require_plan_approval",
+            )
+        return reason
+
+    # Sessions not bound to an issue are not held for workspace writes / external unless enforce_unbound: true
     if not _enforce_unbound(options) and is_unbound(repo_root, key):
         return None
 
@@ -846,45 +864,10 @@ def check_mutation_authorization(event: HookEvent, repo_root: str, options: Opti
             )
         return reason
 
-    slug, how = session.resolve_active_session(repo_root, key)
-    approved = session.is_plan_approved(repo_root, slug=slug, key=key)
-    phase = session.get_session_phase(repo_root, slug=slug, key=key)
-
-    # Destructive tools: require confirmation
-    if t_class == toolnature.ToolClass.DESTRUCTIVE:
-        desc = nature_res.rule_desc or "destructive operation"
-        destructive_confirmed = session.is_destructive_confirmed(repo_root, slug=slug, key=key)
-        if approved and (phase == "execution" or not slug) and destructive_confirmed:
-            return None
-        reason = (
-            f"Destructive Action [gate: require-plan-approval]: Tool or command '{cmd or tool}' is classified as destructive ({desc}). "
-            "Execution requires explicit confirmation. In interactive environments approve prompt, or run 'along plan approve --confirm-destructive'."
-        )
-        if event.runtime == "antigravity":
-            return GateResult(
-                decision=GateDecision.ASK,
-                reason=reason,
-                gate_name="require_plan_approval",
-            )
-        return reason
-
-    # External tools: require explicit confirmation
+    # External tools: allowed after plan approval (or if explicitly confirmed)
     if t_class == toolnature.ToolClass.EXTERNAL:
-        desc = nature_res.rule_desc or "external operation"
-        external_confirmed = session.is_external_confirmed(repo_root, slug=slug, key=key)
-        if approved and (phase == "execution" or not slug) and external_confirmed:
+        if (approved and (phase == "execution" or not slug)) or session.is_external_confirmed(repo_root, slug=slug, key=key):
             return None
-        reason = (
-            f"External Action [gate: require-plan-approval]: Tool or command '{cmd or tool}' is classified as external ({desc}). "
-            "Execution interacts with remote services and requires explicit confirmation. In interactive environments approve prompt, or run 'along plan approve --confirm-external'."
-        )
-        if event.runtime == "antigravity":
-            return GateResult(
-                decision=GateDecision.ASK,
-                reason=reason,
-                gate_name="require_plan_approval",
-            )
-        return reason
 
     # Workspace-write: require plan approval (allow if approved or in execution phase)
     if approved and (phase == "execution" or not slug):

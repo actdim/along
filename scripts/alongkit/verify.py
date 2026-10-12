@@ -182,13 +182,14 @@ def run_checks(repo_root: str, checks: Sequence[str], label: str) -> bool:
 # Change-aware skip
 # ---------------------------------------------------------------------------
 
-_DOC_SUFFIXES = (".md",)
-_DOC_FILES = ("llms.txt", "llms-full.txt")
+_DOC_SUFFIXES = (".md", ".rst", ".txt")
+_DOC_FILES = ("llms.txt", "llms-full.txt", "readme.md", "changelog.md", "license.md", "license", "authors.md", "contributing.md")
+_CODE_SUFFIXES = (".py", ".ts", ".js", ".mjs", ".cjs", ".sh", ".bash", ".ps1", ".bat", ".cmd", ".rs", ".go", ".c", ".cpp", ".cs", ".java")
 _VERSION_LINE = re.compile(r'^[+-]\s*"version"\s*:\s*"[^"]*",?\s*$')
 
 
 def is_doc_only_path(rel: str) -> bool:
-    """Documentation or Along state, never code: `*.md` (outside code/skills), `docs/**`, `.along/**` (not scripts), llms*.txt."""
+    """Documentation or Along state, never code: `*.md` (outside code/skills/rules), `docs/**`, `.along/**` (not scripts/rules), llms*.txt."""
     path = rel.replace("\\", "/")
     while path.startswith("./"):
         path = path[2:]
@@ -200,26 +201,36 @@ def is_doc_only_path(rel: str) -> bool:
     base = parts[-1].lower()
 
     # Product code, protocol instructions and skills are NOT documentation:
-    if norm in ("agents.md", "claude.md", "gemini.md") or base in ("agents.md", "claude.md"):
+    if norm in ("agents.md", "claude.md", "gemini.md") or base in ("agents.md", "claude.md", "gemini.md"):
         return False
     if "skills" in parts or norm.startswith("skills/") or base == "protocol.md":
         return False
 
+    # Executable code files are NEVER documentation regardless of directory:
+    if any(norm.endswith(sfx) for sfx in _CODE_SUFFIXES):
+        return False
+
     for i, part in enumerate(parts):
         if part == ".along":
-            if i + 1 < len(parts) and parts[i + 1] == "scripts":
+            # Lifecycle scripts and managed rule packs under .along/ are code/governance, not doc/state:
+            if i + 1 < len(parts) and parts[i + 1] in ("scripts", "rules"):
                 return False
             return True
 
-    # Root docs/ directory or top-level documentation files
-    if path.startswith("docs/") or (len(parts) > 1 and parts[0] == "docs"):
+    # Docs directories (root docs/ or subpackage pkg/docs/): non-code assets and markdown are docs
+    if "docs" in parts[:-1] or path.startswith("docs/"):
         return True
+
+    # Source, package, script, skill, and test directories are code, never doc-only:
+    if any(p in ("packages", "src", "scripts", "skills", "tests") for p in parts[:-1]):
+        return False
+
     if base in _DOC_FILES:
         return True
-    if path.endswith(_DOC_SUFFIXES):
-        if any(p in ("packages", "src", "scripts", "skills", "tests") for p in parts[:-1]):
-            return False
+
+    if any(norm.endswith(sfx) for sfx in _DOC_SUFFIXES):
         return True
+
     return False
 
 

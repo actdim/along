@@ -677,22 +677,6 @@ def get_session_phase(repo_root: str, slug: Optional[str] = None, key: Optional[
     return DEFAULT_PHASE
 
 
-def _bare_slug(val: Optional[str]) -> str:
-    if not val:
-        return ""
-    if "--" in val:
-        return val.split("--", 1)[1]
-    return val
-
-
-def _slugs_equal(a: Optional[str], b: Optional[str]) -> bool:
-    if not a or not b:
-        return a == b
-    if a == b:
-        return True
-    return _bare_slug(a) == _bare_slug(b)
-
-
 def is_plan_approved(repo_root: str, slug: Optional[str] = None, key: Optional[str] = None) -> bool:
     """True when the plan for the session's slug was approved.
 
@@ -703,24 +687,22 @@ def is_plan_approved(repo_root: str, slug: Optional[str] = None, key: Optional[s
     [bug--commit-blocked-after-wrap].
     """
     key = key or current_session_key()
-    effective_slug = slug or get_active_session_slug(repo_root, key)
     binding = load_binding(repo_root, key)
+    bound_slug = (binding or {}).get("slug")
+    if slug and bound_slug and slug != bound_slug:
+        return False
+    effective_slug = slug or bound_slug or get_active_session_slug(repo_root, key)
     if binding and binding.get("plan_approved"):
         # Approval belongs to the session and the slug it is bound to, in any context.
         approved_slug = binding.get("approved_slug")
-        target_slug = binding.get("slug") or effective_slug
-        if approved_slug is None or _slugs_equal(approved_slug, target_slug):
+        if approved_slug is None or approved_slug == bound_slug or approved_slug == effective_slug:
             return True
     if effective_slug and key:
-        owner = (binding or {}).get("slug") or (os.environ.get("ALONG_ISSUE_SLUG") or "").strip()
-        if not _slugs_equal(owner, effective_slug):
+        owner = bound_slug or (os.environ.get("ALONG_ISSUE_SLUG") or "").strip()
+        if owner != effective_slug:
             return False
     if effective_slug:
         st = load_state(repo_root, effective_slug)
-        if not st:
-            bare = _bare_slug(effective_slug)
-            if bare != effective_slug:
-                st = load_state(repo_root, bare)
         if st:
             return bool(st.get("plan_approved", False))
     elif not key:
@@ -733,16 +715,18 @@ def is_plan_approved(repo_root: str, slug: Optional[str] = None, key: Optional[s
 def is_destructive_confirmed(repo_root: str, slug: Optional[str] = None, key: Optional[str] = None) -> bool:
     """True when destructive actions have been explicitly authorized for this session/blackboard."""
     key = key or current_session_key()
-    effective_slug = slug or get_active_session_slug(repo_root, key)
+    if slug and key is None and load_binding(repo_root, slug):
+        key = slug
+        slug = None
     binding = load_binding(repo_root, key)
+    bound_slug = (binding or {}).get("slug")
+    if slug and bound_slug and slug != bound_slug:
+        return False
+    effective_slug = slug or bound_slug or get_active_session_slug(repo_root, key)
     if binding and binding.get("confirmed_destructive"):
         return True
     if effective_slug:
         st = load_state(repo_root, effective_slug)
-        if not st:
-            bare = _bare_slug(effective_slug)
-            if bare != effective_slug:
-                st = load_state(repo_root, bare)
         if st and st.get("confirmed_destructive"):
             return True
     return False
@@ -751,19 +735,57 @@ def is_destructive_confirmed(repo_root: str, slug: Optional[str] = None, key: Op
 def is_external_confirmed(repo_root: str, slug: Optional[str] = None, key: Optional[str] = None) -> bool:
     """True when external network/remote actions have been explicitly authorized for this session/blackboard."""
     key = key or current_session_key()
-    effective_slug = slug or get_active_session_slug(repo_root, key)
+    if slug and key is None and load_binding(repo_root, slug):
+        key = slug
+        slug = None
     binding = load_binding(repo_root, key)
+    bound_slug = (binding or {}).get("slug")
+    if slug and bound_slug and slug != bound_slug:
+        return False
+    effective_slug = slug or bound_slug or get_active_session_slug(repo_root, key)
     if binding and binding.get("confirmed_external"):
         return True
     if effective_slug:
         st = load_state(repo_root, effective_slug)
-        if not st:
-            bare = _bare_slug(effective_slug)
-            if bare != effective_slug:
-                st = load_state(repo_root, bare)
         if st and st.get("confirmed_external"):
             return True
     return False
+
+
+def confirm_destructive(repo_root: str, slug: Optional[str] = None, key: Optional[str] = None) -> None:
+    """Explicitly authorize destructive operations for this session and blackboard."""
+    key = key or current_session_key()
+    if slug and key is None and load_binding(repo_root, slug):
+        key = slug
+        slug = None
+    binding = load_binding(repo_root, key)
+    effective_slug = slug or (binding or {}).get("slug") or get_active_session_slug(repo_root, key)
+    if key and binding:
+        binding["confirmed_destructive"] = True
+        save_binding(repo_root, key, binding)
+    if effective_slug:
+        st = load_state(repo_root, effective_slug)
+        if st is not None:
+            st["confirmed_destructive"] = True
+            save_state(repo_root, effective_slug, st)
+
+
+def confirm_external(repo_root: str, slug: Optional[str] = None, key: Optional[str] = None) -> None:
+    """Explicitly authorize external remote operations for this session and blackboard."""
+    key = key or current_session_key()
+    if slug and key is None and load_binding(repo_root, slug):
+        key = slug
+        slug = None
+    binding = load_binding(repo_root, key)
+    effective_slug = slug or (binding or {}).get("slug") or get_active_session_slug(repo_root, key)
+    if key and binding:
+        binding["confirmed_external"] = True
+        save_binding(repo_root, key, binding)
+    if effective_slug:
+        st = load_state(repo_root, effective_slug)
+        if st is not None:
+            st["confirmed_external"] = True
+            save_state(repo_root, effective_slug, st)
 
 
 def set_session_phase(

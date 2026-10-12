@@ -312,9 +312,11 @@ def handle_plan_command(repo_root: str, args: List[str]):
     See [feat--plan-approval-exit-plan-mode].
     """
     if not args or args[0] in ("-h", "--help", "help"):
-        print("Usage: along plan approve [<slug>] [--plan-file <path>]")
+        print("Usage: along plan approve [<slug>] [--plan-file <path>] [--confirm-destructive] [--confirm-external]")
         print("                                     Record the user's approval of the plan (run only after an explicit yes);")
-        print("                                     --plan-file writes the approved plan into the blackboard plan.md")
+        print("                                     --plan-file writes the approved plan into the blackboard plan.md;")
+        print("                                     --confirm-destructive explicitly confirms destructive commands (rm, reset --hard);")
+        print("                                     --confirm-external explicitly confirms remote network commands (git push, pr create)")
         print("       along plan approve --closeout <slug>... | --closeout --ready")
         print("                                     Record the user's approval to close these issues out (after an explicit yes)")
         print("       along plan status             Show this session's binding, phase and approval")
@@ -364,6 +366,12 @@ def handle_plan_command(repo_root: str, args: List[str]):
                   "plan to a file and run 'along plan approve --plan-file <path>' after the user's explicit yes.",
                   file=sys.stderr)
             sys.exit(2)
+        confirm_dest = "--confirm-destructive" in args
+        confirm_ext = "--confirm-external" in args
+        if confirm_dest:
+            session.confirm_destructive(repo_root, slug=slug, key=key)
+        if confirm_ext:
+            session.confirm_external(repo_root, slug=slug, key=key)
         if slug:
             # [bug--session-records-not-captured] REQ-1: the approved plan is recorded.
             if plan_file:
@@ -385,13 +393,21 @@ def handle_plan_command(repo_root: str, args: List[str]):
             plan_now = textio.read_text(os.path.join(session.get_session_dir(repo_root, slug), "plan.md"), strict=False)
             session.mark_approval(repo_root, key, via, plan_now)
             sha = session.plan_sha256(plan_now)
-            session.append_trace(repo_root, slug, f"plan approved (along plan approve) approved_via: {via}"
-                                 + (f", plan_sha256: {sha[:12]}" if sha else ""))
+            trace_extra = f", plan_sha256: {sha[:12]}" if sha else ""
+            if confirm_dest:
+                trace_extra += ", confirmed_destructive: true"
+            if confirm_ext:
+                trace_extra += ", confirmed_external: true"
+            session.append_trace(repo_root, slug, f"plan approved (along plan approve) approved_via: {via}{trace_extra}")
             session.append_event(repo_root, slug, key, "approve")
-            print(f"-> Plan approved for '{slug}' (session: {key or 'none'}, via: {via}).")
+            dest_msg = " [destructive confirmed]" if confirm_dest else ""
+            ext_msg = " [external confirmed]" if confirm_ext else ""
+            print(f"-> Plan approved for '{slug}' (session: {key or 'none'}, via: {via}){dest_msg}{ext_msg}.")
         elif key:
             session.record_plan_approval(repo_root, key, via)
-            print(f"-> Plan approved for session {key}; it applies to the next 'along start <slug>'.")
+            dest_msg = " [destructive confirmed]" if confirm_dest else ""
+            ext_msg = " [external confirmed]" if confirm_ext else ""
+            print(f"-> Plan approved for session {key}; it applies to the next 'along start <slug>'{dest_msg}{ext_msg}.")
         else:
             print("[Error] No issue bound and no agent session id; run 'along start <slug>' first.", file=sys.stderr)
             sys.exit(1)
@@ -402,6 +418,8 @@ def handle_plan_command(repo_root: str, args: List[str]):
         print(f"Issue:       {slug or '-'} ({how})")
         print(f"Phase:       {session.get_session_phase(repo_root, slug=slug, key=key)}")
         print(f"Approved:    {str(session.is_plan_approved(repo_root, slug=slug, key=key)).lower()}")
+        print(f"Destructive: {str(session.is_destructive_confirmed(repo_root, slug=slug, key=key)).lower()}")
+        print(f"External:    {str(session.is_external_confirmed(repo_root, slug=slug, key=key)).lower()}")
         sys.exit(0)
     print(f"[Error] Unknown plan subcommand '{sub}'. Use: approve, status.", file=sys.stderr)
     sys.exit(2)

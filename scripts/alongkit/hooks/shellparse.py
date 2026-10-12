@@ -356,7 +356,7 @@ def _strip_wrappers(tokens: List[str]) -> List[str]:
                 opt = tokens[0].split("=", 1)[0]
                 tokens = tokens[2:] if (opt in _WRAPPER_OPTS_WITH_VALUE and "=" not in tokens[0]) else tokens[1:]
             changed = True
-        elif tokens and tokens[0].lower() in ("npx", "sudo", "nohup", "time", "exec"):
+        elif tokens and tokens[0].lower() in ("npx", "nohup", "time", "exec"):
             tokens = tokens[1:]
             while tokens and tokens[0].startswith("-"):
                 tokens = tokens[1:]
