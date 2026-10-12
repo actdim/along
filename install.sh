@@ -12,6 +12,7 @@
 #   ./install.sh --target=claude        # claude | codex | opencode | antigravity | both (claude+codex) | all
 #   ./install.sh --symlink              # symlink skill folders (claude/codex/antigravity); opencode commands are always generated
 #   ./install.sh --migrate              # also migrate this repository's .along/ structure
+#   ./install.sh --register-mcp         # opt in to code-review-graph MCP registration (default: CLI only)
 #   ./install.sh --uninstall            # remove exactly what the install manifest records
 #   ./install.sh --claude-home=DIR --codex-home=DIR --opencode-home=DIR --antigravity-home=DIR --cursor-home=DIR
 set -euo pipefail
@@ -21,6 +22,7 @@ SYMLINK=0
 INSTALL_DEPS=0
 MIGRATE=0
 UNINSTALL=0
+REGISTER_MCP=0
 INCLUDE_UNVERIFIED_MCP=0
 ALONG_HOME="${ALONG_HOME:-$HOME/.along}"
 CLAUDE_HOME="${CLAUDE_HOME:-$HOME/.claude}"
@@ -56,6 +58,7 @@ for arg in "$@"; do
     --install-deps)       INSTALL_DEPS=1 ;;
     --migrate)            MIGRATE=1 ;;
     --uninstall)          UNINSTALL=1 ;;
+    --register-mcp)       REGISTER_MCP=1 ;;
     --include-unverified-mcp) INCLUDE_UNVERIFIED_MCP=1 ;;
     --no-path-update)     NO_PATH_UPDATE=1 ;;
     --along-home=*)       ALONG_HOME="${arg#*=}" ;;
@@ -319,20 +322,27 @@ if [ "$do_antigravity" -eq 1 ]; then
   PROVIDER_ARGS+=(antigravity)
 fi
 
-# --- MCP registration, once, for the providers actually installed ---
-# The installer used to write `code-review-graph` into five files and print a success
-# line for each: only ~/.claude.json is read by anything. scripts/configure_mcp.py holds
-# the per-provider contract, writes where it is verified, and reports the rest with the
-# snippet to add by hand.
-echo "-> code-review-graph MCP:"
+# --- MCP cleanup / optional registration ---
+# By default, code-review-graph executes directly as a CLI engine via uvx (ADR-2026-09-27)
+# and is not registered as an MCP server. Stale MCP entries are cleaned up by default.
+# Passing --register-mcp explicitly opts in to MCP server registration.
 if [ -n "$PYTHON" ]; then
   mcp_args=()
   for provider in "${PROVIDER_ARGS[@]}"; do mcp_args+=(--provider "$provider"); done
   if [ "$INCLUDE_UNVERIFIED_MCP" -eq 1 ]; then mcp_args+=(--include-unverified); fi
-  "$PYTHON" "$SCRIPT_DIR/scripts/configure_mcp.py" "${mcp_args[@]}" \
-    --user-home "$(dirname "$CLAUDE_HOME")" --claude-home "$CLAUDE_HOME" \
-    --codex-home "$CODEX_HOME" --opencode-home "$OPENCODE_HOME" \
-    --antigravity-home "$ANTIGRAVITY_HOME" || true
+  if [ "$REGISTER_MCP" -eq 1 ]; then
+    echo "-> code-review-graph MCP registration:"
+    "$PYTHON" "$SCRIPT_DIR/scripts/configure_mcp.py" "${mcp_args[@]}" \
+      --user-home "$(dirname "$CLAUDE_HOME")" --claude-home "$CLAUDE_HOME" \
+      --codex-home "$CODEX_HOME" --opencode-home "$OPENCODE_HOME" \
+      --antigravity-home "$ANTIGRAVITY_HOME" || true
+  else
+    echo "-> code-review-graph MCP cleanup (CLI is default):"
+    "$PYTHON" "$SCRIPT_DIR/scripts/configure_mcp.py" --clean "${mcp_args[@]}" \
+      --user-home "$(dirname "$CLAUDE_HOME")" --claude-home "$CLAUDE_HOME" \
+      --codex-home "$CODEX_HOME" --opencode-home "$OPENCODE_HOME" \
+      --antigravity-home "$ANTIGRAVITY_HOME" || true
+  fi
 else
   echo "   (skipped: python3 not found, so no provider configuration was touched)"
 fi
@@ -389,5 +399,5 @@ if [ -d "$SCRIPT_DIR/.along" ] || [ -d "$SCRIPT_DIR/.agents" ]; then
 fi
 
 echo "Done. Claude/Codex/Antigravity skills register next session as /along-* (/along-init, /along-update, /along-dash, etc.); OpenCode picks up /commands, and all read AGENTS.md natively."
-echo "     MCP registration is reported per provider above: only a verified configuration contract is written to."
+echo "     MCP cleanup is reported per provider above (CLI execution via uvx is default; --register-mcp to opt in)."
 echo "     To remove Along again: ./install.sh --uninstall  (removes only what the manifest records)."

@@ -10,6 +10,7 @@
 #   powershell ... -File install.ps1 -Target claude    # claude | codex | opencode | antigravity | both | all
 #   powershell ... -File install.ps1 -Symlink          # symlink skill folders (claude/codex/antigravity)
 #   powershell ... -File install.ps1 -Migrate          # also migrate this repository's .along/ structure
+#   powershell ... -File install.ps1 -RegisterMcp      # opt in to code-review-graph MCP registration (default: CLI only)
 #   powershell ... -File install.ps1 -Uninstall        # remove exactly what the install manifest records
 
 param(
@@ -18,6 +19,7 @@ param(
     [switch]$InstallDeps,
     [switch]$Migrate,
     [switch]$Uninstall,
+    [switch]$RegisterMcp,
     [switch]$IncludeUnverifiedMcp,
     [switch]$NoPathUpdate,
     [string]$AlongHome       = (Join-Path $env:USERPROFILE '.along'),
@@ -449,21 +451,26 @@ foreach ($t in $targets) {
     }
 }
 
-# --- MCP registration, once, for the providers actually installed ---
-# The installer used to write `code-review-graph` into five files and print a success
-# line for each: only ~/.claude.json is read by anything. scripts/configure_mcp.py holds
-# the per-provider contract, writes where it is verified, and reports the rest with the
-# snippet to add by hand.
+# --- MCP cleanup / optional registration ---
+# By default, code-review-graph executes directly as a CLI engine via uvx (ADR-2026-09-27)
+# and is not registered as an MCP server. Stale MCP entries are cleaned up by default.
+# Passing -RegisterMcp explicitly opts in to MCP server registration.
 $mcpArgs = @()
 foreach ($t in $targets) { $mcpArgs += @('--provider', $t) }
 if ($IncludeUnverifiedMcp) { $mcpArgs += '--include-unverified' }
 $mcpArgs += @('--user-home', (Split-Path -Parent $ClaudeHome),
               '--claude-home', $ClaudeHome, '--codex-home', $CodexHome,
               '--opencode-home', $OpencodeHome, '--antigravity-home', $AntigravityHome)
-Write-Host "-> code-review-graph MCP:"
 $mcpTool = Get-AlongTool 'configure_mcp.py'
 if ($mcpTool) {
-    & (Get-PythonExe) $mcpTool @mcpArgs
+    if ($RegisterMcp) {
+        Write-Host "-> code-review-graph MCP registration:"
+        & (Get-PythonExe) $mcpTool @mcpArgs
+    }
+    else {
+        Write-Host "-> code-review-graph MCP cleanup (CLI is default):"
+        & (Get-PythonExe) $mcpTool @(@('--clean') + $mcpArgs)
+    }
 }
 else {
     Write-Host "   (skipped: python not found, so no provider configuration was touched)"
@@ -527,5 +534,5 @@ if ($hasState) {
 
 
 Write-Host "Done. Claude/Codex/Antigravity skills register next session as /along-* (/along-init, /along-update, /along-dash, etc.); OpenCode picks up /commands, and all read AGENTS.md natively."
-Write-Host "     MCP registration is reported per provider above: only a verified configuration contract is written to."
+Write-Host "     MCP cleanup is reported per provider above (CLI execution via uvx is default; -RegisterMcp to opt in)."
 Write-Host "     To remove Along again: install.ps1 -Uninstall  (removes only what the manifest records)."
