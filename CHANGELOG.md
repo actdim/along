@@ -2,6 +2,14 @@
 
 All notable changes to this project, newest first.
 
+## v4.4.11 - 2026-10-12
+
+- chore(sync): reconcile entity projections and knowledge base index (refs #wrap-docs-only-test-skip)
+- fix(git): enable push.followTags in git setup and add doctor checks for unpushed release tags (refs #release-tags-not-pushed)
+- fix(lifecycle): auto-generate history entry on wrap fallback and add along history append (refs #history-append-blocked-after-wrap)
+- fix(install): purge default MCP auto-registration from installers (refs #mcp-installer-cleanup-serve-arg)
+- chore(release): close out v4.4.10 release task and glossary terms (refs #release-v4-4-10)
+
 ## v4.4.10 - 2026-10-11
 
 - fix(gates): cross-context entity refs, test policy, transactional wrap, path-based subproject boundary, plan approval check, quote-aware CLI safety, scoped stop hook, AGENTS.md budget split; gate tiers, recorded bypasses and gate stats (refs #field-report-fixes)
