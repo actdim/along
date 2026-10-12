@@ -31,6 +31,7 @@ from typing import Any, Dict, List, Optional, Tuple
 
 from . import proc, repo, textio
 from .install import is_link
+from .runtime import is_cross_os_mount
 
 MANIFEST_FILENAME: str = ".along-worktree.json"
 PENDING_TRASH_FILENAME: str = ".pending_worktrees.json"
@@ -140,7 +141,7 @@ def unlink_directory(link_path: str) -> bool:
         return False
 
 
-def is_worktree_supported(repo_root: str) -> Tuple[bool, str]:
+def is_worktree_supported(repo_root: str, force_cross_os: bool = False) -> Tuple[bool, str]:
     """Verify if the host repository and filesystem support worktree isolation with environment readiness."""
     repo_root_abs = os.path.abspath(repo_root)
 
@@ -149,12 +150,19 @@ def is_worktree_supported(repo_root: str) -> Tuple[bool, str]:
     if not res.ok:
         return False, "Not inside a valid Git repository"
 
-    # 2. Verify repository has at least one commit (HEAD resolves)
+    # 2. Check cross-OS mount guard
+    if not force_cross_os and is_cross_os_mount(repo_root_abs):
+        return False, (
+            "Cross-OS mounted repository detected (worktrees and symlinks are broken across OS boundaries). "
+            "Run this command on the host OS or pass --force-cross-os to override."
+        )
+
+    # 3. Verify repository has at least one commit (HEAD resolves)
     res = proc.git(["rev-parse", "--verify", "HEAD"], cwd=repo_root_abs)
     if not res.ok:
         return False, "Git repository has no initial commit (HEAD cannot be resolved)"
 
-    # 3. Test filesystem linking capability (NTFS junction or symlink)
+    # 4. Test filesystem linking capability (NTFS junction or symlink)
     state_directory = repo.state_dir(repo_root_abs)
     test_dir = os.path.join(state_directory, ".link_test_src")
     test_link = os.path.join(state_directory, ".link_test_dst")
@@ -165,7 +173,7 @@ def is_worktree_supported(repo_root: str) -> Tuple[bool, str]:
         ok = link_directory(test_dir, test_link)
         if not ok:
             return False, "Filesystem does not support NTFS junctions or symbolic links"
-    except (OSError, RuntimeError, subprocess.SubprocessError) as exc:
+    except (OSError, RuntimeError) as exc:
         return False, f"Filesystem link test encountered error: {exc}"
     finally:
         if os.path.exists(test_link) or is_link(test_link):
@@ -323,11 +331,12 @@ def create_worktree(
     slug: str,
     branch: Optional[str] = None,
     base_ref: Optional[str] = None,
+    force_cross_os: bool = False,
 ) -> WorktreeInfo:
     """Provision an isolated Git worktree, link environment, and write manifest."""
     repo_root_abs = os.path.abspath(repo_root)
     _ensure_git_exclude(repo_root_abs)
-    supported, reason = is_worktree_supported(repo_root_abs)
+    supported, reason = is_worktree_supported(repo_root_abs, force_cross_os=force_cross_os)
     if not supported:
         raise RuntimeError(f"Worktree creation aborted by fail-fast check: {reason}")
 

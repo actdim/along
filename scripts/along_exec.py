@@ -999,9 +999,21 @@ def handle_start_command(repo_root: str, args: List[str]):
 
     if "--worktree" in args:
         from alongkit import worktree
-        wt_path = worktree.create_worktree(repo_root, issue["slug"])
-        print(f"-> Created isolated worktree: {wt_path}")
-        print(f"-> Ready to work in worktree. Run tests and edits there.")
+        force_cross = "--force-cross-os" in args
+        if not force_cross and worktree.is_cross_os_mount(repo_root):
+            print("[Warning] Worktree unavailable on cross-OS mount; degrading to in-place mode.", file=sys.stderr)
+            print(f"-> Ready to work on issue '{issue['slug']}'. Active issue bound.")
+        else:
+            try:
+                info = worktree.create_worktree(repo_root, issue["slug"], force_cross_os=force_cross)
+                print(f"-> Created isolated worktree: {info.path}")
+                print("-> Ready to work in worktree. Run tests and edits there.")
+            except RuntimeError as exc:
+                if "cross-os" in str(exc).lower():
+                    print(f"[Warning] Worktree unavailable on cross-OS mount: {exc}; degrading to in-place mode.", file=sys.stderr)
+                    print(f"-> Ready to work on issue '{issue['slug']}'. Active issue bound.")
+                else:
+                    raise
     else:
         print(f"-> Ready to work on issue '{issue['slug']}'. Active issue bound.")
 
@@ -2314,13 +2326,14 @@ def handle_gates_command(repo_root: str, args: List[str]):
 
 def handle_worktree_command(repo_root: str, args: List[str]):
     if not args or args[0] in ("-h", "--help", "help"):
-        print("Usage: along worktree [create|remove|merge|list|status|gc] [args...]")
+        print("Usage: along worktree [create|remove|merge|list|status|gc|is_supported] [args...]")
         print("Subcommands:")
-        print("  create <slug> [--branch <name>] [--base-ref <ref>]")
+        print("  create <slug> [--branch <name>] [--base-ref <ref>] [--force-cross-os]")
         print("  remove <slug> [--force] [--keep-branch]")
         print("  merge  <slug> [--squash]")
         print("  list   [--json]")
         print("  status [--json]")
+        print("  is_supported [--force-cross-os]")
         print("  gc")
         sys.exit(0)
 
@@ -2331,11 +2344,12 @@ def handle_worktree_command(repo_root: str, args: List[str]):
 
     if subcmd == "create":
         if not sub_args:
-            print("[Error] Usage: along worktree create <slug> [--branch <name>] [--base-ref <ref>]", file=sys.stderr)
+            print("[Error] Usage: along worktree create <slug> [--branch <name>] [--base-ref <ref>] [--force-cross-os]", file=sys.stderr)
             sys.exit(1)
-        slug = _require_entity_name(sub_args[0], "along worktree create <slug> [--branch <name>] [--base-ref <ref>]")
+        slug = _require_entity_name(sub_args[0], "along worktree create <slug> [--branch <name>] [--base-ref <ref>] [--force-cross-os]")
         branch = None
         base_ref = None
+        force_cross_os = False
         i = 1
         while i < len(sub_args):
             if sub_args[i] == "--branch" and i + 1 < len(sub_args):
@@ -2344,10 +2358,13 @@ def handle_worktree_command(repo_root: str, args: List[str]):
             elif sub_args[i] == "--base-ref" and i + 1 < len(sub_args):
                 base_ref = sub_args[i + 1]
                 i += 2
+            elif sub_args[i] == "--force-cross-os":
+                force_cross_os = True
+                i += 1
             else:
                 i += 1
         try:
-            info = worktree.create_worktree(repo_root, slug, branch=branch, base_ref=base_ref)
+            info = worktree.create_worktree(repo_root, slug, branch=branch, base_ref=base_ref, force_cross_os=force_cross_os)
             print(f"-> Created isolated worktree: {info.path}")
             print(f"   Branch: {info.branch}")
             if info.linked_dirs:
@@ -2410,13 +2427,23 @@ def handle_worktree_command(repo_root: str, args: List[str]):
                         print(f"    Linked: {', '.join(it['linked_dirs'])}")
         sys.exit(0)
 
+    elif subcmd in ("is_supported", "is-supported", "check"):
+        force = "--force-cross-os" in sub_args
+        supported, reason = worktree.is_worktree_supported(repo_root, force_cross_os=force)
+        if supported:
+            print(f"-> Worktree isolation supported: {reason}")
+            sys.exit(0)
+        else:
+            print(f"[Error] Worktree isolation unsupported: {reason}", file=sys.stderr)
+            sys.exit(1)
+
     elif subcmd == "gc":
         cleaned = worktree.gc_worktrees(repo_root)
         print(f"-> Pruned worktrees and cleaned {cleaned} deferred items.")
         sys.exit(0)
 
     else:
-        print(f"[Error] Unknown worktree subcommand: {subcmd}. Available: create, remove, merge, list, status, gc.", file=sys.stderr)
+        print(f"[Error] Unknown worktree subcommand: {subcmd}. Available: create, remove, merge, list, status, gc, is_supported.", file=sys.stderr)
         sys.exit(1)
 
 

@@ -12,11 +12,14 @@ Verifies feat--runtime-worktree-isolation:
 
 from __future__ import annotations
 
+import io
 import json
 import os
 import shutil
 import sys
 import unittest
+from contextlib import redirect_stderr, redirect_stdout
+from unittest import mock
 
 if not os.environ.get("ALONG_TEST_RUNNER"):
     raise SystemExit(
@@ -251,6 +254,142 @@ class TestWorktreeIsolation(unittest.TestCase):
         self.assertIsNotNone(violation_bad, "Expected violation when node_modules is missing from worktree")
         self.assertIn("Worktree Environment Readiness Violation", violation_bad)
         self.assertIn("[gate: worktree-env-readiness]", violation_bad)
+
+    def test_10_cross_os_mount_rejection_and_force_flag(self):
+        # 1. Simulate POSIX host with core.symlinks=false
+        proc.git(["config", "core.symlinks", "false"], cwd=self.root)
+        with mock.patch("sys.platform", "linux"):
+            supported, reason = worktree.is_worktree_supported(self.root)
+            self.assertFalse(supported)
+            self.assertIn("Cross-OS mounted repository detected", reason)
+            self.assertIn("--force-cross-os", reason)
+
+            # create_worktree must refuse without touching .git/worktrees
+            with self.assertRaises(RuntimeError) as ctx:
+                worktree.create_worktree(self.root, "cross-os-refused")
+            self.assertIn("fail-fast check", str(ctx.exception))
+            self.assertIn("Cross-OS", str(ctx.exception))
+            git_wt_dir = os.path.join(self.root, ".git", "worktrees")
+            self.assertFalse(os.path.exists(git_wt_dir), ".git/worktrees must not be modified or created on refusal")
+
+            # --force-cross-os bypasses the refusal
+            supported_forced, _ = worktree.is_worktree_supported(self.root, force_cross_os=True)
+            self.assertTrue(supported_forced)
+            info = worktree.create_worktree(self.root, "cross-os-forced", force_cross_os=True)
+            self.assertEqual(info.slug, "cross-os-forced")
+            self.assertTrue(os.path.isdir(info.path))
+            self.assertTrue(worktree.is_worktree(info.path))
+
+    def test_11_cross_os_mount_simulated_inputs(self):
+        # Reset core.symlinks
+        proc.git(["config", "--unset", "core.symlinks"], cwd=self.root)
+
+        with mock.patch("sys.platform", "linux"):
+            # a) 9p, drvfs, fuse filesystem types
+            with mock.patch("alongkit.runtime.mount_fs_type", return_value="9p"):
+                self.assertTrue(worktree.is_cross_os_mount(self.root))
+                sup, _ = worktree.is_worktree_supported(self.root)
+                self.assertFalse(sup)
+
+            with mock.patch("alongkit.runtime.mount_fs_type", return_value="drvfs"):
+                self.assertTrue(worktree.is_cross_os_mount(self.root))
+                sup, _ = worktree.is_worktree_supported(self.root)
+                self.assertFalse(sup)
+
+            with mock.patch("alongkit.runtime.mount_fs_type", return_value="fuse.sshfs"):
+                self.assertTrue(worktree.is_cross_os_mount(self.root))
+                sup, _ = worktree.is_worktree_supported(self.root)
+                self.assertFalse(sup)
+
+            # Clean ext4 fs with no cross-os markers should be supported
+            with mock.patch("alongkit.runtime.mount_fs_type", return_value="ext4"):
+                self.assertFalse(worktree.is_cross_os_mount(self.root))
+
+            # b) Windows-style gitdir entries in .git/worktrees/*/gitdir
+            wt_gitdir = os.path.join(self.root, ".git", "worktrees", "simulated-win", "gitdir")
+            os.makedirs(os.path.dirname(wt_gitdir), exist_ok=True)
+            textio.write_text(wt_gitdir, "C:\\Users\\tester\\repo\\.along\\worktrees\\simulated-win\n")
+            with mock.patch("alongkit.runtime.mount_fs_type", return_value="ext4"):
+                self.assertTrue(worktree.is_cross_os_mount(self.root))
+                sup, _ = worktree.is_worktree_supported(self.root)
+                self.assertFalse(sup)
+
+            # Clean up gitdir entry
+            shutil.rmtree(os.path.join(self.root, ".git", "worktrees"))
+
+            # c) Windows-style core.worktree config
+            proc.git(["config", "core.worktree", "D:/projects/along"], cwd=self.root)
+            with mock.patch("alongkit.runtime.mount_fs_type", return_value="ext4"):
+                self.assertTrue(worktree.is_cross_os_mount(self.root))
+                sup, _ = worktree.is_worktree_supported(self.root)
+                self.assertFalse(sup)
+
+    def test_12_cli_worktree_create_and_force_flag(self):
+        # Configure cross-os indicator
+        proc.git(["config", "core.symlinks", "false"], cwd=self.root)
+        import along_exec
+
+        # 1. without --force-cross-os -> exit code 1, stderr contains failure message
+        err = io.StringIO()
+        out = io.StringIO()
+        with redirect_stdout(out), redirect_stderr(err):
+            with mock.patch("sys.platform", "linux"):
+                with self.assertRaises(SystemExit) as ctx:
+                    along_exec.handle_worktree_command(self.root, ["create", "cli-cross-test"])
+                self.assertEqual(ctx.exception.code, 1)
+        self.assertIn("Cross-OS", err.getvalue())
+        self.assertFalse(os.path.exists(os.path.join(self.root, ".git", "worktrees")))
+
+        # 2. with --force-cross-os -> exit code 0, success
+        err = io.StringIO()
+        out = io.StringIO()
+        with redirect_stdout(out), redirect_stderr(err):
+            with mock.patch("sys.platform", "linux"):
+                with self.assertRaises(SystemExit) as ctx:
+                    along_exec.handle_worktree_command(self.root, ["create", "cli-cross-test", "--force-cross-os"])
+                self.assertEqual(ctx.exception.code, 0)
+        self.assertIn("Created isolated worktree", out.getvalue())
+
+    def test_13_along_start_worktree_degrades_gracefully(self):
+        # Create a mock issue in .along/ISSUES
+        issue_file = os.path.join(self.root, ".along", "ISSUES", "task--degrade-test.md")
+        os.makedirs(os.path.dirname(issue_file), exist_ok=True)
+        content = (
+            "---\n"
+            "protocol: along\n"
+            "protocol_version: '4.2.0'\n"
+            "slug: degrade-test\n"
+            "type: task\n"
+            "status: open\n"
+            "priority: medium\n"
+            "---\n"
+            "# Degrade Test\n"
+        )
+        textio.write_text(issue_file, content)
+
+        # Configure cross-os indicator
+        proc.git(["config", "core.symlinks", "false"], cwd=self.root)
+        import along_exec
+
+        err = io.StringIO()
+        out = io.StringIO()
+        with redirect_stdout(out), redirect_stderr(err):
+            with mock.patch("sys.platform", "linux"):
+                with self.assertRaises(SystemExit) as ctx:
+                    along_exec.handle_start_command(self.root, ["degrade-test", "--approved", "--worktree"])
+                self.assertEqual(ctx.exception.code, 0)
+
+        err_output = err.getvalue()
+        out_output = out.getvalue()
+        # Warning should be issued
+        self.assertIn("Worktree unavailable on cross-OS mount", err_output)
+        self.assertIn("degrading to in-place mode", err_output)
+        # Session bound in-place
+        self.assertIn("Ready to work on issue 'degrade-test'", out_output)
+        # Worktree path should NOT have been created
+        wt_path = os.path.join(self.root, ".along", "worktrees", "degrade-test")
+        self.assertFalse(os.path.exists(wt_path), "Worktree directory must not be created when degraded")
+
 
 
 if __name__ == "__main__":

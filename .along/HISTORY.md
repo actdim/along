@@ -175,3 +175,4 @@ _Index of sessions (newest last). One line per session:_
 2026-10-12 - release-tags-not-pushed - antigravity - configure push.followTags in git setup and add doctor diagnostics for release tags - [Session Log](./SESSIONS/2026/2026-10-12--release-tags-not-pushed.md)
 2026-10-12 - wrap-docs-only-test-skip - antigravity - Skip wrap test gate for docs and along-only changes - [Session Log](./SESSIONS/2026/2026-10-12--wrap-docs-only-test-skip.md)
 2026-10-12 - uncommitted-issue-deleted-without-trace - antigravity - Prevent uncommitted entity file deletion and support multi-issue supersede - [Session Log](./SESSIONS/2026/2026-10-12--uncommitted-issue-deleted-without-trace.md)
+2026-10-12 - worktree-cross-os-mount-guard - antigravity - Refuse worktree creation on cross-OS mounted repositories - [Session Log](./SESSIONS/2026/2026-10-12--worktree-cross-os-mount-guard.md)

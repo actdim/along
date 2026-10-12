@@ -4,7 +4,6 @@
 <!-- No active issues -->
 
 ## Backlog
-- [ ] `(bug)` [worktree-cross-os-mount-guard](ISSUES/bug--worktree-cross-os-mount-guard.md)
 - [ ] `(debt)` [agents-md-core-slimming](ISSUES/debt--agents-md-core-slimming.md)
 - [ ] `(debt)` [along-core-extras-split](ISSUES/debt--along-core-extras-split.md)
 - [ ] `(debt)` [along-exec-argparse-migration](ISSUES/debt--along-exec-argparse-migration.md)
@@ -63,8 +62,8 @@
 
 ## Done (recent)
 - [x] `(bug)` [wrap-docs-only-test-skip](ISSUES/done/bug--wrap-docs-only-test-skip.md)
+- [x] `(bug)` [worktree-cross-os-mount-guard](ISSUES/done/bug--worktree-cross-os-mount-guard.md)
 - [x] `(bug)` [uncommitted-issue-deleted-without-trace](ISSUES/done/bug--uncommitted-issue-deleted-without-trace.md)
 - [x] `(bug)` [release-tags-not-pushed](ISSUES/done/bug--release-tags-not-pushed.md)
 - [x] `(bug)` [mcp-installer-cleanup-serve-arg](ISSUES/done/bug--mcp-installer-cleanup-serve-arg.md)
-- [x] `(bug)` [history-append-blocked-after-wrap](ISSUES/done/bug--history-append-blocked-after-wrap.md)
-<!-- 225 older completed issue(s) archived in .along/ISSUES/done/ -->
+<!-- 226 older completed issue(s) archived in .along/ISSUES/done/ -->

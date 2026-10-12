@@ -22,6 +22,7 @@ if __name__ == "__main__":
 
 import json
 import os
+import re
 import sys
 from typing import Any, Dict, List, Mapping, Optional, Tuple
 
@@ -225,16 +226,117 @@ def mount_fs_type(path: str, mounts_file: str = "/proc/mounts") -> Optional[str]
     return best[1]
 
 
+def _is_windows_path(val: str) -> bool:
+    """Check if a path string uses Windows drive letters or Windows backslashes."""
+    s = val.strip().strip("'\"")
+    if not s:
+        return False
+    if re.match(r"^[a-zA-Z]:[\\/]", s):
+        return True
+    if "\\" in s:
+        return True
+    return False
+
+
+def _has_windows_git_entries(repo_root: str) -> bool:
+    """Check if repository contains Windows-style core.worktree or gitdir entries in .git."""
+    from . import proc
+    # 1. Check core.worktree from git config
+    res = proc.git(["config", "--get", "core.worktree"], cwd=repo_root)
+    if res.ok and _is_windows_path(res.stdout):
+        return True
+
+    # 2. Inspect .git file or directory
+    git_entry = os.path.join(repo_root, ".git")
+    if os.path.isfile(git_entry):
+        try:
+            with open(git_entry, "r", encoding="utf-8", errors="ignore") as f:
+                for line in f:
+                    line = line.strip()
+                    if line.startswith("gitdir:"):
+                        target = line.split(":", 1)[1].strip()
+                        if _is_windows_path(target):
+                            return True
+        except OSError:
+            pass
+        return False
+
+    if not os.path.isdir(git_entry):
+        return False
+
+    # 3. Check .git/config for worktree = ...
+    cfg_file = os.path.join(git_entry, "config")
+    if os.path.isfile(cfg_file):
+        try:
+            with open(cfg_file, "r", encoding="utf-8", errors="ignore") as f:
+                for line in f:
+                    line = line.strip()
+                    if line.startswith("worktree") and "=" in line:
+                        target = line.split("=", 1)[1].strip()
+                        if _is_windows_path(target):
+                            return True
+        except OSError:
+            pass
+
+    # 4. Check existing worktrees under .git/worktrees/*/gitdir
+    wt_dir = os.path.join(git_entry, "worktrees")
+    if os.path.isdir(wt_dir):
+        try:
+            for entry in os.listdir(wt_dir):
+                gd_file = os.path.join(wt_dir, entry, "gitdir")
+                if os.path.isfile(gd_file):
+                    try:
+                        with open(gd_file, "r", encoding="utf-8", errors="ignore") as gf:
+                            content = gf.read().strip()
+                            if _is_windows_path(content):
+                                return True
+                    except OSError:
+                        pass
+        except OSError:
+            pass
+
+    return False
+
+
 def is_cross_os_mount(repo_root: str, fs_type: Optional[str] = None,
                       core_symlinks: Optional[str] = None,
-                      platform: str = sys.platform) -> bool:
+                      platform: Optional[str] = None) -> bool:
     """A POSIX process working on a repository that lives on another OS's filesystem."""
-    if platform == "win32":
+    plat = platform if platform is not None else sys.platform
+    if plat == "win32":
         return False
     fs = fs_type if fs_type is not None else mount_fs_type(repo_root)
-    if fs and any(fs == t or fs.startswith(t + ".") for t in _CROSS_OS_FS_TYPES):
+    if fs and any(fs == t or fs.startswith(t + ".") or fs.startswith(t) for t in _CROSS_OS_FS_TYPES):
         return True
-    return (core_symlinks or "").strip().lower() == "false"
+
+    # Check core.symlinks
+    symlinks_val = core_symlinks
+    if symlinks_val is None and os.path.exists(repo_root):
+        from . import proc
+        res = proc.git(["config", "--get", "core.symlinks"], cwd=repo_root)
+        if res.ok and res.stdout.strip():
+            symlinks_val = res.stdout.strip()
+        else:
+            cfg_file = os.path.join(repo_root, ".git", "config")
+            if os.path.isfile(cfg_file):
+                try:
+                    with open(cfg_file, "r", encoding="utf-8", errors="ignore") as f:
+                        for line in f:
+                            line = line.strip()
+                            if line.startswith("symlinks") and "=" in line:
+                                symlinks_val = line.split("=", 1)[1].strip()
+                                break
+                except OSError:
+                    pass
+
+    if (symlinks_val or "").strip().lower() == "false":
+        return True
+
+    # Check for Windows-style core.worktree or gitdir entries in .git
+    if os.path.exists(repo_root) and _has_windows_git_entries(repo_root):
+        return True
+
+    return False
 
 
 def runtime_report(repo_root: str, agent: str) -> Dict[str, Any]:

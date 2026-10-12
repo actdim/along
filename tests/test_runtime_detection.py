@@ -100,10 +100,34 @@ class TestEnforcementLevel(unittest.TestCase):
 class TestEnvironmentHazards(unittest.TestCase):
     def test_cross_os_mount(self):
         self.assertTrue(runtime.is_cross_os_mount("/r", fs_type="9p", platform="linux"))
+        self.assertTrue(runtime.is_cross_os_mount("/r", fs_type="drvfs", platform="linux"))
+        self.assertTrue(runtime.is_cross_os_mount("/r", fs_type="fuse", platform="linux"))
         self.assertTrue(runtime.is_cross_os_mount("/r", fs_type="fuse.sshfs", platform="linux"))
         self.assertTrue(runtime.is_cross_os_mount("/r", fs_type="ext4", core_symlinks="false", platform="linux"))
         self.assertFalse(runtime.is_cross_os_mount("/r", fs_type="ext4", core_symlinks=None, platform="linux"))
         self.assertFalse(runtime.is_cross_os_mount("C:/r", fs_type="9p", core_symlinks="false", platform="win32"))
+
+        # Windows gitdir entries
+        tmp = tempfile.mkdtemp(prefix="along-rt-gitdir-")
+        try:
+            wt_gitdir = os.path.join(tmp, ".git", "worktrees", "w1", "gitdir")
+            os.makedirs(os.path.dirname(wt_gitdir), exist_ok=True)
+            with open(wt_gitdir, "w", encoding="utf-8") as gf:
+                gf.write("C:\\Users\\along\\worktrees\\w1\n")
+            self.assertTrue(runtime.is_cross_os_mount(tmp, fs_type="ext4", platform="linux"))
+        finally:
+            shutil.rmtree(tmp, ignore_errors=True)
+
+        # Windows core.worktree in .git/config
+        tmp2 = tempfile.mkdtemp(prefix="along-rt-worktree-")
+        try:
+            cfg = os.path.join(tmp2, ".git", "config")
+            os.makedirs(os.path.dirname(cfg), exist_ok=True)
+            with open(cfg, "w", encoding="utf-8") as cf:
+                cf.write("[core]\n\tworktree = D:/projects/along\n")
+            self.assertTrue(runtime.is_cross_os_mount(tmp2, fs_type="ext4", platform="linux"))
+        finally:
+            shutil.rmtree(tmp2, ignore_errors=True)
 
     def test_mount_fs_type_picks_longest_prefix(self):
         root = tempfile.mkdtemp(prefix="along-rt-mounts-")
