@@ -1,10 +1,9 @@
 # Active Issues
 
 ## Active
-- [ ] `(bug)` [history-append-blocked-after-wrap](ISSUES/bug--history-append-blocked-after-wrap.md)
+- [ ] `(bug)` [wrap-docs-only-test-skip](ISSUES/bug--wrap-docs-only-test-skip.md)
 
 ## Backlog
-- [ ] `(bug)` [release-tags-not-pushed](ISSUES/bug--release-tags-not-pushed.md)
 - [ ] `(bug)` [uncommitted-issue-deleted-without-trace](ISSUES/bug--uncommitted-issue-deleted-without-trace.md)
 - [ ] `(bug)` [worktree-cross-os-mount-guard](ISSUES/bug--worktree-cross-os-mount-guard.md)
 - [ ] `(debt)` [agents-md-core-slimming](ISSUES/debt--agents-md-core-slimming.md)
@@ -64,9 +63,9 @@
 - [ ] `(feat)` [zero-step-state-recovery-and-drift-detection](ISSUES/feat--zero-step-state-recovery-and-drift-detection.md)
 
 ## Done (recent)
+- [x] `(bug)` [release-tags-not-pushed](ISSUES/done/bug--release-tags-not-pushed.md)
+- [x] `(bug)` [mcp-installer-cleanup-serve-arg](ISSUES/done/bug--mcp-installer-cleanup-serve-arg.md)
+- [x] `(bug)` [history-append-blocked-after-wrap](ISSUES/done/bug--history-append-blocked-after-wrap.md)
 - [x] `(task)` [release-v4-4-10](ISSUES/done/task--release-v4-4-10.md)
 - [x] `(task)` [field-report-fixes](ISSUES/done/task--field-report-fixes.md)
-- [x] `(feat)` [test-gated-code-merge-pipeline](ISSUES/done/feat--test-gated-code-merge-pipeline.md)
-- [x] `(feat)` [gate-friction-and-bypass-accountability](ISSUES/done/feat--gate-friction-and-bypass-accountability.md)
-- [x] `(debt)` [agents-md-budget-project-specifics](ISSUES/done/debt--agents-md-budget-project-specifics.md)
-<!-- 220 older completed issue(s) archived in .along/ISSUES/done/ -->
+<!-- 223 older completed issue(s) archived in .along/ISSUES/done/ -->
