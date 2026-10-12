@@ -197,7 +197,7 @@ gates:
       handler: alongkit.hooks.predicates.check_projection_sync_before_stop
       error: "[gate: projection-sync-before-stop] could not refresh projections. Run 'along issue sync'."
 
-  - id: entity_reference_integrity
+  - id: entity_deletion_protection
     tier: invariant
     enforcement: [runtime, git, ci]
     title: "Entity File Deletion Protection"
@@ -207,7 +207,7 @@ gates:
     rule:
       type: predicate
       handler: alongkit.hooks.predicates.check_entity_deletion_protection
-      error: "Entity file deletion rejected by [gate: entity-reference-integrity]: Deleting an issue, ADR, milestone, risk, or spike file is forbidden. Use 'along issue supersede' / 'along issue rename' (split: supersede into several keys)."
+      error: "Entity file deletion rejected by [gate: entity-deletion-protection]: Deleting an issue, ADR, milestone, risk, or spike file is forbidden. Use 'along issue supersede' / 'along issue rename' (split: supersede into several keys)."
 
   - id: entity_reference_integrity
     # runtime: Stop once entity files changed; also run by `along wrap` and

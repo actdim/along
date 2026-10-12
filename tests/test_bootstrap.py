@@ -100,6 +100,30 @@ class TestBootstrapInline(unittest.TestCase):
                 bootstrap.ensure_deps(missing_exit_code=2)
             self.assertEqual(ctx.exception.code, 2)
 
+    def test_inline_reexec_with_sys_orig_argv(self):
+        """When invoked via CPython -c, sys.argv is ['-c', 'arg'] and code lives in sys.orig_argv."""
+        captured = {}
+        python = self._plant_venv(self.venv_dir, bootstrap.RUNTIME_DEPENDENCIES)
+
+        def fake_reexec(command, missing_exit_code, **_kwargs):
+            captured["command"] = command
+            raise SystemExit(0)
+
+        with mock.patch.object(bootstrap, "have_deps", return_value=False), \
+                mock.patch.object(bootstrap, "_reexec", side_effect=fake_reexec), \
+                mock.patch("shutil.which", return_value="uv"), \
+                mock.patch.dict(os.environ, {bootstrap.VENV_ENV: self.venv_dir}), \
+                mock.patch.object(sys, "argv", ["-c", "foo_arg"]), \
+                mock.patch.object(sys, "orig_argv", ["python", "-c", "import sys; print(sys.argv)", "foo_arg"]):
+            os.environ.pop(bootstrap.GUARD_ENV, None)
+            with self.assertRaises(SystemExit):
+                bootstrap.ensure_deps()
+
+        cmd = captured.get("command")
+        self.assertIsNotNone(cmd)
+        self.assertEqual(cmd[0], python)
+        self.assertEqual(cmd[1:], ["-c", "import sys; print(sys.argv)", "foo_arg"])
+
 
 if __name__ == "__main__":
     unittest.main()

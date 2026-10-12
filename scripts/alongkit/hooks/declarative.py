@@ -13,7 +13,7 @@ import importlib
 import os
 import re
 import sys
-from typing import Any, Callable, Dict, List, Optional, Tuple, Union
+from typing import Any, Callable, Dict, List, Optional, Set, Tuple, Union
 
 from .. import bootstrap, repo, textio
 from .gates import BaseGate
@@ -293,6 +293,11 @@ def merge_override(base: DeclarativeGateDefinition, override: DeclarativeGateDef
     )
 
 
+class DuplicateGateError(ValueError):
+    """Raised when a YAML file defines duplicate gate IDs."""
+    pass
+
+
 def load_gate_definitions(yaml_path: str) -> List[DeclarativeGateDefinition]:
     """Parse all gate definitions from a YAML file."""
     return [defn for defn, _raw in load_gate_entries(yaml_path)]
@@ -319,11 +324,18 @@ def load_gate_entries(yaml_path: str) -> List[Tuple[DeclarativeGateDefinition, D
     if not isinstance(gates_raw, list):
         return []
 
+    seen_ids: Set[str] = set()
     entries: List[Tuple[DeclarativeGateDefinition, Dict[str, Any]]] = []
     for entry in gates_raw:
         if isinstance(entry, dict):
             try:
-                entries.append((parse_gate_dict(entry), entry))
+                defn = parse_gate_dict(entry)
+                if defn.id in seen_ids:
+                    raise DuplicateGateError(f"Duplicate gate id '{defn.id}' defined in '{yaml_path}'")
+                seen_ids.add(defn.id)
+                entries.append((defn, entry))
+            except DuplicateGateError:
+                raise
             except (ValueError, KeyError, re.error) as exc:
                 sys.stderr.write(f"[Along Hook] Warning: Skipping invalid gate entry in '{yaml_path}': {exc}\n")
 
@@ -342,6 +354,8 @@ def get_all_declarative_gates(repo_root: Optional[str] = None) -> List[Declarati
 
     # 1. Load protocol defaults
     for defn in load_gate_definitions(DEFAULT_GATES_FILE):
+        if defn.id in defs_by_id:
+            raise DuplicateGateError(f"Duplicate gate id '{defn.id}' in '{DEFAULT_GATES_FILE}'")
         defs_by_id[defn.id] = defn
 
     # 2. Load repo overrides if present in .along/rules/gates.yaml. An entry for a built-in

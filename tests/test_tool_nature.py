@@ -154,6 +154,74 @@ class TestToolNatureClassification(unittest.TestCase):
             res = toolnature.classify_agent_tool(tool, {})
             self.assertEqual(res.tool_class, ToolClass.DESTRUCTIVE)
 
+    def test_env_unwrapping_and_dangerous_commands(self):
+        """env wrapper should unwrap underlying command and classify correctly."""
+        res_dest = classify_command("env rm -rf ~")
+        self.assertEqual(res_dest.tool_class, ToolClass.DESTRUCTIVE)
+
+        res_read = classify_command("env git status")
+        self.assertEqual(res_read.tool_class, ToolClass.READ_ONLY)
+
+        res_var = classify_command("env FOO=bar rm -rf /")
+        self.assertEqual(res_var.tool_class, ToolClass.DESTRUCTIVE)
+
+    def test_git_dangerous_configs_and_flags(self):
+        """Dangerous git -c options and flags must classify as DESTRUCTIVE."""
+        res_fs = classify_command("git -c core.fsmonitor='rm -rf ~' status")
+        self.assertEqual(res_fs.tool_class, ToolClass.DESTRUCTIVE)
+
+        res_pager = classify_command("git -c core.pager=evil diff")
+        self.assertEqual(res_pager.tool_class, ToolClass.DESTRUCTIVE)
+
+        res_upload = classify_command("git --upload-pack=evil fetch")
+        self.assertEqual(res_upload.tool_class, ToolClass.DESTRUCTIVE)
+
+        res_safe = classify_command("git -c user.name=test status")
+        self.assertEqual(res_safe.tool_class, ToolClass.READ_ONLY)
+
+    def test_gh_command_boundaries(self):
+        """gh pr review and mutation flags must classify as EXTERNAL, not read-only."""
+        res_review = classify_command("gh pr review --approve")
+        self.assertEqual(res_review.tool_class, ToolClass.EXTERNAL)
+
+        res_view = classify_command("gh pr view 123")
+        self.assertEqual(res_view.tool_class, ToolClass.READ_ONLY)
+
+        res_api_field = classify_command("gh api --field key=val repos/foo")
+        self.assertEqual(res_api_field.tool_class, ToolClass.EXTERNAL)
+
+        res_api_read = classify_command("gh api repos/foo")
+        self.assertEqual(res_api_read.tool_class, ToolClass.READ_ONLY)
+
+    def test_destructive_path_indicators(self):
+        """Deletion commands targeting home, root, or wildcards must classify as DESTRUCTIVE."""
+        res_home = classify_command("rm -rf ~")
+        self.assertEqual(res_home.tool_class, ToolClass.DESTRUCTIVE)
+
+        res_pwsh_home = classify_command("Remove-Item -Recurse -Force ~")
+        self.assertEqual(res_pwsh_home.tool_class, ToolClass.DESTRUCTIVE)
+
+        res_local = classify_command("rm temp.txt")
+        self.assertEqual(res_local.tool_class, ToolClass.WORKSPACE_WRITE)
+
+    def test_repo_rules_cannot_downgrade_dangerous_commands(self):
+        """Repository tool rules cannot downgrade built-in destructive or external commands to read-only."""
+        tmp = tempfile.mkdtemp()
+        try:
+            os.makedirs(os.path.join(tmp, ".along"), exist_ok=True)
+            rules_path = os.path.join(tmp, ".along", "tool_rules.yaml")
+            with open(rules_path, "w", encoding="utf-8") as f:
+                f.write(
+                    "rules:\n"
+                    "  - pattern: 'rm -rf ~'\n"
+                    "    class: read-only\n"
+                    "    description: 'Downgraded rm'\n"
+                )
+            res = classify_command("rm -rf ~", repo_root=tmp)
+            self.assertEqual(res.tool_class, ToolClass.DESTRUCTIVE)
+        finally:
+            shutil.rmtree(tmp, ignore_errors=True)
+
 
 class TestCompoundCommands(unittest.TestCase):
     """Test compound shell commands taking the most dangerous class."""

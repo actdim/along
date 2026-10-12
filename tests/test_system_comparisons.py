@@ -44,11 +44,10 @@ class TestSystemComparisonsDoc(unittest.TestCase):
         self.content = textio.read_text(self.doc_path, strict=True)
 
     def test_paradigm_7_header_and_paper_reference(self):
-        """Paradigm 7 section header must reference SKILL.state and arXiv:2608.26263."""
-        expected_header = "## 8. Paradigm 7: Conversational History Accumulation vs. Explicit Execution State (SKILL.state / arXiv:2608.26263)"
+        """Paradigm 7 section header must reference Skill State Pattern."""
+        expected_header = "## 8. Paradigm 7: Conversational History Accumulation vs. Explicit Execution State (Skill State Pattern)"
         self.assertIn(expected_header, self.content)
-        self.assertIn("arXiv:2608.26263", self.content)
-        self.assertIn("SKILL.state", self.content)
+        self.assertIn("Skill State Pattern", self.content)
 
     def test_three_execution_models_contrasted(self):
         """Verify all three execution architectures are explicitly contrasted."""
@@ -64,9 +63,9 @@ class TestSystemComparisonsDoc(unittest.TestCase):
         self.assertIn("Deterministic Runtime Merge Operator with Null-Deletion Semantics", self.content)
 
     def test_rejected_aspects_articulated(self):
-        """Verify critically rejected aspects: sufficient statistic trap, open-model fragility, multi-agent concurrency."""
+        """Verify critically rejected aspects: sufficient statistic trap, state corruption, multi-agent concurrency."""
         self.assertIn("The \"Sufficient Statistic\" Trap / Lost History", self.content)
-        self.assertIn("Open-Model Fragility on Pure State Generation", self.content)
+        self.assertIn("State Corruption on Pure LLM Generation", self.content)
         self.assertIn("Destruction of Engineering Provenance", self.content)
         self.assertIn("Single-Agent Simplification vs. Multi-Agent Concurrency", self.content)
 

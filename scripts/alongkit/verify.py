@@ -188,19 +188,39 @@ _VERSION_LINE = re.compile(r'^[+-]\s*"version"\s*:\s*"[^"]*",?\s*$')
 
 
 def is_doc_only_path(rel: str) -> bool:
-    """Documentation or Along state, never code: `*.md`, `docs/**`, `.along/**` (not scripts), llms*.txt."""
+    """Documentation or Along state, never code: `*.md` (outside code/skills), `docs/**`, `.along/**` (not scripts), llms*.txt."""
     path = rel.replace("\\", "/")
     while path.startswith("./"):
         path = path[2:]
     parts = [p for p in path.split("/") if p]
+    if not parts:
+        return False
+
+    norm = path.lower()
+    base = parts[-1].lower()
+
+    # Product code, protocol instructions and skills are NOT documentation:
+    if norm in ("agents.md", "claude.md", "gemini.md") or base in ("agents.md", "claude.md"):
+        return False
+    if "skills" in parts or norm.startswith("skills/") or base == "protocol.md":
+        return False
+
     for i, part in enumerate(parts):
         if part == ".along":
             if i + 1 < len(parts) and parts[i + 1] == "scripts":
                 return False
             return True
-    if path.startswith("docs/") or "docs" in parts[:-1] or path.endswith(_DOC_SUFFIXES):
+
+    # Root docs/ directory or top-level documentation files
+    if path.startswith("docs/") or (len(parts) > 1 and parts[0] == "docs"):
         return True
-    return os.path.basename(path) in _DOC_FILES
+    if base in _DOC_FILES:
+        return True
+    if path.endswith(_DOC_SUFFIXES):
+        if any(p in ("packages", "src", "scripts", "skills", "tests") for p in parts[:-1]):
+            return False
+        return True
+    return False
 
 
 def version_only_manifest_change(diff_text: str) -> bool:

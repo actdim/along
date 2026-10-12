@@ -380,6 +380,50 @@ class TestStatefulPredicates(unittest.TestCase):
         err = check_entity_deletion_protection(event_del_source, repo_root=self.tmp)
         self.assertIsNone(err)
 
+    def test_duplicate_gate_id_rejected(self):
+        """Duplicate gate IDs must raise DuplicateGateError at load time."""
+        from alongkit.hooks.declarative import DuplicateGateError, load_gate_entries
+
+        dup_yaml = (
+            "version: 1\n"
+            "gates:\n"
+            "  - id: sample_gate\n"
+            "    event: PreToolUse\n"
+            "    tools: [run_command]\n"
+            "    rule:\n"
+            "      type: regex_forbidden\n"
+            "      pattern: 'foo'\n"
+            "  - id: sample_gate\n"
+            "    event: Stop\n"
+            "    rule:\n"
+            "      type: regex_forbidden\n"
+            "      pattern: 'bar'\n"
+        )
+        with tempfile.NamedTemporaryFile("w", suffix=".yaml", delete=False) as f:
+            f.write(dup_yaml)
+            tmp_yaml_path = f.name
+        try:
+            with self.assertRaises(DuplicateGateError):
+                load_gate_entries(tmp_yaml_path)
+        finally:
+            if os.path.exists(tmp_yaml_path):
+                os.remove(tmp_yaml_path)
+
+    def test_both_entity_integrity_gates_coexist(self):
+        """PreToolUse entity_deletion_protection and Stop entity_reference_integrity must both load."""
+        from alongkit.hooks.declarative import get_all_declarative_gates
+
+        gates = get_all_declarative_gates(repo_root=REPO_ROOT)
+        gate_names = {g.name for g in gates}
+        self.assertIn("entity_deletion_protection", gate_names)
+        self.assertIn("entity_reference_integrity", gate_names)
+
+        del_gate = next(g for g in gates if g.name == "entity_deletion_protection")
+        self.assertEqual(del_gate.defn.event_type, HookEventType.PRE_TOOL_USE)
+
+        stop_gate = next(g for g in gates if g.name == "entity_reference_integrity")
+        self.assertEqual(stop_gate.defn.event_type, HookEventType.STOP)
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -195,7 +195,28 @@ def ensure_deps(dependencies: Sequence[str] = RUNTIME_DEPENDENCIES,
         sys.exit(missing_exit_code)
 
     is_inline = bool(sys.argv and sys.argv[0] == "-c")
+    code_str = ""
+    trailing_args: List[str] = []
+    if is_inline:
+        orig = getattr(sys, "orig_argv", [])
+        if "-c" in orig:
+            c_idx = orig.index("-c")
+            if c_idx + 1 < len(orig):
+                code_str = orig[c_idx + 1]
+                trailing_args = list(sys.argv[1:])
+        if not code_str:
+            # Fallback for synthetic test environments or custom wrappers
+            if len(sys.argv) > 1 and sys.argv[1] == "-c" and len(sys.argv) > 2:
+                code_str = sys.argv[2]
+                trailing_args = list(sys.argv[3:])
+            elif len(sys.argv) > 1:
+                code_str = sys.argv[1]
+                trailing_args = list(sys.argv[2:])
+
     script = os.path.abspath(sys.argv[0]) if (sys.argv and sys.argv[0] and not is_inline) else ""
+    if is_inline and not code_str:
+        print(f"[Error] {MissingDependency(modules[0])}", file=sys.stderr)
+        sys.exit(missing_exit_code)
     if not is_inline and (not script or not os.path.isfile(script)):
         print(f"[Error] {MissingDependency(modules[0])}", file=sys.stderr)
         sys.exit(missing_exit_code)
@@ -204,7 +225,7 @@ def ensure_deps(dependencies: Sequence[str] = RUNTIME_DEPENDENCIES,
     # re-resolves the dependencies on every call (every hook, every tool use).
     venv_dir = runtime_venv_dir()
     if _venv_is_current(venv_dir, dependencies):
-        reexec_cmd = [venv_python(venv_dir), *sys.argv[1:]] if is_inline else [venv_python(venv_dir), script, *sys.argv[1:]]
+        reexec_cmd = [venv_python(venv_dir), "-c", code_str, *trailing_args] if is_inline else [venv_python(venv_dir), script, *sys.argv[1:]]
         _reexec(reexec_cmd, missing_exit_code, stdin_data=stdin_data)
 
     uv = shutil.which("uv")
@@ -216,14 +237,14 @@ def ensure_deps(dependencies: Sequence[str] = RUNTIME_DEPENDENCIES,
         print(f"-> [Along] building cached runtime {venv_dir} (one-time): {' '.join(dependencies)}",
               file=sys.stderr)
     if _build_venv(uv, venv_dir, dependencies):
-        reexec_cmd = [venv_python(venv_dir), *sys.argv[1:]] if is_inline else [venv_python(venv_dir), script, *sys.argv[1:]]
+        reexec_cmd = [venv_python(venv_dir), "-c", code_str, *trailing_args] if is_inline else [venv_python(venv_dir), script, *sys.argv[1:]]
         _reexec(reexec_cmd, missing_exit_code, stdin_data=stdin_data)
 
     command: List[str] = [uv, "run", "--quiet"]
     for spec in dependencies:
         command += ["--with", spec]
     if is_inline:
-        command += ["python", *sys.argv[1:]]
+        command += ["python", "-c", code_str, *trailing_args]
     else:
         command += [script, *sys.argv[1:]]
     if not quiet:

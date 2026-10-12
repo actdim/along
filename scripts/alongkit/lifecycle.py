@@ -996,13 +996,10 @@ def execute_wrap(
     if not no_verify and not dry_run:
         skip_tests = False
         attributed = session.attributed_files(repo_root, clean_slug)
-        if attributed:
-            if verify.docs_only_change(repo_root, list(attributed.keys())):
-                skip_tests = True
-        else:
-            wt_changes = repo.working_tree_changes(repo_root)
-            if wt_changes and verify.docs_only_change(repo_root, wt_changes):
-                skip_tests = True
+        wt_changes = repo.working_tree_changes(repo_root) or []
+        combined_changes = set(attributed.keys()) | set(wt_changes)
+        if combined_changes and verify.docs_only_change(repo_root, list(combined_changes)):
+            skip_tests = True
 
         if skip_tests:
             print("-> [Wrap Quality Gate] Only documentation / Along state changes: tests skipped.")

@@ -65,7 +65,7 @@ Along addresses these challenges through a dual-tier structure: an evergreen arc
 
 | Pillar | How Along Delivers It |
 | :--- | :--- |
-| **Zero-Vector In-Repo Intelligence** | Fast TF-IDF multi-scope retrieval engine (`along-kb-search`) unifying docs, ADR constraints, active issues, and session logs into word-boundary aligned snippets (< 150 tokens), avoiding full-file context ingestion and significantly reducing exploration prompt tokens without external vector DBs or daemon processes (see [benchmarks](scripts/bench_kb_search.py)). |
+| **Zero-Vector In-Repo Intelligence** | Fast TF-IDF multi-scope retrieval engine (`along-kb-search`) unifying docs, ADR constraints, active issues, and session logs into word-boundary aligned snippets (<= 150 words), avoiding full-file context ingestion and significantly reducing exploration prompt tokens without external vector DBs or daemon processes (see [benchmarks](scripts/bench_kb_search.py)). |
 | **Dual-Tier Memory Architecture** | Clean architectural separation: Evergreen LLM-Wiki (`docs/`) with AST code symbol grounding and SHA-256 drift detection vs. Living Transactional Governance (`.along/`) with DAG issues, immutable session history, and atomic projections. |
 | **Persistent In-Repo Memory** | Durable, git-tracked memory (`.along/`): DAG issues, append-only ADR logs, milestones, risks, and session records that travel with the codebase. |
 | **Autonomous Multi-Agent Teams** | Sequential living-plan state machine (`along-team`): Supervisor -> Scout -> Architect -> Implementer -> Reviewer with session blackboards, retry limits, and single-agent degradation. |
@@ -76,7 +76,7 @@ Along addresses these challenges through a dual-tier structure: an evergreen arc
 | **Zero-Conflict Git Concurrency** | Single Source of Truth (SSOT) atomic files vs compiled projections (`ISSUES.md`, `INDEX.md`), union merges (`merge=union`), and decentralized date-slug ADRs that avoid collisions in parallel branches. |
 | **Engineering Provenance & Dual-Track UI** | Living plans, fix loops, and verification gates are permanently recorded in session logs while projecting interactive visual review cards in IDEs (Antigravity). |
 | **Strict Data Safety & Verification Gates** | Hermetic engines (`alongkit`) with transactional byte-exact rollbacks, strict front-matter preservation (`ruamel.yaml`), and zero-unintended-deletions invariant. |
-| **Declarative Runtime Gates & Traceability** | Mechanical agent lifecycle interception (`PreToolUse`, `Stop`) enforcing 16 runtime gates in `default_gates.yaml` (and 30+ protocol invariants enforced across runtime hooks, git hooks, and CI), backed by machine-checked bi-directional traceability (`along hook verify`). In runtimes with Along hooks installed, violations trigger immediate tool-level interception; git and CI gates provide universal baseline enforcement everywhere. |
+| **Declarative Runtime Gates & Traceability** | Mechanical agent lifecycle interception (`PreToolUse`, `Stop`) enforcing declarative runtime gates in `default_gates.yaml` (32 protocol invariants enforced across runtime hooks, git hooks, and CI), backed by machine-checked bi-directional traceability (`along hook verify`). In runtimes with Along hooks installed, violations trigger immediate tool-level interception; git and CI gates provide universal baseline enforcement everywhere. |
 | **Nearest Context Boundary** | Monorepos, microservices, and Git submodules maintain isolated localized memory, preventing root workspace pollution. |
 
 ---
@@ -103,8 +103,8 @@ flowchart TD
 
     subgraph Retrieval["Zero-Vector In-Repo Retrieval Engine (along kb-search)"]
         SEARCH["Fast TF-IDF Multi-Scope Search"]
-        SNIPPETS["Targeted Bounded Snippets (< 150 Tokens)"]
-        SAVINGS["Bounded Snippets (< 150 Tokens) vs Full-File Ingestion"]
+        SNIPPETS["Targeted Bounded Snippets (<= 150 Words)"]
+        SAVINGS["Bounded Snippets (<= 150 Words) vs Full-File Ingestion"]
     end
 
     WIKI --- SEARCH
@@ -265,7 +265,7 @@ Also, when relevant: `.along/VISION.md`, `.along/GLOSSARY.md`. These reflect the
 - **Canonical keys**: `<type>--<slug>` (e.g. `feat--token-refresh`). Reference by key, NEVER by file path.
 - **ADRs**: Modular records in `.along/DECISIONS/ADR-YYYY-MM-DD--<slug>.md` (with legacy fallback to monolithic `DECISIONS.md`). Never edit past entries - mark superseded. Recompile projections (`.along/DECISIONS.md` board and `.along/CONSTRAINTS.md`) via `/along-decision-sync` or `along decision sync`.
 - **Issue lifecycle** [gate: issue-lifecycle]: Close with `along issue done <slug>` (`status: done`, `completed`, moved to `.along/ISSUES/done/`).
-- **Entity references** [gate: entity-reference-integrity]: Never delete an entity other entities reference; use `along issue rename` / `along issue supersede`.
+- **Entity references** [gate: entity-reference-integrity] [gate: entity-deletion-protection]: Never delete an entity other entities reference; use `along issue rename` / `along issue supersede`.
 - **Auto-entity creation**: Agents MUST automatically detect user intent (build/fix/refactor -> Issue, blocked/rate-limit -> Risk, compare/benchmark -> Spike, release/sprint -> Milestone) and create entities without prompting the user.
 
 ## Knowledge Base & Documentation
@@ -4237,8 +4237,8 @@ AI engineering workflows employ a diverse range of tools to manage agent context
 
 - **GitHub spec-kit**: Specification-driven prompt scaffolding and structured specification templates for generating features.
 - **Task Master / issue tracking CLIs**: Command-line issue and backlog tracking designed for agents or terminal users.
-- **Beads / Kiro specs**: Modular declarative specification frameworks for agent instructions and structured constraints.
-- **Native static instructions (`CLAUDE.md` / `AGENTS.md`)**: Baseline static markdown conventions loaded by agent harnesses at session start.
+- **Beads / Kiro specs**: Task DAG dependency tracking (Beads) and modular constraint specifications (Kiro).
+- **Native static instructions (`CLAUDE.md` / `AGENTS.md`)**: Baseline static markdown conventions loaded by agent harnesses at session start (e.g. Claude Code reading `CLAUDE.md`, Codex and Antigravity reading `AGENTS.md`).
 - **Cursor rules (`.cursorrules` / `.cursor/rules/`)**: Editor-scoped prompt instructions and file-glob-matched rules for Cursor IDE.
 - **ActDim Along**: Provider-agnostic context protocol embedding dual-tier memory (evergreen wiki + living governance), mechanical lifecycle gates, and zero-vector snippet retrieval across multiple agent platforms.
 
@@ -4250,10 +4250,10 @@ The following table evaluates these tools and paradigms objectively, detailing t
 | :--- | :--- | :--- | :--- | :--- | :--- |
 | **GitHub spec-kit** | Specification authoring and prompt expansion for spec-first feature design | Advisory prompt guidance via Markdown specification templates | Relies on standard Git PR workflows and manual merge resolution | Clear requirement definition upfront; human-readable templates; straightforward integration into GitHub-centric workflows | Prompt-based only without active lifecycle interception (`PreToolUse`, `Stop`); lacks transactional task DAG or live session state tracking; no automated cross-session snippet retrieval |
 | **Task Master / issue tracking CLIs** | Terminal-based task and issue tracking for agent workflows | CLI command invocations; status progression (`open` -> `in-progress` -> `done`) | Centralized local database or flat file tracking | Structured command-line issue management; lightweight task metadata; easy to script in CI or shell workflows | Task management only without architectural wiki (`docs/`), ADR governance, or AST symbol validation; lacks agent lifecycle hook interception and multi-provider context protocol management |
-| **Beads / Kiro specs** | Modular declarative specification frameworks for agent instructions and structured constraints | Advisory prompt composition and modular rule injection | File-level versioning in repository | Modular composability of rules and constraints; clear declarative syntax; portable across prompt-based environments | Advisory prompt guidelines rather than mechanical runtime tool interception; lacks git worktree workspace isolation, in-repo lexical snippet retrieval, or compiled architectural projections |
-| **Native static instructions (`CLAUDE.md` / `AGENTS.md`)** | Baseline agent instructions, repository conventions, and command definitions | Advisory system prompt injection by agent harnesses at startup | Single static file tracked in Git | Zero runtime dependencies; universal native support across Claude Code, OpenAI Codex, Google Antigravity, and OpenCode; simple to author and maintain | Subject to soft prompt decay and context displacement as conversation length grows; static files cannot dynamically track task progression, session state, or multi-agent worktrees; risks token bloat when instructions or project guidelines grow large |
+| **Beads / Kiro specs** | Task DAG dependency tracking (Beads) and structured constraint specifications (Kiro) | CLI or file status tracking; DAG edge resolution; advisory prompt injection | Local file or database storage; file-level versioning | Explicit task dependency graphs; structured blocker tracking; programmatic task progression | Task graph management only without architectural LLM-Wiki (`docs/`), ADR governance, or code AST validation; lacks agent lifecycle hook interception and multi-provider context protocol management |
+| **Native static instructions (`CLAUDE.md` / `AGENTS.md`)** | Baseline agent instructions, repository conventions, and command definitions | Advisory system prompt injection by agent harnesses at startup | Single static file tracked in Git | Zero runtime dependencies; native static loading by major agent harnesses (Claude Code via `CLAUDE.md`, Codex and Antigravity via `AGENTS.md`); simple to author and maintain | Subject to soft prompt decay and context displacement as conversation length grows; static files cannot dynamically track task progression, session state, or multi-agent worktrees; risks token bloat when instructions or project guidelines grow large |
 | **Cursor rules (`.cursorrules` / `.cursor/rules/`)** | Editor-scoped guidelines and pattern-matched rules for Cursor IDE | Advisory context injection scoped to file globs within the editor | File-level versioning in repository | Tailored developer experience within Cursor; glob pattern scoping to target specific file types or subdirectories; low barrier to entry | Tied to a specific editor environment; advisory prompt augmentation without tool-level mechanical execution interception or git-level enforcement; lacks persistent session provenance, ADR compilation, or provider-agnostic CLI tooling |
-| **ActDim Along** | Provider-agnostic agent-context protocol, dual-tier memory (evergreen wiki + living governance), mechanical gates, and execution skills | Multi-layer enforcement: mechanical tool-level interception (`PreToolUse`, `Stop`) where hooks are supported, backed by opt-in git hooks and CI quality gates | Git worktree workspace isolation, atomic issue files, and Git union merge drivers (`merge=union`) for append-only logs | Provider-agnostic across Claude Code, Antigravity, Codex, OpenCode; mechanical quality gates; dual-tier memory with bounded snippet search (< 150 tokens) avoiding full-file ingestion; full engineering provenance in session logs | Higher initial conceptual complexity and larger repository footprint than single static instruction files; requires Python 3.10+ and standard toolchain for CLI engines; runtime tool interception requires agent environments that expose lifecycle hooks (advisory elsewhere) |
+| **ActDim Along** | Provider-agnostic agent-context protocol, dual-tier memory (evergreen wiki + living governance), mechanical gates, and execution skills | Multi-layer enforcement: mechanical tool-level interception (`PreToolUse`, `Stop`) where hooks are supported, backed by opt-in git hooks and CI quality gates | Git worktree workspace isolation, atomic issue files, and Git union merge drivers (`merge=union`) for append-only logs | Provider-agnostic across Claude Code, Antigravity, Codex, OpenCode; mechanical quality gates; dual-tier memory with bounded snippet search (<= 150 words) avoiding full-file ingestion; full engineering provenance in session logs | Higher initial conceptual complexity and larger repository footprint than single static instruction files; requires Python 3.10+ and standard toolchain for CLI engines; runtime tool interception requires agent environments that expose lifecycle hooks (advisory elsewhere) |
 
 ---
 
@@ -4276,7 +4276,7 @@ More recent academic proposals extend this by arguing for a dual-process cogniti
 3. **Heavy Runtimes and Cloud Vendor Lock-in**:
    - Forcing a hard dependency on a closed SaaS classification API, or requiring local deployment of heavy 421M parameter PyTorch models, introduces massive environment fragility, GPU/CUDA overhead, and high token costs.
 4. **The "Neural System-1" Latency and Drift Trap**:
-   - Academic architectures claim that ~0.93 seconds per query is "fast" compared to pure autoregressive LLM memory agents (which take 2-30 seconds). In real-world engineering, ~1 second per search is unacceptably slow compared to local deterministic indexes (20-40 ms). Furthermore, neural probabilistic memory consolidation causes memory drift, where critical constraints can be silently de-prioritized by neural link weights.
+   - Academic architectures claim that ~0.93 seconds per query is "fast" compared to pure autoregressive LLM memory agents (which take 2-30 seconds). In real-world engineering, ~1 second per search is unacceptably slow compared to local deterministic indexes. Furthermore, neural probabilistic memory consolidation causes memory drift, where critical constraints can be silently de-prioritized by neural link weights.
 5. **The Chatbot Benchmark Fallacy (LoCoMo vs. Software Engineering)**:
    - Success on conversational QA benchmarks (such as LoCoMo) measures trivia recall across long character chats ("when did character X buy item Y?"). It completely fails to reflect the core constraints of software engineering: Git multi-branch concurrency, AST symbol call graphs, compilation invariants, and mechanical gate enforcement.
 
@@ -4285,7 +4285,7 @@ Along replaces passive chat scraping and neural controllers with **intentional s
 - Tasks are tracked in machine-parseable DAG files (`.along/ISSUES/<type>--<slug>.md`).
 - Architectural choices are deliberately recorded as modular ADRs (`.along/DECISIONS/ADR-*.md`).
 - Verified technical facts live in the LLM-Wiki (`docs/topic--*.md`).
-- **Mechanical System-1**: High-frequency reflexive decisions (link integrity, clean typography, test execution, compilation, AST boundary checks) are executed by sub-millisecond (< 1 ms) mechanical gates (`along_hook.py`) and zero-vector lexical search (`along-kb-search` in 20-40 ms), reserving the LLM strictly as System-2 for deep architectural reasoning and code generation.
+- **Mechanical System-1**: High-frequency reflexive decisions (link integrity, clean typography, test execution, compilation, AST boundary checks) are executed by deterministic mechanical gates (`along_hook.py`) and zero-vector lexical search (`along-kb-search`), reserving the LLM strictly as System-2 for deep architectural reasoning and code generation.
 - Context remains 100% signal, zero noise, with full rationale and trade-offs preserved.
 
 ---
@@ -4332,7 +4332,7 @@ Standalone extension scripts or proxy daemons (e.g. Harmonist-style) that interc
 ### The Along Engineering Advantage: Universal Multi-Runtime Dispatcher
 Along engineered an open, provider-agnostic lifecycle engine:
 - A universal CLI dispatcher (`along_hook.py`) with native adapters for Google Antigravity, Claude Code, OpenAI Codex, and OpenCode (`GenericCliAdapter`).
-- Deterministic, sub-millisecond (< 1 ms) mechanical gates (`TypographyGate`, `ProjectionProtectionGate`, `CliSafetyGate`, `CircuitBreaker`).
+- Deterministic mechanical gates (`TypographyGate`, `ProjectionProtectionGate`, `CliSafetyGate`, `CircuitBreaker`).
 - A declarative YAML gate engine (`default_gates.yaml`) backed by machine-checked bi-directional traceability (`along hook verify`).
 
 ---
@@ -4391,16 +4391,16 @@ Along standardizes on Python with automated PEP 723 dependency delivery:
 
 ---
 
-## 8. Paradigm 7: Conversational History Accumulation vs. Explicit Execution State (SKILL.state / arXiv:2608.26263)
+## 8. Paradigm 7: Conversational History Accumulation vs. Explicit Execution State (Skill State Pattern)
 
 ### Core Mechanism of the Alternative: Three Execution Models Contrasted
-Modern agent runtimes and recent systems research operate across three fundamentally distinct execution architectures:
+Modern agent runtimes and research architectures operate across three fundamentally distinct execution architectures:
 
 1. **Append-Only Conversational History (ReAct, LangGraph with Transcripts, MemGPT)**:
    - Every intermediate reasoning step, action payload, and raw environment observation is continuously appended to an ever-growing prompt transcript.
    - Over extended task horizons (T > 50-200 turns), this causes quadratic token consumption \(O(T^2)\), prompt bloating, severe context pollution, and catastrophic attention drag.
 
-2. **Pure Ephemeral State Transition (SKILL.state / arXiv:2608.26263)**:
+2. **Pure Ephemeral State Transition (Skill State Pattern)**:
    - Replaces conversational transcripts with an explicit, mutable execution state \(\Sigma_t\).
    - At each turn, the model receives only the immutable procedural specification \(P\), the current structured state \(\Sigma_t\), and the latest distilled observation \(O_t\).
    - Intermediate reasoning (Chain-of-Thought) and historical observations are discarded immediately after producing a validated state patch \(\Delta \Sigma_t\), achieving a bounded \(O(1)\) prompt footprint and linear \(O(T)\) cumulative token complexity.
@@ -4411,16 +4411,16 @@ Modern agent runtimes and recent systems research operate across three fundament
 
 ### What Along Adopted / Evaluated
 - **Bounded Prompt Footprints & Linear Token Scaling**: Discarding runaway conversational histories in subagent worker loops allows prompt token costs to scale linearly \(O(T)\) rather than quadratically \(O(T^2)\). Along bounds context consumption while executing autonomous multi-turn tasks.
-- **Observation Distillation**: Background telemetry, system chatter, and verbose passing test outputs cause severe attention drag (collapsing accuracy from 0.68 down to 0.53 under noise). Along integrates observation distillation into CLI runners (`along test`, `along build`, `alongkit.proc.run_capture`) to filter noisy subprocess telemetry and return bounded, high-signal results.
-- **Ephemeral Reasoning Discard in Worker Retry Loops**: In `along-team`, worker retries in `[Fix Loop]` discard intermediate failed reasoning traces and noisy error output, presenting a fresh snapshot of `(Step Spec, Structured Blackboard State, Clean Working Tree Diff, Distilled Reviewer Failure)`. This eliminates error inertia and hallucinated repetitive failures.
-- **Deterministic Runtime Merge Operator with Null-Deletion Semantics**: In `alongkit.session` (`along scratch patch`), Along adopts the mathematical merge operator \(\Sigma_{t+1} = \Sigma_t \oplus \Delta \Sigma_t\) where key deletion is expressed via `null` values, and schema validation runs deterministically in the Python runtime.
+- **Observation Distillation**: Background telemetry, system chatter, and verbose passing test outputs cause severe attention drag. Along integrates observation distillation into CLI runners (`along test`, `along build`, `alongkit.proc.run_capture`) to filter noisy subprocess telemetry and return bounded, high-signal results.
+- **Ephemeral Reasoning Discard in Worker Retry Loops**: In `along-team`, worker retries in `[Fix Loop]` discard intermediate failed conversational reasoning traces to prevent error inertia and hallucinated repetitive failures, while delivering the reviewer's exact failure diagnostics (assertion, error trace, and diff) to the subsequent attempt.
+- **Deterministic Runtime Merge Operator with Null-Deletion Semantics**: In `alongkit.session` (`along scratch update`), Along adopts structured state merging where key deletion is expressed via `null` values, and schema validation runs deterministically in the Python runtime.
 
 ### What Along Critically Rejected and Why
 1. **The "Sufficient Statistic" Trap / Lost History**:
    - Discarding all prior reasoning and historical observations assumes that every piece of information relevant to future actions can be recognized and projected into a structured JSON state immediately upon receipt.
    - In complex software engineering (compilation bugs, race conditions, edge-case debugging), an agent often notices an obscure detail whose critical relevance only becomes apparent 10 steps later. If intermediate reasoning and logs are completely wiped out, the agent is blinded and cannot trace the root cause.
-2. **Open-Model Fragility on Pure State Generation**:
-   - The paper's empirical error taxonomy shows that even in constrained benchmarks, open-weight models suffer a 68% error rate from accidentally deleting or omitting existing state keys when generating state patches. Offloading state persistence to pure LLM generation without mechanical runtime gates is unsafe.
+2. **State Corruption on Pure LLM Generation**:
+   - Offloading critical state tracking purely to LLM generation without runtime validation is error-prone, as models can accidentally omit or overwrite keys when producing state patches. Along pairs structured state schemas with deterministic Python runtime validation.
 3. **Destruction of Engineering Provenance**:
    - Erasing Chain-of-Thought reasoning traces eliminates the audit trail. In Along, engineering provenance (`ADR-2026-09-06--engineering-provenance`) requires that the baseline plan, execution loop trace, and gate verification manifest survive into permanent repository memory (`.along/SESSIONS/`) for code reviews and post-mortems.
 4. **Single-Agent Simplification vs. Multi-Agent Concurrency**:
@@ -4439,14 +4439,14 @@ Along reconciles the tension between token efficiency and historical traceabilit
 | :--- | :--- | :--- |
 | **System Scope** | Point solutions (isolated chat scrapers or vector wrappers). | Unified Context & Governance OS (Wiki + Issues + ADRs + Gates + Worktrees). |
 | **Memory Signal Quality** | Low. Conversational noise, temporary hacks, speculative chat. | High. Vetted architectural ADRs, active DAG issues, and curated Wiki topics. |
-| **Retrieval Footprint** | Heavy. External vector DBs, dense embeddings, cloud RPCs. | Zero-Vector. Pure Python TF-IDF snippet retrieval (bounded < 150 tokens, benchmarked in scripts/bench_kb_search.py). |
+| **Retrieval Footprint** | Heavy. External vector DBs, dense embeddings, cloud RPCs. | Zero-Vector. Pure Python TF-IDF snippet retrieval (bounded <= 150 words, benchmarked in scripts/bench_kb_search.py). |
 | **Runtime Dependencies** | PyTorch, CUDA, Docker, C++ extensions, or proprietary SaaS. | Standard Python standard library + uv. Zero external services. |
-| **Lifecycle Guardrails** | Soft prompts or slow probabilistic neural scoring (300ms - 4s). | Sub-millisecond (< 1 ms) mechanical deterministic gates. |
-| **Git Concurrency** | High conflict risk on shared flat files (`JEVMEM.md`). | Zero-conflict guarantee via modular date-slug files and union merges. |
+| **Lifecycle Guardrails** | Soft prompts or slow probabilistic neural scoring (300ms - 4s). | Deterministic mechanical gates with minimal process overhead. |
+| **Git Concurrency** | High conflict risk on shared flat files (`JEVMEM.md`). | Minimizes merge conflicts via modular date-slug files and union merges. |
 | **Offline Independence** | Requires network connection to cloud APIs or heavy local GPU. | 100% offline-first, hermetic, and provider-agnostic. |
 | **AST Symbol Verification** | None. Blind token chunking breaks code symbol boundaries. | AST-grounded via code-review-graph integration and link integrity gates. |
-| **Cognitive Control (System-1 / System-2)** | Neural System-1 (probabilistic encoder / cloud API, ~1s latency, graph weight drift). | Mechanical System-1 (< 1 ms deterministic gates, AST graph, 20-40 ms TF-IDF) + System-2 LLM. |
-| **Execution History & Memory Model** | Append-only chat bloat \(O(T^2)\) (ReAct) or blind state wiping (SKILL.state). | Dual-Tier: Clean-Turn Worker Loops + Ephemeral Blackboard + Git Provenance. |
+| **Cognitive Control (System-1 / System-2)** | Neural System-1 (probabilistic encoder / cloud API, ~1s latency, graph weight drift). | Mechanical System-1 (deterministic gates, AST graph, local lexical TF-IDF) + System-2 LLM. |
+| **Execution History & Memory Model** | Append-only chat bloat \(O(T^2)\) (ReAct) or blind state wiping (ephemeral state wiping without provenance). | Dual-Tier: Clean-Turn Worker Loops + Ephemeral Blackboard + Git Provenance. |
 
 ---
 

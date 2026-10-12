@@ -217,11 +217,37 @@ BUILTIN_TOOL_RULES: Dict[str, Dict[str, Any]] = {
     "add-content": {"default": ToolClass.WORKSPACE_WRITE},
     "copy-item": {"default": ToolClass.WORKSPACE_WRITE},
     "move-item": {"default": ToolClass.WORKSPACE_WRITE},
-    "del": {"default": ToolClass.WORKSPACE_WRITE},
-    "erase": {"default": ToolClass.WORKSPACE_WRITE},
-    "rm": {"default": ToolClass.WORKSPACE_WRITE},
-    "rmdir": {"default": ToolClass.WORKSPACE_WRITE},
-    "remove-item": {"default": ToolClass.WORKSPACE_WRITE},
+    "del": {
+        "default": ToolClass.WORKSPACE_WRITE,
+        "rules": [
+            {"match": {"arg_regex": r"(?:^|\s)(?:~|[/\\]|\.\.|\*|[a-zA-Z]:[/\\]|\$HOME|%USERPROFILE%)(?:\s|$)"}, "class": ToolClass.DESTRUCTIVE},
+        ],
+    },
+    "erase": {
+        "default": ToolClass.WORKSPACE_WRITE,
+        "rules": [
+            {"match": {"arg_regex": r"(?:^|\s)(?:~|[/\\]|\.\.|\*|[a-zA-Z]:[/\\]|\$HOME|%USERPROFILE%)(?:\s|$)"}, "class": ToolClass.DESTRUCTIVE},
+        ],
+    },
+    "rm": {
+        "default": ToolClass.WORKSPACE_WRITE,
+        "rules": [
+            {"match": {"arg_regex": r"(?:^|\s)(?:~|[/\\]|\.\.|\*|[a-zA-Z]:[/\\]|\$HOME|%USERPROFILE%)(?:\s|$)"}, "class": ToolClass.DESTRUCTIVE},
+            {"match": {"any_flags": ["-rf", "-fr", "-r", "-R", "--recursive"], "arg_regex": r"(?:^|\s)(?:~|\$HOME|%USERPROFILE%|[/\\]|\.\.|[a-zA-Z]:[/\\]|\*|\.)(?:\s|$)"}, "class": ToolClass.DESTRUCTIVE},
+        ],
+    },
+    "rmdir": {
+        "default": ToolClass.WORKSPACE_WRITE,
+        "rules": [
+            {"match": {"arg_regex": r"(?:^|\s)(?:~|[/\\]|\.\.|\*|[a-zA-Z]:[/\\]|\$HOME|%USERPROFILE%)(?:\s|$)"}, "class": ToolClass.DESTRUCTIVE},
+        ],
+    },
+    "remove-item": {
+        "default": ToolClass.WORKSPACE_WRITE,
+        "rules": [
+            {"match": {"arg_regex": r"(?:^|\s)(?:~|[/\\]|\.\.|\*|[a-zA-Z]:[/\\]|\$HOME|%USERPROFILE%)(?:\s|$)"}, "class": ToolClass.DESTRUCTIVE},
+        ],
+    },
     "jq": {"default": ToolClass.READ_ONLY},
     "yq": {
         "default": ToolClass.READ_ONLY,
@@ -234,9 +260,12 @@ BUILTIN_TOOL_RULES: Dict[str, Dict[str, Any]] = {
     "gh": {
         "default": ToolClass.DESTRUCTIVE,
         "rules": [
-            {"match": {"subcommand": "* list|view|status|diff|checks"}, "class": ToolClass.READ_ONLY},
-            {"match": {"subcommand": "api", "no_flags": ["-X", "--method", "-f", "-F", "--input"]}, "class": ToolClass.READ_ONLY},
+            {"match": {"subcommand": "pr review"}, "class": ToolClass.EXTERNAL},
+            {"match": {"subcommand": "* list|* view|* status|* diff|* checks"}, "class": ToolClass.READ_ONLY},
+            {"match": {"subcommand": "api", "no_flags": ["-X", "--method", "-f", "-F", "--field", "--raw-field", "--input"]}, "class": ToolClass.READ_ONLY},
             {"match": {"subcommand": "api", "flag_value": {"-X": "GET"}}, "class": ToolClass.READ_ONLY},
+            {"match": {"subcommand": "api", "flag_value": {"--method": "GET"}}, "class": ToolClass.READ_ONLY},
+            {"match": {"subcommand": "api", "any_flags": ["-f", "-F", "--field", "--raw-field", "--input"]}, "class": ToolClass.EXTERNAL},
             {"match": {"subcommand": "api graphql", "arg_regex": r"^\s*mutation"}, "class": ToolClass.EXTERNAL},
             {"match": {"subcommand": "pr create|pr merge|issue create|pr close|issue close|pr comment|issue comment"}, "class": ToolClass.EXTERNAL},
             {"match": {"subcommand": "release create|release delete|repo create|repo fork|repo delete"}, "class": ToolClass.EXTERNAL},
@@ -373,6 +402,29 @@ BUILTIN_TOOL_RULES: Dict[str, Dict[str, Any]] = {
 
 def _classify_git(call: NormalizedCall) -> Optional[str]:
     """Git code classifier handling complex modal subcommands, global flags and destructive commands."""
+    # Check for dangerous global git execution flags (-c core.fsmonitor=..., --upload-pack, etc.)
+    dangerous_c_keys = ("core.fsmonitor", "core.pager", "core.editor", "core.sshcommand", "sequence.editor", "alias.")
+    for flag, val in call.flag_values.items():
+        flag_l = flag.lower()
+        val_l = (val or "").lower()
+        if flag_l == "-c":
+            for d_key in dangerous_c_keys:
+                if d_key in val_l:
+                    return ToolClass.DESTRUCTIVE
+        if flag_l in ("--upload-pack", "--receive-pack"):
+            return ToolClass.DESTRUCTIVE
+    for arg in call.args:
+        arg_l = arg.lower()
+        if arg_l.startswith("-c"):
+            for d_key in dangerous_c_keys:
+                if d_key in arg_l:
+                    return ToolClass.DESTRUCTIVE
+        if arg_l.startswith(("--upload-pack=", "--receive-pack=")):
+            return ToolClass.DESTRUCTIVE
+    for f in call.flags:
+        if f.lower() in ("--upload-pack", "--receive-pack"):
+            return ToolClass.DESTRUCTIVE
+
     sub = (call.subcommand or "").split()
     subcmd = sub[0] if sub else ""
 
@@ -454,11 +506,17 @@ def _classify_python(call: NormalizedCall) -> Optional[str]:
             return ToolClass.READ_ONLY
         return ToolClass.DESTRUCTIVE
 
-    if call.subcommand in (".along/scripts/test.py", ".along/scripts/build.py"):
+    if call.subcommand in (".along/scripts/test.py", ".along/scripts/build.py", ".along/scripts/dev.py"):
         return ToolClass.VERIFICATION
 
-    if any(a.endswith((".along/scripts/test.py", ".along/scripts/build.py")) for a in call.args):
+    if any(a.endswith((".along/scripts/test.py", ".along/scripts/build.py", ".along/scripts/dev.py")) for a in call.args):
         return ToolClass.VERIFICATION
+
+    # Scripts inside workspace during execution phase
+    if call.args and not call.subcommand.startswith("-"):
+        first_arg = call.args[0].replace("\\", "/")
+        if first_arg.startswith(("tests/", "test_", "scripts/", ".along/scripts/")) or first_arg.endswith((".py",)):
+            return ToolClass.WORKSPACE_WRITE
 
     return ToolClass.DESTRUCTIVE
 
@@ -695,9 +753,7 @@ def _match_subcommand(call: NormalizedCall, pat: str) -> bool:
             if has_star and fnmatch.fnmatch(cand, alt_lower):
                 return True
             if distribute_wildcard and not has_star:
-                if fnmatch.fnmatch(cand, f"*{alt_lower}"):
-                    return True
-                if cand.endswith(" " + alt_lower):
+                if fnmatch.fnmatch(cand, f"* {alt_lower}") or cand == alt_lower:
                     return True
 
     return False
@@ -845,6 +901,17 @@ def get_layers(repo_root: Optional[str] = None) -> List[Tuple[str, Dict[str, Any
 # Classification Engine (REQ-1, REQ-2, REQ-4)
 # ---------------------------------------------------------------------------
 
+def _safe_rule_class(layer_name: str, candidate_class: str, builtin_class: str) -> str:
+    """Anti-tamper: untrusted repository rules cannot downgrade destructive commands or downgrade writes to read-only."""
+    if layer_name in ("repo", "rule_pack") and builtin_class in ToolClass.ALL:
+        if builtin_class == ToolClass.DESTRUCTIVE and candidate_class != ToolClass.DESTRUCTIVE:
+            return builtin_class
+        if builtin_class in (ToolClass.DESTRUCTIVE, ToolClass.EXTERNAL, ToolClass.WORKSPACE_WRITE):
+            if candidate_class in (ToolClass.READ_ONLY, ToolClass.VERIFICATION):
+                return builtin_class
+    return candidate_class
+
+
 def classify_segment(segment: str, repo_root: Optional[str] = None) -> ClassificationResult:
     """Classify an individual shell command segment."""
     call = normalize_segment(segment)
@@ -879,6 +946,18 @@ def classify_segment(segment: str, repo_root: Optional[str] = None) -> Classific
             )
 
     # 2. Declarative layers (repo -> global -> rule_pack -> builtin)
+    # Determine built-in baseline to prevent repository rule privilege escalation
+    builtin_class = ToolClass.UNKNOWN
+    if call.tool in BUILTIN_TOOL_RULES:
+        b_cfg = BUILTIN_TOOL_RULES[call.tool]
+        if isinstance(b_cfg, dict):
+            for r in b_cfg.get("rules", []):
+                if match_rule(call, r):
+                    builtin_class = r.get("class", ToolClass.UNKNOWN)
+                    break
+            if builtin_class == ToolClass.UNKNOWN and "default" in b_cfg:
+                builtin_class = b_cfg["default"]
+
     layers = get_layers(repo_root=repo_root)
     highest_default: Optional[str] = None
     highest_default_layer = ""
@@ -893,6 +972,7 @@ def classify_segment(segment: str, repo_root: Optional[str] = None) -> Classific
                 for r in rules:
                     if match_rule(call, r):
                         r_class = r.get("class", ToolClass.UNKNOWN)
+                        r_class = _safe_rule_class(layer_name, r_class, builtin_class)
                         final_class = r_class
                         desc = r.get("reason") or f"rule match ({r.get('match', {})})"
                         if call.write_redirect and DANGER_RANK.get(final_class, 0) < DANGER_RANK[ToolClass.WORKSPACE_WRITE]:
@@ -904,7 +984,9 @@ def classify_segment(segment: str, repo_root: Optional[str] = None) -> Classific
                             layer=layer_name,
                         )
                 if highest_default is None and "default" in tool_cfg:
-                    highest_default = tool_cfg["default"]
+                    cand_default = tool_cfg["default"]
+                    cand_default = _safe_rule_class(layer_name, cand_default, builtin_class)
+                    highest_default = cand_default
                     highest_default_layer = layer_name
 
     if highest_default and highest_default in ToolClass.ALL:

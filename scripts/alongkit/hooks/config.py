@@ -54,6 +54,7 @@ GATE_TIERS: Dict[str, str] = {
     "projection_protection": TIER_INVARIANT,
     "rule_pack_protection": TIER_INVARIANT,
     "circuit_breaker": TIER_INVARIANT,
+    "entity_deletion_protection": TIER_INVARIANT,
     "wrapped_work_uncommitted": TIER_ADVISORY,
     "projection_sync_before_stop": TIER_ADVISORY,
 }

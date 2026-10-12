@@ -161,6 +161,16 @@ class TestDocsOnlyChange(unittest.TestCase):
         self.assertTrue(verify.docs_only_change(".", ["apps/server/.along/config.json", "docs/guide.md"]))
         self.assertFalse(verify.docs_only_change(".", ["apps/server/.along/scripts/test.py"]))
 
+        # Exclusions: skills, protocol, AGENTS.md, package code are NOT doc-only
+        self.assertFalse(verify.is_doc_only_path("skills/along-team/SKILL.md"))
+        self.assertFalse(verify.is_doc_only_path("AGENTS.md"))
+        self.assertFalse(verify.is_doc_only_path("CLAUDE.md"))
+        self.assertFalse(verify.is_doc_only_path("skills/along-init/protocol.md"))
+        self.assertFalse(verify.is_doc_only_path("packages/dashboard-ui/README.md"))
+        self.assertFalse(verify.is_doc_only_path("scripts/README.md"))
+        self.assertTrue(verify.is_doc_only_path("docs/topic--architecture.md"))
+        self.assertTrue(verify.is_doc_only_path("README.md"))
+
     def test_version_only_package_json(self):
         bump = '--- a/package.json\n+++ b/package.json\n@@\n-  "version": "1.0.0",\n+  "version": "1.0.1",\n'
         dep = bump + '+  "left-pad": "1.0.0",\n'

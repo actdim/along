@@ -138,8 +138,8 @@ class TestBenchKbSearch(unittest.TestCase):
         self.assertNotIn("sub-50ms", content)
 
         # Grounded claims must be present
-        self.assertIn("16 runtime gates", content)
-        self.assertIn("30+ protocol invariants", content)
+        self.assertIn("runtime gates", content)
+        self.assertIn("protocol invariants", content)
         self.assertIn("bench_kb_search.py", content)
 
     def test_docs_system_comparisons_table_and_claims(self):

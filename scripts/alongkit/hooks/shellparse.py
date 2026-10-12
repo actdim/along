@@ -336,15 +336,30 @@ def _strip_wrappers(tokens: List[str]) -> List[str]:
         while tokens and re.match(r"^[A-Za-z_][A-Za-z0-9_]*=", tokens[0]):
             tokens = tokens[1:]
             changed = True
-        if len(tokens) >= 2 and tokens[0].lower() in ("uv", "poetry", "pipenv", "pdm", "hatch") \
+        if tokens and tokens[0].lower() == "env":
+            sub_tokens = tokens[1:]
+            while sub_tokens and sub_tokens[0].startswith("-"):
+                opt = sub_tokens[0].split("=", 1)[0]
+                if opt in ("-u", "--unset") and "=" not in sub_tokens[0] and len(sub_tokens) >= 2:
+                    sub_tokens = sub_tokens[2:]
+                else:
+                    sub_tokens = sub_tokens[1:]
+            while sub_tokens and re.match(r"^[A-Za-z_][A-Za-z0-9_]*=", sub_tokens[0]):
+                sub_tokens = sub_tokens[1:]
+            if sub_tokens:
+                tokens = sub_tokens
+                changed = True
+        elif len(tokens) >= 2 and tokens[0].lower() in ("uv", "poetry", "pipenv", "pdm", "hatch") \
                 and tokens[1].lower() == "run":
             tokens = tokens[2:]
             while tokens and tokens[0].startswith("-"):
                 opt = tokens[0].split("=", 1)[0]
                 tokens = tokens[2:] if (opt in _WRAPPER_OPTS_WITH_VALUE and "=" not in tokens[0]) else tokens[1:]
             changed = True
-        elif tokens and tokens[0].lower() == "npx":
+        elif tokens and tokens[0].lower() in ("npx", "sudo", "nohup", "time", "exec"):
             tokens = tokens[1:]
+            while tokens and tokens[0].startswith("-"):
+                tokens = tokens[1:]
             changed = True
     return tokens
 

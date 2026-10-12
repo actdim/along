@@ -37,7 +37,7 @@ Also, when relevant: `.along/VISION.md`, `.along/GLOSSARY.md`. These reflect the
 - **Canonical keys**: `<type>--<slug>` (e.g. `feat--token-refresh`). Reference by key, NEVER by file path.
 - **ADRs**: Modular records in `.along/DECISIONS/ADR-YYYY-MM-DD--<slug>.md` (with legacy fallback to monolithic `DECISIONS.md`). Never edit past entries - mark superseded. Recompile projections (`.along/DECISIONS.md` board and `.along/CONSTRAINTS.md`) via `/along-decision-sync` or `along decision sync`.
 - **Issue lifecycle** [gate: issue-lifecycle]: Close with `along issue done <slug>` (`status: done`, `completed`, moved to `.along/ISSUES/done/`).
-- **Entity references** [gate: entity-reference-integrity]: Never delete an entity other entities reference; use `along issue rename` / `along issue supersede`.
+- **Entity references** [gate: entity-reference-integrity] [gate: entity-deletion-protection]: Never delete an entity other entities reference; use `along issue rename` / `along issue supersede`.
 - **Auto-entity creation**: Agents MUST automatically detect user intent (build/fix/refactor -> Issue, blocked/rate-limit -> Risk, compare/benchmark -> Spike, release/sprint -> Milestone) and create entities without prompting the user.
 
 ## Knowledge Base & Documentation

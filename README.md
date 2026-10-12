@@ -57,7 +57,7 @@ Along addresses these challenges through a dual-tier structure: an evergreen arc
 
 | Pillar | How Along Delivers It |
 | :--- | :--- |
-| **Zero-Vector In-Repo Intelligence** | Fast TF-IDF multi-scope retrieval engine (`along-kb-search`) unifying docs, ADR constraints, active issues, and session logs into word-boundary aligned snippets (< 150 tokens), avoiding full-file context ingestion and significantly reducing exploration prompt tokens without external vector DBs or daemon processes (see [benchmarks](scripts/bench_kb_search.py)). |
+| **Zero-Vector In-Repo Intelligence** | Fast TF-IDF multi-scope retrieval engine (`along-kb-search`) unifying docs, ADR constraints, active issues, and session logs into word-boundary aligned snippets (<= 150 words), avoiding full-file context ingestion and significantly reducing exploration prompt tokens without external vector DBs or daemon processes (see [benchmarks](scripts/bench_kb_search.py)). |
 | **Dual-Tier Memory Architecture** | Clean architectural separation: Evergreen LLM-Wiki (`docs/`) with AST code symbol grounding and SHA-256 drift detection vs. Living Transactional Governance (`.along/`) with DAG issues, immutable session history, and atomic projections. |
 | **Persistent In-Repo Memory** | Durable, git-tracked memory (`.along/`): DAG issues, append-only ADR logs, milestones, risks, and session records that travel with the codebase. |
 | **Autonomous Multi-Agent Teams** | Sequential living-plan state machine (`along-team`): Supervisor -> Scout -> Architect -> Implementer -> Reviewer with session blackboards, retry limits, and single-agent degradation. |
@@ -68,7 +68,7 @@ Along addresses these challenges through a dual-tier structure: an evergreen arc
 | **Zero-Conflict Git Concurrency** | Single Source of Truth (SSOT) atomic files vs compiled projections (`ISSUES.md`, `INDEX.md`), union merges (`merge=union`), and decentralized date-slug ADRs that avoid collisions in parallel branches. |
 | **Engineering Provenance & Dual-Track UI** | Living plans, fix loops, and verification gates are permanently recorded in session logs while projecting interactive visual review cards in IDEs (Antigravity). |
 | **Strict Data Safety & Verification Gates** | Hermetic engines (`alongkit`) with transactional byte-exact rollbacks, strict front-matter preservation (`ruamel.yaml`), and zero-unintended-deletions invariant. |
-| **Declarative Runtime Gates & Traceability** | Mechanical agent lifecycle interception (`PreToolUse`, `Stop`) enforcing 16 runtime gates in `default_gates.yaml` (and 30+ protocol invariants enforced across runtime hooks, git hooks, and CI), backed by machine-checked bi-directional traceability (`along hook verify`). In runtimes with Along hooks installed, violations trigger immediate tool-level interception; git and CI gates provide universal baseline enforcement everywhere. |
+| **Declarative Runtime Gates & Traceability** | Mechanical agent lifecycle interception (`PreToolUse`, `Stop`) enforcing declarative runtime gates in `default_gates.yaml` (32 protocol invariants enforced across runtime hooks, git hooks, and CI), backed by machine-checked bi-directional traceability (`along hook verify`). In runtimes with Along hooks installed, violations trigger immediate tool-level interception; git and CI gates provide universal baseline enforcement everywhere. |
 | **Nearest Context Boundary** | Monorepos, microservices, and Git submodules maintain isolated localized memory, preventing root workspace pollution. |
 
 ---
@@ -95,8 +95,8 @@ flowchart TD
 
     subgraph Retrieval["Zero-Vector In-Repo Retrieval Engine (along kb-search)"]
         SEARCH["Fast TF-IDF Multi-Scope Search"]
-        SNIPPETS["Targeted Bounded Snippets (< 150 Tokens)"]
-        SAVINGS["Bounded Snippets (< 150 Tokens) vs Full-File Ingestion"]
+        SNIPPETS["Targeted Bounded Snippets (<= 150 Words)"]
+        SAVINGS["Bounded Snippets (<= 150 Words) vs Full-File Ingestion"]
     end
 
     WIKI --- SEARCH
