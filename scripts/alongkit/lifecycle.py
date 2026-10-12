@@ -28,7 +28,7 @@ import shutil
 import sys
 from typing import List, Optional, Sequence, Tuple, Union
 
-from . import entities, frontmatter, gates, proc, repo, session, testruns, textio, transaction
+from . import entities, frontmatter, gates, proc, repo, session, testruns, textio, transaction, verify
 
 LIFECYCLE_ACTIONS: tuple = ("build", "test", "dev", "debug")
 
@@ -962,13 +962,26 @@ def execute_wrap(
 
     # 1. Pre-Flight Test Gate
     if not no_verify and not dry_run:
-        outcome = gates.run_test_gate(repo_root, label="Wrap Quality Gate")
-        if outcome not in (gates.TESTS_PASSED, gates.TESTS_SKIPPED):
-            if guard_bypass:
-                bypass.record_failure(repo_root, bypass.TESTS)
-            print(f"[Error] Wrap aborted: {gates.test_gate_abort_reason(outcome)}. "
-                  "Nothing was changed.", file=sys.stderr)
-            return 1
+        skip_tests = False
+        attributed = session.attributed_files(repo_root, clean_slug)
+        if attributed:
+            if verify.docs_only_change(repo_root, list(attributed.keys())):
+                skip_tests = True
+        else:
+            wt_changes = repo.working_tree_changes(repo_root)
+            if wt_changes and verify.docs_only_change(repo_root, wt_changes):
+                skip_tests = True
+
+        if skip_tests:
+            print("-> [Wrap Quality Gate] Only documentation / Along state changes: tests skipped.")
+        else:
+            outcome = gates.run_test_gate(repo_root, label="Wrap Quality Gate")
+            if outcome not in (gates.TESTS_PASSED, gates.TESTS_SKIPPED):
+                if guard_bypass:
+                    bypass.record_failure(repo_root, bypass.TESTS)
+                print(f"[Error] Wrap aborted: {gates.test_gate_abort_reason(outcome)}. "
+                      "Nothing was changed.", file=sys.stderr)
+                return 1
 
     # 2. Working tree zero-byte audit
     if not dry_run:

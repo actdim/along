@@ -145,6 +145,22 @@ class TestDocsOnlyChange(unittest.TestCase):
         self.assertFalse(verify.docs_only_change(".", [".along/scripts/test.py"]))
         self.assertFalse(verify.docs_only_change(".", []))
 
+    def test_nested_along_paths(self):
+        # [bug--wrap-docs-only-test-skip] REQ-2: Any .along/ path segment counts as Along state (except .along/scripts/)
+        self.assertTrue(verify.is_doc_only_path("apps/server/.along/ISSUES.md"))
+        self.assertTrue(verify.is_doc_only_path("apps/server/.along/config.json"))
+        self.assertTrue(verify.is_doc_only_path("packages/webmold/.along"))
+        self.assertTrue(verify.is_doc_only_path(".along/ISSUES/x.md"))
+        self.assertTrue(verify.is_doc_only_path("./.along/config.json"))
+        self.assertFalse(verify.is_doc_only_path("apps/server/.along/scripts/test.py"))
+        self.assertFalse(verify.is_doc_only_path("apps/server/.along/scripts"))
+        self.assertFalse(verify.is_doc_only_path(".along/scripts/test.py"))
+        self.assertFalse(verify.is_doc_only_path(".along/scripts"))
+        self.assertFalse(verify.is_doc_only_path("src/app.ts"))
+
+        self.assertTrue(verify.docs_only_change(".", ["apps/server/.along/config.json", "docs/guide.md"]))
+        self.assertFalse(verify.docs_only_change(".", ["apps/server/.along/scripts/test.py"]))
+
     def test_version_only_package_json(self):
         bump = '--- a/package.json\n+++ b/package.json\n@@\n-  "version": "1.0.0",\n+  "version": "1.0.1",\n'
         dep = bump + '+  "left-pad": "1.0.0",\n'

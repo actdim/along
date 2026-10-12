@@ -189,10 +189,16 @@ _VERSION_LINE = re.compile(r'^[+-]\s*"version"\s*:\s*"[^"]*",?\s*$')
 
 def is_doc_only_path(rel: str) -> bool:
     """Documentation or Along state, never code: `*.md`, `docs/**`, `.along/**` (not scripts), llms*.txt."""
-    path = rel.replace("\\", "/").lstrip("./") if rel.startswith("./") else rel.replace("\\", "/")
-    if path.startswith(".along/"):
-        return not path.startswith(".along/scripts/")
-    if path.startswith("docs/") or path.endswith(_DOC_SUFFIXES):
+    path = rel.replace("\\", "/")
+    while path.startswith("./"):
+        path = path[2:]
+    parts = [p for p in path.split("/") if p]
+    for i, part in enumerate(parts):
+        if part == ".along":
+            if i + 1 < len(parts) and parts[i + 1] == "scripts":
+                return False
+            return True
+    if path.startswith("docs/") or "docs" in parts[:-1] or path.endswith(_DOC_SUFFIXES):
         return True
     return os.path.basename(path) in _DOC_FILES
 

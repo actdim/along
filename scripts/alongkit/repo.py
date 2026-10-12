@@ -749,3 +749,30 @@ def is_dev_repo(repo_root: Optional[str] = None) -> bool:
          os.path.exists(os.path.join(repo_root, "skills", "bump-version", "SKILL.md")))
     )
 
+
+def working_tree_changes(repo_root: str) -> Optional[List[str]]:
+    """Paths changed, untracked, or deleted under `repo_root`, or None if git is unavailable.
+
+    Uses `git status --porcelain -z --untracked-files=all -- .` rooted at `repo_root`.
+    """
+    from . import proc
+    root = os.path.realpath(os.path.abspath(repo_root))
+    res = proc.git(["status", "--porcelain", "-z", "--untracked-files=all", "--", "."], cwd=root)
+    if not res.ok:
+        return None
+    paths: List[str] = []
+    entries = (res.stdout or "").split("\0")
+    i = 0
+    while i < len(entries):
+        entry = entries[i]
+        i += 1
+        if len(entry) < 4:
+            continue
+        code, path = entry[:2], entry[3:]
+        paths.append(normalize_posix(path))
+        if code[0] in ("R", "C") and i < len(entries):
+            paths.append(normalize_posix(entries[i]))
+            i += 1
+    return paths
+
+

@@ -3,10 +3,11 @@ protocol: along
 protocol_version: "4.4.10"
 slug: wrap-docs-only-test-skip
 type: bug
-status: in-progress
+status: done
+completed: 2026-10-12
 priority: high
 created: 2026-10-11
-updated: 2026-10-11
+updated: 2026-10-12
 agent: claude-code
 tags: [wrap, test-gate]
 milestone: v4.5.0-multi-user-merge-automation

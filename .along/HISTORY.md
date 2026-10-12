@@ -173,3 +173,4 @@ _Index of sessions (newest last). One line per session:_
 2026-10-11 - release-v4-4-10 - claude-code - Released v4.4.10 and updated the global installation - [Session Log](./SESSIONS/2026/2026-10-11--release-v4-4-10.md)
 2026-10-12 - history-append-blocked-after-wrap - antigravity - auto-append HISTORY entry on wrap, slug idempotency, CLI history append, checklist update, and release-v4-4-7 backfill - [Session Log](./SESSIONS/2026/2026-10-12--history-append-blocked-after-wrap.md)
 2026-10-12 - release-tags-not-pushed - antigravity - configure push.followTags in git setup and add doctor diagnostics for release tags - [Session Log](./SESSIONS/2026/2026-10-12--release-tags-not-pushed.md)
+2026-10-12 - wrap-docs-only-test-skip - antigravity - Skip wrap test gate for docs and along-only changes - [Session Log](./SESSIONS/2026/2026-10-12--wrap-docs-only-test-skip.md)

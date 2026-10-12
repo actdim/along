@@ -24,6 +24,7 @@ if not os.environ.get("ALONG_TEST_RUNNER"):
     )
 
 import io
+import json
 import shutil
 import subprocess
 import tempfile
@@ -550,6 +551,124 @@ class TestLifecycleWrap(unittest.TestCase):
         self.assertIn("[Warning] Issue 'fixture-sample-task' wrapped with uncommitted attributed files:", out)
         self.assertIn("src/module.py", out)
         self.assertIn("along commit -i fixture-sample-task --paths", out)
+
+    def test_17_wrap_docs_only_with_session_ledger_skips_test_gate(self):
+        """[bug--wrap-docs-only-test-skip] REQ-1: docs-only changes in session ledger skip wrap test gate."""
+        textio.write_text(os.path.join(self.root, ".along", "config.json"),
+                          json.dumps({"verify": {"tests": "required"}}))
+        session.append_event(self.root, "fixture-sample-task", "sess-1", "edit", "docs/topic--architecture.md")
+
+        with patch("sys.stdout", new_callable=io.StringIO) as mock_stdout:
+            code = lifecycle.execute_wrap(
+                self.root,
+                "fixture-sample-task",
+                status="done",
+                no_verify=False,
+                decisions=[],
+            )
+            out = mock_stdout.getvalue()
+
+        self.assertEqual(code, 0)
+        self.assertIn("Only documentation / Along state changes: tests skipped.", out)
+
+    def test_18_wrap_docs_only_with_working_tree_changes_skips_test_gate(self):
+        """[bug--wrap-docs-only-test-skip] REQ-1: docs-only working tree changes skip wrap test gate when no ledger."""
+        proc.run_capture(["git", "init", "-q"], cwd=self.root)
+        proc.run_capture(["git", "config", "user.email", "t@example.com"], cwd=self.root)
+        proc.run_capture(["git", "config", "user.name", "T"], cwd=self.root)
+        proc.run_capture(["git", "add", "-A"], cwd=self.root)
+        proc.run_capture(["git", "commit", "-q", "-m", "init"], cwd=self.root)
+
+        textio.write_text(os.path.join(self.root, ".along", "config.json"),
+                          json.dumps({"verify": {"tests": "required"}}))
+        textio.write_text(os.path.join(self.root, "docs", "topic--architecture.md"),
+                          "Updated doc content.\n")
+
+        with patch("sys.stdout", new_callable=io.StringIO) as mock_stdout:
+            code = lifecycle.execute_wrap(
+                self.root,
+                "fixture-sample-task",
+                status="done",
+                no_verify=False,
+                decisions=[],
+            )
+            out = mock_stdout.getvalue()
+
+        self.assertEqual(code, 0)
+        self.assertIn("Only documentation / Along state changes: tests skipped.", out)
+
+    def test_19_wrap_with_source_change_runs_and_fails_test_gate(self):
+        """[bug--wrap-docs-only-test-skip] REQ-1: source changes still run and fail on test gate."""
+        textio.write_text(os.path.join(self.root, ".along", "config.json"),
+                          json.dumps({"verify": {"tests": "required"}}))
+        session.append_event(self.root, "fixture-sample-task", "sess-1", "edit", "src/index.ts")
+
+        with patch("sys.stderr", new_callable=io.StringIO) as mock_stderr:
+            code = lifecycle.execute_wrap(
+                self.root,
+                "fixture-sample-task",
+                status="done",
+                no_verify=False,
+                decisions=[],
+            )
+            err = mock_stderr.getvalue()
+
+        self.assertEqual(code, 1)
+        self.assertIn("misconfigured", err.lower())
+
+    def test_20_wrap_with_unknown_changes_keeps_test_gate(self):
+        """[bug--wrap-docs-only-test-skip] REQ-3: unknown changes keep the test gate."""
+        textio.write_text(os.path.join(self.root, ".along", "config.json"),
+                          json.dumps({"verify": {"tests": "required"}}))
+        # Not a git repo and no ledger events
+        with patch("sys.stderr", new_callable=io.StringIO) as mock_stderr:
+            code = lifecycle.execute_wrap(
+                self.root,
+                "fixture-sample-task",
+                status="done",
+                no_verify=False,
+                decisions=[],
+            )
+            err = mock_stderr.getvalue()
+
+        self.assertEqual(code, 1)
+        self.assertIn("misconfigured", err.lower())
+
+    def test_21_wrap_nested_along_skips_test_gate(self):
+        """[bug--wrap-docs-only-test-skip] REQ-2: nested .along skips test gate."""
+        textio.write_text(os.path.join(self.root, ".along", "config.json"),
+                          json.dumps({"verify": {"tests": "required"}}))
+        session.append_event(self.root, "fixture-sample-task", "sess-1", "edit",
+                             "packages/webmold/.along/ISSUES.md")
+        with patch("sys.stdout", new_callable=io.StringIO) as mock_stdout:
+            code = lifecycle.execute_wrap(
+                self.root,
+                "fixture-sample-task",
+                status="done",
+                no_verify=False,
+                decisions=[],
+            )
+            out = mock_stdout.getvalue()
+        self.assertEqual(code, 0)
+        self.assertIn("Only documentation / Along state changes: tests skipped.", out)
+
+    def test_22_wrap_nested_along_scripts_runs_and_fails_test_gate(self):
+        """[bug--wrap-docs-only-test-skip] REQ-2: nested .along/scripts/ is not state and runs test gate."""
+        textio.write_text(os.path.join(self.root, ".along", "config.json"),
+                          json.dumps({"verify": {"tests": "required"}}))
+        session.append_event(self.root, "fixture-sample-task", "sess-1", "edit",
+                             "packages/webmold/.along/scripts/test.py")
+        with patch("sys.stderr", new_callable=io.StringIO) as mock_stderr:
+            code = lifecycle.execute_wrap(
+                self.root,
+                "fixture-sample-task",
+                status="done",
+                no_verify=False,
+                decisions=[],
+            )
+            err = mock_stderr.getvalue()
+        self.assertEqual(code, 1)
+        self.assertIn("misconfigured", err.lower())
 
 
 if __name__ == "__main__":

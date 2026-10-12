@@ -1,7 +1,7 @@
 # Active Issues
 
 ## Active
-- [ ] `(bug)` [wrap-docs-only-test-skip](ISSUES/bug--wrap-docs-only-test-skip.md)
+<!-- No active issues -->
 
 ## Backlog
 - [ ] `(bug)` [uncommitted-issue-deleted-without-trace](ISSUES/bug--uncommitted-issue-deleted-without-trace.md)
@@ -63,9 +63,9 @@
 - [ ] `(feat)` [zero-step-state-recovery-and-drift-detection](ISSUES/feat--zero-step-state-recovery-and-drift-detection.md)
 
 ## Done (recent)
+- [x] `(bug)` [wrap-docs-only-test-skip](ISSUES/done/bug--wrap-docs-only-test-skip.md)
 - [x] `(bug)` [release-tags-not-pushed](ISSUES/done/bug--release-tags-not-pushed.md)
 - [x] `(bug)` [mcp-installer-cleanup-serve-arg](ISSUES/done/bug--mcp-installer-cleanup-serve-arg.md)
 - [x] `(bug)` [history-append-blocked-after-wrap](ISSUES/done/bug--history-append-blocked-after-wrap.md)
 - [x] `(task)` [release-v4-4-10](ISSUES/done/task--release-v4-4-10.md)
-- [x] `(task)` [field-report-fixes](ISSUES/done/task--field-report-fixes.md)
-<!-- 223 older completed issue(s) archived in .along/ISSUES/done/ -->
+<!-- 224 older completed issue(s) archived in .along/ISSUES/done/ -->
