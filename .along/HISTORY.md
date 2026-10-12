@@ -180,3 +180,4 @@ _Index of sessions (newest last). One line per session:_
 2026-10-12 - release-ci-precondition-check - antigravity - Check CI status of released commit before version bump - [Session Log](./SESSIONS/2026/2026-10-12--release-ci-precondition-check.md)
 2026-10-12 - tool-nature-classification - antigravity - Classify tools by nature with versioned layered rules - [Session Log](./SESSIONS/2026/2026-10-12--tool-nature-classification.md)
 2026-10-12 - kb-search-archive-scope-default - antigravity - Exclude archived issues and session logs from kb-search by default - [Session Log](./SESSIONS/2026/2026-10-12--kb-search-archive-scope-default.md)
+2026-10-12 - progressive-disclosure-and-context-scaling - antigravity - Progressive context disclosure, search toc, line anchors and issue contracts - [Session Log](./SESSIONS/2026/2026-10-12--progressive-disclosure-and-context-scaling.md)

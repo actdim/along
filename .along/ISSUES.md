@@ -49,7 +49,6 @@
 - [ ] `(feat)` [per-model-rework-metrics](ISSUES/feat--per-model-rework-metrics.md)
 - [ ] `(feat)` [pi-harness-support](ISSUES/feat--pi-harness-support.md)
 - [ ] `(feat)` [planning-fields-and-ordering-gates](ISSUES/feat--planning-fields-and-ordering-gates.md)
-- [ ] `(feat)` [progressive-disclosure-and-context-scaling](ISSUES/feat--progressive-disclosure-and-context-scaling.md)
 - [ ] `(feat)` [structured-blackboard-state-machine](ISSUES/feat--structured-blackboard-state-machine.md)
 - [ ] `(feat)` [system-invariants-and-health-probes](ISSUES/feat--system-invariants-and-health-probes.md)
 - [ ] `(feat)` [tool-class-model](ISSUES/feat--tool-class-model.md)
@@ -60,6 +59,6 @@
 - [x] `(feat)` [tool-nature-classification](ISSUES/done/feat--tool-nature-classification.md)
 - [x] `(feat)` [secret-scrubbing-in-hooks-and-diagnostics](ISSUES/done/feat--secret-scrubbing-in-hooks-and-diagnostics.md)
 - [x] `(feat)` [release-ci-precondition-check](ISSUES/done/feat--release-ci-precondition-check.md)
+- [x] `(feat)` [progressive-disclosure-and-context-scaling](ISSUES/done/feat--progressive-disclosure-and-context-scaling.md)
 - [x] `(feat)` [kb-search-archive-scope-default](ISSUES/done/feat--kb-search-archive-scope-default.md)
-- [x] `(bug)` [wrap-docs-only-test-skip](ISSUES/done/bug--wrap-docs-only-test-skip.md)
-<!-- 230 older completed issue(s) archived in .along/ISSUES/done/ -->
+<!-- 231 older completed issue(s) archived in .along/ISSUES/done/ -->

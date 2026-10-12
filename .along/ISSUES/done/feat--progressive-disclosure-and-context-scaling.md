@@ -3,10 +3,11 @@ protocol: along
 protocol_version: "4.0.1"
 slug: progressive-disclosure-and-context-scaling
 type: feat
-status: open
+status: done
+completed: 2026-10-12
 priority: medium
 created: 2026-09-23
-updated: 2026-09-29
+updated: 2026-10-12
 agent: antigravity
 tags: [context, kb-search, progressive-disclosure, scaling, llm-wiki, schema]
 milestone: v4.5.0-multi-user-merge-automation

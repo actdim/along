@@ -585,7 +585,18 @@ def _report_rewritten(repo_root: str, paths: List[str]):
         print(f"   - {repo.normalize_posix(repo.safe_relpath(path, repo_root))}")
 
 
-def _issue_list(issues_dir: str):
+def _issue_list(repo_root: str, issues_dir: str, args: List[str]):
+    compact = "--compact" in args or "-c" in args
+    if compact:
+        issues = sorted(entities.scan_issues(repo_root), key=lambda x: (x.get("status") != "in-progress", x["slug"]))
+        print(f"=== Active Backlog Digest ({len(issues)} open/in-progress issues) ===")
+        for iss in issues:
+            key = entities.canonical_key(iss["type"], iss["slug"])
+            status = iss.get("status", "open")
+            prio = iss.get("priority", "medium")
+            title = (iss.get("frontmatter") or {}).get("title") or iss["slug"].replace("-", " ").capitalize()
+            print(f"- {key} [{status}|{prio}] {title}")
+        sys.exit(0)
     print(f"-> Active issues in {issues_dir}:")
     count = 0
     for f in os.listdir(issues_dir):
@@ -695,6 +706,17 @@ def _issue_show(repo_root: str, args: List[str]):
         print(f"Milestone: {summary.get('milestone') or 'none'}")
         print(f"Agent:     {summary.get('agent') or 'unknown'}")
         print(f"Tags:      {', '.join(summary.get('tags') or [])}")
+        requires = summary.get("requires")
+        if requires:
+            if isinstance(requires, dict):
+                req_parts = []
+                for d in requires.get("decisions", []) or []:
+                    req_parts.append(f"ADR:{d}")
+                for doc in requires.get("docs", []) or []:
+                    req_parts.append(f"docs:{doc}")
+                print(f"Requires:  {', '.join(req_parts)}")
+            else:
+                print(f"Requires:  {requires}")
         print(f"Path:      {summary['file_path']}")
         if summary.get("body"):
             print("\n--- Summary / Body ---")
@@ -706,9 +728,22 @@ def _issue_show(repo_root: str, args: List[str]):
     sys.exit(0)
 
 
+def _issue_lint(repo_root: str, args: List[str]):
+    strict = "--strict" in args
+    report = entities.lint_issues(repo_root, strict=strict)
+    print(f"=== Along Issue Structural Section Lint ({report['scanned']} issues scanned) ===")
+    if report["clean"]:
+        print("[OK] All active issues satisfy structural section contracts (Problem, Requirements/Architecture, Acceptance Criteria).")
+        sys.exit(0)
+    print(f"[WARN] Found {len(report['findings'])} issue(s) with missing mandatory sections:")
+    for item in report["findings"]:
+        print(f"  - {item['path']}: missing {', '.join(item['missing'])}")
+    sys.exit(1 if strict else 0)
+
+
 def handle_issue_command(repo_root: str, args: List[str]):
     if not args or args[0] in ("-h", "--help", "help"):
-        print("Usage: along_exec.py issue [create|update|done|cancel|delete|reopen|sync|list|show|rename|supersede] [args...]")
+        print("Usage: along_exec.py issue [create|update|done|cancel|delete|reopen|sync|list|show|rename|supersede|lint] [args...]")
         print("  create <type> <slug> --title \"Title\" [--priority high|medium|low] [--tags \"t1,t2\"] [--agent <name>] [--milestone <name>|--no-milestone]")
         print("  update <slug> [--milestone <name>] [--priority <high|medium|low>] [--status <status>] [--tags <t1,t2>] [--title <title>]")
         print("  done   <slug> [--status done|superseded|cancelled|duplicate] [--superseded-by <key>] [--duplicate-of <key>]")
@@ -717,8 +752,9 @@ def handle_issue_command(repo_root: str, args: List[str]):
         print("                            or parent/superseded_by/duplicate_of references name it)")
         print("  reopen <slug>")
         print("  sync                      Recompile the .along/ISSUES.md board")
-        print("  list")
+        print("  list   [--compact]        List active issues (or compact backlog digest)")
         print("  show   <slug> [--json]")
+        print("  lint   [--strict]         Audit active issues against mandatory section contracts")
         print("  rename <old-key> <new-key>")
         print("  supersede <old-key> --by <new-key>")
         sys.exit(0)
@@ -739,7 +775,9 @@ def handle_issue_command(repo_root: str, args: List[str]):
         "delete": lambda: _issue_delete(repo_root, args),
         "reopen": lambda: _issue_reopen(repo_root, args, issues_dir, done_dir, today),
         "sync": lambda: _issue_sync(repo_root),
-        "list": lambda: _issue_list(issues_dir),
+        "list": lambda: _issue_list(repo_root, issues_dir, args),
+        "export": lambda: _issue_list(repo_root, issues_dir, args),
+        "lint": lambda: _issue_lint(repo_root, args),
         "update": lambda: _issue_update(repo_root, args, today),
         "edit": lambda: _issue_update(repo_root, args, today),
         "show": lambda: _issue_show(repo_root, args),

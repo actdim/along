@@ -1328,8 +1328,45 @@ def get_issue_summary(repo_root: str, slug: str) -> Optional[Dict[str, Any]]:
         "completed": fm.get("completed"),
         "blocked_by": fm.get("blocked_by", []),
         "related": fm.get("related", []),
+        "requires": fm.get("requires"),
         "file_path": repo.safe_relpath(fpath, repo_root),
         "body": body.strip(),
+    }
+
+
+def lint_issue_sections(content: str) -> List[str]:
+    """Check an issue body for mandatory sections: Problem, Requirements (or Architecture), Acceptance Criteria."""
+    missing = []
+    if not re.search(r"^#{1,3}\s+(?:\d+\.\s+)?Problem\b", content, re.IGNORECASE | re.MULTILINE):
+        missing.append("Problem")
+    if not re.search(r"^#{1,3}\s+(?:\d+\.\s+)?(?:Requirements|Architecture)\b", content, re.IGNORECASE | re.MULTILINE):
+        missing.append("Requirements or Architecture")
+    if not re.search(r"^#{1,3}\s+(?:\d+\.\s+)?Acceptance Criteria\b", content, re.IGNORECASE | re.MULTILINE):
+        missing.append("Acceptance Criteria")
+    return missing
+
+
+def lint_issues(repo_root: str, strict: bool = False) -> Dict[str, Any]:
+    """Audit active issues against structural section contracts."""
+    from . import repo, textio
+    issues = scan_issues(repo_root)
+    findings = []
+    for iss in issues:
+        fpath = iss.get("file_path")
+        if not fpath or not os.path.isfile(fpath):
+            continue
+        try:
+            content = textio.read_text(fpath)
+        except OSError:
+            continue
+        missing = lint_issue_sections(content)
+        if missing:
+            rel = repo.safe_relpath(fpath, repo_root)
+            findings.append({"slug": iss["slug"], "path": rel, "missing": missing})
+    return {
+        "scanned": len(issues),
+        "findings": findings,
+        "clean": len(findings) == 0,
     }
 
 
@@ -1739,6 +1776,18 @@ def validate_entities(repo_root: str, ancestors: bool = True,
         if duplicate_of and str(duplicate_of).strip():
             if not _resolve_ref(duplicate_of, known_entity_keys, root_keys):
                 errors.append((rel, f"dangling duplicate_of reference: '{duplicate_of}'"))
+
+        requires = fm.get("requires")
+        if isinstance(requires, dict):
+            for d in requires.get("decisions", []) or []:
+                if d and not _resolve_ref(str(d), known_entity_keys, root_keys):
+                    errors.append((rel, f"dangling requires.decisions reference: '{d}'"))
+            for doc in requires.get("docs", []) or []:
+                doc_name = str(doc).strip()
+                doc_file = doc_name if doc_name.endswith(".md") else f"{doc_name}.md"
+                doc_path = os.path.join(repo_root, "docs", doc_file)
+                if not os.path.isfile(doc_path):
+                    errors.append((rel, f"dangling requires.docs reference: '{doc}'"))
 
     # 2. Validate Milestones
     active_minor_versions: Dict[Tuple[int, int], str] = {}

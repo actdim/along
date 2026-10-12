@@ -101,6 +101,8 @@ def collect_all_entries(repo_root, verbose=False):
                     "tags": fm.get("tags", []) if isinstance(fm.get("tags", []), list) else ([fm.get("tags")] if fm.get("tags") else []),
                     "status": "active",
                     "file_path": rel_path,
+                    "abs_path": fp,
+                    "raw": raw,
                     "body": body
                 })
             except (OSError, ValueError, AttributeError, TypeError, frontmatter.FrontmatterError) as exc:
@@ -132,6 +134,8 @@ def collect_all_entries(repo_root, verbose=False):
                         "status": status,
                         "priority": fm.get("priority", "medium"),
                         "file_path": rel_path,
+                        "abs_path": fp,
+                        "raw": raw,
                         "body": body
                     })
                 except (OSError, ValueError, AttributeError, TypeError, frontmatter.FrontmatterError) as exc:
@@ -166,6 +170,8 @@ def collect_all_entries(repo_root, verbose=False):
                     "tags": fm.get("tags") or ["adr", "architecture", "decision"],
                     "status": fm.get("status") or ("superseded" if re.search(r"superseded\s+by", body, re.IGNORECASE) else "active"),
                     "file_path": rel_path,
+                    "abs_path": fp,
+                    "raw": raw,
                     "body": body,
                 })
             except (OSError, ValueError, AttributeError, TypeError, frontmatter.FrontmatterError) as exc:
@@ -177,7 +183,11 @@ def collect_all_entries(repo_root, verbose=False):
             try:
                 with open(decisions_path, "r", encoding="utf-8", errors="replace") as p:
                     dec_raw = p.read()
-                entries.extend(parse_decision_entries(dec_raw, rel_path=dec_rel))
+                parsed_adrs = parse_decision_entries(dec_raw, rel_path=dec_rel)
+                for pa in parsed_adrs:
+                    pa["abs_path"] = decisions_path
+                    pa["raw"] = dec_raw
+                entries.extend(parsed_adrs)
             except (OSError, ValueError, AttributeError, TypeError) as exc:
                 _record_skip(dec_rel, exc)
 
@@ -202,6 +212,8 @@ def collect_all_entries(repo_root, verbose=False):
                     "tags": ["milestone", "sprint"],
                     "status": fm.get("status", "open"),
                     "file_path": rel_path,
+                    "abs_path": fp,
+                    "raw": raw,
                     "body": body
                 })
             except (OSError, ValueError, AttributeError, TypeError, frontmatter.FrontmatterError) as exc:
@@ -228,6 +240,8 @@ def collect_all_entries(repo_root, verbose=False):
                     "tags": ["risk", "blocker", fm.get("severity", "medium")],
                     "status": fm.get("status", "active"),
                     "file_path": rel_path,
+                    "abs_path": fp,
+                    "raw": raw,
                     "body": body
                 })
             except (OSError, ValueError, AttributeError, TypeError, frontmatter.FrontmatterError) as exc:
@@ -254,6 +268,8 @@ def collect_all_entries(repo_root, verbose=False):
                     "tags": ["spike", "experiment"],
                     "status": fm.get("status", "evaluating"),
                     "file_path": rel_path,
+                    "abs_path": fp,
+                    "raw": raw,
                     "body": body
                 })
             except (OSError, ValueError, AttributeError, TypeError, frontmatter.FrontmatterError) as exc:
@@ -282,6 +298,8 @@ def collect_all_entries(repo_root, verbose=False):
                         "tags": ["session", "log"],
                         "status": "completed",
                         "file_path": rel_p,
+                        "abs_path": fp,
+                        "raw": raw,
                         "body": body
                     })
                 except (OSError, ValueError, AttributeError, TypeError, frontmatter.FrontmatterError) as exc:
@@ -460,6 +478,195 @@ def extract_passage_snippet(
     return truncated.strip() + "..."
 
 
+def extract_passage_location_and_snippet(
+    entry: Dict[str, Any],
+    query_terms: Sequence[str],
+    phrases: Sequence[str],
+    max_words: int = 150,
+) -> Tuple[str, str, int, int]:
+    """Extract bounded snippet (<= 150 words), enclosing section heading, and 1-indexed line range."""
+    full_text = entry.get("raw")
+    if not full_text:
+        abs_p = entry.get("abs_path")
+        if abs_p and os.path.isfile(abs_p):
+            try:
+                with open(abs_p, "r", encoding="utf-8", errors="replace") as fp:
+                    full_text = fp.read()
+            except OSError:
+                full_text = entry.get("body", "")
+        else:
+            full_text = entry.get("body", "")
+
+    lines = full_text.splitlines() if full_text else []
+    if not lines:
+        return ("", entry.get("title", ""), 1, 1)
+
+    blocks: List[Dict[str, Any]] = []
+    current_section = entry.get("title", "")
+    in_fence = False
+    in_fm = False
+    cur_block_lines: List[Tuple[int, str]] = []
+
+    def _flush_block():
+        nonlocal cur_block_lines
+        if cur_block_lines:
+            b_text = "\n".join(txt for _, txt in cur_block_lines).strip()
+            if b_text:
+                blocks.append({
+                    "start_line": cur_block_lines[0][0],
+                    "end_line": cur_block_lines[-1][0],
+                    "section": current_section,
+                    "text": b_text,
+                })
+            cur_block_lines = []
+
+    for idx, line in enumerate(lines):
+        line_num = idx + 1
+        stripped = line.strip()
+
+        if idx == 0 and stripped == "---":
+            in_fm = True
+            continue
+        if in_fm:
+            if stripped == "---":
+                in_fm = False
+            continue
+
+        if stripped.startswith(("```", "~~~")):
+            in_fence = not in_fence
+            cur_block_lines.append((line_num, line))
+            continue
+
+        if not in_fence and stripped.startswith("#"):
+            _flush_block()
+            current_section = stripped
+            cur_block_lines.append((line_num, line))
+            continue
+
+        if not stripped and not in_fence:
+            _flush_block()
+            continue
+
+        cur_block_lines.append((line_num, line))
+
+    _flush_block()
+
+    if not blocks:
+        blocks.append({
+            "start_line": 1,
+            "end_line": len(lines),
+            "section": entry.get("title", ""),
+            "text": full_text[:400].strip(),
+        })
+
+    best_block = blocks[0]
+    best_score = -1.0
+
+    for b in blocks:
+        b_lower = b["text"].lower()
+        b_tokens = tokenize(b_lower)
+        b_stems = {light_stem(t) for t in b_tokens}
+        score = 0.0
+
+        for phrase in phrases:
+            if phrase.lower() in b_lower:
+                score += 15.0
+
+        for term in query_terms:
+            t_low = term.lower()
+            if t_low in b_tokens:
+                score += 6.0
+            elif light_stem(t_low) in b_stems:
+                score += 3.0
+
+        if score > best_score:
+            best_score = score
+            best_block = b
+
+    text = re.sub(r'^[#\-*>]+\s*', '', best_block["text"]).strip()
+    text = re.sub(r'\s+', ' ', text)
+    words = text.split()
+    if len(words) > max_words:
+        snippet = " ".join(words[:max_words]) + "..."
+    else:
+        snippet = text
+
+    return (
+        snippet,
+        best_block["section"],
+        best_block["start_line"],
+        best_block["end_line"],
+    )
+
+
+def generate_knowledge_catalog(repo_root: str = ".", max_tokens: int = 200) -> str:
+    """Generate a compact hierarchical text catalog (< 200 tokens) across knowledge scopes."""
+    entries = collect_all_entries(repo_root)
+
+    docs = sorted([e for e in entries if e["category"] == "kb"], key=lambda x: x["slug"])
+    adrs = sorted([e for e in entries if e["category"] == "decision" and not is_archived_entry(e)], key=lambda x: x["slug"])
+    milestones = sorted([e for e in entries if e["category"] == "milestone" and e.get("status") in ("open", "in-progress")], key=lambda x: x["slug"])
+
+    lines = ["=== Along Knowledge Catalog & Project Map ==="]
+
+    max_chars = max_tokens * 4
+    docs_char_budget = int(max_chars * 0.35)
+    ms_char_budget = int(max_chars * 0.60)
+    adr_char_budget = int(max_chars * 0.88)
+
+    # 1. Curated Docs
+    lines.append(f"Docs Topics ({len(docs)}):")
+    added_docs = 0
+    for d in docs:
+        slug = d["slug"].replace("topic--", "")
+        title = d.get("title") or slug
+        if len(title) > 32:
+            title = title[:29] + "..."
+        line = f"  - {slug}: {title}"
+        if sum(len(l) + 1 for l in lines) + len(line) > docs_char_budget and added_docs >= 2:
+            rem = len(docs) - added_docs
+            if rem > 0:
+                lines.append(f"  ... ({rem} more docs)")
+            break
+        lines.append(line)
+        added_docs += 1
+
+    # 2. Active Milestones
+    lines.append(f"Active Milestones ({len(milestones)}):")
+    added_ms = 0
+    for m in milestones:
+        status = m.get("status", "open")
+        line = f"  - {m['slug']} [{status}]"
+        if sum(len(l) + 1 for l in lines) + len(line) > ms_char_budget and added_ms >= 1:
+            rem = len(milestones) - added_ms
+            if rem > 0:
+                lines.append(f"  ... ({rem} more milestones)")
+            break
+        lines.append(line)
+        added_ms += 1
+
+    # 3. Active ADRs
+    lines.append(f"Active ADRs ({len(adrs)}):")
+    added_adrs = 0
+    for a in adrs:
+        slug = a["slug"].replace("adr-", "")
+        title = a.get("title", slug)
+        if title.startswith("ADR - "):
+            title = title[6:]
+        if len(title) > 32:
+            title = title[:29] + "..."
+        line = f"  - {slug}: {title}"
+        if sum(len(l) + 1 for l in lines) + len(line) > adr_char_budget and added_adrs >= 2:
+            rem = len(adrs) - added_adrs
+            if rem > 0:
+                lines.append(f"  ... ({rem} more active ADRs; query via 'along kb-search -c decision')")
+            break
+        lines.append(line)
+        added_adrs += 1
+
+    return "\n".join(lines)
+
+
 def calculate_search_stats(entries: List[Dict[str, Any]], results: List[Dict[str, Any]]) -> Dict[str, Any]:
     """Compute corpus and result token estimates for search measurement."""
     total_corpus_chars = sum(len(e.get("body", "")) + len(e.get("title", "")) for e in entries)
@@ -611,9 +818,11 @@ def search_knowledge_base(
         if is_archived_entry(e):
             score -= 10.0
 
-        snippet = extract_passage_snippet(e["body"], query_terms, phrases)
-        if not snippet:
-            snippet = e["body"][:180].replace("\n", " ").strip()
+        snippet, section, line_start, line_end = extract_passage_location_and_snippet(
+            e, query_terms, phrases, max_words=150
+        )
+        base_path = e["file_path"].split("#")[0]
+        anchored_path = f"{base_path}#L{line_start}-L{line_end}"
 
         results.append({
             "category": e["category"],
@@ -621,7 +830,10 @@ def search_knowledge_base(
             "title": e["title"],
             "slug": e["slug"],
             "status": e.get("status", "active"),
-            "file_path": e["file_path"],
+            "file_path": anchored_path,
+            "section": section,
+            "line_start": line_start,
+            "line_end": line_end,
             "tags": e["tags"],
             "score": score,
             "snippet": snippet
@@ -647,8 +859,14 @@ def main():
     parser.add_argument("--prefix", action="store_true", help="Match word prefixes in addition to whole words")
     parser.add_argument("-a", "--archive", action="store_true", help="Include archived entities (done issues, session logs, superseded ADRs)")
     parser.add_argument("--stats", action="store_true", help="Show retrieval token efficiency metrics and corpus stats")
+    parser.add_argument("--toc", "--catalog", action="store_true", help="Generate compact hierarchical knowledge catalog (< 200 tokens)")
     parser.add_argument("-v", "--verbose", "--debug", action="store_true", help="Show verbose collector details and errors")
     args = parser.parse_args()
+
+    if args.toc:
+        catalog = generate_knowledge_catalog(repo_root=args.repo)
+        print(catalog)
+        sys.exit(0)
 
     if args.stats:
         results, stats = search_knowledge_base(
@@ -685,7 +903,8 @@ def main():
               f"Token savings: {stats['savings_pct']}%\n")
 
     for i, r in enumerate(results, 1):
-        print(f"{i}. [{r['category_label']}] [{r['status']}] {r['title']} (./{r['file_path']})")
+        sec_disp = f" > {r['section']}" if r.get("section") else ""
+        print(f"{i}. [{r['category_label']}] [{r['status']}] {r['title']}{sec_disp} (./{r['file_path']})")
         print(f"   \"{r['snippet']}\"\n")
 
 
