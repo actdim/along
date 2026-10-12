@@ -41,6 +41,7 @@ import os
 import re
 import json
 import glob
+import shutil
 from datetime import datetime
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
@@ -372,7 +373,147 @@ if __name__ == "__main__":
 typography_gate = gates.typography_gate
 
 
-def release_preflight(repo_root, skip_verify=False, fix_typography=False):
+def check_ci_precondition(repo_root, head_sha=None, skip_ci=False, skip_reason=None):
+    """Verify CI workflow status of HEAD commit before mutation.
+
+    REQ-1: Lookup CI status of HEAD commit via `gh run list --commit <sha>`.
+    REQ-2: Green -> proceed; failed -> abort with run URL; pending/missing -> abort with hint,
+           unless --skip-ci with a reason is given.
+    REQ-3: No gh, no remote, or no workflow files in .github/workflows/ -> warning, not a block.
+    REQ-4: .along/config.json support: `release.require_ci` (bool) and `release.ci_workflow` (str).
+    """
+    config_path = os.path.join(repo.state_dir(repo_root), "config.json")
+    release_cfg = {}
+    if os.path.isfile(config_path):
+        try:
+            data = json.loads(textio.read_text(config_path, strict=False))
+            if isinstance(data, dict):
+                cfg_val = data.get("release")
+                if isinstance(cfg_val, dict):
+                    release_cfg = cfg_val
+        except (OSError, ValueError):
+            pass
+
+    if release_cfg.get("require_ci") is False:
+        return
+
+    if skip_ci:
+        if not skip_reason or not str(skip_reason).strip():
+            raise ReleaseAborted("--skip-ci requires --reason \"...\": explain why CI verification is skipped")
+        print(f"-> [Warning] Release CI precondition skipped: {str(skip_reason).strip()}",
+              file=sys.stderr)
+        if hasattr(bypass, "record"):
+            bypass.record(repo_root, "release-ci", str(skip_reason), bypass.UNVERIFIED)
+        return
+
+    workflows_dir = os.path.join(repo_root, ".github", "workflows")
+    workflow_files = []
+    if os.path.isdir(workflows_dir):
+        try:
+            workflow_files = [
+                f for f in os.listdir(workflows_dir)
+                if f.endswith((".yml", ".yaml")) and os.path.isfile(os.path.join(workflows_dir, f))
+            ]
+        except OSError:
+            pass
+
+    if not workflow_files:
+        print("[Warning] Release CI precondition: no workflow files in .github/workflows/; skipping CI check.",
+              file=sys.stderr)
+        return
+
+    if not shutil.which("gh"):
+        print("[Warning] Release CI precondition: 'gh' CLI not found; skipping CI check.",
+              file=sys.stderr)
+        return
+
+    remotes = proc.git(["remote"], cwd=repo_root)
+    if not remotes.ok or not remotes.out.strip():
+        print("[Warning] Release CI precondition: no git remote; skipping CI check.",
+              file=sys.stderr)
+        return
+
+    if not head_sha:
+        git_head = proc.git(["rev-parse", "HEAD"], cwd=repo_root)
+        head_sha = git_head.out.strip() if git_head.ok else None
+
+    if not head_sha:
+        print("[Warning] Release CI precondition: cannot resolve HEAD commit; skipping CI check.",
+              file=sys.stderr)
+        return
+
+    short_sha = head_sha[:8]
+    cmd = [
+        "gh", "run", "list",
+        "--commit", head_sha,
+        "--json", "status,conclusion,name,url,workflowName",
+    ]
+    res = proc.run_capture(cmd, cwd=repo_root)
+    if not res.ok:
+        raise ReleaseAborted(
+            f"failed to query CI status via gh ({res.returncode}): {(res.stderr or res.stdout).strip()}"
+        )
+
+    try:
+        runs = json.loads(res.stdout) if res.stdout.strip() else []
+    except (ValueError, TypeError) as exc:
+        raise ReleaseAborted(f"invalid JSON from gh run list: {exc}")
+
+    if not isinstance(runs, list):
+        runs = []
+
+    ci_workflow = release_cfg.get("ci_workflow")
+    if ci_workflow:
+        target_wf = ci_workflow.strip().lower()
+        relevant_runs = [
+            r for r in runs
+            if (r.get("workflowName") or "").strip().lower() == target_wf
+            or (r.get("name") or "").strip().lower() == target_wf
+        ]
+    else:
+        relevant_runs = runs
+
+    if not runs:
+        raise ReleaseAborted(
+            f"commit {short_sha} has no CI runs recorded (not pushed yet?). "
+            "Push commit to remote or use --skip-ci --reason \"...\""
+        )
+
+    if ci_workflow and not relevant_runs:
+        raise ReleaseAborted(
+            f"commit {short_sha} has no CI runs for workflow '{ci_workflow}' "
+            f"(found {len(runs)} other run(s)). Push commit to trigger it or use --skip-ci --reason \"...\""
+        )
+
+    failed_conclusions = {"failure", "cancelled", "timed_out", "action_required", "startup_failure"}
+    for run in relevant_runs:
+        conclusion = (run.get("conclusion") or "").lower()
+        status = (run.get("status") or "").lower()
+        run_name = run.get("workflowName") or run.get("name") or "CI"
+        run_url = run.get("url") or ""
+        url_suffix = f": {run_url}" if run_url else ""
+        if conclusion in failed_conclusions or (status == "completed" and conclusion not in {"success", "neutral", "skipped"}):
+            raise ReleaseAborted(
+                f"CI workflow '{run_name}' {conclusion or 'failed'} on commit {short_sha}{url_suffix}. "
+                "Resolve failures or use --skip-ci --reason \"...\""
+            )
+
+    for run in relevant_runs:
+        status = (run.get("status") or "").lower()
+        if status != "completed":
+            run_name = run.get("workflowName") or run.get("name") or "CI"
+            run_url = run.get("url") or ""
+            url_suffix = f": {run_url}" if run_url else ""
+            raise ReleaseAborted(
+                f"CI workflow '{run_name}' is {status} on commit {short_sha}{url_suffix}. "
+                "Wait for CI to pass or use --skip-ci --reason \"...\""
+            )
+
+    print(f"-> [OK] Release CI precondition satisfied: {len(relevant_runs)} run(s) green for commit {short_sha}.")
+
+
+def release_preflight(repo_root, skip_verify=False, fix_typography=False,
+                      skip_ci=False, skip_reason=None, head_sha=None):
     """Run every gate before the release writes anything.
 
     Returns the absolute paths the typography rule wants to rewrite, so the mutation
@@ -383,6 +524,10 @@ def release_preflight(repo_root, skip_verify=False, fix_typography=False):
     when it was also going to commit, so `along_version_bump.py patch` shipped a version
     number no gate had ever looked at.
     """
+    check_ci_precondition(repo_root, head_sha=head_sha,
+                          skip_ci=(skip_ci or skip_verify),
+                          skip_reason=(skip_reason or ("--no-verify bypass" if skip_verify else None)))
+
     if skip_verify:
         print("-> [Notice] --no-verify: tests, typography, and link gates skipped.")
         return []
@@ -645,7 +790,7 @@ def main():
     if bump_arg in ["-h", "--help"]:
         print("Usage: python along_version_bump.py [patch|minor|major|<version>] "
               "[-c|--commit] [-p|--push] [--fix-typography] [-n|--no-verify --reason \"...\"] "
-              "[--carry-over <milestone>]")
+              "[--skip-ci --reason \"...\"] [--carry-over <milestone>]")
         sys.exit(0)
 
     argv = list(sys.argv[1:])
@@ -671,6 +816,7 @@ def main():
     flags = [a for a in sys.argv[1:] if a.startswith("-")]
     fix_typography = "--fix-typography" in flags
     skip_verify = "--no-verify" in flags or "-n" in flags
+    skip_ci = "--skip-ci" in flags
     do_commit = "--commit" in flags or "-c" in flags or "-cp" in flags or "-pc" in flags or "--push" in flags or "-p" in flags
     do_push = "--push" in flags or "-p" in flags or "-cp" in flags or "-pc" in flags
     bump_arg_clean = [a for a in sys.argv[1:] if not a.startswith("-")][0] if any(not a.startswith("-") for a in sys.argv[1:]) else "patch"
@@ -691,7 +837,8 @@ def main():
         # Gates first, on the untouched tree.
         try:
             pending_typography = release_preflight(repo_root, skip_verify=skip_verify,
-                                                   fix_typography=fix_typography)
+                                                   fix_typography=fix_typography,
+                                                   skip_ci=skip_ci, skip_reason=bypass_reason)
         except ReleaseAborted:
             bypass.record_failure(repo_root, bypass.RELEASE_GATES)
             raise

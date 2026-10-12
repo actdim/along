@@ -12,7 +12,7 @@ Universal project version bumper and release pipeline engine for repositories ad
 - Verifying clean ASCII typography and preparing the release git commit.
 
 ## What a Release Does, In Order
-0. **Precondition (this repository)**: the `Tests` workflow (`.github/workflows/tests.yml`, Python 3.10-3.13 on Linux and Windows) is green on the commit being released. The local gates below cannot see the other interpreters and operating systems.
+0. **Precondition (CI status check)**: Before mutating, `along bump` verifies the CI status of the commit being released (`HEAD`) via GitHub CLI (`gh run list --commit <sha>`). If workflow files exist in `.github/workflows/` and `gh` is available: green proceeds, failed aborts with the run URL, and pending or not pushed aborts with a hint. If `gh`, remote, or workflow files are missing, emits a warning without blocking. Repository opt-out (`release.require_ci: false`) or specific workflow filtering (`release.ci_workflow: "Tests"`) can be configured in `.along/config.json`. Bypassed via `--skip-ci --reason "..."`.
 1. **Gates, on the untouched tree**: the repository's tests, the typography check, and the Markdown link integrity check (`along_kb_sync.py --check --strict`). All three run on every invocation, not only with `--commit`. A failing gate aborts before anything is written.
 2. **Version**: `.along/scripts/bump_version.py` if the project has one, otherwise the detected manifest (`package.json`, `pyproject.toml`, `Cargo.toml`, `VERSION`, or the Along protocol files).
 3. **Milestone**: the milestone in `.along/MILESTONES/` whose front-matter `slug` names the released version is set to `status: completed`, `progress_pct: 100`. Front-matter only; the body is never rewritten.
@@ -36,4 +36,5 @@ along bump 1.5.0
 - `-cp`, `-pc`: Combine commit and push in one command (`along bump patch -cp`).
 - `--fix-typography`: Apply the ASCII replacements the release gate found. Without it the gate reports findings by file and line and aborts the release; a release never rewrites the tree on its own. The repair is applied inside the transaction, so a later abort restores it too.
 - `-n`, `--no-verify`: Skip the tests, typography, and link gates. The one documented way past them; the release still rolls back on a later failure. Requires `--reason "..."`; where user messages are recorded, the gates must have failed in this session and the user must have replied after the failure. The bypass is logged.
+- `--skip-ci`: Skip the automated CI precondition check on `HEAD`. Requires `--reason "..."` explaining why CI verification is skipped; the bypass is recorded.
 - Command: `/along-version-bump`

@@ -51,7 +51,6 @@
 - [ ] `(feat)` [pi-harness-support](ISSUES/feat--pi-harness-support.md)
 - [ ] `(feat)` [planning-fields-and-ordering-gates](ISSUES/feat--planning-fields-and-ordering-gates.md)
 - [ ] `(feat)` [progressive-disclosure-and-context-scaling](ISSUES/feat--progressive-disclosure-and-context-scaling.md)
-- [ ] `(feat)` [release-ci-precondition-check](ISSUES/feat--release-ci-precondition-check.md)
 - [ ] `(feat)` [structured-blackboard-state-machine](ISSUES/feat--structured-blackboard-state-machine.md)
 - [ ] `(feat)` [system-invariants-and-health-probes](ISSUES/feat--system-invariants-and-health-probes.md)
 - [ ] `(feat)` [tool-class-model](ISSUES/feat--tool-class-model.md)
@@ -61,8 +60,8 @@
 
 ## Done (recent)
 - [x] `(feat)` [secret-scrubbing-in-hooks-and-diagnostics](ISSUES/done/feat--secret-scrubbing-in-hooks-and-diagnostics.md)
+- [x] `(feat)` [release-ci-precondition-check](ISSUES/done/feat--release-ci-precondition-check.md)
 - [x] `(bug)` [wrap-docs-only-test-skip](ISSUES/done/bug--wrap-docs-only-test-skip.md)
 - [x] `(bug)` [worktree-cross-os-mount-guard](ISSUES/done/bug--worktree-cross-os-mount-guard.md)
 - [x] `(bug)` [uncommitted-issue-deleted-without-trace](ISSUES/done/bug--uncommitted-issue-deleted-without-trace.md)
-- [x] `(bug)` [release-tags-not-pushed](ISSUES/done/bug--release-tags-not-pushed.md)
-<!-- 227 older completed issue(s) archived in .along/ISSUES/done/ -->
+<!-- 228 older completed issue(s) archived in .along/ISSUES/done/ -->

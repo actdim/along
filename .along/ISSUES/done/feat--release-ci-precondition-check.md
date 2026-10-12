@@ -3,10 +3,11 @@ protocol: along
 protocol_version: "4.4.6"
 slug: release-ci-precondition-check
 type: feat
-status: open
+status: done
+completed: 2026-10-12
 priority: medium
 created: 2026-10-07
-updated: 2026-10-07
+updated: 2026-10-12
 agent: claude
 tags: [release, ci, gates]
 milestone: v4.5.0-multi-user-merge-automation
@@ -34,6 +35,6 @@ CI never consulted.
 - REQ-4: Repository opt-out / workflow name in `.along/config.json`.
 
 ## Acceptance Criteria
-- [ ] Hermetic tests with a stubbed `gh`: green, failed, pending, missing
-- [ ] Skill and docs updated
-- [ ] Automated tests passing
+- [x] Hermetic tests with a stubbed `gh`: green, failed, pending, missing
+- [x] Skill and docs updated
+- [x] Automated tests passing
