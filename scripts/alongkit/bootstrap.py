@@ -194,8 +194,9 @@ def ensure_deps(dependencies: Sequence[str] = RUNTIME_DEPENDENCIES,
         print(f"[Error] {MissingDependency(modules[0])}", file=sys.stderr)
         sys.exit(missing_exit_code)
 
-    script = os.path.abspath(sys.argv[0]) if sys.argv and sys.argv[0] else ""
-    if not script or not os.path.isfile(script):
+    is_inline = bool(sys.argv and sys.argv[0] == "-c")
+    script = os.path.abspath(sys.argv[0]) if (sys.argv and sys.argv[0] and not is_inline) else ""
+    if not is_inline and (not script or not os.path.isfile(script)):
         print(f"[Error] {MissingDependency(modules[0])}", file=sys.stderr)
         sys.exit(missing_exit_code)
 
@@ -203,8 +204,8 @@ def ensure_deps(dependencies: Sequence[str] = RUNTIME_DEPENDENCIES,
     # re-resolves the dependencies on every call (every hook, every tool use).
     venv_dir = runtime_venv_dir()
     if _venv_is_current(venv_dir, dependencies):
-        _reexec([venv_python(venv_dir), script, *sys.argv[1:]], missing_exit_code,
-                stdin_data=stdin_data)
+        reexec_cmd = [venv_python(venv_dir), *sys.argv[1:]] if is_inline else [venv_python(venv_dir), script, *sys.argv[1:]]
+        _reexec(reexec_cmd, missing_exit_code, stdin_data=stdin_data)
 
     uv = shutil.which("uv")
     if not uv:
@@ -215,13 +216,16 @@ def ensure_deps(dependencies: Sequence[str] = RUNTIME_DEPENDENCIES,
         print(f"-> [Along] building cached runtime {venv_dir} (one-time): {' '.join(dependencies)}",
               file=sys.stderr)
     if _build_venv(uv, venv_dir, dependencies):
-        _reexec([venv_python(venv_dir), script, *sys.argv[1:]], missing_exit_code,
-                stdin_data=stdin_data)
+        reexec_cmd = [venv_python(venv_dir), *sys.argv[1:]] if is_inline else [venv_python(venv_dir), script, *sys.argv[1:]]
+        _reexec(reexec_cmd, missing_exit_code, stdin_data=stdin_data)
 
     command: List[str] = [uv, "run", "--quiet"]
     for spec in dependencies:
         command += ["--with", spec]
-    command += [script, *sys.argv[1:]]
+    if is_inline:
+        command += ["python", *sys.argv[1:]]
+    else:
+        command += [script, *sys.argv[1:]]
     if not quiet:
         print(f"-> [Along] resolving dependencies via uv: {' '.join(dependencies)}",
               file=sys.stderr)

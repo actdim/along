@@ -23,7 +23,6 @@
 - [ ] `(feat)` [agent-runtime-adapters-claude-codex-opencode](ISSUES/feat--agent-runtime-adapters-claude-codex-opencode.md)
 - [ ] `(feat)` [along-plan-strategies](ISSUES/feat--along-plan-strategies.md)
 - [ ] `(feat)` [automated-ui-screenshots-and-visual-verification](ISSUES/feat--automated-ui-screenshots-and-visual-verification.md)
-- [ ] `(feat)` [bootstrap-resilience-and-subcommand-proxying](ISSUES/feat--bootstrap-resilience-and-subcommand-proxying.md)
 - [ ] `(feat)` [bounded-prompt-footprint-gate](ISSUES/feat--bounded-prompt-footprint-gate.md)
 - [ ] `(feat)` [byoc-kubernetes-operator-and-private-sandboxes](ISSUES/feat--byoc-kubernetes-operator-and-private-sandboxes.md)
 - [ ] `(feat)` [centralized-gpu-inference-pool-and-cloud-topologies](ISSUES/feat--centralized-gpu-inference-pool-and-cloud-topologies.md)
@@ -60,4 +59,4 @@
 - [x] `(feat)` [release-ci-precondition-check](ISSUES/done/feat--release-ci-precondition-check.md)
 - [x] `(feat)` [progressive-disclosure-and-context-scaling](ISSUES/done/feat--progressive-disclosure-and-context-scaling.md)
 - [x] `(feat)` [kb-search-archive-scope-default](ISSUES/done/feat--kb-search-archive-scope-default.md)
-<!-- 232 older completed issue(s) archived in .along/ISSUES/done/ -->
+<!-- 233 older completed issue(s) archived in .along/ISSUES/done/ -->

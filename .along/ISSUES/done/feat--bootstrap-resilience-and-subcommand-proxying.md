@@ -3,10 +3,11 @@ protocol: along
 protocol_version: "4.1.0"
 slug: bootstrap-resilience-and-subcommand-proxying
 type: feat
-status: open
+status: done
+completed: 2026-10-12
 priority: medium
 created: 2026-09-27
-updated: 2026-09-29
+updated: 2026-10-12
 agent: antigravity
 tags: [bootstrap, uv, python, resilience, cli]
 milestone: v4.5.0-multi-user-merge-automation
@@ -27,3 +28,9 @@ Currently, `scripts/alongkit/bootstrap.py` line 94 validates that `sys.argv[0]` 
 1. **Inline Invocation Support**: In `scripts/alongkit/bootstrap.py`, support cases where `sys.argv[0] == "-c"` by re-executing `[uv, "run", "--quiet", "--with", spec, "python", *sys.argv[1:]]` rather than aborting.
 2. **Graceful Degradation**: Ensure that when `uv` is available, inline commands with `sys.argv[0] == "-c"` receive runtime dependencies seamlessly.
 3. **Automated Unit Tests**: Add unit tests in `tests/test_bootstrap.py` covering inline invocation bootstrapping.
+
+## Acceptance Criteria
+
+- [x] Inline invocation (`-c`) re-executes with dependencies via `uv run` or cached venv
+- [x] Graceful degradation on missing `uv` with exit code
+- [x] Unit tests in `tests/test_bootstrap.py` passing
