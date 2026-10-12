@@ -63,6 +63,16 @@ bootstrap.ensure_deps()
 from dashboard.app import main
 
 if __name__ == "__main__":
+    if any(a in ("--setup-env", "--env-setup") for a in sys.argv):
+        from alongkit import devenv
+        reinstall = "--reinstall" in sys.argv
+        ok, msg = devenv.setup_dev_environment(str(repo_root), reinstall=reinstall)
+        if not ok:
+            print(f"[Error] Dev environment setup failed: {msg}", file=sys.stderr)
+            sys.exit(1)
+        print(f"-> {msg}")
+        sys.exit(0)
+
     # Default to dev mode if no explicit mode arguments passed
     if len(sys.argv) == 1 or (len(sys.argv) == 2 and sys.argv[1] not in ("-w", "--web", "-c", "--cli", "--export")):
         sys.argv.append("--dev")

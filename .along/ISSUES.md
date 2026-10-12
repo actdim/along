@@ -32,7 +32,6 @@
 - [ ] `(feat)` [cursor-agent-and-rules-integration](ISSUES/feat--cursor-agent-and-rules-integration.md)
 - [ ] `(feat)` [dart-flutter-ecosystem-support](ISSUES/feat--dart-flutter-ecosystem-support.md)
 - [ ] `(feat)` [deepseek-harness-bridge](ISSUES/feat--deepseek-harness-bridge.md)
-- [ ] `(feat)` [dev-environment-setup-and-editable-install](ISSUES/feat--dev-environment-setup-and-editable-install.md)
 - [ ] `(feat)` [empirical-benchmark-harness-and-metrics](ISSUES/feat--empirical-benchmark-harness-and-metrics.md)
 - [ ] `(feat)` [enterprise-governance-and-cloud-infrastructure](ISSUES/feat--enterprise-governance-and-cloud-infrastructure.md)
 - [ ] `(feat)` [enterprise-governance-and-compliance-pack](ISSUES/feat--enterprise-governance-and-compliance-pack.md)
@@ -59,4 +58,4 @@
 - [x] `(feat)` [release-ci-precondition-check](ISSUES/done/feat--release-ci-precondition-check.md)
 - [x] `(feat)` [progressive-disclosure-and-context-scaling](ISSUES/done/feat--progressive-disclosure-and-context-scaling.md)
 - [x] `(feat)` [kb-search-archive-scope-default](ISSUES/done/feat--kb-search-archive-scope-default.md)
-<!-- 233 older completed issue(s) archived in .along/ISSUES/done/ -->
+<!-- 234 older completed issue(s) archived in .along/ISSUES/done/ -->

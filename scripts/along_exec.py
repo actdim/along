@@ -117,6 +117,7 @@ Lifecycle Commands (project hooks):
   build          Execute project build (.along/scripts/build.py or auto-detected)
   test           Execute project tests (.along/scripts/test.py or auto-detected)
   dev            Launch project dev server (.along/scripts/dev.py or auto-detected)
+  dev-env        Initialize local .venv and install alongkit in editable mode [--reinstall]
   debug          Execute project debug runner (.along/scripts/debug.py or auto-detected)
 
 Entity Management Commands:
@@ -2708,6 +2709,17 @@ def handle_patch_command(repo_root: str, args: List[str]):
         sys.exit(1)
 
 
+def handle_devenv_command(repo_root: str, args: List[str]):
+    from alongkit import devenv
+    reinstall = "--reinstall" in args
+    success, msg = devenv.setup_dev_environment(repo_root, reinstall=reinstall)
+    if not success:
+        print(f"[Error] Dev environment setup failed: {msg}", file=sys.stderr)
+        sys.exit(1)
+    print(f"-> {msg}")
+    sys.exit(0)
+
+
 def handle_circuit_command(repo_root: str, args: List[str]):
     sub = args[0].lower() if args else "status"
 
@@ -3254,6 +3266,8 @@ def main():
         handle_budget_command(repo_root, extra_args)
     elif cmd == "patch":
         handle_patch_command(repo_root, extra_args)
+    elif cmd in ("dev-env", "devenv"):
+        handle_devenv_command(repo_root, extra_args)
     elif cmd == "run":
         handle_run_command(repo_root, extra_args)
     elif cmd == "kb":

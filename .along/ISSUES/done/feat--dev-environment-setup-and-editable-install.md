@@ -3,10 +3,11 @@ protocol: along
 protocol_version: "4.1.0"
 slug: dev-environment-setup-and-editable-install
 type: feat
-status: open
+status: done
+completed: 2026-10-12
 priority: medium
 created: 2026-09-27
-updated: 2026-09-29
+updated: 2026-10-12
 agent: antigravity
 tags: [dev-environment, venv, packaging, editable, alongkit]
 milestone: v4.5.0-multi-user-merge-automation
@@ -30,3 +31,10 @@ As a result:
 1. **Automated Dev Environment Setup**: Provide a command or hook (`along dev-env` or in `.along/scripts/dev.py`) that initializes a local `.venv` and installs the package in editable mode (`uv pip install -e .` or `.pth` link).
 2. **Interpreter Parity**: Ensure `python` and `pytest` work seamlessly inside the dev environment with all required dependencies pre-installed.
 3. **Hermetic Safety**: The dev environment must remain isolated to the local repository root and not pollute the host global site-packages.
+
+## Acceptance Criteria
+
+- [x] `along dev-env` and `.along/scripts/dev.py --setup-env` initialize local `.venv`
+- [x] Package installed / linked with `.pth` to `scripts/alongkit`
+- [x] Dev environment remains isolated to repository root
+- [x] Automated unit tests in `tests/test_devenv.py` passing
