@@ -54,6 +54,16 @@ TOOL_NAME_MAP: Dict[str, str] = {
     "cmd": "run_command",
     "run": "run_command",
     "run_command": "run_command",
+    "delete_file": "delete_file",
+    "DeleteFile": "delete_file",
+    "delete": "delete",
+    "Delete": "delete",
+    "remove_file": "remove_file",
+    "RemoveFile": "remove_file",
+    "remove": "remove",
+    "Remove": "remove",
+    "unlink": "unlink",
+    "Unlink": "unlink",
 }
 
 

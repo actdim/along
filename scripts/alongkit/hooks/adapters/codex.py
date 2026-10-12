@@ -42,6 +42,9 @@ TOOL_NAME_MAP: Dict[str, str] = {
     "powershell": "run_command",
     "PowerShell": "run_command",
     "cmd": "run_command",
+    "delete_file": "delete_file",
+    "remove_file": "remove_file",
+    "unlink": "unlink",
 }
 
 

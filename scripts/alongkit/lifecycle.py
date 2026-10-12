@@ -637,6 +637,34 @@ def archive_and_purge(repo_root: str, slug: str, *, reason: Optional[str] = None
     return log_path
 
 
+def last_issue_trace_entry(session_dir: str, slug: str) -> Optional[str]:
+    """Find the last execution trace entry touching the issue file, or the last trace entry."""
+    trace_path = os.path.join(session_dir, session.TRACE_FILENAME)
+    if not os.path.isfile(trace_path):
+        return None
+    try:
+        content = textio.read_text(trace_path, strict=False)
+    except (OSError, UnicodeDecodeError):
+        return None
+
+    entries: List[str] = []
+    for line in content.splitlines():
+        line = line.strip()
+        if line.startswith("- "):
+            entries.append(line[2:].strip())
+
+    if not entries:
+        return None
+
+    issue_indicators = (".along/issues", "issues/", slug)
+    for entry in reversed(entries):
+        entry_lower = entry.lower()
+        if any(ind in entry_lower for ind in issue_indicators):
+            return entry
+
+    return entries[-1]
+
+
 def orphan_blackboards(repo_root: str) -> List[Tuple[str, str]]:
     """(slug, why) of blackboards no session is bound to whose issue is closed or missing.
 
@@ -655,7 +683,11 @@ def orphan_blackboards(repo_root: str) -> List[Tuple[str, str]]:
             continue
         issue = entities.find_issue_by_slug(repo_root, entry.name)
         if not issue:
-            found.append((entry.name, "issue missing"))
+            trace_entry = last_issue_trace_entry(entry.path, entry.name)
+            if trace_entry:
+                found.append((entry.name, f"issue missing; last trace: {trace_entry}"))
+            else:
+                found.append((entry.name, "issue missing"))
         elif issue.get("status") in entities.CLOSED_ISSUE_STATUSES:
             found.append((entry.name, f"issue {issue.get('status')}"))
     return found

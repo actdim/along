@@ -3,10 +3,11 @@ protocol: along
 protocol_version: "4.4.6"
 slug: uncommitted-issue-deleted-without-trace
 type: bug
-status: open
+status: done
+completed: 2026-10-12
 priority: medium
 created: 2026-10-07
-updated: 2026-10-07
+updated: 2026-10-12
 agent: claude
 tags: [entities, integrity, gates]
 milestone: v4.5.0-multi-user-merge-automation
@@ -35,6 +36,6 @@ the file, and the deletion of an untracked entity file leaves no git trace eithe
   that touched the file (`along doctor`).
 
 ## Acceptance Criteria
-- [ ] Hermetic test: deleting an untracked issue file is rejected
-- [ ] Supersede to several successors works and keeps the original in `done/`
-- [ ] Automated tests passing
+- [x] Hermetic test: deleting an untracked issue file is rejected
+- [x] Supersede to several successors works and keeps the original in `done/`
+- [x] Automated tests passing

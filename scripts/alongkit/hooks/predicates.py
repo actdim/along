@@ -566,8 +566,75 @@ def check_doc_manual_lock(event: HookEvent, repo_root: str, **kwargs: Any) -> Op
     )
 
 
+_ENTITY_DIR_PATTERN = re.compile(
+    r"\.along[/\\]+(?:ISSUES|DECISIONS|MILESTONES|RISKS|SPIKES)(?:[/\\]|$)",
+    re.IGNORECASE,
+)
+_SHELL_DELETION_CMD_RE = re.compile(
+    r"(?:^|[|;&(\n\s])(?:git\s+(?:-\S+\s+)*rm|(?:rm|rmdir|del|erase|Remove-Item|ri|unlink)(?:\.exe)?)\b|"
+    r"(?:os\.(?:remove|unlink|rmdir)|shutil\.rmtree|\.unlink\(\))",
+    re.IGNORECASE,
+)
+_DELETE_TOOL_NAMES = frozenset({"delete_file", "remove_file", "unlink", "delete", "file_delete", "remove"})
+
+
+def _extract_all_target_paths(event: HookEvent) -> List[str]:
+    args = event.tool_args or {}
+    paths: List[str] = []
+    for k in ("TargetFile", "target_file", "path", "FilePath", "file_path", "filename", "file"):
+        val = args.get(k)
+        if val:
+            if isinstance(val, str):
+                paths.append(val)
+            elif isinstance(val, (list, tuple)):
+                paths.extend(str(x) for x in val if x)
+    for k in ("paths", "files", "TargetFiles", "target_files"):
+        val = args.get(k)
+        if isinstance(val, (list, tuple)):
+            paths.extend(str(x) for x in val if x)
+        elif isinstance(val, str):
+            paths.append(val)
+    return paths
+
+
+def check_entity_deletion_protection(event: HookEvent, repo_root: str, **kwargs: Any) -> Optional[str]:
+    """Intercept file deletion tools and shell commands deleting issue/ADR/milestone/risk/spike files."""
+    tool = (event.tool_name or "").lower()
+
+    # 1. File deletion tools
+    if tool in _DELETE_TOOL_NAMES:
+        for p in _extract_all_target_paths(event):
+            if _ENTITY_DIR_PATTERN.search(p):
+                return (
+                    "Entity file deletion rejected by [gate: entity-reference-integrity]: "
+                    "Deleting an issue, ADR, milestone, risk, or spike file is forbidden. "
+                    "Use 'along issue supersede' / 'along issue rename' (split: supersede into several keys)."
+                )
+
+    # 2. Shell commands
+    if tool in ("run_command", "execute_command", "bash", "shell"):
+        cmd = _extract_command(event)
+        if cmd and _ENTITY_DIR_PATTERN.search(cmd):
+            segments = shellparse.split_segments(cmd)
+            if segments is None:
+                segments = [cmd]
+            for seg in segments:
+                if _ENTITY_DIR_PATTERN.search(seg) and _SHELL_DELETION_CMD_RE.search(seg):
+                    return (
+                        "Entity file deletion rejected by [gate: entity-reference-integrity]: "
+                        "Deleting an issue, ADR, milestone, risk, or spike file is forbidden. "
+                        "Use 'along issue supersede' / 'along issue rename' (split: supersede into several keys)."
+                    )
+
+    return None
+
+
 def check_cli_safety(event: HookEvent, repo_root: str, **kwargs: Any) -> Optional[str]:
     """Check command line for dangerous shell patterns and destructive commands."""
+    entity_err = check_entity_deletion_protection(event, repo_root, **kwargs)
+    if entity_err:
+        return entity_err
+
     cmd = _extract_command(event)
     if not cmd:
         return None

@@ -35,9 +35,12 @@ READ_TOOLS: Tuple[str, ...] = (
     "search_web", "manage_task", "schedule", "send_message", "ask_question", "call_mcp_tool",
     "list_resources", "read_resource",
 )
+DELETE_TOOLS: Tuple[str, ...] = (
+    "delete_file", "remove_file", "unlink", "delete", "file_delete", "remove",
+)
 
 #: Every canonical name some gate or safe-list refers to.
-CANONICAL_TOOLS: FrozenSet[str] = frozenset(WRITE_TOOLS + SHELL_TOOLS + SEARCH_TOOLS + READ_TOOLS)
+CANONICAL_TOOLS: FrozenSet[str] = frozenset(WRITE_TOOLS + SHELL_TOOLS + SEARCH_TOOLS + READ_TOOLS + DELETE_TOOLS)
 
 #: Marker the engine reads to audit a tool no adapter maps.
 UNMAPPED_MARKER = "_along_unmapped_tool"

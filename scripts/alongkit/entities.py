@@ -1727,7 +1727,11 @@ def validate_entities(repo_root: str, ancestors: bool = True,
                     errors.append((rel, f"dangling related reference: '{r}'"))
 
         superseded_by = fm.get("superseded_by")
-        if superseded_by and str(superseded_by).strip():
+        if isinstance(superseded_by, list):
+            for s in superseded_by:
+                if s and str(s).strip() and not _resolve_ref(s, known_entity_keys, root_keys):
+                    errors.append((rel, f"dangling superseded_by reference: '{s}'"))
+        elif superseded_by and str(superseded_by).strip():
             if not _resolve_ref(superseded_by, known_entity_keys, root_keys):
                 errors.append((rel, f"dangling superseded_by reference: '{superseded_by}'"))
 
@@ -1950,7 +1954,11 @@ def validate_entities(repo_root: str, ancestors: bool = True,
                 errors.append((rel, f"invalid status: '{dstatus}' (allowed: {', '.join(DECISION_STATUSES)})"))
 
             sup_by = fm.get("superseded_by")
-            if sup_by and str(sup_by).strip():
+            if isinstance(sup_by, list):
+                for s in sup_by:
+                    if s and str(s).strip() and not _resolve_ref(s, known_entity_keys):
+                        errors.append((rel, f"dangling superseded_by reference: '{s}'"))
+            elif sup_by and str(sup_by).strip():
                 if not _resolve_ref(sup_by, known_entity_keys):
                     errors.append((rel, f"dangling superseded_by reference: '{sup_by}'"))
 
@@ -1998,24 +2006,37 @@ def _rewrite_ref(ref: Any, old_key: str, old_slug: str, new_key: str) -> Optiona
 
 
 def _rewrite_fields(fm: Dict[str, Any], fields: Sequence[str], old_key: str, old_slug: str,
-                    new_key: str) -> Dict[str, Any]:
+                    new_key: Union[str, Sequence[str]]) -> Dict[str, Any]:
     updates: Dict[str, Any] = {}
+    is_multi = isinstance(new_key, (list, tuple))
     for field_name in fields:
         value = fm.get(field_name)
         if isinstance(value, list):
             changed = False
             rewritten = []
             for item in value:
-                new = _rewrite_ref(item, old_key, old_slug, new_key)
-                changed = changed or new is not None
-                if new is None:
-                    rewritten.append(item)
-                elif new not in rewritten:
-                    rewritten.append(new)
+                if is_multi:
+                    item_matches = _rewrite_ref(item, old_key, old_slug, old_key) is not None
+                    if item_matches:
+                        changed = True
+                        for k in new_key:
+                            rewritten_k = _rewrite_ref(item, old_key, old_slug, k)
+                            if rewritten_k is not None and rewritten_k not in rewritten:
+                                rewritten.append(rewritten_k)
+                    else:
+                        rewritten.append(item)
+                else:
+                    new = _rewrite_ref(item, old_key, old_slug, new_key)
+                    changed = changed or new is not None
+                    if new is None:
+                        rewritten.append(item)
+                    elif new not in rewritten:
+                        rewritten.append(new)
             if changed:
                 updates[field_name] = rewritten
         else:
-            new = _rewrite_ref(value, old_key, old_slug, new_key)
+            target_k = new_key[0] if is_multi and new_key else new_key
+            new = _rewrite_ref(value, old_key, old_slug, target_k)
             if new is not None:
                 updates[field_name] = new
     return updates
@@ -2028,7 +2049,7 @@ def _entity_files(sdir: str, dirname: str) -> List[str]:
                   if os.path.basename(p) not in _PROJECTION_FILES)
 
 
-def rewrite_inbound_references(repo_root: str, old_key: str, new_key: str,
+def rewrite_inbound_references(repo_root: str, old_key: str, new_key: Union[str, Sequence[str]],
                                skip: Sequence[str] = (), history: bool = True) -> List[str]:
     """Point every reference to `old_key` at `new_key`; return the rewritten files.
 
@@ -2110,25 +2131,50 @@ def rename_issue(repo_root: str, old: str, new: str) -> Dict[str, Any]:
     return {"old_key": old_key, "new_key": new_key, "file_path": dest, "rewritten": changed}
 
 
-def supersede_issue(repo_root: str, old: str, by: str) -> Dict[str, Any]:
+def supersede_issue(repo_root: str, old: str, by: Union[str, Sequence[str]]) -> Dict[str, Any]:
     """Close `old` as superseded by `by` and move live references over to `by`.
 
+    `by` can be a single key, comma-separated keys, or a list of keys.
     The old file is kept (`status: superseded`, `superseded_by`, moved to `done/`), so
     session history that names it stays valid; dependency fields (`related`,
-    `blocked_by`, `parent`, ...) in other entities are rewritten to the successor.
+    `blocked_by`, `parent`, ...) in other entities are rewritten to the successor(s).
     """
     from . import frontmatter, repo, textio
 
+    if isinstance(by, str):
+        successors_raw = [s.strip().lower() for s in by.split(",") if s.strip()]
+    elif isinstance(by, (list, tuple)):
+        successors_raw = [str(s).strip().lower() for s in by if str(s).strip()]
+    else:
+        raise ValueError(f"Invalid 'by' parameter for supersede: {by}")
+
+    if not successors_raw:
+        raise ValueError("At least one successor issue must be specified via '--by'.")
+
     issue = _require_issue(repo_root, old)
-    successor = _require_issue(repo_root, by)
     old_key = canonical_key(issue["type"], issue["slug"])
-    new_key = canonical_key(successor["type"], successor["slug"])
-    if old_key == new_key:
+
+    successors = [_require_issue(repo_root, s) for s in successors_raw]
+    successors_keys = [canonical_key(s["type"], s["slug"]) for s in successors]
+
+    if old_key in successors_keys:
         raise ValueError("An issue cannot supersede itself.")
 
+    unique_keys = []
+    for k in successors_keys:
+        if k not in unique_keys:
+            unique_keys.append(k)
+    successors_keys = unique_keys
+
+    superseded_by_val: Union[str, List[str]] = (
+        successors_keys[0] if len(successors_keys) == 1 else successors_keys
+    )
+
+    skip_paths = [issue["file_path"]] + [s["file_path"] for s in successors]
     changed = rewrite_inbound_references(
-        repo_root, old_key, new_key,
-        skip=[issue["file_path"], successor["file_path"]], history=False)
+        repo_root, old_key,
+        successors_keys if len(successors_keys) > 1 else successors_keys[0],
+        skip=skip_paths, history=False)
 
     src = issue["file_path"]
     done_dir = os.path.join(repo.state_dir(repo_root), "ISSUES", "done")
@@ -2137,7 +2183,7 @@ def supersede_issue(repo_root: str, old: str, by: str) -> Dict[str, Any]:
     content = textio.read_text(src)
     updated = frontmatter.update(
         content,
-        {"status": "superseded", "superseded_by": new_key, "updated": today, "completed": today},
+        {"status": "superseded", "superseded_by": superseded_by_val, "updated": today, "completed": today},
         place_after={"completed": "status", "superseded_by": "completed"},
         path=src)
     os.makedirs(done_dir, exist_ok=True)
@@ -2147,7 +2193,7 @@ def supersede_issue(repo_root: str, old: str, by: str) -> Dict[str, Any]:
 
     sync_milestones(repo_root)
     sync_issues_board(repo_root)
-    return {"old_key": old_key, "new_key": new_key, "file_path": dest, "rewritten": changed}
+    return {"old_key": old_key, "new_key": superseded_by_val, "file_path": dest, "rewritten": changed}
 
 
 _DELETE_LIST_FIELDS: Tuple[str, ...] = ("related", "blocked_by", "target_issues")

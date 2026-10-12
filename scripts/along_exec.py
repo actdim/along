@@ -544,14 +544,16 @@ def _issue_supersede(repo_root: str, args: List[str]):
         if arg == "--by" and i + 1 < len(args):
             by = args[i + 1].lower()
     if len(args) < 2 or args[1].startswith("-") or not by:
-        print("[Error] Usage: along issue supersede <old-key> --by <new-key>", file=sys.stderr)
+        print("[Error] Usage: along issue supersede <old-key> --by <new-key>[,<new-key>...]", file=sys.stderr)
         sys.exit(1)
     try:
-        result = entities.supersede_issue(repo_root, args[1].lower(), by)
+        by_keys = [k.strip() for k in by.split(",") if k.strip()]
+        result = entities.supersede_issue(repo_root, args[1].lower(), by_keys if len(by_keys) > 1 else by)
     except ValueError as exc:
         print(f"[Error] {exc}", file=sys.stderr)
         sys.exit(1)
-    print(f"-> Superseded {result['old_key']} by {result['new_key']}: "
+    by_display = ", ".join(result["new_key"]) if isinstance(result["new_key"], list) else result["new_key"]
+    print(f"-> Superseded {result['old_key']} by {by_display}: "
           f"{repo.normalize_posix(repo.safe_relpath(result['file_path'], repo_root))}")
     _report_rewritten(repo_root, result["rewritten"])
     sys.exit(0)

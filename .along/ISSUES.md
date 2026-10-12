@@ -4,7 +4,6 @@
 <!-- No active issues -->
 
 ## Backlog
-- [ ] `(bug)` [uncommitted-issue-deleted-without-trace](ISSUES/bug--uncommitted-issue-deleted-without-trace.md)
 - [ ] `(bug)` [worktree-cross-os-mount-guard](ISSUES/bug--worktree-cross-os-mount-guard.md)
 - [ ] `(debt)` [agents-md-core-slimming](ISSUES/debt--agents-md-core-slimming.md)
 - [ ] `(debt)` [along-core-extras-split](ISSUES/debt--along-core-extras-split.md)
@@ -64,8 +63,8 @@
 
 ## Done (recent)
 - [x] `(bug)` [wrap-docs-only-test-skip](ISSUES/done/bug--wrap-docs-only-test-skip.md)
+- [x] `(bug)` [uncommitted-issue-deleted-without-trace](ISSUES/done/bug--uncommitted-issue-deleted-without-trace.md)
 - [x] `(bug)` [release-tags-not-pushed](ISSUES/done/bug--release-tags-not-pushed.md)
 - [x] `(bug)` [mcp-installer-cleanup-serve-arg](ISSUES/done/bug--mcp-installer-cleanup-serve-arg.md)
 - [x] `(bug)` [history-append-blocked-after-wrap](ISSUES/done/bug--history-append-blocked-after-wrap.md)
-- [x] `(task)` [release-v4-4-10](ISSUES/done/task--release-v4-4-10.md)
-<!-- 224 older completed issue(s) archived in .along/ISSUES/done/ -->
+<!-- 225 older completed issue(s) archived in .along/ISSUES/done/ -->

@@ -428,6 +428,53 @@ class TestRenameAndSupersede(_ErRepo):
         self.assertEqual(superseded.returncode, 0, superseded.stderr)
         self.assertEqual(self.errors(), [])
 
+    def test_supersede_multiple_successors_split(self):
+        _er_write(self.root, ".along/ISSUES/feat--split-one.md", _er_issue("split-one"))
+        _er_write(self.root, ".along/ISSUES/feat--split-two.md", _er_issue("split-two"))
+
+        result = entities.supersede_issue(self.root, "feat--alpha-task", ["feat--split-one", "feat--split-two"])
+        done = os.path.join(self.root, ".along", "ISSUES", "done", "feat--alpha-task.md")
+        self.assertFalse(os.path.exists(self.a))
+        self.assertTrue(os.path.exists(done))
+
+        old = _er_fm(done)
+        self.assertEqual(old["status"], "superseded")
+        self.assertEqual(list(old["superseded_by"]), ["feat--split-one", "feat--split-two"])
+
+        beta = _er_fm(self.b)
+        self.assertEqual(list(beta["related"]), ["feat--split-one", "feat--split-two"])
+        self.assertEqual(list(beta["blocked_by"]), ["feat--split-one", "feat--split-two"])
+        self.assertEqual(self.errors(), [])
+
+    def test_cli_supersede_comma_separated_successors(self):
+        _er_write(self.root, ".along/ISSUES/feat--part-a.md", _er_issue("part-a"))
+        _er_write(self.root, ".along/ISSUES/feat--part-b.md", _er_issue("part-b"))
+        run = lambda *a: subprocess.run([sys.executable, EXEC, "issue", *a], cwd=self.root,
+                                        capture_output=True, text=True, encoding="utf-8")
+        res = run("supersede", "feat--alpha-task", "--by", "feat--part-a,feat--part-b")
+        self.assertEqual(res.returncode, 0, res.stderr)
+        self.assertIn("Superseded feat--alpha-task by feat--part-a, feat--part-b", res.stdout)
+        done = os.path.join(self.root, ".along", "ISSUES", "done", "feat--alpha-task.md")
+        self.assertTrue(os.path.exists(done))
+        old = _er_fm(done)
+        self.assertEqual(list(old["superseded_by"]), ["feat--part-a", "feat--part-b"])
+        self.assertEqual(self.errors(), [])
+
+    def test_supersede_dangling_target_fails_validation(self):
+        _er_write(self.root, ".along/ISSUES/feat--part-x.md", _er_issue("part-x"))
+        done_path = os.path.join(self.root, ".along", "ISSUES", "done", "feat--alpha-task.md")
+        os.makedirs(os.path.dirname(done_path), exist_ok=True)
+        if os.path.exists(self.a):
+            os.remove(self.a)
+        with open(done_path, "w", encoding="utf-8") as f:
+            f.write(
+                "---\nprotocol: along\nslug: alpha-task\ntype: feat\nstatus: superseded\n"
+                "priority: medium\ncreated: 2026-09-30\nupdated: 2026-09-30\ncompleted: 2026-09-30\n"
+                "superseded_by: [feat--part-x, feat--non-existent]\n---\n# Alpha\n"
+            )
+        errs = self.errors()
+        self.assertTrue(any("dangling superseded_by reference: 'feat--non-existent'" in err for err in errs))
+
 
 class TestMilestoneSync(_ErRepo):
 

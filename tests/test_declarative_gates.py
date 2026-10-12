@@ -35,6 +35,7 @@ from alongkit.hooks.declarative import (
 from alongkit.hooks.predicates import (
     check_active_issue,
     check_cli_safety,
+    check_entity_deletion_protection,
     check_fast_retrieval,
     check_projection_protection,
     check_test_before_stop,
@@ -286,6 +287,97 @@ class TestStatefulPredicates(unittest.TestCase):
             workspace_root=self.tmp,
         )
         err = check_fast_retrieval(event_scripts_search, repo_root=self.tmp)
+        self.assertIsNone(err)
+
+    def test_check_entity_deletion_protection_blocks_untracked_issue_deletion(self):
+        # Create an untracked issue file
+        untracked_issue = os.path.join(self.issues_dir, "bug--uncommitted-fix.md")
+        with open(untracked_issue, "w", encoding="utf-8") as f:
+            f.write("---\nstatus: open\nslug: uncommitted-fix\n---\n# Uncommitted\n")
+
+        # 1. delete_file tool targeting untracked issue is denied
+        event_delete_tool = HookEvent(
+            event_type=HookEventType.PRE_TOOL_USE,
+            tool_name="delete_file",
+            tool_args={"TargetFile": untracked_issue},
+            workspace_root=self.tmp,
+        )
+        err = check_entity_deletion_protection(event_delete_tool, repo_root=self.tmp)
+        self.assertIsNotNone(err)
+        self.assertIn("entity-reference-integrity", err or "")
+        self.assertIn("along issue supersede", err or "")
+        self.assertIn("along issue rename", err or "")
+        self.assertIn("split: supersede into several keys", err or "")
+
+        # 2. remove_file tool targeting untracked issue is denied
+        event_remove_tool = HookEvent(
+            event_type=HookEventType.PRE_TOOL_USE,
+            tool_name="remove_file",
+            tool_args={"path": untracked_issue},
+            workspace_root=self.tmp,
+        )
+        err = check_entity_deletion_protection(event_remove_tool, repo_root=self.tmp)
+        self.assertIsNotNone(err)
+
+        # 3. unlink tool targeting untracked issue is denied
+        event_unlink_tool = HookEvent(
+            event_type=HookEventType.PRE_TOOL_USE,
+            tool_name="unlink",
+            tool_args={"file_path": untracked_issue},
+            workspace_root=self.tmp,
+        )
+        err = check_entity_deletion_protection(event_unlink_tool, repo_root=self.tmp)
+        self.assertIsNotNone(err)
+
+        # 4. shell command rm targeting untracked issue is denied
+        event_rm_cmd = HookEvent(
+            event_type=HookEventType.PRE_TOOL_USE,
+            tool_name="run_command",
+            tool_args={"CommandLine": f"rm {untracked_issue}"},
+            workspace_root=self.tmp,
+        )
+        err = check_entity_deletion_protection(event_rm_cmd, repo_root=self.tmp)
+        self.assertIsNotNone(err)
+        self.assertIn("along issue supersede", err or "")
+
+        # 5. shell command git rm targeting untracked issue is denied
+        event_git_rm = HookEvent(
+            event_type=HookEventType.PRE_TOOL_USE,
+            tool_name="bash",
+            tool_args={"CommandLine": "git rm .along/ISSUES/bug--uncommitted-fix.md"},
+            workspace_root=self.tmp,
+        )
+        err = check_entity_deletion_protection(event_git_rm, repo_root=self.tmp)
+        self.assertIsNotNone(err)
+
+        # 6. PowerShell Remove-Item targeting entity is denied
+        event_pwsh_rm = HookEvent(
+            event_type=HookEventType.PRE_TOOL_USE,
+            tool_name="run_command",
+            tool_args={"CommandLine": "Remove-Item -Force .along\\DECISIONS\\ADR-1.md"},
+            workspace_root=self.tmp,
+        )
+        err = check_entity_deletion_protection(event_pwsh_rm, repo_root=self.tmp)
+        self.assertIsNotNone(err)
+
+        # 7. Non-deletion command referencing issue file is allowed
+        event_cat = HookEvent(
+            event_type=HookEventType.PRE_TOOL_USE,
+            tool_name="run_command",
+            tool_args={"CommandLine": f"cat {untracked_issue}"},
+            workspace_root=self.tmp,
+        )
+        err = check_entity_deletion_protection(event_cat, repo_root=self.tmp)
+        self.assertIsNone(err)
+
+        # 8. Deleting non-entity file is allowed by this gate
+        event_del_source = HookEvent(
+            event_type=HookEventType.PRE_TOOL_USE,
+            tool_name="delete_file",
+            tool_args={"TargetFile": os.path.join(self.tmp, "src", "temp.txt")},
+            workspace_root=self.tmp,
+        )
+        err = check_entity_deletion_protection(event_del_source, repo_root=self.tmp)
         self.assertIsNone(err)
 
 

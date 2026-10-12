@@ -476,6 +476,24 @@ class TestDoctorOrphans(ArchiveFixture):
         self.assertIn("orphan blackboard(s)", doctor.stdout)
         self.assertIn("ghost (issue missing)", doctor.stdout)
 
+    def test_missing_issue_with_trace_reports_last_trace_entry(self):
+        from alongkit import lifecycle
+        session.init_session(self.root, "traced-ghost")
+        session.append_trace(self.root, "traced-ghost", "plan recorded (plan.md)")
+        session.append_trace(self.root, "traced-ghost", "edit .along/ISSUES/bug--traced-ghost.md")
+        session.append_trace(self.root, "traced-ghost", "test pass (along test)")
+
+        orphans = lifecycle.orphan_blackboards(self.root)
+        self.assertEqual(len(orphans), 1)
+        self.assertEqual(orphans[0][0], "traced-ghost")
+        self.assertIn("issue missing; last trace:", orphans[0][1])
+        self.assertIn("edit .along/ISSUES/bug--traced-ghost.md", orphans[0][1])
+
+        doctor = self.run_exec(["doctor"])
+        self.assertIn("orphan blackboard(s)", doctor.stdout)
+        self.assertIn("traced-ghost (issue missing; last trace:", doctor.stdout)
+        self.assertIn("edit .along/ISSUES/bug--traced-ghost.md", doctor.stdout)
+
 
 SESSION_LOG = ("---\nprotocol: along\ndate: 2026-10-06\nslug: alpha\n---\n\n# Session: Alpha\n\n"
                "## Summary\nFirst summary.\n\n## Blackboard Record\n\nExecution mode: direct.\n\n"
