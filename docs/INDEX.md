@@ -47,6 +47,8 @@ flowchart TD
     INDEX --> T_SKILLS_REFERENCE
     T_SYSTEM_COMPARISONS["System Comparisons & Alternative Architectural Paradigms"]
     INDEX --> T_SYSTEM_COMPARISONS
+    T_TROUBLESHOOTING["Troubleshooting & Developer Diagnostics Guide"]
+    INDEX --> T_TROUBLESHOOTING
     T_ARCHITECTURE -.->|references| T_CLI_REFERENCE
     T_ARCHITECTURE -.->|references| T_SETUP_AND_WORKFLOW
     T_ARCHITECTURE -.->|references| T_SESSION_LIFECYCLE
@@ -73,6 +75,9 @@ flowchart TD
     T_SYSTEM_COMPARISONS -.->|references| T_RUNTIME_HOOKS_AND_GATES
     T_SYSTEM_COMPARISONS -.->|references| T_AGENT_RUN_PROTOCOL
     T_SYSTEM_COMPARISONS -.->|references| T_ARCHITECTURE
+    T_TROUBLESHOOTING -.->|references| T_SETUP_AND_WORKFLOW
+    T_TROUBLESHOOTING -.->|references| T_CLI_REFERENCE
+    T_TROUBLESHOOTING -.->|references| T_RUNTIME_HOOKS_AND_GATES
 ```
 
 ---
@@ -94,6 +99,7 @@ flowchart TD
 - **[Setup & Developer Workflow](./topic--setup-and-workflow.md)** (setup-workflow) `setup-workflow`, `installation`, `lifecycle`, `runners`, `developer-workflow`, `testing`
 - **[Skills & Slash Commands Technical Reference](./topic--skills-reference.md)** (reference) `skills`, `commands`, `reference`, `runners`, `lifecycle`, `automation`, `multi-agent`
 - **[System Comparisons & Alternative Architectural Paradigms](./topic--system-comparisons.md)** (explanation) `comparisons`, `architecture`, `paradigms`, `memory`, `zero-vector`, `mechanical-gates`, `governance`, `engineering-decisions`
+- **[Troubleshooting & Developer Diagnostics Guide](./topic--troubleshooting.md)** (guide) `troubleshooting`, `diagnostics`, `packaging`, `alongkit`, `uv`, `pep-723`, `api-discovery`, `anti-patterns`
 
 ---
 

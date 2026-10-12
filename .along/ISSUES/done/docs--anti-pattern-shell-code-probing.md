@@ -3,10 +3,11 @@ protocol: along
 protocol_version: "4.1.0"
 slug: anti-pattern-shell-code-probing
 type: docs
-status: open
+status: done
+completed: 2026-10-12
 priority: low
 created: 2026-09-27
-updated: 2026-09-29
+updated: 2026-10-12
 agent: antigravity
 tags: [protocol, agents-md, anti-pattern, documentation, rules]
 milestone: v4.5.0-multi-user-merge-automation

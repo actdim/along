@@ -196,6 +196,7 @@ TASK / GOAL
 1. Launch read-only research via `spawn_readonly_researcher` (or execute inline Phase 1 in single-agent mode).
 2. Gather: 1) Relevant files and symbols, 2) Existing patterns, 3) Constraints/Risks, 4) Unknowns. Zero file modifications allowed.
 3. Ingest findings into `.along/.session/<slug>/research.md` (and blackboard).
+4. **Prohibited Anti-Pattern (Ad-Hoc Shell Probing)**: Never use `python -c` or inline shell commands to probe internal module symbols. Internal engine packages (`alongkit`, `scripts`) are not installed into the global Python environment, producing misleading traces. Rely strictly on static file tools (`view_file`, `grep_search`), AST tools (`along graph-*`), or CLI `--help`.
 
 ### Phase 2: Architecture & Public Surface Discovery (Architect)
 1. Execute **Public Surface Discovery & Blast Radius Pre-Check**:
@@ -266,4 +267,22 @@ Validate Phase 0 and Phase 1 execution per provider:
 ### 4. OpenCode
 1. **Trigger**: Run `/along-team <issue-slug>`.
 2. **Smoke Check**: Agent executes single-agent fallback: emits Phase 0 and Phase 1 markers, inspects files via read tools, and outputs Living Plan to session blackboard.
+
+---
+
+## Prohibited Anti-Patterns: Ad-Hoc Shell Code Probing
+
+Agents executing in any role (Supervisor, Scout, Implementer, Reviewer) must **never** use `python -c` or inline shell commands to probe internal module symbols, inspect functions, or test exploratory imports.
+
+### Why This Is Prohibited
+1. **Uninstalled Internal Engine Packages**: Internal engine packages (`alongkit`, `scripts`) are not installed into the global Python environment. Running inline `python -c` fails with `ModuleNotFoundError` or pulls incorrect dependencies.
+2. **Confusing Error Cascades**: Ad-hoc shell probing produces confusing error traces and misleading tracebacks that derail agent reasoning, leading to spurious fix attempts and token waste.
+3. **Breaks Hermetic Guarantees**: Exploratory inline execution bypasses dependency isolation (PEP 723 / `uv`) and violates the `cli_safety` protocol.
+
+### Prescribed Inspection Workflows
+Instead of inline shell probing, agents must strictly employ:
+- **Static File Tools**: Use `view_file` and `grep_search` to inspect module symbols, function signatures, classes, and docstrings directly.
+- **AST Analysis Tools**: Use `along graph-impact`, `along graph-arch`, or `along graph-sync` to inspect callers, callees, and symbol relationships.
+- **Official CLI Subcommands**: Run `along <command> --help` or `python scripts/along_exec.py <command> --help` to inspect supported arguments, subcommands, and flags.
+- **Dedicated Hermetic Tests**: Write or run isolated test fixtures under `tests/` using the project test runner (`python .along/scripts/test.py` or `along test`).
 
