@@ -10,6 +10,8 @@ re-arming test-before-stop unless the gate sets `count_docs`. Throwaway director
 
 from __future__ import annotations
 
+import contextlib
+import io
 import os
 import shutil
 import subprocess
@@ -73,13 +75,15 @@ class TestNoTestsIsNotAPass(unittest.TestCase):
     def test_zero_tests_fail_in_both_modes_and_are_not_green(self):
         for mode in ("distill", "raw"):
             with self.subTest(mode=mode):
-                code = lifecycle.run_lifecycle_command("test", self._cmd("Ran 0 tests in 0.000s"),
-                                                       self.root, mode)
+                with contextlib.redirect_stdout(io.StringIO()), contextlib.redirect_stderr(io.StringIO()):
+                    code = lifecycle.run_lifecycle_command("test", self._cmd("Ran 0 tests in 0.000s"),
+                                                           self.root, mode)
                 self.assertEqual(code, lifecycle.NO_TESTS_EXIT_CODE)
                 self.assertFalse(testruns.load_runs(self.root)[-1]["ok"])
 
     def test_real_run_stays_green(self):
-        code = lifecycle.run_lifecycle_command("test", self._cmd("Ran 3 tests in 0.1s"), self.root, "distill")
+        with contextlib.redirect_stdout(io.StringIO()), contextlib.redirect_stderr(io.StringIO()):
+            code = lifecycle.run_lifecycle_command("test", self._cmd("Ran 3 tests in 0.1s"), self.root, "distill")
         self.assertEqual(code, 0)
         self.assertTrue(testruns.load_runs(self.root)[-1]["ok"])
 

@@ -557,7 +557,8 @@ def canonical_path_gate(repo_root: str, label: str = "Quality Gate") -> bool:
 
 
 def syntax_gate(repo_root: str, label: str = "Quality Gate",
-                target_dirs: Optional[List[str]] = None) -> bool:
+                target_dirs: Optional[List[str]] = None,
+                quiet: bool = False) -> bool:
     """Pre-flight syntax validation gate.
 
     Compiles Python source files across target directories using compileall and halts
@@ -574,11 +575,13 @@ def syntax_gate(repo_root: str, label: str = "Quality Gate",
     if not dirs_to_check:
         return True
 
-    print(f"-> [{label}] Verifying Python syntax integrity across {', '.join(dirs_to_check)}...")
+    if not quiet:
+        print(f"-> [{label}] Verifying Python syntax integrity across {', '.join(dirs_to_check)}...")
     cmd = [sys.executable, "-m", "compileall", "-q"] + dirs_to_check
     res = proc.run_capture(cmd, cwd=repo_root, trip_on_anomaly=False)
     if res.ok:
-        print(f"-> [{label}] Python syntax clean across {len(dirs_to_check)} target directory(ies).")
+        if not quiet:
+            print(f"-> [{label}] Python syntax clean across {len(dirs_to_check)} target directory(ies).")
         return True
 
     print(f"[Error] {label}: Python syntax compilation failed.\n", file=sys.stderr)

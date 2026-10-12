@@ -1033,8 +1033,8 @@ def handle_start_command(repo_root: str, args: List[str]):
         print("-> No agent session id in the environment; gates fall back to the single in-progress issue.")
     if not approved:
         print("-> Edits unlock after the user approves the plan. Call EnterPlanMode, write the plan, then "
-              "ExitPlanMode. If plan mode is unavailable, show the plan in chat and wait for the user's reply; "
-              "run 'along plan approve' only after that reply.")
+              "ExitPlanMode. Outside plan mode, write the plan to a file and run "
+              "'along plan approve --plan-file <path>' after the user's explicit yes.")
 
     if "--worktree" in args:
         from alongkit import worktree
@@ -1231,8 +1231,8 @@ def handle_plan_command(repo_root: str, args: List[str]):
         refusal, via = session.check_cli_approval(repo_root, key, plan_path)
         if refusal:
             print(f"[Error] Plan approval refused: {refusal}.", file=sys.stderr)
-            print("  Call EnterPlanMode, write the plan, then ExitPlanMode. If plan mode is unavailable, show "
-                  "the plan in chat and wait for the user's reply; run 'along plan approve' only after that reply.",
+            print("  Call EnterPlanMode, write the plan, then ExitPlanMode. Outside plan mode, write the "
+                  "plan to a file and run 'along plan approve --plan-file <path>' after the user's explicit yes.",
                   file=sys.stderr)
             sys.exit(2)
         if slug:

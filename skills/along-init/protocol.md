@@ -27,7 +27,7 @@ Also, when relevant: `.along/VISION.md`, `.along/GLOSSARY.md`. These reflect the
 
 ## Mandatory Issue Anchoring
 - **No Code Without Issue** [gate: require-active-issue]: Before modifying source code, agents MUST identify or create an issue in `.along/ISSUES/<type>--<slug>.md` and set `status: in-progress`.
-- **Session Binding & Plan Approval** [gate: require-plan-approval]: `along start <slug>` binds THIS agent session to the issue; parallel sessions keep their own bindings. Source edits unlock after the user approves the plan (`EnterPlanMode` -> `ExitPlanMode`; else show the plan, `along plan approve` only after the user's reply). `along plan status` shows the binding.
+- **Session Binding & Plan Approval** [gate: require-plan-approval]: `along start <slug>` binds THIS agent session to the issue; parallel sessions keep their own bindings. Source edits unlock after the user approves the plan (`EnterPlanMode` -> `ExitPlanMode`; outside plan mode, write the plan to a file and run `along plan approve --plan-file <path>` after the user's explicit yes). `along plan status` shows the binding.
 - **Exemptions**: Read-only Q&A and 1-line micro-edits (typo fixes, comments) do not require issues.
 - **Commit Binding** [gate: commit-issue-binding]: Every commit via `/along-commit` MUST bind to the active issue slug.
 - **No AI Co-Authors** [gate: commit-no-ai-coauthor]: Commit messages MUST NOT carry `Co-Authored-By:` trailers naming an AI agent (GitHub lists the vendor as a contributor). `along hook install` turns runtime attribution off; opt out via `.along/config.json` `commits.allow_ai_coauthor: true`.

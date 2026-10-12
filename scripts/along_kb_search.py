@@ -699,13 +699,17 @@ def search_knowledge_base(
     verbose: bool = False,
     return_stats: bool = False,
     include_archive: bool = False,
+    literal: bool = False,
 ) -> Any:
     repo_root = os.path.abspath(repo_root)
+    if literal:
+        include_archive = True
     phrases, query_terms = parse_query(query)
     entries = collect_all_entries(repo_root, verbose=verbose)
     idf_map = compute_idf(entries) if (query_terms or phrases) else {}
 
     results = []
+    q_literal = query.strip().lower()
     for e in entries:
         if category and category.lower() != "all" and e["category"].lower() != category.lower():
             continue
@@ -720,6 +724,44 @@ def search_knowledge_base(
         title_lower = e["title"].lower()
         slug_lower = e["slug"].lower()
         body_lower = e["body"].lower()
+
+        if literal and q_literal:
+            matched_literal = (q_literal in slug_lower) or (q_literal in title_lower) or (q_literal in body_lower)
+            if not matched_literal:
+                continue
+            score = 100.0
+            if q_literal in slug_lower:
+                score += 50.0
+            if q_literal in title_lower:
+                score += 30.0
+            b_cnt = body_lower.count(q_literal)
+            if b_cnt > 0:
+                score += min(b_cnt * 10.0, 30.0)
+            if e.get("category") == "kb":
+                score += 20.0
+            if is_archived_entry(e):
+                score -= 10.0
+
+            snippet, section, line_start, line_end = extract_passage_location_and_snippet(
+                e, [], [q_literal], max_words=150
+            )
+            base_path = e["file_path"].split("#")[0]
+            anchored_path = f"{base_path}#L{line_start}-L{line_end}"
+            results.append({
+                "category": e["category"],
+                "category_label": e["category_label"],
+                "title": e["title"],
+                "slug": e["slug"],
+                "status": e.get("status", "active"),
+                "file_path": anchored_path,
+                "section": section,
+                "line_start": line_start,
+                "line_end": line_end,
+                "tags": e["tags"],
+                "score": score,
+                "snippet": snippet,
+            })
+            continue
 
         title_tokens = tokenize(title_lower)
         title_stems = [light_stem(t) for t in title_tokens]
@@ -858,6 +900,7 @@ def main():
     parser.add_argument("--any", action="store_true", help="Match ANY query term (OR semantics, default is AND)")
     parser.add_argument("--prefix", action="store_true", help="Match word prefixes in addition to whole words")
     parser.add_argument("-a", "--archive", action="store_true", help="Include archived entities (done issues, session logs, superseded ADRs)")
+    parser.add_argument("--literal", action="store_true", help="Exact substring match across all scopes including archive")
     parser.add_argument("--stats", action="store_true", help="Show retrieval token efficiency metrics and corpus stats")
     parser.add_argument("--toc", "--catalog", action="store_true", help="Generate compact hierarchical knowledge catalog (< 200 tokens)")
     parser.add_argument("-v", "--verbose", "--debug", action="store_true", help="Show verbose collector details and errors")
@@ -880,6 +923,7 @@ def main():
             verbose=args.verbose,
             return_stats=True,
             include_archive=args.archive,
+            literal=args.literal,
         )
     else:
         results = search_knowledge_base(
@@ -893,6 +937,7 @@ def main():
             verbose=args.verbose,
             return_stats=False,
             include_archive=args.archive,
+            literal=args.literal,
         )
         stats = None
 

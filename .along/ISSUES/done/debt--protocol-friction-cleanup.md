@@ -3,10 +3,11 @@ protocol: along
 protocol_version: "4.4.6"
 slug: protocol-friction-cleanup
 type: debt
-status: open
+status: done
+completed: 2026-10-12
 priority: low
 created: 2026-10-07
-updated: 2026-10-07
+updated: 2026-10-12
 agent: claude
 tags: [protocol, kb-search, tests]
 milestone: v4.5.0-multi-user-merge-automation
@@ -33,7 +34,7 @@ Small frictions observed on 2026-10-06/07.
   `Ran 0 tests in 0.000s` line; quiet mode prints only the summary and failures.
 
 ## Acceptance Criteria
-- [ ] Protocol block and gate messages carry the fallback
-- [ ] `along kb-search --literal` finds slugs in all scopes
-- [ ] Quiet run output limited to dots, summary and failures
-- [ ] Automated tests passing
+- [x] Protocol block and gate messages carry the fallback
+- [x] `along kb-search --literal` finds slugs in all scopes
+- [x] Quiet run output limited to dots, summary and failures
+- [x] Automated tests passing

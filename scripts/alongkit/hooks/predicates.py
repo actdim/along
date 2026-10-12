@@ -848,8 +848,8 @@ def check_mutation_authorization(event: HookEvent, repo_root: str, options: Opti
     reason = (
         f"Inquiry Read-Only Invariance [gate: require-plan-approval]: "
         f"No approved plan for {target} (phase: '{phase}', plan_approved: {str(approved).lower()}). "
-        "Call EnterPlanMode, write the plan, then ExitPlanMode. If plan mode is unavailable, show the "
-        "plan in chat and wait for the user's reply; run 'along plan approve' only after that reply. "
+        "Call EnterPlanMode, write the plan, then ExitPlanMode. Outside plan mode, write the "
+        "plan to a file and run 'along plan approve --plan-file <path>' after the user's explicit yes. "
         "Use 'along start <slug>' to bind this session to an issue."
     )
     if tool in ("run_command", "execute_command", "bash", "shell") and shellparse.is_along_commit(cmd):

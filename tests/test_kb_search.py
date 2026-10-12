@@ -464,6 +464,13 @@ class TestArchiveScopeAndRanking(unittest.TestCase):
         self.assertIn("[superseded]", output)
         self.assertIn("[completed]", output)
 
+    def test_literal_search_matches_slug_across_all_scopes(self):
+        """Literal search finds exact substrings across all scopes including archives (REQ-2)."""
+        results = kb.search_knowledge_base("done-worktree", repo_root=self.repo_root, literal=True)
+        self.assertEqual(len(results), 1)
+        self.assertEqual(results[0]["slug"], "done-worktree")
+        self.assertEqual(results[0]["status"], "done")
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -58,12 +58,16 @@ def main():
     if repo_root not in sys.path:
         sys.path.insert(0, repo_root)
 
+    quiet = any(arg in ("-q", "--quiet") for arg in sys.argv[1:])
+
     # Pre-Flight Syntax Gate: halt before test discovery if syntax errors exist
-    if not gates.syntax_gate(repo_root, label="Pre-Flight Syntax Gate"):
+    if not gates.syntax_gate(repo_root, label="Pre-Flight Syntax Gate", quiet=quiet):
         print("[CRITICAL] Syntax validation failed before test discovery. Aborting.", file=sys.stderr)
         sys.exit(1)
 
     tests_dir = os.path.join(repo_root, "tests")
+    if tests_dir not in sys.path:
+        sys.path.insert(0, tests_dir)
     
     os.environ["ALONG_TEST_RUNNER"] = "1"
     # The suite must not see the agent session that launched it: gates bind per session id.
@@ -91,7 +95,6 @@ def main():
                 suite.addTests(loader.loadTestsFromName(target))
     else:
         suite = loader.discover(start_dir=tests_dir, pattern="test_*.py")
-    quiet = any(arg in ("-q", "--quiet") for arg in sys.argv[1:])
     runner = TimingTestRunner(verbosity=1 if quiet else 2)
     result = runner.run(suite)
 
@@ -103,7 +106,7 @@ def main():
                 slowest_limit = int(a.split("=")[1])
             except ValueError:
                 pass
-    if durations and slowest_limit > 0:
+    if not quiet and durations and slowest_limit > 0:
         top = durations[:slowest_limit]
         print(f"\nSlowest tests (top {len(top)}):")
         for dur, tid in top:

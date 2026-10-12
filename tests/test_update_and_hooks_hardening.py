@@ -11,6 +11,8 @@ Verifies:
 8. validate_and_build_entity_graph ancestor context cross-reference resolution.
 """
 
+import contextlib
+import io
 import json
 import os
 import shutil
@@ -444,7 +446,8 @@ class TestUpdateAndHooksHardening(unittest.TestCase):
             with open(ag_hooks, "w", encoding="utf-8") as f:
                 json.dump({"along-runtime-gates": {"pre_tool": "python ../scripts/along_hook.py"}}, f)
 
-            code = migrate_protocol.run_migrations(tmp, dry_run=False)
+            with contextlib.redirect_stdout(io.StringIO()), contextlib.redirect_stderr(io.StringIO()):
+                code = migrate_protocol.run_migrations(tmp, dry_run=False)
             self.assertEqual(code, 0)
             self.assertFalse(os.path.exists(ag_hooks), "Migration must purge .agents/hooks.json")
 
@@ -564,17 +567,20 @@ class TestUpdateAndHooksHardening(unittest.TestCase):
             os.makedirs(os.path.join(sub2, ".along", "ISSUES"), exist_ok=True)
             textio.write_text(os.path.join(sub2, "AGENTS.md"), "<!-- BEGIN ALONG-PROTOCOL ref=../AGENTS.md -->\n<!-- END ALONG-PROTOCOL -->\n")
 
-            # Patch apply_migration_to_context to raise on sub1
-            orig_apply = along_update.apply_migration_to_context
+            # Patch apply_migration_to_context to raise on sub1 and track processed contexts
+            processed = []
             def flaky_apply(ctx_dir, *args, **kwargs):
+                processed.append(os.path.basename(ctx_dir))
                 if os.path.basename(ctx_dir) == "sub1":
                     raise OSError(22, "Simulated invalid argument on sub1")
-                return orig_apply(ctx_dir, *args, **kwargs)
+                return True
 
             with mock.patch("scripts.along_update.apply_migration_to_context", side_effect=flaky_apply):
                 # Run update (should return False because sub1 failed, but sub2 must be processed)
-                success = along_update.run_update(tmp, local_only=True, dry_run=False, no_hooks=True)
+                with contextlib.redirect_stdout(io.StringIO()), contextlib.redirect_stderr(io.StringIO()):
+                    success = along_update.run_update(tmp, local_only=True, dry_run=False, no_hooks=True)
                 self.assertFalse(success, "Update should report failure when one context fails")
+                self.assertIn("sub2", processed)
 
 
 if __name__ == "__main__":

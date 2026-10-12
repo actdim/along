@@ -8,7 +8,6 @@
 - [ ] `(debt)` [along-core-extras-split](ISSUES/debt--along-core-extras-split.md)
 - [ ] `(debt)` [along-exec-argparse-migration](ISSUES/debt--along-exec-argparse-migration.md)
 - [ ] `(debt)` [canonical-path-gate-expansion](ISSUES/debt--canonical-path-gate-expansion.md)
-- [ ] `(debt)` [protocol-friction-cleanup](ISSUES/debt--protocol-friction-cleanup.md)
 - [ ] `(docs)` [anti-pattern-shell-code-probing](ISSUES/docs--anti-pattern-shell-code-probing.md)
 - [ ] `(docs)` [arxiv-academic-paper-preprint](ISSUES/docs--arxiv-academic-paper-preprint.md)
 - [ ] `(docs)` [engineering-deepdive-medium-devto](ISSUES/docs--engineering-deepdive-medium-devto.md)
@@ -61,4 +60,4 @@
 - [x] `(feat)` [release-ci-precondition-check](ISSUES/done/feat--release-ci-precondition-check.md)
 - [x] `(feat)` [progressive-disclosure-and-context-scaling](ISSUES/done/feat--progressive-disclosure-and-context-scaling.md)
 - [x] `(feat)` [kb-search-archive-scope-default](ISSUES/done/feat--kb-search-archive-scope-default.md)
-<!-- 231 older completed issue(s) archived in .along/ISSUES/done/ -->
+<!-- 232 older completed issue(s) archived in .along/ISSUES/done/ -->
