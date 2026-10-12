@@ -700,12 +700,14 @@ def search_knowledge_base(
     return_stats: bool = False,
     include_archive: bool = False,
     literal: bool = False,
+    entries: Optional[List[Dict[str, Any]]] = None,
 ) -> Any:
     repo_root = os.path.abspath(repo_root)
     if literal:
         include_archive = True
     phrases, query_terms = parse_query(query)
-    entries = collect_all_entries(repo_root, verbose=verbose)
+    if entries is None:
+        entries = collect_all_entries(repo_root, verbose=verbose)
     idf_map = compute_idf(entries) if (query_terms or phrases) else {}
 
     results = []

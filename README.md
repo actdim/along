@@ -2,26 +2,54 @@
 
 [![Tests](https://github.com/actdim/along/actions/workflows/tests.yml/badge.svg)](https://github.com/actdim/along/actions/workflows/tests.yml) - Python 3.10-3.13 on Linux and Windows.
 
-**The Provider-Agnostic Context & Memory Operating System for AI Coding Agents.**
+ActDim Along is a provider-agnostic context and memory protocol for AI coding agents (`ALONG-PROTOCOL v4.4.11`) that provides persistent in-repo task tracking, an evergreen architecture wiki, and mechanical quality gates across Claude Code, Google Antigravity, OpenAI Codex, and OpenCode.
 
-One universal convention (`ALONG-PROTOCOL v4.4.11`) and automation skills suite honored natively across **Claude Code**, **Google Antigravity**, **OpenAI Codex**, and **OpenCode**.
+---
 
-ActDim Along eliminates **agent context amnesia**, prevents **architectural drift**, and stops **token bloat** by transforming any codebase into an AI-ready engineering workspace with durable in-repo memory, token-efficient LLM-Wiki intelligence, and autonomous multi-agent coordination.
+## Quickstart & Installation
+
+Install Along across all supported AI providers with a single command:
+
+### Windows (PowerShell)
+```powershell
+powershell -NoProfile -ExecutionPolicy Bypass -Command "irm https://raw.githubusercontent.com/actdim/along/main/install.ps1 | iex"
+```
+
+### Linux / macOS (Bash)
+```bash
+curl -fsSL https://raw.githubusercontent.com/actdim/along/main/install.sh | bash
+```
+
+The installer bootstraps the repository into `~/.cache/actdim-along/repo` (via shallow `git clone` or archive fallback) and configures skills across Claude Code, OpenAI Codex, Google Antigravity, and OpenCode.
+
+#### Manual / Local Checkout Installation
+If you prefer to clone the repository manually or are developing Along:
+```powershell
+git clone https://github.com/actdim/along.git
+cd along
+powershell -NoProfile -ExecutionPolicy Bypass -File install.ps1 -Target all # Windows
+bash install.sh --target=all                                               # Linux / macOS
+```
+
+An install records what it wrote in `~/.along/install-manifest.json`: it never deletes a
+directory it does not own, so rules you wrote yourself survive every re-install, and
+`install.ps1 -Uninstall` / `./install.sh --uninstall` removes exactly that record and
+nothing else. See [Setup, Installation & Workflows](./docs/topic--setup-and-workflow.md).
 
 ---
 
 ## Why Along?
 
-AI coding agents are exceptionally capable, but they start every session blind:
-- **Context Amnesia**: Agents forget past architectural choices, re-invent rejected patterns, and drop active tasks across sessions.
-- **Token Combustion**: Dumping monolithic context files or full directories into prompts wastes tens of thousands of tokens per turn.
-- **Multi-Branch Chaos**: Parallel agents clobber shared docs, status boards, and lock files, causing painful git merge conflicts.
-- **Unanchored Edits & Hallucinations**: Without strict guardrails, agents make rogue modifications, bypass test gates, and produce silent regressions.
-- **Stack Friction & Tool Blindness**: Agents stumble across differing build tools, test frameworks, and release workflows. They execute noisy commands that flood context buffers with megabytes of logs, or hallucinate project-specific build invocations.
-- **Workspace Pollution & Contamination**: Parallel or autonomous agents executing directly in developer working directories corrupt uncommitted work-in-progress, disrupt IDE language servers, or fail abruptly on bare worktrees lacking dependencies.
-- **Soft Prompt Decay & Hallucinated Compliance**: Natural language instructions in markdown rules or system prompts decay as context grows, lacking hard mechanical execution guardrails.
+AI coding agents encounter several recurring failure modes across extended sessions:
+- **Context Loss**: Agents forget past architectural choices, re-invent rejected patterns, and drop active tasks across sessions.
+- **Context Bloat**: Ingesting entire files or directories into prompts consumes large token budgets per turn.
+- **Multi-Branch Concurrency**: Parallel agents modify shared documentation, status boards, or lock files, causing git merge conflicts.
+- **Unanchored Modifications**: Without explicit issue anchoring and pre-commit checks, agents can make unintended modifications that bypass test suites.
+- **Toolchain Inconsistencies**: Differing build tools, test frameworks, and command flags can produce verbose context logs or invalid invocations.
+- **Workspace Pollution**: Running parallel or autonomous agents directly in developer working directories can conflict with uncommitted working tree edits.
+- **Prompt Instruction Decay**: Natural language guidelines in static prompts can lose effectiveness as context length grows.
 
-**Along fixes this by embedding a Dual-Tier Memory Architecture into your repository: an Andrej Karpathy-style LLM-Wiki (`docs/`) for evergreen architectural consensus, and a machine-parseable living memory layer (`.along/`) for transactional project governance.** Agents read past decisions, track issues in a DAG, plan autonomously, search across all project memory in milliseconds via zero-vector unified retrieval, and verify their own work before committing.
+Along addresses these challenges through a dual-tier structure: an evergreen architecture wiki (`docs/`) for system design consensus, and a machine-readable governance layer (`.along/`) for task tracking, decision records, and session history. Agents track issues in a dependency graph, search project knowledge via bounded snippet retrieval, and verify changes through declarative quality gates.
 
 ---
 
@@ -29,18 +57,18 @@ AI coding agents are exceptionally capable, but they start every session blind:
 
 | Pillar | How Along Delivers It |
 | :--- | :--- |
-| **Zero-Vector In-Repo Intelligence** | Sub-50ms TF-IDF multi-scope retrieval engine (`along-kb-search`) unifying docs, ADR constraints, active issues, and session logs into word-boundary aligned snippets (< 150 tokens), cutting token exploration costs by 85-95% without external vector DBs or daemon processes. |
+| **Zero-Vector In-Repo Intelligence** | Fast TF-IDF multi-scope retrieval engine (`along-kb-search`) unifying docs, ADR constraints, active issues, and session logs into word-boundary aligned snippets (< 150 tokens), avoiding full-file context ingestion and significantly reducing exploration prompt tokens without external vector DBs or daemon processes (see [benchmarks](scripts/bench_kb_search.py)). |
 | **Dual-Tier Memory Architecture** | Clean architectural separation: Evergreen LLM-Wiki (`docs/`) with AST code symbol grounding and SHA-256 drift detection vs. Living Transactional Governance (`.along/`) with DAG issues, immutable session history, and atomic projections. |
 | **Persistent In-Repo Memory** | Durable, git-tracked memory (`.along/`): DAG issues, append-only ADR logs, milestones, risks, and session records that travel with the codebase. |
-| **Autonomous Multi-Agent Teams** | Sequential living-plan state machine (`along-team`): Supervisor -> Scout -> Architect -> Implementer -> Reviewer with session blackboards, hard retry limits, and single-agent degradation. |
+| **Autonomous Multi-Agent Teams** | Sequential living-plan state machine (`along-team`): Supervisor -> Scout -> Architect -> Implementer -> Reviewer with session blackboards, retry limits, and single-agent degradation. |
 | **Runtime Worktree Workspace Isolation** | Ephemeral Git worktree isolation (`along worktree`, `/along-team --worktree`) satisfying the 3-part Environment Readiness Contract: NTFS junctions / symlinks for dependencies (`node_modules`, `.venv`), `.env` configuration copying, real-time session blackboard sharing, and Windows file lock resilient teardown. |
 | **Runtime Mechanical Prose Enforcement** | Active agent lifecycle interception (`PreToolUse`, `Stop`) turning markdown guidelines into hard runtime errors across Claude Code, Antigravity, and Codex, with machine-checked bi-directional traceability (`along hook verify`). |
 | **Token-Efficient LLM-Wiki (`docs/`)** | Modular knowledge base with in-place source provenance, SHA-256 drift detection, deterministic `llms.txt` compilation, and targeted snippet search (`along-kb-search`) avoiding full-file context ingestion. |
 | **Stack-Agnostic Lifecycle & Polyglot Hooks** | Unified agent execution contract (`/along-build`, `/along-test`, `/along-dev`, `/along-version-bump`, `/along-dep-scan`) with zero-config stack auto-detection and polyglot repository hooks (`.along/scripts/` in Python, Bash, PowerShell, Batch). |
-| **Zero-Conflict Git Concurrency** | Single Source of Truth (SSOT) atomic files vs compiled projections (`ISSUES.md`, `INDEX.md`), union merges (`merge=union`), and decentralized date-slug ADRs that never collide in parallel branches. |
+| **Zero-Conflict Git Concurrency** | Single Source of Truth (SSOT) atomic files vs compiled projections (`ISSUES.md`, `INDEX.md`), union merges (`merge=union`), and decentralized date-slug ADRs that avoid collisions in parallel branches. |
 | **Engineering Provenance & Dual-Track UI** | Living plans, fix loops, and verification gates are permanently recorded in session logs while projecting interactive visual review cards in IDEs (Antigravity). |
 | **Strict Data Safety & Verification Gates** | Hermetic engines (`alongkit`) with transactional byte-exact rollbacks, strict front-matter preservation (`ruamel.yaml`), and zero-unintended-deletions invariant. |
-| **Declarative Runtime Gates & Traceability** | Mechanical agent lifecycle interception (`PreToolUse`, `Stop`) enforcing 12 protocol invariants, backed by machine-checked bi-directional traceability (`along hook verify`) between prose badges and YAML rules. |
+| **Declarative Runtime Gates & Traceability** | Mechanical agent lifecycle interception (`PreToolUse`, `Stop`) enforcing 16 runtime gates in `default_gates.yaml` (and 30+ protocol invariants enforced across runtime hooks, git hooks, and CI), backed by machine-checked bi-directional traceability (`along hook verify`). In runtimes with Along hooks installed, violations trigger immediate tool-level interception; git and CI gates provide universal baseline enforcement everywhere. |
 | **Nearest Context Boundary** | Monorepos, microservices, and Git submodules maintain isolated localized memory, preventing root workspace pollution. |
 
 ---
@@ -66,9 +94,9 @@ flowchart TD
     end
 
     subgraph Retrieval["Zero-Vector In-Repo Retrieval Engine (along kb-search)"]
-        SEARCH["Sub-50ms TF-IDF Multi-Scope Search"]
+        SEARCH["Fast TF-IDF Multi-Scope Search"]
         SNIPPETS["Targeted Bounded Snippets (< 150 Tokens)"]
-        SAVINGS["85-95% Token Savings (No External Vector DB)"]
+        SAVINGS["Bounded Snippets (< 150 Tokens) vs Full-File Ingestion"]
     end
 
     WIKI --- SEARCH
@@ -88,7 +116,7 @@ flowchart TD
   - **Lifecycle**: Transactional and stateful. Closed issues and session logs are permanent and immutable.
 - **Unified Retrieval Engine (`along kb-search`)**:
   - Unifies both tiers in a single fast local query without vector embeddings, cloud dependencies, or background daemon processes.
-  - Returns word-boundary aligned snippets (< 150 tokens) directly to agent prompts, slashing exploration context costs by 85-95%.
+  - Returns word-boundary aligned snippets (< 150 tokens) directly to agent prompts, avoiding full-file context ingestion (measured in [scripts/bench_kb_search.py](scripts/bench_kb_search.py)).
 
 ---
 
@@ -101,44 +129,12 @@ Add this badge and blurb to the `README.md` of any repository powered by Along:
 
 This repository follows the **ActDim Along Protocol** for AI agent context, persistent memory, and autonomous workflows:
 - **Dual-Tier Memory**: Evergreen LLM-Wiki in `docs/` and living governance memory in `.along/` survive across all AI sessions.
-- **Zero-Vector Unified Retrieval**: Fast local snippet search across architecture, decisions, and issues with 85-95% token reduction and zero external database dependencies.
+- **Zero-Vector Unified Retrieval**: Fast local snippet search across architecture, decisions, and issues returning bounded snippets (< 150 tokens) without full-file ingestion or external database dependencies.
 - **Runtime Worktree Isolation**: Autonomous agent tasks execute in isolated Git worktrees with automatic dependency linking, preserving clean developer checkouts.
 - **Mechanical Quality Gates**: Protocol rules, clean typography, and issue bindings are mechanically enforced before tools execute in runtimes that load Along's hooks (Claude Code, Antigravity, Codex); elsewhere they are advisory. The portable baseline for every committer is the CI job `along gates check --ci` plus opt-in git hooks (`along hooks install --git`).
 - **Standardized Lifecycle Contract**: Unified commands for build, test, dev, release, and dependency discovery via pluggable `.along/scripts/` hooks.
 - **Provider-Agnostic**: Compatible out of the box with **Claude Code**, **Google Antigravity**, **OpenAI Codex**, and **OpenCode**.
 ````
-
----
-
-## Quickstart & Installation
-
-Install Along across all supported AI providers with a single command:
-
-### Windows (PowerShell)
-```powershell
-powershell -NoProfile -ExecutionPolicy Bypass -Command "irm https://raw.githubusercontent.com/actdim/along/main/install.ps1 | iex"
-```
-
-### Linux / macOS (Bash)
-```bash
-curl -fsSL https://raw.githubusercontent.com/actdim/along/main/install.sh | bash
-```
-
-The one-liner installer automatically bootstraps the repository into `~/.cache/actdim-along/repo` (via shallow `git clone` or archive fallback) and configures skills across Claude Code, OpenAI Codex, Google Antigravity, and OpenCode.
-
-#### Manual / Local Checkout Installation
-If you prefer to clone the repository manually or are developing Along:
-```powershell
-git clone https://github.com/actdim/along.git
-cd along
-powershell -NoProfile -ExecutionPolicy Bypass -File install.ps1 -Target all # Windows
-bash install.sh --target=all                                               # Linux / macOS
-```
-
-An install records what it wrote in `~/.along/install-manifest.json`: it never deletes a
-directory it does not own, so rules you wrote yourself survive every re-install, and
-`install.ps1 -Uninstall` / `./install.sh --uninstall` removes exactly that record and
-nothing else. See [Setup, Installation & Workflows](./docs/topic--setup-and-workflow.md).
 
 ---
 
@@ -202,7 +198,7 @@ Along provides **21 singular automation skills** structured across 6 core lifecy
 | Skill / Command | Purpose |
 | :--- | :--- |
 | **`along-kb-sync`** (`/along-kb-sync`) | Idempotent LLM-Wiki Knowledge Base compiler, AST symbol grounding, and link integrity gate in `docs/`. |
-| **`along-kb-search`** (`/along-kb-search`) | Zero-vector, sub-50ms multi-scope snippet search across `docs/`, ADRs, issues, and session logs (< 150 tokens/match). |
+| **`along-kb-search`** (`/along-kb-search`) | Zero-vector local multi-scope snippet search across `docs/`, ADRs, issues, and session logs (< 150 tokens/match). |
 
 ### 6. Visual Analytics, History & Diagnostics
 | Skill / Command | Purpose |
