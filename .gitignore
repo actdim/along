@@ -51,6 +51,9 @@ site/
 .along/worktrees/
 .along/.pending_worktrees.json
 
+# Machine-local diagnostics and runtime audit logs
+.along/diagnostics/
+
 # Raw command output offloaded by telemetry and distilled lifecycle runs
 .along/artifacts/
 

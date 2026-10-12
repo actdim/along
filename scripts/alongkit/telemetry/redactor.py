@@ -65,11 +65,52 @@ RE_SENSITIVE_KEY = re.compile(
     re.IGNORECASE,
 )
 
+# Fast-path candidate substrings for early exit without regular expressions
+FAST_PATH_EXACT_CANDIDATES: Tuple[str, ...] = (
+    "sk-",
+    "gh",
+    "github_pat_",
+    "AKIA",
+    "ASIA",
+    "BEGIN",
+)
+
+FAST_PATH_LOWER_CANDIDATES: Tuple[str, ...] = (
+    "bearer",
+    "password",
+    "secret",
+    "token",
+    "key",
+    "users",
+    "home",
+    "documents and settings",
+    "begin",
+)
+
 
 class Redactor:
     """
     Sanitizes sensitive tokens, API keys, credentials, and user home directory paths.
     """
+
+    @staticmethod
+    def has_candidates(text: str) -> bool:
+        """
+        Fast-path check for presence of sensitive token patterns or candidate substrings.
+        Returns False if no candidate keywords exist, avoiding heavy regex passes.
+        """
+        if not text:
+            return False
+        for kw in FAST_PATH_EXACT_CANDIDATES:
+            if kw in text:
+                return True
+        text_lower = text.lower()
+        for kw in FAST_PATH_LOWER_CANDIDATES:
+            if kw in text_lower:
+                return True
+        return False
+
+    has_sensitive_candidates = has_candidates
 
     def _mask_generic_assignment(self, match: re.Match) -> str:
         prefix = match.group(1)
@@ -95,6 +136,9 @@ class Redactor:
             text = str(text)
         if not text:
             return ""
+
+        if not self.has_candidates(text):
+            return text
 
         # 1. Private keys
         text = RE_PRIVATE_KEY.sub("[REDACTED_PRIVATE_KEY]", text)

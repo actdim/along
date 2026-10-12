@@ -52,7 +52,6 @@
 - [ ] `(feat)` [planning-fields-and-ordering-gates](ISSUES/feat--planning-fields-and-ordering-gates.md)
 - [ ] `(feat)` [progressive-disclosure-and-context-scaling](ISSUES/feat--progressive-disclosure-and-context-scaling.md)
 - [ ] `(feat)` [release-ci-precondition-check](ISSUES/feat--release-ci-precondition-check.md)
-- [ ] `(feat)` [secret-scrubbing-in-hooks-and-diagnostics](ISSUES/feat--secret-scrubbing-in-hooks-and-diagnostics.md)
 - [ ] `(feat)` [structured-blackboard-state-machine](ISSUES/feat--structured-blackboard-state-machine.md)
 - [ ] `(feat)` [system-invariants-and-health-probes](ISSUES/feat--system-invariants-and-health-probes.md)
 - [ ] `(feat)` [tool-class-model](ISSUES/feat--tool-class-model.md)
@@ -61,9 +60,9 @@
 - [ ] `(feat)` [zero-step-state-recovery-and-drift-detection](ISSUES/feat--zero-step-state-recovery-and-drift-detection.md)
 
 ## Done (recent)
+- [x] `(feat)` [secret-scrubbing-in-hooks-and-diagnostics](ISSUES/done/feat--secret-scrubbing-in-hooks-and-diagnostics.md)
 - [x] `(bug)` [wrap-docs-only-test-skip](ISSUES/done/bug--wrap-docs-only-test-skip.md)
 - [x] `(bug)` [worktree-cross-os-mount-guard](ISSUES/done/bug--worktree-cross-os-mount-guard.md)
 - [x] `(bug)` [uncommitted-issue-deleted-without-trace](ISSUES/done/bug--uncommitted-issue-deleted-without-trace.md)
 - [x] `(bug)` [release-tags-not-pushed](ISSUES/done/bug--release-tags-not-pushed.md)
-- [x] `(bug)` [mcp-installer-cleanup-serve-arg](ISSUES/done/bug--mcp-installer-cleanup-serve-arg.md)
-<!-- 226 older completed issue(s) archived in .along/ISSUES/done/ -->
+<!-- 227 older completed issue(s) archived in .along/ISSUES/done/ -->

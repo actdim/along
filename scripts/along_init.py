@@ -147,6 +147,11 @@ def scaffold_state_dir(mig, root, report):
     write_if_missing(mig, os.path.join(along_dir, "ISSUES.md"), ISSUES_BOARD, report, root)
     write_if_missing(mig, os.path.join(along_dir, "GLOSSARY.md"), GLOSSARY, report, root)
     write_if_missing(mig, os.path.join(along_dir, "HISTORY.md"), HISTORY, report, root)
+    diag_dir = os.path.join(along_dir, "diagnostics")
+    if not os.path.isdir(diag_dir):
+        mig.makedirs(diag_dir)
+        _note(report, "created", diag_dir, root)
+    write_if_missing(mig, os.path.join(diag_dir, ".gitignore"), "*\n", report, root)
 
 
 def scaffold_vision(mig, root, report):

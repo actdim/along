@@ -18,6 +18,7 @@ import sys
 from typing import Any, Callable, Dict, List, Optional, Tuple
 
 from .. import attribution, repo, textio
+from ..telemetry.redactor import Redactor
 from .models import GateResult, HookEvent
 
 
@@ -127,6 +128,16 @@ def load_config(repo_root: Optional[str] = None) -> HooksConfig:
     return config
 
 
+_AUDIT_REDACTOR: Optional[Redactor] = None
+
+
+def _get_audit_redactor() -> Redactor:
+    global _AUDIT_REDACTOR
+    if _AUDIT_REDACTOR is None:
+        _AUDIT_REDACTOR = Redactor()
+    return _AUDIT_REDACTOR
+
+
 def record_audit_entry(
     repo_root: Optional[str],
     event: HookEvent,
@@ -142,15 +153,16 @@ def record_audit_entry(
     try:
         diagnostics_dir = repo.ensure_diagnostics_dir(repo_root)
         audit_file = os.path.join(diagnostics_dir, "hooks_audit.jsonl")
+        redactor = _get_audit_redactor()
         entry = {
             "timestamp": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
-            "gate": result.gate_name,
+            "gate": redactor.sanitize_text(result.gate_name) if result.gate_name else result.gate_name,
             "decision": result.decision.value,
             "mode": mode,
-            "runtime": event.runtime,
-            "tool": event.tool_name,
-            "reason": result.reason,
-            "conversation_id": event.conversation_id,
+            "runtime": redactor.sanitize_text(event.runtime) if event.runtime else event.runtime,
+            "tool": redactor.sanitize_text(event.tool_name) if event.tool_name else event.tool_name,
+            "reason": redactor.sanitize_text(result.reason) if result.reason else result.reason,
+            "conversation_id": redactor.sanitize_text(event.conversation_id) if isinstance(event.conversation_id, str) else event.conversation_id,
             "step_idx": event.step_idx,
         }
         with open(audit_file, "a", encoding="utf-8") as handle:

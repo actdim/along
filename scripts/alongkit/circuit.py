@@ -26,6 +26,7 @@ import sys
 from typing import Any, Dict, List, Optional, Sequence, Tuple, Union
 
 from . import repo, textio
+from .telemetry.redactor import Redactor
 
 
 class AnomalyClass(str, Enum):
@@ -320,7 +321,8 @@ def save_circuit_state(repo_root: str, data: Dict[str, Any]) -> None:
     fpath = get_circuit_file_path(repo_root)
     repo.ensure_diagnostics_dir(repo_root)
     try:
-        textio.write_text(fpath, json.dumps(data, indent=2) + "\n")
+        sanitized = Redactor().sanitize_dict(data)
+        textio.write_text(fpath, json.dumps(sanitized, indent=2) + "\n")
     except (OSError, UnicodeDecodeError):
         pass
 
@@ -348,6 +350,15 @@ def get_breaker_state(repo_root: str) -> Tuple[CircuitState, Optional[AnomalyMat
 
 def trip_breaker(repo_root: str, anomaly: AnomalyMatch) -> str:
     """Trip the circuit breaker, write persistent state, and return the report."""
+    redactor = Redactor()
+    sanitized_anomaly = replace(
+        anomaly,
+        signature=redactor.sanitize_text(anomaly.signature),
+        detail=redactor.sanitize_text(anomaly.detail),
+        impact=redactor.sanitize_text(anomaly.impact),
+        source=redactor.sanitize_text(anomaly.source),
+    )
+
     state_data = load_circuit_state(repo_root)
     history = state_data.get("history", [])
     if not isinstance(history, list):
@@ -357,14 +368,14 @@ def trip_breaker(repo_root: str, anomaly: AnomalyMatch) -> str:
         history.append(state_data["anomaly"])
 
     state_data["state"] = CircuitState.TRIPPED.value
-    state_data["anomaly"] = anomaly.to_dict()
-    state_data["tripped_at"] = anomaly.timestamp or datetime.now(timezone.utc).isoformat()
+    state_data["anomaly"] = sanitized_anomaly.to_dict()
+    state_data["tripped_at"] = sanitized_anomaly.timestamp or datetime.now(timezone.utc).isoformat()
     state_data["resolved_at"] = None
     state_data["history"] = history[-10:]
 
     save_circuit_state(repo_root, state_data)
 
-    report = format_escalation_report(anomaly)
+    report = format_escalation_report(sanitized_anomaly)
     print(report, file=sys.stderr)
     return report
 
