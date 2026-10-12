@@ -3,10 +3,11 @@ protocol: along
 protocol_version: "4.2.0"
 slug: kb-search-archive-scope-default
 type: feat
-status: open
+status: done
+completed: 2026-10-12
 priority: medium
 created: 2026-09-27
-updated: 2026-09-29
+updated: 2026-10-12
 agent: cowork
 tags: [kb-search, retrieval, ranking]
 milestone: v4.5.0-multi-user-merge-automation
@@ -29,6 +30,6 @@ The repository accumulated 104 session logs, 135 done issues and 41 ADRs in eigh
 
 ## Acceptance Criteria
 
-- [ ] Default queries on this repo return current docs first
-- [ ] `--archive` restores the old behaviour
-- [ ] Automated tests passing
+- [x] Default queries on this repo return current docs first
+- [x] `--archive` restores the old behaviour
+- [x] Automated tests passing

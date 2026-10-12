@@ -34,6 +34,30 @@ parse_decision_entries = entities.parse_decision_entries
 # Strict reader so malformed files raise FrontmatterError and are counted in skipped
 parse_frontmatter = frontmatter.parse
 
+ARCHIVED_ISSUE_STATUSES = {"done", "superseded", "cancelled", "canceled", "duplicate"}
+ARCHIVED_DECISION_STATUSES = {"superseded", "retired", "deprecated", "rejected"}
+
+
+def is_archived_entry(e: Dict[str, Any]) -> bool:
+    """Check if an entity represents an archived or historical record."""
+    cat = (e.get("category") or "").lower()
+    if cat == "session":
+        return True
+    if cat == "issue":
+        status = str(e.get("status") or "").lower()
+        fpath = str(e.get("file_path") or "").replace("\\", "/").lower()
+        if status in ARCHIVED_ISSUE_STATUSES:
+            return True
+        if "/done/" in fpath or fpath.startswith("done/") or "done" in fpath.split("/"):
+            return True
+        return False
+    if cat == "decision":
+        status = str(e.get("status") or "").lower()
+        if status in ARCHIVED_DECISION_STATUSES:
+            return True
+        return False
+    return False
+
 
 def collect_all_entries(repo_root, verbose=False):
     entries = []
@@ -100,7 +124,7 @@ def collect_all_entries(repo_root, verbose=False):
                     iss_type = fm.get("type", "task")
                     entries.append({
                         "category": "issue",
-                        "category_label": f"Issue ({status})",
+                        "category_label": "Issue",
                         "title": f"[{iss_type.upper()}] {slug.replace('-', ' ').title()}",
                         "slug": slug,
                         "type": iss_type,
@@ -467,6 +491,7 @@ def search_knowledge_base(
     prefix: bool = False,
     verbose: bool = False,
     return_stats: bool = False,
+    include_archive: bool = False,
 ) -> Any:
     repo_root = os.path.abspath(repo_root)
     phrases, query_terms = parse_query(query)
@@ -479,6 +504,11 @@ def search_knowledge_base(
             continue
         if filter_tag and filter_tag.lower() not in [t.lower() for t in e["tags"]]:
             continue
+
+        # Archive filtering: exclude archived entities by default when category is all or not specified
+        if (not category or category.lower() == "all") and not include_archive:
+            if is_archived_entry(e):
+                continue
 
         title_lower = e["title"].lower()
         slug_lower = e["slug"].lower()
@@ -570,8 +600,16 @@ def search_knowledge_base(
                 score += min(body_tf * term_idf, 25.0)
 
         # Status boost for active / in-progress entities
-        if e.get("status") in ["open", "in-progress", "active"]:
+        if e.get("status") in ["open", "in-progress", "active", "accepted"]:
             score += 2.0
+
+        # Curated documentation boost (docs/topic--*.md)
+        if e.get("category") == "kb":
+            score += 20.0
+
+        # Ranking penalty for archived entities when included
+        if is_archived_entry(e):
+            score -= 10.0
 
         snippet = extract_passage_snippet(e["body"], query_terms, phrases)
         if not snippet:
@@ -607,6 +645,7 @@ def main():
     parser.add_argument("--tag", default=None, help="Filter by specific tag")
     parser.add_argument("--any", action="store_true", help="Match ANY query term (OR semantics, default is AND)")
     parser.add_argument("--prefix", action="store_true", help="Match word prefixes in addition to whole words")
+    parser.add_argument("-a", "--archive", action="store_true", help="Include archived entities (done issues, session logs, superseded ADRs)")
     parser.add_argument("--stats", action="store_true", help="Show retrieval token efficiency metrics and corpus stats")
     parser.add_argument("-v", "--verbose", "--debug", action="store_true", help="Show verbose collector details and errors")
     args = parser.parse_args()
@@ -622,6 +661,7 @@ def main():
             prefix=args.prefix,
             verbose=args.verbose,
             return_stats=True,
+            include_archive=args.archive,
         )
     else:
         results = search_knowledge_base(
@@ -634,6 +674,7 @@ def main():
             prefix=args.prefix,
             verbose=args.verbose,
             return_stats=False,
+            include_archive=args.archive,
         )
         stats = None
 
@@ -644,7 +685,7 @@ def main():
               f"Token savings: {stats['savings_pct']}%\n")
 
     for i, r in enumerate(results, 1):
-        print(f"{i}. [{r['category_label']}] {r['title']} (./{r['file_path']})")
+        print(f"{i}. [{r['category_label']}] [{r['status']}] {r['title']} (./{r['file_path']})")
         print(f"   \"{r['snippet']}\"\n")
 
 

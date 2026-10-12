@@ -349,5 +349,121 @@ class TestRelevanceAndRanking(unittest.TestCase):
         self.assertTrue(last_word.isalpha(), f"Last word '{last_word}' is not clean")
 
 
+class TestArchiveScopeAndRanking(unittest.TestCase):
+    """Tests for archive scope exclusion, --archive flag, explicit category, and ranking boost (REQ-1 to REQ-4)."""
+
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.repo_root = self.tmp.name
+        self.docs_dir = os.path.join(self.repo_root, "docs")
+        self.issues_dir = os.path.join(self.repo_root, ".along", "ISSUES")
+        self.done_issues_dir = os.path.join(self.issues_dir, "done")
+        self.dec_dir = os.path.join(self.repo_root, ".along", "DECISIONS")
+        self.sess_dir = os.path.join(self.repo_root, ".along", "SESSIONS", "2026")
+
+        os.makedirs(self.docs_dir, exist_ok=True)
+        os.makedirs(self.done_issues_dir, exist_ok=True)
+        os.makedirs(self.dec_dir, exist_ok=True)
+        os.makedirs(self.sess_dir, exist_ok=True)
+
+        with open(os.path.join(self.docs_dir, "topic--worktree.md"), "w", encoding="utf-8", newline="\n") as f:
+            f.write("---\nprotocol: along\nslug: worktree\ntitle: Worktree Isolation Guide\ntype: topic\n---\n"
+                    "# Worktree Isolation Guide\n\nGuide for workspace isolation and worktree environments.\n")
+
+        with open(os.path.join(self.issues_dir, "feat--open-worktree.md"), "w", encoding="utf-8", newline="\n") as f:
+            f.write("---\nprotocol: along\nslug: open-worktree\ntitle: Open Worktree Task\ntype: feat\nstatus: open\n---\n"
+                    "# Open Worktree Task\n\nImplementing active worktree features.\n")
+
+        with open(os.path.join(self.done_issues_dir, "feat--done-worktree.md"), "w", encoding="utf-8", newline="\n") as f:
+            f.write("---\nprotocol: along\nslug: done-worktree\ntitle: Done Worktree Task\ntype: feat\nstatus: done\n---\n"
+                    "# Done Worktree Task\n\nHistorical completed worktree task.\n")
+
+        with open(os.path.join(self.dec_dir, "ADR-2026-01-01--active-worktree.md"), "w", encoding="utf-8", newline="\n") as f:
+            f.write("---\nprotocol: along\nslug: active-worktree\ntitle: Active Worktree Decision\nstatus: accepted\n---\n"
+                    "# ADR-2026-01-01--active-worktree - Active Worktree Decision\n- Status: accepted\n- Decision: Use worktree.\n")
+
+        with open(os.path.join(self.dec_dir, "ADR-2026-01-02--superseded-worktree.md"), "w", encoding="utf-8", newline="\n") as f:
+            f.write("---\nprotocol: along\nslug: superseded-worktree\ntitle: Superseded Worktree Decision\nstatus: superseded\n---\n"
+                    "# ADR-2026-01-02--superseded-worktree - Superseded Worktree Decision\n- Status: superseded by newer\n- Decision: Old worktree method.\n")
+
+        with open(os.path.join(self.sess_dir, "2026-01-01--session-worktree.md"), "w", encoding="utf-8", newline="\n") as f:
+            f.write("---\nprotocol: along\nslug: session-worktree\ndate: 2026-01-01\n---\n"
+                    "# Session Log: Worktree\n\nLogged work on worktree isolation.\n")
+
+    def tearDown(self):
+        self.tmp.cleanup()
+
+    def test_default_search_excludes_archived_entities(self):
+        """Default search excludes done issues, sessions, and superseded ADRs (REQ-1)."""
+        results = kb.search_knowledge_base("worktree", repo_root=self.repo_root, include_archive=False)
+        slugs = [r["slug"] for r in results]
+        self.assertIn("worktree", slugs)
+        self.assertIn("open-worktree", slugs)
+        self.assertIn("active-worktree", slugs)
+        self.assertNotIn("done-worktree", slugs)
+        self.assertNotIn("superseded-worktree", slugs)
+        self.assertNotIn("session-worktree", slugs)
+
+    def test_archive_flag_restores_archived_entities(self):
+        """--archive / include_archive=True restores archived entities (REQ-1)."""
+        results = kb.search_knowledge_base("worktree", repo_root=self.repo_root, limit=10, include_archive=True)
+        slugs = [r["slug"] for r in results]
+        self.assertIn("worktree", slugs)
+        self.assertIn("open-worktree", slugs)
+        self.assertIn("done-worktree", slugs)
+        self.assertIn("active-worktree", slugs)
+        self.assertIn("superseded-worktree", slugs)
+        self.assertIn("session-worktree", slugs)
+
+    def test_explicit_category_includes_archived(self):
+        """Explicit --category session or --category issue includes them even without --archive (REQ-1)."""
+        session_results = kb.search_knowledge_base("worktree", repo_root=self.repo_root, category="session", include_archive=False)
+        session_slugs = [r["slug"] for r in session_results]
+        self.assertIn("session-worktree", session_slugs)
+
+        issue_results = kb.search_knowledge_base("worktree", repo_root=self.repo_root, category="issue", include_archive=False)
+        issue_slugs = [r["slug"] for r in issue_results]
+        self.assertIn("done-worktree", issue_slugs)
+        self.assertIn("open-worktree", issue_slugs)
+
+    def test_queries_return_matching_docs_in_top_3_by_default(self):
+        """Queries 'worktree isolation', 'typography gate', 'migration backup' return docs/ topic in top 3 (REQ-4)."""
+        queries = ["worktree isolation", "typography gate", "migration backup"]
+        for q in queries:
+            results = kb.search_knowledge_base(q, repo_root=REPO_ROOT, limit=3)
+            self.assertGreaterEqual(len(results), 1, f"Expected matches for '{q}'")
+            has_doc_in_top_3 = any(r["category"] == "kb" for r in results[:3])
+            top_3_labels = [f"[{r['category_label']}] {r['title']} ({r['file_path']})" for r in results[:3]]
+            self.assertTrue(
+                has_doc_in_top_3,
+                f"Query '{q}' did not return docs/ topic in top 3. Top results were:\n" + "\n".join(top_3_labels)
+            )
+
+    def test_status_displayed_in_result_lines(self):
+        """Result lines show status [open, in-progress, done, superseded, active, etc.] (REQ-3)."""
+        results = kb.search_knowledge_base("worktree", repo_root=self.repo_root, include_archive=True)
+        self.assertGreater(len(results), 0)
+        for r in results:
+            self.assertIn("status", r)
+            self.assertTrue(r["status"])
+
+        old_stdout = sys.stdout
+        old_argv = sys.argv
+        sys.stdout = io.StringIO()
+        sys.argv = ["along_kb_search.py", "worktree", "--repo", self.repo_root, "-a", "--limit", "10"]
+        try:
+            kb.main()
+            output = sys.stdout.getvalue()
+        finally:
+            sys.stdout = old_stdout
+            sys.argv = old_argv
+
+        self.assertIn("[active]", output)
+        self.assertIn("[open]", output)
+        self.assertIn("[done]", output)
+        self.assertIn("[superseded]", output)
+        self.assertIn("[completed]", output)
+
+
 if __name__ == "__main__":
     unittest.main()

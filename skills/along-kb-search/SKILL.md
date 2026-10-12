@@ -17,14 +17,29 @@ To eliminate latency and prevent prompt context exhaustion:
 ## Usage
 
 ```bash
-along kb-search "<query>" [--category all|kb|issue|decision|milestone|risk|spike|session] [--limit 8] [--tag <tag>] [--any] [--prefix] [--stats]
+along kb-search "<query>" [--category all|kb|issue|decision|milestone|risk|spike|session] [--archive|-a] [--limit 8] [--tag <tag>] [--any] [--prefix] [--stats]
 ```
 
 Fallback when `along` is not in system PATH:
 ```bash
-python ~/.along/bin/along_exec.py kb-search "<query>"
+python ~/.along/bin/along_exec.py kb-search "<query>" [--archive|-a]
 ```
-*(Or in repository root: `python scripts/along_exec.py kb-search "<query>"`)*
+*(Or in repository root: `python scripts/along_exec.py kb-search "<query>" [--archive|-a]`)*
+
+### Default Scope & Archive Filtering
+By default (`--category all`), search targets current, active knowledge:
+- Curated domain documentation (`docs/topic--*.md`, ranked with priority boost)
+- Active and accepted ADRs (`.along/DECISIONS/`)
+- Open and in-progress issues (`.along/ISSUES/`)
+- Milestones, risks, and spikes
+
+Historical and archived scopes are excluded by default to prevent stale records from dominating results:
+- Completed session logs (`.along/SESSIONS/**/*.md`)
+- Completed, done, or cancelled issues (`.along/ISSUES/done/`)
+- Superseded, retired, or deprecated ADRs
+
+To include archived entities, pass `--archive` (or `-a`).
+Explicit category queries (such as `--category session` or `--category issue`) include historical records for that category without needing `--archive`.
 
 ## Capabilities & Scopes
 1. **Curated Domain Wiki (`docs/*.md`)**: System architecture, domain model, workflows, guides, and engineering rules.

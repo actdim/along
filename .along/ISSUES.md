@@ -42,7 +42,6 @@
 - [ ] `(feat)` [gate-strictness-profiles](ISSUES/feat--gate-strictness-profiles.md)
 - [ ] `(feat)` [golang-ecosystem-support](ISSUES/feat--golang-ecosystem-support.md)
 - [ ] `(feat)` [jvm-ecosystem-support](ISSUES/feat--jvm-ecosystem-support.md)
-- [ ] `(feat)` [kb-search-archive-scope-default](ISSUES/feat--kb-search-archive-scope-default.md)
 - [ ] `(feat)` [multi-runtime-and-omnichannel-expansion](ISSUES/feat--multi-runtime-and-omnichannel-expansion.md)
 - [ ] `(feat)` [native-ast-blast-radius-analyzer](ISSUES/feat--native-ast-blast-radius-analyzer.md)
 - [ ] `(feat)` [openclaw-and-hermes-agent-integration](ISSUES/feat--openclaw-and-hermes-agent-integration.md)
@@ -61,6 +60,6 @@
 - [x] `(feat)` [tool-nature-classification](ISSUES/done/feat--tool-nature-classification.md)
 - [x] `(feat)` [secret-scrubbing-in-hooks-and-diagnostics](ISSUES/done/feat--secret-scrubbing-in-hooks-and-diagnostics.md)
 - [x] `(feat)` [release-ci-precondition-check](ISSUES/done/feat--release-ci-precondition-check.md)
+- [x] `(feat)` [kb-search-archive-scope-default](ISSUES/done/feat--kb-search-archive-scope-default.md)
 - [x] `(bug)` [wrap-docs-only-test-skip](ISSUES/done/bug--wrap-docs-only-test-skip.md)
-- [x] `(bug)` [worktree-cross-os-mount-guard](ISSUES/done/bug--worktree-cross-os-mount-guard.md)
-<!-- 229 older completed issue(s) archived in .along/ISSUES/done/ -->
+<!-- 230 older completed issue(s) archived in .along/ISSUES/done/ -->
