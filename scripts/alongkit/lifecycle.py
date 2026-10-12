@@ -709,6 +709,144 @@ def _warn_uncommitted_work(
     return uncommitted
 
 
+def extract_issue_title(content: str, issue: Optional[Dict[str, Any]], slug: str) -> str:
+    """Extract human-readable title from issue frontmatter or Markdown H1."""
+    if issue:
+        fm_title = (issue.get("frontmatter") or {}).get("title")
+        if fm_title and str(fm_title).strip():
+            return str(fm_title).strip()
+    if content:
+        for line in content.splitlines():
+            line_s = line.strip()
+            if line_s.startswith("# "):
+                h1 = line_s[2:].strip()
+                if h1:
+                    return h1
+    return slug.replace("-", " ").capitalize()
+
+
+def resolve_history_summary(
+    summary: Optional[str],
+    issue: Optional[Dict[str, Any]],
+    content: str,
+    slug: str,
+    log_path: Optional[str] = None,
+) -> Tuple[str, bool]:
+    """Resolve summary for HISTORY.md entry.
+
+    Returns (effective_summary, is_fallback).
+    """
+    if summary and summary.strip():
+        return summary.strip(), False
+
+    if log_path and os.path.isfile(log_path):
+        try:
+            log_content = textio.read_text(log_path)
+            fm, _, _ = frontmatter.try_parse(log_content)
+            if fm and fm.get("summary") and str(fm["summary"]).strip():
+                log_sum = str(fm["summary"]).strip()
+                key = f"{(issue or {}).get('type', 'task')}--{slug}"
+                if log_sum != f"Completed {key}" and log_sum != f"Record of {key}":
+                    return log_sum, True
+        except (OSError, ValueError, frontmatter.FrontmatterError):
+            pass
+
+    title = extract_issue_title(content, issue, slug)
+    if title:
+        return title, True
+
+    itype = (issue or {}).get("type", "task")
+    return f"Completed {itype}--{slug}", True
+
+
+def append_history_entry(
+    repo_root: str,
+    slug: str,
+    *,
+    summary: Optional[str] = None,
+    agent: Optional[str] = None,
+    today: Optional[str] = None,
+    tx: Optional["transaction.FileTransaction"] = None,
+    issue: Optional[Dict[str, Any]] = None,
+    issue_content: Optional[str] = None,
+    session_log_path: Optional[str] = None,
+    dest_file: Optional[str] = None,
+    is_wrap: bool = False,
+) -> int:
+    """Append or update a history entry in .along/HISTORY.md.
+
+    Guarantees idempotency per slug: if an entry for clean_slug already exists,
+    wrap preserves it while explicit CLI calls update it.
+    """
+    clean_type, clean_slug = entities.parse_key(slug)
+    today = today or entities.today_iso()
+    effective_agent = agent or entities.detect_agent()
+    sdir = repo.state_dir(repo_root)
+    history_file = os.path.join(sdir, "HISTORY.md")
+    if not os.path.isfile(history_file):
+        print(f"[Error] HISTORY.md not found at {history_file}", file=sys.stderr)
+        return 1
+
+    issue = issue or entities.find_issue_by_slug(repo_root, slug)
+    if not issue_content and issue and os.path.isfile(issue.get("file_path", "")):
+        try:
+            issue_content = textio.read_text(issue["file_path"])
+        except OSError:
+            issue_content = ""
+
+    effective_summary, is_fallback = resolve_history_summary(
+        summary, issue, issue_content or "", clean_slug, log_path=session_log_path
+    )
+
+    year = today.split("-")[0]
+    session_file = session_log_path or os.path.join(sdir, "SESSIONS", year, f"{today}--{clean_slug}.md")
+    if os.path.isfile(session_file):
+        link = f"[Session Log](./SESSIONS/{year}/{os.path.basename(session_file)})"
+    elif dest_file and os.path.isfile(dest_file):
+        rel_done = repo.safe_relpath(dest_file, sdir).replace("\\", "/")
+        link = f"[{issue.get('type', 'issue')}](./{rel_done})"
+    elif issue and os.path.isfile(issue.get("file_path", "")):
+        rel_path = repo.safe_relpath(issue["file_path"], sdir).replace("\\", "/")
+        link = f"[{issue.get('type', 'issue')}](./{rel_path})"
+    else:
+        link = f"[Session Log](./SESSIONS/{year}/{today}--{clean_slug}.md)"
+
+    history_line = f"{today} - {clean_slug} - {effective_agent} - {effective_summary} - {link}\n"
+
+    hist_raw = textio.read_text(history_file)
+    lines = hist_raw.splitlines()
+    found_idx = -1
+    for idx, l in enumerate(lines):
+        parts = l.strip().split(" - ")
+        if len(parts) >= 5 and parts[1].strip() == clean_slug:
+            found_idx = idx
+            break
+
+    if tx:
+        tx.protect(history_file)
+
+    if found_idx != -1:
+        if is_wrap and not summary:
+            print(f"-> Entry for '{clean_slug}' already exists in HISTORY.md; skipping duplicate append.")
+            return 0
+        lines[found_idx] = history_line.rstrip("\n")
+        new_content = "\n".join(lines).rstrip("\n") + "\n"
+        textio.write_text(history_file, new_content, newline="\n")
+        print(f"-> Updated history entry for '{clean_slug}' in {repo.safe_relpath(history_file, repo_root)}")
+        return 0
+
+    if not hist_raw.endswith("\n"):
+        hist_raw += "\n"
+    hist_raw += history_line
+    textio.write_text(history_file, hist_raw, newline="\n")
+    print(f"-> Appended history entry to {repo.safe_relpath(history_file, repo_root)}")
+    if is_wrap and is_fallback:
+        print("-> [Notice] No --summary provided; generated HISTORY entry from issue title.")
+        print("   To specify a custom summary next time, pass --summary \"<summary>\".")
+        print(f"   Or update it with: along history append {clean_slug} \"<summary>\"")
+    return 0
+
+
 def execute_wrap(
     repo_root: str,
     slug: str,
@@ -873,8 +1011,15 @@ def execute_wrap(
         print("   - Recompile .along/ISSUES.md projection board")
         print("   - Synchronize Knowledge Base (docs/INDEX.md)")
         print(f"   - Purge session blackboard: .along/.session/{clean_slug}/")
+        try:
+            issue_raw = textio.read_text(src_file)
+        except OSError:
+            issue_raw = ""
+        hist_sum, is_fb = resolve_history_summary(summary, issue, issue_raw, clean_slug, log_path=None)
         if summary:
-            print(f"   - Append entry to .along/HISTORY.md: {summary.strip()}")
+            print(f"   - Append entry to .along/HISTORY.md: {hist_sum}")
+        else:
+            print(f"   - Append entry to .along/HISTORY.md (auto-generated from issue title): {hist_sum}")
         return 0
 
     # 4. Transactional execution
@@ -951,26 +1096,22 @@ def execute_wrap(
             )
             print(f"-> Wrote session log: {repo.safe_relpath(log_path, repo_root)}")
 
-        # Append to HISTORY.md if summary provided
-        if summary:
-            history_file = os.path.join(repo.state_dir(repo_root), "HISTORY.md")
-            if os.path.isfile(history_file):
-                tx.protect(history_file)
-                effective_agent = agent or entities.detect_agent()
-                year = today.split("-")[0]
-                session_file = os.path.join(repo.state_dir(repo_root), "SESSIONS", year, f"{today}--{clean_slug}.md")
-                if os.path.isfile(session_file):
-                    link = f"[Session Log](./SESSIONS/{year}/{today}--{clean_slug}.md)"
-                else:
-                    rel_done = repo.safe_relpath(dest_file, repo.state_dir(repo_root)).replace("\\", "/")
-                    link = f"[{issue.get('type', 'issue')}](./{rel_done})"
-                history_line = f"{today} - {clean_slug} - {effective_agent} - {summary.strip()} - {link}\n"
-                hist_raw = textio.read_text(history_file)
-                if not hist_raw.endswith("\n"):
-                    hist_raw += "\n"
-                hist_raw += history_line
-                textio.write_text(history_file, hist_raw, newline="\n")
-                print(f"-> Appended history entry to {repo.safe_relpath(history_file, repo_root)}")
+        # Append to HISTORY.md (REQ-1, REQ-2)
+        history_file = os.path.join(repo.state_dir(repo_root), "HISTORY.md")
+        if os.path.isfile(history_file):
+            append_history_entry(
+                repo_root,
+                clean_slug,
+                summary=summary,
+                agent=agent,
+                today=today,
+                tx=tx,
+                issue=issue,
+                issue_content=content,
+                session_log_path=log_path,
+                dest_file=dest_file,
+                is_wrap=True,
+            )
 
         tx.commit()
         # Knowledge Base projections are regenerable and written by a subprocess the

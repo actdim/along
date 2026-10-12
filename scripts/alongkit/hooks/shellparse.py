@@ -579,7 +579,7 @@ def _is_read_subcommand(joined: str) -> bool:
 #: exists; `commit` and `bump` are not among them.
 _ALONG_STATE = (
     "issue", "start", "scratch", "plan", "decision", "milestone", "session", "wrap",
-    "kb-sync", "kb sync", "glossary", "risk", "spike", "checklist",
+    "kb-sync", "kb sync", "glossary", "risk", "spike", "checklist", "history",
 )
 
 #: Along maintenance subcommands: they keep the installation itself current (protocol block,

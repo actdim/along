@@ -163,6 +163,76 @@ class TestLifecycleWrap(unittest.TestCase):
         )
         self.assertIn(expected_line, hist)
 
+    def test_02b_wrap_without_summary_uses_issue_title_and_is_idempotent(self):
+        """Wrap without --summary derives HISTORY entry from issue title and is idempotent."""
+        history_file = os.path.join(self.root, ".along", "HISTORY.md")
+        textio.write_text(history_file, "# History\n\n_Log:_\n")
+
+        # First wrap without --summary
+        code = lifecycle.execute_wrap(
+            self.root,
+            "fixture-sample-task",
+            summary=None,
+            no_verify=True,
+            agent="test-agent",
+        )
+        self.assertEqual(code, 0)
+
+        hist = textio.read_text(history_file)
+        lines = [l for l in hist.splitlines() if "fixture-sample-task" in l]
+        self.assertEqual(len(lines), 1)
+        self.assertIn("fixture-sample-task", lines[0])
+        self.assertIn("test-agent", lines[0])
+
+        # Second wrap/append attempt on same slug should be idempotent (no duplicate line)
+        code2 = lifecycle.append_history_entry(
+            self.root,
+            "fixture-sample-task",
+            summary=None,
+            agent="test-agent",
+            is_wrap=True,
+        )
+        self.assertEqual(code2, 0)
+        hist2 = textio.read_text(history_file)
+        lines2 = [l for l in hist2.splitlines() if "fixture-sample-task" in l]
+        self.assertEqual(len(lines2), 1)
+
+    def test_02c_along_history_append_cli_and_state_gate(self):
+        """along history append updates existing entries and passes Along state gate."""
+        from alongkit.hooks import shellparse
+
+        history_file = os.path.join(self.root, ".along", "HISTORY.md")
+        textio.write_text(history_file, "# History\n\n_Log:_\n")
+
+        # 1. State command classification passes mutation authorization
+        cmd = "along history append fixture-sample-task 'Updated custom summary'"
+        self.assertTrue(shellparse.is_along_state_command(cmd))
+
+        # 2. Append new entry
+        code = lifecycle.append_history_entry(
+            self.root,
+            "fixture-sample-task",
+            summary="Initial summary",
+            agent="test-agent",
+        )
+        self.assertEqual(code, 0)
+        hist = textio.read_text(history_file)
+        self.assertIn("Initial summary", hist)
+
+        # 3. Explicit append updates the existing line
+        code2 = lifecycle.append_history_entry(
+            self.root,
+            "fixture-sample-task",
+            summary="Updated custom summary",
+            agent="test-agent",
+        )
+        self.assertEqual(code2, 0)
+        hist2 = textio.read_text(history_file)
+        lines = [l for l in hist2.splitlines() if "fixture-sample-task" in l]
+        self.assertEqual(len(lines), 1)
+        self.assertIn("Updated custom summary", lines[0])
+        self.assertNotIn("Initial summary", hist2)
+
     def test_03_test_failure_halts_without_mutations(self):
         """When pre-flight tests fail, wrap halts immediately and mutates nothing."""
         scripts_dir = os.path.join(self.root, ".along", "scripts")

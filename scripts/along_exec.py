@@ -141,6 +141,7 @@ Entity Management Commands:
   session wrap   <slug> (--decisions "ADR-a,ADR-b" | --no-decisions) [--status done|superseded] [--summary "Summary"] [--force-reason "..."] [--dry-run] [-n]
   session bindings  List agent-session bindings
   session gc     [--dry-run]  Remove stale or orphaned bindings
+  history append <slug> [summary]  Append or update a formatted entry in .along/HISTORY.md
   decision create <slug> --title "Title" --context "Why" --decision "What" --consequences "Tradeoffs"
   decision sync   Recompile .along/CONSTRAINTS.md projection from active ADRs
   scratch init   <slug> [--title "Title"] [--steps N] [--restart] [--mode direct]
@@ -1523,6 +1524,26 @@ def handle_decision_command(repo_root: str, args: List[str]):
         sys.exit(0)
 
 
+def handle_history_command(repo_root: str, args: List[str]):
+    if not args or args[0] in ("-h", "--help", "help"):
+        print("Usage: along history [append] <slug> [summary]")
+        print("  append <slug> [summary]   Append or update a formatted entry in .along/HISTORY.md")
+        sys.exit(0)
+
+    subcmd = args[0].lower()
+    if subcmd == "append":
+        if len(args) < 2:
+            print("[Error] Usage: along history append <slug> [summary]", file=sys.stderr)
+            sys.exit(1)
+        slug = _require_entity_name(args[1].lower(), "along history append <slug> [summary]")
+        summary = " ".join(args[2:]).strip() if len(args) > 2 else None
+        res = lifecycle.append_history_entry(repo_root, slug, summary=summary)
+        sys.exit(res)
+    else:
+        print(f"[Error] Unknown history subcommand '{subcmd}'. Run 'along history --help'.", file=sys.stderr)
+        sys.exit(1)
+
+
 def handle_status_command(repo_root: str, args: List[str]):
     if args and args[0] in ("-h", "--help", "help"):
         print("Usage: along status    Show repository root, active issues and Along state")
@@ -1704,6 +1725,67 @@ def handle_doctor_command(repo_root: str, args: List[str]):
             print("[WARN] Projections kept as 'ours' in a merge; run `along git sync`: "
                   + ", ".join(driver_info["pending_resync"]))
             warnings += 1
+
+        # Check Git release tag push configuration and release tag integrity [bug--release-tags-not-pushed]
+        follow_tags = proc.git(["config", "--local", "--get", "push.followTags"], cwd=repo_root)
+        if not follow_tags.ok or follow_tags.stdout.strip().lower() != "true":
+            print("[WARN] Git push.followTags is not configured (release tags will not be pushed by default). "
+                  "Run `along git setup` (or `git config push.followTags true`).")
+            warnings += 1
+        else:
+            print("[OK] Git push.followTags is configured.")
+
+        remote_origin = proc.git(["remote", "get-url", "origin"], cwd=repo_root)
+        if remote_origin.ok:
+            remote_tags_res = proc.git(["ls-remote", "--tags", "origin"], cwd=repo_root, check=False)
+            if remote_tags_res.ok:
+                remote_tag_lines = remote_tags_res.stdout.splitlines()
+                remote_tags = set()
+                for rline in remote_tag_lines:
+                    rparts = rline.split()
+                    if len(rparts) >= 2 and rparts[1].startswith("refs/tags/"):
+                        rtag = rparts[1][len("refs/tags/"):].split("^{}")[0]
+                        remote_tags.add(rtag)
+
+                local_tags_res = proc.git(
+                    ["for-each-ref", "--format=%(refname:short) %(objecttype)", "refs/tags/v*"],
+                    cwd=repo_root,
+                    check=False,
+                )
+                if local_tags_res.ok:
+                    local_release_tags = [
+                        tline.split()[0]
+                        for tline in local_tags_res.stdout.splitlines()
+                        if tline.strip() and tline.split()[-1] == "tag"
+                    ]
+                    unpushed_tags = [t for t in local_release_tags if t not in remote_tags]
+                    if unpushed_tags:
+                        print(f"[WARN] Local release tag(s) not present on origin: {', '.join(unpushed_tags)}. "
+                              "Push with: git push origin --tags")
+                        warnings += 1
+
+        release_commits = proc.git(["log", "--grep=^release: v", "--format=%H %s"], cwd=repo_root, check=False)
+        if release_commits.ok:
+            for rline in release_commits.stdout.splitlines():
+                if not rline.strip():
+                    continue
+                rparts = rline.split(maxsplit=1)
+                if len(rparts) < 2:
+                    continue
+                sha, subject = rparts
+                m = re.match(r"^release:\s+(v\d+\.\d+\.\d+)\b", subject)
+                if m:
+                    expected_tag = m.group(1)
+                    tag_check = proc.git(
+                        ["tag", "-l", "--format=%(refname:short) %(objecttype)", expected_tag],
+                        cwd=repo_root,
+                        check=False,
+                    )
+                    has_tag = tag_check.ok and tag_check.stdout.strip().startswith(expected_tag)
+                    if not has_tag:
+                        print(f"[WARN] Release commit {sha[:7]} ({subject}) has no matching annotated tag '{expected_tag}'. "
+                              f"Create with: git tag -a {expected_tag} -m \"release: {expected_tag}\" {sha[:7]}")
+                        warnings += 1
 
     # Check per-machine diagnostics committed before the directory ignored itself
     from alongkit import gitgates
@@ -2980,6 +3062,7 @@ def main():
         "budget": handle_budget_command,
         "context-budget": handle_budget_command,
         "patch": handle_patch_command,
+        "history": handle_history_command,
     }
     if cmd in native_routers and _wants_help(extra_args):
         _print_router_help(cmd, native_routers[cmd], repo_root, extra_args)
@@ -2988,6 +3071,8 @@ def main():
     # 1. Native Entity Management Subcommands
     if cmd == "status":
         handle_status_command(repo_root, extra_args)
+    elif cmd == "history":
+        handle_history_command(repo_root, extra_args)
     elif cmd == "doctor":
         handle_doctor_command(repo_root, extra_args)
     elif cmd == "circuit":

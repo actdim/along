@@ -8,7 +8,7 @@ Executes automated lifecycle finalization:
 - Updates issue front-matter (status, completed, updated) and relocates to .along/ISSUES/done/
 - Recompiles .along/ISSUES.md and Knowledge Base projections
 - Purges ephemeral session blackboard (.along/.session/<slug>/)
-- Appends formatted entry to .along/HISTORY.md when --summary is provided
+- Appends formatted entry to .along/HISTORY.md (using --summary if provided, else issue title; idempotent per slug)
 - Automatically rolls back all changes via FileTransaction on failure
 
 Usage:
@@ -49,7 +49,7 @@ def main(argv=None) -> int:
         "-m",
         dest="summary",
         default=None,
-        help="One-line summary for .along/HISTORY.md index",
+        help="One-line summary for .along/HISTORY.md index (falls back to issue title if omitted)",
     )
     parser.add_argument(
         "--dry-run",
