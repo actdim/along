@@ -165,6 +165,18 @@ class TestToolNatureClassification(unittest.TestCase):
         res_var = classify_command("env FOO=bar rm -rf /")
         self.assertEqual(res_var.tool_class, ToolClass.DESTRUCTIVE)
 
+        res_ssh_cmd = classify_command("GIT_SSH_COMMAND='rm -rf ~' git status")
+        self.assertEqual(res_ssh_cmd.tool_class, ToolClass.DESTRUCTIVE)
+
+        res_env_cfg = classify_command("env GIT_CONFIG_PARAMETERS='core.fsmonitor=evil' git status")
+        self.assertEqual(res_env_cfg.tool_class, ToolClass.DESTRUCTIVE)
+
+        res_preload = classify_command("LD_PRELOAD=/evil.so git status")
+        self.assertEqual(res_preload.tool_class, ToolClass.DESTRUCTIVE)
+
+        res_pwsh_env = classify_command("$env:GIT_SSH_COMMAND = 'evil'; git status")
+        self.assertEqual(res_pwsh_env.tool_class, ToolClass.DESTRUCTIVE)
+
     def test_git_dangerous_configs_and_flags(self):
         """Dangerous git -c options and flags must classify as DESTRUCTIVE."""
         res_fs = classify_command("git -c core.fsmonitor='rm -rf ~' status")
@@ -194,6 +206,21 @@ class TestToolNatureClassification(unittest.TestCase):
         res_safe = classify_command("git -c user.name=test status")
         self.assertEqual(res_safe.tool_class, ToolClass.READ_ONLY)
 
+        res_color = classify_command("git -c color.ui=always status")
+        self.assertEqual(res_color.tool_class, ToolClass.READ_ONLY)
+
+        res_advice = classify_command("git -c advice.statusHints=false status")
+        self.assertEqual(res_advice.tool_class, ToolClass.READ_ONLY)
+
+        res_diff_algo = classify_command("git -c diff.algorithm=histogram diff")
+        self.assertEqual(res_diff_algo.tool_class, ToolClass.READ_ONLY)
+
+        res_disallowed = classify_command("git -c arbitrary.unknown=1 status")
+        self.assertEqual(res_disallowed.tool_class, ToolClass.DESTRUCTIVE)
+
+        res_filter = classify_command("git -c filter.clean=evil status")
+        self.assertEqual(res_filter.tool_class, ToolClass.DESTRUCTIVE)
+
     def test_gh_command_boundaries(self):
         """gh pr review and mutation flags must classify as EXTERNAL, not read-only."""
         res_review = classify_command("gh pr review --approve")
@@ -209,7 +236,10 @@ class TestToolNatureClassification(unittest.TestCase):
         self.assertEqual(res_api_post.tool_class, ToolClass.EXTERNAL)
 
         res_api_delete = classify_command("gh api -X DELETE repos/foo/1")
-        self.assertEqual(res_api_delete.tool_class, ToolClass.EXTERNAL)
+        self.assertEqual(res_api_delete.tool_class, ToolClass.DESTRUCTIVE)
+
+        res_api_delete_method = classify_command("gh api --method DELETE repos/foo/1")
+        self.assertEqual(res_api_delete_method.tool_class, ToolClass.DESTRUCTIVE)
 
         res_api_read = classify_command("gh api repos/foo")
         self.assertEqual(res_api_read.tool_class, ToolClass.READ_ONLY)
@@ -245,6 +275,35 @@ class TestToolNatureClassification(unittest.TestCase):
 
         res_local = classify_command("rm temp.txt")
         self.assertEqual(res_local.tool_class, ToolClass.WORKSPACE_WRITE)
+
+        res_git = classify_command("rm -rf .git")
+        self.assertEqual(res_git.tool_class, ToolClass.DESTRUCTIVE)
+
+        res_along = classify_command("rm -rf .along")
+        self.assertEqual(res_along.tool_class, ToolClass.DESTRUCTIVE)
+
+        res_del_flag = classify_command("del /q file.txt")
+        self.assertEqual(res_del_flag.tool_class, ToolClass.WORKSPACE_WRITE)
+
+        res_sub_wild = classify_command("rm -rf dist/*")
+        self.assertEqual(res_sub_wild.tool_class, ToolClass.WORKSPACE_WRITE)
+
+    def test_out_file_classification(self):
+        """Out-File PowerShell cmdlet parsing, flag handling, and destination safety."""
+        res_out = classify_command("Out-File -FilePath file.txt -Encoding utf8")
+        self.assertEqual(res_out.tool_class, ToolClass.WORKSPACE_WRITE)
+
+        res_pipe = classify_command("echo hello | Out-File dest.txt -Encoding utf8")
+        self.assertEqual(res_pipe.tool_class, ToolClass.WORKSPACE_WRITE)
+
+        res_null = classify_command("echo hello | Out-File $null")
+        self.assertEqual(res_null.tool_class, ToolClass.READ_ONLY)
+
+        res_ext = classify_command("Out-File -FilePath ~/.bashrc")
+        self.assertEqual(res_ext.tool_class, ToolClass.DESTRUCTIVE)
+
+        res_git = classify_command("Out-File -FilePath .git/config")
+        self.assertEqual(res_git.tool_class, ToolClass.DESTRUCTIVE)
 
     def test_sudo_and_python_script_boundaries(self):
         """sudo elevates privileges and external python scripts classify as DESTRUCTIVE."""

@@ -369,7 +369,11 @@ def handle_plan_command(repo_root: str, args: List[str]):
         confirm_dest = "--confirm-destructive" in args
         confirm_ext = "--confirm-external" in args
         if confirm_dest:
-            session.confirm_destructive(repo_root, slug=slug, key=key)
+            if via == session.APPROVED_VIA_CLI_UNVERIFIED:
+                print("[Error] Destructive operations cannot be confirmed without a verified user prompt in chat.",
+                      file=sys.stderr)
+                sys.exit(2)
+            session.confirm_destructive(repo_root, slug=slug, key=key, via=via)
         if confirm_ext:
             session.confirm_external(repo_root, slug=slug, key=key)
         if slug:

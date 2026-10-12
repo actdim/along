@@ -217,6 +217,7 @@ BUILTIN_TOOL_RULES: Dict[str, Dict[str, Any]] = {
     "add-content": {"default": ToolClass.WORKSPACE_WRITE},
     "copy-item": {"default": ToolClass.WORKSPACE_WRITE},
     "move-item": {"default": ToolClass.WORKSPACE_WRITE},
+    "out-file": {"default": ToolClass.WORKSPACE_WRITE},
     "del": {
         "default": ToolClass.WORKSPACE_WRITE,
         "rules": [
@@ -266,6 +267,8 @@ BUILTIN_TOOL_RULES: Dict[str, Dict[str, Any]] = {
             {"match": {"subcommand": "api", "no_flags": ["-X", "--method", "-f", "-F", "--field", "--raw-field", "--input"]}, "class": ToolClass.READ_ONLY},
             {"match": {"subcommand": "api", "flag_value": {"-X": "GET"}}, "class": ToolClass.READ_ONLY},
             {"match": {"subcommand": "api", "flag_value": {"--method": "GET"}}, "class": ToolClass.READ_ONLY},
+            {"match": {"subcommand": "api", "flag_value": {"-X": "DELETE"}}, "class": ToolClass.DESTRUCTIVE},
+            {"match": {"subcommand": "api", "flag_value": {"--method": "DELETE"}}, "class": ToolClass.DESTRUCTIVE},
             {"match": {"subcommand": "api", "any_flags": ["-f", "-F", "--field", "--raw-field", "--input", "-X", "--method"]}, "class": ToolClass.EXTERNAL},
             {"match": {"subcommand": "api"}, "class": ToolClass.EXTERNAL},
             {"match": {"subcommand": "api graphql"}, "class": ToolClass.EXTERNAL},
@@ -402,35 +405,81 @@ BUILTIN_TOOL_RULES: Dict[str, Dict[str, Any]] = {
 # Built-in Code Classifier Implementations
 # ---------------------------------------------------------------------------
 
+_SAFE_GIT_CONFIG_KEYS = frozenset({
+    "user.name",
+    "user.email",
+    "user.signingkey",
+    "core.quotepath",
+    "core.autocrlf",
+    "core.safecrlf",
+    "core.eol",
+    "core.ignorecase",
+    "core.filemode",
+    "core.precomposeunicode",
+    "diff.algorithm",
+    "diff.renames",
+    "diff.mnemonicprefix",
+    "diff.noprefix",
+    "diff.color",
+    "rebase.autostash",
+    "rebase.autosquash",
+    "pull.rebase",
+    "pull.ff",
+    "merge.ff",
+    "push.default",
+    "init.defaultbranch",
+    "status.submodulesummary",
+    "status.showuntrackedfiles",
+    "log.date",
+    "log.decorate",
+    "i18n.commitencoding",
+    "i18n.logoutputencoding",
+})
+
+
+def _is_safe_git_c_key(key: str) -> bool:
+    k = key.lower().strip()
+    if not k:
+        return False
+    if k in _SAFE_GIT_CONFIG_KEYS:
+        return True
+    if k.startswith("color.") or k.startswith("advice."):
+        return True
+    return False
+
+
 def _classify_git(call: NormalizedCall) -> Optional[str]:
     """Git code classifier handling complex modal subcommands, global flags and destructive commands."""
-    # Check for dangerous global git execution flags (-c core.fsmonitor=..., --upload-pack, etc.)
-    dangerous_c_keys = (
-        "core.fsmonitor", "core.pager", "core.editor", "core.sshcommand", "core.hookspath",
-        "sequence.editor", "alias.", "credential.helper", "include.path", "diff.external",
-        "diff.", "filter."
-    )
+    # Check for dangerous global git execution flags (-c allowlist, --upload-pack, etc.)
     for flag, val in call.flag_values.items():
         flag_l = flag.lower()
-        val_l = (val or "").lower()
         if flag_l == "-c":
-            for d_key in dangerous_c_keys:
-                if d_key in val_l:
-                    return ToolClass.DESTRUCTIVE
+            cfg_k = (val or "").split("=", 1)[0].strip()
+            if not _is_safe_git_c_key(cfg_k):
+                return ToolClass.DESTRUCTIVE
         if flag_l in ("--upload-pack", "--receive-pack") or flag_l.startswith("--config-env"):
-            return ToolClass.DESTRUCTIVE
-    for arg in call.args:
-        arg_l = arg.lower()
-        if arg_l.startswith("-c"):
-            for d_key in dangerous_c_keys:
-                if d_key in arg_l:
-                    return ToolClass.DESTRUCTIVE
-        if arg_l.startswith(("--upload-pack=", "--receive-pack=", "--config-env")):
             return ToolClass.DESTRUCTIVE
     for f in call.flags:
         f_l = f.lower()
         if f_l in ("--upload-pack", "--receive-pack") or f_l.startswith("--config-env"):
             return ToolClass.DESTRUCTIVE
+
+    raw_toks = shellparse._tokens(call.raw_cmd) or []
+    i = 0
+    while i < len(raw_toks):
+        tok = raw_toks[i]
+        if tok == "-c" and i + 1 < len(raw_toks):
+            cfg_k = raw_toks[i + 1].split("=", 1)[0].strip()
+            if not _is_safe_git_c_key(cfg_k):
+                return ToolClass.DESTRUCTIVE
+            i += 1
+        elif tok.startswith("-c") and len(tok) > 2 and not tok.startswith("--"):
+            cfg_k = tok[2:].split("=", 1)[0].strip()
+            if not _is_safe_git_c_key(cfg_k):
+                return ToolClass.DESTRUCTIVE
+        elif tok.lower().startswith(("--upload-pack=", "--receive-pack=", "--config-env")):
+            return ToolClass.DESTRUCTIVE
+        i += 1
 
     sub = (call.subcommand or "").split()
     subcmd = sub[0] if sub else ""
@@ -541,9 +590,19 @@ def _classify_python(call: NormalizedCall, repo_root: Optional[str] = None) -> O
     return ToolClass.DESTRUCTIVE
 
 
+_CMD_FLAG_RE = re.compile(r"^/[a-zA-Z](?::\w+)?$")
+
+
 def _classify_deletion(call: NormalizedCall, repo_root: Optional[str] = None) -> Optional[str]:
     """Deletion classifier checking normalized target paths against repository root."""
-    args = [a for a in call.args if not a.startswith("-")]
+    args: List[str] = []
+    for a in call.args:
+        if a.startswith("-"):
+            continue
+        if call.tool in ("del", "erase", "rmdir", "rd") and _CMD_FLAG_RE.match(a):
+            continue
+        args.append(a)
+
     targets = list(args)
     for opt in ("-path", "-literalpath"):
         val = call.flag_values.get(opt)
@@ -556,18 +615,41 @@ def _classify_deletion(call: NormalizedCall, repo_root: Optional[str] = None) ->
     root = repo_root or repo.find_repo_root() or os.getcwd()
     root_norm = os.path.normcase(os.path.abspath(root))
     user_home = os.path.normcase(os.path.abspath(os.path.expanduser("~")))
+    git_dir = os.path.normcase(os.path.abspath(os.path.join(root, ".git")))
+    along_dir = os.path.normcase(os.path.abspath(os.path.join(root, ".along")))
 
-    has_recurse = any(f.lower() in ("-r", "-rf", "-fr", "--recursive", "-recurse") for f in call.flags) or \
+    has_recurse = any(f.lower() in ("-r", "-rf", "-fr", "--recursive", "-recurse", "/s") for f in call.flags) or \
                   any(f.lower().startswith("-r") or "recurse" in f.lower() for f in call.flags)
 
     for t in targets:
         t_raw = t.strip("\"'")
         if not t_raw:
             continue
-        if t_raw in ("*", ".*") or t_raw.endswith(("/*", "\\*")):
+
+        # Wildcards
+        if t_raw in ("*", ".*", "/*", "\\*"):
             return ToolClass.DESTRUCTIVE
+
+        if t_raw.endswith(("/*", "\\*")):
+            prefix = t_raw[:-2].rstrip("/\\")
+            if not prefix or prefix in (".", "./", ".\\"):
+                return ToolClass.DESTRUCTIVE
+            try:
+                abs_pref = os.path.normcase(os.path.abspath(os.path.join(root, prefix)))
+            except (ValueError, OSError):
+                return ToolClass.DESTRUCTIVE
+            if abs_pref == root_norm or not repo.is_within(abs_pref, root_norm):
+                return ToolClass.DESTRUCTIVE
+            if abs_pref == git_dir or repo.is_within(abs_pref, git_dir):
+                return ToolClass.DESTRUCTIVE
+            if abs_pref == along_dir or repo.is_within(abs_pref, along_dir):
+                return ToolClass.DESTRUCTIVE
+            # Wildcard targeting contents of a repository subfolder (dist/*, build/*, etc.)
+            continue
+
         if t_raw in ("/", "\\", ".") or (len(t_raw) >= 2 and t_raw[1] == ":" and len(t_raw) <= 3):
             return ToolClass.DESTRUCTIVE
+
         if t_raw in ("~", "$HOME", "%USERPROFILE%") or t_raw.startswith(("~/", "~\\", "$HOME/", "$HOME\\", "%USERPROFILE%\\")):
             exp = os.path.normcase(os.path.abspath(os.path.expanduser(os.path.expandvars(t_raw))))
             if exp == user_home or not repo.is_within(exp, root_norm):
@@ -583,6 +665,13 @@ def _classify_deletion(call: NormalizedCall, repo_root: Optional[str] = None) ->
             return ToolClass.DESTRUCTIVE
 
         if abs_t == root_norm:
+            return ToolClass.DESTRUCTIVE
+
+        # Internal critical protocol and VCS targets
+        if abs_t == git_dir or repo.is_within(abs_t, git_dir):
+            return ToolClass.DESTRUCTIVE
+
+        if abs_t == along_dir or repo.is_within(abs_t, along_dir):
             return ToolClass.DESTRUCTIVE
 
         if has_recurse and (t_raw in (".", "./", ".\\", "*") or abs_t == root_norm):
@@ -659,6 +748,51 @@ def _classify_along(call: NormalizedCall) -> Optional[str]:
     return ToolClass.WORKSPACE_WRITE
 
 
+def _classify_out_file(call: NormalizedCall, repo_root: Optional[str] = None) -> Optional[str]:
+    """Out-File classifier verifying destination path safety."""
+    targets: List[str] = []
+    fv_lower = {k.lower(): v for k, v in call.flag_values.items()}
+    for opt in ("-filepath", "-literalpath", "-path"):
+        val = fv_lower.get(opt)
+        if val:
+            targets.append(val)
+    if not targets and call.args:
+        targets.extend(call.args)
+
+    if not targets:
+        return ToolClass.WORKSPACE_WRITE
+
+    root = repo_root or repo.find_repo_root() or os.getcwd()
+    root_norm = os.path.normcase(os.path.abspath(root))
+    user_home = os.path.normcase(os.path.abspath(os.path.expanduser("~")))
+    git_dir = os.path.normcase(os.path.abspath(os.path.join(root, ".git")))
+    along_dir = os.path.normcase(os.path.abspath(os.path.join(root, ".along")))
+
+    for t in targets:
+        t_raw = t.strip("\"'")
+        if not t_raw:
+            continue
+        tl = t_raw.replace("\\", "/").lower()
+        if tl in ("/dev/null", "nul", "$null"):
+            return ToolClass.READ_ONLY
+        if t_raw in ("~", "$HOME", "%USERPROFILE%") or t_raw.startswith(("~/", "~\\", "$HOME/", "$HOME\\", "%USERPROFILE%\\")):
+            exp = os.path.normcase(os.path.abspath(os.path.expanduser(os.path.expandvars(t_raw))))
+            if exp == user_home or not repo.is_within(exp, root_norm):
+                return ToolClass.DESTRUCTIVE
+        try:
+            abs_t = os.path.normcase(os.path.abspath(os.path.join(root, t_raw)))
+        except (ValueError, OSError):
+            return ToolClass.DESTRUCTIVE
+        if abs_t == root_norm or not repo.is_within(abs_t, root_norm):
+            return ToolClass.DESTRUCTIVE
+        if abs_t == git_dir or repo.is_within(abs_t, git_dir):
+            return ToolClass.DESTRUCTIVE
+        if abs_t == along_dir or repo.is_within(abs_t, along_dir):
+            return ToolClass.DESTRUCTIVE
+
+    return ToolClass.WORKSPACE_WRITE
+
+
 register_classifier("git", _classify_git)
 register_classifier("python", _classify_python)
 register_classifier("rm", _classify_deletion)
@@ -670,6 +804,7 @@ register_classifier("sed", _classify_sed)
 register_classifier("awk", _classify_awk)
 register_classifier("find", _classify_find)
 register_classifier("along", _classify_along)
+register_classifier("out-file", _classify_out_file)
 
 
 # ---------------------------------------------------------------------------
@@ -730,8 +865,12 @@ def _parse_tokens_into_call(tool: str, rest_tokens: List[str], raw_cmd: str, wri
     flag_values: Dict[str, str] = {}
     positionals: List[str] = []
 
-    val_options = ("-x", "--method", "-m", "-c", "-o", "--output", "-f", "-f", "--input", "-u", "--url",
-                   "-i", "--issue", "-t", "--type", "--field-separator", "--file", "--with", "-p", "--python")
+    val_options = (
+        "-x", "--method", "-m", "-c", "-o", "--output", "-f", "--input", "-u", "--url",
+        "-i", "--issue", "-t", "--type", "--field-separator", "--file", "--with", "-p", "--python",
+        "-encoding", "-filepath", "-literalpath", "-path", "-destination", "-width", "-inputobject",
+        "-delimiter", "-pattern", "-filter", "-include", "-exclude", "-name", "-value",
+    )
 
     i = 0
     n = len(rest_tokens)
@@ -745,6 +884,9 @@ def _parse_tokens_into_call(tool: str, rest_tokens: List[str], raw_cmd: str, wri
                 flag_name, val = tok.split("=", 1)
                 flags.append(flag_name)
                 flag_values[flag_name] = val
+            elif tok.startswith("-X") and len(tok) > 2:
+                flags.append("-X")
+                flag_values["-X"] = tok[2:]
             else:
                 flags.append(tok)
                 if i + 1 < n and not rest_tokens[i + 1].startswith("-"):
@@ -760,7 +902,11 @@ def _parse_tokens_into_call(tool: str, rest_tokens: List[str], raw_cmd: str, wri
     if positionals:
         if len(positionals) >= 2 and tool in ("gh", "git", "docker", "kubectl", "npm", "pnpm", "yarn", "bun"):
             subcommand = f"{positionals[0]} {positionals[1]}"
-        else:
+        elif tool not in (
+            "rm", "del", "erase", "rmdir", "rd", "remove-item",
+            "out-file", "set-content", "add-content", "get-content",
+            "cat", "type", "touch", "mkdir", "md", "cp", "mv", "copy", "move",
+        ):
             subcommand = positionals[0]
 
     return NormalizedCall(
@@ -987,8 +1133,38 @@ def _safe_rule_class(layer_name: str, candidate_class: str, builtin_class: str) 
     return candidate_class
 
 
+def extract_dangerous_env_overrides(segment: str, raw_tokens: Optional[List[str]] = None) -> List[str]:
+    """Identify dangerous execution-hijacking environment variables set or passed in a command segment."""
+    dangerous: List[str] = []
+    tokens = raw_tokens if raw_tokens is not None else (shellparse._tokens(segment) or [])
+    for tok in tokens:
+        if "=" in tok:
+            candidate = tok.split("=", 1)[0].strip()
+            if candidate.startswith("-"):
+                candidate = candidate.lstrip("-")
+            if shellparse.is_dangerous_env_var(candidate):
+                dangerous.append(candidate)
+    for m in re.finditer(r"\$env:([A-Za-z_][A-Za-z0-9_]*)\b", segment, re.IGNORECASE):
+        v = m.group(1)
+        if shellparse.is_dangerous_env_var(v):
+            dangerous.append(f"$env:{v}")
+    for m in re.finditer(r"\b(?:export|set)\s+([A-Za-z_][A-Za-z0-9_]*)\s*=", segment, re.IGNORECASE):
+        v = m.group(1)
+        if shellparse.is_dangerous_env_var(v):
+            dangerous.append(v)
+    return dangerous
+
+
 def classify_segment(segment: str, repo_root: Optional[str] = None) -> ClassificationResult:
     """Classify an individual shell command segment."""
+    dangerous_envs = extract_dangerous_env_overrides(segment)
+    if dangerous_envs:
+        return ClassificationResult(
+            tool_class=ToolClass.DESTRUCTIVE,
+            rule_desc=f"dangerous environment variable override ({', '.join(dangerous_envs)}) -> destructive",
+            layer="shell",
+        )
+
     call = normalize_segment(segment)
     if not call.tool:
         return ClassificationResult(

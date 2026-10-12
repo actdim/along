@@ -354,6 +354,45 @@ class TestCommandNatureAndConfirmation(SessionFixture):
         session.confirm_destructive(self.root, self.key_a)
         self.assertIsNone(check_mutation_authorization(event, self.root))
 
+    def test_destructive_confirmation_is_single_use_consumed_on_post_tool_use(self):
+        self.start("alpha", self.key_a)
+        session.record_plan_approval(self.root, self.key_a)
+        session.update_state(self.root, "alpha", phase="execution", plan_approved=True)
+
+        event = HookEvent(
+            event_type=HookEventType.PRE_TOOL_USE,
+            tool_name="run_command",
+            tool_args={"CommandLine": "git reset --hard HEAD~1"},
+            workspace_root=self.root,
+            runtime="claude",
+            conversation_id="sess-a",
+        )
+        session.confirm_destructive(self.root, self.key_a)
+        self.assertTrue(session.is_destructive_confirmed(self.root, key=self.key_a))
+        self.assertIsNone(check_mutation_authorization(event, self.root))
+
+        # Tool executes: PostToolUse consumes the authorization
+        post_event = HookEvent(
+            event_type=HookEventType.POST_TOOL_USE,
+            tool_name="run_command",
+            tool_args={"CommandLine": "git reset --hard HEAD~1"},
+            workspace_root=self.root,
+            runtime="claude",
+            conversation_id="sess-a",
+        )
+        record_tool_activity(post_event, self.root)
+        self.assertFalse(session.is_destructive_confirmed(self.root, key=self.key_a))
+
+        # Subsequent destructive attempt is held again
+        held_again = check_mutation_authorization(event, self.root)
+        self.assertIsNotNone(held_again)
+        self.assertIn("confirm-destructive", str(held_again))
+
+    def test_unverified_cli_cannot_confirm_destructive(self):
+        self.start("alpha", self.key_a)
+        with self.assertRaises(ValueError):
+            session.confirm_destructive(self.root, self.key_a, via=session.APPROVED_VIA_CLI_UNVERIFIED)
+
     def test_external_confirmation_flag(self):
         self.start("alpha", self.key_a)
         self.assertFalse(session.is_external_confirmed(self.root, key=self.key_a))

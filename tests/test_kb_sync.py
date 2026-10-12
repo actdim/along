@@ -394,6 +394,7 @@ class TestKbSyncCliIntegration(unittest.TestCase):
             self.assertIn("Refers to Architecture but should not be auto-linked.", c_after)
 
     def test_doc_manual_lock_gate_predicate(self):
+        from alongkit import session
         from alongkit.hooks.predicates import check_doc_manual_lock
         from alongkit.hooks.models import HookEvent, HookEventType
 
@@ -423,7 +424,7 @@ class TestKbSyncCliIntegration(unittest.TestCase):
             self.assertIn("Manual Document Lock Violation", violation)
             self.assertIn("write_policy: manual", violation)
 
-            # 2. With active docs--locked-policy issue -> allowed
+            # 2. With active docs--locked-policy issue in unkeyed runtime -> allowed
             issues_dir = os.path.join(root, ".along", "ISSUES")
             os.makedirs(issues_dir, exist_ok=True)
             doc_issue = os.path.join(issues_dir, "docs--locked-policy.md")
@@ -438,6 +439,26 @@ class TestKbSyncCliIntegration(unittest.TestCase):
 
             violation_allowed = check_doc_manual_lock(event, root)
             self.assertIsNone(violation_allowed)
+
+            # 3. In keyed session without approved plan -> blocked even if ticket exists
+            keyed_event = HookEvent(
+                event_type=HookEventType.PRE_TOOL_USE,
+                tool_name="replace_file_content",
+                tool_args={"TargetFile": man_doc, "TargetContent": "Locked", "ReplacementContent": "Unlocked"},
+                conversation_id="session-doc-1",
+                runtime="claude",
+            )
+            key = "claude--session-doc-1"
+            session.bind_session(root, "docs--locked-policy", key=key)
+            violation_unapproved = check_doc_manual_lock(keyed_event, root)
+            self.assertIsNotNone(violation_unapproved)
+            self.assertIn("Manual Document Lock Violation", violation_unapproved)
+
+            # 4. In keyed session with approved plan -> allowed
+            session.record_plan_approval(root, key=key)
+            session.update_state(root, "docs--locked-policy", phase="execution", plan_approved=True)
+            violation_approved = check_doc_manual_lock(keyed_event, root)
+            self.assertIsNone(violation_approved)
 
 
 if __name__ == "__main__":

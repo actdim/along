@@ -182,7 +182,7 @@ def run_checks(repo_root: str, checks: Sequence[str], label: str) -> bool:
 # Change-aware skip
 # ---------------------------------------------------------------------------
 
-_DOC_SUFFIXES = (".md", ".rst", ".txt")
+_DOC_SUFFIXES = (".md", ".rst")
 _DOC_FILES = ("llms.txt", "llms-full.txt", "readme.md", "changelog.md", "license.md", "license", "authors.md", "contributing.md")
 _CODE_SUFFIXES = (".py", ".ts", ".js", ".mjs", ".cjs", ".sh", ".bash", ".ps1", ".bat", ".cmd", ".rs", ".go", ".c", ".cpp", ".cs", ".java")
 _VERSION_LINE = re.compile(r'^[+-]\s*"version"\s*:\s*"[^"]*",?\s*$')

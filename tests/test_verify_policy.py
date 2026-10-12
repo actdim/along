@@ -144,6 +144,13 @@ class TestDocsOnlyChange(unittest.TestCase):
         self.assertFalse(verify.docs_only_change(".", ["README.md", "src/app.ts"]))
         self.assertFalse(verify.docs_only_change(".", [".along/scripts/test.py"]))
         self.assertFalse(verify.docs_only_change(".", []))
+        self.assertFalse(verify.docs_only_change(".", ["requirements.txt"]))
+        self.assertFalse(verify.docs_only_change(".", ["constraints.txt"]))
+        self.assertFalse(verify.docs_only_change(".", ["CMakeLists.txt"]))
+        self.assertFalse(verify.is_doc_only_path("requirements.txt"))
+        self.assertFalse(verify.is_doc_only_path("constraints.txt"))
+        self.assertTrue(verify.is_doc_only_path("llms.txt"))
+        self.assertTrue(verify.is_doc_only_path("llms-full.txt"))
 
     def test_nested_along_paths(self):
         # [bug--wrap-docs-only-test-skip] REQ-2: Any .along/ path segment counts as Along state (except .along/scripts/)

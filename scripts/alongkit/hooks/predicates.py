@@ -17,7 +17,7 @@ import sys
 from typing import Any, Dict, List, Optional, Tuple
 
 from .. import attribution, entities, frontmatter, kb, proc, repo, sanitizer, session, testruns, textio, typography
-from . import shellparse, shellwrite
+from . import shellparse, shellwrite, toolnature
 from .models import GateDecision, GateResult, HookEvent, HookEventType
 
 
@@ -292,6 +292,15 @@ def record_tool_activity(event: HookEvent, repo_root: str) -> None:
     key = event_session_key(event)
     trace = load_activity_trace(repo_root, key)
 
+    # Post-execution destructive single-use authorization consumption
+    if event.event_type == HookEventType.POST_TOOL_USE:
+        try:
+            nature_res = toolnature.classify_event(event, repo_root=repo_root)
+            if nature_res.tool_class == toolnature.ToolClass.DESTRUCTIVE:
+                session.consume_destructive_confirmation(repo_root, key=key)
+        except (OSError, ValueError, TypeError, KeyError, AttributeError):
+            pass
+
     # Track file edits: repository files outside .along/ (agent state is not source), plus the
     # lifecycle hooks in .along/scripts/ [feat--rule-pack-protection-gate].
     if event.tool_name in ("write_to_file", "write_file", "replace_file_content", "edit_file", "patch_file", "create_file"):
@@ -561,27 +570,27 @@ def check_doc_manual_lock(event: HookEvent, repo_root: str, **kwargs: Any) -> Op
                             affects = [affects]
                         norm_target = repo.normalize_posix(rel_target).lstrip("/")
                         affects_norm = [repo.normalize_posix(str(a)).lstrip("/") for a in affects]
-                        target_doc = fm.get("target_doc") or fm.get("path")
+                        target_doc = i_fm.get("target_doc") or i_fm.get("path")
                         target_doc_norm = repo.normalize_posix(str(target_doc)).lstrip("/") if target_doc else ""
                         if norm_target in affects_norm or (target_doc_norm and target_doc_norm == norm_target):
                             is_targeted = True
                 except (OSError, UnicodeDecodeError, ValueError):
                     pass
-        if is_targeted:
+        if is_targeted and session.is_plan_approved(repo_root, slug=active_slug, key=key):
             return None
-
-    # Also check if an active docs issue for this slug exists in .along/ISSUES/
-    issues_dir = _issues_dir(repo_root)
-    if os.path.isdir(issues_dir):
-        doc_issue_cand = os.path.join(issues_dir, f"docs--{slug}.md")
-        if os.path.isfile(doc_issue_cand):
-            try:
-                i_raw = textio.read_text(doc_issue_cand, strict=False)
-                i_fm, _, _ = frontmatter.try_parse(i_raw)
-                if i_fm and i_fm.get("status") == "in-progress":
-                    return None
-            except (OSError, UnicodeDecodeError, ValueError):
-                pass
+    elif not key:
+        # In test environments or runtimes without session tracking, verify an active doc issue exists
+        issues_dir = _issues_dir(repo_root)
+        if os.path.isdir(issues_dir):
+            doc_issue_cand = os.path.join(issues_dir, f"docs--{slug}.md")
+            if os.path.isfile(doc_issue_cand):
+                try:
+                    i_raw = textio.read_text(doc_issue_cand, strict=False)
+                    i_fm, _, _ = frontmatter.try_parse(i_raw)
+                    if i_fm and i_fm.get("status") == "in-progress":
+                        return None
+                except (OSError, UnicodeDecodeError, ValueError):
+                    pass
 
     return (
         f"Manual Document Lock Violation [gate: doc-manual-lock]: "

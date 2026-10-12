@@ -328,27 +328,70 @@ def _tokens(segment: str) -> Optional[List[str]]:
     return [t.strip("'\"") for t in raw]
 
 
+_DANGEROUS_ENV_VARS = frozenset({
+    "GIT_SSH_COMMAND",
+    "GIT_SSH",
+    "GIT_ASKPASS",
+    "GIT_EXTERNAL_DIFF",
+    "LD_PRELOAD",
+    "LD_LIBRARY_PATH",
+    "DYLD_INSERT_LIBRARIES",
+    "DYLD_LIBRARY_PATH",
+    "PAGER",
+    "EDITOR",
+    "VISUAL",
+    "PYTHONPATH",
+    "PYTHONSTARTUP",
+    "BASH_ENV",
+    "ENV",
+    "PERL5OPT",
+    "PERL5LIB",
+    "RUBYOPT",
+    "NODE_OPTIONS",
+    "PROMPT_COMMAND",
+    "IFS",
+})
+
+
+def is_dangerous_env_var(var_name: str) -> bool:
+    """True when environment variable can hijack command execution or security posture."""
+    vu = var_name.strip().upper()
+    return vu in _DANGEROUS_ENV_VARS or vu.startswith("GIT_CONFIG")
+
+
 def _strip_wrappers(tokens: List[str]) -> List[str]:
     """Drop `uv run [opts]`, `poetry run`, `npx`, ... and environment assignments."""
     changed = True
     while changed and tokens:
         changed = False
         while tokens and re.match(r"^[A-Za-z_][A-Za-z0-9_]*=", tokens[0]):
+            var_name = tokens[0].split("=", 1)[0]
+            if is_dangerous_env_var(var_name):
+                break
             tokens = tokens[1:]
             changed = True
         if tokens and tokens[0].lower() == "env":
             sub_tokens = tokens[1:]
-            while sub_tokens and sub_tokens[0].startswith("-"):
-                opt = sub_tokens[0].split("=", 1)[0]
-                if opt in ("-u", "--unset") and "=" not in sub_tokens[0] and len(sub_tokens) >= 2:
-                    sub_tokens = sub_tokens[2:]
-                else:
+            has_dangerous = False
+            for tok in sub_tokens:
+                if "=" in tok and is_dangerous_env_var(tok.split("=", 1)[0].lstrip("-")):
+                    has_dangerous = True
+                    break
+            if not has_dangerous:
+                while sub_tokens and sub_tokens[0].startswith("-"):
+                    opt = sub_tokens[0].split("=", 1)[0]
+                    if opt in ("-u", "--unset") and "=" not in sub_tokens[0] and len(sub_tokens) >= 2:
+                        sub_tokens = sub_tokens[2:]
+                    else:
+                        sub_tokens = sub_tokens[1:]
+                while sub_tokens and re.match(r"^[A-Za-z_][A-Za-z0-9_]*=", sub_tokens[0]):
+                    var_name = sub_tokens[0].split("=", 1)[0]
+                    if is_dangerous_env_var(var_name):
+                        break
                     sub_tokens = sub_tokens[1:]
-            while sub_tokens and re.match(r"^[A-Za-z_][A-Za-z0-9_]*=", sub_tokens[0]):
-                sub_tokens = sub_tokens[1:]
-            if sub_tokens:
-                tokens = sub_tokens
-                changed = True
+                if sub_tokens:
+                    tokens = sub_tokens
+                    changed = True
         elif len(tokens) >= 2 and tokens[0].lower() in ("uv", "poetry", "pipenv", "pdm", "hatch") \
                 and tokens[1].lower() == "run":
             tokens = tokens[2:]

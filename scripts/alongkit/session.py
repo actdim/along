@@ -752,8 +752,11 @@ def is_external_confirmed(repo_root: str, slug: Optional[str] = None, key: Optio
     return False
 
 
-def confirm_destructive(repo_root: str, slug: Optional[str] = None, key: Optional[str] = None) -> None:
+def confirm_destructive(repo_root: str, slug: Optional[str] = None, key: Optional[str] = None,
+                        via: Optional[str] = None) -> None:
     """Explicitly authorize destructive operations for this session and blackboard."""
+    if via == APPROVED_VIA_CLI_UNVERIFIED:
+        raise ValueError("Destructive operations cannot be confirmed without a verified user prompt in chat.")
     key = key or current_session_key()
     if slug and key is None and load_binding(repo_root, slug):
         key = slug
@@ -768,6 +771,33 @@ def confirm_destructive(repo_root: str, slug: Optional[str] = None, key: Optiona
         if st is not None:
             st["confirmed_destructive"] = True
             save_state(repo_root, effective_slug, st)
+
+
+def consume_destructive_confirmation(repo_root: str, slug: Optional[str] = None, key: Optional[str] = None) -> bool:
+    """Reset confirmed_destructive on both the session binding and blackboard state.
+
+    Destructive authorizations are single-use and consumed upon tool execution.
+    Returns True if an active confirmation was consumed, False otherwise.
+    """
+    key = key or current_session_key()
+    if slug and key is None and load_binding(repo_root, slug):
+        key = slug
+        slug = None
+    binding = load_binding(repo_root, key)
+    bound_slug = (binding or {}).get("slug")
+    effective_slug = slug or bound_slug or get_active_session_slug(repo_root, key)
+    consumed = False
+    if key and binding and binding.get("confirmed_destructive"):
+        binding["confirmed_destructive"] = False
+        save_binding(repo_root, key, binding)
+        consumed = True
+    if effective_slug:
+        st = load_state(repo_root, effective_slug)
+        if st is not None and st.get("confirmed_destructive"):
+            st["confirmed_destructive"] = False
+            save_state(repo_root, effective_slug, st)
+            consumed = True
+    return consumed
 
 
 def confirm_external(repo_root: str, slug: Optional[str] = None, key: Optional[str] = None) -> None:
