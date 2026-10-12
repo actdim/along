@@ -185,3 +185,4 @@ _Index of sessions (newest last). One line per session:_
 2026-10-12 - bootstrap-resilience-and-subcommand-proxying - antigravity - Support inline invocation (-c) and subcommand proxying in bootstrap.ensure_deps - [Session Log](./SESSIONS/2026/2026-10-12--bootstrap-resilience-and-subcommand-proxying.md)
 2026-10-12 - dev-environment-setup-and-editable-install - antigravity - Automate local dev environment setup and editable package installation - [Session Log](./SESSIONS/2026/2026-10-12--dev-environment-setup-and-editable-install.md)
 2026-10-12 - along-exec-argparse-migration - antigravity - Migrate hand-rolled CLI parsing in along_exec to modular argparse subparsers - [Session Log](./SESSIONS/2026/2026-10-12--along-exec-argparse-migration.md)
+2026-10-12 - vision-md-refresh - antigravity - Refresh VISION.md for v4.x protocol, current skill names, bounded non-goals, and sources provenance - [Session Log](./SESSIONS/2026/2026-10-12--vision-md-refresh.md)

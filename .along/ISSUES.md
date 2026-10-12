@@ -14,7 +14,6 @@
 - [ ] `(docs)` [state-centric-execution-and-skill-state-comparison](ISSUES/docs--state-centric-execution-and-skill-state-comparison.md)
 - [ ] `(docs)` [tiered-model-workflow-guide](ISSUES/docs--tiered-model-workflow-guide.md)
 - [ ] `(docs)` [unverified-performance-claims](ISSUES/docs--unverified-performance-claims.md)
-- [ ] `(docs)` [vision-md-refresh](ISSUES/docs--vision-md-refresh.md)
 - [ ] `(feat)` [agent-chat-adapters-discord-slack-mattermost-matrix](ISSUES/feat--agent-chat-adapters-discord-slack-mattermost-matrix.md)
 - [ ] `(feat)` [agent-execution-gate-telegram](ISSUES/feat--agent-execution-gate-telegram.md)
 - [ ] `(feat)` [agent-interactive-stdin-bridge](ISSUES/feat--agent-interactive-stdin-bridge.md)
@@ -57,4 +56,4 @@
 - [x] `(feat)` [release-ci-precondition-check](ISSUES/done/feat--release-ci-precondition-check.md)
 - [x] `(feat)` [progressive-disclosure-and-context-scaling](ISSUES/done/feat--progressive-disclosure-and-context-scaling.md)
 - [x] `(feat)` [kb-search-archive-scope-default](ISSUES/done/feat--kb-search-archive-scope-default.md)
-<!-- 235 older completed issue(s) archived in .along/ISSUES/done/ -->
+<!-- 236 older completed issue(s) archived in .along/ISSUES/done/ -->
