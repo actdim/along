@@ -3,10 +3,11 @@ protocol: along
 protocol_version: "4.1.0"
 slug: structured-blackboard-state-machine
 type: feat
-status: open
+status: done
+completed: 2026-10-13
 priority: high
 created: 2026-09-27
-updated: 2026-09-27
+updated: 2026-10-13
 agent: antigravity
 tags: [blackboard, state-machine, delta-patch, session, alongkit, skill-state]
 milestone: v4.6.0-structured-state-and-blackboard-engine
@@ -52,7 +53,7 @@ As highlighted in the SKILL.state research (arXiv:2608.26263):
 
 ## Acceptance Criteria
 
-- [ ] `alongkit.session` implements structured state schema and deterministic merge operator \(\oplus\) with null-deletion semantics.
-- [ ] `along scratch patch <slug> <json-delta>` works via CLI and validates schema before commit.
-- [ ] Unit tests verify that partial updates merge correctly and setting values to null deletes target keys without corrupting sibling state.
-- [ ] Clean ASCII formatting with zero forbidden typography characters.
+- [x] `alongkit.session` implements structured state schema and deterministic merge operator \(\oplus\) with null-deletion semantics.
+- [x] `along scratch patch <slug> <json-delta>` works via CLI and validates schema before commit.
+- [x] Unit tests verify that partial updates merge correctly and setting values to null deletes target keys without corrupting sibling state.
+- [x] Clean ASCII formatting with zero forbidden typography characters.

@@ -156,6 +156,7 @@ Entity Management Commands:
   decision sync   Recompile .along/CONSTRAINTS.md projection from active ADRs
   scratch init   <slug> [--title "Title"] [--steps N] [--restart] [--mode direct]
   scratch state  <slug> [--json]
+  scratch patch  <slug> <json-delta> [--file <path>] [--show]
   scratch phase  <slug> <inquiry|planning|execution> [--approve]
   scratch approve <slug>  Grant plan approval (phase: execution)
   scratch update <slug> [--step N] [--step-status status] [--inc-retry] [--status status]

@@ -246,6 +246,7 @@ Manages ephemeral multi-agent session blackboard memory (`.along/.session/<slug>
 - **Subcommands**:
   - `along scratch init <slug> [--title "Title"] [--steps N] [--restart] [--mode direct]`: Initializes session scratchpad directory, `state.json`, and `plan.md`. The blackboard is `role-based` (held to the along-team step loop by `[gate: team-step-active]` and `[gate: team-reviews-before-stop]`) unless `--mode direct` is given.
   - `along scratch state <slug> [--json]`: Displays current step progress, status, and retry counters.
+  - `along scratch patch <slug> <json-delta> [--file <path>] [--show]`: Atomically updates structured working memory in `blackboard.json` using the deterministic merge operator ($\Sigma_{t+1} = \Sigma_t \oplus \Delta \Sigma_t$) with null-deletion semantics (passing `null` deletes the key). Supports `active_hypotheses`, `discovered_symbols`, `touched_files` (deduplicated), `open_defects`, and `custom` nested dicts.
   - `along scratch phase <slug> <inquiry|planning|execution> [--approve]`: Sets the session phase; `--approve` also marks the plan as approved.
   - `along scratch approve <slug>` (alias: `plan-approve`): Grants plan approval and moves the session to the `execution` phase. Refused while `plan.md` is the scaffold.
   - `along scratch update <slug> [--step N] [--step-status {pending,in-progress,passed,failed}] [--inc-retry] [--status {in-progress,completed,failed}]`: Updates execution state.
@@ -256,6 +257,7 @@ Manages ephemeral multi-agent session blackboard memory (`.along/.session/<slug>
   ```bash
   along scratch init token-refresh --title "Token Refresh Step Loop" --steps 4
   along scratch state token-refresh
+  along scratch patch token-refresh '{"active_hypotheses": {"H1": "valid"}}' --show
   along scratch update token-refresh --step 1 --step-status in-progress
   along scratch update token-refresh --step 1 --step-status passed
   along scratch fallback token-refresh --reason "single file change, no parallel roles"

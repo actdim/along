@@ -17,6 +17,7 @@ if __name__ == "__main__":
         "Run: along scratch --help   (or: python scripts/along_exec.py scratch --help)"
     )
 
+import copy
 import json
 import os
 import re
@@ -33,7 +34,131 @@ SESSION_STATUSES: tuple = ("in-progress", "completed", "failed")
 SESSION_PHASES: tuple = ("inquiry", "planning", "execution")
 DEFAULT_PHASE: str = "inquiry"
 STATE_FILENAME: str = "state.json"
+BLACKBOARD_FILENAME: str = "blackboard.json"
 
+ALLOWED_BLACKBOARD_KEYS: tuple = (
+    "active_hypotheses",
+    "discovered_symbols",
+    "touched_files",
+    "open_defects",
+    "custom",
+)
+
+
+def make_default_blackboard() -> Dict[str, Any]:
+    """Return a fresh default structured blackboard state dictionary."""
+    return {
+        "active_hypotheses": {},
+        "discovered_symbols": {},
+        "touched_files": [],
+        "open_defects": {},
+        "custom": {},
+    }
+
+
+def _dedup_list(items: List[Any]) -> List[Any]:
+    """Preserve element insertion order while eliminating duplicates."""
+    out: List[Any] = []
+    seen_hashable = set()
+    seen_unhashable: List[Any] = []
+    for item in items:
+        try:
+            if item in seen_hashable:
+                continue
+            seen_hashable.add(item)
+            out.append(item)
+        except TypeError:
+            if item in seen_unhashable:
+                continue
+            seen_unhashable.append(item)
+            out.append(item)
+    return out
+
+
+def merge_patch(base: Dict[str, Any], delta: Dict[str, Any]) -> Dict[str, Any]:
+    r"""Deterministic runtime merge operator with null-deletion semantics.
+
+    Mathematical formulation: Sigma_{t+1} = Sigma_t \oplus \Delta Sigma_t.
+    Rules:
+    - Nested dictionaries are recursively merged.
+    - Setting any key to None (JSON null) removes the key from the dictionary.
+    - None values inside nested patch dictionaries remove those nested keys.
+    - Lists for 'touched_files' and 'discovered_symbols' (when list) are merged
+      with order-preserving deduplication.
+    - Other lists are concatenated.
+    - Primitive scalars replace previous values.
+    """
+    result = copy.deepcopy(base) if isinstance(base, dict) else {}
+    for key, val in delta.items():
+        if val is None:
+            result.pop(key, None)
+        elif isinstance(val, dict):
+            existing_sub = result.get(key)
+            if isinstance(existing_sub, dict):
+                result[key] = merge_patch(existing_sub, val)
+            else:
+                result[key] = merge_patch({}, val)
+        elif isinstance(val, list):
+            existing_val = result.get(key)
+            if isinstance(existing_val, list):
+                if key in ("touched_files", "discovered_symbols"):
+                    result[key] = _dedup_list(existing_val + list(val))
+                else:
+                    result[key] = existing_val + list(val)
+            else:
+                if key in ("touched_files", "discovered_symbols"):
+                    result[key] = _dedup_list(list(val))
+                else:
+                    result[key] = list(val)
+        else:
+            result[key] = val
+    return result
+
+
+def validate_blackboard_patch(delta: Any) -> None:
+    """Validate patch delta against structured blackboard schema rules."""
+    if not isinstance(delta, dict):
+        raise ValueError("Patch delta must be a JSON object (dict)")
+    for key, val in delta.items():
+        if key not in ALLOWED_BLACKBOARD_KEYS:
+            allowed = ", ".join(sorted(ALLOWED_BLACKBOARD_KEYS))
+            raise ValueError(f"Invalid blackboard key '{key}'. Allowed keys: {allowed}")
+        if val is None:
+            continue
+        if key in ("active_hypotheses", "discovered_symbols", "open_defects"):
+            if not isinstance(val, (dict, list)):
+                raise ValueError(f"Field '{key}' must be a dict or list (or null), got {type(val).__name__}")
+        elif key == "touched_files":
+            if not isinstance(val, list):
+                raise ValueError(f"Field 'touched_files' must be a list of file paths (or null), got {type(val).__name__}")
+            for item in val:
+                if not isinstance(item, str):
+                    raise ValueError(f"Field 'touched_files' elements must be string paths, got {type(item).__name__}")
+        elif key == "custom":
+            if not isinstance(val, dict):
+                raise ValueError(f"Field 'custom' must be a dict (or null), got {type(val).__name__}")
+
+
+def validate_blackboard_state(state: Any) -> None:
+    """Validate full persistent blackboard state dictionary."""
+    if not isinstance(state, dict):
+        raise ValueError("Blackboard state must be a JSON object (dict)")
+    for key, val in state.items():
+        if key not in ALLOWED_BLACKBOARD_KEYS:
+            allowed = ", ".join(sorted(ALLOWED_BLACKBOARD_KEYS))
+            raise ValueError(f"Invalid blackboard key '{key}' in state. Allowed keys: {allowed}")
+        if key in ("active_hypotheses", "discovered_symbols", "open_defects"):
+            if not isinstance(val, (dict, list)):
+                raise ValueError(f"Field '{key}' in state must be a dict or list, got {type(val).__name__}")
+        elif key == "touched_files":
+            if not isinstance(val, list):
+                raise ValueError(f"Field 'touched_files' in state must be a list, got {type(val).__name__}")
+            for item in val:
+                if not isinstance(item, str):
+                    raise ValueError(f"Field 'touched_files' in state must be string paths, got {type(item).__name__}")
+        elif key == "custom":
+            if not isinstance(val, dict):
+                raise ValueError(f"Field 'custom' in state must be a dict, got {type(val).__name__}")
 
 
 def _utc_now_iso() -> str:
@@ -44,6 +169,11 @@ def _utc_now_iso() -> str:
 def get_session_dir(repo_root: str, slug: str) -> str:
     """Absolute path to the ephemeral session blackboard directory."""
     return os.path.join(repo.state_dir(repo_root), ".session", slug)
+
+
+def get_blackboard_file(repo_root: str, slug: str) -> str:
+    """Absolute path to ephemeral blackboard.json in session directory."""
+    return os.path.join(get_session_dir(repo_root, slug), BLACKBOARD_FILENAME)
 
 
 def load_state(repo_root: str, slug: str) -> Optional[Dict[str, Any]]:
@@ -65,6 +195,50 @@ def save_state(repo_root: str, slug: str, state: Dict[str, Any]) -> None:
     state["updated"] = _utc_now_iso()
     raw = json.dumps(state, indent=2) + "\n"
     textio.write_text(os.path.join(session_dir, "state.json"), raw, newline="\n")
+
+
+def load_blackboard(repo_root: str, slug: str) -> Optional[Dict[str, Any]]:
+    """Read and validate blackboard.json from session blackboard, or None if absent."""
+    bb_file = get_blackboard_file(repo_root, slug)
+    if not os.path.isfile(bb_file):
+        return None
+    try:
+        raw = textio.read_text(bb_file, strict=True)
+        data = json.loads(raw)
+        validate_blackboard_state(data)
+        return data
+    except (OSError, UnicodeDecodeError, json.JSONDecodeError, ValueError):
+        return None
+
+
+def save_blackboard(repo_root: str, slug: str, blackboard: Dict[str, Any]) -> None:
+    """Save blackboard dict atomically to blackboard.json in session directory."""
+    validate_blackboard_state(blackboard)
+    session_dir = get_session_dir(repo_root, slug)
+    os.makedirs(session_dir, exist_ok=True)
+    raw = json.dumps(blackboard, indent=2) + "\n"
+    textio.write_text(get_blackboard_file(repo_root, slug), raw, newline="\n")
+
+
+def patch_blackboard(repo_root: str, slug: str, delta: Dict[str, Any],
+                     key: Optional[str] = None) -> Dict[str, Any]:
+    """Apply atomic patch delta to session blackboard with deterministic merge.
+
+    Validates schema conformity, merges delta into persistent state using null-deletion
+    semantics, writes atomically to blackboard.json, and appends trace and event entries.
+    """
+    validate_blackboard_patch(delta)
+    if not load_state(repo_root, slug):
+        init_session(repo_root, slug)
+    current = load_blackboard(repo_root, slug)
+    if current is None:
+        current = make_default_blackboard()
+    updated = merge_patch(current, delta)
+    save_blackboard(repo_root, slug, updated)
+    keys_summary = ", ".join(sorted(delta.keys()))
+    append_trace(repo_root, slug, f"blackboard patched: {keys_summary}")
+    append_event(repo_root, slug, key or current_session_key(), "blackboard_patch", ok=True)
+    return updated
 
 
 def get_global_session_file(repo_root: str) -> str:
@@ -1304,6 +1478,56 @@ def render_blackboard_markdown(repo_root: str, slug: str, reason: Optional[str] 
             text = _read(os.path.join("reviews", name))
             if name.endswith(".md") and text:
                 out.append(f"### Review {name[:-3]}\n\n{_demote(text)}\n")
+    bb = load_blackboard(repo_root, slug)
+    if bb and any(bb.get(k) for k in ALLOWED_BLACKBOARD_KEYS):
+        out.append("### Structured Working Context\n")
+        hypos = bb.get("active_hypotheses")
+        if hypos:
+            out.append("#### Active Hypotheses\n")
+            if isinstance(hypos, dict):
+                for hk, hv in sorted(hypos.items()):
+                    val_str = json.dumps(hv, ensure_ascii=True) if isinstance(hv, (dict, list)) else str(hv)
+                    out.append(f"- **{hk}**: {val_str}")
+            elif isinstance(hypos, list):
+                for item in hypos:
+                    val_str = json.dumps(item, ensure_ascii=True) if isinstance(item, (dict, list)) else str(item)
+                    out.append(f"- {val_str}")
+            out.append("")
+        symbols = bb.get("discovered_symbols")
+        if symbols:
+            out.append("#### Discovered Symbols\n")
+            if isinstance(symbols, dict):
+                for sk, sv in sorted(symbols.items()):
+                    out.append(f"- `{sk}`: {sv}")
+            elif isinstance(symbols, list):
+                for item in symbols:
+                    out.append(f"- `{item}`")
+            out.append("")
+        touched = bb.get("touched_files")
+        if touched:
+            out.append("#### Touched Files\n")
+            for tf in touched:
+                out.append(f"- `{tf}`")
+            out.append("")
+        defects = bb.get("open_defects")
+        if defects:
+            out.append("#### Open Defects\n")
+            if isinstance(defects, dict):
+                for dk, dv in sorted(defects.items()):
+                    val_str = json.dumps(dv, ensure_ascii=True) if isinstance(dv, (dict, list)) else str(dv)
+                    out.append(f"- **{dk}**: {val_str}")
+            elif isinstance(defects, list):
+                for item in defects:
+                    val_str = json.dumps(item, ensure_ascii=True) if isinstance(item, (dict, list)) else str(item)
+                    out.append(f"- {val_str}")
+            out.append("")
+        custom = bb.get("custom")
+        if custom:
+            out.append("#### Custom Variables\n")
+            for ck, cv in sorted(custom.items()):
+                val_str = json.dumps(cv, ensure_ascii=True) if isinstance(cv, (dict, list)) else str(cv)
+                out.append(f"- **{ck}**: {val_str}")
+            out.append("")
     return "\n".join(out).rstrip() + "\n"
 
 
@@ -1312,6 +1536,7 @@ def unrecorded_files(repo_root: str, slug: str) -> List[str]:
 
     A file is considered recorded or safely accounted for if:
     - state.json (engine state, rendered in header and steps table)
+    - blackboard.json (structured working context, rendered in Structured Working Context)
     - events.jsonl (engine ledger, rendered in Attributed Files)
     - plan.md, living_plan.md (rendered under Plan or recognized scaffold)
     - research.md (rendered under Research if edited, or recognized scaffold)
@@ -1327,6 +1552,7 @@ def unrecorded_files(repo_root: str, slug: str) -> List[str]:
     unrecorded: List[str] = []
     known_root = {
         STATE_FILENAME,
+        BLACKBOARD_FILENAME,
         EVENTS_FILENAME,
         PLAN_FILENAME,
         "living_plan.md",
@@ -1455,6 +1681,11 @@ def init_session(
             f"## Architectural Patterns\n"
         )
         textio.write_text(research_file, research_content, newline="\n")
+
+    # Initialize blackboard.json
+    bb_file = get_blackboard_file(repo_root, slug)
+    if not os.path.exists(bb_file) or force_restart:
+        save_blackboard(repo_root, slug, make_default_blackboard())
 
     return state
 

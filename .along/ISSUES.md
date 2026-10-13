@@ -42,16 +42,15 @@
 - [ ] `(feat)` [per-model-rework-metrics](ISSUES/feat--per-model-rework-metrics.md)
 - [ ] `(feat)` [pi-harness-support](ISSUES/feat--pi-harness-support.md)
 - [ ] `(feat)` [planning-fields-and-ordering-gates](ISSUES/feat--planning-fields-and-ordering-gates.md)
-- [ ] `(feat)` [structured-blackboard-state-machine](ISSUES/feat--structured-blackboard-state-machine.md)
 - [ ] `(feat)` [system-invariants-and-health-probes](ISSUES/feat--system-invariants-and-health-probes.md)
 - [ ] `(feat)` [tool-class-model](ISSUES/feat--tool-class-model.md)
 - [ ] `(feat)` [vps-runner-daemon](ISSUES/feat--vps-runner-daemon.md)
 - [ ] `(feat)` [zero-step-state-recovery-and-drift-detection](ISSUES/feat--zero-step-state-recovery-and-drift-detection.md)
 
 ## Done (recent)
+- [x] `(feat)` [structured-blackboard-state-machine](ISSUES/done/feat--structured-blackboard-state-machine.md)
 - [x] `(docs)` [ground-topic-based-docs](ISSUES/done/docs--ground-topic-based-docs.md)
 - [x] `(feat)` [tool-nature-classification](ISSUES/done/feat--tool-nature-classification.md)
 - [x] `(feat)` [secret-scrubbing-in-hooks-and-diagnostics](ISSUES/done/feat--secret-scrubbing-in-hooks-and-diagnostics.md)
 - [x] `(feat)` [release-ci-precondition-check](ISSUES/done/feat--release-ci-precondition-check.md)
-- [x] `(feat)` [progressive-disclosure-and-context-scaling](ISSUES/done/feat--progressive-disclosure-and-context-scaling.md)
-<!-- 245 older completed issue(s) archived in .along/ISSUES/done/ -->
+<!-- 246 older completed issue(s) archived in .along/ISSUES/done/ -->

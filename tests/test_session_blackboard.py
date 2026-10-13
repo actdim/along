@@ -163,3 +163,126 @@ class TestSessionBlackboard(unittest.TestCase):
         self.assertEqual(res.returncode, 0)
         self.assertIn("Purged session blackboard", res.stdout)
 
+    def test_merge_patch_nested_and_null_deletion(self):
+        base = {
+            "active_hypotheses": {"H1": {"status": "testing", "desc": "initial"}},
+            "discovered_symbols": ["sym1"],
+            "touched_files": ["a.py"],
+            "open_defects": {"D1": "bug"},
+            "custom": {"nested": {"k1": "v1", "k2": "v2"}, "flag": True},
+        }
+        delta = {
+            "active_hypotheses": {"H1": {"status": "confirmed"}, "H2": "new"},
+            "touched_files": ["b.py", "a.py"],
+            "custom": {"nested": {"k2": None, "k3": "v3"}, "flag": False},
+        }
+        res = session.merge_patch(base, delta)
+        self.assertEqual(res["active_hypotheses"]["H1"], {"status": "confirmed", "desc": "initial"})
+        self.assertEqual(res["active_hypotheses"]["H2"], "new")
+        self.assertEqual(res["touched_files"], ["a.py", "b.py"])
+        self.assertEqual(res["custom"]["nested"], {"k1": "v1", "k3": "v3"})
+        self.assertFalse(res["custom"]["flag"])
+
+    def test_merge_patch_null_deletes_top_level_key(self):
+        base = session.make_default_blackboard()
+        base["active_hypotheses"] = {"H1": "active"}
+        delta = {"active_hypotheses": None}
+        res = session.merge_patch(base, delta)
+        self.assertNotIn("active_hypotheses", res)
+
+    def test_validate_blackboard_patch_rejects_disallowed_keys(self):
+        with self.assertRaises(ValueError) as ctx:
+            session.validate_blackboard_patch({"unknown_key": "val"})
+        self.assertIn("Invalid blackboard key 'unknown_key'", str(ctx.exception))
+
+    def test_validate_blackboard_patch_rejects_invalid_types(self):
+        with self.assertRaises(ValueError):
+            session.validate_blackboard_patch({"touched_files": "not-a-list"})
+        with self.assertRaises(ValueError):
+            session.validate_blackboard_patch({"touched_files": [123]})
+        with self.assertRaises(ValueError):
+            session.validate_blackboard_patch({"custom": ["not-a-dict"]})
+
+    def test_patch_blackboard_persists_to_disk(self):
+        slug = "patch-persist-task"
+        session.init_session(self.repo, slug)
+        res = session.patch_blackboard(self.repo, slug, {
+            "active_hypotheses": {"H1": "testing"},
+            "touched_files": ["foo.py"],
+            "custom": {"metric": 42},
+        })
+        self.assertEqual(res["active_hypotheses"], {"H1": "testing"})
+        self.assertEqual(res["touched_files"], ["foo.py"])
+        self.assertEqual(res["custom"], {"metric": 42})
+
+        loaded = session.load_blackboard(self.repo, slug)
+        self.assertIsNotNone(loaded)
+        self.assertEqual(loaded["active_hypotheses"], {"H1": "testing"})
+        self.assertEqual(loaded["touched_files"], ["foo.py"])
+        self.assertEqual(loaded["custom"], {"metric": 42})
+
+    def test_scratch_cli_patch_and_show(self):
+        slug = "cli-patch-task"
+        script_path = os.path.join(hermetic.REPO_ROOT, "scripts", "along_exec.py")
+        session.init_session(self.repo, slug)
+
+        # 1. Patch inline with --show
+        patch_json = json.dumps({"active_hypotheses": {"H1": "testing"}, "touched_files": ["src/main.py"]})
+        res = proc.run_capture([
+            sys.executable, script_path, "scratch", "patch", slug, patch_json, "--show"
+        ], cwd=self.repo)
+        self.assertEqual(res.returncode, 0, f"patch failed: {res.stderr}")
+        self.assertIn("Patched blackboard for session: cli-patch-task", res.stdout)
+        data = json.loads(res.stdout.split("Patched blackboard for session: cli-patch-task\n", 1)[1])
+        self.assertEqual(data["active_hypotheses"]["H1"], "testing")
+        self.assertEqual(data["touched_files"], ["src/main.py"])
+
+        # 2. Patch via --file with null-deletion
+        file_path = os.path.join(self.repo, "delta.json")
+        with open(file_path, "w", encoding="utf-8") as f:
+            json.dump({"active_hypotheses": {"H1": None}, "custom": {"key": "val"}}, f)
+        res = proc.run_capture([
+            sys.executable, script_path, "scratch", "patch", slug, "--file", "delta.json", "--show"
+        ], cwd=self.repo)
+        self.assertEqual(res.returncode, 0)
+        data = json.loads(res.stdout.split("Patched blackboard for session: cli-patch-task\n", 1)[1])
+        self.assertNotIn("H1", data["active_hypotheses"])
+        self.assertEqual(data["custom"]["key"], "val")
+
+        # 3. Invalid JSON error handling
+        res_bad = proc.run_capture([
+            sys.executable, script_path, "scratch", "patch", slug, "{not-json}"
+        ], cwd=self.repo)
+        self.assertEqual(res_bad.returncode, 1)
+        self.assertIn("Invalid JSON patch", res_bad.stderr)
+
+        # 4. Schema validation error handling
+        bad_schema = json.dumps({"invalid_field": 123})
+        res_schema = proc.run_capture([
+            sys.executable, script_path, "scratch", "patch", slug, bad_schema
+        ], cwd=self.repo)
+        self.assertEqual(res_schema.returncode, 1)
+        self.assertIn("Schema validation failed", res_schema.stderr)
+
+    def test_patch_blackboard_unrecorded_files_and_render(self):
+        slug = "patch-unrecorded-task"
+        session.init_session(self.repo, slug)
+        session.patch_blackboard(self.repo, slug, {
+            "active_hypotheses": {"H1": {"status": "proven"}},
+            "touched_files": ["app.py"],
+            "custom": {"env": "prod"},
+        })
+
+        unrecorded = session.unrecorded_files(self.repo, slug)
+        self.assertEqual(unrecorded, [])
+
+        md = session.render_blackboard_markdown(self.repo, slug)
+        self.assertIn("### Structured Working Context", md)
+        self.assertIn("#### Active Hypotheses", md)
+        self.assertIn("proven", md)
+        self.assertIn("#### Touched Files", md)
+        self.assertIn("app.py", md)
+        self.assertIn("#### Custom Variables", md)
+        self.assertIn("prod", md)
+
+

@@ -18,7 +18,7 @@ import os
 import sys
 from typing import List
 
-from alongkit import lifecycle, repo, session
+from alongkit import lifecycle, repo, session, textio
 from .common import check_unknown_args, require_entity_name
 
 
@@ -54,6 +54,12 @@ def build_parser() -> argparse.ArgumentParser:
     p_state.add_argument("slug", help="Session slug")
     p_state.add_argument("--json", action="store_true", help="Format as JSON")
 
+    p_patch = sub.add_parser("patch", help="Apply atomic state patch to structured blackboard")
+    p_patch.add_argument("slug", help="Session slug")
+    p_patch.add_argument("delta", nargs="?", default=None, help="JSON delta string")
+    p_patch.add_argument("--file", "-f", default=None, help="Path to JSON delta file")
+    p_patch.add_argument("--show", action="store_true", help="Print resulting structured blackboard state")
+
     for name in ("approve", "plan-approve"):
         p_app = sub.add_parser(name, help="Approve plan and transition to execution phase")
         p_app.add_argument("slug", help="Session slug")
@@ -87,9 +93,10 @@ def build_parser() -> argparse.ArgumentParser:
 
 def handle_scratch_command(repo_root: str, args: List[str]):
     if not args or args[0] in ("-h", "--help", "help"):
-        print("Usage: along scratch [init|state|update|approve|phase|purge] <slug> [options]")
+        print("Usage: along scratch [init|state|patch|update|approve|phase|purge] <slug> [options]")
         print("  init   <slug> [--title <title>] [--steps <N>] [--restart]")
         print("  state  <slug> [--json]")
+        print("  patch  <slug> <json-delta> [--file <path>] [--show]")
         print("  update <slug> [--step <N>] [--step-status <pending|in-progress|passed|failed>] [--inc-retry] [--status <in-progress|completed|failed>] [--plan-rev <N>] [--phase <inquiry|planning|execution>] [--approve]")
         print("  approve <slug>")
         print("  phase  <slug> <inquiry|planning|execution> [--approve]")
@@ -100,7 +107,7 @@ def handle_scratch_command(repo_root: str, args: List[str]):
 
     subcmd = args[0].lower()
     if len(args) < 2:
-        print("[Error] Usage: along scratch [init|state|update|approve|phase|purge] <slug> [options]", file=sys.stderr)
+        print("[Error] Usage: along scratch [init|state|patch|update|approve|phase|purge] <slug> [options]", file=sys.stderr)
         sys.exit(1)
     slug = require_entity_name(args[1].lower(), f"along scratch {subcmd} <slug> [options]")
     sub_args = args[1:]
@@ -151,6 +158,45 @@ def handle_scratch_command(repo_root: str, args: List[str]):
             print(json.dumps(st, indent=2))
         else:
             print(session.format_state_summary(st))
+        sys.exit(0)
+
+    elif subcmd == "patch":
+        parser = argparse.ArgumentParser(prog="along scratch patch", allow_abbrev=False)
+        parser.add_argument("slug")
+        parser.add_argument("delta", nargs="?", default=None)
+        parser.add_argument("--file", "-f", default=None)
+        parser.add_argument("--show", action="store_true")
+        parsed, extra = parser.parse_known_args(sub_args)
+        check_unknown_args(extra, "along scratch patch")
+
+        raw_delta: Optional[str] = None
+        if parsed.file:
+            file_path = os.path.abspath(parsed.file) if os.path.isabs(parsed.file) else os.path.join(repo_root, parsed.file)
+            if not os.path.isfile(file_path):
+                print(f"[Error] Patch file not found: {parsed.file}", file=sys.stderr)
+                sys.exit(1)
+            raw_delta = textio.read_text(file_path, strict=False)
+        elif parsed.delta:
+            raw_delta = parsed.delta
+        else:
+            print("[Error] Usage: along scratch patch <slug> <json-delta> [--file <path>] [--show]", file=sys.stderr)
+            sys.exit(1)
+
+        try:
+            delta_obj = json.loads(raw_delta)
+        except json.JSONDecodeError as err:
+            print(f"[Error] Invalid JSON patch: {err}", file=sys.stderr)
+            sys.exit(1)
+
+        try:
+            updated = session.patch_blackboard(repo_root, slug, delta_obj)
+        except ValueError as err:
+            print(f"[Error] Schema validation failed: {err}", file=sys.stderr)
+            sys.exit(1)
+
+        print(f"-> Patched blackboard for session: {slug}")
+        if parsed.show:
+            print(json.dumps(updated, indent=2))
         sys.exit(0)
 
     elif subcmd in ("approve", "plan-approve"):
@@ -304,5 +350,5 @@ def handle_scratch_command(repo_root: str, args: List[str]):
         sys.exit(0)
 
     else:
-        print(f"[Error] Unknown scratch subcommand: {subcmd}. Use init, state, update, or purge.", file=sys.stderr)
+        print(f"[Error] Unknown scratch subcommand: {subcmd}. Use init, state, patch, update, or purge.", file=sys.stderr)
         sys.exit(1)
