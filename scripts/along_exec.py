@@ -212,16 +212,28 @@ compile_issues_board = entities.compile_issues_board
 
 def handle_start_command(repo_root: str, args: List[str]):
     if not args or args[0] in ("-h", "--help", "help"):
-        print("Usage: along start <slug> [--approved] [--worktree] [--allow-root <path>]... [--write-scope <path>]...")
+        print("Usage: along start <slug> [--approved] [--worktree] [--profile <strict|standard|light>] [--allow-root <path>]... [--write-scope <path>]...")
         print("  Atomically marks issue in-progress, initializes session blackboard, binds this")
         print("  agent session to the issue, and optionally creates an isolated worktree.")
         print("  The plan stays unapproved until the user approves it; --approved is for scripted runs.")
+        print("  --profile sets the gate strictness profile (strict, standard, light) for this session.")
         print("  --allow-root / --write-scope add to the issue's allowed_roots / write_scope")
         print("  frontmatter, read by [gate: workspace-containment].")
         sys.exit(0)
 
     from datetime import datetime
     today = datetime.now().strftime("%Y-%m-%d")
+
+    profile_arg = _flag_value(args, "--profile")
+    if profile_arg:
+        try:
+            from alongkit import profiles
+            profile_val = profiles.validate_profile(profile_arg)
+        except ValueError as exc:
+            print(f"[Error] {exc}", file=sys.stderr)
+            sys.exit(2)
+    else:
+        profile_val = None
 
     scope_flags: Dict[str, List[str]] = {"--allow-root": [], "--write-scope": []}
     i = 1
@@ -235,7 +247,7 @@ def handle_start_command(repo_root: str, args: List[str]):
             continue
         i += 1
 
-    slug = _require_entity_name(args[0].lower(), "along start <slug> [--approved] [--worktree]")
+    slug = _require_entity_name(args[0].lower(), "along start <slug> [--approved] [--worktree] [--profile <profile>]")
     issue = entities.find_issue_by_slug(repo_root, slug)
     if not issue:
         print(f"[Error] Issue '{slug}' not found in .along/ISSUES/.", file=sys.stderr)
@@ -254,7 +266,7 @@ def handle_start_command(repo_root: str, args: List[str]):
     entities.sync_issues_board(repo_root, recent_done_limit=RECENT_DONE_LIMIT)
 
     title = new_fm.get("title", issue["slug"].replace("-", " ").capitalize())
-    st = session.init_session(repo_root, issue["slug"], title=title)
+    st = session.init_session(repo_root, issue["slug"], title=title, profile=profile_val)
     sdir = session.get_session_dir(repo_root, issue["slug"])
     key = session.current_session_key()
     # Starting an issue is not a plan approval: approval comes from the user (ExitPlanMode,
@@ -266,7 +278,8 @@ def handle_start_command(repo_root: str, args: List[str]):
             print(f"[Error] --approved refused: {refusal}.", file=sys.stderr)
             sys.exit(2)
     binding = session.bind_session(repo_root, issue["slug"], key=key,
-                                   approved=True if "--approved" in args else None)
+                                   approved=True if "--approved" in args else None,
+                                   profile=profile_val)
     if "--approved" in args:
         session.mark_approval(repo_root, key, via)
         session.append_trace(repo_root, issue["slug"], f"plan approved (along start --approved; approved_via: {via})")
@@ -279,6 +292,8 @@ def handle_start_command(repo_root: str, args: List[str]):
         print(f"-> Bound agent session {binding['key']} to '{issue['slug']}'.")
     else:
         print("-> No agent session id in the environment; gates fall back to the single in-progress issue.")
+    if profile_val:
+        print(f"-> Active profile set to '{profile_val}'.")
     if not approved:
         print("-> Edits unlock after the user approves the plan. Call EnterPlanMode, write the plan, then "
               "ExitPlanMode. Outside plan mode, write the plan to a file and run "
@@ -901,6 +916,26 @@ def handle_doctor_command(repo_root: str, args: List[str]):
         print(f"[WARN] Gate '{row.gate}' bypassed {row.bypassed}x vs blocked {row.blocked}x "
               f"({row.bypass_ratio * 100:.0f}%): review whether it is wrong or too strict ('along gates stats').")
         warnings += 1
+
+    # Gate strictness profiles [feat--gate-strictness-profiles] REQ-5
+    from alongkit import profiles
+    active_prof, prof_source = profiles.resolve_active_profile_with_source(repo_root)
+    h_config = hook_config.load_config(repo_root)
+    gate_table = hook_config.load_gate_profiles_table(repo_root)
+    counts = {"block": 0, "warn": 0, "off": 0}
+    matrix_rows = []
+    width = max((len(gid) for gid in gate_table), default=20)
+    for gid in sorted(gate_table.keys()):
+        mode = h_config.get_gate_mode(gid)
+        sev = "block" if mode == hook_config.HookMode.ENFORCE else ("off" if mode == hook_config.HookMode.OFF else "warn")
+        counts[sev] += 1
+        matrix_rows.append((gid, sev))
+    print(f"\n--- Gate Strictness Profile: {active_prof} (source: {prof_source}) ---")
+    print(f"[OK] Gate strictness profile: {active_prof} (source: {prof_source}) - "
+          f"{counts['block']} block, {counts['warn']} warn, {counts['off']} off.")
+    print(f"Gate strictness matrix ({len(matrix_rows)} gates):")
+    for gid, sev in matrix_rows:
+        print(f"  {gid.ljust(width)}  [{sev.upper()}]")
 
     errors, warnings = _doctor_runtime_checks(repo_root, errors, warnings)
 

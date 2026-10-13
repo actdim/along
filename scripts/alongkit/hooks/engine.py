@@ -68,6 +68,8 @@ class HookEngine:
             )
 
         for gate in self.gates:
+            if not self.config.is_enabled(gate.name):
+                continue
             # Propagate effective repo_root to declarative gates if needed
             if hasattr(gate, "repo_root") and getattr(gate, "repo_root") is None:
                 setattr(gate, "repo_root", effective_root)

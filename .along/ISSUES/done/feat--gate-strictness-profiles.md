@@ -3,10 +3,11 @@ protocol: along
 protocol_version: "4.4.1"
 slug: gate-strictness-profiles
 type: feat
-status: open
+status: done
+completed: 2026-10-13
 priority: high
 created: 2026-09-29
-updated: 2026-09-29
+updated: 2026-10-13
 agent: claude
 tags: [gates, profiles, model-tiers, context-budget]
 milestone: v4.6.0-structured-state-and-blackboard-engine

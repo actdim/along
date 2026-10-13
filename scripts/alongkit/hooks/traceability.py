@@ -19,6 +19,8 @@ from .declarative import (
     DEFAULT_GATES_FILE,
     DeclarativeGateDefinition,
     load_gate_definitions,
+    load_gate_entries,
+    merge_override,
     resolve_handler,
 )
 
@@ -48,6 +50,9 @@ class TraceabilityReport:
     schema_errors: List[str] = field(default_factory=list)
     #: `{gate id: [runtime, git, ci]}` from each definition's `enforcement` list.
     enforcement: Dict[str, List[str]] = field(default_factory=dict)
+    active_profile: str = "standard"
+    profile_source: str = "default"
+    gate_profiles: Dict[str, Dict[str, str]] = field(default_factory=dict)
 
     @property
     def is_clean(self) -> bool:
@@ -115,15 +120,18 @@ def audit_traceability(repo_root: Optional[str] = None) -> TraceabilityReport:
     gates_by_canon: Dict[str, DeclarativeGateDefinition] = {}
     schema_errors: List[str] = []
 
-    definitions: List[DeclarativeGateDefinition] = []
+    defs_by_id: Dict[str, DeclarativeGateDefinition] = {}
     if os.path.isfile(DEFAULT_GATES_FILE):
-        definitions.extend(load_gate_definitions(DEFAULT_GATES_FILE))
+        for defn, _raw in load_gate_entries(DEFAULT_GATES_FILE):
+            defs_by_id[defn.id] = defn
 
     repo_yaml = os.path.join(repo.state_dir(effective_root), "rules", "gates.yaml")
     if os.path.isfile(repo_yaml):
-        definitions.extend(load_gate_definitions(repo_yaml))
+        for defn, raw in load_gate_entries(repo_yaml):
+            base = defs_by_id.get(defn.id)
+            defs_by_id[defn.id] = merge_override(base, defn, raw) if base else defn
 
-    for defn in definitions:
+    for defn in defs_by_id.values():
         cid = _canonical_id(defn.id)
         gates_by_canon[cid] = defn
 
@@ -158,6 +166,12 @@ def audit_traceability(repo_root: Optional[str] = None) -> TraceabilityReport:
         if cid in anchored_canon_ids
     ]
 
+    from alongkit import profiles
+    active_prof, prof_source = profiles.resolve_active_profile_with_source(effective_root)
+    gate_profs: Dict[str, Dict[str, str]] = {
+        defn.id: dict(defn.profiles) for defn in gates_by_canon.values() if defn.profiles
+    }
+
     return TraceabilityReport(
         total_gates=len(gates_by_canon),
         total_prose_anchors=len(prose_anchors),
@@ -166,6 +180,9 @@ def audit_traceability(repo_root: Optional[str] = None) -> TraceabilityReport:
         undocumented_gates=sorted(undocumented),
         schema_errors=schema_errors,
         enforcement={defn.id: list(defn.enforcement) for defn in gates_by_canon.values()},
+        active_profile=active_prof,
+        profile_source=prof_source,
+        gate_profiles=gate_profs,
     )
 
 
@@ -173,6 +190,7 @@ def format_traceability_report(report: TraceabilityReport) -> str:
     """Render a clean ASCII report for CLI and test output."""
     lines: List[str] = [
         "=== ALONG PROTOCOL GATE TRACEABILITY REPORT ===",
+        f"Active Profile:      {report.active_profile} (source: {report.profile_source})",
         f"Total Defined Gates: {report.total_gates}",
         f"Total Prose Badges:  {report.total_prose_anchors}",
         f"Enforced & Anchored: {len(report.mapped_gates)} / {report.total_gates}",
@@ -184,12 +202,14 @@ def format_traceability_report(report: TraceabilityReport) -> str:
             lines.append(f"  + [gate: {gid}]")
 
     if report.enforcement:
-        lines.append("\n[Enforcement Matrix] (runtime = agent hooks, git = `along hooks install --git`, ci = `along gates check --ci`):")
+        lines.append(f"\n[Enforcement Matrix] (active profile: {report.active_profile}):")
         width = max(len(gid) for gid in report.enforcement)
         for gid in sorted(report.enforcement):
             layers = report.enforcement[gid]
             cells = "  ".join(f"{layer}:{'yes' if layer in layers else '-  '}" for layer in ("runtime", "git", "ci"))
-            lines.append(f"  {gid.ljust(width)}  {cells}".rstrip())
+            prof_info = report.gate_profiles.get(gid, {})
+            mode = prof_info.get(report.active_profile, "block")
+            lines.append(f"  {gid.ljust(width)}  [{mode.upper().ljust(5)}]  {cells}".rstrip())
 
     if report.undocumented_gates:
         lines.append(f"\n[Undocumented Gates ({len(report.undocumented_gates)})]:")

@@ -77,11 +77,78 @@ def strip_protocol_wrapper(protocol_text: str) -> str:
     return _WRAPPER_END_RE.sub("", text.strip()).strip()
 
 
-def render_protocol_block(protocol_text: str, ref_path: Optional[str] = None) -> str:
+def adapt_protocol_for_profile(protocol_text: str, profile: str) -> str:
+    """Adapt protocol rules and checklist verbosity according to gate strictness profile."""
+    if not profile or profile == "standard":
+        return protocol_text
+
+    text = protocol_text
+    if profile == "light":
+        # Header annotation
+        text = re.sub(r"^(# ALONG-PROTOCOL v[0-9.]+)(.*)$", r"\1 (profile: light)", text, flags=re.MULTILINE)
+
+        # Plan approval easing
+        old_plan = (
+            "- **Session Binding & Plan Approval** [gate: require-plan-approval]: `along start <slug>` binds THIS agent "
+            "session to the issue; parallel sessions keep their own bindings. Source edits unlock after the user approves the plan "
+            "(`EnterPlanMode` -> `ExitPlanMode`; outside plan mode, write the plan to a file and run "
+            "`along plan approve --plan-file <path>` after the user's explicit yes). `along plan status` shows the binding."
+        )
+        new_plan = (
+            "- **Session Binding & Plan Alignment**: `along start <slug>` binds THIS agent session to the issue; "
+            "parallel sessions keep their own bindings. Formal plan mode is recommended for complex architectural "
+            "refactors; direct execution with user alignment is permitted."
+        )
+        if old_plan in text:
+            text = text.replace(old_plan, new_plan)
+
+        # Multi-agent escalation easing
+        old_esc = (
+            "- **Mandatory Adaptive Complexity Escalation & Execution Mode Routing**: When scope touches > 3 files, "
+            "crosses subsystems, or refactors core engines: single-agent execution is forbidden - route to `along-team`. "
+            "Plans MUST declare `Execution Mode: Direct` or `Role-Based`. Role-based blackboards (`along scratch init`) "
+            "are held to the step loop [gate: team-step-active] [gate: team-reviews-before-stop]; dropping it needs "
+            "`along scratch fallback <slug> --reason \"...\"`."
+        )
+        new_esc = (
+            "- **Adaptive Complexity Escalation & Execution Mode Routing**: Complex multi-subsystem refactors may "
+            "route to `along-team` when needed. Direct execution with user alignment is permitted for focused tasks."
+        )
+        if old_esc in text:
+            text = text.replace(old_esc, new_esc)
+
+        # Compact 5-step checklist
+        checklist_block_match = re.search(
+            r"## Stage & Session Completion Checklist\r?\nWhen a stage or session completes, agents MUST execute in this order:\r?\n"
+            r"(?:[0-9]+\. \[ \].*?\r?\n)+",
+            text
+        )
+        if checklist_block_match:
+            compact_checklist = (
+                "## Stage & Session Completion Checklist\n"
+                "When a stage or session completes, agents MUST execute in this order:\n"
+                "1. [ ] **Tests** [gate: test_before_stop]: Run via `/along-test` with quiet flags. Zero failures.\n"
+                "2. [ ] **File Integrity**: `git status -u` - all new/modified files non-zero size, no empty placeholders.\n"
+                "3. [ ] **Entity Reconciliation**: Close issues (`done` + move to `done/`), update milestones, resolve risks, conclude spikes.\n"
+                "4. [ ] **Session Log & Wrap** [gate: wrap_before_stop]: `along wrap <slug>` records session log and appends to `.along/HISTORY.md`.\n"
+                "5. [ ] **Projections** [gate: projection_sync_before_stop]: Run `/along-issue-sync` and `/along-decision-sync`.\n"
+            )
+            text = text[:checklist_block_match.start()] + compact_checklist + text[checklist_block_match.end():]
+
+    elif profile == "strict":
+        text = re.sub(r"^(# ALONG-PROTOCOL v[0-9.]+)(.*)$", r"\1 (profile: strict)", text, flags=re.MULTILINE)
+
+    return text
+
+
+def render_protocol_block(protocol_text: str, ref_path: Optional[str] = None, profile: Optional[str] = None) -> str:
     """The FULL managed block, or a short REF block pointing at `ref_path`."""
     if not ref_path:
-        begin = f"<!-- BEGIN {PROTOCOL_MARKER} root {MANAGED_SUFFIX} -->"
-        return f"{begin}\n{strip_protocol_wrapper(protocol_text)}\n{END_MARKER}"
+        prof = profile or "standard"
+        content = adapt_protocol_for_profile(strip_protocol_wrapper(protocol_text), prof)
+        prof_attr = f" profile={prof}" if prof != "standard" else ""
+        begin = f"<!-- BEGIN {PROTOCOL_MARKER} root{prof_attr} {MANAGED_SUFFIX} -->"
+        return f"{begin}\n{content}\n{END_MARKER}"
     begin = f"<!-- BEGIN {PROTOCOL_MARKER} ref={ref_path} {MANAGED_SUFFIX} -->"
     return (
         f"{begin}\n"
@@ -122,13 +189,13 @@ def find_full_protocol_ancestor(root: str) -> Optional[str]:
         current = parent
 
 
-def protocol_block_for(ctx_dir: str, protocol_text: str) -> Dict[str, str]:
+def protocol_block_for(ctx_dir: str, protocol_text: str, profile: Optional[str] = None) -> Dict[str, str]:
     """The block `ctx_dir` should carry, with its variant (`FULL` or `REF`)."""
     ancestor = find_full_protocol_ancestor(ctx_dir)
     if ancestor is None:
-        return {"variant": "FULL", "block": render_protocol_block(protocol_text), "ref": ""}
+        return {"variant": "FULL", "block": render_protocol_block(protocol_text, profile=profile), "ref": ""}
     ref = repo.normalize_posix(repo.safe_relpath(os.path.join(ancestor, "AGENTS.md"), ctx_dir))
-    return {"variant": "REF", "block": render_protocol_block(protocol_text, ref), "ref": ref}
+    return {"variant": "REF", "block": render_protocol_block(protocol_text, ref, profile=profile), "ref": ref}
 
 
 def merge_protocol_block(existing: str, block: str) -> str:

@@ -395,7 +395,8 @@ def save_binding(repo_root: str, key: str, data: Dict[str, Any]) -> Dict[str, An
 
 
 def bind_session(repo_root: str, slug: str, key: Optional[str] = None,
-                 approved: Optional[bool] = None) -> Optional[Dict[str, Any]]:
+                 approved: Optional[bool] = None,
+                 profile: Optional[str] = None) -> Optional[Dict[str, Any]]:
     """Bind the agent session `key` (default: this process's session) to `slug`.
 
     A plan approval recorded before any slug was bound (ExitPlanMode at the start of a
@@ -424,6 +425,8 @@ def bind_session(repo_root: str, slug: str, key: Optional[str] = None,
         else:
             binding["plan_approved"] = False
             binding["approved_slug"] = None
+    if profile:
+        binding["profile"] = profile
     # A plan accepted before any slug was bound goes with its approval to the first slug.
     pending_plan = binding.pop("pending_plan", None)
     binding["slug"] = slug
@@ -1597,6 +1600,7 @@ def init_session(
     retry_limit: int = DEFAULT_RETRY_LIMIT,
     force_restart: bool = False,
     execution_mode: str = "direct",
+    profile: Optional[str] = None,
 ) -> Dict[str, Any]:
     """Initialize or load session blackboard with plan.md, research.md, reviews/, and state.json."""
     session_dir = get_session_dir(repo_root, slug)
@@ -1607,8 +1611,14 @@ def init_session(
         raise ValueError(f"Invalid execution mode '{execution_mode}'. Allowed: {', '.join(EXECUTION_MODES)}")
     existing_state = load_state(repo_root, slug)
     if existing_state and not force_restart:
+        needs_save = False
         if execution_mode == "role-based" and existing_state.get("execution_mode") != "role-based":
             existing_state["execution_mode"] = "role-based"
+            needs_save = True
+        if profile is not None and existing_state.get("profile") != profile:
+            existing_state["profile"] = profile
+            needs_save = True
+        if needs_save:
             save_state(repo_root, slug, existing_state)
         return existing_state
 
@@ -1658,6 +1668,8 @@ def init_session(
         "updated": now,
         "steps": steps_list,
     }
+    if profile:
+        state["profile"] = profile
     save_state(repo_root, slug, state)
 
     # Initialize plan.md
@@ -1701,6 +1713,7 @@ def update_state(
     plan_revision: Optional[int] = None,
     increment_retry: bool = False,
     max_retries: Optional[int] = None,
+    profile: Optional[str] = None,
 ) -> Tuple[Dict[str, Any], bool]:
     """Update session state. Returns tuple (updated_state, retry_exhausted_bool)."""
     state = load_state(repo_root, slug)
@@ -1710,6 +1723,9 @@ def update_state(
 
     if status:
         state["status"] = status
+
+    if profile is not None:
+        state["profile"] = profile
 
     if phase and phase != state.get("phase"):
         changes.append(f"phase: {state.get('phase', DEFAULT_PHASE)} -> {phase}")
@@ -1776,6 +1792,22 @@ def update_state(
     # No repository-wide pointer: parallel sessions read their own bindings
     # [bug--session-state-cross-session-leak].
     return state, retry_exhausted
+
+
+def get_session_profile(repo_root: str, slug: Optional[str] = None, key: Optional[str] = None) -> Optional[str]:
+    """Resolve profile from session binding or state.json."""
+    key = key or current_session_key()
+    if key:
+        b = load_binding(repo_root, key)
+        if b and b.get("profile"):
+            return str(b["profile"]).strip().lower()
+        if not slug and b:
+            slug = b.get("slug")
+    if slug:
+        st = load_state(repo_root, slug)
+        if st and st.get("profile"):
+            return str(st["profile"]).strip().lower()
+    return None
 
 
 def purge_session(repo_root: str, slug: str, key: Optional[str] = None, complete: bool = False) -> bool:

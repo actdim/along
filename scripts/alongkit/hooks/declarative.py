@@ -49,6 +49,8 @@ class DeclarativeGateDefinition:
     #: Layers that enforce this gate: `runtime` (agent hooks), `git` (`along hooks
     #: install --git`), `ci` (`along gates check --ci`). See alongkit.gitgates.
     enforcement: List[str] = field(default_factory=lambda: ["runtime"])
+    #: Strictness profiles mapping: {strict: s, standard: s, light: s} where s is block|warn|off.
+    profiles: Dict[str, str] = field(default_factory=dict)
     #: Gate-specific settings passed to predicate handlers as `options=` (for example
     #: `allowed_roots` / `write_scope` of workspace_containment).
     options: Dict[str, Any] = field(default_factory=dict)
@@ -58,7 +60,7 @@ class DeclarativeGateDefinition:
 #: Keys of a gate entry that belong to the definition; every other key is an option.
 _GATE_KEYS = frozenset((
     "id", "title", "description", "event", "tools", "match_args", "rule", "rules",
-    "enforcement", "enabled",
+    "enforcement", "profiles", "enabled",
 ))
 
 
@@ -251,6 +253,12 @@ def parse_gate_dict(raw: Dict[str, Any]) -> DeclarativeGateDefinition:
     if unknown:
         raise ValueError(f"Gate '{gate_id}' declares unknown enforcement layer(s): {unknown}")
 
+    profiles_raw = raw.get("profiles", {})
+    profiles: Dict[str, str] = {}
+    if isinstance(profiles_raw, dict):
+        for pk, pv in profiles_raw.items():
+            profiles[str(pk).strip().lower()] = str(pv).strip().lower()
+
     return DeclarativeGateDefinition(
         id=gate_id,
         title=title,
@@ -260,6 +268,7 @@ def parse_gate_dict(raw: Dict[str, Any]) -> DeclarativeGateDefinition:
         match_args=match_args,
         rules=rules,
         enforcement=enforcement or ["runtime"],
+        profiles=profiles,
         options={str(k): v for k, v in raw.items() if str(k) not in _GATE_KEYS},
         enabled=raw.get("enabled", True) is not False,
     )
@@ -279,6 +288,7 @@ def merge_override(base: DeclarativeGateDefinition, override: DeclarativeGateDef
         sys.stderr.write(f"[Along] Ignoring 'enabled: false' for invariant gate '{base.id}' "
                          "in .along/rules/gates.yaml.\n")
         enabled = True
+    merged_profiles = {**base.profiles, **override.profiles} if ("profiles" in raw or override.profiles) else base.profiles
     return replace(
         base,
         title=override.title if "title" in raw else base.title,
@@ -288,6 +298,7 @@ def merge_override(base: DeclarativeGateDefinition, override: DeclarativeGateDef
         event_type=override.event_type if "event" in raw else base.event_type,
         rules=override.rules if ("rule" in raw or "rules" in raw) else base.rules,
         enforcement=override.enforcement if "enforcement" in raw else base.enforcement,
+        profiles=merged_profiles,
         options={**base.options, **override.options},
         enabled=enabled,
     )

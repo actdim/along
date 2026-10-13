@@ -25,6 +25,7 @@ from .models import GateResult, HookEvent
 class HookMode:
     ENFORCE = "enforce"
     SHADOW = "shadow"
+    OFF = "off"
 
 
 #: cli_safety enforces like every other gate; the AGENTS.md rule is mandatory, and shadow mode
@@ -35,6 +36,27 @@ DEFAULT_GATE_MODES: Dict[str, str] = {
     "projection_protection": HookMode.ENFORCE,
     "cli_safety": HookMode.ENFORCE,
     "wrapped_work_uncommitted": HookMode.SHADOW,
+}
+
+
+#: State layer gates [feat--gate-strictness-profiles] REQ-2:
+#: Anchoring and core integrity rules that MUST remain active ('block') in all profiles.
+STATE_LAYER_GATES: Tuple[str, ...] = (
+    "require_active_issue",
+    "projection_protection",
+    "typography",
+    "test_before_stop",
+)
+
+
+def is_state_layer_gate(gate_name: str) -> bool:
+    return gate_name in STATE_LAYER_GATES
+
+
+SEVERITY_TO_MODE: Dict[str, str] = {
+    "block": HookMode.ENFORCE,
+    "warn": HookMode.SHADOW,
+    "off": HookMode.OFF,
 }
 
 
@@ -64,20 +86,82 @@ def gate_tier(gate_name: str) -> str:
     return GATE_TIERS.get(gate_name, TIER_PROCESS)
 
 
+_DEFAULT_GATE_PROFILES_CACHE: Optional[Dict[str, Dict[str, str]]] = None
+
+
+def get_default_gate_profiles() -> Dict[str, Dict[str, str]]:
+    """Lazy load {gate_id: {strict: s, standard: s, light: s}} from default_gates.yaml."""
+    global _DEFAULT_GATE_PROFILES_CACHE
+    if _DEFAULT_GATE_PROFILES_CACHE is None:
+        from .declarative import DEFAULT_GATES_FILE, load_gate_entries
+        cache: Dict[str, Dict[str, str]] = {}
+        for defn, _raw in load_gate_entries(DEFAULT_GATES_FILE):
+            if defn.profiles:
+                cache[defn.id] = dict(defn.profiles)
+        _DEFAULT_GATE_PROFILES_CACHE = cache
+    return _DEFAULT_GATE_PROFILES_CACHE
+
+
+def load_gate_profiles_table(repo_root: Optional[str] = None) -> Dict[str, Dict[str, str]]:
+    """Collect {gate_id: {strict: s, standard: s, light: s}} from default and repo YAML."""
+    from .declarative import DEFAULT_GATES_FILE, load_gate_entries, merge_override
+    table: Dict[str, Dict[str, str]] = {}
+    defs_by_id = {}
+    for defn, raw in load_gate_entries(DEFAULT_GATES_FILE):
+        defs_by_id[defn.id] = defn
+    if repo_root:
+        repo_rules_dir = os.path.join(repo.state_dir(repo_root), "rules")
+        repo_gates_file = os.path.join(repo_rules_dir, "gates.yaml")
+        if os.path.isfile(repo_gates_file):
+            for defn, raw in load_gate_entries(repo_gates_file):
+                base = defs_by_id.get(defn.id)
+                defs_by_id[defn.id] = merge_override(base, defn, raw) if base else defn
+    for gid, defn in defs_by_id.items():
+        if defn.profiles:
+            table[gid] = dict(defn.profiles)
+    return table
+
+
 @dataclass
 class HooksConfig:
     """Runtime configuration for hook execution."""
     mode: str = HookMode.ENFORCE
     gates: Dict[str, str] = field(default_factory=lambda: dict(DEFAULT_GATE_MODES))
     record_transcript: bool = False
+    profile: Optional[str] = None
+    gate_profiles: Dict[str, Dict[str, str]] = field(default_factory=dict)
 
     def get_gate_mode(self, gate_name: str) -> str:
-        """Resolve mode for an individual gate; the tier wins over any override."""
+        """Resolve mode for an individual gate; invariant tier and state layer win."""
         tier = gate_tier(gate_name)
         if tier == TIER_INVARIANT:
             return HookMode.ENFORCE
         if tier == TIER_ADVISORY:
             return HookMode.SHADOW
+
+        # If global mode was explicitly set to shadow (e.g. ALONG_HOOK_MODE=shadow or test fixture)
+        if self.mode == HookMode.SHADOW:
+            return HookMode.SHADOW
+
+        # Explicit per-gate override from repo config or test fixture
+        # (excluding default gate modes that merely reflect baseline defaults)
+        if gate_name in self.gates and gate_name not in DEFAULT_GATE_MODES:
+            return self.gates[gate_name]
+
+        # State layer gates always enforce across all profiles [REQ-2]
+        if is_state_layer_gate(gate_name):
+            if gate_name in self.gates and self.gates[gate_name] != DEFAULT_GATE_MODES.get(gate_name):
+                return self.gates[gate_name]
+            return HookMode.ENFORCE
+
+        # Profile severity lookup
+        profs = self.gate_profiles if self.gate_profiles else get_default_gate_profiles()
+        gate_prof = profs.get(gate_name, {})
+        active_prof = self.profile or "standard"
+        if active_prof in gate_prof:
+            sev = gate_prof[active_prof]
+            return SEVERITY_TO_MODE.get(sev, HookMode.ENFORCE)
+
         if gate_name in self.gates:
             return self.gates[gate_name]
         return self.mode
@@ -93,10 +177,21 @@ class HooksConfig:
         """True if the gate should actively block on violation."""
         return self.get_gate_mode(gate_name) == HookMode.ENFORCE
 
+    def is_enabled(self, gate_name: str) -> bool:
+        """True if gate is active (not off)."""
+        return self.get_gate_mode(gate_name) != HookMode.OFF
+
 
 def load_config(repo_root: Optional[str] = None) -> HooksConfig:
     """Load hooks configuration from repository or environment."""
-    config = HooksConfig()
+    if not repo_root:
+        repo_root = repo.find_repo_root()
+
+    from .. import profiles
+    active_profile = profiles.resolve_active_profile(repo_root)
+
+    config = HooksConfig(profile=active_profile)
+    config.gate_profiles = load_gate_profiles_table(repo_root)
 
     env_mode = os.environ.get("ALONG_HOOK_MODE", "").strip().lower()
     if env_mode in (HookMode.ENFORCE, HookMode.SHADOW):

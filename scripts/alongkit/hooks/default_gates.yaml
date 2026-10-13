@@ -4,6 +4,10 @@ version: 1
 
 gates:
   - id: commit_issue_binding
+    profiles:
+      strict: block
+      standard: block
+      light: block
     enforcement: [runtime, git, ci]
     title: "Git Commit Issue Slug Binding"
     description: "Enforces issue slug binding ([type--slug] or /along-commit's (refs #slug)) in commit messages"
@@ -18,6 +22,10 @@ gates:
       error: "Git commit rejected by [gate: commit-issue-binding]: Commit message must bind an issue slug, '[feat--my-feature]' or '(refs #my-feature)'. Use /along-commit."
 
   - id: commit_no_conflict_markers
+    profiles:
+      strict: block
+      standard: block
+      light: block
     enforcement: [runtime, git, ci]
     title: "Git Commit Merge Conflict Protection"
     description: "Blocks commits whose staged content adds unresolved git conflict markers"
@@ -31,6 +39,10 @@ gates:
       error: "Git commit rejected by [gate: commit-no-conflict-markers]: Unresolved git merge conflict markers detected in staged content."
 
   - id: commit_no_ai_coauthor
+    profiles:
+      strict: block
+      standard: block
+      light: block
     enforcement: [runtime, git, ci]
     title: "Git Commit AI Co-Author Protection"
     description: "Blocks commits whose message names an AI agent in a Co-Authored-By trailer"
@@ -44,6 +56,10 @@ gates:
       error: "Git commit rejected by [gate: commit-no-ai-coauthor]: AI co-author trailer in commit message."
 
   - id: anti_stub_injection
+    profiles:
+      strict: block
+      standard: block
+      light: warn
     enforcement: [runtime, git, ci]
     title: "Anti-Stub Truncation Protection"
     description: "Blocks lazy truncation skeletons and placeholder comments"
@@ -56,6 +72,10 @@ gates:
       error: "Write rejected by [gate: anti-stub-injection]: Truncation placeholder or code skeleton stub detected. Supply complete implementation."
 
   - id: cli_safety
+    profiles:
+      strict: block
+      standard: block
+      light: block
     title: "Destructive Shell Command Protection"
     description: "Blocks destructive shell commands, heredocs, and inline writers"
     event: PreToolUse
@@ -67,6 +87,10 @@ gates:
 
   - id: projection_protection
     tier: invariant
+    profiles:
+      strict: block
+      standard: block
+      light: block
     enforcement: [runtime, git, ci]
     title: "Projection View Protection"
     description: "Blocks direct edits to compiled projections (.along/ISSUES.md, docs/INDEX.md)"
@@ -79,6 +103,10 @@ gates:
 
   - id: rule_pack_protection
     tier: invariant
+    profiles:
+      strict: block
+      standard: block
+      light: block
     # runtime: file tools and shell commands that write .along/rules/**/*.md (`along rules ...`
     # excepted). git / ci: alongkit.gitgates.check_rule_packs - a staged or tracked rule pack
     # carries the managed header and its body matches the header hash.
@@ -93,6 +121,10 @@ gates:
       error: "Edit to a managed rule pack rejected by [gate: rule-pack-protection]."
 
   - id: doc_manual_lock
+    profiles:
+      strict: block
+      standard: block
+      light: warn
     title: "Manual Document Lock Protection"
     description: "Blocks automated agent edits to documentation marked with write_policy: manual"
     event: PreToolUse
@@ -103,6 +135,10 @@ gates:
       error: "Manual Document Lock Violation [gate: doc-manual-lock]."
 
   - id: typography
+    profiles:
+      strict: block
+      standard: block
+      light: block
     enforcement: [runtime, git, ci]
     title: "Clean ASCII Typography"
     description: "Enforces clean ASCII characters and bans non-ASCII dashes, quotes, ellipsis, and invisible spaces"
@@ -114,6 +150,10 @@ gates:
       error: "Typography violation detected by [gate: clean-ascii-typography]."
 
   - id: require_active_issue
+    profiles:
+      strict: block
+      standard: block
+      light: block
     title: "Mandatory Issue Anchoring"
     description: "Blocks modifying repository source code without an in-progress issue"
     event: PreToolUse
@@ -138,6 +178,10 @@ gates:
       error: "Code edit rejected by [gate: require-active-issue]: Modifying repository source code requires an active issue with 'status: in-progress' in .along/ISSUES/. Create an issue first."
 
   - id: team_step_active
+    profiles:
+      strict: block
+      standard: block
+      light: warn
     title: "along-team Step Discipline"
     description: "Blocks source edits in a role-based (along-team) session while no step is in progress"
     event: PreToolUse
@@ -148,6 +192,10 @@ gates:
       error: "Code edit rejected by [gate: team-step-active]: start an along-team step first."
 
   - id: team_reviews_before_stop
+    profiles:
+      strict: block
+      standard: block
+      light: warn
     title: "along-team Reviews Before Turn Termination"
     description: "Blocks turn completion while a passed along-team step has no reviews/step-N.md"
     event: Stop
@@ -157,6 +205,10 @@ gates:
       error: "Turn completion rejected by [gate: team-reviews-before-stop]: write the step review first."
 
   - id: test_before_stop
+    profiles:
+      strict: block
+      standard: block
+      light: block
     title: "Test Execution Before Turn Termination"
     description: "Blocks turn completion if source code was changed without running tests"
     event: Stop
@@ -169,6 +221,10 @@ gates:
       error: "Turn completion rejected by [gate: test-before-stop]: Source files were modified, but automated tests have not been executed afterward. Run tests via '/along-test' or 'python .along/scripts/test.py'."
 
   - id: wrap_before_stop
+    profiles:
+      strict: block
+      standard: block
+      light: block
     title: "Session Wrap Before Turn Termination"
     description: "Blocks turn completion if an issue was marked done without recording a session log"
     event: Stop
@@ -179,6 +235,10 @@ gates:
 
   - id: wrapped_work_uncommitted
     tier: advisory
+    profiles:
+      strict: warn
+      standard: warn
+      light: warn
     title: "Wrapped Work Uncommitted Warning"
     description: "Warns if a session wrapped an issue but attributed files remain uncommitted"
     event: Stop
@@ -189,6 +249,10 @@ gates:
 
   - id: projection_sync_before_stop
     tier: advisory
+    profiles:
+      strict: warn
+      standard: warn
+      light: warn
     title: "Projection Synchronization Before Turn Termination"
     description: "Recompiles a stale ISSUES.md (content differs from the compiled board) itself at turn end; never blocks"
     event: Stop
@@ -199,6 +263,10 @@ gates:
 
   - id: entity_deletion_protection
     tier: invariant
+    profiles:
+      strict: block
+      standard: block
+      light: block
     enforcement: [runtime, git, ci]
     title: "Entity File Deletion Protection"
     description: "Blocks deleting issue, ADR, milestone, risk, or spike files; use along issue supersede / along issue rename"
@@ -210,6 +278,10 @@ gates:
       error: "Entity file deletion rejected by [gate: entity-deletion-protection]: Deleting an issue, ADR, milestone, risk, or spike file is forbidden. Use 'along issue supersede' / 'along issue rename' (split: supersede into several keys)."
 
   - id: entity_reference_integrity
+    profiles:
+      strict: block
+      standard: block
+      light: block
     # runtime: Stop once entity files changed; also run by `along wrap` and
     # `along issue sync` (alongkit.gates.entity_integrity_gate). git / ci: `along gates
     # check` and `along commit` block references the staged or pushed change newly breaks.
@@ -223,6 +295,10 @@ gates:
       error: "Turn completion rejected by [gate: entity-reference-integrity]: The entity graph has dangling references or schema violations. Run 'along doctor --entities'; use 'along issue rename' / 'along issue supersede' instead of deleting referenced entities."
 
   - id: subproject_boundary
+    profiles:
+      strict: block
+      standard: block
+      light: warn
     title: "Subproject Localization Boundary"
     description: "Blocks creating .along entities at workspace root when working inside subproject"
     event: PreToolUse
@@ -234,6 +310,10 @@ gates:
 
   - id: workspace_containment
     tier: invariant
+    profiles:
+      strict: block
+      standard: block
+      light: block
     title: "Workspace Containment"
     description: "Keeps file, search and shell-cwd paths inside the workspace; writes outside are denied, reads outside undeclared roots ask (interactive) or are denied (autonomous)"
     event: PreToolUse
@@ -252,6 +332,10 @@ gates:
   # `along gates check` (pre-commit on staged files, --ci on every tracked file).
   # Options: exclude_paths (fnmatch globs); stable_entry_point also takes scope.
   - id: windows_safe_filenames
+    profiles:
+      strict: block
+      standard: block
+      light: block
     enforcement: [git, ci]
     title: "Windows-Safe Filenames"
     description: "Tracked paths carry no Windows-forbidden characters, trailing dots/spaces or reserved device names"
@@ -261,6 +345,10 @@ gates:
       error: "Filename rejected by [gate: windows-safe-filenames]."
 
   - id: untracked_exports
+    profiles:
+      strict: block
+      standard: block
+      light: block
     enforcement: [git, ci]
     title: "Untracked Dashboard Exports"
     description: ".along/dashboard.html and .along/DASHBOARD.md are local exports and never tracked"
@@ -270,6 +358,10 @@ gates:
       error: "Tracked export rejected by [gate: untracked-exports]."
 
   - id: code_fence_language
+    profiles:
+      strict: block
+      standard: block
+      light: warn
     enforcement: [git, ci]
     title: "Explicit Code Fence Languages"
     description: "Every opening Markdown code fence names a language"
@@ -280,6 +372,10 @@ gates:
       error: "Markdown rejected by [gate: code-fence-language]."
 
   - id: portable_links
+    profiles:
+      strict: block
+      standard: block
+      light: warn
     enforcement: [git, ci]
     title: "Portable Markdown Links"
     description: "Markdown link targets use relative paths: no file:// scheme, no backslashes"
@@ -289,6 +385,10 @@ gates:
       error: "Link rejected by [gate: portable-links]."
 
   - id: stable_entry_point
+    profiles:
+      strict: block
+      standard: block
+      light: warn
     enforcement: [git, ci]
     title: "Stable Entry Point"
     description: "README.md and docs/ never link into .along/; route through docs/INDEX.md or docs/topic--*.md"
@@ -299,6 +399,10 @@ gates:
       error: "Link rejected by [gate: stable-entry-point]."
 
   - id: issue_lifecycle
+    profiles:
+      strict: block
+      standard: block
+      light: block
     enforcement: [git, ci]
     title: "Issue Lifecycle Placement"
     description: "Closed issues (done, cancelled, superseded) live in .along/ISSUES/done/; open ones never do"
@@ -310,6 +414,10 @@ gates:
   - id: session_record_append_only
     # git / ci only, base-aware: `along gates check`, `along commit` and CI compare each changed
     # session log with HEAD (or the range base) via alongkit.gitgates.check_session_records.
+    profiles:
+      strict: block
+      standard: block
+      light: block
     enforcement: [git, ci]
     title: "Session Record Append-Only"
     description: "A committed session log never loses lines of its Blackboard Record; the Summary stays editable"
@@ -320,6 +428,10 @@ gates:
 
   - id: no_tracked_secrets
     tier: invariant
+    profiles:
+      strict: block
+      standard: block
+      light: block
     enforcement: [git, ci]
     title: "No Secrets In Tracked Files"
     description: "Tracked content carries no private keys or well-known API token shapes"
@@ -329,6 +441,10 @@ gates:
       error: "Content rejected by [gate: no-tracked-secrets]."
 
   - id: worktree_env_readiness
+    profiles:
+      strict: block
+      standard: block
+      light: warn
     title: "Worktree Environment Readiness"
     description: "Blocks execution in bare worktrees lacking linked dependencies or configuration"
     event: PreToolUse
@@ -340,6 +456,10 @@ gates:
 
   - id: circuit_breaker
     tier: invariant
+    profiles:
+      strict: block
+      standard: block
+      light: block
     title: "Systemic Anomaly Circuit Breaker"
     description: "Blocks modifying tools and shell commands when the circuit breaker is tripped"
     event: PreToolUse
@@ -350,6 +470,10 @@ gates:
       error: "Tool execution rejected by [gate: circuit-breaker]: The systemic anomaly circuit breaker is TRIPPED."
 
   - id: require_plan_approval
+    profiles:
+      strict: block
+      standard: block
+      light: warn
     title: "Inquiry Read-Only Mode & Plan Approval Enforcement"
     description: "Blocks modifying repository files and executing state-mutating commands in inquiry phase without an approved plan"
     event: PreToolUse
@@ -363,6 +487,10 @@ gates:
       error: "Mutation rejected by [gate: require-plan-approval]: Plan approval required before repository mutations."
 
   - id: fast_retrieval
+    profiles:
+      strict: block
+      standard: block
+      light: warn
     title: "Fast Knowledge Base & Memory Retrieval"
     description: "Blocks manual directory search across docs/ and .along/ directories, enforcing along kb-search"
     event: PreToolUse

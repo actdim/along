@@ -89,9 +89,12 @@ def write_if_missing(mig, path, text, report, root):
     _note(report, "created", path, root)
 
 
-def scaffold_agents_md(mig, root, protocol_text, report):
+def scaffold_agents_md(mig, root, protocol_text, report, profile=None):
     path = os.path.join(root, "AGENTS.md")
-    info = scaffold.protocol_block_for(root, protocol_text)
+    if profile is None:
+        from alongkit import profiles
+        profile = profiles.resolve_active_profile(root)
+    info = scaffold.protocol_block_for(root, protocol_text, profile=profile)
     report["protocol_variant"] = info["variant"]
     report["protocol_ref"] = info["ref"]
     if not os.path.isfile(path):
@@ -247,6 +250,8 @@ def main(argv=None) -> int:
     parser.add_argument("--no-git", action="store_true", help="Skip `along git setup`")
     parser.add_argument("--no-hooks", action="store_true", help="Skip `along hook install`")
     parser.add_argument("--no-migrate", action="store_true", help="Skip `along migrate --apply`")
+    parser.add_argument("--profile", default=None, choices=["strict", "standard", "light"],
+                        help="Gate strictness profile (default: standard or repository config)")
     args = parser.parse_args(argv)
 
     root = resolve_init_target(args.target)
@@ -267,7 +272,7 @@ def main(argv=None) -> int:
     mig = migration.Migration(root, dry_run=args.dry_run,
                               state_dir=os.path.join(root, repo.STATE_DIR), printer=quiet)
 
-    scaffold_agents_md(mig, root, protocol_text, report)
+    scaffold_agents_md(mig, root, protocol_text, report, profile=args.profile)
     scaffold_claude_md(mig, root, report)
     scaffold_gitattributes(mig, root, report)
     scaffold_state_dir(mig, root, report)
