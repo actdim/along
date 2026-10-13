@@ -2,6 +2,31 @@
 
 All notable changes to this project, newest first.
 
+## v4.4.12 - 2026-10-13
+
+- feat(orchestrator): add cross-runtime supervisor orchestrator issue (refs #cross-runtime-supervisor-orchestrator)
+- docs(wiki): ground topic-based documentation architecture (refs #ground-topic-based-docs)
+- fix(security): consume destructive confirmation on PreToolUse and eliminate classifier false positives (refs #destructive-pre-tool-consumption-and-false-positives)
+- fix(security): harden destructive authorization, doc-manual-lock, git -c allowlist, and env stripping (refs #destructive-authorization-and-lock-hardening)
+- fix(core): restore external commands, implement plan confirmation flags, and harden classifiers (refs #post-audit-regressions-and-alignment)
+- fix(core): resolve audit findings across gates, toolnature, bootstrap, and docs (refs #post-audit-core-hardening)
+- docs(claims): benchmark kb-search, ground performance metrics, and neutralize tone (refs #unverified-performance-claims)
+- docs(rules): document prohibition of ad-hoc shell code probing (refs #anti-pattern-shell-code-probing)
+- docs(comparisons): document paradigm 7 comparing conversational history vs explicit state (refs #state-centric-execution-and-skill-state-comparison)
+- docs(vision): refresh scope, roadmap, bounded non-goals, and provenance (refs #vision-md-refresh)
+- refactor(cli): migrate along_exec to modular commands with argparse validation (refs #along-exec-argparse-migration)
+- feat(dev): automated local dev environment setup and editable install (refs #dev-environment-setup-and-editable-install)
+- feat(bootstrap): support inline -c invocation in ensure_deps (refs #bootstrap-resilience-and-subcommand-proxying)
+- debt(protocol): cleanup plan approval wording, literal kb-search, and quiet test runner (refs #protocol-friction-cleanup)
+- feat(context): implement progressive disclosure, catalog toc, and issue contracts (refs #progressive-disclosure-and-context-scaling)
+- feat(kb-search): exclude archived issues and session logs by default (refs #kb-search-archive-scope-default)
+- feat(hooks): classify tools by nature with versioned layered rules (refs #tool-nature-classification)
+- feat(release): check CI status of released commit before version bump (refs #release-ci-precondition-check)
+- feat(security): scrub secrets in hooks audit logs and isolate diagnostics (refs #secret-scrubbing-in-hooks-and-diagnostics)
+- fix(worktree): refuse worktree creation on cross-OS mounted repositories (refs #worktree-cross-os-mount-guard)
+- fix(entities): prevent entity file deletion and support multi-issue supersede (refs #uncommitted-issue-deleted-without-trace)
+- fix(lifecycle): skip wrap test gate for docs and along-only changes (refs #wrap-docs-only-test-skip)
+
 ## v4.4.11 - 2026-10-12
 
 - chore(sync): reconcile entity projections and knowledge base index (refs #wrap-docs-only-test-skip)
