@@ -60,6 +60,7 @@ Establish Along as an execution control plane and observability layer for autono
 - `[feat--agent-interactive-stdin-bridge]`: Interactive Telegram clarification bridge routing operator answers to agent stdin / question prompts.
 - `[feat--operational-assets-and-playbooks]`: Operational assets, dependency topology, and executable playbooks.
 - `[feat--system-invariants-and-health-probes]`: System invariant assertions, health probes, and generalized verification gates.
+- `[feat--cross-runtime-supervisor-orchestrator]`: Cross-runtime supervisor orchestrator dispatching along-team roles across heterogeneous agent CLIs.
 - `[docs--operations-and-autonomous-systems-paradigm]`: Documentation paradigm shift to dual-mode software engineering and autonomous operations.
 
 ## Acceptance Criteria

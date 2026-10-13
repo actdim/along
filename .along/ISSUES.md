@@ -24,6 +24,7 @@
 - [ ] `(feat)` [clean-turn-context-isolation-in-along-team](ISSUES/feat--clean-turn-context-isolation-in-along-team.md)
 - [ ] `(feat)` [cowork-plugin-skill-packaging](ISSUES/feat--cowork-plugin-skill-packaging.md)
 - [ ] `(feat)` [cpp-ecosystem-support](ISSUES/feat--cpp-ecosystem-support.md)
+- [ ] `(feat)` [cross-runtime-supervisor-orchestrator](ISSUES/feat--cross-runtime-supervisor-orchestrator.md)
 - [ ] `(feat)` [cursor-agent-and-rules-integration](ISSUES/feat--cursor-agent-and-rules-integration.md)
 - [ ] `(feat)` [dart-flutter-ecosystem-support](ISSUES/feat--dart-flutter-ecosystem-support.md)
 - [ ] `(feat)` [deepseek-harness-bridge](ISSUES/feat--deepseek-harness-bridge.md)
