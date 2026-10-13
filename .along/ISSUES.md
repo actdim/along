@@ -32,7 +32,6 @@
 - [ ] `(feat)` [enterprise-governance-and-cloud-infrastructure](ISSUES/feat--enterprise-governance-and-cloud-infrastructure.md)
 - [ ] `(feat)` [enterprise-governance-and-compliance-pack](ISSUES/feat--enterprise-governance-and-compliance-pack.md)
 - [ ] `(feat)` [external-issue-trackers-sync-and-import](ISSUES/feat--external-issue-trackers-sync-and-import.md)
-- [ ] `(feat)` [gate-strictness-profiles](ISSUES/feat--gate-strictness-profiles.md)
 - [ ] `(feat)` [golang-ecosystem-support](ISSUES/feat--golang-ecosystem-support.md)
 - [ ] `(feat)` [jvm-ecosystem-support](ISSUES/feat--jvm-ecosystem-support.md)
 - [ ] `(feat)` [multi-runtime-and-omnichannel-expansion](ISSUES/feat--multi-runtime-and-omnichannel-expansion.md)
@@ -49,8 +48,8 @@
 
 ## Done (recent)
 - [x] `(feat)` [structured-blackboard-state-machine](ISSUES/done/feat--structured-blackboard-state-machine.md)
+- [x] `(feat)` [gate-strictness-profiles](ISSUES/done/feat--gate-strictness-profiles.md)
 - [x] `(docs)` [ground-topic-based-docs](ISSUES/done/docs--ground-topic-based-docs.md)
 - [x] `(feat)` [tool-nature-classification](ISSUES/done/feat--tool-nature-classification.md)
 - [x] `(feat)` [secret-scrubbing-in-hooks-and-diagnostics](ISSUES/done/feat--secret-scrubbing-in-hooks-and-diagnostics.md)
-- [x] `(feat)` [release-ci-precondition-check](ISSUES/done/feat--release-ci-precondition-check.md)
-<!-- 246 older completed issue(s) archived in .along/ISSUES/done/ -->
+<!-- 247 older completed issue(s) archived in .along/ISSUES/done/ -->

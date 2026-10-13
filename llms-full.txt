@@ -3327,6 +3327,40 @@ Cowork runs the agent in a cloud container plus a Linux VM on the user's machine
 
 ---
 
+## 6. Gate Strictness Profiles per Model Tier
+
+Complex procedural ceremonies and rigid review checklists impose significant token overhead. To accommodate varying model capabilities, Along decouples the immutable **state layer** from the **control layer** via named Gate Strictness Profiles.
+
+### 6.1 Named Profiles
+
+| Profile | Target Tier | Behavior |
+| :--- | :--- | :--- |
+| `strict` | Standard & Junior models | Full procedural ceremony, mandatory plan approval for all mutations, low complexity escalation thresholds, full 9-step completion checklist. |
+| `standard` | Default baseline | Preserves default Along behavior: 32 gates active, role-based escalation for multi-file/cross-system tasks. |
+| `light` | Frontier / Strong models | Streamlines procedural ceremony: warns rather than blocks on procedural gates (`require_plan_approval`, `code_fence_language`, `fast_retrieval`, `team_step_active`), compacts the Stage Completion Checklist to 5 core invariants, and allows direct execution with user alignment. |
+
+### 6.2 State-Layer Invariance
+
+Regardless of active profile (`strict`, `standard`, or `light`), immutable state integrity gates and safety invariants ALWAYS evaluate to `block`:
+- **State-Layer Gates**: `require_active_issue`, `projection_protection`, `typography`, `test_before_stop`.
+- **Invariant Safety Gates**: `workspace_containment`, `circuit_breaker`, `no_tracked_secrets`, `rule_pack_protection`, `entity_deletion_protection`.
+
+### 6.3 Resolution Hierarchy
+
+Active profile resolves through the following precedence order:
+1. **Session Binding**: `along start <slug> --profile <p>` or `.along/.session/<slug>/state.json`.
+2. **Environment Variable**: `ALONG_PROFILE=<p>`.
+3. **Repository Configuration**: `.along/config.json` or `.along/config.yaml` (`{"profile": "<p>"}`).
+4. **Default Baseline**: `standard`.
+
+### 6.4 Inspection & Visibility
+
+- `along doctor`: Reports active profile, resolution source, strictness counts, and the complete gate strictness matrix.
+- `along hook verify`: Shows active profile in the traceability report header and annotates each gate with its active strictness mode (`[BLOCK]`, `[WARN]`, `[OFF]`).
+- `along init --profile <p>`: Scaffolds `AGENTS.md` with rules tailored to the selected profile.
+
+---
+
 ## Document: docs/topic--session-lifecycle.md (Session & Blackboard Lifecycle Guide)
 
 # Session & Blackboard Lifecycle Guide
