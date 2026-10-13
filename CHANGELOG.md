@@ -2,6 +2,12 @@
 
 All notable changes to this project, newest first.
 
+## v4.4.13 - 2026-10-14
+
+- chore(along): projections after closing out feat--gate-strictness-profiles (refs #gate-strictness-profiles)
+- feat: gate-strictness-profiles (refs #gate-strictness-profiles)
+- feat(session): structured blackboard state machine and deterministic patch merging (refs #structured-blackboard-state-machine)
+
 ## v4.4.12 - 2026-10-13
 
 - feat(orchestrator): add cross-runtime supervisor orchestrator issue (refs #cross-runtime-supervisor-orchestrator)
