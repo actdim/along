@@ -4,7 +4,7 @@ slug: INDEX
 title: ActDim Along - Knowledge Base Topic Index
 type: index
 created: 2026-09-10
-updated: 2026-10-12
+updated: 2026-10-13
 tags: [index, kb, topics, map]
 ---
 
@@ -31,7 +31,7 @@ flowchart TD
     INDEX --> T_DOMAIN_MODEL
     T_LICENSE["License"]
     INDEX --> T_LICENSE
-    T_LLM_WIKI_ARCHITECTURE["LLM-Wiki Knowledge Base Architecture & Paradigm"]
+    T_LLM_WIKI_ARCHITECTURE["Topic-Based Knowledge Base Architecture & Paradigm"]
     INDEX --> T_LLM_WIKI_ARCHITECTURE
     T_MIGRATIONS["Protocol & Repository Migrations Guide"]
     INDEX --> T_MIGRATIONS
@@ -91,7 +91,7 @@ flowchart TD
 - **[Dependencies & Submodules AI Documentation and Rules](./topic--dependencies.md)** (topic) `dependencies`, `ai-context`, `submodules`, `vendor`, `rules`
 - **[Domain Model & Entity Ecosystem](./topic--domain-model.md)** (domain-model) `domain-model`, `entities`, `schemas`, `dag`, `metadata`, `issues`, `milestones`, `risks`, `spikes`, `checklists`, `sessions`
 - **[License](./topic--license.md)** (license) `license`, `mit`
-- **[LLM-Wiki Knowledge Base Architecture & Paradigm](./topic--llm-wiki-architecture.md)** (topic) `llm-wiki`, `architecture`, `knowledge-base`, `token-efficiency`, `indexing`, `methodology`, `search`, `karpathy`
+- **[Topic-Based Knowledge Base Architecture & Paradigm](./topic--llm-wiki-architecture.md)** (topic) `topic-based-authoring`, `diataxis`, `tf-idf`, `architecture`, `knowledge-base`, `token-efficiency`, `indexing`, `methodology`, `search`, `karpathy`
 - **[Protocol & Repository Migrations Guide](./topic--migrations.md)** (guide) `migrations`, `upgrade`, `protocol`, `changelog`, `versioning`, `data-safety`
 - **[Parallel Sessions & Closeout Guide](./topic--parallel-sessions.md)** (guide) `session`, `parallel`, `closeout`, `attribution`, `ledger`, `commit`, `readiness`, `approval`
 - **[Runtime Lifecycle Hooks & Mechanical Gates](./topic--runtime-hooks-and-gates.md)** (architecture) `hooks`, `gates`, `runtime`, `enforcement`, `antigravity`, `claude`, `codex`, `typography`, `cli-safety`, `circuit-breaker`, `attribution`

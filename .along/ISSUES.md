@@ -48,9 +48,9 @@
 - [ ] `(feat)` [zero-step-state-recovery-and-drift-detection](ISSUES/feat--zero-step-state-recovery-and-drift-detection.md)
 
 ## Done (recent)
+- [x] `(docs)` [ground-topic-based-docs](ISSUES/done/docs--ground-topic-based-docs.md)
 - [x] `(feat)` [tool-nature-classification](ISSUES/done/feat--tool-nature-classification.md)
 - [x] `(feat)` [secret-scrubbing-in-hooks-and-diagnostics](ISSUES/done/feat--secret-scrubbing-in-hooks-and-diagnostics.md)
 - [x] `(feat)` [release-ci-precondition-check](ISSUES/done/feat--release-ci-precondition-check.md)
 - [x] `(feat)` [progressive-disclosure-and-context-scaling](ISSUES/done/feat--progressive-disclosure-and-context-scaling.md)
-- [x] `(feat)` [kb-search-archive-scope-default](ISSUES/done/feat--kb-search-archive-scope-default.md)
-<!-- 244 older completed issue(s) archived in .along/ISSUES/done/ -->
+<!-- 245 older completed issue(s) archived in .along/ISSUES/done/ -->
