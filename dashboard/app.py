@@ -28,9 +28,10 @@ try:
 except ImportError:
     HAS_RICH = False
 
-_scripts_dir = str(Path(__file__).resolve().parent.parent / "scripts")
-if _scripts_dir not in sys.path:
-    sys.path.insert(0, _scripts_dir)
+_parent = Path(__file__).resolve().parent.parent
+for _cand in [_parent / "scripts", _parent]:
+    if (_cand / "alongkit").is_dir() and str(_cand) not in sys.path:
+        sys.path.insert(0, str(_cand))
 
 from alongkit.version import CURRENT_VERSION
 
@@ -263,30 +264,13 @@ def main():
             out_path = collector.repo_root / out_path
         collector.collect_all()
         full_data_json = collector.to_full_data().model_dump_json(indent=2)
-        ui_dist = Path(__file__).resolve().parent / "ui" / "dist"
-
         if out_path.suffix == ".html":
             out_path.parent.mkdir(parents=True, exist_ok=True)
             out_path.write_text(f"<script>window.__ALONG_DATA__ = {full_data_json};</script>", encoding="utf-8")
             print(f"-> Static dashboard script exported: {out_path}")
-        elif out_path.suffix == ".json":
-            out_path.parent.mkdir(parents=True, exist_ok=True)
-            out_path.write_text(full_data_json, encoding="utf-8")
-            print(f"-> Static dashboard JSON exported: {out_path}")
         else:
-            out_path.mkdir(parents=True, exist_ok=True)
-            data_file = out_path / "data.json"
-            data_file.write_text(full_data_json, encoding="utf-8")
-            if ui_dist.exists():
-                for item in ui_dist.iterdir():
-                    dst = out_path / item.name
-                    if item.is_dir():
-                        shutil.copytree(item, dst, dirs_exist_ok=True)
-                    else:
-                        shutil.copy2(item, dst)
-                print(f"-> Static dashboard UI and data.json exported to: {out_path}")
-            else:
-                print(f"-> Static data.json exported to: {data_file} (UI bundle not found at {ui_dist})")
+            print(f"[Error] Static directory and data.json exports are removed. Specify a .html target (e.g. --export .along/dashboard.html).", file=sys.stderr)
+            sys.exit(1)
         return
 
     if args.dev:
