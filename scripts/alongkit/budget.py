@@ -295,3 +295,209 @@ def format_budget_text(report: Dict[str, Any]) -> str:
     overall = "ALL BUDGET CHECKS PASSED" if report["all_passed"] else "BUDGET OVERRUN DETECTED"
     lines.append(f"\nResult: {overall}")
     return "\n".join(lines)
+
+
+# ---------------------------------------------------------------------------
+# Prompt Footprint and Attention Leak Detection (feat--bounded-prompt-footprint-gate)
+# ---------------------------------------------------------------------------
+DEFAULT_PROMPT_HARD_LIMIT_BYTES = 32768  # 32 KB (~8,623 tokens)
+DEFAULT_PROMPT_SOFT_LIMIT_BYTES = 16384  # 16 KB (~4,311 tokens)
+MAX_UNPARSED_LOG_LINES = 50
+MAX_RAW_CODE_DUMP_LINES = 50
+
+LOG_LINE_PATTERNS: List[re.Pattern] = [
+    re.compile(r"^\s*Traceback \(most recent call last\):", re.IGNORECASE),
+    re.compile(r'^\s*File "[^"]+", line \d+', re.IGNORECASE),
+    re.compile(r"^\s*(?:FAIL|FAILED|ERROR|AssertionError|Exception|Error):", re.IGNORECASE),
+    re.compile(r"^\s*at\s+.*\(.*:\d+:\d+\)"),
+    re.compile(r"^\s*npm\s+(?:ERR!|error|warn)", re.IGNORECASE),
+    re.compile(r"^\s*(?:===|---|\*\*\*)\s*(?:FAIL|ERROR|PASS|test)", re.IGNORECASE),
+    re.compile(r"^\s*(?:[A-Za-z0-9_.-]+(?:\.py|\.ts|\.js|\.rs|\.go|\.cs):\d+:\d+: (?:error|warning):)", re.IGNORECASE),
+    re.compile(r"^\s*\d+\s+(?:failed|passed|skipped|errors)\b", re.IGNORECASE),
+    re.compile(r"^\s*(?:Ran \d+ tests? in|PASSED in|FAILED in)\b", re.IGNORECASE),
+    re.compile(r"^\s*\[(?:INFO|DEBUG|WARN|WARNING|ERROR|CRITICAL|FAIL|OK)\]", re.IGNORECASE),
+]
+
+CODE_FENCE_RE = re.compile(r"```([a-zA-Z0-9_-]*)\r?\n(.*?)\r?\n```", re.DOTALL)
+REVIEW_MANIFEST_RE = re.compile(r"Gate Execution Manifest:", re.IGNORECASE)
+REVIEW_VERDICT_RE = re.compile(r"\bVERDICT:\s*(?:PASS|FAIL)\b", re.IGNORECASE)
+STEP_REVIEW_HEADING_RE = re.compile(r"^#+\s*Step\s+\d+\s+Review\b", re.MULTILINE | re.IGNORECASE)
+
+
+def detect_attention_leaks(text: str) -> List[Dict[str, Any]]:
+    """Detect prompt context bloat anti-patterns.
+
+    Identifies:
+    1. Unparsed log outputs (> 50 lines).
+    2. Repetition of previous passed step reviews.
+    3. Embedding raw file dumps (> 50 lines).
+    """
+    leaks: List[Dict[str, Any]] = []
+
+    # 1. Unparsed log outputs
+    # Check within code fences
+    fences = CODE_FENCE_RE.findall(text)
+    for lang, body in fences:
+        body_lines = [l for l in body.splitlines() if l.strip()]
+        line_count = len(body_lines)
+        if line_count > MAX_UNPARSED_LOG_LINES:
+            log_matches = sum(1 for line in body_lines if any(pat.search(line) for pat in LOG_LINE_PATTERNS))
+            is_log_lang = lang.lower() in ("log", "logs", "txt", "output", "bash", "sh", "console", "terminal", "stdout", "stderr")
+            if (log_matches >= 10 or (log_matches / line_count >= 0.25)) or is_log_lang:
+                leaks.append({
+                    "type": "unparsed_log",
+                    "severity": "warning",
+                    "lines": line_count,
+                    "description": f"Unparsed log output detected ({line_count} lines > {MAX_UNPARSED_LOG_LINES}). Use distilled summaries instead of full log dumps.",
+                })
+
+    # Check un-fenced continuous log blocks
+    raw_lines = text.splitlines()
+    consecutive_log_lines = 0
+    for line in raw_lines:
+        if any(pat.search(line) for pat in LOG_LINE_PATTERNS):
+            consecutive_log_lines += 1
+        elif consecutive_log_lines > 0 and not line.strip():
+            # Allow blank lines within logs
+            continue
+        else:
+            if consecutive_log_lines > MAX_UNPARSED_LOG_LINES:
+                leaks.append({
+                    "type": "unparsed_log",
+                    "severity": "warning",
+                    "lines": consecutive_log_lines,
+                    "description": f"Unparsed log block detected ({consecutive_log_lines} consecutive lines > {MAX_UNPARSED_LOG_LINES}). Distill error outputs before prompt injection.",
+                })
+            consecutive_log_lines = 0
+    if consecutive_log_lines > MAX_UNPARSED_LOG_LINES:
+        leaks.append({
+            "type": "unparsed_log",
+            "severity": "warning",
+            "lines": consecutive_log_lines,
+            "description": f"Unparsed log block detected ({consecutive_log_lines} consecutive lines > {MAX_UNPARSED_LOG_LINES}). Distill error outputs before prompt injection.",
+        })
+
+    # 2. Repetition of previous passed step reviews
+    manifest_count = len(REVIEW_MANIFEST_RE.findall(text))
+    verdict_count = len(REVIEW_VERDICT_RE.findall(text))
+    heading_count = len(STEP_REVIEW_HEADING_RE.findall(text))
+    max_review_indicators = max(manifest_count, verdict_count, heading_count)
+    if max_review_indicators > 1:
+        leaks.append({
+            "type": "repeated_reviews",
+            "severity": "warning",
+            "count": max_review_indicators,
+            "description": f"Repeated historical review artifacts detected ({max_review_indicators} instances). Isolate context to the active step instead of re-injecting prior reviews.",
+        })
+
+    # 3. Embedding raw file dumps (> 50 lines)
+    code_langs = (
+        "py", "python", "ts", "typescript", "js", "javascript", "json", "yaml", "yml",
+        "rust", "rs", "go", "c", "cpp", "cs", "html", "css", "sql", "sh", "bash", "ps1",
+    )
+    for lang, body in fences:
+        body_lines = body.splitlines()
+        line_count = len(body_lines)
+        if line_count > MAX_RAW_CODE_DUMP_LINES:
+            # Distinguish source code from log output
+            is_code_lang = lang.lower() in code_langs
+            has_code_syntax = any(re.search(r"^\s*(?:def\s+|class\s+|import\s+|from\s+|function\s+|const\s+|let\s+|var\s+|interface\s+|type\s+|public\s+|private\s+)", l) for l in body_lines)
+            if is_code_lang or has_code_syntax:
+                # Avoid duplicate flagging if already flagged as unparsed_log
+                if not any(l["type"] == "unparsed_log" and l.get("lines") == line_count for l in leaks):
+                    leaks.append({
+                        "type": "raw_file_dump",
+                        "severity": "warning",
+                        "lines": line_count,
+                        "description": f"Embedded raw source code dump ({line_count} lines > {MAX_RAW_CODE_DUMP_LINES}). Reference files by path and line anchors (e.g. path#L1-L50) instead.",
+                    })
+
+    return leaks
+
+
+def check_prompt(
+    payload_or_path: str,
+    limits: Optional[Dict[str, int]] = None,
+    allow_oversized: bool = False,
+) -> Dict[str, Any]:
+    """Measure prompt payload footprint, compare against bounds, and detect attention leaks."""
+    text = payload_or_path
+    path: Optional[str] = None
+    if os.path.isfile(payload_or_path):
+        path = payload_or_path
+        try:
+            with open(payload_or_path, "r", encoding="utf-8", errors="replace") as f:
+                text = f.read()
+        except OSError:
+            text = payload_or_path
+
+    size_bytes = len(text.encode("utf-8"))
+    char_count = len(text)
+    line_count = len(text.splitlines())
+    token_est = estimate_tokens(char_count)
+
+    hard_limit = (limits or {}).get("hard_limit_bytes", DEFAULT_PROMPT_HARD_LIMIT_BYTES)
+    soft_limit = (limits or {}).get("soft_limit_bytes", DEFAULT_PROMPT_SOFT_LIMIT_BYTES)
+
+    leaks = detect_attention_leaks(text)
+    is_oversized = size_bytes > hard_limit
+    passed = (not is_oversized or allow_oversized)
+    warn = (size_bytes > soft_limit) or bool(leaks)
+
+    if not passed:
+        status = "FAIL"
+    elif warn:
+        status = "WARN"
+    else:
+        status = "PASS"
+
+    return {
+        "path": path,
+        "bytes": size_bytes,
+        "chars": char_count,
+        "lines": line_count,
+        "tokens": token_est,
+        "hard_limit_bytes": hard_limit,
+        "soft_limit_bytes": soft_limit,
+        "allow_oversized": allow_oversized,
+        "is_oversized": is_oversized,
+        "passed": passed,
+        "warn": warn,
+        "status": status,
+        "leaks": leaks,
+    }
+
+
+def format_prompt_budget_text(report: Dict[str, Any]) -> str:
+    """Format human-readable terminal report for prompt footprint and attention leaks."""
+    status_tag = f"[{report['status']}]"
+    lines = [
+        "=== Along Prompt Footprint & Attention Leak Report ===",
+        f"Status:      {status_tag}",
+        f"Footprint:   {report['bytes']:,} bytes (~{report['tokens']:,} tokens, {report['lines']:,} lines, {report['chars']:,} chars)",
+        f"Thresholds:  Soft: {report['soft_limit_bytes']:,} B | Hard: {report['hard_limit_bytes']:,} B",
+        f"Override:    {report['allow_oversized']}",
+    ]
+    if report.get("path"):
+        lines.append(f"Source File: {report['path']}")
+
+    leaks = report.get("leaks", [])
+    lines.append("")
+    if not leaks:
+        lines.append("Attention Leaks: None detected (Clean O(1) prompt footprint)")
+    else:
+        lines.append(f"Attention Leaks ({len(leaks)} detected):")
+        for idx, leak in enumerate(leaks, 1):
+            sev = f"[{leak.get('severity', 'warning').upper()}]"
+            ltype = leak.get("type", "unknown")
+            desc = leak.get("description", "")
+            lines.append(f"  {idx}. {sev} {ltype}: {desc}")
+
+    if report["status"] == "FAIL":
+        lines.append("\nResult: PROMPT BUDGET EXCEEDED (Hard limit violation without override)")
+    elif report["status"] == "WARN":
+        lines.append("\nResult: PROMPT BUDGET ADVISORY (Threshold warning or attention leaks present)")
+    else:
+        lines.append("\nResult: ALL PROMPT CHECKS PASSED")
+
+    return "\n".join(lines)

@@ -42,9 +42,10 @@ class TestScaffoldProtocolBlockProfiles(unittest.TestCase):
         self.assertIn("Mandatory Adaptive Complexity Escalation", block)
 
     def test_light_profile_compacts_checklist_and_rules(self):
+        from alongkit.version import CURRENT_PROTOCOL_VERSION
         block = scaffold.render_protocol_block(self.raw_protocol, profile="light")
         self.assertIn("<!-- BEGIN ALONG-PROTOCOL root profile=light (managed by along-init - do not edit by hand) -->", block)
-        self.assertIn("# ALONG-PROTOCOL v4.4.12 (profile: light)", block)
+        self.assertIn(f"# ALONG-PROTOCOL v{CURRENT_PROTOCOL_VERSION} (profile: light)", block)
 
         # 5-step compact checklist
         self.assertIn("1. [ ] **Tests** [gate: test_before_stop]", block)
@@ -69,9 +70,10 @@ class TestScaffoldProtocolBlockProfiles(unittest.TestCase):
         self.assertIn("[gate: workspace-containment]", block)
 
     def test_strict_profile_annotates_header(self):
+        from alongkit.version import CURRENT_PROTOCOL_VERSION
         block = scaffold.render_protocol_block(self.raw_protocol, profile="strict")
         self.assertIn("<!-- BEGIN ALONG-PROTOCOL root profile=strict (managed by along-init - do not edit by hand) -->", block)
-        self.assertIn("# ALONG-PROTOCOL v4.4.12 (profile: strict)", block)
+        self.assertIn(f"# ALONG-PROTOCOL v{CURRENT_PROTOCOL_VERSION} (profile: strict)", block)
         self.assertIn("9. [ ] **Compaction**", block)
 
 

@@ -38,9 +38,12 @@ READ_TOOLS: Tuple[str, ...] = (
 DELETE_TOOLS: Tuple[str, ...] = (
     "delete_file", "remove_file", "unlink", "delete", "file_delete", "remove",
 )
+SUBAGENT_TOOLS: Tuple[str, ...] = (
+    "invoke_subagent", "spawn_subagent", "Task",
+)
 
 #: Every canonical name some gate or safe-list refers to.
-CANONICAL_TOOLS: FrozenSet[str] = frozenset(WRITE_TOOLS + SHELL_TOOLS + SEARCH_TOOLS + READ_TOOLS + DELETE_TOOLS)
+CANONICAL_TOOLS: FrozenSet[str] = frozenset(WRITE_TOOLS + SHELL_TOOLS + SEARCH_TOOLS + READ_TOOLS + DELETE_TOOLS + SUBAGENT_TOOLS)
 
 #: Marker the engine reads to audit a tool no adapter maps.
 UNMAPPED_MARKER = "_along_unmapped_tool"

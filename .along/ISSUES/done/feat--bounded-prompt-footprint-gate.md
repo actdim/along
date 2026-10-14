@@ -3,10 +3,11 @@ protocol: along
 protocol_version: "4.1.0"
 slug: bounded-prompt-footprint-gate
 type: feat
-status: open
+status: done
+completed: 2026-10-14
 priority: medium
 created: 2026-09-27
-updated: 2026-09-27
+updated: 2026-10-14
 agent: antigravity
 tags: [gates, context-budget, tokens, prompt-size, skill-state]
 milestone: v4.6.0-structured-state-and-blackboard-engine

@@ -76,6 +76,15 @@ def ledger_event_attributes(record: dict) -> dict:
              (ALONG_EVENT_OK, record.get("ok")))
     return {name: value for name, value in pairs if value is not None}
 
+
+# ---------------------------------------------------------------------------
+# Prompt Footprint and Attention Leak Semantic Conventions
+# ---------------------------------------------------------------------------
+ALONG_PROMPT_BYTES = "along.prompt.bytes"
+ALONG_PROMPT_TOKENS = "along.prompt.tokens"
+ALONG_PROMPT_STATUS = "along.prompt.status"
+ALONG_PROMPT_LEAKS = "along.prompt.leaks"
+
 # ---------------------------------------------------------------------------
 # Standard Resource Attributes
 # ---------------------------------------------------------------------------

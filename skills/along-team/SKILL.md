@@ -212,7 +212,7 @@ TASK / GOAL
 
 ### Phase 3 to 5: Step Loop (Step N)
 For each step in the Living Plan:
-1. **Implement**: Mark step active: `along scratch update <slug> --step <N> --step-status in-progress`. [gate: team-step-active] denies source edits while no step is in progress. Invoke `spawn_worker` (or execute inline Phase 3) with step instructions and relevant context.
+1. **Implement**: Mark step active: `along scratch update <slug> --step <N> --step-status in-progress`. [gate: team-step-active] denies source edits while no step is in progress. Subagent prompt synthesis enforces an O(1) bounded footprint [gate: bounded-prompt-gate] (32 KB hard ceiling, 16 KB soft warning threshold, and attention leak detection). Invoke `spawn_worker` (or execute inline Phase 3) with step instructions and relevant context.
 2. **Review**: Invoke `spawn_reviewer` (or execute inline Phase 4) to run tests, audit diff, and execute `/along-graph-impact` across all modified files to confirm zero unexpected blast radius. Save rubric verdict into `.along/.session/<slug>/reviews/step-<N>.md` before marking the step passed; [gate: team-reviews-before-stop] blocks the turn end while a passed step has no review file. Output Gate Execution Manifest.
 3. **Reassess & Loop Disambiguation**: Supervisor inspects reviewer verdict:
    - If `PASS`: mark passed (`along scratch update <slug> --step <N> --step-status passed`) and advance to Step N+1.
