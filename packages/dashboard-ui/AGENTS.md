@@ -12,7 +12,7 @@ This document defines the local agent context boundary and engineering rules for
 ## Nearest Context Boundary
 
 When working on the dashboard frontend:
-- Follow all architectural rules and invariants documented in [README.md](./README.md).
+- Follow all architectural rules and conventions documented in [Frontend Coding Conventions](docs/topic--frontend-conventions.md) and [Knowledge Base Index](docs/INDEX.md).
 - Adhere to the strict Dynstruct component model (`@actdim/dynstruct` + `@actdim/dynstruct-mui`).
 - Never introduce raw React component state (`useState`, `useMemo`, `useCallback`, `useEffect`). All component state belongs in `c.model` (MobX).
 - Never use untyped casting (`any` or `as ...`). Maintain 100% strict TypeScript typing.

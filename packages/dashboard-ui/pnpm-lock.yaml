@@ -9,17 +9,17 @@ importers:
   .:
     dependencies:
       '@actdim/dynstruct':
-        specifier: ^1.5.13
-        version: 1.5.13(@actdim/msgmesh@1.5.13(@actdim/utico@1.5.13(dexie@4.4.5)(luxon@3.7.2)(uuid@13.0.2))(rxjs@7.8.2)(uuid@13.0.2))(@actdim/utico@1.5.13(dexie@4.4.5)(luxon@3.7.2)(uuid@13.0.2))(http-status@2.1.0)(jwt-decode@4.0.0)(mobx-react-lite@4.1.1(mobx@6.16.1)(react-dom@19.2.8(react@19.2.8))(react@19.2.8))(mobx-utils@6.1.1(mobx@6.16.1))(mobx@6.16.1)(path-to-regexp@8.4.2)(react-dom@19.2.8(react@19.2.8))(react-router-dom@7.18.2(react-dom@19.2.8(react@19.2.8))(react@19.2.8))(react-router@8.3.0(react-dom@19.2.8(react@19.2.8))(react@19.2.8))(react@19.2.8)(rxjs@7.8.2)(uuid@13.0.2)
+        specifier: ^1.8.3
+        version: 1.8.3(@actdim/msgmesh@1.8.3(@actdim/utico@1.8.3(dexie@4.4.5)(luxon@3.7.2)(uuid@13.0.2))(rxjs@7.8.2)(uuid@13.0.2))(@actdim/utico@1.8.3(dexie@4.4.5)(luxon@3.7.2)(uuid@13.0.2))(http-status@2.1.0)(jwt-decode@4.0.0)(mobx-react-lite@4.1.1(mobx@6.16.1)(react-dom@19.2.8(react@19.2.8))(react@19.2.8))(mobx-utils@6.1.1(mobx@6.16.1))(mobx@6.16.1)(path-to-regexp@8.4.2)(react-dom@19.2.8(react@19.2.8))(react-router-dom@7.18.2(react-dom@19.2.8(react@19.2.8))(react@19.2.8))(react-router@8.3.0(react-dom@19.2.8(react@19.2.8))(react@19.2.8))(react@19.2.8)(rxjs@7.8.2)(uuid@13.0.2)
       '@actdim/dynstruct-mui':
-        specifier: ^1.5.13
-        version: 1.5.13(288f7b9c921eda986f523681b65a8b87)
+        specifier: ^1.8.3
+        version: 1.8.3(21b9960374fc18347efdcfad52a5f473)
       '@actdim/msgmesh':
-        specifier: ^1.5.13
-        version: 1.5.13(@actdim/utico@1.5.13(dexie@4.4.5)(luxon@3.7.2)(uuid@13.0.2))(rxjs@7.8.2)(uuid@13.0.2)
+        specifier: ^1.8.3
+        version: 1.8.3(@actdim/utico@1.8.3(dexie@4.4.5)(luxon@3.7.2)(uuid@13.0.2))(rxjs@7.8.2)(uuid@13.0.2)
       '@actdim/utico':
-        specifier: ^1.5.13
-        version: 1.5.13(dexie@4.4.5)(luxon@3.7.2)(uuid@13.0.2)
+        specifier: ^1.8.3
+        version: 1.8.3(dexie@4.4.5)(luxon@3.7.2)(uuid@13.0.2)
       '@emotion/react':
         specifier: ^11.14.0
         version: 11.14.0(@types/react@19.2.18)(react@19.2.8)
@@ -111,12 +111,12 @@ importers:
 
 packages:
 
-  '@actdim/dynstruct-mui@1.5.13':
-    resolution: {integrity: sha512-2skYmkfptopLe/rigUDhaJQAr73Te6vYZ88Ml7J9Bs9Rp836Xa2GyyjkIGXmQBMCXGX8Vfyh7FBiiUEQW0kcbQ==}
+  '@actdim/dynstruct-mui@1.8.3':
+    resolution: {integrity: sha512-Pr9FOfS8fiYUIQhUXHnYkwLLnNLJRXzdbUBCJtY8EfWHi6bfUfczTWDKfkHgNvOng6xCW0u/87n8eBvJIXBC0g==}
     peerDependencies:
-      '@actdim/dynstruct': 1.5.13
-      '@actdim/msgmesh': 1.5.13
-      '@actdim/utico': 1.5.13
+      '@actdim/dynstruct': '>=1.8.3'
+      '@actdim/msgmesh': '>=1.8.3'
+      '@actdim/utico': '>=1.8.3'
       '@emotion/react': '>=11.14.0'
       '@emotion/styled': '>=11.14.1'
       '@mui/material': '>=9.0.1'
@@ -133,11 +133,11 @@ packages:
       rxjs: '>=7.8.2'
       uuid: '>=13.0.0'
 
-  '@actdim/dynstruct@1.5.13':
-    resolution: {integrity: sha512-snipVvr8hOiDcdnYc5XWsx368n7lEvg2JpXSVALaeVk2cp7znaJ80xbEJoAVqZqpT/2ft39Oh8/TSYZ4uTZfog==}
+  '@actdim/dynstruct@1.8.3':
+    resolution: {integrity: sha512-UcW0gQbxpI2r+w5dhoDvhPD7MSj0sw4Bndi33OigI0bcpMOXvA8p3xWeytukDxr+yoJ5xWGovZl4MYNfp6YhfA==}
     peerDependencies:
-      '@actdim/msgmesh': 1.5.13
-      '@actdim/utico': 1.5.13
+      '@actdim/msgmesh': '>=1.8.3'
+      '@actdim/utico': '>=1.8.3'
       http-status: '>=2.1.0'
       jwt-decode: '>=4.0.0'
       mobx: '>=6.15.0'
@@ -151,15 +151,15 @@ packages:
       rxjs: '>=7.8.2'
       uuid: '>=13.0.0'
 
-  '@actdim/msgmesh@1.5.13':
-    resolution: {integrity: sha512-qcU2tjeOqGd2ZRcLasjF7tBL8ummQPOtTWuJFp+OClSqzZ3K3CtKUI6Dkal2+zL/pADv+bm46WPTMZ8SbhVzAw==}
+  '@actdim/msgmesh@1.8.3':
+    resolution: {integrity: sha512-QHU50upPijg9MkxXkek8cDd6LvchxjJEmKwXi6kticHbnqlTd3BYDIbl7pS6oOuVRXamIQb2JCBTDBhrx6JFQQ==}
     peerDependencies:
-      '@actdim/utico': 1.5.13
+      '@actdim/utico': '>=1.8.3'
       rxjs: '>=7.8.0'
       uuid: '>=13.0.0'
 
-  '@actdim/utico@1.5.13':
-    resolution: {integrity: sha512-H6mPsCTdkRvJQlYP+FwxkxPBEWFKvg4aiRtJSBK2BHvVQq4YffP2BaKLLlytKToRLq4exXX1eo337mn0G0s8eg==}
+  '@actdim/utico@1.8.3':
+    resolution: {integrity: sha512-pVqOY5WEMPNlFWyECwXQhGonK7I+Tyyng+rKMJVqNS6IMPqWxXb+ZWPdfohRjhH7U2EEcjZB+QsFTtV5oR+6TA==}
     peerDependencies:
       dexie: '>=4.2.0'
       luxon: '>=3.7.2'
@@ -1772,11 +1772,11 @@ packages:
 
 snapshots:
 
-  '@actdim/dynstruct-mui@1.5.13(288f7b9c921eda986f523681b65a8b87)':
+  '@actdim/dynstruct-mui@1.8.3(21b9960374fc18347efdcfad52a5f473)':
     dependencies:
-      '@actdim/dynstruct': 1.5.13(@actdim/msgmesh@1.5.13(@actdim/utico@1.5.13(dexie@4.4.5)(luxon@3.7.2)(uuid@13.0.2))(rxjs@7.8.2)(uuid@13.0.2))(@actdim/utico@1.5.13(dexie@4.4.5)(luxon@3.7.2)(uuid@13.0.2))(http-status@2.1.0)(jwt-decode@4.0.0)(mobx-react-lite@4.1.1(mobx@6.16.1)(react-dom@19.2.8(react@19.2.8))(react@19.2.8))(mobx-utils@6.1.1(mobx@6.16.1))(mobx@6.16.1)(path-to-regexp@8.4.2)(react-dom@19.2.8(react@19.2.8))(react-router-dom@7.18.2(react-dom@19.2.8(react@19.2.8))(react@19.2.8))(react-router@8.3.0(react-dom@19.2.8(react@19.2.8))(react@19.2.8))(react@19.2.8)(rxjs@7.8.2)(uuid@13.0.2)
-      '@actdim/msgmesh': 1.5.13(@actdim/utico@1.5.13(dexie@4.4.5)(luxon@3.7.2)(uuid@13.0.2))(rxjs@7.8.2)(uuid@13.0.2)
-      '@actdim/utico': 1.5.13(dexie@4.4.5)(luxon@3.7.2)(uuid@13.0.2)
+      '@actdim/dynstruct': 1.8.3(@actdim/msgmesh@1.8.3(@actdim/utico@1.8.3(dexie@4.4.5)(luxon@3.7.2)(uuid@13.0.2))(rxjs@7.8.2)(uuid@13.0.2))(@actdim/utico@1.8.3(dexie@4.4.5)(luxon@3.7.2)(uuid@13.0.2))(http-status@2.1.0)(jwt-decode@4.0.0)(mobx-react-lite@4.1.1(mobx@6.16.1)(react-dom@19.2.8(react@19.2.8))(react@19.2.8))(mobx-utils@6.1.1(mobx@6.16.1))(mobx@6.16.1)(path-to-regexp@8.4.2)(react-dom@19.2.8(react@19.2.8))(react-router-dom@7.18.2(react-dom@19.2.8(react@19.2.8))(react@19.2.8))(react-router@8.3.0(react-dom@19.2.8(react@19.2.8))(react@19.2.8))(react@19.2.8)(rxjs@7.8.2)(uuid@13.0.2)
+      '@actdim/msgmesh': 1.8.3(@actdim/utico@1.8.3(dexie@4.4.5)(luxon@3.7.2)(uuid@13.0.2))(rxjs@7.8.2)(uuid@13.0.2)
+      '@actdim/utico': 1.8.3(dexie@4.4.5)(luxon@3.7.2)(uuid@13.0.2)
       '@emotion/react': 11.14.0(@types/react@19.2.18)(react@19.2.8)
       '@emotion/styled': 11.14.1(@emotion/react@11.14.0(@types/react@19.2.18)(react@19.2.8))(@types/react@19.2.18)(react@19.2.8)
       '@mui/material': 6.5.0(@emotion/react@11.14.0(@types/react@19.2.18)(react@19.2.8))(@emotion/styled@11.14.1(@emotion/react@11.14.0(@types/react@19.2.18)(react@19.2.8))(@types/react@19.2.18)(react@19.2.8))(@types/react@19.2.18)(react-dom@19.2.8(react@19.2.8))(react@19.2.8)
@@ -1793,12 +1793,13 @@ snapshots:
       rxjs: 7.8.2
       uuid: 13.0.2
 
-  '@actdim/dynstruct@1.5.13(@actdim/msgmesh@1.5.13(@actdim/utico@1.5.13(dexie@4.4.5)(luxon@3.7.2)(uuid@13.0.2))(rxjs@7.8.2)(uuid@13.0.2))(@actdim/utico@1.5.13(dexie@4.4.5)(luxon@3.7.2)(uuid@13.0.2))(http-status@2.1.0)(jwt-decode@4.0.0)(mobx-react-lite@4.1.1(mobx@6.16.1)(react-dom@19.2.8(react@19.2.8))(react@19.2.8))(mobx-utils@6.1.1(mobx@6.16.1))(mobx@6.16.1)(path-to-regexp@8.4.2)(react-dom@19.2.8(react@19.2.8))(react-router-dom@7.18.2(react-dom@19.2.8(react@19.2.8))(react@19.2.8))(react-router@8.3.0(react-dom@19.2.8(react@19.2.8))(react@19.2.8))(react@19.2.8)(rxjs@7.8.2)(uuid@13.0.2)':
+  '@actdim/dynstruct@1.8.3(@actdim/msgmesh@1.8.3(@actdim/utico@1.8.3(dexie@4.4.5)(luxon@3.7.2)(uuid@13.0.2))(rxjs@7.8.2)(uuid@13.0.2))(@actdim/utico@1.8.3(dexie@4.4.5)(luxon@3.7.2)(uuid@13.0.2))(http-status@2.1.0)(jwt-decode@4.0.0)(mobx-react-lite@4.1.1(mobx@6.16.1)(react-dom@19.2.8(react@19.2.8))(react@19.2.8))(mobx-utils@6.1.1(mobx@6.16.1))(mobx@6.16.1)(path-to-regexp@8.4.2)(react-dom@19.2.8(react@19.2.8))(react-router-dom@7.18.2(react-dom@19.2.8(react@19.2.8))(react@19.2.8))(react-router@8.3.0(react-dom@19.2.8(react@19.2.8))(react@19.2.8))(react@19.2.8)(rxjs@7.8.2)(uuid@13.0.2)':
     dependencies:
-      '@actdim/msgmesh': 1.5.13(@actdim/utico@1.5.13(dexie@4.4.5)(luxon@3.7.2)(uuid@13.0.2))(rxjs@7.8.2)(uuid@13.0.2)
-      '@actdim/utico': 1.5.13(dexie@4.4.5)(luxon@3.7.2)(uuid@13.0.2)
+      '@actdim/msgmesh': 1.8.3(@actdim/utico@1.8.3(dexie@4.4.5)(luxon@3.7.2)(uuid@13.0.2))(rxjs@7.8.2)(uuid@13.0.2)
+      '@actdim/utico': 1.8.3(dexie@4.4.5)(luxon@3.7.2)(uuid@13.0.2)
       http-status: 2.1.0
       jwt-decode: 4.0.0
+      magic-string: 0.30.21
       mobx: 6.16.1
       mobx-react-lite: 4.1.1(mobx@6.16.1)(react-dom@19.2.8(react@19.2.8))(react@19.2.8)
       mobx-utils: 6.1.1(mobx@6.16.1)
@@ -1810,13 +1811,13 @@ snapshots:
       rxjs: 7.8.2
       uuid: 13.0.2
 
-  '@actdim/msgmesh@1.5.13(@actdim/utico@1.5.13(dexie@4.4.5)(luxon@3.7.2)(uuid@13.0.2))(rxjs@7.8.2)(uuid@13.0.2)':
+  '@actdim/msgmesh@1.8.3(@actdim/utico@1.8.3(dexie@4.4.5)(luxon@3.7.2)(uuid@13.0.2))(rxjs@7.8.2)(uuid@13.0.2)':
     dependencies:
-      '@actdim/utico': 1.5.13(dexie@4.4.5)(luxon@3.7.2)(uuid@13.0.2)
+      '@actdim/utico': 1.8.3(dexie@4.4.5)(luxon@3.7.2)(uuid@13.0.2)
       rxjs: 7.8.2
       uuid: 13.0.2
 
-  '@actdim/utico@1.5.13(dexie@4.4.5)(luxon@3.7.2)(uuid@13.0.2)':
+  '@actdim/utico@1.8.3(dexie@4.4.5)(luxon@3.7.2)(uuid@13.0.2)':
     dependencies:
       dexie: 4.4.5
       luxon: 3.7.2

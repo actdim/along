@@ -4,116 +4,35 @@ The Along Dashboard UI is the internal web interface for inspecting repository e
 
 ---
 
-## Architecture & Ecosystem Standards
+## Overview
 
 The dashboard frontend is built strictly on the ActDim component and messaging ecosystem:
 
-### 1. Core Ecosystem Components
-
-1. **`@actdim/dynstruct`**
-   - **Pattern**: Structure-first component definition via `ComponentStruct<AppMsgStruct, ...>` with explicit `props`, `actions`, `children`, `events`, and `effects`.
-   - **Zero React Boilerplate**: All component state lives in observable `c.model` (MobX under the hood). No raw React `useState`, `useMemo`, `useCallback`, or hook spaghetti.
-
-2. **`@actdim/dynstruct-mui`**
-   - **Pattern**: Material UI components adapted as Dynstruct hook-constructors (`useButton`, `useDrawer`, `useCard`, `useTabs`, `useChip`, `useTextField`, `useDialog`, `useTable`, etc.).
-
-3. **`@actdim/msgmesh`**
-   - **Pattern**: Type-safe async messaging mesh for API communication and inter-component signaling.
-
-4. **`@actdim/utico`**
-   - **Pattern**: Foundation type utilities (`KeysOf`, `ToMsgChannelPrefix`, `ToMsgStruct`).
+- **`@actdim/dynstruct`**: Structure-first component definition via `ComponentStruct` with explicit `props`, `actions`, `children`, `events`, and `effects`. Zero React boilerplate; all state lives in observable models.
+- **`@actdim/dynstruct-mui`**: Material UI components adapted as Dynstruct hook-constructors (`useButton`, `useDrawer`, `useCard`, etc.).
+- **`@actdim/msgmesh`**: Type-safe async messaging mesh for API communication and inter-component signaling.
+- **`@actdim/utico`**: Foundation type utilities (`KeysOf`, `ToMsgChannelPrefix`, `ToMsgStruct`).
 
 ---
 
-## Mandatory Architectural Rules & Invariants
+## Documentation & Conventions
 
-### 1. Zero Manual API Channels & No Manual `fetch` Handlers
-- **NEVER** write manual `MsgStruct` channel maps (`{ in: ..., out: ... }`) for backend REST/OpenAPI endpoints.
-- **NEVER** write manual `fetch` or `axios` handlers inside `provide()`.
-- All backend API clients are generated automatically from FastAPI OpenAPI schemas via NSwag:
-  ```bash
-  pnpm run generate:api
-  ```
-  This creates [src/api/client.ts](./src/api/client.ts) containing `DashboardApiClient`.
+Detailed technical specifications, coding conventions, and architectural contracts live in the Knowledge Base:
 
-### 2. Dynamic Bus Struct via `@actdim/msgmesh/adapters`
-- Use `ToMsgChannelPrefix` and `ToMsgStruct` to generate typed channels at compile-time directly from `DashboardApiClient`:
-  ```typescript
-  export type ApiPrefix = 'API';
-  export type DashboardApiClientName = 'DashboardApiClient';
+- **[Knowledge Base Index](./docs/INDEX.md)**: Documentation catalog and topic graph.
+- **[Frontend Coding Conventions](./docs/topic--frontend-conventions.md)**: Mandatory Dynstruct and MsgMesh conventions, reactivity rules, component model, styling, and overlays.
+- **[System Architecture & Flow](./docs/topic--architecture.md)**: System topology and backend integration.
+- **[Domain Model & Entity Ecosystem](./docs/topic--domain-model.md)**: Entity schemas and DAG relationships.
+- **[Setup & Workflow](./docs/topic--setup-and-workflow.md)**: Developer setup and verification lifecycle.
 
-  export type DashboardChannelPrefix = ToMsgChannelPrefix<
-    DashboardApiClientName,
-    ApiPrefix,
-    BaseServiceSuffix
-  >; // 'API.DASHBOARD.'
+---
 
-  export type DashboardApiStruct = ToMsgStruct<
-    DashboardApiClient,
-    DashboardChannelPrefix
-  >;
-  ```
-- Resulting channels are compile-time verified:
-  - `getFullData()` -> `"API.DASHBOARD.GETFULLDATA"`
-  - `searchKb(q, tag, type)` -> `"API.DASHBOARD.SEARCHKB"`
-  - `listIssues(status, ...)` -> `"API.DASHBOARD.LISTISSUES"`
+## Quick Start & Verification
 
-### 3. Automated Runtime Registration via `registerAdapters`
-- Use `getMsgChannelSelector(services)` and `registerAdapters`:
-  ```typescript
-  const services: Record<DashboardChannelPrefix, any> = {
-    'API.DASHBOARD.': new DashboardApiClient(),
-  };
+### Scripts
 
-  const adapters = Object.entries(services).map(([_, service]) => ({
-    service,
-    channelSelector: getMsgChannelSelector(services),
-  })) as MsgProviderAdapter[];
-
-  registerAdapters(dashboardBus, adapters);
-  ```
-
-### 4. Implicit Bus Injection via React Context & Component Proxies
-- Create the bus once in `src/bus.ts` (`dashboardBus`).
-- Inject it at the application root via `<ComponentContextProvider value={{ msgBus: dashboardBus }}>`.
-- Components **never** create local buses or accept buses via manual props. Components access the bus implicitly via `c.msgBus`.
-- `c.msgBus` inside a Dynstruct component is a specialized proxy that integrates with the component lifecycle, handles error scoping, and manages `msgScope` permissions.
-
-### 5. Clear Interaction Points & Observability
-- All published and subscribed channels of a component must be declared in its `msgScope`:
-  ```typescript
-  export type MyViewStruct = ComponentStruct<
-    DashboardAppMsgStruct,
-    {
-      msgScope: {
-        subscribe: DashboardMsgChannels<'APP.DATA.UPDATED' | 'APP.SSE.STATUS'>;
-        publish: DashboardMsgChannels<'API.DASHBOARD.GETFULLDATA' | 'APP.ENTITY.SELECT'>;
-      };
-      // ...
-    }
-  >;
-  ```
-
-### 6. 100% Strict Type Safety (Zero `any` & Zero `window` State Hacks)
-- No `any` type casting.
-- No `as ...` type assertions.
-- No storing state on `window` (`window.__ALONG_DATA__`).
-- All payloads are strictly typed through channel definitions and NSwag DTO interfaces.
-
-### 7. Content Security & Markdown Sanitization
-- Markdown rendering (e.g. in `EntityDrawer.tsx`) must always be sanitized via `DOMPurify.sanitize(marked.parse(...))` to prevent XSS vulnerabilities.
-- Mermaid diagrams must be configured with `securityLevel: 'strict'` under Content Security Policy (CSP).
-
-### 8. Testing & Quality Gates
-- Component and unit tests use `vitest` with `happy-dom`:
-  ```bash
-  pnpm test
-  ```
-- Type checking is enforced via `tsc --noEmit`:
-  ```bash
-  pnpm run typecheck
-  ```
-- Production build:
-  ```bash
-  pnpm run build
-  ```
+- `pnpm run dev`: Start local Vite development server.
+- `pnpm run build`: Production typecheck and bundle build (`tsc --noEmit && vite build`).
+- `pnpm run generate:api`: Generate TypeScript client from FastAPI OpenAPI schema via NSwag.
+- `pnpm run typecheck`: Run strict TypeScript validation (`tsc --noEmit`).
+- `pnpm test`: Execute automated test suite via Vitest (`vitest run`).

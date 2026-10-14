@@ -4,7 +4,7 @@ slug: INDEX
 title: Along Dashboard UI (`@along/dashboard-ui`) - Knowledge Base Topic Index
 type: index
 created: 2026-09-29
-updated: 2026-10-13
+updated: 2026-10-14
 tags: [index, kb, topics, map]
 ---
 
@@ -21,6 +21,8 @@ flowchart TD
     INDEX --> T_ARCHITECTURE
     T_DOMAIN_MODEL["Domain Model & Entity Ecosystem"]
     INDEX --> T_DOMAIN_MODEL
+    T_FRONTEND_CONVENTIONS["Frontend Coding Conventions (Dynstruct + MsgMesh)"]
+    INDEX --> T_FRONTEND_CONVENTIONS
     T_SETUP_AND_WORKFLOW["Setup, Installation & Agent Workflows"]
     INDEX --> T_SETUP_AND_WORKFLOW
 ```
@@ -31,6 +33,7 @@ flowchart TD
 
 - **[System Architecture & Flow](./topic--architecture.md)** (architecture) `architecture`, `boundaries`, `providers`, `mcp`, `dashboard`
 - **[Domain Model & Entity Ecosystem](./topic--domain-model.md)** (domain-model) `domain-model`, `entities`, `schemas`, `dag`, `metadata`
+- **[Frontend Coding Conventions (Dynstruct + MsgMesh)](./topic--frontend-conventions.md)** (reference) `conventions`, `dynstruct`, `msgmesh`, `dynstruct-mui`, `utico`, `routing`, `rules`
 - **[Setup, Installation & Agent Workflows](./topic--setup-and-workflow.md)** (setup-workflow) `setup`, `workflow`, `installation`, `lifecycle`, `quality-gates`
 
 ---
