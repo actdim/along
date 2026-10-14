@@ -199,3 +199,4 @@ _Index of sessions (newest last). One line per session:_
 2026-10-14 - dashboard-docs-kb-alignment - antigravity - Align dashboard conventions into Knowledge Base topic and update AGENTS references - [Session Log](./SESSIONS/2026/2026-10-14--dashboard-docs-kb-alignment.md)
 2026-10-14 - session-scanner-prompts-dir-leak - antigravity - Exclude internal prompts directory from session and blackboard scanners - [Session Log](./SESSIONS/2026/2026-10-14--session-scanner-prompts-dir-leak.md)
 2026-10-14 - doc-routing-compliance-gate - antigravity - Enforce Documentation Routing Tree via doc-routing-compliance gate - [Session Log](./SESSIONS/2026/2026-10-14--doc-routing-compliance-gate.md)
+2026-10-14 - ci-linux-toolnature-and-secrets - antigravity - Fix CI Linux toolnature cross-os paths and secrets false positive - [Session Log](./SESSIONS/2026/2026-10-14--ci-linux-toolnature-and-secrets.md)

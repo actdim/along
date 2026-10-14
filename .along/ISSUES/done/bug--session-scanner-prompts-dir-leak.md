@@ -24,7 +24,7 @@ The internal directory `.along/.session/prompts/` stores timestamps of recent us
 As a result:
 1. `prompts` is mistakenly interpreted as an issue slug or blackboard directory.
 2. `along session list` reports a phantom blocked item:
-   ```
+   ```text
    - prompts [blocked]
        sessions: none bound
        files: 0 exclusive, 0 shared; 0 still uncommitted

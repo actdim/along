@@ -98,7 +98,7 @@ class TestRedactorFastPath(unittest.TestCase):
         raw = f"Header: Bearer {raw_key} with AWS AKIAIOSFODNN7EXAMPLE and ghp_123456789012345678901234"  # along: allow-no-tracked-secrets
         sanitized = self.redactor.sanitize_text(raw)
         self.assertNotIn("123456789012345678901234567890", sanitized)
-        self.assertNotIn("AKIAIOSFODNN7EXAMPLE", sanitized)
+        self.assertNotIn("AKIAIOSFODNN7EXAMPLE", sanitized)  # along: allow-no-tracked-secrets
         self.assertNotIn("ghp_123456789012345678901234", sanitized)
         self.assertIn("Bearer [REDACTED]", sanitized)
         self.assertIn("[REDACTED_AWS_KEY]", sanitized)

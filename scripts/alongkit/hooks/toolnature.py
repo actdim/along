@@ -723,6 +723,9 @@ def _classify_deletion(call: NormalizedCall, repo_root: Optional[str] = None) ->
         if t_raw in ("/", "\\", ".") or (len(t_raw) >= 2 and t_raw[1] == ":" and len(t_raw) <= 3):
             return ToolClass.DESTRUCTIVE
 
+        if re.match(r"^[a-zA-Z]:", t_raw) and os.name != "nt":
+            return ToolClass.DESTRUCTIVE
+
         if t_raw in ("~", "$HOME", "%USERPROFILE%") or t_raw.startswith(("~/", "~\\", "$HOME/", "$HOME\\", "%USERPROFILE%\\")):
             exp = os.path.normcase(os.path.abspath(os.path.expanduser(os.path.expandvars(t_raw))))
             if exp == user_home or not repo.is_within(exp, root_norm):
@@ -851,6 +854,9 @@ def _classify_out_file(call: NormalizedCall, repo_root: Optional[str] = None) ->
         exp_t = _expand_system_path(t_raw)
         if _is_temp_dir_path(exp_t):
             continue
+
+        if re.match(r"^[a-zA-Z]:", t_raw) and os.name != "nt":
+            return ToolClass.DESTRUCTIVE
 
         if t_raw in ("~", "$HOME", "%USERPROFILE%") or t_raw.startswith(("~/", "~\\", "$HOME/", "$HOME\\", "%USERPROFILE%\\")):
             exp_home = os.path.normcase(os.path.abspath(exp_t))

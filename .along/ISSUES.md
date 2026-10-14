@@ -51,4 +51,4 @@
 - [x] `(feat)` [bounded-prompt-footprint-gate](ISSUES/done/feat--bounded-prompt-footprint-gate.md)
 - [x] `(debt)` [remove-static-dashboard-data-json-export](ISSUES/done/debt--remove-static-dashboard-data-json-export.md)
 - [x] `(bug)` [session-scanner-prompts-dir-leak](ISSUES/done/bug--session-scanner-prompts-dir-leak.md)
-<!-- 253 older completed issue(s) archived in .along/ISSUES/done/ -->
+<!-- 254 older completed issue(s) archived in .along/ISSUES/done/ -->
