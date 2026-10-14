@@ -1467,6 +1467,34 @@ def _kb_validate_taxonomy_and_symbols(repo_root: str, docs_dir: str, articles, c
     return section_violations, ghost_symbols
 
 
+def _kb_validate_doc_routing(repo_root: str):
+    """Inspect README.md and AGENTS.md files for Documentation Routing Tree compliance."""
+    from alongkit import repochecks
+    candidates = []
+    for root, dirs, files in os.walk(repo_root):
+        dirs[:] = [d for d in dirs if d not in IGNORED_DIRS and not d.startswith(".")]
+        for f in files:
+            if f.lower() in ("readme.md", "agents.md"):
+                rel = os.path.relpath(os.path.join(root, f), repo_root).replace("\\", "/")
+                candidates.append(rel)
+
+    def read_file(rel_path: str):
+        try:
+            return textio.read_text(os.path.join(repo_root, rel_path), strict=False)
+        except OSError:
+            return None
+
+    raw_findings = repochecks.check_doc_routing_compliance(candidates, read_file, {})
+    violations = [{"location": loc, "message": msg} for loc, msg in raw_findings]
+    if violations:
+        print(f"   [WARN] Documentation Routing Tree Gate [gate: doc-routing-compliance] detected {len(violations)} issue(s):")
+        for v in violations:
+            print(f"      - {v['location']}: {v['message']}")
+    else:
+        print("   [OK] Documentation Routing Tree Gate [gate: doc-routing-compliance]: README overview and AGENTS references clean.")
+    return violations
+
+
 def _kb_format_report_and_exit(
     total_articles: int,
     broken_links,
@@ -1482,6 +1510,7 @@ def _kb_format_report_and_exit(
     strict: bool,
     strict_sections: bool,
     check_symbols: bool,
+    doc_routing_violations=None,
 ):
     print(f"-> Knowledge Base sync complete. Total active articles: {total_articles}\n")
 
@@ -1498,6 +1527,7 @@ def _kb_format_report_and_exit(
             "crosslink_candidates": crosslink_candidates,
             "total_crosslinks_applied": total_crosslinks_applied,
             "ghost_symbols": ghost_symbols,
+            "doc_routing_violations": doc_routing_violations or [],
         }
         print(json.dumps(report, indent=2, ensure_ascii=False))
 
@@ -1508,6 +1538,8 @@ def _kb_format_report_and_exit(
         reasons.append(f"{len(section_violations)} section contract violation(s)")
     if strict and check_symbols and ghost_symbols:
         reasons.append(f"{len(ghost_symbols)} ghost symbol(s)")
+    if strict and doc_routing_violations:
+        reasons.append(f"{len(doc_routing_violations)} doc routing violation(s)")
 
     if reasons:
         print(f"   [FAIL] Gate failed in strict mode: {', '.join(reasons)}.")
@@ -1600,6 +1632,8 @@ def sync_kb(
         repo_root, docs_dir, articles, check_symbols
     )
 
+    doc_routing_violations = _kb_validate_doc_routing(repo_root)
+
     total_articles = len(articles) + (1 if os.path.exists(index_path) else 0)
 
     _kb_format_report_and_exit(
@@ -1617,6 +1651,7 @@ def sync_kb(
         strict,
         strict_sections,
         check_symbols,
+        doc_routing_violations=doc_routing_violations,
     )
 
     return total_articles, len(broken_links)

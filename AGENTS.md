@@ -48,7 +48,7 @@ Also, when relevant: `.along/VISION.md`, `.along/GLOSSARY.md`. These reflect the
 - **Doc Blast Radius**: After non-trivial code changes, agents MUST map affected symbols to `docs/topic--*.md` articles and update them before completing the task.
 - **Manual Document Lock** [gate: doc-manual-lock]: Documents marked with `write_policy: manual` (or `locked: true`) are protected from automated agent modification during blast radius sweeps. Modifications require an explicit documentation issue (`docs--<slug>`).
 - **Managed Rule Packs** [gate: rule-pack-protection]: Never edit `.along/rules/**/*.md`; `along rules attach` owns them. Project guidelines go to `docs/topic--<slug>.md` or "Project specifics"; revert with `along rules restore`. `.along/rules/gates.yaml` and `.along/scripts/` stay repo-owned.
-- **Documentation Routing Tree**:
+- **Documentation Routing Tree** [gate: doc-routing-compliance]:
   - Architectural choice / trade-off -> `.along/DECISIONS/` (ADR)
   - Public overview / pitch / landing page -> `README.md`
   - Technical interface contract / CLI spec -> `docs/topic--<slug>.md` (`type: reference`)
@@ -119,4 +119,4 @@ This repository is **ActDim Along** (`actdim-along`) - the provider-agnostic age
 - **Migration**: `migrate_protocol.py` keeps destinations, union-merges append-only files, backs up to `.along/.migration-backup/`.
 - **Install**: `install.ps1 -Target all` / `install.bat` (Windows), `bash install.sh` (Unix); `-Uninstall` / `--uninstall`; manifest `~/.along/install-manifest.json`.
 - **Lifecycle**: Tests: `python .along/scripts/test.py`. Dev: `npm run dev`. Build: `npm run build`.
-- **Frontend** (`packages/dashboard-ui/`): Internal dashboard. Strict `@actdim/dynstruct` + MobX (zero `useState`/`useEffect`), NSwag client via `@actdim/msgmesh/adapters`. 100% typed (zero `any`/`as`). Rules: `[packages/dashboard-ui/README.md](./packages/dashboard-ui/README.md)`.
+- **Frontend** (`packages/dashboard-ui/`): Internal dashboard. Strict `@actdim/dynstruct` + MobX (zero `useState`/`useEffect`), NSwag client via `@actdim/msgmesh/adapters`. 100% typed (zero `any`/`as`). Rules: `[packages/dashboard-ui/docs/topic--frontend-conventions.md](./packages/dashboard-ui/docs/topic--frontend-conventions.md)`.

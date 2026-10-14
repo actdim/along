@@ -15,6 +15,8 @@ blobs, `--ci` passes every tracked path and reads the checked-out tree. A check 
 - `check_stable_entry_point`      `README.md` and `docs/` never link into `.along/`.
 - `check_issue_lifecycle`         closed issues live in `.along/ISSUES/done/`, open ones don't.
 - `check_no_tracked_secrets`      no private keys or well-known token shapes in content.
+- `check_doc_routing_compliance`  README.md stays a high-level overview (no code fences >50 lines,
+                                  no convention sections >50 lines); AGENTS.md links to docs/ for rules.
 - `check_rule_pack_integrity`     a `.along/rules/**/*.md` rule pack carries the managed header
                                   and its body matches the header hash. Not a catalogue rule
                                   handler: `gitgates.check_rule_packs` runs it for the
@@ -65,6 +67,21 @@ _CLOSED_STATUSES = {"done", "cancelled", "canceled", "superseded", "wontfix", "r
 _ACTIVE_STATUSES = {"open", "in-progress", "blocked", "review", "todo"}
 _BINARY_EXTS = {".png", ".jpg", ".jpeg", ".gif", ".ico", ".webp", ".pdf", ".zip", ".gz",
                 ".whl", ".woff", ".woff2", ".ttf", ".pyc", ".exe", ".dll"}
+_TECH_CONVENTIONS_HEADING_RE = re.compile(r"^ {0,3}(#{1,6})\s+(.+)$")
+_TECH_CONVENTIONS_TITLE_RE = re.compile(
+    r"\b(?:conventions?|coding\s+standards?|coding\s+conventions?|architectural\s+rules?|"
+    r"architecture\s+(?:and|&)\s+ecosystem\s+standards?|mandatory\s+(?:architectural\s+)?rules?|"
+    r"component\s+models?|interface\s+contracts?|api\s+reference|rule\s+packs?|quality\s+gate\s+rules)\b",
+    re.IGNORECASE,
+)
+_AGENTS_README_CONVENTION_LINK_RE = re.compile(
+    r"\[(?P<text>[^\]]*\b(?:conventions?|standards?|rules?|architectur\w*|contracts?|components?)\b[^\]]*)\]\((?P<target>[^\)]*README\.md[^\)]*)\)",
+    re.IGNORECASE,
+)
+_AGENTS_README_CONVENTION_PROSE_RE = re.compile(
+    r"\b(?:conventions?|coding\s+standards?|architectur\w*\s+rules?)\b.*?\b(?:documented\s+in|see|refer\s+to|in)\s+\[?[^\]\n]*README\.md",
+    re.IGNORECASE,
+)
 
 
 def _rc_pragma(gate_id: str) -> str:
@@ -276,3 +293,128 @@ def check_no_tracked_secrets(paths: Sequence[str], read: Reader,
                                      f"looks like a {label}; remove it and rotate the credential"))
                     break
     return findings
+
+
+def check_doc_routing_compliance(paths: Sequence[str], read: Reader,
+                                  options: Dict[str, Any]) -> List[Finding]:
+    """README.md remains an overview; contracts and conventions belong in docs/topic--*.md."""
+    findings: List[Finding] = []
+    pragma = _rc_pragma("doc_routing_compliance")
+    scope = options.get("scope")
+
+    for path in paths:
+        if _rc_excluded(path, options):
+            continue
+        if scope and not any(fnmatch.fnmatch(path, pat) for pat in scope):
+            continue
+
+        norm_path = path.replace("\\", "/")
+        base_name = posixpath.basename(norm_path).lower()
+
+        if base_name == "readme.md":
+            text = read(path)
+            if not text:
+                continue
+            if any(pragma in l for l in text.splitlines()[:5]):
+                continue
+
+            lines = text.splitlines()
+            total_lines = len(lines)
+
+            fence_marker: Optional[str] = None
+            fence_start: int = 0
+            fence_lines: int = 0
+            fence_has_pragma = False
+
+            tech_heading_line: Optional[int] = None
+            tech_heading_title: str = ""
+            tech_heading_level: int = 0
+            tech_section_lines: int = 0
+            has_tech_section = False
+
+            for num, line in enumerate(lines, 1):
+                fence_match = _FENCE_RE.match(line)
+                if fence_marker is None:
+                    if fence_match:
+                        fence_marker = fence_match.group(1)
+                        fence_start = num
+                        fence_lines = 0
+                        fence_has_pragma = pragma in line
+                    else:
+                        h_match = _TECH_CONVENTIONS_HEADING_RE.match(line)
+                        if h_match:
+                            hashes, title = h_match.group(1), h_match.group(2).strip()
+                            level = len(hashes)
+                            if tech_heading_line is not None and level <= tech_heading_level:
+                                if tech_section_lines > 50:
+                                    findings.append((
+                                        f"{path}:{tech_heading_line}",
+                                        f"section '{tech_heading_title}' in README.md exceeds 50 lines "
+                                        f"({tech_section_lines} lines); detailed technical conventions "
+                                        f"belong in docs/topic--<slug>.md",
+                                    ))
+                                tech_heading_line = None
+
+                            if _TECH_CONVENTIONS_TITLE_RE.search(title) and pragma not in line:
+                                tech_heading_line = num
+                                tech_heading_title = title
+                                tech_heading_level = level
+                                tech_section_lines = 0
+                                has_tech_section = True
+                        elif tech_heading_line is not None:
+                            if pragma in line:
+                                tech_heading_line = None
+                            else:
+                                tech_section_lines += 1
+                else:
+                    if (
+                        fence_match
+                        and fence_match.group(1)[0] == fence_marker[0]
+                        and len(fence_match.group(1)) >= len(fence_marker)
+                        and not fence_match.group(2).strip()
+                    ):
+                        if fence_lines > 50 and not fence_has_pragma:
+                            findings.append((
+                                f"{path}:{fence_start}",
+                                f"code fence in README.md exceeds 50 lines ({fence_lines} lines); "
+                                f"move technical implementation to docs/topic--<slug>.md",
+                            ))
+                        fence_marker = None
+                    else:
+                        if pragma in line:
+                            fence_has_pragma = True
+                        fence_lines += 1
+                        if tech_heading_line is not None:
+                            tech_section_lines += 1
+
+            if tech_heading_line is not None and tech_section_lines > 50:
+                findings.append((
+                    f"{path}:{tech_heading_line}",
+                    f"section '{tech_heading_title}' in README.md exceeds 50 lines "
+                    f"({tech_section_lines} lines); detailed technical conventions "
+                    f"belong in docs/topic--<slug>.md",
+                ))
+
+            if total_lines > 300 and has_tech_section and pragma not in text:
+                findings.append((
+                    f"{path}:1",
+                    f"README.md exceeds 300 lines with technical reference content ({total_lines} lines); "
+                    f"slim README to landing overview and move technical topics to docs/topic--<slug>.md",
+                ))
+
+        elif base_name == "agents.md":
+            text = read(path)
+            if not text:
+                continue
+            for num, line in _rc_prose_lines(text):
+                if pragma in line:
+                    continue
+                if _AGENTS_README_CONVENTION_LINK_RE.search(line) or _AGENTS_README_CONVENTION_PROSE_RE.search(line):
+                    findings.append((
+                        f"{path}:{num}",
+                        "AGENTS.md references README.md for conventions or architecture rules; "
+                        "route through docs/topic--<slug>.md or docs/INDEX.md",
+                    ))
+
+    return findings
+

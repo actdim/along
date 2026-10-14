@@ -352,6 +352,20 @@ def check_rule_packs(paths: Sequence[str], layer: str, read) -> List[Violation]:
             for location, message in repochecks.check_rule_pack_integrity(paths, read, defn.options)]
 
 
+DOC_ROUTING_GATE = "doc_routing_compliance"
+
+
+def check_doc_routing(paths: Sequence[str], layer: str, read) -> List[Violation]:
+    """[gate: doc-routing-compliance] at git / ci: README.md overview, AGENTS.md links to docs/."""
+    from . import repochecks
+    defn = _definitions(layer).get(DOC_ROUTING_GATE)
+    if defn is None:
+        return []
+    paths = [p.replace("\\", "/") for p in paths if p]
+    return [Violation(DOC_ROUTING_GATE, location, message)
+            for location, message in repochecks.check_doc_routing_compliance(paths, read, defn.options)]
+
+
 ENTITY_GATE = "entity_reference_integrity"
 ENTITY_SUBDIRS: Tuple[str, ...] = ("ISSUES", "MILESTONES", "RISKS", "SPIKES", "CHECKLISTS",
                                    "DECISIONS", "SESSIONS")
@@ -632,6 +646,7 @@ def check_pre_commit(repo_root: str) -> List[Violation]:
                   + check_projections(repo_root, along_roots(staged), "index")
                   + check_repo_state(repo_root, added, "git", _index_reader(repo_root))
                   + check_rule_packs(added, "git", _index_reader(repo_root))
+                  + check_doc_routing(added, "git", _index_reader(repo_root))
                   + check_entity_references(repo_root, staged, "git", "index", head)
                   + check_session_records(repo_root, staged, "git", head))
     from . import gates
@@ -683,6 +698,7 @@ def check_ci(repo_root: str, commit_range: Optional[str] = None, links: bool = T
     tracked = _git_out(repo_root, "ls-files", "-z").split("\0")
     violations += check_repo_state(repo_root, tracked, "ci", _tree_reader(repo_root))
     violations += check_rule_packs(tracked, "ci", _tree_reader(repo_root))
+    violations += check_doc_routing(tracked, "ci", _tree_reader(repo_root))
 
     if links and kb_script and os.path.isdir(os.path.join(repo_root, "docs")):
         result = proc.run_capture([sys.executable, kb_script, "--check"], cwd=repo_root,

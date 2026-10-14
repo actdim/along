@@ -113,6 +113,8 @@ The managed rule pack gate also spans all three layers:
 
 26. `wrapped_work_uncommitted` [gate: wrapped_work_uncommitted]: Intercepts session termination (`Stop`) to warn when the active session wrapped an issue but attributed files remain uncommitted on disk. Non-blocking: runs in `shadow` mode by default, emitting guidance on committing attributed files.
 
+27. `doc_routing_compliance` [gate: doc-routing-compliance]: Enforces the Along Documentation Routing Tree. `README.md` must remain a high-level overview (no deep code fences >50 lines, no coding convention or technical reference sections >50 lines, no overall bloat >300 lines with technical reference content). `AGENTS.md` must not treat `README.md` as the conventions source of truth instead of `docs/topic--<slug>.md` or `docs/INDEX.md`. Enforced across runtime (`PreToolUse`), git `pre-commit`, and `--ci`.
+
 Gate options: keys of a gate entry other than the definition keys (`id`, `title`, `description`, `event`, `tools`, `match_args`, `rule(s)`, `enforcement`, `enabled`) are passed to predicate handlers as `options=`. A `.along/rules/gates.yaml` entry whose `id` names a built-in gate is merged into it: keys it sets win and the rest is inherited, so an entry can just add options or set `enabled: false`:
 
 ```yaml
