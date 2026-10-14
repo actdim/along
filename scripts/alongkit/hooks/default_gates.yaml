@@ -500,5 +500,38 @@ gates:
       handler: alongkit.hooks.predicates.check_fast_retrieval
       error: "Manual directory search across docs/ or .along/ rejected by [gate: fast-retrieval]."
 
+  - id: bounded_prompt_gate
+    profiles:
+      strict: block
+      standard: block
+      light: warn
+    enforcement: [runtime]
+    title: "Bounded Step Prompt Footprint Gate"
+    description: "Inspects synthesized subagent input payloads to maintain bounded O(1) step prompts and prevent attention leaks"
+    event: PreToolUse
+    tools: [invoke_subagent, spawn_subagent, Task, send_message, manage_task]
+    hard_limit_bytes: 32768
+    soft_limit_bytes: 16384
+    rule:
+      type: predicate
+      handler: alongkit.hooks.predicates.check_bounded_prompt_footprint
+      error: "Subagent prompt payload rejected by [gate: bounded-prompt-gate]: Prompt footprint exceeds budget or contains critical attention leaks."
+
+  - id: doc_routing_compliance
+    profiles:
+      strict: block
+      standard: block
+      light: warn
+    enforcement: [runtime, git, ci]
+    title: "Documentation Routing Tree Compliance"
+    description: "README.md remains an overview; technical contracts, coding conventions, and deep code fences belong in docs/topic--<slug>.md"
+    event: PreToolUse
+    tools: [write_to_file, write_file, replace_file_content, edit_file, patch_file, create_file]
+    rule:
+      type: predicate
+      handler: alongkit.hooks.predicates.check_doc_routing_compliance
+      error: "Write rejected by [gate: doc-routing-compliance]: README.md must remain an overview. Technical contracts, coding conventions, and deep code fences belong in docs/topic--<slug>.md."
+
+
 
 

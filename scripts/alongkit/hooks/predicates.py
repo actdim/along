@@ -12,6 +12,7 @@ from datetime import datetime, timezone
 import fnmatch
 import json
 import os
+import posixpath
 import re
 import sys
 from typing import Any, Dict, List, Optional, Tuple
@@ -599,6 +600,38 @@ def check_doc_manual_lock(event: HookEvent, repo_root: str, **kwargs: Any) -> Op
         f"To edit this file, activate an explicit documentation issue (.along/ISSUES/docs--{slug}.md) "
         f"or modify the frontmatter write_policy."
     )
+
+
+def check_doc_routing_compliance(event: HookEvent, repo_root: str, **kwargs: Any) -> Optional[str]:
+    """Inspect writes to README.md and AGENTS.md to enforce Documentation Routing Tree [gate: doc-routing-compliance]."""
+    from .. import repochecks
+
+    target = _extract_target_file(event)
+    if not target:
+        return None
+
+    base_name = posixpath.basename(repo.normalize_posix(target)).lower()
+    if base_name not in ("readme.md", "agents.md"):
+        return None
+
+    rel_target = _repo_relative(target, repo_root) or target
+
+    content = _extract_content(event)
+    if event.tool_name in ("replace_file_content", "edit_file", "patch_file"):
+        abs_target = os.path.normpath(target if os.path.isabs(target) else os.path.join(repo_root, target))
+        if os.path.isfile(abs_target):
+            try:
+                existing = textio.read_text(abs_target, strict=False)
+                target_chunk = event.tool_args.get("TargetContent") or event.tool_args.get("old_string") or ""
+                if target_chunk and target_chunk in existing:
+                    content = existing.replace(target_chunk, content, 1)
+            except OSError:
+                pass
+
+    findings = repochecks.check_doc_routing_compliance([rel_target], lambda _: content, {})
+    if findings:
+        return f"Write rejected by [gate: doc-routing-compliance]: {findings[0][1]}"
+    return None
 
 
 _ENTITY_DIR_PATTERN = re.compile(
@@ -1703,6 +1736,160 @@ def check_fast_retrieval(event: HookEvent, repo_root: str, **kwargs: Any) -> Opt
             f"Manual Search Rejected [gate: fast-retrieval]: Manual directory search across '{target_path}' "
             "is forbidden to prevent latency and LLM token exhaustion. "
             "Execute 'along kb-search \"<query>\"' instead for sub-100ms indexed retrieval."
+        )
+
+    return None
+
+
+# ---------------------------------------------------------------------------
+# Bounded Prompt Footprint and Attention Leak Gate (feat--bounded-prompt-footprint-gate)
+# ---------------------------------------------------------------------------
+
+def record_prompt_activity(
+    repo_root: str,
+    report: Dict[str, Any],
+    key: Optional[str] = None,
+) -> None:
+    """Record prompt footprint metrics in activity trace."""
+    data = load_activity_trace(repo_root, key)
+    now_iso = datetime.now(timezone.utc).isoformat()
+    pb = data.get("prompt_budget")
+    if not isinstance(pb, dict):
+        pb = {
+            "last_checked_at": None,
+            "last_prompt_bytes": 0,
+            "last_prompt_tokens": 0,
+            "total_checks": 0,
+            "violations": 0,
+            "warnings": 0,
+            "leaks_detected": [],
+        }
+    pb["last_checked_at"] = now_iso
+    pb["last_prompt_bytes"] = report.get("bytes", 0)
+    pb["last_prompt_tokens"] = report.get("tokens", 0)
+    pb["total_checks"] = pb.get("total_checks", 0) + 1
+    if report.get("status") == "FAIL":
+        pb["violations"] = pb.get("violations", 0) + 1
+    elif report.get("status") == "WARN":
+        pb["warnings"] = pb.get("warnings", 0) + 1
+    pb["leaks_detected"] = [l.get("type") for l in report.get("leaks", [])]
+    data["prompt_budget"] = pb
+    save_activity_trace(repo_root, data, key)
+
+
+def _extract_subagent_payload(event: HookEvent) -> str:
+    """Extract synthesized subagent prompt text from hook event arguments."""
+    args = event.tool_args or {}
+    tool = (event.tool_name or "").lower()
+
+    # 1. Antigravity invoke_subagent with Subagents list
+    subagents = args.get("Subagents") or args.get("subagents")
+    if isinstance(subagents, list):
+        prompts: List[str] = []
+        for s in subagents:
+            if isinstance(s, dict):
+                p = s.get("Prompt") or s.get("prompt") or s.get("instructions") or s.get("description") or ""
+                if p:
+                    prompts.append(str(p))
+            elif isinstance(s, str):
+                prompts.append(s)
+        if prompts:
+            return "\n\n".join(prompts)
+
+    # 2. Direct string prompt keys
+    for k in (
+        "Prompt", "prompt", "instructions", "instruction", "description",
+        "task", "Task", "message", "Message", "content", "Input", "input",
+    ):
+        val = args.get(k)
+        if isinstance(val, str) and val.strip():
+            return val
+
+    # 3. Fallback: concatenate large string values
+    parts: List[str] = []
+    for k, v in args.items():
+        if isinstance(v, str) and len(v) > 50 and not k.startswith("_"):
+            parts.append(v)
+    return "\n\n".join(parts)
+
+
+def check_bounded_prompt_footprint(
+    event: HookEvent,
+    repo_root: str,
+    options: Optional[Dict[str, Any]] = None,
+    **kwargs: Any,
+) -> Optional[GateResult]:
+    """Inspect subagent prompt payload against bounded footprint and attention leaks.
+
+    Enforces:
+    - Hard limit: 32 KB (~8,000 tokens) ceiling (denies execution unless override flag is set).
+    - Soft limit: 16 KB (~4,000 tokens) warning threshold.
+    - Attention leaks: unparsed logs (> 50 lines), repeated reviews, raw code dumps (> 50 lines).
+    [gate: bounded-prompt-gate]
+    """
+    payload = _extract_subagent_payload(event)
+    if not payload:
+        return None
+
+    args = event.tool_args or {}
+    allow_oversized = bool(
+        args.get("allow_oversized_prompt")
+        or args.get("override_prompt_budget")
+    )
+
+    limits: Dict[str, int] = {}
+    if options:
+        if "hard_limit_bytes" in options:
+            try:
+                limits["hard_limit_bytes"] = int(options["hard_limit_bytes"])
+            except (ValueError, TypeError):
+                pass
+        if "soft_limit_bytes" in options:
+            try:
+                limits["soft_limit_bytes"] = int(options["soft_limit_bytes"])
+            except (ValueError, TypeError):
+                pass
+
+    from .. import budget
+
+    report = budget.check_prompt(payload, limits=limits or None, allow_oversized=allow_oversized)
+
+    # Record trace in diagnostics
+    try:
+        record_prompt_activity(repo_root, report, key=event_session_key(event))
+    except (OSError, ValueError, json.JSONDecodeError):
+        pass
+
+    if report["status"] == "FAIL":
+        leak_notes = ""
+        if report["leaks"]:
+            leak_notes = " Leaks detected: " + "; ".join(l["description"] for l in report["leaks"])
+        reason = (
+            f"Subagent prompt payload rejected by [gate: bounded-prompt-gate]: "
+            f"Prompt footprint ({report['bytes']:,} bytes, ~{report['tokens']:,} tokens) "
+            f"exceeds hard limit ({report['hard_limit_bytes']:,} bytes).{leak_notes} "
+            f"Distill context to maintain O(1) step footprint or set allow_oversized_prompt: true."
+        )
+        record_gate_denial(event, repo_root, "bounded_prompt_gate", reason)
+        return GateResult(
+            decision=GateDecision.DENY,
+            reason=reason,
+            gate_name="bounded_prompt_gate",
+            exit_code=2,
+        )
+
+    elif report["status"] == "WARN":
+        leak_notes = ""
+        if report["leaks"]:
+            leak_notes = " Leaks: " + "; ".join(l["description"] for l in report["leaks"])
+        reason = (
+            f"Advisory [gate: bounded-prompt-gate]: Prompt footprint ({report['bytes']:,} bytes, "
+            f"~{report['tokens']:,} tokens) is approaching hard limit ({report['hard_limit_bytes']:,} bytes).{leak_notes}"
+        )
+        return GateResult(
+            decision=GateDecision.ALLOW,
+            reason=reason,
+            gate_name="bounded_prompt_gate",
         )
 
     return None

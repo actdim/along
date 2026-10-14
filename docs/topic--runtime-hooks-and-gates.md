@@ -87,6 +87,12 @@ The Along Runtime Hook and Gate System establishes deterministic, programmatic i
    - Intercepts command execution tools (`run_command`, `execute_command`, `bash`).
    - Scans command strings for forbidden patterns: heredocs (`<<EOF`), inline Python file writers (`python -c "open('...', 'w')"`), destructive unstaged Git wipes (`git reset --hard`, `git clean -f`), and unauthorized global package managers (`npm install -g`).
    - The echo/printf file-writer rule (`alongkit.hooks.shellwrite`) is quote-aware: it flags only `echo` / `printf` / `Write-Output ... > file`, `>> file`, `1> file`, `&> file` and `echo ... | tee file`. `2>/dev/null`, `>/dev/null`, `2>&1`, `&>/dev/null`, `>&2`, other pipes and a `>` inside quotes pass.
+4. **`DocRoutingComplianceGate`** (`doc_routing_compliance`):
+   - Intercepts file mutation tools (`write_to_file`, `replace_file_content`, etc.).
+   - Enforces the Along Documentation Routing Tree: `README.md` must remain a high-level overview.
+   - Forbids deep code fences (>50 lines) and oversized coding convention or technical reference sections (>50 lines) directly in `README.md`.
+   - Forbids `AGENTS.md` from referencing `README.md` as the conventions source of truth instead of `docs/topic--<slug>.md` or `docs/INDEX.md`.
+   - Enforced across runtime hooks, git `pre-commit`, `--ci`, `along kb sync`, and `along doctor`.
 
 ### 2.3 Declarative Extension & Traceability Matrix
 Beyond hardcoded Python gates, Along provides an extensible, declarative YAML gate catalogue (`default_gates.yaml` and `.along/rules/gates.yaml`) enforcing 26 canonical gates, 7 of them git/CI-only repository-state checks (including `require_plan_approval` for inquiry read-only locks, `circuit_breaker`, `worktree_env_readiness`, and `workspace_containment`, which keeps file, search and shell-cwd paths inside the workspace; see [Declarative Gates](./topic--declarative-gates-and-traceability.md)), verified bi-directionally against prose badges (`[gate: <id>]`) via `along hook verify`.
@@ -330,6 +336,7 @@ Every rule of the managed `AGENTS.md` block, classified: **a** enforced by a gat
 | Inquiry read-only | a | `require_plan_approval` | runtime |
 | Complexity escalation to `along-team` | c | - | - |
 | along-team step loop and reviews | a | `team_step_active`, `team_reviews_before_stop`, `along scratch purge` / `along wrap` refusal | runtime |
+| Bounded subagent step prompt footprint | a | `bounded_prompt_gate` (`[gate: bounded-prompt-gate]`, hard limit 32 KB, soft warning 16 KB, attention leak detection) | runtime |
 | ADR question at wrap | a | `along wrap --decisions / --no-decisions` (required) | runtime |
 | Windows-safe filenames | a | `windows_safe_filenames` | git, ci |
 | `ISSUES.md` compact | a | `along context-budget --check`, `tests/test_context_budget.py` | ci |
