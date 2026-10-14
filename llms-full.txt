@@ -276,7 +276,7 @@ Also, when relevant: `.along/VISION.md`, `.along/GLOSSARY.md`. These reflect the
 - **Doc Blast Radius**: After non-trivial code changes, agents MUST map affected symbols to `docs/topic--*.md` articles and update them before completing the task.
 - **Manual Document Lock** [gate: doc-manual-lock]: Documents marked with `write_policy: manual` (or `locked: true`) are protected from automated agent modification during blast radius sweeps. Modifications require an explicit documentation issue (`docs--<slug>`).
 - **Managed Rule Packs** [gate: rule-pack-protection]: Never edit `.along/rules/**/*.md`; `along rules attach` owns them. Project guidelines go to `docs/topic--<slug>.md` or "Project specifics"; revert with `along rules restore`. `.along/rules/gates.yaml` and `.along/scripts/` stay repo-owned.
-- **Documentation Routing Tree**:
+- **Documentation Routing Tree** [gate: doc-routing-compliance]:
   - Architectural choice / trade-off -> `.along/DECISIONS/` (ADR)
   - Public overview / pitch / landing page -> `README.md`
   - Technical interface contract / CLI spec -> `docs/topic--<slug>.md` (`type: reference`)
@@ -347,7 +347,7 @@ This repository is **ActDim Along** (`actdim-along`) - the provider-agnostic age
 - **Migration**: `migrate_protocol.py` keeps destinations, union-merges append-only files, backs up to `.along/.migration-backup/`.
 - **Install**: `install.ps1 -Target all` / `install.bat` (Windows), `bash install.sh` (Unix); `-Uninstall` / `--uninstall`; manifest `~/.along/install-manifest.json`.
 - **Lifecycle**: Tests: `python .along/scripts/test.py`. Dev: `npm run dev`. Build: `npm run build`.
-- **Frontend** (`packages/dashboard-ui/`): Internal dashboard. Strict `@actdim/dynstruct` + MobX (zero `useState`/`useEffect`), NSwag client via `@actdim/msgmesh/adapters`. 100% typed (zero `any`/`as`). Rules: `[packages/dashboard-ui/README.md](./packages/dashboard-ui/README.md)`.
+- **Frontend** (`packages/dashboard-ui/`): Internal dashboard. Strict `@actdim/dynstruct` + MobX (zero `useState`/`useEffect`), NSwag client via `@actdim/msgmesh/adapters`. 100% typed (zero `any`/`as`). Rules: `[packages/dashboard-ui/docs/topic--frontend-conventions.md](./packages/dashboard-ui/docs/topic--frontend-conventions.md)`.
 
 ---
 
@@ -1941,6 +1941,8 @@ The managed rule pack gate also spans all three layers:
 
 26. `wrapped_work_uncommitted` [gate: wrapped_work_uncommitted]: Intercepts session termination (`Stop`) to warn when the active session wrapped an issue but attributed files remain uncommitted on disk. Non-blocking: runs in `shadow` mode by default, emitting guidance on committing attributed files.
 
+27. `doc_routing_compliance` [gate: doc-routing-compliance]: Enforces the Along Documentation Routing Tree. `README.md` must remain a high-level overview (no deep code fences >50 lines, no coding convention or technical reference sections >50 lines, no overall bloat >300 lines with technical reference content). `AGENTS.md` must not treat `README.md` as the conventions source of truth instead of `docs/topic--<slug>.md` or `docs/INDEX.md`. Enforced across runtime (`PreToolUse`), git `pre-commit`, and `--ci`.
+
 Gate options: keys of a gate entry other than the definition keys (`id`, `title`, `description`, `event`, `tools`, `match_args`, `rule(s)`, `enforcement`, `enabled`) are passed to predicate handlers as `options=`. A `.along/rules/gates.yaml` entry whose `id` names a built-in gate is merged into it: keys it sets win and the rest is inherited, so an entry can just add options or set `enabled: false`:
 
 ```yaml
@@ -3051,6 +3053,12 @@ The Along Runtime Hook and Gate System establishes deterministic, programmatic i
    - Intercepts command execution tools (`run_command`, `execute_command`, `bash`).
    - Scans command strings for forbidden patterns: heredocs (`<<EOF`), inline Python file writers (`python -c "open('...', 'w')"`), destructive unstaged Git wipes (`git reset --hard`, `git clean -f`), and unauthorized global package managers (`npm install -g`).
    - The echo/printf file-writer rule (`alongkit.hooks.shellwrite`) is quote-aware: it flags only `echo` / `printf` / `Write-Output ... > file`, `>> file`, `1> file`, `&> file` and `echo ... | tee file`. `2>/dev/null`, `>/dev/null`, `2>&1`, `&>/dev/null`, `>&2`, other pipes and a `>` inside quotes pass.
+4. **`DocRoutingComplianceGate`** (`doc_routing_compliance`):
+   - Intercepts file mutation tools (`write_to_file`, `replace_file_content`, etc.).
+   - Enforces the Along Documentation Routing Tree: `README.md` must remain a high-level overview.
+   - Forbids deep code fences (>50 lines) and oversized coding convention or technical reference sections (>50 lines) directly in `README.md`.
+   - Forbids `AGENTS.md` from referencing `README.md` as the conventions source of truth instead of `docs/topic--<slug>.md` or `docs/INDEX.md`.
+   - Enforced across runtime hooks, git `pre-commit`, `--ci`, `along kb sync`, and `along doctor`.
 
 ### 2.3 Declarative Extension & Traceability Matrix
 Beyond hardcoded Python gates, Along provides an extensible, declarative YAML gate catalogue (`default_gates.yaml` and `.along/rules/gates.yaml`) enforcing 26 canonical gates, 7 of them git/CI-only repository-state checks (including `require_plan_approval` for inquiry read-only locks, `circuit_breaker`, `worktree_env_readiness`, and `workspace_containment`, which keeps file, search and shell-cwd paths inside the workspace; see [Declarative Gates](./topic--declarative-gates-and-traceability.md)), verified bi-directionally against prose badges (`[gate: <id>]`) via `along hook verify`.
@@ -3294,6 +3302,7 @@ Every rule of the managed `AGENTS.md` block, classified: **a** enforced by a gat
 | Inquiry read-only | a | `require_plan_approval` | runtime |
 | Complexity escalation to `along-team` | c | - | - |
 | along-team step loop and reviews | a | `team_step_active`, `team_reviews_before_stop`, `along scratch purge` / `along wrap` refusal | runtime |
+| Bounded subagent step prompt footprint | a | `bounded_prompt_gate` (`[gate: bounded-prompt-gate]`, hard limit 32 KB, soft warning 16 KB, attention leak detection) | runtime |
 | ADR question at wrap | a | `along wrap --decisions / --no-decisions` (required) | runtime |
 | Windows-safe filenames | a | `windows_safe_filenames` | git, ci |
 | `ISSUES.md` compact | a | `along context-budget --check`, `tests/test_context_budget.py` | ci |

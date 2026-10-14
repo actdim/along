@@ -18,7 +18,6 @@
 - [ ] `(feat)` [agent-runtime-adapters-claude-codex-opencode](ISSUES/feat--agent-runtime-adapters-claude-codex-opencode.md)
 - [ ] `(feat)` [along-plan-strategies](ISSUES/feat--along-plan-strategies.md)
 - [ ] `(feat)` [automated-ui-screenshots-and-visual-verification](ISSUES/feat--automated-ui-screenshots-and-visual-verification.md)
-- [ ] `(feat)` [bounded-prompt-footprint-gate](ISSUES/feat--bounded-prompt-footprint-gate.md)
 - [ ] `(feat)` [byoc-kubernetes-operator-and-private-sandboxes](ISSUES/feat--byoc-kubernetes-operator-and-private-sandboxes.md)
 - [ ] `(feat)` [centralized-gpu-inference-pool-and-cloud-topologies](ISSUES/feat--centralized-gpu-inference-pool-and-cloud-topologies.md)
 - [ ] `(feat)` [clean-turn-context-isolation-in-along-team](ISSUES/feat--clean-turn-context-isolation-in-along-team.md)
@@ -47,9 +46,9 @@
 - [ ] `(feat)` [zero-step-state-recovery-and-drift-detection](ISSUES/feat--zero-step-state-recovery-and-drift-detection.md)
 
 ## Done (recent)
-- [x] `(feat)` [structured-blackboard-state-machine](ISSUES/done/feat--structured-blackboard-state-machine.md)
-- [x] `(feat)` [gate-strictness-profiles](ISSUES/done/feat--gate-strictness-profiles.md)
-- [x] `(docs)` [ground-topic-based-docs](ISSUES/done/docs--ground-topic-based-docs.md)
-- [x] `(feat)` [tool-nature-classification](ISSUES/done/feat--tool-nature-classification.md)
-- [x] `(feat)` [secret-scrubbing-in-hooks-and-diagnostics](ISSUES/done/feat--secret-scrubbing-in-hooks-and-diagnostics.md)
-<!-- 247 older completed issue(s) archived in .along/ISSUES/done/ -->
+- [x] `(task)` [dashboard-docs-kb-alignment](ISSUES/done/task--dashboard-docs-kb-alignment.md)
+- [x] `(feat)` [doc-routing-compliance-gate](ISSUES/done/feat--doc-routing-compliance-gate.md)
+- [x] `(feat)` [bounded-prompt-footprint-gate](ISSUES/done/feat--bounded-prompt-footprint-gate.md)
+- [x] `(debt)` [remove-static-dashboard-data-json-export](ISSUES/done/debt--remove-static-dashboard-data-json-export.md)
+- [x] `(bug)` [session-scanner-prompts-dir-leak](ISSUES/done/bug--session-scanner-prompts-dir-leak.md)
+<!-- 253 older completed issue(s) archived in .along/ISSUES/done/ -->
