@@ -134,7 +134,7 @@ def _blackboard_slugs(ctx: str) -> List[str]:
     if not os.path.isdir(s_root):
         return []
     return sorted(e.name for e in os.scandir(s_root)
-                  if e.is_dir() and not e.name.startswith(".") and e.name != session.BINDINGS_DIRNAME)
+                  if e.is_dir() and not e.name.startswith(".") and e.name not in session.RESERVED_SESSION_DIRS)
 
 
 def _issue_body(issue: Dict[str, Any]) -> str:

@@ -677,7 +677,7 @@ def orphan_blackboards(repo_root: str) -> List[Tuple[str, str]]:
     bound = {str(b.get("slug")) for b in session.list_bindings(repo_root) if b.get("slug")}
     found: List[Tuple[str, str]] = []
     for entry in sorted(os.scandir(s_root), key=lambda e: e.name):
-        if not entry.is_dir() or entry.name.startswith(".") or entry.name == session.BINDINGS_DIRNAME:
+        if not entry.is_dir() or entry.name.startswith(".") or entry.name in session.RESERVED_SESSION_DIRS:
             continue
         if entry.name in bound:
             continue

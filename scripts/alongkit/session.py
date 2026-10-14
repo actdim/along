@@ -277,6 +277,8 @@ def save_global_session_state(repo_root: str, state: Dict[str, Any]) -> None:
 # ---------------------------------------------------------------------------
 
 BINDINGS_DIRNAME: str = "bindings"
+PROMPTS_DIRNAME: str = "prompts"
+RESERVED_SESSION_DIRS: frozenset[str] = frozenset({BINDINGS_DIRNAME, PROMPTS_DIRNAME})
 #: Bindings untouched for this long are removed by `gc_bindings`.
 BINDING_MAX_AGE_HOURS: int = 72
 
@@ -778,7 +780,7 @@ def in_progress_slugs(repo_root: str) -> List[str]:
     if os.path.isdir(s_root):
         try:
             for entry in os.scandir(s_root):
-                if entry.is_dir() and not entry.name.startswith(".") and entry.name != BINDINGS_DIRNAME:
+                if entry.is_dir() and not entry.name.startswith(".") and entry.name not in RESERVED_SESSION_DIRS:
                     st = load_state(repo_root, entry.name)
                     if st and st.get("status") == "in-progress":
                         found.append(entry.name)
