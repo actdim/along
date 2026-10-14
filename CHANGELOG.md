@@ -2,6 +2,21 @@
 
 All notable changes to this project, newest first.
 
+## v4.4.14 - 2026-10-14
+
+- fix(ci): cross-os toolnature paths, code-fence tag and secret pragma (refs #ci-linux-toolnature-and-secrets)
+- chore(dashboard-ui): sync dashboard dependencies and milestone projections (refs #bump-dashboard-deps)
+- chore(along): projections after closing out bug--along-dash-missing-dashboard, bug--session-scanner-prompts-dir-leak, debt--decouple-static-data-json-fallback, debt--remove-static-dashboard-data-json-export, feat--bounded-prompt-footprint-gate, feat--doc-routing-compliance-gate, task--bump-dashboard-deps, task--dashboard-docs-kb-alignment, task--update-overlay-conventions (refs #along-dash-missing-dashboard) (refs #session-scanner-prompts-dir-leak) (refs #decouple-static-data-json-fallback) (refs #remove-static-dashboard-data-json-export) (refs #bounded-prompt-footprint-gate) (refs #doc-routing-compliance-gate) (refs #bump-dashboard-deps) (refs #dashboard-docs-kb-alignment) (refs #update-overlay-conventions)
+- chore: changes shared by bug--session-scanner-prompts-dir-leak, feat--bounded-prompt-footprint-gate, feat--doc-routing-compliance-gate (refs #session-scanner-prompts-dir-leak) (refs #bounded-prompt-footprint-gate) (refs #doc-routing-compliance-gate)
+- chore: changes shared by feat--bounded-prompt-footprint-gate, feat--doc-routing-compliance-gate (refs #bounded-prompt-footprint-gate) (refs #doc-routing-compliance-gate)
+- chore: changes shared by bug--along-dash-missing-dashboard, debt--remove-static-dashboard-data-json-export (refs #along-dash-missing-dashboard) (refs #remove-static-dashboard-data-json-export)
+- chore: dashboard-docs-kb-alignment (refs #dashboard-docs-kb-alignment)
+- feat: doc-routing-compliance-gate (refs #doc-routing-compliance-gate)
+- feat: bounded-prompt-footprint-gate (refs #bounded-prompt-footprint-gate)
+- refactor: remove-static-dashboard-data-json-export (refs #remove-static-dashboard-data-json-export)
+- fix: session-scanner-prompts-dir-leak (refs #session-scanner-prompts-dir-leak)
+- fix: along-dash-missing-dashboard (refs #along-dash-missing-dashboard)
+
 ## v4.4.13 - 2026-10-14
 
 - chore(along): projections after closing out feat--gate-strictness-profiles (refs #gate-strictness-profiles)

@@ -1,8 +1,8 @@
-# ActDim Along (v4.4.13)
+# ActDim Along (v4.4.14)
 
 [![Tests](https://github.com/actdim/along/actions/workflows/tests.yml/badge.svg)](https://github.com/actdim/along/actions/workflows/tests.yml) - Python 3.10-3.13 on Linux and Windows.
 
-ActDim Along is a provider-agnostic context and memory protocol for AI coding agents (`ALONG-PROTOCOL v4.4.13`) that provides persistent in-repo task tracking, an evergreen architecture wiki, and mechanical quality gates across Claude Code, Google Antigravity, OpenAI Codex, and OpenCode.
+ActDim Along is a provider-agnostic context and memory protocol for AI coding agents (`ALONG-PROTOCOL v4.4.14`) that provides persistent in-repo task tracking, an evergreen architecture wiki, and mechanical quality gates across Claude Code, Google Antigravity, OpenAI Codex, and OpenCode.
 
 ---
 
