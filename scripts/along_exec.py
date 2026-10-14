@@ -533,7 +533,7 @@ def handle_status_command(repo_root: str, args: List[str]):
     if os.path.exists(session_bb_dir):
         bbs = [d for d in os.listdir(session_bb_dir)
                if os.path.isdir(os.path.join(session_bb_dir, d))
-               and not d.startswith(".") and d != session.BINDINGS_DIRNAME]
+               and not d.startswith(".") and d not in session.RESERVED_SESSION_DIRS]
         if bbs:
             print(f"\nActive Blackboards ({len(bbs)}): {', '.join(bbs)}")
     print("\n===============================")
@@ -937,6 +937,27 @@ def handle_doctor_command(repo_root: str, args: List[str]):
     for gid, sev in matrix_rows:
         print(f"  {gid.ljust(width)}  [{sev.upper()}]")
 
+    # Documentation Routing Tree Compliance [gate: doc-routing-compliance]
+    from alongkit import repochecks
+    doc_candidates = []
+    for d_root, dirs, files in os.walk(repo_root):
+        dirs[:] = [d for d in dirs if d not in repo.IGNORED_DIRS and not d.startswith(".")]
+        for f in files:
+            if f.lower() in ("readme.md", "agents.md"):
+                doc_candidates.append(os.path.relpath(os.path.join(d_root, f), repo_root).replace("\\", "/"))
+    doc_findings = repochecks.check_doc_routing_compliance(
+        doc_candidates,
+        lambda p: textio.read_text(os.path.join(repo_root, p), strict=False),
+        {},
+    )
+    if doc_findings:
+        print(f"[WARN] Documentation Routing Tree: {len(doc_findings)} issue(s) detected [gate: doc-routing-compliance]:")
+        for loc, msg in doc_findings:
+            print(f"       - {loc}: {msg}")
+        warnings += 1
+    else:
+        print("[OK] Documentation Routing Tree: README.md overview boundaries and AGENTS.md references clean.")
+
     errors, warnings = _doctor_runtime_checks(repo_root, errors, warnings)
 
     print(f"\nDoctor Summary: {errors} errors, {warnings} warnings.")
@@ -1221,13 +1242,48 @@ def handle_tool_command(repo_root: str, args: List[str]):
 
 def handle_budget_command(repo_root: str, args: List[str]):
     if "-h" in args or "--help" in args or "help" in args:
-        print("Usage: along_exec.py context-budget [--json] [--check]")
+        print("Usage:")
+        print("  along budget [--json] [--check]")
+        print("  along budget check-prompt <file|payload> [--json] [--check] [--allow-oversized]")
         sys.exit(0)
     try:
         from alongkit import budget
     except ImportError:
         print("[Error] alongkit.budget not found.", file=sys.stderr)
         sys.exit(1)
+
+    sub = args[0].lower() if args else ""
+    if sub == "check-prompt":
+        as_json = "--json" in args
+        check_mode = "--check" in args
+        allow_oversized = "--allow-oversized" in args
+        non_flags = [a for a in args[1:] if not a.startswith("--")]
+
+        if non_flags and non_flags[0] != "-":
+            target = non_flags[0]
+            # If target looks like a relative path and exists relative to repo_root, resolve it
+            if not os.path.isabs(target) and not os.path.exists(target):
+                repo_rel = os.path.join(repo_root, target)
+                if os.path.exists(repo_rel):
+                    target = repo_rel
+        else:
+            if not sys.stdin.isatty():
+                target = sys.stdin.read()
+            else:
+                print("[Error] Missing payload or file for check-prompt.", file=sys.stderr)
+                print("Usage: along budget check-prompt <file|payload> [--json] [--check] [--allow-oversized]", file=sys.stderr)
+                sys.exit(1)
+
+        report = budget.check_prompt(target, allow_oversized=allow_oversized)
+        if as_json:
+            import json
+            print(json.dumps(report, indent=2))
+        else:
+            print(budget.format_prompt_budget_text(report))
+
+        if check_mode and not report.get("passed", True):
+            sys.exit(1)
+        sys.exit(0)
 
     as_json = "--json" in args
     check_mode = "--check" in args
