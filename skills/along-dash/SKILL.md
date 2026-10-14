@@ -20,18 +20,18 @@ Inspect, visualize, and analyze repository status across all `.along/` entities 
 
 When `/along-dash` is invoked (or the user asks for the dashboard), agents MUST:
 
-1. **Execute CLI Summary**:
-   Run `along dash . --cli` (or fallback: `python ~/.along/bin/along_exec.py dash . --cli`).
-   This parses entities on the fly and prints clean summary tables without polluting git status.
-
-2. **Present Executive Summary & Active Issues in Chat**:
-   Directly output the key statistics table and active issues list in the chat response.
-
-3. **Launch the Live Web Dashboard in Background**:
+1. **Launch the Live Web Dashboard in Background Immediately**:
    Start the interactive FastAPI web server as a background daemon task (`run_command` with `IsDaemon: true`):
    ```bash
    along dash . --web --no-browser
    ```
+
+2. **Execute CLI Summary**:
+   Run `along dash . --cli` (or fallback: `python scripts/along_dash.py . --cli`).
+   This parses entities on the fly and prints clean summary tables without polluting git status.
+
+3. **Present Executive Summary & Active Issues in Chat**:
+   Directly output the key statistics table and active issues list in the chat response.
 
 4. **Provide Direct Clickable Links & Controls**:
    - **Live Interactive Dashboard**: [**http://127.0.0.1:8765**](http://127.0.0.1:8765) (React 19 + Cytoscape DAG + Knowledge Base Explorer).

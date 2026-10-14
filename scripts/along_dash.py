@@ -41,9 +41,28 @@ if "--no-uv-reentry" not in sys.argv:
 if "--no-uv-reentry" in sys.argv:
     sys.argv.remove("--no-uv-reentry")
 
-repo_root = Path(__file__).resolve().parent.parent
-if str(repo_root) not in sys.path:
-    sys.path.insert(0, str(repo_root))
+here = Path(__file__).resolve().parent
+dash_parent = None
+for candidate in [here, here.parent]:
+    if (candidate / "dashboard").is_dir():
+        dash_parent = candidate
+        break
+
+if not dash_parent:
+    target_arg = next((arg for arg in sys.argv[1:] if not arg.startswith("-")), None)
+    if target_arg:
+        t_path = Path(target_arg).resolve()
+        for cand in [t_path, t_path.parent]:
+            if (cand / "dashboard").is_dir():
+                dash_parent = cand
+                break
+
+if dash_parent and str(dash_parent) not in sys.path:
+    sys.path.insert(0, str(dash_parent))
+
+for cand in [here, here.parent / "scripts"]:
+    if (cand / "alongkit").is_dir() and str(cand) not in sys.path:
+        sys.path.insert(0, str(cand))
 
 from alongkit import bootstrap
 bootstrap.ensure_deps()
@@ -53,3 +72,4 @@ from dashboard.app import main
 
 if __name__ == "__main__":
     main()
+

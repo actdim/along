@@ -231,7 +231,7 @@ def isolated_home_env(base: dict | None = None) -> dict:
 #: What an installer needs from a checkout, and nothing else: no `.along/`, no `.git`,
 #: no tests. Keeping the migration step's trigger out of the copy is deliberate - an
 #: installer test must not exercise the migration engine as a side effect.
-CHECKOUT_CONTENTS = ("skills", "rules", "scripts", "config",
+CHECKOUT_CONTENTS = ("skills", "rules", "scripts", "dashboard", "config",
                      "install.sh", "install.ps1", "install.bat")
 
 

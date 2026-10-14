@@ -429,6 +429,10 @@ def engine_files(source_root: str) -> Dict[str, str]:
     package = os.path.join(scripts_dir, "alongkit")
     for path in walk_tree(package, (".py", ".yaml", ".json")):
         pairs[os.path.join("alongkit", repo.safe_relpath(path, package))] = path
+    dashboard_dir = os.path.join(source_root, "dashboard")
+    if os.path.isdir(dashboard_dir):
+        for path in walk_tree(dashboard_dir, (".py", ".json", ".html", ".css", ".js", ".svg", ".png", ".ico")):
+            pairs[os.path.join("dashboard", repo.safe_relpath(path, dashboard_dir))] = path
     return pairs
 
 

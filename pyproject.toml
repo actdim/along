@@ -99,6 +99,7 @@ pattern = 'CURRENT_PROTOCOL_VERSION = "(?P<version>[^"]+)"'
 [tool.hatch.build.targets.sdist]
 include = [
     "scripts",
+    "dashboard",
     "skills",
     "rules",
     "docs",

@@ -238,6 +238,12 @@ install_along_scripts() {
     cp -r "$scripts_src/alongkit" "$along_bin/alongkit" 2>/dev/null || true
     find "$along_bin" -name "__pycache__" -type d -prune -exec rm -rf {} + 2>/dev/null || true
     chmod +x "$along_bin/along" 2>/dev/null || true
+    local dashboard_src="$SCRIPT_DIR/dashboard"
+    if [ -d "$dashboard_src" ]; then
+      rm -rf "$along_bin/dashboard"
+      cp -r "$dashboard_src" "$along_bin/dashboard" 2>/dev/null || true
+      find "$along_bin/dashboard" -name "__pycache__" -type d -prune -exec rm -rf {} + 2>/dev/null || true
+    fi
     echo "-> Along tools installed -> $along_bin"
     case ":$PATH:" in
       *":$along_bin:"*) ;;
@@ -277,6 +283,12 @@ install_opencode() {  # generate flat commands + place along-init helper
     rm -rf "$helper/alongkit"
     cp -r "$scripts_src/alongkit" "$helper/alongkit" 2>/dev/null || true
     find "$helper/alongkit" -name "__pycache__" -type d -prune -exec rm -rf {} + 2>/dev/null || true
+  fi
+  local dashboard_src="$SCRIPT_DIR/dashboard"
+  if [ -d "$dashboard_src" ]; then
+    rm -rf "$helper/dashboard"
+    cp -r "$dashboard_src" "$helper/dashboard" 2>/dev/null || true
+    find "$helper/dashboard" -name "__pycache__" -type d -prune -exec rm -rf {} + 2>/dev/null || true
   fi
   [ -f "$src/along-init/protocol.md" ] && cp -f "$src/along-init/protocol.md" "$helper/protocol.md"
 

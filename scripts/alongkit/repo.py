@@ -395,9 +395,10 @@ def bundled_engines_dir() -> str:
 def tool_search_path(repo_root: Optional[str] = None,
                      skill_folder: Optional[str] = None) -> List[str]:
     """Ordered directories searched for an Along engine script."""
-    candidates = [engines_dir(), bundled_engines_dir()]
-    if repo_root:
+    candidates = []
+    if repo_root and os.path.isdir(os.path.join(repo_root, "scripts")):
         candidates.append(os.path.join(repo_root, "scripts"))
+    candidates.extend([engines_dir(), bundled_engines_dir()])
     candidates.extend(os.path.expanduser(p) for p in GLOBAL_TOOL_DIRS)
     if skill_folder:
         candidates.extend(os.path.expanduser(p.format(skill=skill_folder))

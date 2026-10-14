@@ -351,6 +351,13 @@ function Install-AlongScripts {
         Write-Host "-> Along tools installed -> $alongBin"
         Configure-UserPath $alongBin
     }
+    $dashboardSrc = Join-Path $PSScriptRoot 'dashboard'
+    if (Test-Path $dashboardSrc) {
+        $dashDest = Join-Path $alongBin 'dashboard'
+        Copy-Item -Path $dashboardSrc -Destination $alongBin -Recurse -Force
+        Get-ChildItem -Path $dashDest -Directory -Recurse -Filter '__pycache__' |
+            Remove-Item -Recurse -Force -ErrorAction SilentlyContinue
+    }
 
 
     $cfgFile = Join-Path $alongHome 'config.json'
@@ -393,6 +400,13 @@ function Install-OpenCode {
         # The shared `alongkit` package travels with the engines, which import it from
         # their own directory. Compiled caches must not: they are interpreter-specific.
         Get-ChildItem -Path $helper -Directory -Recurse -Filter '__pycache__' |
+            Remove-Item -Recurse -Force -ErrorAction SilentlyContinue
+    }
+    $dashboardSrc = Join-Path $PSScriptRoot 'dashboard'
+    if (Test-Path $dashboardSrc) {
+        $dashHelper = Join-Path $helper 'dashboard'
+        Copy-Item -Path $dashboardSrc -Destination $helper -Recurse -Force
+        Get-ChildItem -Path $dashHelper -Directory -Recurse -Filter '__pycache__' |
             Remove-Item -Recurse -Force -ErrorAction SilentlyContinue
     }
     if (Test-Path (Join-Path $src 'along-init\protocol.md')) {
