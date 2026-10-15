@@ -41,12 +41,13 @@ ActDim Along is a provider-agnostic, zero-friction agent memory, documentation, 
 - **No Unmeasured Enterprise Extras in Core**: Optional extensions (dashboard, telemetry, circuit breakers, autonomous team runners, worktree isolation, chat gateways) belong in modular extras, preventing runtime protocol inflation and dependency bloat in core.
 - **No External Vector DB or Cloud Daemon Dependencies**: Project memory and retrieval operate completely in-repo with local file access; no external database servers, embedding APIs, background daemons, or cloud subscriptions are required.
 
-## Roadmap
+## Strategic Horizons & Roadmap
 
-- [x] **Phase 1 (Core Agent Memory & Lifecycle)**: Protocol v1.x foundational `.along/` memory layout, machine-parseable issues, decentralized ADRs, session wrap, and cross-platform installers.
-- [x] **Phase 2 (Dual-Tier Memory & LLM-Wiki Knowledge Base)**: Protocol v2.x transition to `docs/` LLM-Wiki (`along-kb-sync`), bounded TF-IDF snippet retrieval (`along-kb-search`), and AST code-review-graph integration (`along-graph-sync`, `along-graph-check`, `along-graph-impact`, `along-graph-arch`).
-- [x] **Phase 3 (Visual Dashboard & Repository Analytics)**: Protocol v3.x executive dashboard (`along-dash`), entity DAG visualization, repository health metrics, and Generative UI widgets.
-- [x] **Phase 4 (Mechanical Runtime Gates & Worktree Isolation)**: Protocol v4.0 declarative runtime gates (`PreToolUse`, `Stop`), ephemeral git worktree sandboxing, and autonomous team execution (`along-team`).
-- [ ] **Phase 5 (Multi-User Git Concurrency & Merge Automation)**: Protocol v4.5 in-progress custom Git merge drivers (`along git setup`), zero-manual-merge projection recompilation, and atomic entity conflict prevention.
-- [ ] **Phase 6 (Structured State & Blackboard Resilience)**: Protocol v4.6 formal state transitions, persistent session blackboards, and automated agent recovery loops.
-- [ ] **Phase 7 (Clean-Turn Agent Loops & Resilient State Recovery)**: Protocol v4.7 clean-turn context isolation, zero-step state recovery, and error resilience in multi-agent execution loops.
+Granular iteration progress, release milestones, and active task DAGs are tracked dynamically in `.along/MILESTONES/` and `.along/ISSUES/` (compiled into `.along/ISSUES.md`).
+
+`VISION.md` governs long-term architectural horizons rather than day-to-day tickets:
+
+1. **Foundation & Dual-Tier Memory (Shipped - v1.x - v3.x)**: Git-native transactional memory (`.along/`), Andrej Karpathy-style LLM-Wiki (`docs/`), bounded TF-IDF retrieval (`along-kb-search`), and executive dashboard (`along-dash`).
+2. **Mechanical Safety & Isolation (Shipped - v4.0 - v4.5)**: Declarative runtime gates (`PreToolUse`, `Stop`), ephemeral git worktree sandboxing, test-gated merge automation (`along git setup`), and zero-manual-merge projection compilers.
+3. **Structured Execution & Resilient Agent Loops (Active - v4.6 - v4.7)**: Deterministic blackboard state transitions (`along scratch patch`), clean-turn context isolation, bounded step prompt budgets, and automated zero-step drift recovery in `along-team`.
+4. **Ecosystem & Cross-Runtime Expansion (Next - v4.8+)**: Empirical benchmarks, multi-language support (C++, Rust, Go, JVM), multi-runtime orchestration (Claude Code, Google Antigravity, OpenAI Codex, OpenCode), and enterprise governance packs.

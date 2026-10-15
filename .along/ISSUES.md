@@ -46,9 +46,9 @@
 - [ ] `(feat)` [zero-step-state-recovery-and-drift-detection](ISSUES/feat--zero-step-state-recovery-and-drift-detection.md)
 
 ## Done (recent)
+- [x] `(debt)` [vision-roadmap-decoupling](ISSUES/done/debt--vision-roadmap-decoupling.md)
 - [x] `(task)` [dashboard-docs-kb-alignment](ISSUES/done/task--dashboard-docs-kb-alignment.md)
 - [x] `(feat)` [doc-routing-compliance-gate](ISSUES/done/feat--doc-routing-compliance-gate.md)
 - [x] `(feat)` [bounded-prompt-footprint-gate](ISSUES/done/feat--bounded-prompt-footprint-gate.md)
 - [x] `(debt)` [remove-static-dashboard-data-json-export](ISSUES/done/debt--remove-static-dashboard-data-json-export.md)
-- [x] `(bug)` [session-scanner-prompts-dir-leak](ISSUES/done/bug--session-scanner-prompts-dir-leak.md)
-<!-- 254 older completed issue(s) archived in .along/ISSUES/done/ -->
+<!-- 255 older completed issue(s) archived in .along/ISSUES/done/ -->
