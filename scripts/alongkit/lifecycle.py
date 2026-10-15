@@ -28,7 +28,7 @@ import shutil
 import sys
 from typing import List, Optional, Sequence, Tuple, Union
 
-from . import entities, frontmatter, gates, proc, repo, session, testruns, textio, transaction, verify
+from . import entities, frontmatter, gates, markdown, proc, repo, session, testruns, textio, transaction, verify
 
 LIFECYCLE_ACTIONS: tuple = ("build", "test", "dev", "debug")
 
@@ -992,6 +992,41 @@ def execute_wrap(
             )
             return 2
 
+    # Verify that issue acceptance criteria checklist items are completed
+    src_content = textio.read_text(src_file, strict=False)
+    issue_unchecked = markdown.extract_unchecked_checklist_items(src_content)
+    if issue_unchecked:
+        if not force_reason:
+            _check_failed()
+            print(
+                f"[Error] Wrap aborted: issue '{clean_slug}' has {len(issue_unchecked)} uncompleted checklist item(s) (- [ ]):\n"
+                + "\n".join(f"  - [ ] {item}" for item in issue_unchecked)
+                + "\n  Complete all checklist items, or pass --force-reason \"...\".",
+                file=sys.stderr,
+            )
+            return 2
+        if not _force_allowed():
+            return 2
+        forced.append(f"Wrapped with open issue checklist items: {force_reason}")
+
+    # Verify that living plan checklist items are completed
+    if has_blackboard:
+        plan_text = session.read_plan(repo_root, clean_slug)
+        plan_unchecked = markdown.extract_unchecked_checklist_items(plan_text)
+        if plan_unchecked:
+            if not force_reason:
+                _check_failed()
+                print(
+                    f"[Error] Wrap aborted: living plan for '{clean_slug}' has {len(plan_unchecked)} uncompleted checklist item(s) (- [ ]):\n"
+                    + "\n".join(f"  - [ ] {item}" for item in plan_unchecked)
+                    + "\n  Complete all checklist items, or pass --force-reason \"...\".",
+                    file=sys.stderr,
+                )
+                return 2
+            if not _force_allowed():
+                return 2
+            forced.append(f"Wrapped with open plan checklist items: {force_reason}")
+
     # 1. Pre-Flight Test Gate
     if not no_verify and not dry_run:
         skip_tests = False
@@ -1161,7 +1196,12 @@ def execute_wrap(
         # [bug--wrap-not-transactional] REQ-2
         kb_script = repo.resolve_tool_script("along_kb_sync.py", repo_root)
         if kb_script:
-            kb_res = proc.run_python([kb_script, repo_root], cwd=repo_root)
+            kb_cmd = [kb_script, repo_root]
+            issue_type = str(issue.get("type", "")).lower()
+            issue_tags = [str(t).lower() for t in (issue.get("tags") or [])]
+            if issue_type == "docs" or any(t in issue_tags for t in ("cleanup", "refactor", "prune")):
+                kb_cmd.extend(["--prune-intent", f"Issue wrap: {clean_slug}"])
+            kb_res = proc.run_python(kb_cmd, cwd=repo_root)
             if kb_res.ok:
                 print("-> Synchronized Knowledge Base.")
             else:

@@ -15,6 +15,7 @@ from __future__ import annotations
 import os
 import sys
 import unittest
+from unittest.mock import patch
 
 REPO_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 SCRIPTS_DIR = os.path.join(REPO_ROOT, "scripts")
@@ -459,6 +460,145 @@ class TestKbSyncCliIntegration(unittest.TestCase):
             session.update_state(root, "docs--locked-policy", phase="execution", plan_approved=True)
             violation_approved = check_doc_manual_lock(keyed_event, root)
             self.assertIsNone(violation_approved)
+
+    def test_context_aware_prune_authorization(self):
+        """along_kb_sync automatically authorizes content reduction if active issue is type: docs or tag cleanup."""
+        from alongkit import session
+
+        with hermetic.repo_fixture() as root:
+            proc.git(["init"], cwd=root)
+            proc.git(["config", "user.email", "test@example.com"], cwd=root)
+            proc.git(["config", "user.name", "Test Runner"], cwd=root)
+            docs_dir = os.path.join(root, "docs")
+            doc_file = os.path.join(docs_dir, "topic--architecture.md")
+            # Create a 25-line article and commit it to git
+            initial_lines = [
+                "---",
+                "protocol: along",
+                'protocol_version: "4.4.14"',
+                "slug: architecture",
+                "title: Architecture",
+                "type: architecture",
+                "created: 2026-09-01",
+                "tags: [architecture]",
+                "---",
+                "",
+                "# Architecture",
+                "",
+                "Detailed architecture content follows.",
+            ] + [f"Line {i} describing system components in detail." for i in range(1, 25)]
+            textio.write_text(doc_file, "\n".join(initial_lines) + "\n")
+            proc.git(["add", "."], cwd=root)
+            proc.git(["commit", "-m", "Initial full architecture doc"], cwd=root)
+
+            # Shrink article drastically
+            shrunk_lines = [
+                "---",
+                "protocol: along",
+                'protocol_version: "4.4.14"',
+                "slug: architecture",
+                "title: Architecture",
+                "type: architecture",
+                "created: 2026-09-01",
+                "tags: [architecture]",
+                "---",
+                "",
+                "# Architecture",
+                "",
+                "Only small stub left.",
+            ]
+            textio.write_text(doc_file, "\n".join(shrunk_lines) + "\n")
+
+            kb_script = os.path.join(SCRIPTS_DIR, "along_kb_sync.py")
+
+            # 1. Without active issue or prune intent -> halts with exit code 2
+            res_blocked = proc.run_python([kb_script, root], cwd=root)
+            self.assertEqual(res_blocked.returncode, 2)
+            self.assertIn("--prune-intent", res_blocked.stdout)
+
+            # 2. Bind session to an active docs issue
+            issues_dir = os.path.join(root, ".along", "ISSUES")
+            os.makedirs(issues_dir, exist_ok=True)
+            doc_issue = os.path.join(issues_dir, "docs--clean-architecture.md")
+            textio.write_text(doc_issue, (
+                "---\n"
+                "protocol: along\n"
+                "slug: clean-architecture\n"
+                "type: docs\n"
+                "status: in-progress\n"
+                "tags: [cleanup]\n"
+                "---\n\n"
+                "# Clean Architecture\n"
+            ))
+            key = "antigravity--test-prune-session"
+            session.bind_session(root, "clean-architecture", key=key)
+
+            # Auto-authorizes prune with exit code 0
+            with patch.dict(os.environ, {"ALONG_SESSION_KEY": key}):
+                res_allowed = proc.run_python([kb_script, root], cwd=root)
+                self.assertEqual(res_allowed.returncode, 0, res_allowed.stdout + res_allowed.stderr)
+                self.assertIn("[PRUNE-INTENT]", res_allowed.stdout)
+                self.assertIn("Auto-authorized by active issue", res_allowed.stdout)
+
+    def test_cross_project_slug_collision(self):
+        """along_kb_sync in --strict mode detects duplicate non-standard topic slugs across subprojects."""
+        with hermetic.repo_fixture() as root:
+            kb_script = os.path.join(SCRIPTS_DIR, "along_kb_sync.py")
+            # Create a non-standard doc at root
+            root_docs = os.path.join(root, "docs")
+            textio.write_text(os.path.join(root_docs, "topic--frontend-conventions.md"), (
+                "---\n"
+                "protocol: along\n"
+                "slug: frontend-conventions\n"
+                "title: Frontend Conventions\n"
+                "type: reference\n"
+                "---\n\n"
+                "# Root Frontend Conventions\n\n"
+                "Overview of root conventions and design architecture.\n\n"
+                "## Guidelines\n\n"
+                "Core guidelines for the entire repository.\n"
+            ))
+
+            # Create subproject with the same non-standard slug
+            sub_dir = os.path.join(root, "packages", "ui-core")
+            sub_docs = os.path.join(sub_dir, "docs")
+            os.makedirs(sub_docs, exist_ok=True)
+            sub_doc = os.path.join(sub_docs, "topic--frontend-conventions.md")
+            textio.write_text(sub_doc, (
+                "---\n"
+                "protocol: along\n"
+                "slug: frontend-conventions\n"
+                "title: UI Core Conventions\n"
+                "type: reference\n"
+                "---\n\n"
+                "# Subproject Frontend Conventions\n\n"
+                "Overview of subproject conventions.\n\n"
+                "## Guidelines\n\n"
+                "Subproject specific guidelines.\n"
+            ))
+            textio.write_text(os.path.join(sub_dir, "package.json"), '{"name": "@actdim/ui-core"}')
+
+            # 1. In strict mode -> fails with collision
+            res_strict = proc.run_python([kb_script, root, "--strict"], cwd=root)
+            self.assertEqual(res_strict.returncode, 1)
+            self.assertIn("slug collision", res_strict.stdout.lower() + res_strict.stderr.lower())
+
+            # 2. With override -> passes
+            textio.write_text(sub_doc, (
+                "---\n"
+                "protocol: along\n"
+                "slug: frontend-conventions\n"
+                "override: frontend-conventions\n"
+                "title: UI Core Conventions\n"
+                "type: reference\n"
+                "---\n\n"
+                "# Subproject Frontend Conventions with Override\n\n"
+                "Overview of subproject conventions with override.\n\n"
+                "## Guidelines\n\n"
+                "Subproject specific guidelines.\n"
+            ))
+            res_override = proc.run_python([kb_script, root, "--strict"], cwd=root)
+            self.assertEqual(res_override.returncode, 0, res_override.stdout + res_override.stderr)
 
 
 if __name__ == "__main__":

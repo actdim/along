@@ -979,11 +979,11 @@ def sync_decisions_to_docs(repo_root: str, check_only: bool = False) -> str:
     return target_dir
 
 
-def _kb_reconcile_and_bootstrap(repo_root: str, docs_dir: str, check_only: bool):
+def _kb_reconcile_and_bootstrap(repo_root: str, docs_dir: str, check_only: bool, is_subproject: bool = False):
     print(f"-> Synchronizing Knowledge Base in {docs_dir}...")
     reconcile_sources(repo_root, docs_dir, dry_run=check_only)
 
-    if not os.path.exists(docs_dir) or not os.listdir(docs_dir):
+    if not is_subproject and (not os.path.exists(docs_dir) or not os.listdir(docs_dir)):
         print("   docs/ is missing or empty. Bootstrapping standard articles...")
         bootstrapped = bootstrap_docs_if_empty(docs_dir, repo_root, dry_run=check_only)
         print(f"   Bootstrapped {bootstrapped} core Knowledge Base articles.")
@@ -1168,8 +1168,32 @@ def _kb_ingest_articles(
     )
 
 
-def _kb_check_shrunk_articles(shrunk_articles, prune_intent):
+def _kb_check_shrunk_articles(shrunk_articles, prune_intent, repo_root=None):
     if shrunk_articles:
+        if not prune_intent and repo_root:
+            try:
+                from alongkit import session, entities
+                active_slug, _ = session.resolve_active_session(repo_root)
+                if not active_slug:
+                    in_prog = session.in_progress_slugs(repo_root)
+                    if len(in_prog) == 1:
+                        active_slug = in_prog[0]
+                issue = None
+                if active_slug:
+                    issue = entities.find_issue_by_slug(repo_root, active_slug)
+                if not issue:
+                    issue, _ = entities.resolve_active_issue(repo_root)
+                if issue:
+                    itype = str(issue.get("type", "")).lower()
+                    fm = issue.get("frontmatter") or {}
+                    raw_tags = issue.get("tags") or fm.get("tags") or []
+                    itags = [str(t).lower() for t in raw_tags]
+                    if itype == "docs" or any(t in itags for t in ("cleanup", "refactor", "prune")):
+                        resolved_slug = issue.get("slug") or active_slug or "active-issue"
+                        prune_intent = f"Auto-authorized by active issue {resolved_slug} (type: {itype})"
+            except (OSError, UnicodeDecodeError, ValueError, KeyError, AttributeError):
+                pass
+
         if not prune_intent:
             print("\n[WARNING] Detected significant content reduction in Knowledge Base:")
             for s_name, s_delta, s_pct in shrunk_articles:
@@ -1180,6 +1204,7 @@ def _kb_check_shrunk_articles(shrunk_articles, prune_intent):
             sys.exit(2)
         else:
             print(f"   [PRUNE-INTENT] Acknowledged content reduction: {prune_intent}")
+    return prune_intent
 
 
 def _kb_generate_index(repo_root: str, docs_dir: str, articles, doc_cross_links, today: str, check_only: bool):
@@ -1293,6 +1318,7 @@ def _kb_export_artifacts(repo_root: str, articles, check_only: bool):
 
 def _kb_sync_subprojects(
     repo_root: str,
+    articles,
     is_subproject: bool,
     check_only: bool,
     strict: bool,
@@ -1304,12 +1330,57 @@ def _kb_sync_subprojects(
     check_symbols: bool,
     strict_sections: bool,
 ):
+    slug_collisions = []
     if not is_subproject:
         # Installed contexts and package doc roots (docs/ + AGENTS.md | llms.txt | manifest):
         # a package's docs compile without a .along/ of its own [bug--along-install-marker-ambiguous].
         all_contexts = repo.find_agent_contexts(repo_root)
         all_contexts += [p for p in repo.find_package_doc_roots(repo_root) if p not in all_contexts]
         abs_root = os.path.abspath(repo_root)
+
+        standard_slugs = {
+            fname.replace(".md", "").replace("topic--", "").lower()
+            for fname, _, _, _ in STANDARD_ARTICLES
+        } | {"index", "architecture", "domain-model", "setup-and-workflow"}
+
+        slug_registry = {}
+        for art in articles:
+            s = art.get("slug")
+            if s:
+                slug_registry.setdefault(str(s).lower(), []).append(("root", art.get("filename", ""), art.get("override")))
+
+        for ctx in all_contexts:
+            if os.path.abspath(ctx) == abs_root:
+                continue
+            ctx_docs = os.path.join(ctx, "docs")
+            rel_ctx = repo.safe_relpath(ctx, repo_root).replace("\\", "/")
+            if os.path.isdir(ctx_docs):
+                for fname in os.listdir(ctx_docs):
+                    if fname.endswith(".md") and fname.lower() not in ("index.md", "readme.md"):
+                        try:
+                            fpath = os.path.join(ctx_docs, fname)
+                            fm, _, _ = frontmatter.try_parse(textio.read_text(fpath, strict=False))
+                            if fm and fm.get("protocol") == "along":
+                                sub_slug = fm.get("slug") or fname.replace(".md", "").replace("topic--", "")
+                                override = fm.get("override")
+                                slug_registry.setdefault(str(sub_slug).lower(), []).append((rel_ctx, fname, override))
+                        except (OSError, UnicodeDecodeError, ValueError, KeyError, AttributeError):
+                            pass
+
+        for s_key, entries in slug_registry.items():
+            if s_key in standard_slugs:
+                continue
+            if len(entries) > 1:
+                has_override = any(entry[2] for entry in entries)
+                if not has_override:
+                    locs = ", ".join(f"{loc}/docs/{fn}" for loc, fn, _ in entries)
+                    slug_collisions.append((s_key, f"Non-standard slug '{s_key}' defined in multiple contexts without override: {locs}"))
+
+        if slug_collisions:
+            print(f"\n[WARN: slug-collision] Detected {len(slug_collisions)} cross-project slug collision(s):")
+            for _, msg in slug_collisions:
+                print(f"   - {msg}")
+
         for ctx in all_contexts:
             if os.path.abspath(ctx) == abs_root:
                 continue
@@ -1327,6 +1398,8 @@ def _kb_sync_subprojects(
                         explicit_mapping=explicit_mapping,
                         crosslink_check=crosslink_check, crosslink_apply=crosslink_apply,
                         check_symbols=check_symbols, strict_sections=strict_sections)
+
+    return slug_collisions
 
 
 def _kb_rewrite_inbound_links(repo_root: str, is_subproject: bool, check_only: bool, migrate_numbered: bool, explicit_mapping):
@@ -1511,6 +1584,7 @@ def _kb_format_report_and_exit(
     strict_sections: bool,
     check_symbols: bool,
     doc_routing_violations=None,
+    slug_collisions=None,
 ):
     print(f"-> Knowledge Base sync complete. Total active articles: {total_articles}\n")
 
@@ -1528,6 +1602,7 @@ def _kb_format_report_and_exit(
             "total_crosslinks_applied": total_crosslinks_applied,
             "ghost_symbols": ghost_symbols,
             "doc_routing_violations": doc_routing_violations or [],
+            "slug_collisions": [msg for _, msg in (slug_collisions or [])],
         }
         print(json.dumps(report, indent=2, ensure_ascii=False))
 
@@ -1540,6 +1615,8 @@ def _kb_format_report_and_exit(
         reasons.append(f"{len(ghost_symbols)} ghost symbol(s)")
     if strict and doc_routing_violations:
         reasons.append(f"{len(doc_routing_violations)} doc routing violation(s)")
+    if strict and slug_collisions:
+        reasons.append(f"{len(slug_collisions)} cross-project slug collision(s)")
 
     if reasons:
         print(f"   [FAIL] Gate failed in strict mode: {', '.join(reasons)}.")
@@ -1564,7 +1641,7 @@ def sync_kb(
     docs_dir = os.path.join(repo_root, "docs")
     today = datetime.now().strftime("%Y-%m-%d")
 
-    _kb_reconcile_and_bootstrap(repo_root, docs_dir, check_only)
+    _kb_reconcile_and_bootstrap(repo_root, docs_dir, check_only, is_subproject=is_subproject)
 
     in_git = False
     try:
@@ -1594,14 +1671,15 @@ def sync_kb(
         today,
     )
 
-    _kb_check_shrunk_articles(shrunk_articles, prune_intent)
+    prune_intent = _kb_check_shrunk_articles(shrunk_articles, prune_intent, repo_root=repo_root)
 
     index_path = _kb_generate_index(repo_root, docs_dir, articles, doc_cross_links, today, check_only)
 
     _kb_export_artifacts(repo_root, articles, check_only)
 
-    _kb_sync_subprojects(
+    slug_collisions = _kb_sync_subprojects(
         repo_root,
+        articles,
         is_subproject,
         check_only,
         strict,
@@ -1652,6 +1730,7 @@ def sync_kb(
         strict_sections,
         check_symbols,
         doc_routing_violations=doc_routing_violations,
+        slug_collisions=slug_collisions,
     )
 
     return total_articles, len(broken_links)

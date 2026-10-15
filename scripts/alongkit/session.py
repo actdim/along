@@ -293,7 +293,7 @@ SESSION_ENV_MARKERS: Tuple[Tuple[str, str], ...] = (
 #: Every environment variable that ties a process to an agent session or issue; the test
 #: runner clears them so the suite stays hermetic.
 SESSION_ENV_VARS: Tuple[str, ...] = tuple(v for v, _ in SESSION_ENV_MARKERS) + (
-    "ALONG_SESSION_ID", "ALONG_SESSION_RUNTIME", "ALONG_ISSUE_SLUG",
+    "ALONG_SESSION_KEY", "ALONG_SESSION_ID", "ALONG_SESSION_RUNTIME", "ALONG_ISSUE_SLUG",
 )
 
 
@@ -311,6 +311,9 @@ def session_key(runtime: Optional[str], session_id: Optional[str]) -> Optional[s
 def current_session_key(env: Optional[Dict[str, str]] = None) -> Optional[str]:
     """Session key of the agent session this process runs in, from its environment."""
     env = dict(os.environ) if env is None else env
+    direct = (env.get("ALONG_SESSION_KEY") or "").strip()
+    if direct:
+        return direct
     explicit = (env.get("ALONG_SESSION_ID") or "").strip()
     if explicit:
         return session_key((env.get("ALONG_SESSION_RUNTIME") or "generic").strip(), explicit)

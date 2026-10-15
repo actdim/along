@@ -670,6 +670,95 @@ class TestLifecycleWrap(unittest.TestCase):
         self.assertEqual(code, 1)
         self.assertIn("misconfigured", err.lower())
 
+    def test_23_wrap_aborts_on_uncompleted_issue_checklist(self):
+        """Wrap aborts if issue body contains uncompleted checklist items (- [ ])."""
+        issue_path = os.path.join(self.root, ".along", "ISSUES", "task--fixture-sample-task.md")
+        content = textio.read_text(issue_path)
+        content += "\n## Acceptance Criteria\n- [ ] Task requirement 1\n- [x] Task requirement 2\n"
+        textio.write_text(issue_path, content)
+
+        with patch("sys.stderr", new_callable=io.StringIO) as mock_stderr:
+            code = lifecycle.execute_wrap(
+                self.root,
+                "fixture-sample-task",
+                status="done",
+                no_verify=True,
+                decisions=[],
+            )
+            err = mock_stderr.getvalue()
+        self.assertEqual(code, 2)
+        self.assertIn("uncompleted checklist item", err)
+        self.assertIn("- [ ] Task requirement 1", err)
+
+        # Passes with --force-reason
+        code_forced = lifecycle.execute_wrap(
+            self.root,
+            "fixture-sample-task",
+            status="done",
+            no_verify=True,
+            decisions=[],
+            force_reason="Force past unfinished checklist items",
+        )
+        self.assertEqual(code_forced, 0)
+
+    def test_24_wrap_aborts_on_uncompleted_plan_checklist(self):
+        """Wrap aborts if session living plan contains uncompleted checklist items (- [ ])."""
+        session.record_plan(
+            self.root,
+            "fixture-sample-task",
+            "# Plan\n- [ ] Step A\n- [x] Step B\n",
+            "test",
+        )
+        with patch("sys.stderr", new_callable=io.StringIO) as mock_stderr:
+            code = lifecycle.execute_wrap(
+                self.root,
+                "fixture-sample-task",
+                status="done",
+                no_verify=True,
+                decisions=[],
+            )
+            err = mock_stderr.getvalue()
+        self.assertEqual(code, 2)
+        self.assertIn("living plan for 'fixture-sample-task' has 1 uncompleted checklist item", err)
+
+        # Passes with --force-reason
+        code_forced = lifecycle.execute_wrap(
+            self.root,
+            "fixture-sample-task",
+            status="done",
+            no_verify=True,
+            decisions=[],
+            force_reason="Force past unfinished plan items",
+        )
+        self.assertEqual(code_forced, 0)
+
+    def test_25_wrap_passes_prune_intent_for_docs_issues(self):
+        """Wrap forwards --prune-intent when closing issue with type: docs or tag cleanup."""
+        issue_path = os.path.join(self.root, ".along", "ISSUES", "task--fixture-sample-task.md")
+        content = textio.read_text(issue_path)
+        fm, body = frontmatter.parse(content)
+        fm["type"] = "docs"
+        fm["tags"] = ["cleanup"]
+        textio.write_text(issue_path, frontmatter.render(fm, body))
+
+        with patch("alongkit.proc.run_python") as mock_run_python:
+            mock_res = unittest.mock.MagicMock()
+            mock_res.ok = True
+            mock_res.stdout = ""
+            mock_res.stderr = ""
+            mock_run_python.return_value = mock_res
+            code = lifecycle.execute_wrap(
+                self.root,
+                "fixture-sample-task",
+                status="done",
+                no_verify=True,
+                decisions=[],
+            )
+            self.assertEqual(code, 0)
+            calls = mock_run_python.call_args_list
+            prune_calls = [c for c in calls if any("--prune-intent" in str(arg) for arg in c[0][0])]
+            self.assertTrue(len(prune_calls) > 0)
+
 
 if __name__ == "__main__":
     unittest.main()

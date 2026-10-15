@@ -17,6 +17,7 @@
 - [ ] `(feat)` [agent-run-protocol-and-observability](ISSUES/feat--agent-run-protocol-and-observability.md)
 - [ ] `(feat)` [agent-runtime-adapters-claude-codex-opencode](ISSUES/feat--agent-runtime-adapters-claude-codex-opencode.md)
 - [ ] `(feat)` [along-plan-strategies](ISSUES/feat--along-plan-strategies.md)
+- [ ] `(feat)` [anti-silent-fallback-gate](ISSUES/feat--anti-silent-fallback-gate.md)
 - [ ] `(feat)` [automated-ui-screenshots-and-visual-verification](ISSUES/feat--automated-ui-screenshots-and-visual-verification.md)
 - [ ] `(feat)` [byoc-kubernetes-operator-and-private-sandboxes](ISSUES/feat--byoc-kubernetes-operator-and-private-sandboxes.md)
 - [ ] `(feat)` [centralized-gpu-inference-pool-and-cloud-topologies](ISSUES/feat--centralized-gpu-inference-pool-and-cloud-topologies.md)
@@ -46,9 +47,9 @@
 - [ ] `(feat)` [zero-step-state-recovery-and-drift-detection](ISSUES/feat--zero-step-state-recovery-and-drift-detection.md)
 
 ## Done (recent)
+- [x] `(feat)` [kb-integrity-and-wrap-verification](ISSUES/done/feat--kb-integrity-and-wrap-verification.md)
 - [x] `(debt)` [vision-roadmap-decoupling](ISSUES/done/debt--vision-roadmap-decoupling.md)
 - [x] `(task)` [dashboard-docs-kb-alignment](ISSUES/done/task--dashboard-docs-kb-alignment.md)
 - [x] `(feat)` [doc-routing-compliance-gate](ISSUES/done/feat--doc-routing-compliance-gate.md)
 - [x] `(feat)` [bounded-prompt-footprint-gate](ISSUES/done/feat--bounded-prompt-footprint-gate.md)
-- [x] `(debt)` [remove-static-dashboard-data-json-export](ISSUES/done/debt--remove-static-dashboard-data-json-export.md)
-<!-- 255 older completed issue(s) archived in .along/ISSUES/done/ -->
+<!-- 256 older completed issue(s) archived in .along/ISSUES/done/ -->

@@ -588,11 +588,71 @@ def _doctor_runtime_checks(repo_root: str, errors: int, warnings: int) -> Tuple[
     return errors, warnings
 
 
+def _doctor_zombie_docs_checks(repo_root: str, warnings: int) -> Tuple[int, List[dict]]:
+    """Scan docs/ directories for abandoned zombie stubs."""
+    zombies = []
+    today = datetime.now().date()
+    ignored = set(repo.IGNORED_DIRS) | set(repo.PROVIDER_DIRS)
+
+    for root, dirs, files in os.walk(repo_root):
+        dirs[:] = [d for d in dirs if d not in ignored]
+        if os.path.basename(root) != "docs":
+            continue
+        for f in files:
+            if not f.endswith(".md") or f.lower() in ("index.md", "readme.md"):
+                continue
+            fpath = os.path.join(root, f)
+            try:
+                content = textio.read_text(fpath, strict=False)
+                fm, body, _ = frontmatter.try_parse(content)
+                if not fm or fm.get("protocol") != "along":
+                    continue
+                created_str = str(fm.get("created", ""))
+                age_days = None
+                if created_str:
+                    try:
+                        c_date = datetime.strptime(created_str[:10], "%Y-%m-%d").date()
+                        age_days = (today - c_date).days
+                    except ValueError:
+                        pass
+                body_lines = [
+                    line.strip()
+                    for line in (body or "").splitlines()
+                    if line.strip() and not line.strip().startswith("#")
+                ]
+                is_placeholder = (
+                    "Document system components and engineering guidelines here" in (body or "")
+                    or len(body_lines) < 3
+                )
+                if is_placeholder and (age_days is None or age_days >= 7):
+                    rel = repo.safe_relpath(fpath, repo_root).replace("\\", "/")
+                    zombies.append({
+                        "path": rel,
+                        "lines": len(body_lines),
+                        "created": created_str or "unknown",
+                        "age_days": age_days,
+                    })
+            except (OSError, UnicodeDecodeError, ValueError, KeyError, AttributeError):
+                continue
+
+    if zombies:
+        print(f"\n[WARN: zombie-stub] Detected {len(zombies)} abandoned zombie stub(s) in documentation:")
+        for z in zombies:
+            age_disp = f"{z['age_days']}d old" if z['age_days'] is not None else "unknown age"
+            print(f"  - {z['path']}: {z['lines']} content line(s), created {z['created']} ({age_disp}). Populate with real content or prune.")
+        warnings += len(zombies)
+    else:
+        print("[OK] Knowledge Base articles clean: no abandoned zombie stubs detected.")
+
+    return warnings, zombies
+
+
 def handle_doctor_command(repo_root: str, args: List[str]):
     if args and args[0] in ("-h", "--help", "help"):
-        print("Usage: along doctor [entities|--entities] [--fix]")
-        print("  (no args)            Report protocol, hooks, runtime, bindings and blackboard health")
+        print("Usage: along doctor [entities|docs|--entities|--docs] [--fix]")
+        print("  (no args)            Report protocol, hooks, runtime, bindings, doc quality and blackboard health")
         print("  entities [--fix]     Validate entity schemas and references; --fix drops dangling milestone fields")
+        print("  docs                 Validate documentation quality and detect abandoned zombie stubs")
         sys.exit(0)
     check_entities = "--entities" in args or (bool(args) and args[0].lower() == "entities")
     if check_entities:
@@ -623,6 +683,13 @@ def handle_doctor_command(repo_root: str, args: List[str]):
 
         print(f"\nEntity Doctor Summary: {len(errs)} errors, {len(warns)} warnings.")
         sys.exit(1 if len(errs) > 0 else 0)
+
+    check_docs = "--docs" in args or (bool(args) and args[0].lower() == "docs")
+    if check_docs:
+        print("=== Along Knowledge Base Quality Validation (Doctor) ===")
+        warns, zombies = _doctor_zombie_docs_checks(repo_root, 0)
+        print(f"\nDocs Doctor Summary: 0 errors, {len(zombies)} warning(s).")
+        sys.exit(0)
 
     print("=== Along Protocol Diagnostics (Doctor) ===")
     errors = 0
@@ -957,6 +1024,8 @@ def handle_doctor_command(repo_root: str, args: List[str]):
         warnings += 1
     else:
         print("[OK] Documentation Routing Tree: README.md overview boundaries and AGENTS.md references clean.")
+
+    warnings, _ = _doctor_zombie_docs_checks(repo_root, warnings)
 
     errors, warnings = _doctor_runtime_checks(repo_root, errors, warnings)
 
