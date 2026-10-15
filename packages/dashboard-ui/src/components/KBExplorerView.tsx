@@ -6,7 +6,6 @@ import {
   type ComponentModel,
 } from '@actdim/dynstruct/componentModel/contracts';
 import { useComponent, toReact } from '@actdim/dynstruct/componentModel/react/hooks';
-import { Icon } from '@iconify/react';
 import { marked } from 'marked';
 import DOMPurify from 'dompurify';
 import { KBArticle } from '../types';
@@ -61,13 +60,19 @@ export const useKBView = (params?: ComponentParams<KBViewStruct>): Component<KBV
         });
       },
       get activeArticle() {
-        if (!m.articles || m.articles.length === 0) return null;
-        if (!m.selectedSlug) return m.articles[0];
+        if (!m.articles || m.articles.length === 0) {
+          return null;
+        }
+        if (!m.selectedSlug) {
+          return m.articles[0];
+        }
         return m.articles.find((a) => a.slug === m.selectedSlug) || m.articles[0] || null;
       },
       get renderedHtml() {
         const art = m.activeArticle;
-        if (!art || !art.body) return '';
+        if (!art || !art.body) {
+          return '';
+        }
         try {
           const parsed = marked.parse(art.body);
           return DOMPurify.sanitize(typeof parsed === 'string' ? parsed : String(parsed));
@@ -109,7 +114,7 @@ export const useKBView = (params?: ComponentParams<KBViewStruct>): Component<KBV
           <div className="lg:col-span-4 bg-slate-900 border border-slate-800 rounded-2xl p-4 space-y-4 shadow-sm">
             {/* Search */}
             <div className="relative">
-              <Icon icon="lucide:search" className="w-4 h-4 text-slate-400 absolute left-3 top-3" />
+              <span className="iconify lucide--search w-4 h-4 text-slate-400 absolute left-3 top-3" />
               <input
                 type="text"
                 value={m.searchQuery}
@@ -125,11 +130,12 @@ export const useKBView = (params?: ComponentParams<KBViewStruct>): Component<KBV
             <div className="flex flex-wrap gap-1.5">
               {categories.map((cat) => (
                 <button
+                  type="button"
                   key={cat.id}
                   onClick={() => {
                     m.categoryFilter = cat.id;
                   }}
-                  className={`px-2.5 py-1 rounded-lg text-[10px] font-mono transition ${
+                  className={`px-2.5 py-1 rounded-lg text-[10px] font-mono transition cursor-pointer ${
                     m.categoryFilter === cat.id
                       ? 'bg-sky-500/20 text-sky-300 border border-sky-500/40 font-bold'
                       : 'bg-slate-950 text-slate-400 hover:text-slate-200 border border-slate-800'
@@ -147,7 +153,9 @@ export const useKBView = (params?: ComponentParams<KBViewStruct>): Component<KBV
                 return (
                   <div
                     key={a.id}
-                    onClick={() => m.selectArticle(a.slug)}
+                    onClick={() => {
+                      m.selectArticle(a.slug);
+                    }}
                     className={`p-3.5 rounded-xl border cursor-pointer transition ${
                       isSelected
                         ? 'bg-sky-950/40 border-sky-500/50 shadow-sm'
@@ -199,11 +207,14 @@ export const useKBView = (params?: ComponentParams<KBViewStruct>): Component<KBV
                       <span className="text-xs text-slate-400 font-mono">{m.activeArticle.file_path}</span>
                     </div>
                     <button
-                      onClick={() => m.inspectInDrawer(m.activeArticle!.id)}
-                      className="text-xs text-slate-400 hover:text-slate-200 p-1 rounded hover:bg-slate-800 transition"
+                      type="button"
+                      onClick={() => {
+                        m.inspectInDrawer(m.activeArticle!.id);
+                      }}
+                      className="text-xs text-slate-400 hover:text-slate-200 p-1 rounded hover:bg-slate-800 transition cursor-pointer"
                       title="Inspect Metadata in Drawer"
                     >
-                      <Icon icon="lucide:maximize" className="w-4 h-4" />
+                      <span className="iconify lucide--maximize w-4 h-4" />
                     </button>
                   </div>
 
@@ -229,19 +240,23 @@ export const useKBView = (params?: ComponentParams<KBViewStruct>): Component<KBV
                 {m.activeArticle.outgoing_links.length > 0 && (
                   <div className="bg-slate-950/80 border border-slate-800 rounded-xl p-3.5">
                     <div className="text-[10px] font-mono uppercase tracking-wider text-slate-400 flex items-center gap-1.5 mb-2">
-                      <Icon icon="lucide:link-2" className="w-3.5 h-3.5 text-sky-400" />
+                      <span className="iconify lucide--link-2 w-3.5 h-3.5 text-sky-400" />
                       Referenced Topics & Entities
                     </div>
                     <div className="flex flex-wrap gap-2">
                       {m.activeArticle.outgoing_links.map((link) => (
                         <button
+                          type="button"
                           key={link}
                           onClick={() => {
                             const target = m.articles.find((a) => a.slug === link || a.title === link);
-                            if (target) m.selectArticle(target.slug);
-                            else m.selectEntity(link);
+                            if (target) {
+                              m.selectArticle(target.slug);
+                            } else {
+                              m.selectEntity(link);
+                            }
                           }}
-                          className="text-xs font-mono px-2 py-0.5 bg-slate-900 hover:bg-sky-950 hover:text-sky-300 text-slate-300 border border-slate-800 hover:border-sky-700 rounded transition flex items-center gap-1"
+                          className="text-xs font-mono px-2 py-0.5 bg-slate-900 hover:bg-sky-950 hover:text-sky-300 text-slate-300 border border-slate-800 hover:border-sky-700 rounded transition flex items-center gap-1 cursor-pointer"
                         >
                           [[{link}]]
                         </button>
@@ -258,7 +273,7 @@ export const useKBView = (params?: ComponentParams<KBViewStruct>): Component<KBV
               </div>
             ) : (
               <div className="flex flex-col items-center justify-center py-20 text-slate-500 space-y-3">
-                <Icon icon="lucide:book-open" className="w-12 h-12 text-slate-600" />
+                <span className="iconify lucide--book-open w-12 h-12 text-slate-600" />
                 <p className="text-sm font-medium">Select an article from the left column to read.</p>
               </div>
             )}

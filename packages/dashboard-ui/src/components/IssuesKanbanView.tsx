@@ -6,7 +6,6 @@ import {
   type ComponentModel,
 } from '@actdim/dynstruct/componentModel/contracts';
 import { useComponent, toReact } from '@actdim/dynstruct/componentModel/react/hooks';
-import { Icon } from '@iconify/react';
 import { Issue } from '../types';
 import { DashboardAppMsgStruct, DashboardMsgChannels } from '../bus';
 
@@ -86,7 +85,7 @@ export const useIssuesView = (
           <div className="bg-slate-900/90 border border-slate-800 rounded-2xl p-4 flex flex-col md:flex-row gap-4 items-center justify-between">
             {/* Search input */}
             <div className="relative w-full md:w-72">
-              <Icon icon="lucide:search" className="w-4 h-4 text-slate-400 absolute left-3 top-3" />
+              <span className="iconify lucide--search w-4 h-4 text-slate-400 absolute left-3 top-3" />
               <input
                 type="text"
                 value={m.searchQuery}
@@ -146,26 +145,28 @@ export const useIssuesView = (
               {/* View Mode Toggle */}
               <div className="flex items-center bg-slate-950 border border-slate-800 rounded-xl p-0.5 ml-auto">
                 <button
+                  type="button"
                   onClick={() => {
                     m.viewMode = 'table';
                   }}
-                  className={`p-1.5 rounded-lg text-xs transition ${
+                  className={`p-1.5 rounded-lg text-xs transition cursor-pointer ${
                     m.viewMode === 'table' ? 'bg-sky-600 text-white' : 'text-slate-400 hover:text-slate-200'
                   }`}
                   title="Table View"
                 >
-                  <Icon icon="lucide:table" className="w-4 h-4" />
+                  <span className="iconify lucide--table w-4 h-4" />
                 </button>
                 <button
+                  type="button"
                   onClick={() => {
                     m.viewMode = 'kanban';
                   }}
-                  className={`p-1.5 rounded-lg text-xs transition ${
+                  className={`p-1.5 rounded-lg text-xs transition cursor-pointer ${
                     m.viewMode === 'kanban' ? 'bg-sky-600 text-white' : 'text-slate-400 hover:text-slate-200'
                   }`}
                   title="Kanban Board"
                 >
-                  <Icon icon="lucide:columns" className="w-4 h-4" />
+                  <span className="iconify lucide--columns w-4 h-4" />
                 </button>
               </div>
             </div>
@@ -191,7 +192,9 @@ export const useIssuesView = (
                     {m.filteredIssues.map((iss) => (
                       <tr
                         key={iss.id}
-                        onClick={() => m.selectIssue(iss.id, iss.type)}
+                        onClick={() => {
+                          m.selectIssue(iss.id, iss.type);
+                        }}
                         className="hover:bg-slate-800/60 cursor-pointer transition"
                       >
                         <td className="py-3 px-4">
@@ -267,7 +270,9 @@ export const useIssuesView = (
                       {colIssues.map((iss) => (
                         <div
                           key={iss.id}
-                          onClick={() => m.selectIssue(iss.id, iss.type)}
+                          onClick={() => {
+                            m.selectIssue(iss.id, iss.type);
+                          }}
                           className="bg-slate-950 border border-slate-800/80 hover:border-slate-700 rounded-xl p-3.5 cursor-pointer transition hover:shadow-md space-y-2"
                         >
                           <div className="flex items-center justify-between text-[10px] font-mono">

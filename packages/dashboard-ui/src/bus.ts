@@ -1,5 +1,5 @@
 import { createMsgBus } from '@actdim/msgmesh/core';
-import type { MsgBus, MsgStruct } from '@actdim/msgmesh/contracts';
+import type { MsgBus, MsgStructBase } from '@actdim/msgmesh/contracts';
 import {
     type ToMsgChannelPrefix,
     type ToMsgStruct,
@@ -62,10 +62,13 @@ export type DashboardLocalChannels = {
     };
 };
 
-export type DashboardAppMsgStruct = DashboardApiStruct & MsgStruct<DashboardLocalChannels> & BaseAppMsgStruct;
+export type DashboardAppMsgStruct = MsgStructBase &
+  DashboardApiStruct &
+  DashboardLocalChannels &
+  BaseAppMsgStruct;
 
 export type DashboardMsgChannels<
     TChannel extends keyof DashboardAppMsgStruct | Array<keyof DashboardAppMsgStruct>,
 > = KeysOf<DashboardAppMsgStruct, TChannel>;
 
-export const dashboardBus: MsgBus<any> = createMsgBus<any>();
+export const dashboardBus: MsgBus<DashboardAppMsgStruct> = createMsgBus<DashboardAppMsgStruct>();

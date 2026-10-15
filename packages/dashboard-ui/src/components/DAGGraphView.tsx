@@ -7,18 +7,37 @@ import {
   type ComponentModel,
 } from '@actdim/dynstruct/componentModel/contracts';
 import { useComponent, toReact } from '@actdim/dynstruct/componentModel/react/hooks';
-import { Icon } from '@iconify/react';
 import { DashboardAppMsgStruct, DashboardMsgChannels } from '../bus';
 
 export type GraphFilterMode = 'all' | 'dag' | 'kb' | 'decisions' | 'architecture';
+
+export type GraphNodeData = {
+  id: string;
+  label: string;
+  type: string;
+  status?: string;
+  description?: string;
+  dominant_language?: string;
+  size?: number;
+  cohesion?: number;
+  level?: number;
+  [key: string]: unknown;
+};
+
+export type GraphEdgeData = {
+  source: string;
+  target: string;
+  type: string;
+  label?: string;
+};
 
 export type GraphViewStruct = ComponentStruct<
   DashboardAppMsgStruct,
   {
     props: {
       graphData: {
-        nodes: Array<{ id: string; label: string; type: string; [key: string]: any }>;
-        edges: Array<{ source: string; target: string; type: string; label?: string }>;
+        nodes: GraphNodeData[];
+        edges: GraphEdgeData[];
       };
       filterMode?: GraphFilterMode;
     };
@@ -45,26 +64,38 @@ export const useGraphView = (
   const containerRef = { current: null as HTMLDivElement | null };
 
   const initCytoscape = () => {
-    if (!containerRef.current || !m.graphData) return;
+    if (!containerRef.current || !m.graphData) {
+      return;
+    }
 
     const currentFilter = m.filterMode || 'all';
     const allNodes = m.graphData.nodes || [];
     const allEdges = m.graphData.edges || [];
 
     const filteredNodes = allNodes.filter((n) => {
-      if (currentFilter === 'all') return true;
-      if (currentFilter === 'dag') return ['issue', 'milestone', 'risk'].includes(n.type);
-      if (currentFilter === 'kb') return n.type === 'kb';
-      if (currentFilter === 'decisions') return ['decision', 'spike'].includes(n.type);
-      if (currentFilter === 'architecture') return n.type === 'architecture';
+      if (currentFilter === 'all') {
+        return true;
+      }
+      if (currentFilter === 'dag') {
+        return ['issue', 'milestone', 'risk'].includes(n.type);
+      }
+      if (currentFilter === 'kb') {
+        return n.type === 'kb';
+      }
+      if (currentFilter === 'decisions') {
+        return ['decision', 'spike'].includes(n.type);
+      }
+      if (currentFilter === 'architecture') {
+        return n.type === 'architecture';
+      }
       return true;
     });
 
     const activeNodeIds = new Set(filteredNodes.map((n) => n.id));
 
-    const filteredEdges = allEdges.filter(
-      (e) => activeNodeIds.has(e.source) && activeNodeIds.has(e.target)
-    );
+    const filteredEdges = allEdges.filter((e) => {
+      return activeNodeIds.has(e.source) && activeNodeIds.has(e.target);
+    });
 
     const elements: cytoscape.ElementDefinition[] = [];
 
@@ -73,10 +104,15 @@ export const useGraphView = (
       let shape: cytoscape.Css.NodeShape = 'round-rectangle';
 
       if (n.type === 'issue') {
-        if (n.status === 'done') color = '#10b981';
-        else if (n.status === 'in-progress') color = '#f59e0b';
-        else if (n.status === 'blocked') color = '#ef4444';
-        else color = '#64748b';
+        if (n.status === 'done') {
+          color = '#10b981';
+        } else if (n.status === 'in-progress') {
+          color = '#f59e0b';
+        } else if (n.status === 'blocked') {
+          color = '#ef4444';
+        } else {
+          color = '#64748b';
+        }
       } else if (n.type === 'milestone') {
         color = '#818cf8';
         shape = 'hexagon';
@@ -147,6 +183,12 @@ export const useGraphView = (
       cyInstance.destroy();
     }
 
+    const layoutConfig: cytoscape.LayoutOptions = {
+      name: 'cose',
+      padding: 40,
+      animate: false,
+    } as cytoscape.LayoutOptions;
+
     cyInstance = cytoscape({
       container: containerRef.current,
       elements: elements,
@@ -161,7 +203,7 @@ export const useGraphView = (
             'font-family': 'ui-monospace, monospace',
             'text-valign': 'center',
             'text-halign': 'center',
-            shape: 'data(shape)' as any,
+            shape: 'round-rectangle',
             width: 'label',
             height: '34px',
             padding: '10px',
@@ -185,11 +227,7 @@ export const useGraphView = (
           },
         },
       ],
-      layout: {
-        name: 'cose',
-        padding: 40,
-        animate: false,
-      } as any,
+      layout: layoutConfig,
     });
 
     cyInstance.on('tap', 'node', (evt) => {
@@ -206,7 +244,12 @@ export const useGraphView = (
     actions: {
       resetLayout: () => {
         if (cyInstance) {
-          cyInstance.layout({ name: 'cose', padding: 40, animate: true } as any).run();
+          const runConfig: cytoscape.LayoutOptions = {
+            name: 'cose',
+            padding: 40,
+            animate: true,
+          } as cytoscape.LayoutOptions;
+          cyInstance.layout(runConfig).run();
         }
       },
       fit: () => {
@@ -268,9 +311,12 @@ export const useGraphView = (
               ] as const
             ).map((filter) => (
               <button
+                type="button"
                 key={filter.id}
-                onClick={() => m.setFilterMode(filter.id)}
-                className={`px-2.5 py-1 rounded-md transition font-medium ${
+                onClick={() => {
+                  m.setFilterMode(filter.id);
+                }}
+                className={`px-2.5 py-1 rounded-md transition font-medium cursor-pointer ${
                   (m.filterMode || 'all') === filter.id
                     ? 'bg-sky-500 text-slate-950 font-semibold'
                     : 'text-slate-400 hover:text-slate-200'
@@ -284,32 +330,44 @@ export const useGraphView = (
           <div className="w-px h-5 bg-slate-800 mx-1" />
 
           <button
-            onClick={() => m.resetLayout()}
-            className="px-3 py-1.5 bg-slate-900 hover:bg-slate-800 text-xs font-medium text-slate-200 rounded-lg transition flex items-center gap-1.5"
+            type="button"
+            onClick={() => {
+              m.resetLayout();
+            }}
+            className="px-3 py-1.5 bg-slate-900 hover:bg-slate-800 text-xs font-medium text-slate-200 rounded-lg transition flex items-center gap-1.5 cursor-pointer"
             title="Recalculate Layout"
           >
-            <Icon icon="lucide:refresh-cw" className="w-3.5 h-3.5" /> Layout
+            <span className="iconify lucide--refresh-cw w-3.5 h-3.5" /> Layout
           </button>
           <button
-            onClick={() => m.fit()}
-            className="px-2.5 py-1.5 bg-slate-900 hover:bg-slate-800 text-xs font-medium text-slate-200 rounded-lg transition"
+            type="button"
+            onClick={() => {
+              m.fit();
+            }}
+            className="px-2.5 py-1.5 bg-slate-900 hover:bg-slate-800 text-xs font-medium text-slate-200 rounded-lg transition cursor-pointer"
             title="Fit to Screen"
           >
-            <Icon icon="lucide:maximize-2" className="w-3.5 h-3.5" />
+            <span className="iconify lucide--maximize-2 w-3.5 h-3.5" />
           </button>
           <button
-            onClick={() => m.zoomIn()}
-            className="p-1.5 bg-slate-900 hover:bg-slate-800 text-slate-200 rounded-lg transition"
+            type="button"
+            onClick={() => {
+              m.zoomIn();
+            }}
+            className="p-1.5 bg-slate-900 hover:bg-slate-800 text-slate-200 rounded-lg transition cursor-pointer"
             title="Zoom In"
           >
-            <Icon icon="lucide:zoom-in" className="w-3.5 h-3.5" />
+            <span className="iconify lucide--zoom-in w-3.5 h-3.5" />
           </button>
           <button
-            onClick={() => m.zoomOut()}
-            className="p-1.5 bg-slate-900 hover:bg-slate-800 text-slate-200 rounded-lg transition"
+            type="button"
+            onClick={() => {
+              m.zoomOut();
+            }}
+            className="p-1.5 bg-slate-900 hover:bg-slate-800 text-slate-200 rounded-lg transition cursor-pointer"
             title="Zoom Out"
           >
-            <Icon icon="lucide:zoom-out" className="w-3.5 h-3.5" />
+            <span className="iconify lucide--zoom-out w-3.5 h-3.5" />
           </button>
         </div>
 

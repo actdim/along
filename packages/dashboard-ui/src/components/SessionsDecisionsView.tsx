@@ -6,7 +6,6 @@ import {
   type ComponentModel,
 } from '@actdim/dynstruct/componentModel/contracts';
 import { useComponent, toReact } from '@actdim/dynstruct/componentModel/react/hooks';
-import { Icon } from '@iconify/react';
 import { Session, Decision } from '../types';
 import { DashboardAppMsgStruct, DashboardMsgChannels } from '../bus';
 
@@ -57,25 +56,31 @@ export const useSessionsView = (
         {/* Section Switcher */}
         <div className="flex items-center gap-3 bg-slate-900 border border-slate-800 p-1.5 rounded-2xl w-fit">
           <button
-            onClick={() => m.setSection('sessions')}
-            className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-semibold transition ${
+            type="button"
+            onClick={() => {
+              m.setSection('sessions');
+            }}
+            className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-semibold transition cursor-pointer ${
               m.section === 'sessions'
                 ? 'bg-sky-600 text-white shadow-md'
                 : 'text-slate-400 hover:text-slate-200'
             }`}
           >
-            <Icon icon="lucide:history" className="w-4 h-4" />
+            <span className="iconify lucide--history w-4 h-4" />
             Work Sessions ({m.sessions.length})
           </button>
           <button
-            onClick={() => m.setSection('decisions')}
-            className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-semibold transition ${
+            type="button"
+            onClick={() => {
+              m.setSection('decisions');
+            }}
+            className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-semibold transition cursor-pointer ${
               m.section === 'decisions'
                 ? 'bg-sky-600 text-white shadow-md'
                 : 'text-slate-400 hover:text-slate-200'
             }`}
           >
-            <Icon icon="lucide:scale" className="w-4 h-4" />
+            <span className="iconify lucide--scale w-4 h-4" />
             Architectural Decisions (ADR) ({m.decisions.length})
           </button>
         </div>
@@ -85,7 +90,9 @@ export const useSessionsView = (
             {m.sessions.map((sess) => (
               <div
                 key={sess.id}
-                onClick={() => m.selectEntity(sess.id, 'session')}
+                onClick={() => {
+                  m.selectEntity(sess.id, 'session');
+                }}
                 className="bg-slate-900 border border-slate-800 hover:border-slate-700 rounded-2xl p-5 cursor-pointer transition shadow-sm space-y-3"
               >
                 <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-800/80 pb-3">
@@ -114,19 +121,19 @@ export const useSessionsView = (
                 <div className="flex flex-wrap items-center gap-2 pt-1 text-xs font-mono">
                   {sess.issues_completed.length > 0 && (
                     <span className="text-emerald-400 flex items-center gap-1 bg-emerald-950/40 px-2 py-0.5 rounded border border-emerald-800/60">
-                      <Icon icon="lucide:check-circle" className="w-3.5 h-3.5" />
+                      <span className="iconify lucide--check-circle w-3.5 h-3.5" />
                       Completed: {sess.issues_completed.join(', ')}
                     </span>
                   )}
                   {sess.issues_advanced.length > 0 && (
                     <span className="text-sky-400 flex items-center gap-1 bg-sky-950/40 px-2 py-0.5 rounded border border-sky-800/60">
-                      <Icon icon="lucide:arrow-right" className="w-3.5 h-3.5" />
+                      <span className="iconify lucide--arrow-right w-3.5 h-3.5" />
                       Advanced: {sess.issues_advanced.join(', ')}
                     </span>
                   )}
                   {sess.decisions.length > 0 && (
                     <span className="text-amber-400 flex items-center gap-1 bg-amber-950/40 px-2 py-0.5 rounded border border-amber-800/60">
-                      <Icon icon="lucide:bookmark" className="w-3.5 h-3.5" />
+                      <span className="iconify lucide--bookmark w-3.5 h-3.5" />
                       ADR: {sess.decisions.join(', ')}
                     </span>
                   )}
@@ -144,7 +151,9 @@ export const useSessionsView = (
             {m.decisions.map((dec) => (
               <div
                 key={dec.id}
-                onClick={() => m.selectEntity(dec.id, 'decision')}
+                onClick={() => {
+                  m.selectEntity(dec.id, 'decision');
+                }}
                 className="bg-slate-900 border border-slate-800 hover:border-slate-700 rounded-2xl p-5 cursor-pointer transition shadow-sm space-y-3 flex flex-col justify-between"
               >
                 <div>

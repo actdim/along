@@ -3,6 +3,7 @@ import {
   getMsgChannelSelector,
   type MsgProviderAdapter,
 } from '@actdim/msgmesh/adapters';
+import type { MsgBus, MsgStructBase } from '@actdim/msgmesh/contracts';
 import { DashboardApiClient } from '../api/client';
 import { dashboardBus, type DashboardChannelPrefix } from '../bus';
 import { FullDashboardData } from '../types';
@@ -39,19 +40,21 @@ export class DashboardApiService {
   }
 
   private registerAdapter() {
-    const services: Record<DashboardChannelPrefix, any> = {
+    const services: Record<DashboardChannelPrefix, DashboardApiClient> = {
       'API.DASHBOARD.': this.client,
     };
 
-    const adapters = Object.entries(services).map(
-      ([_, service]) =>
-        ({
-          service,
-          channelSelector: getMsgChannelSelector(services),
-        }) as MsgProviderAdapter,
+    const adapters: MsgProviderAdapter[] = Object.entries(services).map(
+      ([_, service]) => ({
+        service,
+        channelSelector: getMsgChannelSelector(services),
+      }),
     );
 
-    registerAdapters(dashboardBus, adapters);
+    registerAdapters(
+      dashboardBus as unknown as MsgBus<MsgStructBase>,
+      adapters,
+    );
   }
 
   private connectSSE() {

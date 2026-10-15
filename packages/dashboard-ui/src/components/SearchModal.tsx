@@ -6,8 +6,8 @@ import {
   type ComponentModel,
 } from '@actdim/dynstruct/componentModel/contracts';
 import { useComponent, toReact } from '@actdim/dynstruct/componentModel/react/hooks';
-import { Dialog } from '@mui/material';
-import { Icon } from '@iconify/react';
+import { useDialog, type DialogStruct } from '@actdim/dynstruct-mui/Dialog';
+import { bindProp } from '@actdim/dynstruct/componentModel/core';
 import { SearchResultItem, FullDashboardData } from '../types';
 import { DashboardAppMsgStruct, DashboardMsgChannels } from '../bus';
 
@@ -16,7 +16,6 @@ export type SearchModalStruct = ComponentStruct<
   {
     props: {
       isOpen: boolean;
-      onClose: () => void;
       query: string;
       activeTypeFilter: string;
       results: SearchResultItem[];
@@ -33,6 +32,9 @@ export type SearchModalStruct = ComponentStruct<
       open: () => void;
       close: () => void;
     };
+    children: {
+      dialog: DialogStruct;
+    };
   }
 >;
 
@@ -46,7 +48,6 @@ export const useSearchModal = (
     regType: 'SearchModal',
     props: {
       isOpen: false,
-      onClose: () => {},
       query: '',
       activeTypeFilter: 'all',
       results: [],
@@ -59,7 +60,6 @@ export const useSearchModal = (
       },
       close: () => {
         m.isOpen = false;
-        m.onClose();
       },
       performSearch: async (queryText: string) => {
         m.query = queryText;
@@ -170,7 +170,8 @@ export const useSearchModal = (
           const typeParam = m.activeTypeFilter === 'all' ? undefined : m.activeTypeFilter;
           const msgResp = await c.msgBus.request({
             channel: 'API.DASHBOARD.SEARCHKB',
-            payload: [queryText, undefined, typeParam as any],
+            group: 'in',
+            payload: [queryText, undefined, typeParam],
           });
           const resp = msgResp.payload;
           if (resp?.results && resp.results.length > 0) {
@@ -210,52 +211,57 @@ export const useSearchModal = (
         },
       },
     },
-    view: () => {
-      return (
-        <Dialog
-          open={Boolean(m.isOpen)}
-          onClose={() => m.close()}
-          maxWidth="md"
-          fullWidth
-          sx={{
-            zIndex: 1400,
-            '& .MuiDialog-paper': {
-              backgroundColor: '#0f172a',
-              color: '#f8fafc',
-              backgroundImage: 'none',
-              borderRadius: '16px',
-              border: '1px solid #1e293b',
-              overflow: 'hidden',
-              margin: '16px',
-            },
-            '& .MuiBackdrop-root': {
-              backgroundColor: 'rgba(2, 6, 23, 0.8)',
-              backdropFilter: 'blur(4px)',
-            },
-          }}
-        >
+    children: {
+      dialog: useDialog({
+        open: bindProp(() => m, 'isOpen'),
+        onClose: () => {
+          m.close();
+        },
+        maxWidth: 'md',
+        fullWidth: true,
+        sx: {
+          zIndex: 1400,
+          '& .MuiDialog-paper': {
+            backgroundColor: '#0f172a',
+            color: '#f8fafc',
+            backgroundImage: 'none',
+            borderRadius: '16px',
+            border: '1px solid #1e293b',
+            overflow: 'hidden',
+            margin: '16px',
+          },
+          '& .MuiBackdrop-root': {
+            backgroundColor: 'rgba(2, 6, 23, 0.8)',
+            backdropFilter: 'blur(4px)',
+          },
+        },
+        content: () => (
           <div className="bg-slate-900 text-slate-100 p-0 flex flex-col max-h-[80vh]">
             {/* Search Bar Input */}
             <div className="flex items-center px-4 py-3.5 border-b border-slate-800 gap-3">
-              <Icon icon="lucide:search" className="w-5 h-5 text-sky-400 shrink-0" />
+              <span className="iconify lucide--search w-5 h-5 text-sky-400 shrink-0" />
               <input
                 type="text"
                 autoFocus
                 value={m.query}
-                onChange={(e) => m.performSearch(e.target.value)}
+                onChange={(e) => {
+                  m.performSearch(e.target.value);
+                }}
                 placeholder="Search across Knowledge Base, Issues, ADR decisions..."
                 className="w-full bg-transparent text-slate-100 placeholder-slate-500 text-sm focus:outline-none"
               />
               {m.loading && (
-                <Icon icon="lucide:loader-2" className="w-4 h-4 text-sky-400 animate-spin shrink-0" />
+                <span className="iconify lucide--loader-2 w-4 h-4 text-sky-400 animate-spin shrink-0" />
               )}
               <button
                 type="button"
-                onClick={() => m.close()}
+                onClick={() => {
+                  m.close();
+                }}
                 className="text-slate-500 hover:text-slate-300 p-1 rounded-lg cursor-pointer transition"
                 title="Close modal (Esc)"
               >
-                <Icon icon="lucide:x" className="w-4 h-4" />
+                <span className="iconify lucide--x w-4 h-4" />
               </button>
             </div>
 
@@ -288,7 +294,9 @@ export const useSearchModal = (
               {m.results.map((r) => (
                 <div
                   key={r.id}
-                  onClick={() => m.selectResult(r)}
+                  onClick={() => {
+                    m.selectResult(r);
+                  }}
                   className="p-3 bg-slate-950 border border-slate-800/80 hover:border-sky-500/50 rounded-xl cursor-pointer transition group"
                 >
                   <div className="flex items-center justify-between">
@@ -323,9 +331,10 @@ export const useSearchModal = (
               )}
             </div>
           </div>
-        </Dialog>
-      );
+        ),
+      }),
     },
+    view: () => <c.children.Dialog />,
   };
 
   c = useComponent(def, params ?? {});

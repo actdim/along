@@ -6,10 +6,8 @@ import {
   type ComponentModel,
 } from '@actdim/dynstruct/componentModel/contracts';
 import { useComponent, toReact } from '@actdim/dynstruct/componentModel/react/hooks';
-import { type BaseAppMsgStruct } from '@actdim/dynstruct/appDomain/appContracts';
 import { useDrawer, type DrawerStruct } from '@actdim/dynstruct-mui/Drawer';
 import { bind } from '@actdim/dynstruct/componentModel/core';
-import { Icon } from '@iconify/react';
 import { marked } from 'marked';
 import {
   type Issue,
@@ -20,8 +18,9 @@ import {
   type Decision,
   type KBArticle,
   type FullDashboardData,
+  type KBGraphNode,
 } from '../types';
-
+import { DashboardAppMsgStruct, DashboardMsgChannels } from '../bus';
 import DOMPurify from 'dompurify';
 
 export type DrawerEntity =
@@ -57,7 +56,7 @@ declare global {
 }
 
 export type MarkdownContentStruct = ComponentStruct<
-  BaseAppMsgStruct,
+  DashboardAppMsgStruct,
   {
     props: {
       html: string;
@@ -82,16 +81,24 @@ export const useMarkdownContent = (
     actions: {
       renderMermaid: () => {
         const container = document.getElementById(c.id);
-        if (!container) return;
+        if (!container) {
+          return;
+        }
 
-        if (!window.mermaid) return;
+        if (!window.mermaid) {
+          return;
+        }
 
         const codeBlocks = container.querySelectorAll('pre code.language-mermaid');
-        if (codeBlocks.length === 0) return;
+        if (codeBlocks.length === 0) {
+          return;
+        }
 
         codeBlocks.forEach((codeEl) => {
           const preEl = codeEl.parentElement;
-          if (!preEl) return;
+          if (!preEl) {
+            return;
+          }
           const div = document.createElement('div');
           div.className =
             'mermaid my-4 p-4 bg-slate-950 rounded-xl border border-slate-800 flex justify-center overflow-x-auto text-slate-200';
@@ -136,17 +143,23 @@ export const useMarkdownContent = (
 export const MarkdownContent = toReact(useMarkdownContent);
 
 export type EntityDrawerStruct = ComponentStruct<
-  BaseAppMsgStruct,
+  DashboardAppMsgStruct,
   {
     props: {
       data: FullDashboardData | null;
       selectedEntityId: string | null;
-      onClose: () => void;
       readonly entity: DrawerEntity | null;
       readonly renderedBody: string;
     };
+    msgScope: {
+      publish: DashboardMsgChannels<'APP.ENTITY.CLOSE'>;
+    };
+    actions: {
+      close: () => void;
+    };
     children: {
       drawer: DrawerStruct;
+      drawerBody: (params?: unknown) => React.JSX.Element;
       markdownContent: MarkdownContentStruct;
     };
   }
@@ -163,38 +176,53 @@ export const useEntityDrawer = (
     props: {
       data: null,
       selectedEntityId: null,
-      onClose: () => {},
       get entity(): DrawerEntity | null {
-        if (!m.data || !m.selectedEntityId) return null;
+        if (!m.data || !m.selectedEntityId) {
+          return null;
+        }
         const id = m.selectedEntityId;
 
         const iss = m.data.issues.find((i) => i.id === id || i.slug === id);
-        if (iss) return { ...iss, entityType: 'issue' as const };
+        if (iss) {
+          return { ...iss, entityType: 'issue' as const };
+        }
 
         const mil = m.data.milestones.find((ml) => ml.id === id || ml.slug === id);
-        if (mil) return { ...mil, entityType: 'milestone' as const };
+        if (mil) {
+          return { ...mil, entityType: 'milestone' as const };
+        }
 
         const r = m.data.risks.find((rk) => rk.id === id || rk.slug === id);
-        if (r) return { ...r, entityType: 'risk' as const };
+        if (r) {
+          return { ...r, entityType: 'risk' as const };
+        }
 
         const sp = m.data.spikes.find((s) => s.id === id || s.slug === id);
-        if (sp) return { ...sp, entityType: 'spike' as const };
+        if (sp) {
+          return { ...sp, entityType: 'spike' as const };
+        }
 
         const sess = m.data.sessions.find((s) => s.id === id || s.slug === id);
-        if (sess) return { ...sess, entityType: 'session' as const };
+        if (sess) {
+          return { ...sess, entityType: 'session' as const };
+        }
 
         const kb = m.data.kb_articles.find((k) => k.id === id || k.slug === id);
-        if (kb) return { ...kb, entityType: 'kb' as const };
+        if (kb) {
+          return { ...kb, entityType: 'kb' as const };
+        }
 
         const dec = m.data.decisions.find((d) => d.id === id);
-        if (dec) return { ...dec, entityType: 'decision' as const, body: dec.raw_markdown };
+        if (dec) {
+          return { ...dec, entityType: 'decision' as const, body: dec.raw_markdown };
+        }
 
         // Support architecture graph nodes
         if (id.startsWith('arch--') && m.data.graph?.nodes) {
-          const archNode = m.data.graph.nodes.find((n: any) => n.id === id);
+          const archNode = m.data.graph.nodes.find((n: KBGraphNode) => n.id === id);
           if (archNode) {
             const body = [
-              `### Architecture Module: ${archNode.label}`,
+              `### Architecture Module: ${archNode.label || ''}`,
               '',
               `- **Description**: ${archNode.description || 'N/A'}`,
               `- **Dominant Language**: ${archNode.dominant_language || 'N/A'}`,
@@ -203,10 +231,10 @@ export const useEntityDrawer = (
               `- **Hierarchy Level**: ${archNode.level ?? 0}`,
             ].join('\n');
             return {
-              id: archNode.id,
-              label: archNode.label,
-              title: archNode.label,
-              slug: archNode.label,
+              id: archNode.id || id,
+              label: archNode.label || id,
+              title: archNode.label || id,
+              slug: archNode.label || id,
               entityType: 'architecture' as const,
               description: archNode.description,
               dominant_language: archNode.dominant_language,
@@ -223,7 +251,9 @@ export const useEntityDrawer = (
       },
       get renderedBody() {
         const ent = m.entity;
-        if (!ent || !ent.body) return '';
+        if (!ent || !ent.body) {
+          return '';
+        }
         try {
           const parsed = marked.parse(ent.body);
           return DOMPurify.sanitize(typeof parsed === 'string' ? parsed : String(parsed));
@@ -232,11 +262,21 @@ export const useEntityDrawer = (
         }
       },
     },
+    actions: {
+      close: () => {
+        m.selectedEntityId = null;
+        c.msgBus.send({
+          channel: 'APP.ENTITY.CLOSE',
+        });
+      },
+    },
     children: {
       drawer: useDrawer({
         anchor: 'right',
         open: bind(() => Boolean(m.selectedEntityId)),
-        onClose: bind(() => m.onClose),
+        onClose: () => {
+          m.close();
+        },
         sx: {
           '& .MuiDrawer-paper': {
             backgroundColor: '#0f172a',
@@ -245,111 +285,120 @@ export const useEntityDrawer = (
             borderLeft: '1px solid #1e293b',
           },
         },
-        children: () => {
-          const ent = m.entity;
-          if (!ent) return null;
+        children: () => <c.children.DrawerBody />,
+      }),
+      drawerBody: () => {
+        const ent = m.entity;
+        if (!ent) {
+          return <></>;
+        }
 
-          const title =
-            ('title' in ent && ent.title) ||
-            ('summary' in ent && ent.summary) ||
-            ent.slug ||
-            ent.id;
+        const title =
+          ('title' in ent && ent.title) ||
+          ('summary' in ent && ent.summary) ||
+          ent.slug ||
+          ent.id;
 
-          return (
-            <div className="w-full sm:w-[600px] bg-slate-900 text-slate-100 p-6 min-h-full flex flex-col justify-between">
-              <div className="space-y-6">
-                {/* Header */}
-                <div className="flex items-start justify-between border-b border-slate-800 pb-4">
-                  <div>
-                    <span className="text-xs font-mono uppercase px-2 py-0.5 rounded bg-slate-800 text-sky-400 border border-slate-700">
-                      {ent.entityType}
-                    </span>
-                    <h2 className="text-xl font-bold text-slate-100 mt-2 tracking-tight">
-                      {title}
-                    </h2>
-                  </div>
-                  <button
-                    onClick={m.onClose}
-                    className="p-1 rounded-lg text-slate-400 hover:text-slate-100 hover:bg-slate-800 transition"
-                  >
-                    <Icon icon="lucide:x" className="w-5 h-5" />
-                  </button>
+        return (
+          <div className="w-full sm:w-[600px] bg-slate-900 text-slate-100 p-6 min-h-full flex flex-col justify-between">
+            <div className="space-y-6">
+              {/* Header */}
+              <div className="flex items-start justify-between border-b border-slate-800 pb-4">
+                <div>
+                  <span className="text-xs font-mono uppercase px-2 py-0.5 rounded bg-slate-800 text-sky-400 border border-slate-700">
+                    {ent.entityType}
+                  </span>
+                  <h2 className="text-xl font-bold text-slate-100 mt-2 tracking-tight">
+                    {title}
+                  </h2>
                 </div>
-
-                {/* Metadata */}
-                <div className="grid grid-cols-2 gap-3 text-xs text-slate-400 bg-slate-950/60 p-4 rounded-xl border border-slate-800/80">
-                  {'status' in ent && ent.status && (
-                    <div>
-                      Status: <span className="text-slate-200 font-bold">{ent.status}</span>
-                    </div>
-                  )}
-                  {'priority' in ent && ent.priority && (
-                    <div>
-                      Priority: <span className="text-slate-200 font-bold">{ent.priority}</span>
-                    </div>
-                  )}
-                  {'type' in ent && ent.type && (
-                    <div>
-                      Type: <span className="text-slate-200 font-mono">{ent.type}</span>
-                    </div>
-                  )}
-                  {'agent' in ent && ent.agent && (
-                    <div>
-                      Agent: <span className="text-slate-200">{ent.agent}</span>
-                    </div>
-                  )}
-                  {'created' in ent && ent.created && (
-                    <div>
-                      Created: <span className="text-slate-200">{ent.created}</span>
-                    </div>
-                  )}
-                  {'completed' in ent && ent.completed && (
-                    <div>
-                      Completed: <span className="text-emerald-400 font-bold">{ent.completed}</span>
-                    </div>
-                  )}
-                  {'file_path' in ent && ent.file_path && (
-                    <div className="col-span-2">
-                      File: <span className="text-sky-400">{ent.file_path}</span>
-                    </div>
-                  )}
-                </div>
-
-                {/* Tags */}
-                {'tags' in ent && Array.isArray(ent.tags) && ent.tags.length > 0 && (
-                  <div className="flex flex-wrap gap-1.5">
-                    {ent.tags.map((t: string) => (
-                      <span
-                        key={t}
-                        className="text-xs font-mono px-2 py-0.5 rounded bg-slate-950 text-slate-400 border border-slate-800"
-                      >
-                        #{t}
-                      </span>
-                    ))}
-                  </div>
-                )}
-
-                {/* Content */}
-                <div className="border-t border-slate-800 pt-4">
-                  <h3 className="text-xs font-bold font-mono uppercase text-slate-400 mb-3">
-                    Description & Content
-                  </h3>
-                  <c.children.MarkdownContent />
-                </div>
-              </div>
-
-              <div className="border-t border-slate-800 pt-4 mt-6 flex justify-end">
                 <button
-                  onClick={m.onClose}
-                  className="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded-xl text-xs font-medium transition"
+                  type="button"
+                  onClick={() => {
+                    m.close();
+                  }}
+                  className="p-1 rounded-lg text-slate-400 hover:text-slate-100 hover:bg-slate-800 transition cursor-pointer"
                 >
-                  Close
+                  <span className="iconify lucide--x w-5 h-5" />
                 </button>
               </div>
+
+              {/* Metadata */}
+              <div className="grid grid-cols-2 gap-3 text-xs text-slate-400 bg-slate-950/60 p-4 rounded-xl border border-slate-800/80">
+                {'status' in ent && ent.status && (
+                  <div>
+                    Status: <span className="text-slate-200 font-bold">{ent.status}</span>
+                  </div>
+                )}
+                {'priority' in ent && ent.priority && (
+                  <div>
+                    Priority: <span className="text-slate-200 font-bold">{ent.priority}</span>
+                  </div>
+                )}
+                {'type' in ent && ent.type && (
+                  <div>
+                    Type: <span className="text-slate-200 font-mono">{ent.type}</span>
+                  </div>
+                )}
+                {'agent' in ent && ent.agent && (
+                  <div>
+                    Agent: <span className="text-slate-200">{ent.agent}</span>
+                  </div>
+                )}
+                {'created' in ent && ent.created && (
+                  <div>
+                    Created: <span className="text-slate-200">{ent.created}</span>
+                  </div>
+                )}
+                {'completed' in ent && ent.completed && (
+                  <div>
+                    Completed: <span className="text-emerald-400 font-bold">{ent.completed}</span>
+                  </div>
+                )}
+                {'file_path' in ent && ent.file_path && (
+                  <div className="col-span-2">
+                    File: <span className="text-sky-400">{ent.file_path}</span>
+                  </div>
+                )}
+              </div>
+
+              {/* Tags */}
+              {'tags' in ent && Array.isArray(ent.tags) && ent.tags.length > 0 && (
+                <div className="flex flex-wrap gap-1.5">
+                  {ent.tags.map((t: string) => (
+                    <span
+                      key={t}
+                      className="text-xs font-mono px-2 py-0.5 rounded bg-slate-950 text-slate-400 border border-slate-800"
+                    >
+                      #{t}
+                    </span>
+                  ))}
+                </div>
+              )}
+
+              {/* Content */}
+              <div className="border-t border-slate-800 pt-4">
+                <h3 className="text-xs font-bold font-mono uppercase text-slate-400 mb-3">
+                  Description & Content
+                </h3>
+                <c.children.MarkdownContent />
+              </div>
             </div>
-          );
-        },
-      }),
+
+            <div className="border-t border-slate-800 pt-4 mt-6 flex justify-end">
+              <button
+                type="button"
+                onClick={() => {
+                  m.close();
+                }}
+                className="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded-xl text-xs font-medium transition cursor-pointer"
+              >
+                Close
+              </button>
+            </div>
+          </div>
+        );
+      },
       markdownContent: useMarkdownContent({
         html: bind(() => m.renderedBody),
       }),

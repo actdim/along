@@ -6,9 +6,8 @@ import {
   type ComponentModel,
 } from '@actdim/dynstruct/componentModel/contracts';
 import { useComponent, toReact } from '@actdim/dynstruct/componentModel/react/hooks';
-import { bind } from '@actdim/dynstruct/componentModel/core';
+import { bind, bindProp } from '@actdim/dynstruct/componentModel/core';
 import { useTabs, type TabsStruct } from '@actdim/dynstruct-mui/Tabs';
-import { Icon } from '@iconify/react';
 import { FullDashboardData } from './types';
 import { DashboardAppMsgStruct, DashboardMsgChannels } from './bus';
 import { DashboardApiService } from './services/apiService';
@@ -104,6 +103,7 @@ export const useDashboardApp = (
         try {
           const msgResp = await c.msgBus.request({
             channel: 'API.DASHBOARD.GETFULLDATA',
+            group: 'in',
             options: {
               timeout: 10000,
               abortSignal: new AbortController().signal,
@@ -111,9 +111,10 @@ export const useDashboardApp = (
           });
           m.data = msgResp.payload || null;
           m.error = null;
-        } catch (err: any) {
+        } catch (err: unknown) {
+          const message = err instanceof Error ? err.message : 'Error fetching data';
           console.error('Failed to load dashboard data:', err);
-          m.error = err.message || 'Error fetching data';
+          m.error = message;
         } finally {
           m.loading = false;
         }
@@ -139,14 +140,18 @@ export const useDashboardApp = (
         'APP.TAB.SET': {
           in: {
             callback: (msg) => {
-              if (msg.payload) m.switchTab(msg.payload);
+              if (msg.payload) {
+                m.switchTab(msg.payload);
+              }
             },
           },
         },
         'APP.ENTITY.SELECT': {
           in: {
             callback: (msg) => {
-              if (msg.payload?.id) m.selectEntity(msg.payload.id);
+              if (msg.payload?.id) {
+                m.selectEntity(msg.payload.id);
+              }
             },
           },
         },
@@ -212,11 +217,12 @@ export const useDashboardApp = (
         scanTimestamp: bind(() => m.data?.metrics.scan_timestamp || ''),
         sseConnected: bind(() => m.sseConnected),
         protocolVersion: bind(() => m.data?.metrics.protocol_version || '3.9.4'),
-        onSearchClick: () => m.openSearch(),
       }),
       tabs: useTabs({
         value: bind(() => m.activeTab),
-        onChange: (v: string) => m.switchTab(v),
+        onChange: (v: string) => {
+          m.switchTab(v);
+        },
         variant: 'scrollable',
         tabs: [
           { value: 'overview', label: 'Overview' },
@@ -266,12 +272,15 @@ export const useDashboardApp = (
       }),
       entityDrawer: useEntityDrawer({
         data: bind(() => m.data),
-        selectedEntityId: bind(() => m.selectedEntityId),
-        onClose: () => m.closeEntity(),
+        selectedEntityId: bindProp(() => m, 'selectedEntityId'),
       }),
       searchModal: useSearchModal({
-        isOpen: bind(() => m.searchModalOpen),
-        onClose: () => m.closeSearch(),
+        isOpen: bind(
+          () => m.searchModalOpen,
+          (open) => {
+            m.searchModalOpen = open;
+          }
+        ),
         data: bind(() => m.data),
       }),
     },
@@ -279,7 +288,7 @@ export const useDashboardApp = (
       if (m.loading && !m.data) {
         return (
           <div className="min-h-screen bg-slate-950 flex flex-col items-center justify-center text-slate-400 space-y-4">
-            <Icon icon="lucide:loader-2" className="w-8 h-8 text-sky-400 animate-spin" />
+            <span className="iconify lucide--loader-2 w-8 h-8 text-sky-400 animate-spin" />
             <p className="text-sm font-mono">Loading Along Dashboard & KB Engine via MsgMesh...</p>
           </div>
         );
@@ -289,12 +298,15 @@ export const useDashboardApp = (
         return (
           <div className="min-h-screen bg-slate-950 flex flex-col items-center justify-center text-slate-300 p-6">
             <div className="bg-slate-900 border border-rose-800/80 rounded-2xl p-6 max-w-md w-full text-center space-y-4 shadow-xl">
-              <Icon icon="lucide:alert-triangle" className="w-10 h-10 text-rose-400 mx-auto" />
+              <span className="iconify lucide--alert-triangle w-10 h-10 text-rose-400 mx-auto" />
               <h2 className="text-lg font-bold text-slate-100">Failed to Connect to Dashboard API</h2>
               <p className="text-xs text-slate-400 font-mono">{m.error}</p>
               <button
-                onClick={() => m.loadData()}
-                className="px-4 py-2 bg-sky-600 hover:bg-sky-500 rounded-xl text-xs font-semibold text-white transition"
+                type="button"
+                onClick={() => {
+                  m.loadData();
+                }}
+                className="px-4 py-2 bg-sky-600 hover:bg-sky-500 rounded-xl text-xs font-semibold text-white transition cursor-pointer"
               >
                 Retry Connection
               </button>

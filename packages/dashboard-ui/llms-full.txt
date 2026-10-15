@@ -134,7 +134,35 @@ Rules for writing dashboard UI code on the ActDim component and messaging ecosys
 6. **Params semantics**: plain params are initial values (applied once by `useComponent`); live input goes only through bindings. Never read `params.x` in a hook-constructor (`def.props` holds defaults only; live values for children come from `m` via `bindProp` / `bind`); bind factory-child props per value (`bind(() => p.item)`), never pass `p` whole. Details: [dynstruct Params Semantics](https://github.com/actdim/dynstruct/blob/main/AGENTS.md).
 7. **No callback props**: never pass `onSelect*`, `onNavigate*`, `onOpen*`, `onClose*`, `onChange*` between components to coordinate state (dual sources of truth, timing races, desynchronization). `props` configure a component; `actions` are transactional mutators of its own state; cross-component coordination goes through typed MsgMesh channels (`c.msgBus.send`, `msgBroker.subscribe`), open/close state through two-way bindings. `on*` props are fine only on primitive wrappers over DOM events (button click, input change).
 
-## 2. State, Lifecycle & Reactivity
+## 2. Dynstruct Conventions, Prop-Less JSX & Callback Policy
+
+1. **Clean Prop-Less JSX (`<c.children.Name />`)**:
+   - Child components (including `@actdim/dynstruct-mui` wrappers) are created and configured strictly in `def.children` via their hook constructors (`useButton`, `useDialog`, `useTextField`, `useDrawer`, `useTabs`).
+   - In the `view` section, JSX is rendered strictly without passing props: `<c.children.Name />`.
+   - Passing props or event handlers inline as JSX attributes is strictly forbidden.
+2. **Low-Level Event Handlers in `def.children` (ALLOWED & STANDARD)**:
+   - Passing standard DOM/MUI event handlers (`onClick`, `onClose`, `onChange`) in hook constructor parameters inside `def.children` is permitted and represents standard pattern:
+     ```typescript
+     def.children = {
+       submitButton: useButton({
+         label: 'Submit',
+         onClick: handleSubmit,
+       }),
+       dialog: useDialog({
+         open: bindProp(() => m, 'isOpen'),
+         onClose: handleClose,
+       }),
+     };
+     ```
+3. **Inter-Component Coordination (BANNED callback-drilling)**:
+   - Never pass domain callback props (`onSelect*`, `onNavigate*`, `onDelete*`) between features, pages, or major modules to synchronize state.
+   - Inter-component coordination and user intents go strictly through the `MsgMesh` bus (`c.msgBus.send`, `msgBroker.subscribe`).
+   - Open/close state is passed via two-way bindings (`bindProp(() => m, 'open')` or `bind(get, set)`).
+4. **Overlays and Dialogs**:
+   - Application overlays (`AdaptiveDialog`, `ActionSheet`, `AdaptiveMenu`, custom drawers) dismiss themselves internally (backdrop click, Escape, cancel button) and synchronize status with host via two-way `open: bindProp(...)`.
+   - Low-level primitive `useDialog` from `@actdim/dynstruct-mui` inside `def.children` takes `onClose` to forward the close event into host model logic.
+
+## 3. State, Lifecycle & Reactivity
 
 1. **Hooks policy (Dynstruct-first, not a ban)**: built-in React hooks are not needed in typical components. Use the component model instead:
    - State -> `props: { ... }`, mutate via `m.prop = value`.
@@ -148,18 +176,17 @@ Rules for writing dashboard UI code on the ActDim component and messaging ecosys
    - `'shallow'` - for large collections, read-only arrays: container mutations are tracked, items are not proxied.
    - `false` - for static configuration.
 
-## 3. Communication (`@actdim/msgmesh`)
+## 4. Communication (`@actdim/msgmesh`)
 
 1. **Bus-first**: inter-component interaction, backend calls, notifications, and navigation go through `c.msgBus`. No prop drilling across features, no cross-component ref mutation.
 2. **Backend API via bus adapters**: the API client is generated from FastAPI OpenAPI schemas via NSwag (`pnpm run generate:api`) producing `src/api/client.ts` with `DashboardApiClient`. Components call typed channels (e.g. `'API.DASHBOARD.GETFULLDATA'`), never `fetch()` / `axios` directly. Raw `fetch` is allowed only inside the generated client under `src/api/`.
 3. **Channel groups**:
-   - `in` - request payloads for request/response calls (`c.msgBus.request({ channel, group: 'in' })`).
+   - `in` - request payloads for request/response calls (`c.msgBus.request({ channel, group: 'in' })`) and commands.
    - `out` - provider responses and broadcast events (`msgBroker.subscribe`).
-   - `ex` - fire-and-forget commands (e.g. `APP.NAV.GOTO`).
 4. **Hierarchical filtering**: to receive messages only from descendants or ancestors, set `componentFilter: ComponentMsgFilter.FromDescendants` (or `FromAncestors`) in `msgBroker`. Used for intents of child items instead of callback props.
 5. **Payloads through `c.msgBus`** are normalized (observables -> plain values); class instances (`File`, `Blob`, `Date`) are passed by reference.
 
-### 3a. Dynamic Bus Struct via `@actdim/msgmesh/adapters`
+### 4a. Dynamic Bus Struct via `@actdim/msgmesh/adapters`
 
 Use `ToMsgChannelPrefix` and `ToMsgStruct` to generate typed channels at compile-time directly from `DashboardApiClient`:
 
@@ -184,7 +211,7 @@ Resulting channels are compile-time verified:
 - `searchKb(q, tag, type)` -> `"API.DASHBOARD.SEARCHKB"`
 - `listIssues(status, ...)` -> `"API.DASHBOARD.LISTISSUES"`
 
-### 3b. Automated Runtime Registration via `registerAdapters`
+### 4b. Automated Runtime Registration via `registerAdapters`
 
 Use `getMsgChannelSelector(services)` and `registerAdapters`:
 
@@ -201,14 +228,14 @@ const adapters = Object.entries(services).map(([_, service]) => ({
 registerAdapters(dashboardBus, adapters);
 ```
 
-### 3c. Implicit Bus Injection via React Context & Component Proxies
+### 4c. Implicit Bus Injection via React Context & Component Proxies
 
 - Create the bus once in `src/bus.ts` (`dashboardBus`).
 - Inject it at the application root via `<ComponentContextProvider value={{ msgBus: dashboardBus }}>`.
 - Components **never** create local buses or accept buses via manual props. Components access the bus implicitly via `c.msgBus`.
 - `c.msgBus` inside a Dynstruct component is a specialized proxy that integrates with the component lifecycle, handles error scoping, and manages `msgScope` permissions.
 
-### 3d. Clear Interaction Points & Observability
+### 4d. Clear Interaction Points & Observability
 
 All published and subscribed channels of a component must be declared in its `msgScope`:
 
@@ -225,12 +252,12 @@ export type MyViewStruct = ComponentStruct<
 >;
 ```
 
-## 4. Overlays & Modal UI (Dialogs, Drawers, Sheets, Menus)
+## 5. Overlays & Modal UI (Dialogs, Drawers, Sheets, Menus)
 
 All overlay components (dialogs, bottom sheets, menus, drawers, popovers) must follow Dynstruct child and two-way binding conventions rather than React callback props. Never add `onClose`, `onOpen`, or `onDismiss` callback props.
 
 1. **Declared as children of the host**: overlays are instantiated in `def.children` via their hook constructor (e.g. `useDrawer`, `useDialog`, `useAdaptiveMenu`, `useActionSheet`) and rendered in `view` as `<c.children.OverlayName />`.
-2. **No `onClose` callback props**: the overlay dismisses itself internally (backdrop click, escape key, cancel button sets model `open = false`). The host observes and coordinates state through a two-way binding on `open`:
+2. **No `onClose` callback props on public interfaces**: the overlay dismisses itself internally (backdrop click, escape key, cancel button sets model `open = false`). The host observes and coordinates state through a two-way binding on `open`:
    - `bindProp(() => m, 'dialogOpen')` for direct model flag synchronization.
    - `bind(get, set)` when closing requires additional host state cleanup (e.g. resetting an anchor element):
      ```typescript
@@ -245,15 +272,16 @@ All overlay components (dialogs, bottom sheets, menus, drawers, popovers) must f
      ```
    - A host setter may veto or defer closing (for example, while submitting an asynchronous operation).
    - At boundaries with plain React components, closing events arrive via `$events.onChangeOpen(false)`.
+   - Note on low-level primitives: When instantiating lower-level `@actdim/dynstruct-mui` components (such as `useDialog({ open: bindProp(...), onClose: handleClose })` or `useDrawer({ open: bindProp(...), onClose: handleClose })`) inside `def.children`, an `onClose` callback is standard and expected for forwarding backdrop/escape events to host model logic.
 3. **Live content via fragment children**: overlay content (`children`, `body`, custom `actions`) passed through bindings must be rendered through a host fragment child:
    ```typescript
    children: bind(() => <c.children.DialogBody />)
    ```
-   where `dialogBody` is declared as a fragment child (`React.FC`) on the host. Fragment children are rendered as observers, keeping content reactive and synchronized while the overlay is visible. Inside, drawer or dialog content is a fragment child for the same reason.
+   where `dialogBody` is declared as a fragment child (`(params?: unknown) => React.JSX.Element`) on the host. Fragment children are rendered as observers, keeping content reactive and synchronized while the overlay is visible. Inside, drawer or dialog content is a fragment child for the same reason.
 4. **Hardware Back button and Escape lifecycle**: overlays handling navigation back events (Android `APP.HOST.BACK`, `APP.NAV.BACK`, or Escape key) register the handler in `def.effects` while `open` is true, and unregister on close and in `events.onDestroy`. (Never use bare React `useEffect` for overlay lifecycle inside hook constructors; nested child components do not run effect cleanups properly on mount/unmount).
 5. **Canonical primitives and wrappers**: reuse existing core primitives from `@actdim/dynstruct-mui` (`useDrawer`, `useDialog`, `useMenu`) or shared components in `src/components/core/`. Menu and action icons (`MenuItemAction.icon`) support icon class strings (`'iconify tabler--upload'`) or React nodes (`renderMenuIcon`).
 
-## 5. Routing & Navigation
+## 6. Routing & Navigation
 
 1. Routes are declared with `createNavigationRoute` (`@actdim/dynstruct/appDomain/navigation`) and checked with `satisfies NavRoutes` (`@actdim/dynstruct/appDomain/commonContracts`). Patterns use `path-to-regexp` syntax.
 2. Never call `useNavigate()` or change `window.location` for internal routes. Send a bus command:
@@ -261,12 +289,11 @@ All overlay components (dialogs, bottom sheets, menus, drawers, popovers) must f
 ```typescript
 c.msgBus.send({
     channel: 'APP.NAV.GOTO',
-    group: 'ex',
     payload: { route: 'explorer' },
 });
 ```
 
-## 6. TypeScript & Styling
+## 7. TypeScript & Styling
 
 1. No `any` (`@typescript-eslint/no-explicit-any` is an error). No `as ...` type assertions. No `interface`, no `class` - use `type`, pure functions, closures, plain objects.
 2. No single-line control flow: always multi-line `{ ... }` blocks.
@@ -274,12 +301,12 @@ c.msgBus.send({
 4. MUI through `@actdim/dynstruct-mui` wrappers (or custom dynstruct wrappers) for interactive behavior: menus, modals / dialogs, drawers, dropdowns, form inputs.
 5. No storing state on `window` (`window.__ALONG_DATA__`). All payloads are strictly typed through channel definitions and NSwag DTO interfaces.
 
-## 7. Content Security & Markdown Sanitization
+## 8. Content Security & Markdown Sanitization
 
 - Markdown rendering (e.g. in `EntityDrawer.tsx`) must always be sanitized via `DOMPurify.sanitize(marked.parse(...))` to prevent XSS vulnerabilities.
 - Mermaid diagrams must be configured with `securityLevel: 'strict'` under Content Security Policy (CSP).
 
-## 8. Testing & Quality Gates
+## 9. Testing & Quality Gates
 
 - Component and unit tests use `vitest` with `happy-dom`:
   ```bash
@@ -294,7 +321,7 @@ c.msgBus.send({
   pnpm run build
   ```
 
-## 9. Component Ecosystem References
+## 10. Component Ecosystem References
 
 - Dynstruct Component Architecture: [`@actdim/dynstruct`](https://github.com/actdim/dynstruct)
 - Message Mesh Adapter Protocol: [`@actdim/msgmesh`](https://github.com/actdim/msgmesh)
