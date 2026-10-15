@@ -2,6 +2,13 @@
 
 All notable changes to this project, newest first.
 
+## v4.4.15 - 2026-10-16
+
+- docs: sync kb index and register backlog feature anti-silent-fallback-gate (refs #anti-silent-fallback-gate)
+- refactor(dashboard-ui): align with dynstruct and msgmesh conventions
+- feat(lifecycle): implement wrap checklist verification, prune amnesty, and zombie stub detection (refs #kb-integrity-and-wrap-verification)
+- debt(vision): decouple roadmap into strategic horizons and relax tests (refs #vision-roadmap-decoupling)
+
 ## v4.4.14 - 2026-10-14
 
 - fix(ci): cross-os toolnature paths, code-fence tag and secret pragma (refs #ci-linux-toolnature-and-secrets)
