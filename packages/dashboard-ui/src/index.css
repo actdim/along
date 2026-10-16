@@ -1,4 +1,5 @@
 @import "tailwindcss";
+@import "@actdim/ui-core/theme.css";
 @plugin "@iconify/tailwind4";
 
 @layer base {

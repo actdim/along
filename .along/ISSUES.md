@@ -1,7 +1,7 @@
 # Active Issues
 
 ## Active
-- [ ] `(task)` [migrate-to-actdim-ui-core](ISSUES/task--migrate-to-actdim-ui-core.md)
+<!-- No active issues -->
 
 ## Backlog
 - [ ] `(bug)` [session-record-gate-lifecycle-resilience](ISSUES/bug--session-record-gate-lifecycle-resilience.md)
@@ -51,9 +51,9 @@
 - [ ] `(task)` [reconcile-dashboard-ui-core-conventions](ISSUES/task--reconcile-dashboard-ui-core-conventions.md)
 
 ## Done (recent)
+- [x] `(task)` [migrate-to-actdim-ui-core](ISSUES/done/task--migrate-to-actdim-ui-core.md)
 - [x] `(feat)` [kb-integrity-and-wrap-verification](ISSUES/done/feat--kb-integrity-and-wrap-verification.md)
 - [x] `(feat)` [issue-stub-validation-and-lifecycle-gates](ISSUES/done/feat--issue-stub-validation-and-lifecycle-gates.md)
 - [x] `(feat)` [atomic-wrap-commit-and-start-guard](ISSUES/done/feat--atomic-wrap-commit-and-start-guard.md)
 - [x] `(docs)` [sync-recent-features-documentation](ISSUES/done/docs--sync-recent-features-documentation.md)
-- [x] `(docs)` [monorepo-submodule-release-workflow](ISSUES/done/docs--monorepo-submodule-release-workflow.md)
-<!-- 267 older completed issue(s) archived in .along/ISSUES/done/ -->
+<!-- 268 older completed issue(s) archived in .along/ISSUES/done/ -->

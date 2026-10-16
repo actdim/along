@@ -20,10 +20,10 @@ The dashboard frontend is built strictly on the ActDim component and messaging e
 Detailed technical specifications, coding conventions, and architectural contracts live in the Knowledge Base:
 
 - **[Knowledge Base Index](./docs/INDEX.md)**: Documentation catalog and topic graph.
-- **[Frontend Coding Conventions](./docs/topic--frontend-conventions.md)**: Mandatory Dynstruct and MsgMesh conventions, reactivity rules, component model, styling, and overlays.
-- **[System Architecture & Flow](./docs/topic--architecture.md)**: System topology and backend integration.
+- **[System Architecture & Flow](./docs/topic--architecture.md)**: System topology, backend integration, and UI Core delta.
 - **[Domain Model & Entity Ecosystem](./docs/topic--domain-model.md)**: Entity schemas and DAG relationships.
 - **[Setup & Workflow](./docs/topic--setup-and-workflow.md)**: Developer setup and verification lifecycle.
+- **UI & Frontend Standards**: Governed exclusively by `@actdim/ui-core` ([Developer Guide](./node_modules/@actdim/ui-core/docs/topic--developer-guide.md)).
 
 ---
 

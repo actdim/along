@@ -12,9 +12,7 @@ This document defines the local agent context boundary and engineering rules for
 ## Nearest Context Boundary
 
 When working on the dashboard frontend:
-- Follow all architectural rules and conventions documented in [Frontend Coding Conventions](docs/topic--frontend-conventions.md) and [Knowledge Base Index](docs/INDEX.md).
-- Adhere to the strict Dynstruct component model (`@actdim/dynstruct` + `@actdim/dynstruct-mui`).
-- Never introduce raw React component state (`useState`, `useMemo`, `useCallback`, `useEffect`). All component state belongs in `c.model` (MobX).
+- **UI & Frontend Invariants**: All UI guidelines, component models, design tokens, adaptive layout tiers, and overlay rules are governed exclusively by `@actdim/ui-core` (`node_modules/@actdim/ui-core/docs/INDEX.md`). Application-specific architecture is defined in `docs/topic--architecture.md`.
 - Never use untyped casting (`any` or `as ...`). Maintain 100% strict TypeScript typing.
 - Never write manual `fetch` calls or manual API channel maps. Use NSwag client generator (`pnpm run generate:api`) and dynamic bus adapters (`@actdim/msgmesh/adapters`).
 - Sanitize all rendered Markdown using DOMPurify and enforce strict CSP on Mermaid diagrams.
