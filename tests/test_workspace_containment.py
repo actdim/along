@@ -144,6 +144,11 @@ class TestDefaultWhitelist(_ContainmentFixture):
         self.assertEqual(res.decision, GateDecision.DENY)
         self.assertIn("credential store", res.reason)
 
+    def test_along_bin_never_readable_in_client_repo(self):
+        engine_script = os.path.join(self.home, ".along", "bin", "along_exec.py")
+        res = self.run_gate("view_file", {"file_path": engine_script}, options={"on_violation": "ask"})
+        self.assertEqual(res.decision, GateDecision.DENY)
+
     def test_pathless_tools_ignored(self):
         self.assertIsNone(self.run_gate("read_url_content", {"Url": "https://example.com"}))
         self.assertIsNone(self.run_gate("run_command", {"CommandLine": "git status"}))

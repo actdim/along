@@ -92,6 +92,11 @@ def main(argv=None) -> int:
         default=None,
         help="Why the user accepts skipping the tests (-n); recorded as a bypass",
     )
+    parser.add_argument(
+        "--no-commit",
+        action="store_true",
+        help="Skip automatic git commit of attributed and wrap metadata files",
+    )
 
     args = parser.parse_args(argv if argv is not None else sys.argv[1:])
     repo_root = repo.find_repo_root()
@@ -109,6 +114,7 @@ def main(argv=None) -> int:
         force_reason=args.force_reason,
         guard_bypass=True,
         bypass_reason=args.reason,
+        no_commit=args.no_commit,
     )
     if code == 0:
         # Not verifiable mechanically, so the engine only reminds (skills/along-wrap Phase A).

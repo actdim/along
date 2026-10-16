@@ -253,6 +253,63 @@ def handle_start_command(repo_root: str, args: List[str]):
         print(f"[Error] Issue '{slug}' not found in .along/ISSUES/.", file=sys.stderr)
         sys.exit(1)
 
+    allow_dirty = "--allow-dirty" in args
+    is_worktree = "--worktree" in args
+
+    if not is_worktree:
+        from alongkit import closeout
+        top = closeout.git_top(repo_root)
+        if top:
+            changes = closeout.git_changes(repo_root)
+            if changes:
+                # 1. Hard block if uncommitted files from previously completed (wrapped) issues exist
+                done_attr = closeout.done_issues_attribution(repo_root)
+                unattributed_candidates = list(changes.keys())
+                wrapped_groups: Dict[str, List[str]] = {}
+                for dkey, dinfo in done_attr.items():
+                    all_dpaths = {closeout.path_key(p) for p in list(dinfo["files"].keys()) + dinfo["entity_files"]}
+                    matched = [p for p in unattributed_candidates if closeout.path_key(p) in all_dpaths]
+                    if matched:
+                        wrapped_groups[dkey] = sorted(matched)
+                if wrapped_groups and not allow_dirty:
+                    print("[Error] Working tree has uncommitted changes from completed (wrapped) issue(s):", file=sys.stderr)
+                    for dkey, wpaths in sorted(wrapped_groups.items()):
+                        print(f"  - {dkey}:", file=sys.stderr)
+                        for wp in wpaths[:5]:
+                            print(f"      {wp}", file=sys.stderr)
+                        if len(wpaths) > 5:
+                            print(f"      ... and {len(wpaths) - 5} more", file=sys.stderr)
+                    print("Commit them first ('along commit -i <slug> --paths ...' or 'along session close'),", file=sys.stderr)
+                    print("or pass --allow-dirty to override.", file=sys.stderr)
+                    sys.exit(1)
+
+                # 2. Block if active in-progress issue exists with uncommitted working tree changes
+                active_others = [i for i in entities.scan_issues(repo_root)
+                                 if i.get("status") == "in-progress" and i.get("slug") != issue["slug"]]
+                if active_others and not allow_dirty:
+                    changed_keys = {closeout.path_key(p): p for p in changes}
+                    active_with_changes = []
+                    for other in active_others:
+                        other_slug = other["slug"]
+                        attr_files = session.attributed_files(repo_root, other_slug)
+                        other_top_paths = [repo.canonical_relpath(os.path.join(repo_root, p), top) for p in attr_files]
+                        dirty_for_other = [changed_keys[closeout.path_key(p)] for p in other_top_paths if closeout.path_key(p) in changed_keys]
+                        if dirty_for_other:
+                            active_with_changes.append((other["slug"], dirty_for_other))
+
+                    if active_with_changes:
+                        print("[Error] Active in-progress issue(s) exist with uncommitted working tree changes:", file=sys.stderr)
+                        for os_slug, os_paths in active_with_changes:
+                            print(f"  - {os_slug}:", file=sys.stderr)
+                            for op in os_paths[:5]:
+                                print(f"      {op}", file=sys.stderr)
+                            if len(os_paths) > 5:
+                                print(f"      ... and {len(os_paths) - 5} more", file=sys.stderr)
+                        print(f"To work on '{issue['slug']}' in parallel without dirtying this tree, use:", file=sys.stderr)
+                        print(f"  along start {issue['slug']} --worktree", file=sys.stderr)
+                        print("Or commit the current changes first, or pass --allow-dirty to proceed anyway.", file=sys.stderr)
+                        sys.exit(1)
+
     updates: Dict[str, Any] = {"status": "in-progress", "updated": today}
     for flag, key in (("--allow-root", "allowed_roots"), ("--write-scope", "write_scope")):
         if scope_flags[flag]:

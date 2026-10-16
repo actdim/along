@@ -315,6 +315,7 @@ def handle_session_command(repo_root: str, args: List[str]):
         parser.add_argument("--no-decisions", action="store_true")
         parser.add_argument("--force-reason", default=None)
         parser.add_argument("--reason", default=None)
+        parser.add_argument("--no-commit", action="store_true", help="Skip automatic git commit on wrap")
         parsed, extra = parser.parse_known_args(sub_args)
         check_unknown_args(extra, "along session wrap")
 
@@ -337,6 +338,7 @@ def handle_session_command(repo_root: str, args: List[str]):
             force_reason=parsed.force_reason,
             guard_bypass=True,
             bypass_reason=parsed.reason,
+            no_commit=parsed.no_commit,
         )
         sys.exit(code)
 

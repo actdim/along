@@ -535,7 +535,7 @@ class TestReopenAndDoctor(unittest.TestCase):
         textio.write_text(os.path.join(self.root, "src", "work.py"), "code = 1\n")
         textio.write_text(os.path.join(self.root, "src", "unrelated.py"), "u = 2\n")
 
-        code = lifecycle.execute_wrap(self.root, slug, status="done", no_verify=True, decisions=[])
+        code = lifecycle.execute_wrap(self.root, slug, status="done", no_verify=True, decisions=[], no_commit=True)
         self.assertEqual(code, 0)
 
         status = closeout.closeout_status(self.root)

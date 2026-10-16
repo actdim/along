@@ -23,6 +23,17 @@ class TestDocumentationRules(unittest.TestCase):
             self.assertIn("view_file", content)
             self.assertIn("along graph-", content)
 
+    def test_agents_md_prohibits_cli_reverse_engineering(self):
+        """AGENTS.md and skills/along-init/protocol.md must prohibit reading Along engine source code."""
+        agents_path = os.path.join(REPO_ROOT, "AGENTS.md")
+        protocol_path = os.path.join(REPO_ROOT, "skills", "along-init", "protocol.md")
+
+        for path in (agents_path, protocol_path):
+            content = textio.read_text(path)
+            self.assertIn("CLI Black-Box Invariance", content)
+            self.assertIn("opaque black-box", content)
+            self.assertIn("alongkit", content)
+
     def test_along_team_skill_documents_anti_pattern(self):
         """skills/along-team/SKILL.md must document the anti-pattern shell code probing."""
         skill_path = os.path.join(REPO_ROOT, "skills", "along-team", "SKILL.md")

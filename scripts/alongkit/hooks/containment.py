@@ -218,11 +218,18 @@ def build_policy(repo_root: str, options: Optional[Dict[str, Any]] = None,
         write_scope.append(canonical(repo.state_dir(root)))
 
     mode = str(opts.get("on_violation", "auto")).strip().lower()
+    denied = [canonical(os.path.join(home_dir, d)) for d in SECRET_DIRS]
+    is_along_repo = os.path.isfile(os.path.join(root, "skills", "along-init", "protocol.md")) and \
+                    os.path.isdir(os.path.join(root, "scripts", "alongkit"))
+    if not is_along_repo:
+        denied.append(canonical(os.path.join(home_dir, ".along", "bin")))
+        denied.append(canonical(os.path.join(root, ".along", "bin")))
+
     return ContainmentPolicy(
         root=root,
         write_roots=write_roots,
         read_roots=read_roots,
-        denied_roots=[canonical(os.path.join(home_dir, d)) for d in SECRET_DIRS],
+        denied_roots=denied,
         write_scope=write_scope,
         on_violation=mode if mode in VIOLATION_MODES else "auto",
     )

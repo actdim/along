@@ -544,6 +544,7 @@ class TestLifecycleWrap(unittest.TestCase):
                 status="done",
                 no_verify=True,
                 decisions=[],
+                no_commit=True,
             )
             out = mock_stdout.getvalue()
 
@@ -551,6 +552,34 @@ class TestLifecycleWrap(unittest.TestCase):
         self.assertIn("[Warning] Issue 'fixture-sample-task' wrapped with uncommitted attributed files:", out)
         self.assertIn("src/module.py", out)
         self.assertIn("along commit -i fixture-sample-task --paths", out)
+
+    def test_16b_wrap_auto_commits_by_default(self):
+        """[feat--atomic-wrap-commit-and-start-guard] REQ-1: wrap auto-commits by default."""
+        proc.run_capture(["git", "init", "-q"], cwd=self.root)
+        proc.run_capture(["git", "config", "user.email", "t@example.com"], cwd=self.root)
+        proc.run_capture(["git", "config", "user.name", "T"], cwd=self.root)
+        proc.run_capture(["git", "add", "-A"], cwd=self.root)
+        proc.run_capture(["git", "commit", "-q", "-m", "init"], cwd=self.root)
+
+        session.append_event(self.root, "fixture-sample-task", "sess-1", "edit", "src/module.py")
+        os.makedirs(os.path.join(self.root, "src"), exist_ok=True)
+        textio.write_text(os.path.join(self.root, "src", "module.py"), "print('auto commit')\n")
+
+        with patch("sys.stdout", new_callable=io.StringIO) as mock_stdout:
+            code = lifecycle.execute_wrap(
+                self.root,
+                "fixture-sample-task",
+                status="done",
+                no_verify=True,
+                decisions=[],
+            )
+            out = mock_stdout.getvalue()
+
+        self.assertEqual(code, 0)
+        self.assertIn("Automatically committed", out)
+        # Check that git status is clean for src/module.py
+        status = proc.run_capture(["git", "status", "--porcelain", "src/module.py"], cwd=self.root)
+        self.assertEqual(status.stdout.strip(), "")
 
     def test_17_wrap_docs_only_with_session_ledger_skips_test_gate(self):
         """[bug--wrap-docs-only-test-skip] REQ-1: docs-only changes in session ledger skip wrap test gate."""

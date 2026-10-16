@@ -741,6 +741,91 @@ def _warn_uncommitted_work(
     return uncommitted
 
 
+def _auto_commit_wrapped_work(
+    repo_root: str,
+    slug: str,
+    attributed_map: Dict[str, Any],
+    dest_file: Optional[str] = None,
+    log_path: Optional[str] = None,
+    issue: Optional[Dict[str, Any]] = None,
+    issue_content: Optional[str] = None,
+    summary: Optional[str] = None,
+    dry_run: bool = False,
+    no_verify: bool = False,
+    bypass_reason: Optional[str] = None,
+) -> int:
+    """Automatically commit attributed files and wrap metadata [feat--atomic-wrap-commit-and-start-guard] REQ-1."""
+    from . import closeout
+    top = closeout.git_top(repo_root)
+    if not top:
+        return 0
+    changes = closeout.git_changes(repo_root)
+    if not changes:
+        return 0
+    changed_keys = {closeout.path_key(p): p for p in changes}
+
+    attributed_paths = [repo.canonical_relpath(os.path.join(repo_root, p), top) for p in attributed_map]
+    dirty_attributed = [changed_keys[closeout.path_key(p)] for p in attributed_paths if closeout.path_key(p) in changed_keys]
+
+    dirty_entities: List[str] = []
+    for path in (dest_file, log_path):
+        if path and os.path.exists(path):
+            top_rel = repo.canonical_relpath(path, top)
+            pk = closeout.path_key(top_rel)
+            if pk in changed_keys:
+                dirty_entities.append(changed_keys[pk])
+
+    dirty_projections: List[str] = []
+    for proj in closeout.PROJECTION_FILES:
+        proj_abs = os.path.join(repo_root, proj)
+        if os.path.isfile(proj_abs):
+            top_rel = repo.canonical_relpath(proj_abs, top)
+            pk = closeout.path_key(top_rel)
+            if pk in changed_keys:
+                dirty_projections.append(changed_keys[pk])
+
+    commit_paths = sorted(dict.fromkeys(dirty_attributed + dirty_entities + dirty_projections))
+    if not commit_paths:
+        return 0
+
+    if dry_run:
+        print(f"-> [dry-run] Would commit {len(commit_paths)} file(s) for '{slug}':")
+        for p in commit_paths:
+            print(f"     {p}")
+        return 0
+
+    itype = str((issue or {}).get("type") or "task").lower()
+    title = extract_issue_title(issue_content or "", issue, slug)
+    type_map = {"feat": "feat", "bug": "fix", "debt": "refactor", "task": "chore", "docs": "docs"}
+    ctype = type_map.get(itype, "chore")
+    commit_desc = summary.strip() if summary and summary.strip() else title
+    commit_msg = f"{ctype}: {commit_desc} (refs #{slug})"
+
+    script = repo.resolve_tool_script("along_commit.py", repo_root)
+    if not script:
+        print("[Error] along_commit.py not found; cannot auto-commit.", file=sys.stderr)
+        return 1
+
+    abs_paths = [os.path.join(top, *p.split("/")) for p in commit_paths]
+    cmd = [sys.executable, script, commit_msg, "-i", slug, "--paths", *abs_paths]
+    if no_verify:
+        cmd.append("-n")
+        cmd.extend(["--reason", bypass_reason or "Automated wrap verification"])
+
+    result = proc.run_capture(cmd, cwd=repo_root, check=False, trip_on_anomaly=False)
+    if result.stdout:
+        print(result.stdout.rstrip())
+    if not result.ok:
+        if result.stderr:
+            print(result.stderr.rstrip(), file=sys.stderr)
+        print(f"[Error] Auto-commit failed for '{slug}'.", file=sys.stderr)
+        return result.returncode
+
+    print(f"-> [OK] Automatically committed {len(commit_paths)} file(s) for '{slug}'.")
+    return 0
+
+
+
 def extract_issue_title(content: str, issue: Optional[Dict[str, Any]], slug: str) -> str:
     """Extract human-readable title from issue frontmatter or Markdown H1."""
     if issue:
@@ -891,6 +976,7 @@ def execute_wrap(
     force_reason: Optional[str] = None,
     guard_bypass: bool = False,
     bypass_reason: Optional[str] = None,
+    no_commit: bool = False,
 ) -> int:
     """Execute automated session and issue wrap-up.
 
@@ -1213,8 +1299,23 @@ def execute_wrap(
         if purge_archived(repo_root, clean_slug, complete=True):
             print(f"-> Purged session blackboard: .along/.session/{clean_slug}")
         print(f"-> [OK] Successfully wrapped up '{clean_slug}'.")
-        _warn_uncommitted_work(repo_root, clean_slug, attributed_map, dest_file, log_path)
-        return 0
+        if no_commit:
+            _warn_uncommitted_work(repo_root, clean_slug, attributed_map, dest_file, log_path)
+            return 0
+        code = _auto_commit_wrapped_work(
+            repo_root=repo_root,
+            slug=clean_slug,
+            attributed_map=attributed_map,
+            dest_file=dest_file,
+            log_path=log_path,
+            issue=issue,
+            issue_content=content,
+            summary=summary,
+            dry_run=dry_run,
+            no_verify=no_verify,
+            bypass_reason=bypass_reason or force_reason,
+        )
+        return code
 
     except (OSError, RuntimeError, ValueError, KeyError, frontmatter.FrontmatterError) as exc:
         print(f"[Error] Wrap failed: {exc}", file=sys.stderr)

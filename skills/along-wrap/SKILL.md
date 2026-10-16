@@ -33,6 +33,7 @@ along wrap <slug> -s superseded --no-decisions
 - `-m`, `--summary "<text>"`: One-line summary appended to `.along/HISTORY.md` (optional; falls back to issue title if omitted).
 - `--dry-run`: Inspect planned actions without writing or moving files.
 - `-n`, `--no-verify`: Skip pre-flight automated tests. Requires `--reason "..."` (or `--force-reason`); where user messages are recorded, the test gate must have failed in this session and the user must have replied after the failure. The bypass is logged.
+- `--no-commit`: Skip automatic git commit of attributed files and wrap metadata (by default, `along wrap` automatically commits).
 - `-a`, `--agent "<name>"`: Explicit agent name (defaults to detected agent).
 
 All checks (team steps, plan, tests, zero-byte audit, entity graph) run before the first write: a failed wrap leaves the tree unchanged. KB sync runs after the transaction commits and only warns on failure.
@@ -72,6 +73,8 @@ All checks (team steps, plan, tests, zero-byte audit, entity graph) run before t
      - Writes the session log with the blackboard record, then purges `.along/.session/<slug>/` and the agent-session bindings to it.
      - Appends formatted line to `.along/HISTORY.md` linking to the session log (always written; falls back to issue title if `--summary` is omitted; idempotent per slug).
      - Protects all mutations with `alongkit.transaction.FileTransaction` (clean rollback on failure).
+
+      - Automatically commits attributed files and wrap metadata to git using Conventional Commits, leaving the working tree clean (unless `--no-commit` is passed).
 
 ### Phase C: Clean Up
 5. **Compaction Prompt**: Advise user to run `/compact` to free up token budget.

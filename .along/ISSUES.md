@@ -1,7 +1,7 @@
 # Active Issues
 
 ## Active
-<!-- No active issues -->
+- [ ] `(debt)` [consolidate-dashboard-ui-subproject](ISSUES/debt--consolidate-dashboard-ui-subproject.md)
 
 ## Backlog
 - [ ] `(debt)` [agents-md-core-slimming](ISSUES/debt--agents-md-core-slimming.md)
@@ -41,15 +41,17 @@
 - [ ] `(feat)` [per-model-rework-metrics](ISSUES/feat--per-model-rework-metrics.md)
 - [ ] `(feat)` [pi-harness-support](ISSUES/feat--pi-harness-support.md)
 - [ ] `(feat)` [planning-fields-and-ordering-gates](ISSUES/feat--planning-fields-and-ordering-gates.md)
+- [ ] `(feat)` [ste-cnl-specification-engine](ISSUES/feat--ste-cnl-specification-engine.md)
 - [ ] `(feat)` [system-invariants-and-health-probes](ISSUES/feat--system-invariants-and-health-probes.md)
 - [ ] `(feat)` [tool-class-model](ISSUES/feat--tool-class-model.md)
 - [ ] `(feat)` [vps-runner-daemon](ISSUES/feat--vps-runner-daemon.md)
 - [ ] `(feat)` [zero-step-state-recovery-and-drift-detection](ISSUES/feat--zero-step-state-recovery-and-drift-detection.md)
+- [ ] `(task)` [migrate-to-actdim-ui-core](ISSUES/task--migrate-to-actdim-ui-core.md)
 
 ## Done (recent)
 - [x] `(feat)` [kb-integrity-and-wrap-verification](ISSUES/done/feat--kb-integrity-and-wrap-verification.md)
+- [x] `(feat)` [atomic-wrap-commit-and-start-guard](ISSUES/done/feat--atomic-wrap-commit-and-start-guard.md)
 - [x] `(debt)` [vision-roadmap-decoupling](ISSUES/done/debt--vision-roadmap-decoupling.md)
 - [x] `(task)` [dashboard-docs-kb-alignment](ISSUES/done/task--dashboard-docs-kb-alignment.md)
 - [x] `(feat)` [doc-routing-compliance-gate](ISSUES/done/feat--doc-routing-compliance-gate.md)
-- [x] `(feat)` [bounded-prompt-footprint-gate](ISSUES/done/feat--bounded-prompt-footprint-gate.md)
-<!-- 256 older completed issue(s) archived in .along/ISSUES/done/ -->
+<!-- 257 older completed issue(s) archived in .along/ISSUES/done/ -->

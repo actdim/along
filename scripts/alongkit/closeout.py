@@ -643,7 +643,8 @@ def run_closeout(repo_root: str, keys: Optional[List[str]] = None, ready: bool =
         issue = entities.find_issue_by_slug(real_root, ikey)
         if issue and issue.get("status") not in entities.CLOSED_ISSUE_STATUSES:
             code = lifecycle.execute_wrap(real_root, ikey, no_verify=True, decisions=[],
-                                          summary=f"Closed out ({run['titles'].get(ikey, ikey)})")
+                                          summary=f"Closed out ({run['titles'].get(ikey, ikey)})",
+                                          no_commit=True)
             if code != 0:
                 _save_run(real_root, run)
                 print(f"[Error] Wrap of {ikey} failed; re-run 'along session close' to continue.", file=sys.stderr)
