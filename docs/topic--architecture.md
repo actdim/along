@@ -86,11 +86,31 @@ Along avoids vendor lock-in by utilizing standard agent discovery paths without 
 
 ## 3. Nearest Context Boundary & Subproject Localization
 
-In multi-package monorepos, Git submodules, or symlinked component libraries (`packages/*`, `libs/*`, `modules/*`), Along enforces **Strict Subproject Localization** via the Anti-Root Pollution Rule:
+### Subproject Boundary Definition (ADR-2026-10-06)
 
-1. **Nearest `.along/` Boundary**: Any subfolder may contain its own `AGENTS.md` and `.along/`. Agents MUST evaluate and write entities (`ISSUES/`, `SESSIONS/`, `DECISIONS.md`, `HISTORY.md`) to the **NEAREST** `.along/` corresponding to the modified files.
-2. **Submodule Isolation**: When fixing a defect or adding a feature inside a Git submodule or shared library, the issue ticket, ADR, session log, and history line are recorded directly in that submodule's `.along/`.
-3. **Parent Orchestration**: The workspace root `.along/` is reserved strictly for whole-solution orchestration, top-level integration tasks, and cross-package architectural ADRs. Parent issues reference subproject issues via canonical keys (e.g. `[pkg-auth:feat--token-refresh]`), never by copying internal history.
+Following [ADR-2026-10-06](./decisions/ADR-2026-10-06--subproject-boundary-is-git-or-explicit-init.md), a subproject context boundary is strictly determined by one of two conditions:
+1. **A nested Git boundary**: A directory containing its own `.git` (Git submodule, nested clone, or worktree).
+2. **An explicit user initialization**: A directory where the user explicitly executed `along init`.
+
+Package manifests alone (`package.json`, `Cargo.toml`, `*.csproj`, `pyproject.toml`) do **not** establish a subproject boundary. In a monorepo workspace (e.g. `pnpm-workspace.yaml`, Cargo `[workspace]`, or npm workspaces), all package folders (`packages/*`) belong to the root Along context unless explicitly initialized.
+
+### Monorepo Workspaces vs Git Submodules
+
+Understanding the architectural distinction between Monorepo Workspaces and Git Submodules is essential for proper change management and release orchestration:
+
+| Architectural Dimension | Monorepo Workspaces (`packages/*`) | Git Submodules (`.gitmodules`) |
+| :--- | :--- | :--- |
+| **Git Repositories** | Single shared `.git` repository. | Multiple distinct `.git` repositories with independent remotes. |
+| **Commit Atomicity** | Atomic: A single Git commit can span changes across multiple packages. | Fragmented: Each submodule requires its own independent Git commit; the root records only a commit pointer (SHA). |
+| **Context Ownership** | Root `.along/` manages issues and history across packages. | Nearest `.along/`: Each submodule maintains its own isolated `.along/` memory. |
+| **Release Flow** | Single release run: `along bump` updates all package manifests in one commit. | Multi-stage orchestration: Submodules must be tested, committed, and pushed to origin before root can update their pointers. |
+
+### Anti-Root Pollution Rule
+
+When true subprojects exist (submodules with independent `.git` or explicit subprojects):
+1. **Nearest `.along/` Boundary**: Agents MUST evaluate and write entities (`ISSUES/`, `SESSIONS/`, `DECISIONS.md`, `HISTORY.md`) to the **NEAREST** `.along/` corresponding to the modified files.
+2. **Submodule Isolation**: When fixing a defect or adding a feature inside a Git submodule, the issue ticket, ADR, session log, and history line are recorded directly in that submodule's `.along/`.
+3. **Parent Orchestration**: The workspace root `.along/` is reserved strictly for whole-solution orchestration, integration tasks, and cross-package architectural ADRs. Parent issues reference subproject issues via canonical keys (e.g. `[pkg-auth:feat--token-refresh]`), never by copying internal history.
 
 ---
 

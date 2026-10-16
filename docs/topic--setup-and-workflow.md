@@ -311,6 +311,71 @@ into repairing the findings from step 1 and is itself covered by the rollback. `
 A release writes nothing outside the repository. Installing skills for your providers is
 `/along-update` or `install.ps1` / `install.sh`, run deliberately.
 
+### Monorepo Workspaces vs Git Submodules in Releases
+
+When managing multi-component projects, the release pipeline behaves fundamentally differently depending on whether components are organized as Monorepo Workspaces or Git Submodules:
+
+#### Monorepo Workspaces (`packages/*`)
+In monorepos sharing a single `.git` repository (such as pnpm or npm workspaces):
+- `along bump` automatically detects all workspace manifests (e.g. root `package.json` and nested `packages/*/package.json`).
+- Version updates, changelog generation, git commit (`release: vX.Y.Z`), annotated git tag, and remote push happen in a single atomic transaction.
+- There are no detached commit pointers or distributed push failure risks.
+
+#### Git Submodules (`.gitmodules`)
+Git submodules are independent remote repositories. Git fundamentally forbids committing files belonging to a nested `.git` from the parent repository; the parent repository only records a 40-character commit hash pointer.
+
+Because of this distributed architecture:
+- **Default root `along bump` does NOT cascade into submodules**: Running `along bump` in the root repository bumps only the root repository. It will not blindly create commits or push tags to foreign submodule remotes.
+- **Two-phase release sequence**: If code changed both in a submodule and in the root application:
+  1. **Phase 1 (Submodule)**: Finalize the submodule task (`along wrap`) and release the submodule (`along bump patch -cp` inside the submodule). Push the submodule commit and tag to its remote.
+  2. **Phase 2 (Root)**: Stage the updated submodule commit SHA in the root repository (`along commit "chore: update submodule pointer"`), then release the root (`along bump patch -cp`).
+
+### Cascading Releases Across Git Submodules (.along/scripts/bump_version.py)
+
+If a project requires Unified / Lockstep Versioning (where changing the root version must automatically cascade the exact same version string, commit, tag, and push across all Git submodules), this behavior must be explicitly implemented via the project hook `.along/scripts/bump_version.py`.
+
+Standard `along bump` delegates to `.along/scripts/bump_version.py` whenever this file exists. The custom hook orchestrates the distributed release:
+
+```python
+#!/usr/bin/env python3
+"""Custom project version bumper with cascading submodule release."""
+import subprocess
+import sys
+import os
+
+def run(cmd, cwd=None):
+    res = subprocess.run(cmd, cwd=cwd, check=True)
+    return res.returncode
+
+def main():
+    bump_arg = sys.argv[1] if len(sys.argv) > 1 else "patch"
+    repo_root = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
+
+    # 1. Target submodules requiring lockstep release
+    submodules = ["packages/ui-core", "packages/common-api"]
+
+    # 2. Step through each submodule: run tests, bump version, commit, and push
+    for sub in submodules:
+        sub_dir = os.path.join(repo_root, sub)
+        print(f"-> Cascading release to submodule: {sub}")
+        # Run submodule along bump with commit and push (-cp)
+        # Submodules MUST push immediately so their commit SHA exists on the remote
+        run(["along", "bump", bump_arg, "-cp"], cwd=sub_dir)
+
+    # 3. In root repository: stage updated submodule pointers
+    run(["git", "add", *submodules], cwd=repo_root)
+
+    # 4. Return new version to Along release engine
+    print("4.5.0")
+    return 0
+
+if __name__ == "__main__":
+    sys.exit(main())
+```
+
+> [!WARNING]
+> Distributed submodule releases are not atomic across Git remotes. If a network error or test failure occurs midway through a cascading push, already-pushed submodule tags cannot be automatically rolled back without administrative force-pushes. For tightly coupled components released on the same cadence, a Monorepo Workspace is strongly recommended over Git Submodules.
+
 ### Continuous Integration
 
 `.github/workflows/tests.yml` runs on every push to `main` and every pull request:

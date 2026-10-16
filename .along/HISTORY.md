@@ -205,3 +205,4 @@ _Index of sessions (newest last). One line per session:_
 2026-10-16 - atomic-wrap-commit-and-start-guard - antigravity - feat: atomic wrap commit, clean start guard, and CLI black-box invariance - [Session Log](./SESSIONS/2026/2026-10-16--atomic-wrap-commit-and-start-guard.md)
 2026-10-16 - consolidate-dashboard-ui-subproject - antigravity - Consolidate packages/dashboard-ui subproject into root context - [Session Log](./SESSIONS/2026/2026-10-16--consolidate-dashboard-ui-subproject.md)
 2026-10-16 - issue-stub-validation-and-lifecycle-gates - antigravity - Implement issue stub validation, lifecycle quality gates, and doctor audit - [Session Log](./SESSIONS/2026/2026-10-16--issue-stub-validation-and-lifecycle-gates.md)
+2026-10-16 - monorepo-submodule-release-workflow - antigravity - Document Monorepo Workspaces vs Git Submodules in release cycles - [Session Log](./SESSIONS/2026/2026-10-16--monorepo-submodule-release-workflow.md)

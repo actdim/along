@@ -54,6 +54,6 @@
 - [x] `(feat)` [kb-integrity-and-wrap-verification](ISSUES/done/feat--kb-integrity-and-wrap-verification.md)
 - [x] `(feat)` [issue-stub-validation-and-lifecycle-gates](ISSUES/done/feat--issue-stub-validation-and-lifecycle-gates.md)
 - [x] `(feat)` [atomic-wrap-commit-and-start-guard](ISSUES/done/feat--atomic-wrap-commit-and-start-guard.md)
+- [x] `(docs)` [monorepo-submodule-release-workflow](ISSUES/done/docs--monorepo-submodule-release-workflow.md)
 - [x] `(debt)` [consolidate-dashboard-ui-subproject](ISSUES/done/debt--consolidate-dashboard-ui-subproject.md)
-- [x] `(docs)` [align-dynstruct-jsx-callback-policy](ISSUES/done/docs--align-dynstruct-jsx-callback-policy.md)
-<!-- 265 older completed issue(s) archived in .along/ISSUES/done/ -->
+<!-- 266 older completed issue(s) archived in .along/ISSUES/done/ -->
