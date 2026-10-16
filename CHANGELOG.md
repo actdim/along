@@ -2,6 +2,12 @@
 
 All notable changes to this project, newest first.
 
+## v4.4.16 - 2026-10-16
+
+- feat: Implement issue stub validation, lifecycle quality gates, and doctor audit (refs #issue-stub-validation-and-lifecycle-gates)
+- debt(dashboard-ui): consolidate subproject context into root repository (refs #consolidate-dashboard-ui-subproject)
+- feat: feat: atomic wrap commit, clean start guard, and CLI black-box invariance (refs #atomic-wrap-commit-and-start-guard)
+
 ## v4.4.15 - 2026-10-16
 
 - docs: sync kb index and register backlog feature anti-silent-fallback-gate (refs #anti-silent-fallback-gate)
