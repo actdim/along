@@ -55,4 +55,4 @@
 - [x] `(feat)` [issue-stub-validation-and-lifecycle-gates](ISSUES/done/feat--issue-stub-validation-and-lifecycle-gates.md)
 - [x] `(feat)` [atomic-wrap-commit-and-start-guard](ISSUES/done/feat--atomic-wrap-commit-and-start-guard.md)
 - [x] `(docs)` [sync-recent-features-documentation](ISSUES/done/docs--sync-recent-features-documentation.md)
-<!-- 269 older completed issue(s) archived in .along/ISSUES/done/ -->
+<!-- 270 older completed issue(s) archived in .along/ISSUES/done/ -->

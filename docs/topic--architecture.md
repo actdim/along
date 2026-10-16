@@ -160,9 +160,9 @@ reader, so ADR search returned zero results in every released version.
 | :--- | :--- |
 | `alongkit/repo.py` | The installation definition (`is_installed`: Along state, never an `AGENTS.md`), root discovery (installation or `.git`), nearest `.along/` discovery, package doc roots, engine resolution, directory walking and the shared ignore set. |
 | `alongkit/frontmatter.py` | The single YAML front-matter reader and writer (`ruamel.yaml`, round-trip). |
-| `alongkit/entities.py` | Entity vocabulary, canonical keys, slugs, dates, ADR record parsing and formatting. |
+| `alongkit/commands/` | Modular command handlers for the CLI router (doctor, lifecycle, gates, ops, telemetry, session, issue). |
+| `alongkit/entities/` | Modular entity subsystem (vocabulary, decisions, projections, query, mutation, validation) with backward-compatible `alongkit.entities` facade. |
 | `alongkit/proc.py` | Subprocess execution with UTF-8 fixed on both sides of the pipe. |
-| `alongkit/textio.py` | Strict reads, line-ending preservation, atomic writes. |
 | `alongkit/markdown.py` | Link parsing, fenced-code tracking, GitHub heading anchors, and link resolution. |
 | `alongkit/typography.py` | The forbidden-character table, shared with the quality gate. |
 | `alongkit/sanitizer.py` | Which files that table governs, strict reads, the modes, and the JSON report. |
