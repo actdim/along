@@ -1,7 +1,7 @@
 # Active Issues
 
 ## Active
-<!-- No active issues -->
+- [ ] `(task)` [migrate-to-actdim-ui-core](ISSUES/task--migrate-to-actdim-ui-core.md)
 
 ## Backlog
 - [ ] `(bug)` [session-record-gate-lifecycle-resilience](ISSUES/bug--session-record-gate-lifecycle-resilience.md)
@@ -48,13 +48,12 @@
 - [ ] `(feat)` [vps-runner-daemon](ISSUES/feat--vps-runner-daemon.md)
 - [ ] `(feat)` [zero-step-state-recovery-and-drift-detection](ISSUES/feat--zero-step-state-recovery-and-drift-detection.md)
 - [ ] `(task)` [integrate-actdim-ui-core-runtime](ISSUES/task--integrate-actdim-ui-core-runtime.md)
-- [ ] `(task)` [migrate-to-actdim-ui-core](ISSUES/task--migrate-to-actdim-ui-core.md)
 - [ ] `(task)` [reconcile-dashboard-ui-core-conventions](ISSUES/task--reconcile-dashboard-ui-core-conventions.md)
 
 ## Done (recent)
 - [x] `(feat)` [kb-integrity-and-wrap-verification](ISSUES/done/feat--kb-integrity-and-wrap-verification.md)
 - [x] `(feat)` [issue-stub-validation-and-lifecycle-gates](ISSUES/done/feat--issue-stub-validation-and-lifecycle-gates.md)
 - [x] `(feat)` [atomic-wrap-commit-and-start-guard](ISSUES/done/feat--atomic-wrap-commit-and-start-guard.md)
+- [x] `(docs)` [sync-recent-features-documentation](ISSUES/done/docs--sync-recent-features-documentation.md)
 - [x] `(docs)` [monorepo-submodule-release-workflow](ISSUES/done/docs--monorepo-submodule-release-workflow.md)
-- [x] `(debt)` [consolidate-dashboard-ui-subproject](ISSUES/done/debt--consolidate-dashboard-ui-subproject.md)
-<!-- 266 older completed issue(s) archived in .along/ISSUES/done/ -->
+<!-- 267 older completed issue(s) archived in .along/ISSUES/done/ -->

@@ -116,6 +116,16 @@ Detailed problem statement, constraints, and verifiable acceptance criteria.
 - **`cancelled`**: Non-delivered terminal state. Abandoned or intentionally dropped requirements. Closed via `along issue done <slug> --status cancelled`. Mandatory field `completed: YYYY-MM-DD` is set, and the file is moved to `.along/ISSUES/done/`.
 - **`duplicate`**: Non-delivered terminal state. Redundant issue covered by another entity. Closed via `along issue done <slug> --status duplicate --duplicate-of <slug>`. Mandatory field `completed: YYYY-MM-DD` is set, `duplicate_of: <primary-slug>` references the primary entity, and the file is moved to `.along/ISSUES/done/`.
 
+#### Quality Gates & Anti-Stub Validation (`validate_issue_completion`):
+To prevent empty scaffolding or hallucinated completions from degrading project memory:
+- **Mandatory Sections**: Every issue must declare `## Problem`, `## Requirements`, and `## Acceptance Criteria`.
+- **Anti-Stub Invariance**: Issues containing template placeholder text (such as `"Describe the feature..."` or `"Task requirement 1"`) or lacking concrete criteria are blocked by `along start` and `along plan approve`.
+- **Completion Validation**: Transitioning an issue to `done` (`along wrap` or `along issue done <slug>`) executes `validate_issue_completion`:
+  - Refuses issues with unfilled scaffold placeholders;
+  - Requires mandatory `## Acceptance Criteria` with at least one completed checklist item (`- [x]`);
+  - Requires all checklist items to be checked (`- [x]`); any remaining `- [ ]` checklist item aborts wrap unless explicitly overridden with `--force-reason`.
+- **Audit Tooling**: Run `along doctor issues` (or `along doctor --issues`) to audit all `.along/ISSUES/` files for template stubs or uncompleted criteria.
+
 ---
 
 ### 2. Architectural Decision Records (ADRs) (`.along/DECISIONS/` & Projections)

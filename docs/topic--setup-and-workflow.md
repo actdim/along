@@ -157,6 +157,9 @@ write entity front-matter. Everything else is standard library.
 # Recommended: install the toolchain with uv (creates an isolated environment)
 uv tool install actdim-along
 
+# Working inside this repository: initialize local .venv and install alongkit in editable mode
+along dev-env
+
 # Working inside this repository: uv resolves the environment from pyproject.toml
 uv run python .along/scripts/test.py -q
 
@@ -282,7 +285,7 @@ endings are preserved, so a CRLF `.ps1` stays CRLF. See
 Along provides terminal utilities for inspecting repository state, verifying protocol adherence, and guarding context budgets:
 
 - **`along status`**: Quick terminal overview of repository health, active issues, and recent sessions.
-- **`along doctor [--entities]`**: Comprehensive repository health check validating directory structure, `.gitattributes`, ADR headers, and entity DAG dependencies.
+- **`along doctor [--entities] [--issues] [--docs]`**: Comprehensive repository health check validating directory structure, `.gitattributes`, ADR headers, entity DAG dependencies (`--entities`), issue template placeholders and incomplete criteria (`--issues`), and abandoned documentation stubs (`--docs`).
 - **`along budget [--check]`**: Audits context footprint across root protocol files (`AGENTS.md`, `CLAUDE.md`, `.along/ISSUES.md`, `.along/CONSTRAINTS.md`) against strict limits (14 KB for `AGENTS.md`, measured without its "Project specifics" section; that section has a 4 KB soft limit that only warns), exiting with code 1 on budget breach. Limits are overridable in the `budget` block of `.along/config.json`.
 
 For full command syntax, flags, exit codes, and subcommands, see the [Along CLI Command Reference](./topic--cli-reference.md).

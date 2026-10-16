@@ -86,6 +86,17 @@ Launches the local development server or watcher.
   along dev [args...]
   ```
 
+### `along dev-env`
+Initializes local developer virtual environment (`scripts/alongkit/devenv.py`).
+- Provisions `.venv` in the repository root using `uv` (with `venv` fallback) and installs `alongkit` in editable mode (`pip install -e .`).
+- **Options**:
+  - `--reinstall`: Forces removal and clean recreation of the existing `.venv` environment.
+- **Usage**:
+  ```bash
+  along dev-env
+  along dev-env --reinstall
+  ```
+
 ### `along debug`
 Executes project debugging or diagnostics profile.
 - **Engine Script**: `.along/scripts/debug.py`
@@ -116,14 +127,18 @@ Validates repository compliance with the Along protocol. Audits `.along/` direct
 - **Tracked diagnostics**: warns when files under any `.along/diagnostics/` are still tracked in git (committed before the directory ignored itself) and names `along migrate --apply` (or `git rm --cached`) as the fix.
 - **Nested installs**: warns about nested `.along/` contexts that sit in no nested git repository (possibly created per manifest folder by older versions) and lists them. It changes nothing: consolidating them into the root is a manual per-repository task. A deliberate nested context is silenced with `"subproject": {"intentional": true}` in its `.along/config.json`. See ADR `subproject-boundary-is-git-or-explicit-init`.
 - **Sessions**: warns about orphan blackboards (no session bound, issue closed or missing), session bindings older than 72 h or without a blackboard (`along session gc`), and issues in progress with no session bound. See [Parallel Sessions](./topic--parallel-sessions.md).
-- **Verification & gates**: prints the test policy line (`Verify: tests: ...`, see `along test`; `tests: none` is a warning, an invalid policy such as a missing `reason` / `tracked_by` an error), warns about gates shadowed by repository config and names the most-bypassed gates (see `along gates stats`).
+- **Verification & gates**: prints the test policy line (`Verify: tests: ...`, see `along test`; `tests: none` is a warning, an invalid policy such as a missing `reason` / `tracked_by` an error), active gate strictness profile (`strict`, `standard`, `light`), warns about gates shadowed by repository config and names the most-bypassed gates (see `along gates stats`).
 - **Options**:
-  - `--entities`: Performs deep validation of the entity DAG graph, verifying parent/child relationships, `blocked_by` dependencies, and detecting circular references. References resolve against the current `.along/`, every enclosing `.along/` up to the outermost context below home (crossing nested git / submodule boundaries), every nested subproject `.along/` below it, and every sibling `.along/` of the same git repository (nested git repositories and dependency/build dirs are not entered). Schema findings on archived issues (`.along/ISSUES/done/`) are warnings.
-  - `--entities --fix`: Removes `milestone` fields of issues and session logs that resolve to no milestone, lists the changed files, then validates.
+  - `entities`, `--entities`: Performs deep validation of the entity DAG graph, verifying parent/child relationships, `blocked_by` dependencies, and detecting circular references. References resolve against the current `.along/`, every enclosing `.along/` up to the outermost context below home (crossing nested git / submodule boundaries), every nested subproject `.along/` below it, and every sibling `.along/` of the same git repository (nested git repositories and dependency/build dirs are not entered). Schema findings on archived issues (`.along/ISSUES/done/`) are warnings.
+  - `entities --fix`, `--entities --fix`: Removes `milestone` fields of issues and session logs that resolve to no milestone, lists the changed files, then validates.
+  - `issues`, `--issues`: Validates issue entity quality across `.along/ISSUES/`, detecting boilerplate placeholders, unfilled scaffold stubs, and incomplete criteria.
+  - `docs`, `--docs`: Validates documentation quality across `docs/` and detects abandoned zombie stubs.
 - **Usage**:
   ```bash
   along doctor
   along doctor --entities
+  along doctor --issues
+  along doctor --docs
   along doctor --entities --fix
   ```
 
@@ -165,8 +180,11 @@ Manages atomic issue files in `.along/ISSUES/` and recompiles the active board p
   ```
 
 ### `along start`
-Atomically marks an issue as `in-progress`, updates `updated: YYYY-MM-DD`, recompiles the active board projection (`.along/ISSUES.md`), initializes the session blackboard (`.along/.session/<slug>/`) and binds this agent session to the issue (`.along/.session/bindings/<runtime>--<session_id>.json`). The plan is not approved by starting: the blackboard is in `phase: planning` until the user approves (Claude Code `ExitPlanMode`, or `along plan approve` after an explicit yes). An `ExitPlanMode` approval carries over to a newly started slug until the user's next message (the plan is recorded under the new slug).
+Atomically marks an issue as `in-progress`, updates `updated: YYYY-MM-DD`, recompiles the active board projection (`.along/ISSUES.md`), initializes the session blackboard (`.along/.session/<slug>/`) and binds this agent session to the issue (`.along/.session/bindings/<runtime>--<session_id>.json`). Starting is refused if the issue is already closed in `done/` (reopen first with `along issue reopen <slug>`) or if the issue file contains unfilled scaffold placeholders or lacks concrete acceptance criteria.
+- **Clean Start Guard**: Hard-blocks starting when uncommitted changes from previously wrapped issues remain in the working tree (advising `along commit -i <slug>` or `along session close`), or when other in-progress issues have uncommitted changes (suggesting `along start <slug> --worktree` to avoid dirtying the shared checkout). Override with `--allow-dirty`.
 - **Options**:
+  - `--profile <strict|standard|light>`: Sets the gate strictness profile for this session.
+  - `--allow-dirty`: Bypasses the Clean Start Guard to proceed despite uncommitted working tree changes.
   - `--approved`: Mark the plan approved at once (scripted and runner use only). Held to the same check as `along plan approve`: refused when the plan changed after the user's last message.
   - `--worktree`: Enforces git worktree workspace isolation. Verifies environment readiness, provisions an isolated worktree at `.along/worktrees/<slug>` on branch `along/<slug>`, links heavy dependencies (`node_modules`, `.venv`) via NTFS junctions on Windows or symlinks on POSIX, copies untracked configuration (`.env*`), and points agent execution to the worktree path.
   - `--allow-root <path>` (repeatable): Adds `path` to the issue's `allowed_roots` frontmatter: extra read-only roots for `[gate: workspace-containment]` (for example a sibling contracts repository).
@@ -175,7 +193,9 @@ Atomically marks an issue as `in-progress`, updates `updated: YYYY-MM-DD`, recom
   ```bash
   along start token-refresh
   along start token-refresh --worktree
+  along start token-refresh --profile light
   along start token-refresh --allow-root ../contracts --write-scope packages/auth
+  along start token-refresh --allow-dirty
   ```
 
 ### `along milestone`
@@ -373,22 +393,25 @@ Protocol tools provide specialized repository maintenance, release management, a
 
 ### `along wrap`
 Transactional end-of-stage wrap engine.
-- Validates quality gates, inspects git diffs, updates active issue status, moves files to `done/`, writes session logs, recompiles projections, and appends to `HISTORY.md`.
-- **Check-then-write**: every check (team steps, plan, tests, zero-byte audit, entity graph) runs before the first write; a failed wrap leaves the tree unchanged. KB sync runs after the transaction commits and only warns on failure.
+- Validates quality gates, inspects git diffs, updates active issue status, moves files to `done/`, writes session logs, recompiles projections, appends to `HISTORY.md`, and atomically commits wrapped work.
+- **Check-then-write**: every check (team steps, plan, completion of `- [ ]` checklist items in issue Acceptance Criteria and living plan, tests, zero-byte audit, entity graph) runs before the first write; a failed wrap leaves the tree unchanged. KB sync runs after the transaction commits and only warns on failure.
+- **Atomic auto-commit**: Automatically commits attributed files, issue status change, session log, and updated projections in a single atomic commit linked to the issue slug. Pass `--no-commit` to keep changes staged/unstaged on disk.
 - **Options**:
   - `-s, --status <status>`: Closing status (`done`, `superseded`, `cancelled`, `duplicate`). Default: `done`.
-  - `-m, --summary "<text>"`: One-line summary for `.along/HISTORY.md` index.
+  - `-m, --summary "<text>"`: One-line summary for `.along/HISTORY.md` index (falls back to issue title if omitted).
+  - `--no-commit`: Skip automatic git commit of attributed and wrap metadata files.
   - `--dry-run`: Simulate wrap-up operations without writing or moving files.
   - `-n, --no-verify --reason "<text>"`: Skip pre-flight automated tests (`--force-reason` also serves as the reason). A recorded bypass, see [Runtime Lifecycle Hooks & Mechanical Gates](./topic--runtime-hooks-and-gates.md).
   - `-a, --agent "<name>"`: Explicit agent name.
   - `-d, --decisions "ADR-a,ADR-b"` or `--no-decisions` (one is required): The answer to "were architectural decisions made?". The session log for today is written or extended with `issues_completed: [<type>--<slug>]`, the decisions, and the blackboard record (plan, step table, research, execution trace, reviews). A second record of the same issue on the same day is appended as `## Blackboard Record (<n>, <ts>)`. The blackboard is purged only after the wrap transaction committed.
-  - `--force-reason "<text>"`: Wrap a role-based blackboard with open steps or missing reviews, or a blackboard whose `plan.md` is still the scaffold (refused otherwise, exit 2); it also passes the entity-reference-integrity gate. The reason is recorded in the trace and the session log; when a check is actually forced it is a recorded bypass.
-- **Uncommitted work warning**: when files attributed to the issue remain uncommitted after wrap, warns with the list of paths and emits the exact `along commit -i <slug> --paths ...` command.
-- **Completion token**: the purge removes the session's binding; when this session had an approved plan for the slug, it keeps a completion token so the following `along commit -i <slug>` passes the plan gate without a new approval (see `along commit`).
+  - `--force-reason "<text>"`: Wrap past open steps, uncompleted checklist items, or a scaffold plan (refused otherwise, exit 2); it also passes the entity-reference-integrity gate. The reason is recorded in the trace and the session log; when a check is actually forced it is a recorded bypass.
+- **Uncommitted work warning**: when `--no-commit` is used and files attributed to the issue remain uncommitted after wrap, warns with the list of paths and emits the exact `along commit -i <slug> --paths ...` command.
+- **Completion token**: the purge removes the session's binding; when this session had an approved plan for the slug, it keeps a completion token so a manual `along commit -i <slug>` passes the plan gate without a new approval (see `along commit`).
 - **Usage**:
   ```bash
   along wrap <slug> --no-decisions -m "Summary of work"
   along wrap <slug> --decisions ADR-2026-10-01--session-bindings -m "Summary of work"
+  along wrap <slug> --no-commit --no-decisions -m "Summary of work"
   along wrap <slug> -s superseded --no-decisions
   ```
 
@@ -485,11 +508,12 @@ Deterministic scaffolder behind `/along-init` (`scripts/along_init.py`). Idempot
 - **VISION**: a root `VISION.md` ends up only in `.along/VISION.md` (moved, deduplicated, or merged under an `along:imported-vision needs-restructure` marker); links to it are repointed (public files -> `docs/INDEX.md`). Otherwise a skeleton with `## Scope`, `## Non-goals`, `## Roadmap` is created.
 - **Pipeline**: `along rules attach`, `along git setup` (git roots), `along hook install --runtime all`, `along migrate --apply`.
 - **Report**: CREATED / UPDATED / UNTOUCHED files, VISION outcome, repointed links, `AGENT ACTIONS` (imported VISION section, root notes `ROADMAP.md` / `ARCHITECTURE.md` / `SPEC.md` / `TODO.md` / `DESIGN.md`, adopted hand-written `AGENTS.md`) and, when `.along/` already existed, `RE-RUN QUESTIONS` for the user.
-- **Options**: `--dry-run`, `--json`, `--no-rules`, `--no-git`, `--no-hooks`, `--no-migrate`.
+- **Options**: `--dry-run`, `--json`, `--profile <strict|standard|light>`, `--no-rules`, `--no-git`, `--no-hooks`, `--no-migrate`.
 - **Usage**:
   ```bash
   along init --dry-run
   along init
+  along init --profile light
   along init packages/lib --no-hooks
   ```
 
@@ -677,25 +701,44 @@ along run npm test
 ```
 
 ### `along resolve`
-Semantic conflict auto-resolution engine for documentation and markdown files (`feat--docs-semantic-conflict-resolution`).
-- Detects unmerged markdown files (`UU`, `AA`, `UD`, `DU` in `docs/**/*.md`, `README.md`, `AGENTS.md`) and reconciles structural conflicts outside fenced code blocks.
-- **Reconciliation heuristics**:
-  - Non-overlapping headings/sections under common context combined in deterministic order.
-  - Task checklists (`- [ ]`, `- [x]`) and bullet lists merged via set-union with `[x]` completion priority.
-  - Markdown table rows merged and deduplicated while preserving headers.
-  - Link integrity validation (`find_broken_links`) and clean ASCII typography verification.
-  - Automatically recompiles the Knowledge Base via `along kb sync` after successful resolution.
+Semantic and test-gated conflict auto-resolution engine for documentation and source code (`feat--docs-semantic-conflict-resolution`, `feat--test-gated-code-merge-pipeline`).
+- **Documentation mode (`--docs`, default)**:
+  - Detects unmerged markdown files (`UU`, `AA`, `UD`, `DU` in `docs/**/*.md`, `README.md`, `AGENTS.md`) and reconciles structural conflicts outside fenced code blocks.
+  - Non-overlapping headings/sections combined in deterministic order.
+  - Task checklists (`- [ ]`, `- [x]`) merged via set-union with `[x]` completion priority; table rows deduplicated.
+  - Recompiles the Knowledge Base via `along kb sync` after successful resolution.
+- **Source code mode (`--code`)**:
+  - Detects unmerged source code files, reconciling non-overlapping imports, functions, classes, and methods.
+  - Enforces test-gated verification: executes the project test suite (`along test`) immediately after code resolution. If tests fail, `FileTransaction` restores all original conflict markers and exits with code 1.
 - **Options**:
   - `--docs`: Target unmerged documentation files across `docs/` and root markdown (default).
+  - `--code`: Resolve unmerged source code files with test-gated verification.
+  - `--no-tests`: Skip running test runner during code conflict resolution verification.
   - `--check`, `--dry-run`: Test resolution and report outcomes without writing changes to disk.
   - `--strict`: Fail with exit code 1 if any conflict cannot be cleanly resolved or broken links remain.
   - `--no-kb-sync`: Skip post-merge `along kb sync` execution.
-  - `files`: Optional explicit markdown file paths to resolve.
+  - `files`: Optional explicit file paths to resolve.
 - **Usage**:
   ```bash
   along resolve --docs
+  along resolve --code
   along resolve --check
   along resolve --strict docs/topic--architecture.md
+  ```
+
+### `along conflict-check` (alias `along conflictcheck`)
+Predicts git merge conflict risks and AST symbol collisions between `HEAD` and a target branch before merging (`scripts/along_conflict_check.py`).
+- Analyzes the common merge-base ancestor between branches.
+- Detects overlapping modified files across branches.
+- Identifies colliding AST symbols across function and class definitions.
+- Classifies risk level (`CLEAN`, `LOW`, `MEDIUM`, `HIGH`, `UNKNOWN`) and exits with code 1 on `HIGH` or `UNKNOWN` risk.
+- **Options**:
+  - `branch`: Target branch to compare against HEAD.
+  - `--json`: Output report in structured JSON format.
+- **Usage**:
+  ```bash
+  along conflict-check origin/main
+  along conflict-check feature-branch --json
   ```
 
 ---

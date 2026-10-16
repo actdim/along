@@ -331,6 +331,7 @@ Every rule of the managed `AGENTS.md` block, classified: **a** enforced by a gat
 | Clean ASCII (incl. BOM) | a | `typography`, `along sanitize` | runtime, git, ci |
 | Code fence languages | a | `code_fence_language` | git, ci |
 | File content via tools only | a | `cli_safety` | runtime |
+| CLI black-box invariance | c | - (Treat Along CLI as strict opaque black box; no engine source inspection in consumer repos) | - |
 | Verify written files | c | - | - |
 | Hermetic tests | a | `tests/test_zz_hermetic_suite.py` (this repo) | ci |
 | Inquiry read-only | a | `require_plan_approval` | runtime |

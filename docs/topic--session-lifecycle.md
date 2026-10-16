@@ -81,10 +81,14 @@ Every way a blackboard leaves the repository writes it into the issue's session 
 
 - `along wrap` refuses a blackboard whose plan was never recorded, unless
   `--force-reason "..."` says why; the reason is kept in the trace and the session log.
-- `along wrap` runs every check (team steps, plan, tests, zero-byte audit, entity graph) before
-  its first write, so a failed wrap leaves the tree unchanged. `--force-reason` also passes the
-  entity-reference-integrity gate. KB sync runs after the transaction commits and only warns
-  when it fails.
+- `along wrap` runs every check before its first write, so a failed wrap leaves the tree unchanged:
+  - Role-based steps (no open steps or missing reviews);
+  - Approved living plan recorded (not a scaffold);
+  - Issue and plan checklists: verifies that all `- [ ]` checklist items in the issue's `## Acceptance Criteria` and in the living plan `plan.md` are completed (`- [x]`); open checklist items abort wrap unless `--force-reason` is passed;
+  - Pre-flight automated tests (or green test run reuse);
+  - Zero-byte audit across the working tree;
+  - Entity reference integrity (`--force-reason` passes the check).
+  KB sync runs after the transaction commits and only warns when it fails.
 - Template placeholders (scaffold plan, empty research headings, the generic step list) are not
   written as content: a missing plan shows as `No plan recorded.` Non-scaffold findings (`research.md`)
   and notes (`notes.md`) are preserved under `### Research` and `### Notes`.
@@ -102,14 +106,10 @@ Every way a blackboard leaves the repository writes it into the issue's session 
   remove or rewrite lines inside a `## Blackboard Record` of a committed session log. The Summary
   and Decisions sections stay editable.
 - **`along doctor`**: warns about orphan blackboards (no session bound, issue closed or missing).
-  `along scratch purge <slug>` archives and removes one.
+  `along scratch purge <slug>` archives and removes one. Run `along doctor issues` to audit scaffold stubs.
 
-## 6. Committing after wrap
+## 6. Committing wrapped work
 
-`along wrap` removes the session's binding. The session that wrapped an issue with an approved
-plan keeps a completion token, so `along commit -i <slug> --paths ...` passes the plan gate right
-after the wrap; the commit uses the token up.
-
-Several issues finished in parallel are closed in one step with `along session close`; the
-record of each one then also lists its attributed files. See
-[Parallel Sessions](./topic--parallel-sessions.md).
+- **Atomic wrap auto-commit**: By default, `along wrap` automatically creates an atomic Git commit linked to the wrapped issue slug (`<type>: <summary> (refs #<slug>)`), bundling all attributed files, the moved issue file in `done/`, today's session log, and recompiled projections.
+- **Opting out with `--no-commit`**: When `--no-commit` is passed, `along wrap` leaves changes uncommitted. The wrap purge removes the session's binding but preserves a completion token, so a subsequent manual `along commit -i <slug> --paths ...` passes the plan gate without a new approval and consumes the token.
+- **Parallel closeout**: Several issues finished in parallel are closed in one step with `along session close`; the record of each one then also lists its attributed files. See [Parallel Sessions](./topic--parallel-sessions.md).

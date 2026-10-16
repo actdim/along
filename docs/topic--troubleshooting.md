@@ -50,6 +50,13 @@ python -c "from alongkit import rules; print(rules.__file__)"
 3. **Misleading Error Cascades**: The resulting error traces reflect the un-isolated execution environment rather than any actual codebase bug. This frequently misleads agents into attempting unnecessary package installations or corrupting local configurations.
 4. **Violation of CLI Safety**: Running inline code via shell strings violates Along's `cli_safety` gate, which mandates that code be authored in files rather than passed via inline strings.
 
+### CLI Black-Box Invariance
+
+Agents must treat the Along CLI and development tools as strict opaque black-box executables:
+- **No Engine Code Probing in Consumer Repositories**: Reading Along engine source code (`.along/bin/*.py`, `~/.along/bin/`, `alongkit/**`, `along_*.py`) to inspect internals, arguments, or private data structures is strictly forbidden unless actively working on the Along repository itself.
+- **Contract-Based Discovery**: Always use `along <command> --help` or official documentation in `docs/`.
+- **Immediate Error Reporting**: If an Along command returns an error or fails validation, report the exact CLI error output to the user immediately. Do not attempt to reverse-engineer or debug the Along engine internals.
+
 ---
 
 ## 3. Recommended Workflows for API Discovery
