@@ -3,7 +3,8 @@ protocol: along
 protocol_version: "4.4.16"
 slug: session-record-gate-lifecycle-resilience
 type: bug
-status: open
+status: done
+completed: 2026-10-16
 priority: medium
 created: 2026-10-16
 updated: 2026-10-16
@@ -35,7 +36,7 @@ However, the current implementation has several structural limitations during re
 
 ## Acceptance Criteria
 
-- [ ] File deletions in `check_session_records` do not emit per-line Blackboard Record violations.
-- [ ] Relocated or renamed session files are validated across paths without false deletion alerts.
-- [ ] CI range gate verification respects authorized bypass trailers or subproject consolidation markers.
-- [ ] Hermetic unit tests cover file deletion, session relocation, and CI range validation.
+- [x] File deletions in `check_session_records` do not emit per-line Blackboard Record violations.
+- [x] Relocated or renamed session files are validated across paths without false deletion alerts.
+- [x] CI range gate verification respects authorized bypass trailers or subproject consolidation markers.
+- [x] Hermetic unit tests cover file deletion, session relocation, and CI range validation.

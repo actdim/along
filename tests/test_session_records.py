@@ -548,7 +548,35 @@ class TestSessionRecordAppendOnly(unittest.TestCase):
     def test_deleting_the_log_is_rejected(self):
         from alongkit import gitgates
         self.git("rm", "-q", LOG_REL)
-        self.assertTrue(gitgates.check_session_records(self.root, [LOG_REL], "git", "HEAD"))
+        found = gitgates.check_session_records(self.root, [LOG_REL], "git", "HEAD")
+        self.assertEqual(len(found), 1)
+        self.assertEqual(found[0].gate, "session_record_append_only")
+        self.assertEqual(found[0].location, LOG_REL)
+        self.assertIn("session log was deleted", found[0].message)
+
+    def test_renaming_session_file_preserves_blackboard(self):
+        from alongkit import gitgates
+        new_rel = ".along/SESSIONS/2026/2026-10-06--alpha-renamed.md"
+        new_path = os.path.join(self.root, *new_rel.split("/"))
+        old_path = os.path.join(self.root, *LOG_REL.split("/"))
+        self.git("mv", old_path, new_path)
+        found = gitgates.check_session_records(self.root, [LOG_REL, new_rel], "git", "HEAD")
+        self.assertEqual(found, [])
+
+    def test_ci_range_with_along_bypass_trailer(self):
+        from alongkit import gitgates
+        self.git("rm", "-q", LOG_REL)
+        self.git("commit", "-q", "-m", "chore: remove session\n\nAlong-Bypass: pre-commit; unverified; Subproject consolidation")
+        found = gitgates.check_session_records(self.root, [LOG_REL], "ci", "HEAD^", target="HEAD")
+        self.assertEqual(found, [])
+
+    def test_ci_range_deletion_without_bypass_is_rejected(self):
+        from alongkit import gitgates
+        self.git("rm", "-q", LOG_REL)
+        self.git("commit", "-q", "-m", "chore: delete log")
+        found = gitgates.check_session_records(self.root, [LOG_REL], "ci", "HEAD^", target="HEAD")
+        self.assertEqual(len(found), 1)
+        self.assertIn("session log was deleted", found[0].message)
 
     def test_ci_range(self):
         from alongkit import gitgates

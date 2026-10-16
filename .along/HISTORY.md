@@ -208,3 +208,4 @@ _Index of sessions (newest last). One line per session:_
 2026-10-16 - monorepo-submodule-release-workflow - antigravity - Document Monorepo Workspaces vs Git Submodules in release cycles - [Session Log](./SESSIONS/2026/2026-10-16--monorepo-submodule-release-workflow.md)
 2026-10-16 - sync-recent-features-documentation - antigravity - Sync recent features documentation across CLI reference and lifecycle guides - [Session Log](./SESSIONS/2026/2026-10-16--sync-recent-features-documentation.md)
 2026-10-16 - migrate-to-actdim-ui-core - antigravity - Migrate dashboard UI foundations to @actdim/ui-core - [Session Log](./SESSIONS/2026/2026-10-16--migrate-to-actdim-ui-core.md)
+2026-10-16 - session-record-gate-lifecycle-resilience - antigravity - Improve session-record-append-only gate for deletions, renames, and subproject consolidation - [Session Log](./SESSIONS/2026/2026-10-16--session-record-gate-lifecycle-resilience.md)

@@ -594,6 +594,29 @@ def removed_line_numbers(diff_text: str) -> List[int]:
     return removed
 
 
+def _is_session_change_authorized(repo_root: str, base: str, target: str, path: str) -> bool:
+    """True when a commit modifying `path` in `base..target` carries an authorized Along-Bypass."""
+    log_out = _git_out(repo_root, "log", f"{base}..{target}", "--format=%B%x00", "--", path)
+    for msg in log_out.split("\0"):
+        if not msg.strip():
+            continue
+        for line in msg.splitlines():
+            line_str = line.strip()
+            if line_str.startswith("Along-Bypass:"):
+                payload = line_str[len("Along-Bypass:"):].strip()
+                parts = [p.strip() for p in payload.split(";")]
+                gate = parts[0] if parts else ""
+                reason = parts[2] if len(parts) > 2 else (parts[1] if len(parts) > 1 else "")
+                if gate in ("pre-commit", "session_record_append_only", "session_deletion", "all"):
+                    return True
+                if any(w in reason.lower() for w in ("consolidate", "subproject", "migration", "retire")):
+                    return True
+        subj = msg.strip().splitlines()[0]
+        if "consolidate" in subj.lower() and "subproject" in subj.lower():
+            return True
+    return False
+
+
 def check_session_records(repo_root: str, changed: Sequence[str], layer: str, base: Optional[str],
                           target: Optional[str] = None) -> List[Violation]:
     """[gate: session-record-append-only] a change never removes Blackboard Record lines.
@@ -604,25 +627,113 @@ def check_session_records(repo_root: str, changed: Sequence[str], layer: str, ba
     """
     if not base or SESSION_RECORD_GATE not in _definitions(layer):
         return []
-    violations: List[Violation] = []
-    for path in sorted({p.replace("\\", "/") for p in changed if p}):
-        parts = path.split("/")
-        if not path.endswith(".md") or ".along" not in parts or "SESSIONS" not in parts[parts.index(".along"):]:
+
+    candidate_paths = sorted({
+        p.replace("\\", "/") for p in changed
+        if p and p.endswith(".md") and ".along" in p.split("/")
+        and "SESSIONS" in p.split("/")[p.split("/").index(".along"):]
+    })
+    if not candidate_paths:
+        return []
+
+    # Detect renames (-M) and status of changed paths
+    status_args = ["diff", "-M", "--name-status", "-z"]
+    status_args += ["--cached", base] if target is None else [base, target]
+    raw_status = _git_out(repo_root, *status_args).split("\0")
+
+    renames: Dict[str, str] = {}
+    deleted: set = set()
+    idx = 0
+    while idx < len(raw_status):
+        token = raw_status[idx].strip()
+        if not token:
+            idx += 1
             continue
+        if token.startswith(("R", "C")):
+            if idx + 2 < len(raw_status):
+                old_p = raw_status[idx + 1].replace("\\", "/")
+                new_p = raw_status[idx + 2].replace("\\", "/")
+                if token.startswith("R"):
+                    renames[old_p] = new_p
+                idx += 3
+                continue
+        elif token.startswith("D"):
+            if idx + 1 < len(raw_status):
+                deleted.add(raw_status[idx + 1].replace("\\", "/"))
+                idx += 2
+                continue
+        idx += 2
+
+    violations: List[Violation] = []
+    processed_renames: set = set()
+
+    for path in candidate_paths:
+        if path in processed_renames:
+            continue
+
         before = _git_out(repo_root, "show", f"{base}:{path}")
         protected = record_line_numbers(before) if before else set()
         if not protected:
             continue
+
+        before_lines = before.splitlines()
+
+        # Case 1: File renamed
+        if path in renames:
+            new_path = renames[path]
+            processed_renames.add(new_path)
+            args = ["diff", "-U0", "-M", "--no-color", "--no-ext-diff"]
+            args += ["--cached", base] if target is None else [base, target]
+            diff = _git_out(repo_root, *args, "--", path, new_path)
+            rename_violations: List[Violation] = []
+            for number in removed_line_numbers(diff):
+                if number in protected and number <= len(before_lines):
+                    rename_violations.append(Violation(
+                        SESSION_RECORD_GATE, f"{new_path}:{number}",
+                        f"removes a Blackboard Record line (append-only): {before_lines[number - 1][:120]!r}. "
+                        "Edit the Summary instead; a record is only ever appended to."))
+            if rename_violations:
+                if target is not None and _is_session_change_authorized(repo_root, base, target, path):
+                    continue
+                violations.extend(rename_violations)
+            continue
+
+        # Case 2: File deleted
+        is_deleted = path in deleted
+        if not is_deleted:
+            if target is None:
+                if not _git_out(repo_root, "show", f":{path}").strip():
+                    is_deleted = True
+            else:
+                if not _git_out(repo_root, "show", f"{target}:{path}").strip():
+                    is_deleted = True
+
+        if is_deleted:
+            if target is not None and _is_session_change_authorized(repo_root, base, target, path):
+                continue
+            violations.append(Violation(
+                SESSION_RECORD_GATE, path,
+                "session log was deleted (append-only policy forbids deleting committed session records "
+                "without explicit bypass or consolidation metadata)."))
+            continue
+
+        # Case 3: In-place file modification
         args = ["diff", "-U0", "--no-color", "--no-ext-diff"]
         args += ["--cached", base] if target is None else [base, target]
         diff = _git_out(repo_root, *args, "--", path)
-        before_lines = before.splitlines()
+        line_violations: List[Violation] = []
         for number in removed_line_numbers(diff):
             if number in protected and number <= len(before_lines):
-                violations.append(Violation(
+                line_violations.append(Violation(
                     SESSION_RECORD_GATE, f"{path}:{number}",
                     f"removes a Blackboard Record line (append-only): {before_lines[number - 1][:120]!r}. "
                     "Edit the Summary instead; a record is only ever appended to."))
+
+        if line_violations:
+            if target is not None and _is_session_change_authorized(repo_root, base, target, path):
+                continue
+            violations.extend(line_violations)
+
     return violations
 
 
