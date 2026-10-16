@@ -9,7 +9,7 @@ priority: medium
 created: 2026-10-14
 updated: 2026-10-14
 agent: antigravity
-tags: [docs, conventions, overlays]
+tags: [dashboard-ui, docs, conventions, overlays]
 blocked_by: []
 related: []
 ---

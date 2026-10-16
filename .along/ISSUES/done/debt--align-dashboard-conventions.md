@@ -9,14 +9,14 @@ priority: medium
 created: 2026-10-15
 updated: 2026-10-15
 agent: antigravity
-tags: []
+tags: [dashboard-ui, conventions, dynstruct, msgmesh]
 blocked_by: []
 related: []
 ---
 
 # Refactor dashboard-ui to full Dynstruct and MsgMesh conventions compliance
 
-Describe the feature, requirements, and background context here.
+Refactor `packages/dashboard-ui/` components to full compliance with Dynstruct and MsgMesh architectural conventions.
 
 ## Acceptance Criteria
 - [x] Refactor dashboard-ui components to full Dynstruct and MsgMesh conventions compliance (two-way bindings, iconify classes, strict typing, host fragment children)

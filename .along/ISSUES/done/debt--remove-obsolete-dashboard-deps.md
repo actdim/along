@@ -9,7 +9,7 @@ priority: low
 created: 2026-10-15
 updated: 2026-10-15
 agent: antigravity
-tags: [deps, cleanup]
+tags: [dashboard-ui, deps, cleanup]
 blocked_by: []
 related: []
 ---

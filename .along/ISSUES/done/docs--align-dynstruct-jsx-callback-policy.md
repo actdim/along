@@ -9,7 +9,7 @@ priority: medium
 created: 2026-10-15
 updated: 2026-10-15
 agent: antigravity
-tags: [conventions, dynstruct, jsx, callbacks]
+tags: [dashboard-ui, conventions, dynstruct, jsx, callbacks]
 blocked_by: []
 related: []
 ---

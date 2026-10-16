@@ -10,15 +10,14 @@ created: 2026-10-14
 updated: 2026-10-14
 agent: antigravity
 tags: [dashboard-ui, cleanup]
-parent: debt--remove-static-dashboard-data-json-export
+related: [debt--remove-static-dashboard-data-json-export]
 blocked_by: []
-related: []
 ---
 
 # Decouple frontend from static data.json fallback
 
-Describe the feature, requirements, and background context here.
+Decouple `packages/dashboard-ui/` API service from static `data.json` fallback, routing requests to live API endpoints with robust error states.
 
 ## Acceptance Criteria
-- [ ] Task requirement 1
-- [ ] Automated tests passing
+- [x] Decouple frontend from static data.json fallback
+- [x] Automated tests passing

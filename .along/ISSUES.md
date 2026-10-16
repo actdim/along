@@ -1,7 +1,7 @@
 # Active Issues
 
 ## Active
-- [ ] `(debt)` [consolidate-dashboard-ui-subproject](ISSUES/debt--consolidate-dashboard-ui-subproject.md)
+<!-- No active issues -->
 
 ## Backlog
 - [ ] `(debt)` [agents-md-core-slimming](ISSUES/debt--agents-md-core-slimming.md)
@@ -46,12 +46,14 @@
 - [ ] `(feat)` [tool-class-model](ISSUES/feat--tool-class-model.md)
 - [ ] `(feat)` [vps-runner-daemon](ISSUES/feat--vps-runner-daemon.md)
 - [ ] `(feat)` [zero-step-state-recovery-and-drift-detection](ISSUES/feat--zero-step-state-recovery-and-drift-detection.md)
+- [ ] `(task)` [integrate-actdim-ui-core-runtime](ISSUES/task--integrate-actdim-ui-core-runtime.md)
 - [ ] `(task)` [migrate-to-actdim-ui-core](ISSUES/task--migrate-to-actdim-ui-core.md)
+- [ ] `(task)` [reconcile-dashboard-ui-core-conventions](ISSUES/task--reconcile-dashboard-ui-core-conventions.md)
 
 ## Done (recent)
 - [x] `(feat)` [kb-integrity-and-wrap-verification](ISSUES/done/feat--kb-integrity-and-wrap-verification.md)
 - [x] `(feat)` [atomic-wrap-commit-and-start-guard](ISSUES/done/feat--atomic-wrap-commit-and-start-guard.md)
+- [x] `(debt)` [consolidate-dashboard-ui-subproject](ISSUES/done/debt--consolidate-dashboard-ui-subproject.md)
+- [x] `(docs)` [align-dynstruct-jsx-callback-policy](ISSUES/done/docs--align-dynstruct-jsx-callback-policy.md)
 - [x] `(debt)` [vision-roadmap-decoupling](ISSUES/done/debt--vision-roadmap-decoupling.md)
-- [x] `(task)` [dashboard-docs-kb-alignment](ISSUES/done/task--dashboard-docs-kb-alignment.md)
-- [x] `(feat)` [doc-routing-compliance-gate](ISSUES/done/feat--doc-routing-compliance-gate.md)
-<!-- 257 older completed issue(s) archived in .along/ISSUES/done/ -->
+<!-- 264 older completed issue(s) archived in .along/ISSUES/done/ -->

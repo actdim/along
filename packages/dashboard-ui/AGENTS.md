@@ -32,6 +32,6 @@ pnpm run build
 
 <!-- BEGIN ALONG-RULES -->
 See the following engineering guidelines:
-- `[languages/typescript.md](.along/rules/languages/typescript.md)`
-- `[platforms/web.md](.along/rules/platforms/web.md)`
+- `[languages/typescript.md](../../.along/rules/languages/typescript.md)`
+- `[platforms/web.md](../../.along/rules/platforms/web.md)`
 <!-- END ALONG-RULES -->
