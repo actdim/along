@@ -59,6 +59,9 @@ tags: [a, b]
 The reviewer must set `status: open` in the body example and it must survive untouched.
 
 - updated: never-touch-this-body-line
+
+## Acceptance Criteria
+- [x] Sample acceptance criterion
 """
 
 
@@ -339,7 +342,9 @@ class TestIssueDoneCommand(unittest.TestCase):
             "status: in-progress\n"
             "---\n\n"
             "# Sample\n\n"
-            "See [Other](feat--other.md) and [Dot](./bug--dot.md) and [Already](../task--pre.md).\n"
+            "See [Other](feat--other.md) and [Dot](./bug--dot.md) and [Already](../task--pre.md).\n\n"
+            "## Acceptance Criteria\n"
+            "- [x] Relative links resolved\n"
         )
         self._write("feat--sample-issue.md", body_with_links)
 

@@ -1078,22 +1078,24 @@ def execute_wrap(
             )
             return 2
 
-    # Verify that issue acceptance criteria checklist items are completed
+    # Verify that issue acceptance criteria checklist items are completed and issue is not a stub
     src_content = textio.read_text(src_file, strict=False)
-    issue_unchecked = markdown.extract_unchecked_checklist_items(src_content)
-    if issue_unchecked:
-        if not force_reason:
-            _check_failed()
-            print(
-                f"[Error] Wrap aborted: issue '{clean_slug}' has {len(issue_unchecked)} uncompleted checklist item(s) (- [ ]):\n"
-                + "\n".join(f"  - [ ] {item}" for item in issue_unchecked)
-                + "\n  Complete all checklist items, or pass --force-reason \"...\".",
-                file=sys.stderr,
-            )
-            return 2
-        if not _force_allowed():
-            return 2
-        forced.append(f"Wrapped with open issue checklist items: {force_reason}")
+    if status in entities.DELIVERED_ISSUE_STATUSES:
+        comp_ok, comp_reasons = entities.validate_issue_completion(src_content, status)
+        if not comp_ok:
+            if not force_reason:
+                _check_failed()
+                print(
+                    f"[Error] Wrap aborted: issue '{clean_slug}' failed completion validation:\n"
+                    + "\n".join(f"  - {r}" for r in comp_reasons)
+                    + "\n  Complete all checklist items, remove placeholders, or pass --force-reason \"...\".",
+                    file=sys.stderr,
+                )
+                return 2
+            if not _force_allowed():
+                return 2
+            forced.append(f"Wrapped with uncompleted issue criteria ({'; '.join(comp_reasons)}): {force_reason}")
+
 
     # Verify that living plan checklist items are completed
     if has_blackboard:

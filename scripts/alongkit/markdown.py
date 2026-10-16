@@ -330,3 +330,23 @@ def extract_unchecked_checklist_items(markdown_text: str) -> List[str]:
             unchecked.append(m.group(1).strip())
     return unchecked
 
+
+_CHECKLIST_ITEM_RE = re.compile(r"^\s*-\s*\[([ xX])\]\s+(.+)$")
+
+
+def extract_all_checklist_items(markdown_text: str) -> List[Tuple[bool, str]]:
+    """Return all markdown checklist items as (is_ticked, text), ignoring code fences."""
+    tracker = FenceTracker()
+    items: List[Tuple[bool, str]] = []
+    for line in (markdown_text or "").splitlines():
+        if tracker.process_line(line):
+            continue
+        if tracker.in_fence:
+            continue
+        m = _CHECKLIST_ITEM_RE.match(line)
+        if m:
+            is_ticked = m.group(1) in "xX"
+            items.append((is_ticked, m.group(2).strip()))
+    return items
+
+

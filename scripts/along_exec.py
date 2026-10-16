@@ -253,7 +253,29 @@ def handle_start_command(repo_root: str, args: List[str]):
         print(f"[Error] Issue '{slug}' not found in .along/ISSUES/.", file=sys.stderr)
         sys.exit(1)
 
+    issue_path = issue.get("file_path", "")
+    is_closed = issue.get("done") or issue.get("status") in entities.CLOSED_ISSUE_STATUSES or "done" in os.path.normpath(issue_path).split(os.sep)
+    if is_closed:
+        print(f"[Error] Cannot start work on issue '{slug}': issue is already closed in ISSUES/done/ (status: {issue.get('status')}).\n"
+              f"To resume work on a closed issue, reopen it first:\n"
+              f"    along issue reopen {slug}", file=sys.stderr)
+        sys.exit(1)
+
+    if issue_path and os.path.isfile(issue_path):
+        try:
+            content = textio.read_text(issue_path, strict=False)
+            is_stub, stub_reasons = entities.is_issue_stub(content)
+            if is_stub:
+                print(f"[Error] Cannot start work on issue '{slug}': issue contains unfilled scaffold placeholders:\n"
+                      + "\n".join(f"  - {r}" for r in stub_reasons)
+                      + f"\nPopulate '{repo.safe_relpath(issue_path, repo_root)}' with actual requirements and context before starting work.",
+                      file=sys.stderr)
+                sys.exit(2)
+        except OSError:
+            pass
+
     allow_dirty = "--allow-dirty" in args
+
     is_worktree = "--worktree" in args
 
     if not is_worktree:
@@ -466,6 +488,19 @@ def handle_plan_command(repo_root: str, args: List[str]):
                 print("  Write the approved plan to a file and pass '--plan-file <path>', or write it into plan.md.",
                       file=sys.stderr)
                 sys.exit(2)
+            bound_issue = entities.find_issue_by_slug(repo_root, slug)
+            if bound_issue and os.path.isfile(bound_issue.get("file_path", "")):
+                try:
+                    iss_txt = textio.read_text(bound_issue["file_path"], strict=False)
+                    is_stub, stub_reasons = entities.is_issue_stub(iss_txt)
+                    if is_stub:
+                        print(f"[Error] Plan approval refused: bound issue '{slug}' contains unfilled scaffold placeholders:\n"
+                              + "\n".join(f"  - {r}" for r in stub_reasons)
+                              + f"\n  Populate '{repo.safe_relpath(bound_issue['file_path'], repo_root)}' with actual requirements before approving the plan.",
+                              file=sys.stderr)
+                        sys.exit(2)
+                except OSError:
+                    pass
             session.set_session_phase(repo_root, "execution", slug=slug, plan_approved=True)
             plan_now = textio.read_text(os.path.join(session.get_session_dir(repo_root, slug), "plan.md"), strict=False)
             session.mark_approval(repo_root, key, via, plan_now)
@@ -704,12 +739,31 @@ def _doctor_zombie_docs_checks(repo_root: str, warnings: int) -> Tuple[int, List
     return warnings, zombies
 
 
+def _doctor_stub_issues_checks(repo_root: str, warnings: int) -> Tuple[int, List[dict]]:
+    """Scan .along/ISSUES/ for stubs, boilerplate placeholders, or uncompleted criteria."""
+    findings = entities.audit_stub_issues(repo_root)
+    if findings:
+        print(f"\n[WARN: stub-issues] Detected {len(findings)} stub or incomplete issue(s) across .along/ISSUES/:")
+        for f in findings:
+            reasons_str = "; ".join(f["reasons"])
+            print(f"  - {f['path']} ({f['status']}): {reasons_str}")
+        print("Remediation advice:")
+        print("  - To reopen and populate with real context: along issue reopen <slug>")
+        print("  - To cancel unneeded stubs: along issue done <slug> --status cancelled")
+        warnings += len(findings)
+    else:
+        print("[OK] Issue entity quality clean: zero scaffold stubs or incomplete criteria detected.")
+    return warnings, findings
+
+
+
 def handle_doctor_command(repo_root: str, args: List[str]):
     if args and args[0] in ("-h", "--help", "help"):
-        print("Usage: along doctor [entities|docs|--entities|--docs] [--fix]")
-        print("  (no args)            Report protocol, hooks, runtime, bindings, doc quality and blackboard health")
+        print("Usage: along doctor [entities|docs|issues|--entities|--docs|--issues] [--fix]")
+        print("  (no args)            Report protocol, hooks, runtime, bindings, doc quality, issue stubs and blackboard health")
         print("  entities [--fix]     Validate entity schemas and references; --fix drops dangling milestone fields")
         print("  docs                 Validate documentation quality and detect abandoned zombie stubs")
+        print("  issues               Validate issue quality and detect empty scaffold stubs or incomplete criteria")
         sys.exit(0)
     check_entities = "--entities" in args or (bool(args) and args[0].lower() == "entities")
     if check_entities:
@@ -747,6 +801,14 @@ def handle_doctor_command(repo_root: str, args: List[str]):
         warns, zombies = _doctor_zombie_docs_checks(repo_root, 0)
         print(f"\nDocs Doctor Summary: 0 errors, {len(zombies)} warning(s).")
         sys.exit(0)
+
+    check_issues = "--issues" in args or (bool(args) and args[0].lower() == "issues")
+    if check_issues:
+        print("=== Along Issue Quality & Stub Validation (Doctor) ===")
+        warns, findings = _doctor_stub_issues_checks(repo_root, 0)
+        print(f"\nIssues Doctor Summary: 0 errors, {len(findings)} warning(s).")
+        sys.exit(0)
+
 
     print("=== Along Protocol Diagnostics (Doctor) ===")
     errors = 0
@@ -1083,6 +1145,7 @@ def handle_doctor_command(repo_root: str, args: List[str]):
         print("[OK] Documentation Routing Tree: README.md overview boundaries and AGENTS.md references clean.")
 
     warnings, _ = _doctor_zombie_docs_checks(repo_root, warnings)
+    warnings, _ = _doctor_stub_issues_checks(repo_root, warnings)
 
     errors, warnings = _doctor_runtime_checks(repo_root, errors, warnings)
 

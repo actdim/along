@@ -27,7 +27,7 @@ from alongkit import bootstrap
 bootstrap.ensure_deps()
 
 
-from alongkit import attribution, bypass, entities, gates, gitgates, proc, repo, session, verify
+from alongkit import attribution, bypass, entities, gates, gitgates, proc, repo, session, textio, verify
 
 
 # Both gates live in alongkit.gates, shared with the release engine, which used to
@@ -230,6 +230,40 @@ def main(argv=None):
             print(gitgates.format_report(broken, "Pre-Commit Quality Gate"), file=sys.stderr)
             _abort(repo_root, "Commit aborted. Fix the entity references before committing.")
         print("-> [Pre-Commit Quality Gate] Entity references intact.")
+
+    # 5b. Issue stub and completion quality gate on staged .along/ISSUES/ files
+    if not parsed.skip_tests:
+        staged_issue_violations = []
+        for path in staged_files:
+            norm_p = path.replace("\\", "/")
+            if "/.along/ISSUES/" in norm_p or norm_p.startswith(".along/ISSUES/"):
+                if not norm_p.endswith(".md"):
+                    continue
+                abs_p = os.path.join(repo_root, *path.split("/"))
+                if not os.path.isfile(abs_p):
+                    continue
+                try:
+                    iss_content = textio.read_text(abs_p, strict=False)
+                except OSError:
+                    continue
+                if "/done/" in norm_p or norm_p.startswith(".along/ISSUES/done/"):
+                    comp_ok, comp_reasons = entities.validate_issue_completion(iss_content, "done")
+                    if not comp_ok:
+                        for r in comp_reasons:
+                            staged_issue_violations.append((path, r))
+                else:
+                    is_stub, stub_reasons = entities.is_issue_stub(iss_content)
+                    if is_stub:
+                        for r in stub_reasons:
+                            staged_issue_violations.append((path, r))
+        if staged_issue_violations:
+            print("[Error] [Pre-Commit Quality Gate: Issue Stub Detected]", file=sys.stderr)
+            for p, reason in staged_issue_violations:
+                print(f"  - {p}: {reason}", file=sys.stderr)
+            _abort(repo_root, "Commit aborted. Populate issue with actual requirements and context before committing.")
+        if any("/.along/ISSUES/" in p.replace("\\", "/") or p.replace("\\", "/").startswith(".along/ISSUES/") for p in staged_files):
+            print("-> [Pre-Commit Quality Gate] Staged issues verified (no stubs, criteria valid).")
+
 
     # 6. Blackboard Records of committed session logs are append-only
     # [bug--session-records-not-captured] REQ-7.

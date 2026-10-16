@@ -76,6 +76,9 @@ tags: [fixture]
 
 A single well-formed entity, so an engine walking `.along/ISSUES/` is not walking an
 empty directory.
+
+## Acceptance Criteria
+- [x] Fixture acceptance criterion satisfied
 """
 
 FIXTURE_TOPIC = """---

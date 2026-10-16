@@ -42,7 +42,7 @@ from alongkit import bootstrap
 bootstrap.ensure_deps()
 
 
-from alongkit import proc, repo, scaffold, semver
+from alongkit import entities, proc, repo, scaffold, semver
 
 REMOTE_GIT_URL = "https://github.com/actdim/along.git"
 REMOTE_RAW_URL = "https://raw.githubusercontent.com/actdim/along/main/AGENTS.md"
@@ -664,6 +664,21 @@ def run_update(repo_root, check_only=False, dry_run=False, force=False, local_on
         for u in uninit:
             rel = safe_relpath(u, repo_root)
             print(f"     - {rel} (run 'along init' there only if it should keep its own board)")
+
+    # Scan for empty scaffold stubs or incomplete criteria across updated contexts
+    try:
+        stub_issues = entities.audit_stub_issues(repo_root)
+        if stub_issues:
+            print(f"\n-> [Notice] Detected {len(stub_issues)} stub or incomplete issue(s) across .along/ISSUES/:")
+            for si in stub_issues[:5]:
+                print(f"     - {si['path']} ({si['status']}): {si['reasons'][0]}")
+            if len(stub_issues) > 5:
+                print(f"     ... and {len(stub_issues) - 5} more.")
+            print("   Remediation advice:")
+            print("     - Reopen and populate: along issue reopen <slug>")
+            print("     - Cancel unneeded stubs: along issue done <slug> --status cancelled")
+    except (OSError, ValueError, KeyError):
+        pass
 
     if not all_contexts_ok or not sync_ok:
         print("\n[Error] Update completed with errors.\n", file=sys.stderr)

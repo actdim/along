@@ -83,7 +83,9 @@ class TestCliErrorHandlingAndIo(unittest.TestCase):
             "tags: [test]\n"
             "---\n\n"
             "# BOM Strip Test\n\n"
-            "Body content.\n"
+            "Body content.\n\n"
+            "## Acceptance Criteria\n"
+            "- [x] Strip BOM bytes\n"
         )
         src_file = os.path.join(self.issues, "bug--bom-strip-test.md")
         with open(src_file, "w", encoding="utf-8") as f:

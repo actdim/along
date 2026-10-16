@@ -196,6 +196,18 @@ def _issue_done(repo_root: str, args: List[str], issues_dir: str, done_dir: str,
             "[IO.File]::WriteAllText(path, text, (New-Object System.Text.UTF8Encoding($false)))."
         )
 
+    if target_status in entities.DELIVERED_ISSUE_STATUSES:
+        comp_ok, comp_reasons = entities.validate_issue_completion(content, target_status)
+        if not comp_ok:
+            print(
+                f"[Error] Cannot close issue '{islug}' as {target_status}:\n"
+                + "\n".join(f"  - {r}" for r in comp_reasons)
+                + f"\n  Update '{repo.safe_relpath(found_file, repo_root)}' before marking it done, "
+                + "or cancel with '--status cancelled'.",
+                file=sys.stderr,
+            )
+            sys.exit(2)
+
     updates = {"status": target_status, "updated": today, "completed": today}
     if superseded_by:
         updates["superseded_by"] = superseded_by

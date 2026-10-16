@@ -52,8 +52,8 @@
 
 ## Done (recent)
 - [x] `(feat)` [kb-integrity-and-wrap-verification](ISSUES/done/feat--kb-integrity-and-wrap-verification.md)
+- [x] `(feat)` [issue-stub-validation-and-lifecycle-gates](ISSUES/done/feat--issue-stub-validation-and-lifecycle-gates.md)
 - [x] `(feat)` [atomic-wrap-commit-and-start-guard](ISSUES/done/feat--atomic-wrap-commit-and-start-guard.md)
 - [x] `(debt)` [consolidate-dashboard-ui-subproject](ISSUES/done/debt--consolidate-dashboard-ui-subproject.md)
 - [x] `(docs)` [align-dynstruct-jsx-callback-policy](ISSUES/done/docs--align-dynstruct-jsx-callback-policy.md)
-- [x] `(debt)` [vision-roadmap-decoupling](ISSUES/done/debt--vision-roadmap-decoupling.md)
-<!-- 264 older completed issue(s) archived in .along/ISSUES/done/ -->
+<!-- 265 older completed issue(s) archived in .along/ISSUES/done/ -->
