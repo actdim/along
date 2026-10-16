@@ -6,7 +6,7 @@
 - [README.md](README.md): Overview, quick installation, and full skill list.
 - [AGENTS.md](AGENTS.md): Active ALONG-PROTOCOL conventions and instructions.
 - [docs/INDEX.md](docs/INDEX.md): Central Knowledge Base topic catalog.
-- [docs/topic--architecture.md](docs/topic--architecture.md): System Architecture & Flow.
-- [docs/topic--domain-model.md](docs/topic--domain-model.md): Domain Model & Entity Ecosystem.
-- [docs/topic--frontend-conventions.md](docs/topic--frontend-conventions.md): Frontend Coding Conventions (Dynstruct + MsgMesh).
-- [docs/topic--setup-and-workflow.md](docs/topic--setup-and-workflow.md): Setup, Installation & Agent Workflows.
+- [docs/topic--architecture.md](docs/topic--architecture.md): Dashboard UI System Architecture & Flow.
+- [docs/topic--dependencies.md](docs/topic--dependencies.md): Dependencies & AI Documentation for @along/dashboard-ui.
+- [docs/topic--domain-model.md](docs/topic--domain-model.md): Dashboard UI Domain Model & Visualized Entities.
+- [docs/topic--setup-and-workflow.md](docs/topic--setup-and-workflow.md): Dashboard UI Setup, Installation & Developer Workflow.

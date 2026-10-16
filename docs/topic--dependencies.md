@@ -1,11 +1,11 @@
 ---
 protocol: along
-protocol_version: "4.1.0"
+protocol_version: "4.4.16"
 slug: dependencies
 title: Dependencies & Submodules AI Documentation and Rules
 type: topic
-created: 2026-09-27
-updated: 2026-09-27
+created: 2026-10-16
+updated: 2026-10-16
 tags: [dependencies, ai-context, submodules, vendor, rules]
 ---
 
@@ -19,7 +19,7 @@ tags: [dependencies, ai-context, submodules, vendor, rules]
 
 | Subproject / Module | Path | Ecosystems | AI Documentation & Context |
 | :--- | :--- | :--- | :--- |
-| **`@along/dashboard-ui`** | `packages/dashboard-ui` | `npm` | [AGENTS.md](../packages/dashboard-ui/AGENTS.md) |
+| **`@along/dashboard-ui`** | `packages/dashboard-ui` | `npm` | [AGENTS.md](../packages/dashboard-ui/AGENTS.md) <br> [llms-full.txt](../packages/dashboard-ui/llms-full.txt) <br> [llms.txt](../packages/dashboard-ui/llms.txt) <br> [docs/](../packages/dashboard-ui/docs) |
 
 ## Internal Monorepo Dependency Graph
 
@@ -29,11 +29,12 @@ No internal monorepo package inter-dependencies detected.
 
 | Package | Scope / Project | Ecosystem | Version | AI Guidelines / Instructions |
 | :--- | :--- | :--- | :--- | :--- |
-| **`@actdim/dynstruct`** | `packages/dashboard-ui` | `npm` | `1.5.13` | [AGENTS.md](../packages/dashboard-ui/node_modules/@actdim/dynstruct/AGENTS.md) <br> [CLAUDE.md](../packages/dashboard-ui/node_modules/@actdim/dynstruct/CLAUDE.md) <br> [docs/](../packages/dashboard-ui/node_modules/@actdim/dynstruct/docs) <br> manifest metadata (`ai`) |
-| **`@actdim/dynstruct-mui`** | `packages/dashboard-ui` | `npm` | `1.5.13` | [docs/](../packages/dashboard-ui/node_modules/@actdim/dynstruct-mui/docs) |
-| **`@actdim/msgmesh`** | `packages/dashboard-ui` | `npm` | `1.5.13` | [docs/](../packages/dashboard-ui/node_modules/@actdim/msgmesh/docs) |
-| **`@actdim/utico`** | `packages/dashboard-ui` | `npm` | `1.5.13` | [AGENTS.md](../packages/dashboard-ui/node_modules/@actdim/utico/AGENTS.md) <br> [CLAUDE.md](../packages/dashboard-ui/node_modules/@actdim/utico/CLAUDE.md) <br> [docs/](../packages/dashboard-ui/node_modules/@actdim/utico/docs) <br> manifest metadata (`ai`) |
-| **`cytoscape`** | `packages/dashboard-ui` | `npm` | `3.34.2` | [AGENTS.md](../packages/dashboard-ui/node_modules/cytoscape/AGENTS.md) |
+| **`@actdim/dynstruct`** | `packages/dashboard-ui` | `npm` | `1.9.1` | [AGENTS.md](../packages/dashboard-ui/node_modules/.pnpm/@actdim+dynstruct@1.9.1_@ac_7882b87fdfcbb3d3cb87f3e617ba5c46/node_modules/@actdim/dynstruct/AGENTS.md) <br> [CLAUDE.md](../packages/dashboard-ui/node_modules/.pnpm/@actdim+dynstruct@1.9.1_@ac_7882b87fdfcbb3d3cb87f3e617ba5c46/node_modules/@actdim/dynstruct/CLAUDE.md) <br> [llms-full.txt](../packages/dashboard-ui/node_modules/.pnpm/@actdim+dynstruct@1.9.1_@ac_7882b87fdfcbb3d3cb87f3e617ba5c46/node_modules/@actdim/dynstruct/llms-full.txt) <br> [llms.txt](../packages/dashboard-ui/node_modules/.pnpm/@actdim+dynstruct@1.9.1_@ac_7882b87fdfcbb3d3cb87f3e617ba5c46/node_modules/@actdim/dynstruct/llms.txt) <br> [docs/](../packages/dashboard-ui/node_modules/@actdim/dynstruct/docs) <br> manifest metadata (`ai`) |
+| **`@actdim/dynstruct-mui`** | `packages/dashboard-ui` | `npm` | `1.9.1` | [AGENTS.md](../packages/dashboard-ui/node_modules/.pnpm/@actdim+dynstruct-mui@1.9.1_c630b5fb5dfb0d208cd4802c728bae1a/node_modules/@actdim/dynstruct-mui/AGENTS.md) <br> [CLAUDE.md](../packages/dashboard-ui/node_modules/.pnpm/@actdim+dynstruct-mui@1.9.1_c630b5fb5dfb0d208cd4802c728bae1a/node_modules/@actdim/dynstruct-mui/CLAUDE.md) <br> [llms-full.txt](../packages/dashboard-ui/node_modules/.pnpm/@actdim+dynstruct-mui@1.9.1_c630b5fb5dfb0d208cd4802c728bae1a/node_modules/@actdim/dynstruct-mui/llms-full.txt) <br> [llms.txt](../packages/dashboard-ui/node_modules/.pnpm/@actdim+dynstruct-mui@1.9.1_c630b5fb5dfb0d208cd4802c728bae1a/node_modules/@actdim/dynstruct-mui/llms.txt) <br> [docs/](../packages/dashboard-ui/node_modules/@actdim/dynstruct-mui/docs) <br> manifest metadata (`ai`) |
+| **`@actdim/msgmesh`** | `packages/dashboard-ui` | `npm` | `1.9.1` | [AGENTS.md](../packages/dashboard-ui/node_modules/.pnpm/@actdim+msgmesh@1.9.1_@actd_ce15b8ccd9aab596c28f4716ba2eec23/node_modules/@actdim/msgmesh/AGENTS.md) <br> [CLAUDE.md](../packages/dashboard-ui/node_modules/.pnpm/@actdim+msgmesh@1.9.1_@actd_ce15b8ccd9aab596c28f4716ba2eec23/node_modules/@actdim/msgmesh/CLAUDE.md) <br> [llms-full.txt](../packages/dashboard-ui/node_modules/.pnpm/@actdim+msgmesh@1.9.1_@actd_ce15b8ccd9aab596c28f4716ba2eec23/node_modules/@actdim/msgmesh/llms-full.txt) <br> [llms.txt](../packages/dashboard-ui/node_modules/.pnpm/@actdim+msgmesh@1.9.1_@actd_ce15b8ccd9aab596c28f4716ba2eec23/node_modules/@actdim/msgmesh/llms.txt) <br> [docs/](../packages/dashboard-ui/node_modules/@actdim/msgmesh/docs) <br> manifest metadata (`ai`) |
+| **`@actdim/ui-core`** | `packages/dashboard-ui` | `npm` | `1.9.1` | [AGENTS.md](../packages/dashboard-ui/node_modules/.pnpm/@actdim+ui-core@1.9.1_8d9c50eb238a4e8d46b5cd0409bd9fb9/node_modules/@actdim/ui-core/AGENTS.md) <br> [CLAUDE.md](../packages/dashboard-ui/node_modules/.pnpm/@actdim+ui-core@1.9.1_8d9c50eb238a4e8d46b5cd0409bd9fb9/node_modules/@actdim/ui-core/CLAUDE.md) <br> [llms-full.txt](../packages/dashboard-ui/node_modules/.pnpm/@actdim+ui-core@1.9.1_8d9c50eb238a4e8d46b5cd0409bd9fb9/node_modules/@actdim/ui-core/llms-full.txt) <br> [llms.txt](../packages/dashboard-ui/node_modules/.pnpm/@actdim+ui-core@1.9.1_8d9c50eb238a4e8d46b5cd0409bd9fb9/node_modules/@actdim/ui-core/llms.txt) <br> [docs/](../packages/dashboard-ui/node_modules/@actdim/ui-core/docs) <br> manifest metadata (`ai`) |
+| **`@actdim/utico`** | `packages/dashboard-ui` | `npm` | `1.9.1` | [AGENTS.md](../packages/dashboard-ui/node_modules/.pnpm/@actdim+utico@1.9.1_dexie@4.4.5_luxon@3.7.2_uuid@13.0.2/node_modules/@actdim/utico/AGENTS.md) <br> [CLAUDE.md](../packages/dashboard-ui/node_modules/.pnpm/@actdim+utico@1.9.1_dexie@4.4.5_luxon@3.7.2_uuid@13.0.2/node_modules/@actdim/utico/CLAUDE.md) <br> [llms-full.txt](../packages/dashboard-ui/node_modules/.pnpm/@actdim+utico@1.9.1_dexie@4.4.5_luxon@3.7.2_uuid@13.0.2/node_modules/@actdim/utico/llms-full.txt) <br> [llms.txt](../packages/dashboard-ui/node_modules/.pnpm/@actdim+utico@1.9.1_dexie@4.4.5_luxon@3.7.2_uuid@13.0.2/node_modules/@actdim/utico/llms.txt) <br> [docs/](../packages/dashboard-ui/node_modules/@actdim/utico/docs) <br> manifest metadata (`ai`) |
+| **`cytoscape`** | `packages/dashboard-ui` | `npm` | `3.34.2` | [AGENTS.md](../packages/dashboard-ui/node_modules/.pnpm/cytoscape@3.34.2/node_modules/cytoscape/AGENTS.md) |
 
 ## Transitive Dependency Guidelines & Invariants
 

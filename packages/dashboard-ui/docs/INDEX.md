@@ -17,13 +17,13 @@ Central entry point and cross-linked topic catalog for project documentation:
 ```mermaid
 flowchart TD
     INDEX["Knowledge Base (INDEX)"]
-    T_ARCHITECTURE["System Architecture & Flow"]
+    T_ARCHITECTURE["Dashboard UI System Architecture & Flow"]
     INDEX --> T_ARCHITECTURE
-    T_DOMAIN_MODEL["Domain Model & Entity Ecosystem"]
+    T_DEPENDENCIES["Dependencies & AI Documentation for @along/dashboard-ui"]
+    INDEX --> T_DEPENDENCIES
+    T_DOMAIN_MODEL["Dashboard UI Domain Model & Visualized Entities"]
     INDEX --> T_DOMAIN_MODEL
-    T_FRONTEND_CONVENTIONS["Frontend Coding Conventions (Dynstruct + MsgMesh)"]
-    INDEX --> T_FRONTEND_CONVENTIONS
-    T_SETUP_AND_WORKFLOW["Setup, Installation & Agent Workflows"]
+    T_SETUP_AND_WORKFLOW["Dashboard UI Setup, Installation & Developer Workflow"]
     INDEX --> T_SETUP_AND_WORKFLOW
 ```
 
@@ -31,10 +31,10 @@ flowchart TD
 
 ## Articles
 
-- **[System Architecture & Flow](./topic--architecture.md)** (architecture) `architecture`, `boundaries`, `providers`, `mcp`, `dashboard`
-- **[Domain Model & Entity Ecosystem](./topic--domain-model.md)** (domain-model) `domain-model`, `entities`, `schemas`, `dag`, `metadata`
-- **[Frontend Coding Conventions (Dynstruct + MsgMesh)](./topic--frontend-conventions.md)** (reference) `conventions`, `dynstruct`, `msgmesh`, `dynstruct-mui`, `utico`, `routing`, `rules`
-- **[Setup, Installation & Agent Workflows](./topic--setup-and-workflow.md)** (setup-workflow) `setup`, `workflow`, `installation`, `lifecycle`, `quality-gates`
+- **[Dashboard UI System Architecture & Flow](./topic--architecture.md)** (architecture) `architecture`, `boundaries`, `dynstruct`, `msgmesh`, `dashboard`, `ui-core`
+- **[Dependencies & AI Documentation for @along/dashboard-ui](./topic--dependencies.md)** (topic) `dependencies`, `subproject`, `ai-context`, `rules`
+- **[Dashboard UI Domain Model & Visualized Entities](./topic--domain-model.md)** (domain-model) `domain-model`, `entities`, `schemas`, `dag`, `metadata`
+- **[Dashboard UI Setup, Installation & Developer Workflow](./topic--setup-and-workflow.md)** (setup-workflow) `setup`, `workflow`, `installation`, `lifecycle`, `quality-gates`
 
 ---
 
