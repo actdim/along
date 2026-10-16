@@ -64,7 +64,7 @@ PROJECTION_FILES = ("ISSUES.md", "DASHBOARD.md", "dashboard.html", "INDEX.md")
 BACKUP_DIRNAME = ".migration-backup"
 
 #: Newest backup snapshots kept; older ones are pruned once a new one is written.
-BACKUP_KEEP = 5
+BACKUP_KEEP = 1
 
 #: Machine-local state a backup does not copy: per-machine diagnostics, session blackboards,
 #: lifecycle artifacts and worktrees are rebuilt, not migrated, and copying them made every
@@ -90,13 +90,17 @@ def prune_backups(state_dir: str, keep: int = BACKUP_KEEP) -> List[str]:
     """Remove all but the `keep` newest snapshots; return the removed snapshot names.
 
     Snapshot names are `YYYY-MM-DD-HHMMSS` timestamps, so name order is age order.
+    If `keep <= 0`, all snapshots are removed.
     """
     root = os.path.join(state_dir, BACKUP_DIRNAME)
-    if keep < 1 or not os.path.isdir(root):
+    if not os.path.isdir(root):
         return []
     snapshots = sorted(name for name in os.listdir(root)
                        if os.path.isdir(os.path.join(root, name)))
-    removed = snapshots[:-keep] if len(snapshots) > keep else []
+    if keep <= 0:
+        removed = snapshots
+    else:
+        removed = snapshots[:-keep] if len(snapshots) > keep else []
     for name in removed:
         shutil.rmtree(os.path.join(root, name), ignore_errors=True)
     return removed

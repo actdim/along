@@ -119,6 +119,19 @@ class TestMigrationBackups(unittest.TestCase):
         left = sorted(n for n in os.listdir(root) if n != ".gitignore")
         self.assertEqual(left, names[5:])
 
+    def test_prune_backups_keep_zero_removes_all(self):
+        root = migration.backup_root(self.state)
+        names = [f"2026-09-0{i}-120000" for i in range(1, 5)]
+        for name in names:
+            os.makedirs(os.path.join(root, name))
+        removed = migration.prune_backups(self.state, keep=0)
+        self.assertEqual(removed, names)
+        left = sorted(n for n in os.listdir(root) if n != ".gitignore")
+        self.assertEqual(left, [])
+
+    def test_backup_keep_default_is_one(self):
+        self.assertEqual(migration.BACKUP_KEEP, 1)
+
 
 if __name__ == "__main__":
     unittest.main()

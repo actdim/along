@@ -1362,9 +1362,23 @@ def main(argv=None):
                         help="re-run every step even when the recorded state is current")
     parser.add_argument("--no-backup", action="store_true",
                         help="skip the pre-migration copy of the state directory")
+    parser.add_argument("--clean-backups", action="store_true",
+                        help="prune older migration snapshots from .along/.migration-backup/")
+    parser.add_argument("--keep-backups", type=int, default=migration.BACKUP_KEEP,
+                        help=f"number of migration snapshots to keep (default: {migration.BACKUP_KEEP})")
     parser.add_argument("-v", "--verbose", "--debug", action="store_true",
                         help="enable verbose output on errors")
     args = parser.parse_args(argv)
+
+    along_dir = os.path.join(os.path.abspath(args.repo_root), ".along")
+    if args.clean_backups:
+        if os.path.isdir(along_dir):
+            removed = migration.prune_backups(along_dir, keep=args.keep_backups)
+            print(f"   [backup] Pruned {len(removed)} snapshot(s) from .along/.migration-backup/ (kept {args.keep_backups})")
+        else:
+            print(f"No .along directory found in {args.repo_root}.")
+        if not args.apply and not args.force:
+            return 0
 
     # Dry-run unless a human asked for the mutation, either by passing --apply or by
     # running the engine at a terminal. The installer and the test suite both used to
