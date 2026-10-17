@@ -159,11 +159,15 @@ class TestLiveRepositoryRetrieval(unittest.TestCase):
             "The header format and the parser have drifted apart."
         )
 
+        # The board lists only the newest active ADRs [debt--decisions-board-sliding-window];
+        # retrieval must surface every ADR file, which covers the board.
         collected = [e for e in kb.collect_all_entries(REPO_ROOT) if e["category"] == "decision"]
+        adr_files = [n for n in os.listdir(os.path.join(REPO_ROOT, ".along", "DECISIONS")) if n.endswith(".md")]
         self.assertEqual(
-            len(collected), len(entries),
-            "collect_all_entries() must surface every ADR that parse_decision_entries() finds."
+            len(collected), len(adr_files),
+            "collect_all_entries() must surface every ADR in .along/DECISIONS/."
         )
+        self.assertGreaterEqual(len(collected), len(entries))
 
     def test_08_decision_category_search_returns_results(self):
         decisions_path = os.path.join(REPO_ROOT, ".along", "DECISIONS.md")

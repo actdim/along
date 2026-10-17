@@ -262,8 +262,35 @@ def scan_decisions(repo_root: str) -> List[Dict[str, Any]]:
     return decisions
 
 
+#: Active ADRs the DECISIONS.md board lists (newest first); the full list is
+#: docs/decisions/INDEX.md. Override: `.along/config.json` `budget.decisions_board_recent`.
+#: [debt--decisions-board-sliding-window]
+DECISIONS_BOARD_RECENT = 30
+
+
+def decisions_board_recent(repo_root: str) -> int:
+    """Window size of the DECISIONS.md board: the config override, else the default."""
+    import json
+    from .. import repo
+
+    path = os.path.join(repo.state_dir(repo_root), "config.json")
+    try:
+        with open(path, "r", encoding="utf-8") as handle:
+            data = json.load(handle)
+    except (OSError, ValueError):
+        return DECISIONS_BOARD_RECENT
+    value = (data.get("budget") or {}).get("decisions_board_recent") if isinstance(data, dict) else None
+    if isinstance(value, int) and not isinstance(value, bool) and value > 0:
+        return value
+    return DECISIONS_BOARD_RECENT
+
+
 def compile_decisions_board(repo_root: str) -> str:
-    """Compile lightweight .along/DECISIONS.md projection board from .along/DECISIONS/*.md."""
+    """Compile the .along/DECISIONS.md board: the newest active ADRs and compact retired ones.
+
+    Bounded by `decisions_board_recent`; older active ADRs are counted and left to
+    docs/decisions/INDEX.md. [debt--decisions-board-sliding-window]
+    """
     from .. import repo, textio
 
     sdir = repo.state_dir(repo_root)
@@ -285,23 +312,29 @@ def compile_decisions_board(repo_root: str) -> str:
         else:
             superseded_adrs.append(d)
 
-    active_adrs.sort(key=lambda x: x.get("filename", ""))
+    # Filenames start with the date: newest first.
+    active_adrs.sort(key=lambda x: x.get("filename", ""), reverse=True)
     superseded_adrs.sort(key=lambda x: x.get("filename", ""))
 
+    window = decisions_board_recent(repo_root)
+    shown = active_adrs[:window]
+    heading = f"## Active Decisions ({len(active_adrs)})"
+    if len(active_adrs) > len(shown):
+        heading = f"## Active Decisions ({len(active_adrs)}, newest {len(shown)} shown)"
     lines = [
         "<!-- Generated projection from .along/DECISIONS/*.md. Do not edit by hand. Run: along decision sync -->",
         "# Decisions (ADR Projection Board)",
         "",
-        "Compiled index of Architectural Decision Records stored in `.along/DECISIONS/`.",
-        "",
-        f"## Active Decisions ({len(active_adrs)})",
+        heading,
         "",
     ]
 
-    for d in active_adrs:
+    for d in shown:
         fname = d.get("filename") or f"{d['slug']}.md"
         title = d.get("title") or d["slug"]
         lines.append(f"- [{title}](DECISIONS/{fname})")
+    if len(active_adrs) > len(shown):
+        lines.extend(["", f"Older decisions ({len(active_adrs) - len(shown)}): docs/decisions/INDEX.md"])
 
     lines.extend([
         "",
@@ -310,11 +343,8 @@ def compile_decisions_board(repo_root: str) -> str:
     ])
 
     for d in superseded_adrs:
-        fname = d.get("filename") or f"{d['slug']}.md"
-        title = d.get("title") or d["slug"]
         sup_by = d.get("frontmatter", {}).get("superseded_by")
-        note = f" *(superseded by {sup_by})*" if sup_by else " *(superseded)*"
-        lines.append(f"- [{title}](DECISIONS/{fname}){note}")
+        lines.append(f"- {d['slug']} -> {sup_by}" if sup_by else f"- {d['slug']} (superseded)")
 
     lines.append("")
     content = "\n".join(lines)

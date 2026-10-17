@@ -155,17 +155,52 @@ class TestModularDecisionsCompilation(unittest.TestCase):
             self.assertIn("## Superseded & Retired Decisions", content)
             self.assertIn("[First Architectural Choice](DECISIONS/ADR-2026-09-01--first-architectural-choice.md)", content)
             self.assertIn("[Third Architectural Choice](DECISIONS/ADR-2026-09-10--third-architectural-choice.md)", content)
-            self.assertIn("superseded by third-architectural-choice", content)
+            self.assertIn("- second-architectural-choice -> third-architectural-choice", content)
+            # Newest active ADR first.
+            self.assertLess(content.index("Third Architectural Choice"), content.index("First Architectural Choice"))
+            self.assertNotIn("newest", content)
+            self.assertNotIn("Older decisions", content)
 
             # Compactness verification
             self.assertLess(len(content.encode("utf-8")), 7168)
 
+    def test_board_is_a_sliding_window(self):
+        # [debt--decisions-board-sliding-window]
+        with hermetic.repo_fixture() as fixture:
+            dec_dir = os.path.join(fixture, ".along", "DECISIONS")
+            os.makedirs(dec_dir, exist_ok=True)
+            for day in range(1, 7):
+                slug = f"choice-{day}"
+                textio.write_text(
+                    os.path.join(dec_dir, f"ADR-2026-09-{day:02d}--{slug}.md"),
+                    SAMPLE_ADR_1.replace("first-architectural-choice", slug)
+                                .replace("First Architectural Choice", f"Choice {day}"))
+            textio.write_text(os.path.join(fixture, ".along", "config.json"),
+                              '{"budget": {"decisions_board_recent": 4}}\n')
+            self.assertEqual(entities.decisions_board_recent(fixture), 4)
+
+            content = textio.read_text(entities.compile_decisions_board(fixture))
+            self.assertIn("## Active Decisions (", content)
+            self.assertIn("newest 4 shown)", content)
+            for day in (6, 5, 4, 3):
+                self.assertIn(f"[Choice {day}]", content)
+            self.assertNotIn("[Choice 2]", content)
+            self.assertNotIn("[Choice 1]", content)
+            self.assertIn("Older decisions (2): docs/decisions/INDEX.md", content)
+            self.assertLess(content.index("[Choice 6]"), content.index("[Choice 3]"))
+
+    def test_window_default_and_bad_override(self):
+        with hermetic.repo_fixture() as fixture:
+            self.assertEqual(entities.decisions_board_recent(fixture), entities.DECISIONS_BOARD_RECENT)
+            textio.write_text(os.path.join(fixture, ".along", "config.json"),
+                              '{"budget": {"decisions_board_recent": 0}}\n')
+            self.assertEqual(entities.decisions_board_recent(fixture), entities.DECISIONS_BOARD_RECENT)
+
     def test_live_repo_projection_size_budget(self):
         """Verify the live repository's compiled DECISIONS.md stays under the 8 KB budget ceiling.
 
-        The board gains one line per ADR; 7 KB was reached at 44 ADRs (2026-10-01), so the
-        ceiling now matches the ISSUES.md budget. Superseded-ADR filtering is tracked in
-        [debt--constraints-superseded-adr-filtering].
+        The board lists only the newest active ADRs, so it stays bounded as ADRs accumulate.
+        [debt--decisions-board-sliding-window]
         """
         dec_file = os.path.join(REPO_ROOT, ".along", "DECISIONS.md")
         self.assertTrue(os.path.isfile(dec_file))

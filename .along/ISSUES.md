@@ -1,7 +1,7 @@
 # Active Issues
 
 ## Active
-- [ ] `(debt)` [decisions-board-sliding-window](ISSUES/debt--decisions-board-sliding-window.md)
+<!-- No active issues -->
 
 ## Backlog
 - [ ] `(debt)` [agents-md-core-slimming](ISSUES/debt--agents-md-core-slimming.md)
@@ -58,7 +58,7 @@
 ## Done (recent)
 - [~] `(feat)` [tool-class-model](ISSUES/done/feat--tool-class-model.md)
 - [x] `(debt)` [gate-simplification](ISSUES/done/debt--gate-simplification.md)
+- [x] `(debt)` [decisions-board-sliding-window](ISSUES/done/debt--decisions-board-sliding-window.md)
 - [x] `(task)` [migrate-to-actdim-ui-core](ISSUES/done/task--migrate-to-actdim-ui-core.md)
 - [x] `(feat)` [kb-integrity-and-wrap-verification](ISSUES/done/feat--kb-integrity-and-wrap-verification.md)
-- [x] `(feat)` [issue-stub-validation-and-lifecycle-gates](ISSUES/done/feat--issue-stub-validation-and-lifecycle-gates.md)
-<!-- 273 older completed issue(s) archived in .along/ISSUES/done/ -->
+<!-- 274 older completed issue(s) archived in .along/ISSUES/done/ -->

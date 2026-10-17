@@ -13,7 +13,7 @@ tags: [adr, architecture, decisions, index]
 This directory contains the project's Architectural Decision Records.
 Decisions are authored and maintained in `.along/DECISIONS/` and published here as first-class documentation.
 
-## Active Decisions (44)
+## Active Decisions (45)
 
 - **[along-v200-rebranding-and-namespace-isolation](./ADR-2026-08-27--along-v200-rebranding-and-namespace-isolation.md)** - Along v2.0.0: Rebranding, Isolated .along/ Directory, along-* Skill Prefixes, and protocol: along Metadata
 - **[autonomous-multi-mode-dashboard-and-analytics-engine](./ADR-2026-08-27--autonomous-multi-mode-dashboard-and-analytics-engine.md)** - Autonomous Multi-Mode Repository Dashboard & Analytics Engine
@@ -59,6 +59,7 @@ Decisions are authored and maintained in `.along/DECISIONS/` and published here 
 - **[along-installation-is-state-not-agents-md](./ADR-2026-10-07--along-installation-is-state-not-agents-md.md)** - An Along installation is Along state, never an AGENTS.md
 - **[gate-friction-fixes](./ADR-2026-10-11--gate-friction-fixes.md)** - Gate friction fixes of 2026-10-11
 - **[docker-isolation-now-gvisor-later](./ADR-2026-10-17--docker-isolation-now-gvisor-later.md)** - Autonomous mode isolation: one Docker container per environment now, gVisor runtime later
+- **[gates-judge-results-not-commands](./ADR-2026-10-17--gates-judge-results-not-commands.md)** - Gates judge results, not commands
 
 ## Superseded & Retired Decisions (6)
 
