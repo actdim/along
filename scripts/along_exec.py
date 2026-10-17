@@ -18,7 +18,6 @@ bootstrap.ensure_deps()
 from alongkit import entities, frontmatter, gates, lifecycle, proc, repo
 from alongkit.commands import (
     handle_budget_command,
-    handle_circuit_command,
     handle_decision_command,
     handle_devenv_command,
     handle_doctor_command,
@@ -26,6 +25,7 @@ from alongkit.commands import (
     handle_git_command,
     handle_history_command,
     handle_issue_command,
+    handle_lint_command,
     handle_milestone_command,
     handle_patch_command,
     handle_plan_command,
@@ -36,7 +36,6 @@ from alongkit.commands import (
     handle_start_command,
     handle_status_command,
     handle_telemetry_command,
-    handle_tool_command,
     handle_worktree_command,
 )
 from alongkit.commands.lifecycle import _cli_approval_or_exit
@@ -148,11 +147,10 @@ Entity Management Commands:
   git status     Report merge driver registration and pending projection resync [--json]
   git sync       Recompile projections after a merge handled by the projection driver
   gates check    Commit-time gates outside agent runtimes [--hook pre-commit|commit-msg] [--ci [--range R] [--no-links]] [--json]
+  lint           Commit-time checks on demand (alias of 'gates check')
   rules          Rule packs management (attach, status, diff, restore)
-  tool           Tool nature classification and rules (classify, list, explain)
   budget         Measure context footprint and check token budgets (--json, --check)
   context-budget Measure context footprint and check token budgets (--json, --check)
-  circuit        Systemic anomaly circuit breaker (status, trip, reset, verify)
   telemetry status Check pending WAL telemetry spool and endpoint connectivity (--json)
   telemetry flush  Flush spooled telemetry spans to OTLP endpoint (--endpoint <url>)
   run            Execute command behind runtime gate pipeline (along run <cmd...>)
@@ -242,7 +240,6 @@ def main():
     native_routers = {
         "status": handle_status_command,
         "doctor": handle_doctor_command,
-        "circuit": handle_circuit_command,
         "telemetry": handle_telemetry_command,
         "issue": handle_issue_command,
         "milestone": handle_milestone_command,
@@ -256,9 +253,8 @@ def main():
         "worktree": handle_worktree_command,
         "git": handle_git_command,
         "gates": handle_gates_command,
+        "lint": handle_lint_command,
         "rules": handle_rules_command,
-        "tool": handle_tool_command,
-        "tools": handle_tool_command,
         "budget": handle_budget_command,
         "context-budget": handle_budget_command,
         "patch": handle_patch_command,

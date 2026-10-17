@@ -217,13 +217,13 @@ def along_roots(paths: Iterable[str]) -> List[str]:
 def _snapshot_from_index(repo_root: str, roots: Sequence[str], dest: str) -> None:
     specs = [f"{r}/.along" if r else ".along" for r in roots]
     listing = proc.run_capture(["git", "ls-files", "-z", "--", *specs], cwd=repo_root,
-                               check=False, trip_on_anomaly=False)
+                               check=False)
     files = [f for f in listing.stdout.split("\0") if f]
     if not files:
         return
     prefix = dest.replace("\\", "/").rstrip("/") + "/"
     proc.run_capture(["git", "checkout-index", "-f", f"--prefix={prefix}", "--", *files],
-                     cwd=repo_root, check=False, trip_on_anomaly=False)
+                     cwd=repo_root, check=False)
 
 
 def _snapshot_from_tree(repo_root: str, roots: Sequence[str], dest: str) -> None:
@@ -293,7 +293,7 @@ def check_projections(repo_root: str, roots: Sequence[str], source: str) -> List
 # ---------------------------------------------------------------------------
 
 def _git_out(repo_root: str, *args: str) -> str:
-    result = proc.run_capture(["git", *args], cwd=repo_root, check=False, trip_on_anomaly=False)
+    result = proc.run_capture(["git", *args], cwd=repo_root, check=False)
     return result.stdout if result.ok else ""
 
 
@@ -312,8 +312,7 @@ def _tree_reader(repo_root: str):
 
 def _index_reader(repo_root: str):
     def read(path: str) -> Optional[str]:
-        result = proc.run_capture(["git", "show", f":{path}"], cwd=repo_root, check=False,
-                                  trip_on_anomaly=False)
+        result = proc.run_capture(["git", "show", f":{path}"], cwd=repo_root, check=False)
         return result.stdout if result.ok else None
     return read
 
@@ -390,7 +389,7 @@ def _snapshot_from_commit(repo_root: str, commit: str, roots: Sequence[str], des
         return
     archive = os.path.join(dest, ".along-snapshot.tar")
     result = proc.run_capture(["git", "archive", "--format=tar", "-o", archive, commit, "--", *specs],
-                              cwd=repo_root, check=False, trip_on_anomaly=False)
+                              cwd=repo_root, check=False)
     if not result.ok or not os.path.isfile(archive):
         return
     with tarfile.open(archive) as tar:
@@ -459,7 +458,7 @@ def _entity_snapshot(repo_root: str, roots: Sequence[str], source: str) -> set:
 def _entity_dirs_at(repo_root: str, commit: str) -> Optional[List[str]]:
     """Every `<ctx>/.along/<entity dir>` tracked at `commit` (None when git cannot say)."""
     result = proc.run_capture(["git", "ls-tree", "-r", "--name-only", "-z", commit], cwd=repo_root,
-                              check=False, trip_on_anomaly=False)
+                              check=False)
     if not result.ok:
         return None
     dirs = set()
@@ -492,7 +491,7 @@ def untrack_diagnostics(repo_root: str, dry_run: bool = False) -> List[str]:
     paths = tracked_diagnostics(repo_root)
     if paths and not dry_run:
         result = proc.run_capture(["git", "rm", "--cached", "-q", "--", *paths], cwd=repo_root,
-                                  check=False, trip_on_anomaly=False)
+                                  check=False)
         if not result.ok:
             return []
     return paths
@@ -813,7 +812,7 @@ def check_ci(repo_root: str, commit_range: Optional[str] = None, links: bool = T
 
     if links and kb_script and os.path.isdir(os.path.join(repo_root, "docs")):
         result = proc.run_capture([sys.executable, kb_script, "--check"], cwd=repo_root,
-                                  check=False, trip_on_anomaly=False)
+                                  check=False)
         if not result.ok:
             tail = (result.stdout + result.stderr).strip().splitlines()[-5:]
             violations.append(Violation("link_integrity", "docs/",

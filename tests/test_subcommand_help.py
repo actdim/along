@@ -45,7 +45,6 @@ ROUTERS = {
     "rules": ["attach", "status", "diff", "restore"],
     "budget": [],
     "patch": ["replace-func"],
-    "circuit": ["status", "trip", "reset", "verify"],
     "telemetry": ["status", "flush"],
     "status": [],
     "doctor": ["entities"],

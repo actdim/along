@@ -35,7 +35,7 @@ from alongkit import bootstrap
 bootstrap.ensure_deps()
 
 import hermetic
-from alongkit import circuit, hookpreflight, repo, session
+from alongkit import hookpreflight, repo, session
 from alongkit.hooks import HookEngine, HookEvent, HookEventType, HooksConfig
 from alongkit.hooks.predicates import (
     check_mutation_authorization,
@@ -44,7 +44,6 @@ from alongkit.hooks.predicates import (
     load_activity_trace,
     record_tool_activity,
 )
-from alongkit.hooks.shellparse import is_read_only_command, is_verification_command
 
 HOOK = os.path.join(SCRIPTS_DIR, "along_hook.py")
 
@@ -206,40 +205,10 @@ class TestHookProcess(_TempRoot):
     def test_gates_still_run_inside_a_context(self):
         _along(self.root)
         done = self._run({"hook_event_name": "PreToolUse", "tool_name": "Bash", "cwd": self.root,
-                          "tool_input": {"command": "git reset --hard"}})
-        self.assertEqual(done.returncode, 2, done.stderr)
-        self.assertIn(b"CLI Safety", done.stderr)
-
-
-class TestShellClassification(unittest.TestCase):
-    def test_reported_audit_command_is_read_only(self):
-        cmd = ("cd /d/work/Service && sed -n 25,62p X.cs; echo ---; grep -rn \"pattern\" --include=*.cs . "
-               "| grep -v \"/obj/\" | awk -F: '{print $1\":\"$2}'; echo ---; git log --oneline -3 -- X.cs")
-        self.assertTrue(is_read_only_command(cmd))
-
-    def test_awk_reads(self):
-        for cmd in ("awk '{print $1}' f", "awk -F, -v n=2 '$3 > 5 {print $n}' f", "gawk 'END {print NR}' f"):
-            with self.subTest(cmd=cmd):
-                self.assertTrue(is_read_only_command(cmd))
-
-    def test_awk_writes(self):
-        for cmd in ("awk '{print > \"out.txt\"}' f", "awk '{print | \"sh\"}' f", "awk 'BEGIN {system(\"rm x\")}'",
-                    "gawk -i inplace '{print}' f", "awk -f prog.awk f", "awk '{print}' f > out"):
-            with self.subTest(cmd=cmd):
-                self.assertFalse(is_read_only_command(cmd))
-
-    def test_verification_commands(self):
-        for cmd in ("dotnet build -v q", "dotnet test", "cargo check", "cargo clippy", "go vet ./...",
-                    "npm run lint", "pnpm build", "tsc --noEmit", "mypy scripts", "ruff check .",
-                    "cd src && dotnet build", "along build", "python .along/scripts/test.py"):
-            with self.subTest(cmd=cmd):
-                self.assertTrue(is_verification_command(cmd))
-
-    def test_rewriting_or_redirected_runs_are_not_verification(self):
-        for cmd in ("dotnet format", "eslint --fix .", "ruff check --fix .", "cargo clippy --fix",
-                    "dotnet build > build.log", "npm install", "dotnet build && rm -rf src", "jest -u"):
-            with self.subTest(cmd=cmd):
-                self.assertFalse(is_verification_command(cmd))
+                          "tool_input": {"command": "git push --force"}})
+        # destructive_command asks through Claude's native permission prompt.
+        self.assertEqual(done.returncode, 0, done.stderr)
+        self.assertIn(b"destructive-command", done.stdout)
 
 
 class TestPlanGate(_TempRoot):
@@ -261,10 +230,12 @@ class TestPlanGate(_TempRoot):
         self.assertIn("require-plan-approval",
                       check_mutation_authorization(_edit_tool_event(self.src, self.root), self.root) or "")
 
-    def test_verification_passes_for_a_bound_unapproved_session(self):
+    def test_shell_is_never_held_before_it_runs(self):
+        # [debt--gate-simplification]: shell results are judged at Stop by git status.
         session.bind_session(self.root, "work", key=session.session_key("claude", "sess-1"))
-        self.assertIsNone(check_mutation_authorization(_bash_tool_event("dotnet build -v q", self.root), self.root))
-        self.assertIsNotNone(check_mutation_authorization(_bash_tool_event("rm -rf src", self.root), self.root))
+        for cmd in ("dotnet build -v q", "rm -rf src", "python tools/x.py", 'along commit "fix" -i work --all'):
+            with self.subTest(cmd=cmd):
+                self.assertIsNone(check_mutation_authorization(_bash_tool_event(cmd, self.root), self.root))
 
     def test_declared_root_whitelists_its_state_paths(self):
         nested = tempfile.mkdtemp(prefix="along-declared-")
@@ -281,9 +252,10 @@ class TestPlanGate(_TempRoot):
 
 
 class TestCommitAfterWrap(_TempRoot):
-    """`along wrap` leaves a completion token; only that session commits only that issue.
+    """`along wrap` leaves a completion token for the session that had its plan approved.
 
-    See [bug--commit-blocked-after-wrap] REQ-1..REQ-7.
+    Commits themselves are no longer held by the plan gate [debt--gate-simplification]; the
+    tokens still drive closeout and the wrapped-work warning. See [bug--commit-blocked-after-wrap].
     """
     ENFORCE = {"enforce_unbound": True}
 
@@ -302,45 +274,13 @@ class TestCommitAfterWrap(_TempRoot):
             session.record_plan_approval(self.root, key)
         session.purge_session(self.root, slug, key=key, complete=True)
 
-    def _gate(self, cmd, key="sess-1"):
-        return check_mutation_authorization(_bash_tool_event(cmd, self.root, key=key), self.root,
-                                            options=self.ENFORCE)
-
-    def test_wrapping_session_commits_its_issue(self):
+    def test_approved_wrap_leaves_a_token(self):
         self._wrap()
-        for cmd in ('along commit "fix" -i work --all --push',
-                    'along commit "fix" --issue=work --paths a.py',
-                    'along commit "fix" -i bug--work --all',
-                    'python scripts/along_exec.py commit "fix" --issue work --all',
-                    'along issue sync; along commit "fix" -i work --all --push'):
-            with self.subTest(cmd=cmd):
-                self.assertIsNone(self._gate(cmd))
-
-    def test_other_session_is_held_and_told_who_wrapped(self):
-        self._wrap()
-        reason = self._gate('along commit "fix" -i work --all', key="sess-2")
-        self.assertIn("require-plan-approval", reason or "")
-        self.assertIn("another agent session", reason or "")
-        self.assertIn(self.key, reason or "")
-
-    def test_other_issue_is_held(self):
-        self._wrap()
-        reason = self._gate('along commit "fix" -i other --all')
-        self.assertIn("no completion token for 'other'", reason or "")
-
-    def test_commit_without_issue_is_held(self):
-        self._wrap()
-        reason = self._gate('along commit "fix" --all')
-        self.assertIn("pass '-i <slug>'", reason or "")
-
-    def test_a_quoted_message_is_not_the_issue_flag(self):
-        self._wrap()
-        self.assertIsNotNone(self._gate('along commit "drop -i work flag" --all'))
+        self.assertEqual(session.completion_tokens(self.root, self.key), ["work"])
 
     def test_unapproved_wrap_leaves_no_token(self):
         self._wrap(approve=False)
         self.assertEqual(session.completion_tokens(self.root, self.key), [])
-        self.assertIsNotNone(self._gate('along commit "fix" -i work --all'))
 
     def test_scratch_purge_leaves_no_token(self):
         session.init_session(self.root, "work")
@@ -348,38 +288,28 @@ class TestCommitAfterWrap(_TempRoot):
         session.record_plan_approval(self.root, self.key)
         session.purge_session(self.root, "work", key=self.key)
         self.assertEqual(session.completion_tokens(self.root, self.key), [])
-        self.assertIsNotNone(self._gate('along commit "fix" -i work --all'))
-
-    def test_rewriting_chained_and_raw_git_commits_stay_held(self):
-        self._wrap()
-        for cmd in ('along commit "fix" -i work --all --fix-typography',
-                    'git commit -am "fix"', 'git push',
-                    'along commit "fix" -i work --all && rm -rf src',
-                    'along commit "fix" -i work > out.txt',
-                    'along commit "a" -i work; along commit "b" -i work'):
-            with self.subTest(cmd=cmd):
-                self.assertIn("require-plan-approval", self._gate(cmd) or "")
 
     def test_source_edits_after_wrap_stay_held(self):
         self._wrap()
         self.assertIsNotNone(check_mutation_authorization(
             _edit_tool_event(self.src, self.root), self.root, options=self.ENFORCE))
 
-    def test_consumed_token_holds_the_second_commit(self):
+    def test_consumed_token_is_gone(self):
         self._wrap()
         self.assertTrue(session.consume_completion_token(self.root, self.key, "work"))
-        self.assertIsNotNone(self._gate('along commit "again" -i work --all'))
+        self.assertEqual(session.completion_tokens(self.root, self.key), [])
         self.assertIsNone(session.load_binding(self.root, self.key), "an empty binding is removed")
 
     def test_fresh_session_does_not_inherit_an_orphan_approval(self):
         """An approved blackboard whose session ended approves nobody else (Rev 2)."""
         session.init_session(self.root, "orphan")
         session.update_state(self.root, "orphan", phase="execution", plan_approved=True)
-        for cmd in ("touch x.txt", 'along commit "fix" -i orphan --all'):
-            with self.subTest(cmd=cmd):
-                self.assertIn("require-plan-approval", self._gate(cmd, key="fresh") or "")
+        edit = _edit_tool_event(self.src, self.root, key="fresh")
+        self.assertIn("require-plan-approval",
+                      check_mutation_authorization(edit, self.root, options=self.ENFORCE) or "")
         session.bind_session(self.root, "orphan", key=session.session_key("claude", "fresh"))
-        self.assertIsNone(self._gate("touch x.txt", key="fresh"), "the bound session uses its blackboard")
+        self.assertIsNone(check_mutation_authorization(edit, self.root, options=self.ENFORCE),
+                          "the bound session uses its blackboard")
 
 
 class TestActivityTrace(_TempRoot):
@@ -403,16 +333,13 @@ class TestActivityTrace(_TempRoot):
         self.assertTrue(result.is_denied)
         self.assertIsNone(load_activity_trace(self.root, self.key).get("last_edit_time"))
 
-    def test_unbound_session_and_tripped_breaker_do_not_demand_tests(self):
+    def test_unbound_session_does_not_demand_tests(self):
         stop = HookEvent(event_type=HookEventType.STOP, workspace_root=self.root, runtime="claude",
                          conversation_id="sess-1")
         record_tool_activity(_edit_tool_event(self.src, self.root, HookEventType.POST_TOOL_USE), self.root)
         self.assertIsNone(check_test_before_stop(stop, self.root))
         enforce = {"enforce_unbound": True}
         self.assertIn("test-before-stop", check_test_before_stop(stop, self.root, options=enforce) or "")
-        with mock.patch.object(circuit, "get_breaker_state",
-                               return_value=(circuit.CircuitState.TRIPPED, None)):
-            self.assertIsNone(check_test_before_stop(stop, self.root, options=enforce))
 
 
 if __name__ == "__main__":

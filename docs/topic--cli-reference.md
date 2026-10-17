@@ -6,7 +6,7 @@ title: Along CLI Command Reference
 type: reference
 curated: true
 created: 2026-09-14
-updated: 2026-10-06
+updated: 2026-10-17
 tags: [cli, commands, router, lifecycle, tools, reference]
 ---
 
@@ -242,7 +242,7 @@ Manages session logs in `.along/SESSIONS/` and records engineering provenance.
 Plan approval for this agent session ([gate: require-plan-approval]).
 - **Subcommands**:
   - `along plan approve [<slug>] [--plan-file <path>]`: Records the user's approval of the presented plan for the bound issue (or for the next `along start` when none is bound). Run it only after the user's explicit yes; in Claude Code accepting a plan via `ExitPlanMode` records it automatically, plan text included. `--plan-file` writes the approved plan into the blackboard `plan.md` (the scaffold becomes `## Revision 1`, later plans are appended as `## Revision N`). With an issue, approval is refused (exit 2) while `plan.md` is still the scaffold. Where the runtime records user messages (Claude Code `UserPromptSubmit` hook), approval is also refused when the plan file changed after the user's last message ("plan changed after the user's last message; show it and wait for a reply"); with no recorded message it passes as `approved_via: cli-unverified`. The binding records `approved_via` (`exit-plan-mode` | `cli` | `cli-unverified`), `approved_at` and `plan_sha256`.
-  - `along plan approve --closeout <slug>... | --closeout --ready`: Records the user's approval to close these issues out (`--ready`: every issue `along session list` shows ready) in this session's binding; works from a fresh session. `along session close` and `along commit -i <slug>` of those issues pass with it; the closeout consumes it; it lapses after 72 h. Run it only after the user's explicit yes.
+  - `along plan approve --closeout <slug>... | --closeout --ready`: Records the user's approval to close these issues out (`--ready`: every issue `along session list` shows ready) in this session's binding; works from a fresh session. `along session close` of those issues passes with it; the closeout consumes it; it lapses after 72 h. Run it only after the user's explicit yes.
   - `along plan status`: Prints the session key, the resolved issue (`binding`, `single`, `ambiguous`, `elsewhere`, `none`), the phase and the approval.
 - **Usage**:
   ```bash
@@ -318,49 +318,17 @@ Registers Along's custom git merge drivers so concurrent branches merge projecti
   along git sync
   ```
 
-### `along circuit`
-Manages the Systemic Anomaly Circuit Breaker and Human Escalation Gate.
-- Detects VCS corruption, OS/NTFS file contention, missing toolchain binaries, unauthorized global package manager commands, and repetitive syntax edit churn.
-- **Subcommands**:
-  - `along circuit status [--json]`: Displays current circuit breaker state (`CLOSED` or `TRIPPED`) and active anomaly escalation report.
-  - `along circuit trip [--class N] [-r MSG]`: Manually trips the circuit breaker for a specified anomaly class (1 through 5).
-  - `along circuit reset [--force]`: Executes pre-flight health probe and resets breaker to `CLOSED` when healthy.
-  - `along circuit verify`: Executes environment health probe (checking `.git/index` size >= 12 bytes, that `git status` reads the index, absence of stale locks, and AST syntax parsing) without altering state.
-- **Usage**:
-  ```bash
-  along circuit status
-  along circuit verify
-  along circuit reset
-  along circuit trip --class 1 -r "Corrupted git index detected"
-  ```
-
 ### `along rules`
 Attaches engineering guidelines and rule packs to the project.
 - **Subcommands**:
   - `along rules attach`: Automatically inspects repository dependencies and project manifests, attaching appropriate language and platform rule packs into `.along/rules/`. A pack whose body differs from its managed header hash is kept (`--on-conflict preserve|diff|overwrite`); an obsolete pack is pruned only when it is unmodified (a headerless legacy pack must match the current template).
   - `along rules status [--json]`, `along rules diff <rule>`, `along rules restore [<rule>]`: audit, diff and restore packs against the Along templates (restore backs up to `.along/.migration-backup/`).
-- Agents never edit `.along/rules/**/*.md` directly: [gate: rule-pack-protection] denies it at runtime and `along gates check` flags an edited pack.
+- Agents never edit `.along/rules/**/*.md` directly: [gate: rule-pack-protection] denies file-tool writes at runtime and `along gates check` flags an edited pack (including shell edits) by its header hash.
 - **Usage**:
   ```bash
   along rules attach
   along rules status
   along rules restore platforms/web.md
-  ```
-
-### `along tool`
-Inspects, classifies, and manages operational tool nature and rules for shell commands and agent tools.
-- **Subcommands**:
-  - `along tool classify <pattern> <class> [--global]`: Records a declarative classification rule for a tool or command pattern. Valid classes: `read-only`, `verification`, `workspace-write`, `external`, `destructive`. Without `--global`, writes to repository rules (`.along/rules/gates.yaml` under `tools:` or `.along/tool_rules.yaml`). With `--global`, writes to the personal user pack (`~/.along/user-pack/tool_rules.yaml`) backed by git with automated commit.
-  - `along tool list [--json]`: Lists all classified tools, defaults, rule counts, and contributing layers across built-in, rule pack, user pack, and repository configurations.
-  - `along tool explain "<command>"`: Normalizes and explains how a command (or compound command) is classified, displaying the winning layer, rule match conditions, and per-segment breakdown.
-- **Usage**:
-  ```bash
-  along tool classify "kubectl get" read-only
-  along tool classify "kubectl" destructive
-  along tool classify "mytool" read-only --global
-  along tool list
-  along tool explain "git status"
-  along tool explain "git status && rm -rf src"
   ```
 
 ### `along budget` (alias `along context-budget`)
@@ -474,7 +442,7 @@ Conventional Commits generator with active issue binding and typography validati
   - `-n, --no-verify --reason "<text>"`: Skips the pre-commit gates. A recorded bypass: the commit carries an `Along-Bypass: <gate>; <verified|unverified>; <reason>` trailer.
   - `-a, --all` / `--paths <file>...`: Stage the whole tree / only these paths. Prefer `--paths` when other sessions have uncommitted work in the tree.
   - `-p, --push`: Push after the commit.
-- **After `along wrap`**: the plan gate passes `along commit -i <slug>` only for the session that wrapped `<slug>` with an approved plan (completion token), or that holds a closeout approval for it (`along plan approve --closeout`); the commit uses the token up. `-i` is required on this path; `--fix-typography`, a write redirect or a chained mutation take the command off it.
+- **Plan gate**: commits (`along commit`, `git commit`) are not held by `require_plan_approval`; it judges file-tool targets and, at turn end, the files the turn changed (see [Runtime Hooks & Gates](./topic--runtime-hooks-and-gates.md)).
 - **Test reuse**: the pre-commit test gate (also of `along wrap` and `along bump`) skips the suite when the last run on the same working tree was green (tree hash without `.along/` state, KB projections and `__pycache__`; `.along/scripts/` counts). `along test` always runs. Runs are kept in `.along/diagnostics/test_runs.json`.
 - **Docs-only skip**: `along commit` skips the test gate when the change touches only `*.md`, `docs/**`, `.along/**` (not `.along/scripts/`), `llms*.txt` or a version-only `package.json` change.
 - **Usage**:
@@ -667,11 +635,19 @@ Runs the commit-time gate subset (catalogue entries with `git` or `ci` in `enfor
   - `along gates check --hook pre-commit`: Added lines of the staged diff (typography in `.md`/`.py`/`.sh`/`.ps1`/`.bat`, conflict markers, anti-stub) and freshness of staged `.along/` boards (`ISSUES.md`, `DECISIONS.md`, `CONSTRAINTS.md`). Only added lines count, so existing debt elsewhere never blocks a commit.
   - `along gates check --hook commit-msg <file>`: Issue binding and AI co-author trailers in the message.
   - `along gates check --ci [--range R] [--no-links] [--json]`: Every non-merge commit message in the range, the range diff, projection freshness of the checkout, and link integrity (`along kb-sync --check`). The range defaults to `origin/$GITHUB_BASE_REF...HEAD` for PRs, `$ALONG_CI_BEFORE..HEAD` for pushes, else `HEAD^..HEAD`. Used by `.github/workflows/tests.yml`.
-  - `along gates stats [--since YYYY-MM-DD]`: Per-gate blocked / warned / bypassed counts aggregated from `.along/diagnostics/hooks_audit.jsonl` (`mode: shadow` decisions count as warnings, `decision: bypass` entries as bypasses). Read-only.
+  - `along gates stats [--since YYYY-MM-DD]`: Per-gate blocked / warned / bypassed counts aggregated from `.along/diagnostics/hooks_audit.jsonl` (shadow-mode records, `decision: "warn"`, count as warnings; `decision: bypass` entries as bypasses), then "Repeated blocks": identical (gate, target) blocks >= 3 in one conversation, a loop indicator. Each audit entry ends with `target` (the judged command or file path, redacted, at most 200 chars); entries without it fall back to the reason. Read-only.
 - **Usage**:
   ```bash
   along gates check --ci --range origin/main...HEAD
   along gates stats --since 2026-10-01
+  ```
+
+### `along lint`
+Alias of `along gates check`: runs the commit-time checks on demand (typography, anti-stub, AI co-author trailers, code fence languages, portable links, stable entry point, Windows-safe filenames, tracked secrets). The same checks run in pre-commit / commit-msg hooks and CI, not while the agent works. Takes the same options as `along gates check`.
+- **Usage**:
+  ```bash
+  along lint
+  along lint --ci --range origin/main...HEAD
   ```
 
 ### `along run`
@@ -693,7 +669,7 @@ Parameters:
 - `-b`, `--binary <path>`: Explicit path to the Antigravity binary executable.
 
 #### 2. Lifecycle Command Proxy
-Intercepts shell commands, validating CLI safety, typography, and circuit breaker gates before executing:
+Intercepts shell commands, evaluating the `PreToolUse` shell gates (`cli_safety` warnings, `destructive_command`, commit gates) before executing:
 
 ```bash
 along run pytest -q

@@ -12,7 +12,7 @@ from typing import List, Optional
 
 from .config import HooksConfig, load_config, record_audit_entry
 from .declarative import get_all_declarative_gates
-from .gates import BaseGate, CliSafetyGate, ProjectionProtectionGate, TypographyGate
+from .gates import BaseGate, ProjectionProtectionGate
 from .adapters import normalize
 from .models import GateDecision, GateResult, HookEvent, HookEventType
 from .predicates import record_gate_denial, record_tool_activity
@@ -22,10 +22,9 @@ from .predicates import record_gate_denial, record_tool_activity
 #: (Claude Code: `permissionDecision: "ask"`). See [bug--claude-stop-loop-ask-mapping].
 ASK_CAPABLE_RUNTIMES = ("antigravity", "claude")
 
+#: Used only when the declarative catalogue cannot be loaded.
 FALLBACK_GATES: List[BaseGate] = [
-    TypographyGate(),
     ProjectionProtectionGate(),
-    CliSafetyGate(),
 ]
 
 

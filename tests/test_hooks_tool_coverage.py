@@ -103,11 +103,9 @@ class TestFailClosedGates(unittest.TestCase):
         decision = self._decide("NotebookEdit", {"notebook_path": target, "new_source": "print(1)"})
         self.assertEqual(decision, GateDecision.DENY)
 
-    def test_grep_over_docs_triggers_fast_retrieval(self):
+    def test_grep_over_docs_is_allowed(self):
         event = _claude_event("Grep", {"pattern": "x", "path": os.path.join(self.root, "docs")}, self.root)
-        result = evaluate_event(event, repo_root=self.root)
-        self.assertEqual(result.decision, GateDecision.DENY)
-        self.assertIn("fast-retrieval", result.reason or "")
+        self.assertEqual(evaluate_event(event, repo_root=self.root).decision, GateDecision.ALLOW)
 
     def test_grep_over_source_is_allowed(self):
         event = _claude_event("Grep", {"pattern": "x", "path": os.path.join(self.root, "src")}, self.root)

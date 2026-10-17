@@ -60,14 +60,6 @@ class TestCliErrorHandlingAndIo(unittest.TestCase):
         self.assertEqual(res.returncode, 1)
         self.assertIn("--plan-rev expects an integer", res.stderr)
 
-        # --class expects integer
-        res = proc.run_capture(
-            [sys.executable, self.EXEC, "circuit", "trip", "--class", "invalid-class"],
-            cwd=self.repo,
-        )
-        self.assertEqual(res.returncode, 1)
-        self.assertIn("--class expects an integer", res.stderr)
-
     def test_02_along_issue_done_strips_bom_bytes(self):
         """along issue done must strip leading UTF-8 BOM bytes on disk."""
         issue_content = (

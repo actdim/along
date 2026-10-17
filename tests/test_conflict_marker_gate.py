@@ -34,7 +34,7 @@ MARKED = "a\n<<<<<<< HEAD\nours\n=======\ntheirs\n>>>>>>> branch\n"
 def _git(root, *args):
     res = proc.run_capture(
         ["git", "-c", "user.email=t@example.com", "-c", "user.name=t", "-c", "core.autocrlf=false", *args],
-        cwd=root, trip_on_anomaly=False,
+        cwd=root,
     )
     if res.returncode != 0:
         raise AssertionError(f"git {' '.join(args)} failed: {res.stderr}")

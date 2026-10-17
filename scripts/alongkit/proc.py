@@ -102,27 +102,6 @@ def _resolve_cmd(cmd: Command, shell: bool) -> Command:
     return cmd
 
 
-def _safe_trip_breaker(r_root: Optional[str], anomaly: Any) -> None:
-    if not r_root:
-        return
-    from . import circuit, repo
-    if os.environ.get("ALONG_TEST_RUNNER"):
-        real_root = repo.find_repo_root(__file__)
-        if real_root and os.path.abspath(r_root) == os.path.abspath(real_root):
-            return
-    try:
-        if anomaly.anomaly_class == circuit.AnomalyClass.CLASS_1_VCS_CORRUPTION \
-                and not circuit.vcs_anomaly_confirmed(r_root):
-            # Git reads the repository fine: the signature was transient or quoted.
-            # [bug--breaker-trips-on-test-output] REQ-4
-            print(f"[Circuit Breaker] Not tripped: '{anomaly.signature}' seen, but 'git status' "
-                  "succeeds in the repository.", file=sys.stderr)
-            return
-        circuit.trip_breaker(r_root, anomaly)
-    except (OSError, UnicodeDecodeError):
-        pass
-
-
 def run_capture(cmd: Command,
                 cwd: Optional[str] = None,
                 timeout: Optional[float] = None,
@@ -130,7 +109,6 @@ def run_capture(cmd: Command,
                 env: Optional[Dict[str, str]] = None,
                 stdin_text: Optional[str] = None,
                 shell: bool = False,
-                trip_on_anomaly: bool = True,
                 telemetry_span: Optional[Any] = None,
                 tracer: Optional[Any] = None,
                 distill: bool = False,
@@ -161,30 +139,6 @@ def run_capture(cmd: Command,
         active_span = active_tracer.active_span
 
     target_cmd = _resolve_cmd(cmd, shell)
-
-    # Intercept prohibited global package manager and system commands before execution
-    from . import circuit
-    prohibited = circuit.classify_anomaly(cmd=target_cmd)
-    if prohibited and prohibited.anomaly_class == circuit.AnomalyClass.CLASS_3_GLOBAL_ENV:
-        from . import repo
-        try:
-            r_root = repo.find_repo_root(cwd or os.getcwd())
-            _safe_trip_breaker(r_root, prohibited)
-        except (OSError, UnicodeDecodeError):
-            pass
-        res = Result(cmd, 126, "", f"Execution blocked by circuit breaker: {prohibited.signature}")
-        if active_span is not None and active_tracer is not None:
-            active_tracer.record_command_result(
-                span=active_span,
-                cmd=cmd,
-                exit_code=126,
-                stdout="",
-                stderr=res.stderr,
-                pid=None,
-            )
-        if check:
-            raise ProcessError(res)
-        return res
 
     pid: Optional[int] = None
     try:
@@ -257,21 +211,6 @@ def run_capture(cmd: Command,
             except (OSError, RuntimeError, ValueError, TypeError, AttributeError):
                 pass
 
-    if not result.ok and trip_on_anomaly:
-        anomaly = circuit.classify_anomaly(
-            stdout=result.stdout,
-            stderr=result.stderr,
-            returncode=result.returncode,
-            cmd=target_cmd,
-        )
-        if anomaly:
-            from . import repo
-            try:
-                r_root = repo.find_repo_root(cwd or os.getcwd())
-                _safe_trip_breaker(r_root, anomaly)
-            except (OSError, UnicodeDecodeError):
-                pass
-
     if check and not result.ok:
         raise ProcessError(result)
     return result
@@ -287,19 +226,6 @@ def run_passthrough(cmd: Command,
     capturing would hide progress. The UTF-8 child environment still applies.
     """
     target_cmd = _resolve_cmd(cmd, shell)
-
-    # Intercept prohibited global package manager and system commands before execution
-    from . import circuit
-    prohibited = circuit.classify_anomaly(cmd=target_cmd)
-    if prohibited and prohibited.anomaly_class == circuit.AnomalyClass.CLASS_3_GLOBAL_ENV:
-        from . import repo
-        try:
-            r_root = repo.find_repo_root(cwd or os.getcwd())
-            _safe_trip_breaker(r_root, prohibited)
-        except (OSError, UnicodeDecodeError):
-            pass
-        print(f"[Circuit Breaker] Command blocked: {prohibited.signature}", file=sys.stderr)
-        return 126
 
     try:
         completed = subprocess.run(target_cmd, cwd=cwd, shell=shell,
@@ -373,23 +299,12 @@ def git(args: Sequence[str], cwd: Optional[str] = None, check: bool = False,
     if git_dir:
         _heal_git_index(git_dir, target_cwd)
 
-    # First attempt does not trip breaker immediately to allow healing routine to run
-    result = run_capture(["git", *args], cwd=cwd, check=False, timeout=timeout, trip_on_anomaly=False)
+    result = run_capture(["git", *args], cwd=cwd, check=False, timeout=timeout)
     combined = (result.stderr or "") + (result.stdout or "")
     if ("index file smaller than expected" in combined or "bad signature" in combined or "index.lock" in combined) and git_dir:
         time.sleep(0.2)
         _heal_git_index(git_dir, target_cwd, force_lock=("index.lock" in combined))
-        # Second attempt after healing trips breaker if corruption persists
-        result = run_capture(["git", *args], cwd=cwd, check=False, timeout=timeout, trip_on_anomaly=True)
-    elif not result.ok:
-        from . import circuit, repo
-        anomaly = circuit.classify_anomaly(stdout=result.stdout, stderr=result.stderr, returncode=result.returncode, cmd=["git", *args])
-        if anomaly:
-            try:
-                r_root = repo.find_repo_root(target_cwd)
-                _safe_trip_breaker(r_root, anomaly)
-            except (OSError, UnicodeDecodeError):
-                pass
+        result = run_capture(["git", *args], cwd=cwd, check=False, timeout=timeout)
 
     if check and not result.ok:
         raise ProcessError(result)

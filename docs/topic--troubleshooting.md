@@ -4,7 +4,7 @@ slug: troubleshooting
 title: Troubleshooting & Developer Diagnostics Guide
 type: guide
 created: 2026-10-12
-updated: 2026-10-12
+updated: 2026-10-17
 tags: [troubleshooting, diagnostics, packaging, alongkit, uv, pep-723, api-discovery, anti-patterns]
 ---
 
@@ -48,7 +48,7 @@ python -c "from alongkit import rules; print(rules.__file__)"
 1. **Uninstalled Modules**: Because `alongkit` is not installed globally, standard Python invocations outside the project runner fail with `ModuleNotFoundError: No module named 'alongkit'`.
 2. **Missing Inline Dependencies**: Standalone Python invocations bypass the PEP 723 / `uv` dependency wrapper, causing `ImportError` on third-party libraries (e.g. `ruamel.yaml`).
 3. **Misleading Error Cascades**: The resulting error traces reflect the un-isolated execution environment rather than any actual codebase bug. This frequently misleads agents into attempting unnecessary package installations or corrupting local configurations.
-4. **Violation of CLI Safety**: Running inline code via shell strings violates Along's `cli_safety` gate, which mandates that code be authored in files rather than passed via inline strings.
+4. **Violation of CLI Safety**: Running inline code via shell strings triggers Along's `cli_safety` warning: code belongs in files rather than inline strings.
 
 ### CLI Black-Box Invariance
 
@@ -124,8 +124,13 @@ Along provides dedicated diagnostic commands to inspect repository health and is
 
 - **`along doctor`**: Validates repository structure, `.gitattributes`, ADR headers, and entity DAG consistency. Run `along doctor --entities` to check entity relationships.
 - **`along feedback`**: Inspects self-diagnostics, captures incident logs, and provides feedback channels.
-- **`along circuit`**: Checks the systemic anomaly circuit breaker status.
-- **`along gates stats`**: Reviews gate execution counts and recorded bypass reasons.
+- **`along gates stats`**: Reviews gate execution counts and recorded bypass reasons, and lists "Repeated blocks" (the same gate holding the same target >= 3 times in one conversation, a loop).
+- **`along lint`**: Runs the commit-time checks (typography, anti-stub, code fences, links, filenames, secrets) on demand.
+
+### Gate Messages
+
+- **`PLAN_REQUIRED [gate: require-plan-approval]: this turn changed <files> ...`** at the end of a turn: the turn changed repository files (by a file tool or a shell command) while the bound issue has no approved plan. Fix: ask the user, then either approve the plan (`EnterPlanMode` / `ExitPlanMode`, or `along plan approve --plan-file <path>` after the user's yes) or revert the listed files (`git checkout -- <files>`, delete new files). Files that were already dirty before the turn and unchanged are not listed.
+- **`DESTRUCTIVE [gate: destructive-command]: ...`** asks before a recursive delete, `git clean -f`, `git reset --hard` or `git push --force` (denied in autonomous sessions): the target is empty, unexpandable, outside the repository, the repository itself, or holds uncommitted work. Fix: follow the `Fix:` in the message - commit or stash the work first, or name a committed or ignored path inside the repository, or let the user run the command.
 
 ---
 

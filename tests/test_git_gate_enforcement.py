@@ -70,9 +70,11 @@ class TestEnforcementCatalogue(unittest.TestCase):
 
     def test_commit_time_subset_declares_git_and_ci(self):
         by_id = {d.id: d.enforcement for d in load_gate_definitions(DEFAULT_GATES_FILE)}
-        for gid in ("commit_issue_binding", "commit_no_conflict_markers", "commit_no_ai_coauthor",
-                    "anti_stub_injection", "projection_protection", "typography"):
+        for gid in ("commit_issue_binding", "commit_no_conflict_markers", "projection_protection"):
             self.assertEqual(by_id[gid], ["runtime", "git", "ci"], gid)
+        # Content rules run at commit only [debt--gate-simplification].
+        for gid in ("commit_no_ai_coauthor", "anti_stub_injection", "typography"):
+            self.assertEqual(by_id[gid], ["git", "ci"], gid)
         self.assertEqual(by_id["cli_safety"], ["runtime"])
 
     def test_traceability_report_prints_matrix(self):

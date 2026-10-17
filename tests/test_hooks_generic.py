@@ -132,7 +132,9 @@ class TestAlongRunCliProxy(unittest.TestCase):
             self.assertEqual(res.returncode, 0)
             self.assertIn("proxy-test-ok", res.stdout)
 
-    def test_along_run_heredoc_blocked_in_enforce_mode(self):
+    def test_along_run_force_push_blocked_in_enforce_mode(self):
+        # A force-push is always held by destructive_command; the generic runtime cannot ask.
+        # If the gate ever let it through, the push fails harmlessly (no remote).
         script_path = os.path.join(SCRIPTS_DIR, "along_exec.py")
         with tempfile.TemporaryDirectory() as tmp:
             along_dir = os.path.join(tmp, ".along")
@@ -140,12 +142,12 @@ class TestAlongRunCliProxy(unittest.TestCase):
             env = dict(os.environ)
             env["ALONG_HOOK_MODE"] = "enforce"
             res = proc.run_capture(
-                [sys.executable, script_path, "run", "cat <<EOF"],
+                [sys.executable, script_path, "run", "git push --force"],
                 cwd=tmp,
                 env=env,
             )
             self.assertEqual(res.returncode, 2)
-            self.assertIn("CLI Safety Gate Violation", res.stderr)
+            self.assertIn("destructive-command", res.stderr)
 
     def test_along_hook_run_benign_command(self):
         script_path = os.path.join(SCRIPTS_DIR, "along_hook.py")

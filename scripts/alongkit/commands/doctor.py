@@ -19,7 +19,7 @@ import sys
 from datetime import datetime
 from typing import Any, Dict, List, Optional, Tuple
 
-from .. import circuit, entities, frontmatter, lifecycle, proc, repo, session, textio
+from .. import entities, frontmatter, lifecycle, proc, repo, session, textio
 
 
 def _doctor_runtime_checks(repo_root: str, errors: int, warnings: int) -> Tuple[int, int]:
@@ -442,21 +442,6 @@ def handle_doctor_command(repo_root: str, args: List[str]):
         else:
             print("[WARN] Global user pack (~/.along/user-pack) is not a git repository.")
             warnings += 1
-
-    # Check Systemic Anomaly Circuit Breaker
-    try:
-        cb_state, cb_anomaly = circuit.get_breaker_state(repo_root)
-        if cb_state == circuit.CircuitState.TRIPPED:
-            sig = cb_anomaly.signature if cb_anomaly else "Unknown anomaly"
-            cls_name = cb_anomaly.anomaly_class.value if cb_anomaly else "Systemic Anomaly"
-            print(f"[FAIL] Systemic Anomaly Circuit Breaker is TRIPPED ({cls_name}: {sig}).")
-            print("       Run 'along circuit status' for human remediation steps or 'along circuit reset'.")
-            errors += 1
-        else:
-            print("[OK] Systemic Anomaly Circuit Breaker: CLOSED (normal operation).")
-    except (OSError, UnicodeDecodeError, ValueError) as exc:
-        print(f"[WARN] Could not check circuit breaker status: {exc}")
-        warnings += 1
 
     # Declared test policy
     from alongkit import verify

@@ -406,7 +406,7 @@ def delete_issue(repo_root: str, key: str) -> Dict[str, Any]:
         raise ValueError(f"'{old_key}' is referenced by {', '.join(holders)}: cancel it "
                          f"('along issue cancel {old_slug}') or supersede it instead.")
     log = proc.run_capture(["git", "log", "--all", "-F", f"--grep={old_slug}", "-n", "1", "--format=%h"],
-                           cwd=repo_root, check=False, trip_on_anomaly=False)
+                           cwd=repo_root, check=False)
     if log.ok and log.stdout.strip():
         raise ValueError(f"Commit {log.stdout.strip()} mentions '{old_slug}': cancel it "
                          f"('along issue cancel {old_slug}') instead of deleting it.")

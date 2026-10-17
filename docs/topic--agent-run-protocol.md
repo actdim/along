@@ -4,7 +4,7 @@ slug: agent-run-protocol
 title: Agent Run Protocol (ARP/AEP) & OpenTelemetry Engine
 type: architecture
 created: 2026-09-25
-updated: 2026-09-25
+updated: 2026-10-17
 tags: [telemetry, opentelemetry, openinference, tracing, arp, aep, redactor, offloader, spool]
 sources:
   - path: scripts/alongkit/telemetry/models.py
@@ -86,7 +86,7 @@ The ARP engine bridges semantic OpenInference standards and OpenTelemetry (OTel)
 Telemetry is instrumented non-intrusively across the core Along architecture:
 - Session Blackboards and Agent Lifecycle: Tracks execution turns, plan revisions, and autonomous task completions.
 - Subprocess Execution via `run_capture`: Captures terminal process invocations, exit codes, process IDs, and outputs.
-- Declarative Gate Enforcements: Hooks report gate validations and circuit breaker trip events directly into active spans.
+- Declarative Gate Enforcements: Hooks report gate validations directly into active spans.
 - Offline-First Durability: Telemetry never disrupts agent runs if the network is absent or the OTel collector is offline.
 
 ---
@@ -178,7 +178,7 @@ Agent Harness           Tracer / Stack             Redactor / Offloader         
 ### 3.1 Subprocess Telemetry Integration (`proc.run_capture`)
 All text-capturing subprocess calls in Along execute via `alongkit.proc.run_capture`. Telemetry is linked automatically:
 1. Active Tracer Discovery: When `run_capture` is invoked, it queries `Tracer.get_active()`. If an active tracer and span exist, subprocess execution attaches directly to that span context.
-2. Anomaly & Circuit Interception: If a prohibited command violates runtime gates (e.g. global package manager execution), `run_capture` intercepts execution, trips the circuit breaker, and logs a command failure span event with exit code 126 before any process spawns.
+2. Timeouts: `run_capture` does not judge commands (there is no circuit breaker, `debt--gate-simplification`). A process that exceeds its `timeout` is reported as a failed result (`timed out after <n>s`); runner timeouts handle hangs.
 3. Execution Metrics: On process completion, `run_capture` captures process ID (`process.pid`), complete command line (`process.command_line`), and process return code (`process.exit.code`).
 4. Output Scrubbing & Offloading: The command stdout and stderr are scrubbed through `Redactor.sanitize_text(...)`. If the output exceeds 10 KB or 50 lines, `ArtifactOffloader` saves the raw stream to `.along/artifacts/<run_id>/` and returns a truncated preview with the artifact digest.
 

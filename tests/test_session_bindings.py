@@ -31,7 +31,6 @@ bootstrap.ensure_deps()
 
 from alongkit import session
 from alongkit.hooks import HookEvent, HookEventType
-from alongkit.hooks import shellparse
 from alongkit.hooks.predicates import (
     check_active_issue,
     check_mutation_authorization,
@@ -204,14 +203,6 @@ class TestCliApprovalAgainstUserMessage(SessionFixture):
         self.assertIsNone(session.load_binding(self.root, self.key_a))
 
     def test_along_state_commands_pass_the_plan_gate(self):
-        # `along commit` is not a state command: without an approved plan it passes only on a
-        # completion token of the wrapping session [bug--commit-blocked-after-wrap].
-        for cmd in ("along issue create bug x-y --title T", "along start x-y",
-                    "python scripts/along_exec.py issue sync", "along plan status && git status"):
-            self.assertTrue(shellparse.is_along_state_command(cmd), cmd)
-        for cmd in ("along commit -m x", "along commit -m x --fix-typography", "along bump patch",
-                    "along issue sync > out.txt", "along start x && rm -rf src"):
-            self.assertFalse(shellparse.is_along_state_command(cmd), cmd)
         event = HookEvent(event_type=HookEventType.PRE_TOOL_USE, tool_name="run_command",
                           tool_args={"CommandLine": "along issue create bug a-b --title T"},
                           workspace_root=self.root, runtime="claude", conversation_id="sess-a")
@@ -311,84 +302,24 @@ class TestCompletionTokens(SessionFixture):
         self.assertEqual(session.gc_bindings(self.root, now=future), [self.key_a])
 
 
-class TestCommandNatureAndConfirmation(SessionFixture):
-    """Regression suite for command nature authorization and plan confirmation flags."""
+class TestPlanApprovalScope(SessionFixture):
+    """Plan approval covers file-tool edits; shell commands are not held before they run."""
 
-    def test_external_command_passes_with_plan_approval(self):
+    def test_file_edit_passes_with_plan_approval_and_shell_is_never_held(self):
         self.start("alpha", self.key_a)
-        event = HookEvent(
-            event_type=HookEventType.PRE_TOOL_USE,
-            tool_name="run_command",
-            tool_args={"CommandLine": "git push origin main"},
-            workspace_root=self.root,
-            runtime="claude",
-            conversation_id="sess-a",
-        )
-        held = check_mutation_authorization(event, self.root)
-        self.assertIsNotNone(held)
-        self.assertIn("require-plan-approval", str(held))
+        edit = HookEvent(event_type=HookEventType.PRE_TOOL_USE, tool_name="write_to_file",
+                         tool_args={"TargetFile": "src/a.py", "CodeContent": "x = 1\n"},
+                         workspace_root=self.root, runtime="claude", conversation_id="sess-a")
+        self.assertIn("require-plan-approval", str(check_mutation_authorization(edit, self.root)))
+        for cmd in ("git push origin main", "git reset --hard HEAD~1"):
+            shell = HookEvent(event_type=HookEventType.PRE_TOOL_USE, tool_name="run_command",
+                              tool_args={"CommandLine": cmd}, workspace_root=self.root,
+                              runtime="claude", conversation_id="sess-a")
+            self.assertIsNone(check_mutation_authorization(shell, self.root), cmd)
 
-        # Approve plan
         session.record_plan_approval(self.root, self.key_a)
         session.update_state(self.root, "alpha", phase="execution", plan_approved=True)
-        self.assertIsNone(check_mutation_authorization(event, self.root))
-
-    def test_destructive_command_requires_explicit_confirmation(self):
-        self.start("alpha", self.key_a)
-        session.record_plan_approval(self.root, self.key_a)
-        session.update_state(self.root, "alpha", phase="execution", plan_approved=True)
-
-        event = HookEvent(
-            event_type=HookEventType.PRE_TOOL_USE,
-            tool_name="run_command",
-            tool_args={"CommandLine": "git reset --hard HEAD~1"},
-            workspace_root=self.root,
-            runtime="claude",
-            conversation_id="sess-a",
-        )
-        held = check_mutation_authorization(event, self.root)
-        self.assertIsNotNone(held)
-        self.assertIn("confirm-destructive", str(held))
-
-        # Confirm destructive
-        session.confirm_destructive(self.root, self.key_a)
-        self.assertIsNone(check_mutation_authorization(event, self.root))
-
-    def test_destructive_confirmation_is_single_use_consumed_on_post_tool_use(self):
-        self.start("alpha", self.key_a)
-        session.record_plan_approval(self.root, self.key_a)
-        session.update_state(self.root, "alpha", phase="execution", plan_approved=True)
-
-        event = HookEvent(
-            event_type=HookEventType.PRE_TOOL_USE,
-            tool_name="run_command",
-            tool_args={"CommandLine": "git reset --hard HEAD~1"},
-            workspace_root=self.root,
-            runtime="claude",
-            conversation_id="sess-a",
-        )
-        session.confirm_destructive(self.root, self.key_a)
-        self.assertTrue(session.is_destructive_confirmed(self.root, key=self.key_a))
-        self.assertIsNone(check_mutation_authorization(event, self.root))
-
-        # Confirmation is consumed immediately during PreToolUse authorization
-        self.assertFalse(session.is_destructive_confirmed(self.root, key=self.key_a))
-
-        # Subsequent destructive attempt without new confirmation is held immediately
-        held_again = check_mutation_authorization(event, self.root)
-        self.assertIsNotNone(held_again)
-        self.assertIn("confirm-destructive", str(held_again))
-
-    def test_unverified_cli_cannot_confirm_destructive(self):
-        self.start("alpha", self.key_a)
-        with self.assertRaises(ValueError):
-            session.confirm_destructive(self.root, self.key_a, via=session.APPROVED_VIA_CLI_UNVERIFIED)
-
-    def test_external_confirmation_flag(self):
-        self.start("alpha", self.key_a)
-        self.assertFalse(session.is_external_confirmed(self.root, key=self.key_a))
-        session.confirm_external(self.root, self.key_a)
-        self.assertTrue(session.is_external_confirmed(self.root, key=self.key_a))
+        self.assertIsNone(check_mutation_authorization(edit, self.root))
 
     def test_exact_canonical_slug_matching_no_bare_slug_bleed(self):
         self.start("feat--auth", self.key_a, approved=True)

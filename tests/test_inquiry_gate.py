@@ -151,19 +151,17 @@ class TestInquiryGatePredicate(unittest.TestCase):
             self.assertIsInstance(result, str)
             self.assertIn("require-plan-approval", result)
 
-    def test_mutating_shell_command_blocked_in_inquiry_phase(self):
+    def test_shell_command_is_not_held_before_it_runs(self):
+        # [debt--gate-simplification]: shell results are judged at Stop (turnstate).
         session.set_session_phase(self.temp_dir, "inquiry", plan_approved=False)
-        cmd = "rm -rf build"
         event = HookEvent(
             event_type=HookEventType.PRE_TOOL_USE,
             tool_name="run_command",
-            tool_args={"CommandLine": cmd},
+            tool_args={"CommandLine": "rm -rf build"},
             workspace_root=self.temp_dir,
             runtime="claude",
         )
-        result = check_mutation_authorization(event, self.temp_dir, options=ENFORCE_UNBOUND)
-        self.assertIsInstance(result, str)
-        self.assertIn("require-plan-approval", result)
+        self.assertIsNone(check_mutation_authorization(event, self.temp_dir, options=ENFORCE_UNBOUND))
 
     def test_plan_approval_unlocks_mutations(self):
         session.set_session_phase(self.temp_dir, "inquiry", plan_approved=False)

@@ -1,10 +1,9 @@
 #!/usr/bin/env python3
 """
-tests/test_hooks_audit_scrubbing.py - Unit tests for secret scrubbing in hook audit logs and circuit diagnostics.
+tests/test_hooks_audit_scrubbing.py - Unit tests for secret scrubbing in hook audit logs.
 
 Verifies:
 - REQ-1: Redactor sanitizes all audit entry strings before appending to hooks_audit.jsonl.
-- REQ-2: Redactor sanitizes command arguments and error details in circuit_breaker.json and reports.
 - REQ-3: Fast-path zero-allocation detection in Redactor returns clean strings intact.
 - REQ-5: Strict backward compatibility of hooks_audit.jsonl JSON schema.
 """
@@ -23,13 +22,6 @@ SCRIPTS_DIR = os.path.join(REPO_ROOT, "scripts")
 if SCRIPTS_DIR not in sys.path:
     sys.path.insert(0, SCRIPTS_DIR)
 
-from alongkit.circuit import (
-    AnomalyClass,
-    AnomalyMatch,
-    load_circuit_state,
-    save_circuit_state,
-    trip_breaker,
-)
 from alongkit.hooks import (
     GateDecision,
     GateResult,
@@ -157,6 +149,7 @@ class TestHooksAuditScrubbing(unittest.TestCase):
             "reason",
             "conversation_id",
             "step_idx",
+            "target",
         ]
         self.assertEqual(list(record.keys()), expected_keys)
 
@@ -234,76 +227,54 @@ class TestHooksAuditScrubbing(unittest.TestCase):
         self.assertEqual(record["step_idx"], 2)
 
 
-class TestCircuitBreakerDiagnosticsScrubbing(unittest.TestCase):
+class TestAuditTargetAndLoops(unittest.TestCase):
+    """[debt--gate-simplification]: redacted `target`, `warn` for shadow, loop report."""
+
     def setUp(self) -> None:
-        self.tmp = tempfile.mkdtemp(prefix="along-circuit-scrub-")
+        self.tmp = tempfile.mkdtemp(prefix="along-audit-target-")
         os.makedirs(os.path.join(self.tmp, ".along", "ISSUES"), exist_ok=True)
 
     def tearDown(self) -> None:
         shutil.rmtree(self.tmp, ignore_errors=True)
 
-    def test_trip_breaker_scrubs_command_args_and_anomaly(self) -> None:
-        anthropic_key = "sk-ant-api03-123456789012345678901234567890"  # along: allow-no-tracked-secrets
-        sensitive_cmd = f"curl -H 'Authorization: Bearer {anthropic_key}' https://api.anthropic.com"
-        aws_token = "AKIAIOSFODNN7EXAMPLE"  # along: allow-no-tracked-secrets
-        sensitive_detail = f"fatal error at /home/admin/config.json with key {aws_token}"
+    def _records(self):
+        audit_file = os.path.join(self.tmp, ".along", "diagnostics", "hooks_audit.jsonl")
+        with open(audit_file, "r", encoding="utf-8") as handle:
+            return [json.loads(line) for line in handle if line.strip()]
 
-        anomaly = AnomalyMatch(
-            anomaly_class=AnomalyClass.CLASS_3_GLOBAL_ENV,
-            signature="Prohibited toolchain anomaly",
-            detail=sensitive_detail,
-            impact="Fatal failure with credential leak risk",
-            remediation=("Remediate immediately",),
-            source=sensitive_cmd,
-        )
+    def _event(self, **args):
+        return HookEvent(event_type=HookEventType.PRE_TOOL_USE, tool_name="run_command", tool_args=args,
+                         workspace_root=self.tmp, runtime="claude", conversation_id="conv-loop")
 
-        report = trip_breaker(self.tmp, anomaly)
-
-        # 1. Escalation report stderr rendering must be redacted
-        self.assertNotIn(anthropic_key, report)
-        self.assertNotIn(aws_token, report)
-        self.assertNotIn("/home/admin", report)
-        self.assertIn("Bearer [REDACTED]", report)
-        self.assertIn("[REDACTED_AWS_KEY]", report)
-        self.assertIn("~/config.json", report)
-
-        # 2. circuit_breaker.json on disk must be redacted
-        state = load_circuit_state(self.tmp)
-        self.assertEqual(state["state"], "tripped")
-        anomaly_dict = state["anomaly"]
-        self.assertIsNotNone(anomaly_dict)
-        self.assertNotIn(anthropic_key, anomaly_dict["source"])
-        self.assertNotIn(aws_token, anomaly_dict["detail"])
-        self.assertNotIn("/home/admin", anomaly_dict["detail"])
-        self.assertIn("Bearer [REDACTED]", anomaly_dict["source"])
-        self.assertIn("[REDACTED_AWS_KEY]", anomaly_dict["detail"])
-        self.assertIn("~/config.json", anomaly_dict["detail"])
-
-    def test_save_circuit_state_sanitizes_history_and_extra_data(self) -> None:
+    def test_target_is_redacted_and_cut(self) -> None:
         gh_token = "ghp_123456789012345678901234"  # along: allow-no-tracked-secrets
-        data = {
-            "state": "tripped",
-            "anomaly": None,
-            "history": [
-                {
-                    "source": f"git clone https://{gh_token}@github.com/repo.git",
-                    "detail": "auth failed for password: my_plain_password",
-                }
-            ],
-            "password": "unmasked_password",
-        }
+        event = self._event(CommandLine=f"git clone https://{gh_token}@github.com/x.git " + "y" * 300)
+        record_audit_entry(self.tmp, event, GateResult(decision=GateDecision.DENY, gate_name="g"), HookMode.ENFORCE)
+        target = self._records()[0]["target"]
+        self.assertNotIn(gh_token, target)
+        self.assertLessEqual(len(target), 200 + 40)  # redaction markers may lengthen it slightly
+        self.assertTrue(target.endswith("..."))
 
-        save_circuit_state(self.tmp, data)
+    def test_file_target_and_shadow_decision(self) -> None:
+        event = HookEvent(event_type=HookEventType.PRE_TOOL_USE, tool_name="write_to_file",
+                          tool_args={"TargetFile": "src/a.py"}, workspace_root=self.tmp)
+        record_audit_entry(self.tmp, event, GateResult(decision=GateDecision.DENY, gate_name="g"), HookMode.SHADOW)
+        record = self._records()[0]
+        self.assertEqual(record["target"], "src/a.py")
+        self.assertEqual(record["decision"], "warn")
 
-        state_file = os.path.join(self.tmp, ".along", "diagnostics", "circuit_breaker.json")
-        self.assertTrue(os.path.isfile(state_file))
-        with open(state_file, "r", encoding="utf-8") as handle:
-            saved = json.load(handle)
-
-        self.assertNotIn(gh_token, saved["history"][0]["source"])
-        self.assertIn("[REDACTED_GITHUB_TOKEN]", saved["history"][0]["source"])
-        self.assertIn("password: [REDACTED]", saved["history"][0]["detail"])
-        self.assertEqual(saved["password"], "[REDACTED]")
+    def test_loops_report_repeated_identical_blocks(self) -> None:
+        from alongkit import gatestats
+        held = GateResult(decision=GateDecision.DENY, gate_name="require_plan_approval")
+        for _ in range(3):
+            record_audit_entry(self.tmp, self._event(CommandLine="python x.py"), held, HookMode.ENFORCE)
+        record_audit_entry(self.tmp, self._event(CommandLine="python y.py"), held, HookMode.ENFORCE)
+        for _ in range(3):
+            record_audit_entry(self.tmp, self._event(CommandLine="python z.py"), held, HookMode.SHADOW)
+        found = gatestats.loops(self.tmp)
+        self.assertEqual([(lp.gate, lp.target, lp.count) for lp in found],
+                         [("require_plan_approval", "python x.py", 3)])
+        self.assertIn("3x", gatestats.format_loops(found))
 
 
 if __name__ == "__main__":

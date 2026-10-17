@@ -108,14 +108,14 @@ class TestDistill(unittest.TestCase):
 class TestRunCaptureDistill(unittest.TestCase):
     def test_observation_set_and_raw_kept(self):
         code = "import sys; print('chatter\\n' * 200); sys.stderr.write('ValueError: bad\\n'); sys.exit(1)"
-        res = proc.run_capture([sys.executable, "-c", code], distill=True, trip_on_anomaly=False)
+        res = proc.run_capture([sys.executable, "-c", code], distill=True)
         self.assertEqual(res.returncode, 1)
         self.assertIn("chatter", res.stdout)
         self.assertIn("ValueError: bad", res.observation)
         self.assertLess(len(res.observation), len(res.stdout))
 
     def test_default_has_no_observation(self):
-        res = proc.run_capture([sys.executable, "-c", "print(1)"], trip_on_anomaly=False)
+        res = proc.run_capture([sys.executable, "-c", "print(1)"])
         self.assertIsNone(res.observation)
 
 

@@ -249,10 +249,10 @@ class TestCatalogueAndOverrides(_ContainmentFixture):
         # [feat--gate-friction-and-bypass-accountability] REQ-4; a process gate still can.
         _wc_write(os.path.join(self.ws, ".along", "rules", "gates.yaml"),
                   "gates:\n  - id: workspace_containment\n    enabled: false\n"
-                  "  - id: fast_retrieval\n    enabled: false\n")
+                  "  - id: doc_manual_lock\n    enabled: false\n")
         self.assertIn("workspace_containment", self._gates())
-        self.assertNotIn("fast_retrieval", self._gates())
-        self.assertIn("typography", self._gates())
+        self.assertNotIn("doc_manual_lock", self._gates())
+        self.assertIn("require_active_issue", self._gates())
 
 
 class TestStartScopeFlags(unittest.TestCase):

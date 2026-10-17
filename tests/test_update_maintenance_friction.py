@@ -2,8 +2,7 @@
 """
 tests/test_update_maintenance_friction.py - [bug--update-maintenance-friction].
 
-Covers: Along maintenance subcommands passing the plan gate (removal excluded), `along doctor
---fix` no longer classified read-only, schema findings on archived issues reported as warnings
+Covers: schema findings on archived issues reported as warnings
 while dangling issue references stay errors, `doctor --entities --fix` cleaning archived
 issues, and migration backup retention, skip list and self-ignore file. Every test runs in a
 throwaway directory; nothing touches the live repository.
@@ -26,31 +25,8 @@ from alongkit import bootstrap
 bootstrap.ensure_deps()
 
 from alongkit import entities, migration
-from alongkit.hooks import shellparse
 
 from test_entity_reference_integrity import _ErRepo, _er_fm, _er_issue, _er_write
-
-
-class TestMaintenanceCommands(unittest.TestCase):
-
-    def test_maintenance_subcommands_pass_as_state_commands(self):
-        for cmd in ("along update", "along update --local-only", "along init",
-                    "along migrate --apply", "along doctor --entities --fix", "along hook install",
-                    "along git setup", "along git sync", "along rules attach python",
-                    "along rules restore", "python scripts/along_exec.py update --force"):
-            self.assertTrue(shellparse.is_along_state_command(cmd), cmd)
-
-    def test_removal_and_chained_mutations_do_not_pass(self):
-        for cmd in ("along hook uninstall", "along hook install --uninstall",
-                    "along update && rm -rf src", "along update > out.txt", "along bump patch",
-                    "along commit -m x"):
-            self.assertFalse(shellparse.is_along_state_command(cmd), cmd)
-
-    def test_doctor_fix_is_not_read_only(self):
-        self.assertTrue(shellparse.is_read_only_command("along doctor"))
-        self.assertTrue(shellparse.is_read_only_command("along doctor --entities"))
-        self.assertFalse(shellparse.is_read_only_command("along doctor --entities --fix"))
-        self.assertFalse(shellparse.is_read_only_command("python scripts/along_exec.py doctor --fix"))
 
 
 class TestArchivedIssues(_ErRepo):

@@ -164,7 +164,7 @@ def run_checks(repo_root: str, checks: Sequence[str], label: str) -> bool:
             ok = False
             continue
         print(f"-> [{label}] Running check '{name}': {' '.join(cmd)}")
-        res = proc.run_capture(cmd, cwd=repo_root, trip_on_anomaly=False)
+        res = proc.run_capture(cmd, cwd=repo_root)
         if res.ok:
             print(f"-> [{label}] Check '{name}' passed.")
             continue

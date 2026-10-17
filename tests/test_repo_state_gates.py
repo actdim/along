@@ -159,7 +159,8 @@ class TestRepoGateCatalogue(unittest.TestCase):
     def test_runtime_pipeline_skips_repo_gates(self):
         names = {gate.name for gate in get_all_declarative_gates(None)}
         self.assertTrue(names.isdisjoint(REPO_GATES))
-        self.assertIn("typography", names)
+        self.assertNotIn("typography", names)  # commit-time only [debt--gate-simplification]
+        self.assertIn("require_plan_approval", names)
 
 
 class TestRepoGatesThroughGit(unittest.TestCase):

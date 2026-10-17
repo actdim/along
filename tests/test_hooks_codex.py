@@ -292,83 +292,37 @@ class TestCodexEndToEnd(unittest.TestCase):
             ).strip()
             self.assertEqual(clean_stderr, "")
 
-    def test_cli_invocation_write_file_typography_violation_exits_two(self):
+    def test_cli_invocation_typography_is_not_a_runtime_check(self):
+        # [debt--gate-simplification]: typography runs at commit (`along lint`), not per write.
         script_path = os.path.join(SCRIPTS_DIR, "along_hook.py")
-        bad_text = f"val = 'hello {EM_DASH} world'\n"
-        input_payload = json.dumps({
-            "hook_event_name": "PreToolUse",
-            "tool_name": "write_file",
-            "tool_input": {
-                "file_path": "src/bad.py",
-                "content": bad_text,
-            },
-        })
+        for tool, tool_input in (
+                ("write_file", {"file_path": "src/bad.py", "content": f"val = 'hello {EM_DASH} world'\n"}),
+                ("edit_file", {"file_path": "src/bad_edit.py", "old_string": "val = 'old'\n",
+                               "new_string": f"val = 'bad {EM_DASH} replace'\n"})):
+            payload = json.dumps({"hook_event_name": "PreToolUse", "tool_name": tool, "tool_input": tool_input})
+            with self.subTest(tool=tool), tempfile.TemporaryDirectory() as tmp:
+                os.makedirs(os.path.join(tmp, ".along", "ISSUES"), exist_ok=True)
+                res = proc.run_capture(
+                    [sys.executable, script_path, "--runtime", "codex", "--event", "PreToolUse", "--repo-root", tmp],
+                    stdin_text=payload,
+                )
+                self.assertNotIn("Typography", res.stderr)
 
+    def test_cli_invocation_destructive_delete_exits_two(self):
+        # Codex has no native ask: the destructive_command ASK becomes a DENY.
+        script_path = os.path.join(SCRIPTS_DIR, "along_hook.py")
         with tempfile.TemporaryDirectory() as tmp:
-            along_dir = os.path.join(tmp, ".along")
-            os.makedirs(os.path.join(along_dir, "ISSUES"), exist_ok=True)
+            os.makedirs(os.path.join(tmp, ".along", "ISSUES"), exist_ok=True)
+            input_payload = json.dumps({
+                "hook_event_name": "PreToolUse", "tool_name": "shell", "cwd": tmp,
+                "tool_input": {"command": "rm -rf .."},
+            })
             res = proc.run_capture(
                 [sys.executable, script_path, "--runtime", "codex", "--event", "PreToolUse", "--repo-root", tmp],
                 stdin_text=input_payload,
             )
             self.assertEqual(res.returncode, 2)
-            self.assertEqual(res.stdout.strip(), "")
-            self.assertIn("Typography", res.stderr)
-            self.assertIn("em dash", res.stderr)
-
-    def test_cli_invocation_edit_file_typography_violation_exits_two(self):
-        script_path = os.path.join(SCRIPTS_DIR, "along_hook.py")
-        bad_text = f"val = 'bad {EM_DASH} replace'\n"
-        input_payload = json.dumps({
-            "hook_event_name": "PreToolUse",
-            "tool_name": "edit_file",
-            "tool_input": {
-                "file_path": "src/bad_edit.py",
-                "old_string": "val = 'old'\n",
-                "new_string": bad_text,
-            },
-        })
-
-        with tempfile.TemporaryDirectory() as tmp:
-            along_dir = os.path.join(tmp, ".along")
-            os.makedirs(os.path.join(along_dir, "ISSUES"), exist_ok=True)
-            res = proc.run_capture(
-                [sys.executable, script_path, "--runtime", "codex", "--event", "PreToolUse", "--repo-root", tmp],
-                stdin_text=input_payload,
-            )
-            self.assertEqual(res.returncode, 2)
-            self.assertIn("Typography", res.stderr)
-
-    def test_cli_invocation_cli_safety_heredoc_exits_two(self):
-        script_path = os.path.join(SCRIPTS_DIR, "along_hook.py")
-        input_payload = json.dumps({
-            "hook_event_name": "PreToolUse",
-            "tool_name": "shell",
-            "tool_input": {
-                "command": "cat <<EOF > test.py\nx = 1\nEOF",
-            },
-        })
-
-        with tempfile.TemporaryDirectory() as tmp:
-            along_dir = os.path.join(tmp, ".along")
-            os.makedirs(os.path.join(along_dir, "ISSUES"), exist_ok=True)
-            res = proc.run_capture(
-                [
-                    sys.executable,
-                    script_path,
-                    "--runtime",
-                    "codex",
-                    "--event",
-                    "PreToolUse",
-                    "--mode",
-                    "enforce",
-                    "--repo-root",
-                    tmp,
-                ],
-                stdin_text=input_payload,
-            )
-            self.assertEqual(res.returncode, 2)
-            self.assertIn("Heredoc", res.stderr)
+            self.assertIn("destructive-command", res.stderr)
 
 
 class TestInstallCodexHooks(unittest.TestCase):

@@ -160,7 +160,7 @@ def run_test_gate(repo_root: str, label: str = "Quality Gate") -> str:
     print(f"-> [{label}] Running automated tests: {' '.join(cmd)}")
     # No anomaly classification: a failing suite prints fixture signatures such as
     # "bad signature" [bug--breaker-trips-on-test-output].
-    res = proc.run_capture(cmd, cwd=repo_root, trip_on_anomaly=False)
+    res = proc.run_capture(cmd, cwd=repo_root)
     output = res.stdout + "\n" + res.stderr
     executed = lifecycle.tests_ran(cmd, output, repo_root) if res.ok else None
     passed = res.ok and executed != 0
@@ -578,7 +578,7 @@ def syntax_gate(repo_root: str, label: str = "Quality Gate",
     if not quiet:
         print(f"-> [{label}] Verifying Python syntax integrity across {', '.join(dirs_to_check)}...")
     cmd = [sys.executable, "-m", "compileall", "-q"] + dirs_to_check
-    res = proc.run_capture(cmd, cwd=repo_root, trip_on_anomaly=False)
+    res = proc.run_capture(cmd, cwd=repo_root)
     if res.ok:
         if not quiet:
             print(f"-> [{label}] Python syntax clean across {len(dirs_to_check)} target directory(ies).")

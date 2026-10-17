@@ -287,7 +287,7 @@ def _run_lifecycle_command(action: str, cmd: Sequence[str], repo_root: str, mode
     rel_log = repo.safe_relpath(log_path, repo_root).replace("\\", "/")
     # No anomaly classification: test output legitimately contains strings such as
     # "bad signature" from fixtures, and passthrough mode never classified it either.
-    result = proc.run_capture(list(cmd), cwd=repo_root, distill=True, trip_on_anomaly=False)
+    result = proc.run_capture(list(cmd), cwd=repo_root, distill=True)
     raw = result.stdout + ("\n" if result.stdout and result.stderr else "") + result.stderr
     try:
         os.makedirs(os.path.dirname(log_path), exist_ok=True)
@@ -812,7 +812,7 @@ def _auto_commit_wrapped_work(
         cmd.append("-n")
         cmd.extend(["--reason", bypass_reason or "Automated wrap verification"])
 
-    result = proc.run_capture(cmd, cwd=repo_root, check=False, trip_on_anomaly=False)
+    result = proc.run_capture(cmd, cwd=repo_root, check=False)
     if result.stdout:
         print(result.stdout.rstrip())
     if not result.ok:

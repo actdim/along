@@ -7,10 +7,10 @@ description: Fast unified retrieval engine across Knowledge Base (docs/) and liv
 
 Unified Multi-Scope Knowledge & Memory Retrieval Engine for AI coding agents and developers.
 
-## Strict Fast-Retrieval Gate & Negative Constraints [gate: fast-retrieval]
+## Retrieval Guidance
 
-To eliminate latency and prevent prompt context exhaustion:
-1. **No Manual Directory Scans**: Agents MUST NOT use directory search or traversal tools (`grep_search`, `find_by_name`, `list_dir`) across `docs/` or `.along/` directories to search for documentation or project issues. Directory searches targeting these paths are programmatically blocked by `[gate: fast-retrieval]`.
+To keep latency and prompt context low:
+1. **Search Before Scanning**: Query `along kb-search` before scanning `docs/` or `.along/` with directory search tools; a targeted grep is fine once you know what to look for.
 2. **No Speculative File Reading**: Agents MUST NOT open and read whole files sequentially with `view_file` to search for concepts. Query `along kb-search` first, then inspect only the specific target file if edits are required.
 3. **Single-Shot Invocation**: Agents MUST execute the deterministic search engine in a single command.
 

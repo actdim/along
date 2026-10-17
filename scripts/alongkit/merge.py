@@ -115,7 +115,7 @@ def text_merge(base: str, ours: str, theirs: str, path: str = "") -> Tuple[str, 
             ["git", "merge-file", "-p",
              "-L", f"ours:{label}", "-L", f"base:{label}", "-L", f"theirs:{label}",
              *names],
-            check=False, trip_on_anomaly=False)
+            check=False)
         if result.returncode < 0 or result.returncode > 127:
             raise RuntimeError(f"git merge-file failed: {result.stderr.strip()}")
         return result.stdout, result.returncode == 0
@@ -155,7 +155,7 @@ def git_dir(cwd: Optional[str] = None) -> Optional[str]:
     from . import proc
 
     result = proc.run_capture(["git", "rev-parse", "--absolute-git-dir"], cwd=cwd,
-                              check=False, trip_on_anomaly=False)
+                              check=False)
     if not result.ok:
         return None
     return result.stdout.strip() or None
@@ -436,7 +436,7 @@ def render_gitattributes(current: str, repo_root: str, uninstall: bool = False) 
 def _git_config(repo_root: str, *args: str):
     from . import proc
     return proc.run_capture(["git", "config", "--local", *args], cwd=repo_root,
-                            check=False, trip_on_anomaly=False)
+                            check=False)
 
 
 def desired_config() -> Dict[str, str]:
@@ -543,8 +543,7 @@ def resync(repo_root: str, kb_script: Optional[str] = None) -> List[str]:
             done.append(repo.canonical_relpath(os.path.join(root, ".along", "CONSTRAINTS.md"), repo_root))
 
     if kb_script and os.path.isdir(os.path.join(repo_root, "docs")):
-        result = proc.run_capture([sys.executable, kb_script], cwd=repo_root, check=False,
-                                  trip_on_anomaly=False)
+        result = proc.run_capture([sys.executable, kb_script], cwd=repo_root, check=False)
         if result.ok:
             done.append("docs/INDEX.md")
         else:

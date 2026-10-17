@@ -177,15 +177,14 @@ class TestCliSafetyGate(unittest.TestCase):
         self.assertEqual(result.decision, GateDecision.DENY)
         self.assertIn("Inline Python file writer", result.reason or "")
 
-    def test_destructive_git_wipe_is_denied(self):
+    def test_git_reset_hard_is_left_to_destructive_command(self):
+        # [debt--gate-simplification]: judged by git status in alongkit.hooks.deletion.
         event = HookEvent(
             event_type=HookEventType.PRE_TOOL_USE,
             tool_name="run_command",
             tool_args={"CommandLine": "git reset --hard HEAD~1"},
         )
-        result = self.gate.evaluate(event)
-        self.assertEqual(result.decision, GateDecision.DENY)
-        self.assertIn("git reset --hard", result.reason or "")
+        self.assertEqual(self.gate.evaluate(event).decision, GateDecision.ALLOW)
 
     def test_global_npm_install_is_denied(self):
         event = HookEvent(
@@ -243,40 +242,39 @@ class TestEngineGovernanceAndAudit(unittest.TestCase):
     def test_shadow_mode_permits_execution_and_logs(self):
         with tempfile.TemporaryDirectory() as tmp:
             along_dir = os.path.join(tmp, ".along")
-            # An installation without an issue board: only the typography gate speaks.
+            # An installation without an issue board: only the cli_safety gate speaks.
             os.makedirs(along_dir, exist_ok=True)
             with open(os.path.join(along_dir, "HISTORY.md"), "w", encoding="utf-8") as fh:
                 fh.write("# History\n")
 
             config = HooksConfig(
                 mode=HookMode.SHADOW,
-                gates={"typography": HookMode.SHADOW},
+                gates={"cli_safety": HookMode.SHADOW},
             )
             engine = HookEngine(config=config)
 
-            bad_text = f"bad {EM_DASH} text\n"
             event = HookEvent(
                 event_type=HookEventType.PRE_TOOL_USE,
-                tool_name="write_to_file",
-                tool_args={"TargetFile": "foo.py", "CodeContent": bad_text},
+                tool_name="run_command",
+                tool_args={"CommandLine": "cat <<EOF > foo.py\nx = 1\nEOF"},
                 workspace_root=tmp,
             )
 
-            session.approve_plan(tmp)
             result = engine.evaluate(event, repo_root=tmp)
             # In shadow mode, decision remains ALLOW
             self.assertEqual(result.decision, GateDecision.ALLOW)
 
-            # Audit file must be created
+            # Audit file must be created; a shadow record says `warn` [debt--gate-simplification]
             audit_file = os.path.join(along_dir, "diagnostics", "hooks_audit.jsonl")
             self.assertTrue(os.path.isfile(audit_file))
             with open(audit_file, "r", encoding="utf-8") as handle:
                 lines = handle.readlines()
             self.assertEqual(len(lines), 1)
             record = json.loads(lines[0])
-            self.assertEqual(record["gate"], "typography")
+            self.assertEqual(record["gate"], "cli_safety")
             self.assertEqual(record["mode"], HookMode.SHADOW)
-            self.assertEqual(record["decision"], "deny")
+            self.assertEqual(record["decision"], "warn")
+            self.assertIn("cat <<EOF", record["target"])
 
     def test_enforce_mode_blocks_execution(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -285,21 +283,20 @@ class TestEngineGovernanceAndAudit(unittest.TestCase):
 
             config = HooksConfig(
                 mode=HookMode.ENFORCE,
-                gates={"typography": HookMode.ENFORCE},
+                gates={"cli_safety": HookMode.ENFORCE},
             )
             engine = HookEngine(config=config)
 
-            bad_text = f"bad {EM_DASH} text\n"
             event = HookEvent(
                 event_type=HookEventType.PRE_TOOL_USE,
-                tool_name="write_to_file",
-                tool_args={"TargetFile": "foo.py", "CodeContent": bad_text},
+                tool_name="run_command",
+                tool_args={"CommandLine": "cat <<EOF > foo.py\nx = 1\nEOF"},
                 workspace_root=tmp,
             )
 
             result = engine.evaluate(event, repo_root=tmp)
             self.assertEqual(result.decision, GateDecision.DENY)
-            self.assertIn("em dash", result.reason or "")
+            self.assertIn("Heredoc", result.reason or "")
 
             audit_file = os.path.join(along_dir, "diagnostics", "hooks_audit.jsonl")
             self.assertTrue(os.path.isfile(audit_file))
@@ -312,8 +309,8 @@ class TestAlongHookCliE2E(unittest.TestCase):
             "toolCall": {
                 "name": "write_to_file",
                 "args": {
-                    "TargetFile": "test.py",
-                    "CodeContent": f"bad {EM_DASH} code\n",
+                    "TargetFile": ".along/ISSUES.md",
+                    "CodeContent": "# hand-edited board\n",
                 },
             },
         })
@@ -328,7 +325,7 @@ class TestAlongHookCliE2E(unittest.TestCase):
             self.assertEqual(res.returncode, 0)
             data = json.loads(res.stdout)
             self.assertEqual(data["decision"], "deny")
-            self.assertIn("Typography Gate Violation", data["reason"])
+            self.assertIn("Projection Protection Violation", data["reason"])
 
 
 class TestInstallAntigravityHooks(unittest.TestCase):

@@ -28,13 +28,10 @@ class HookMode:
     OFF = "off"
 
 
-#: cli_safety enforces like every other gate; the AGENTS.md rule is mandatory, and shadow mode
-#: let heredocs through. Override per repo in `.along/config.json` hooks.gates or with
-#: ALONG_HOOK_MODE. See [bug--cli-safety-heredoc-gaps].
+#: Baseline modes of gates whose catalogue profiles do not decide alone. Override per repo in
+#: `.along/config.json` hooks.gates or with ALONG_HOOK_MODE.
 DEFAULT_GATE_MODES: Dict[str, str] = {
-    "typography": HookMode.ENFORCE,
     "projection_protection": HookMode.ENFORCE,
-    "cli_safety": HookMode.ENFORCE,
     "wrapped_work_uncommitted": HookMode.SHADOW,
 }
 
@@ -44,7 +41,6 @@ DEFAULT_GATE_MODES: Dict[str, str] = {
 STATE_LAYER_GATES: Tuple[str, ...] = (
     "require_active_issue",
     "projection_protection",
-    "typography",
     "test_before_stop",
 )
 
@@ -75,7 +71,6 @@ GATE_TIERS: Dict[str, str] = {
     "no_tracked_secrets": TIER_INVARIANT,
     "projection_protection": TIER_INVARIANT,
     "rule_pack_protection": TIER_INVARIANT,
-    "circuit_breaker": TIER_INVARIANT,
     "entity_deletion_protection": TIER_INVARIANT,
     "wrapped_work_uncommitted": TIER_ADVISORY,
     "projection_sync_before_stop": TIER_ADVISORY,
@@ -234,13 +229,34 @@ def _get_audit_redactor() -> Redactor:
     return _AUDIT_REDACTOR
 
 
+#: Longest audit `target` kept; a longer command is cut with "...".
+AUDIT_TARGET_MAX = 200
+
+
+def audit_target(event: HookEvent) -> Optional[str]:
+    """The command or file path an event acts on, cut to AUDIT_TARGET_MAX (not yet redacted)."""
+    args = event.tool_args or {}
+    for key in ("CommandLine", "command", "cmd", "TargetFile", "target_file", "file_path", "FilePath",
+                "path", "notebook_path"):
+        value = args.get(key)
+        if isinstance(value, str) and value.strip():
+            text = " ".join(value.split())
+            return text if len(text) <= AUDIT_TARGET_MAX else text[:AUDIT_TARGET_MAX - 3] + "..."
+    return None
+
+
 def record_audit_entry(
     repo_root: Optional[str],
     event: HookEvent,
     result: GateResult,
     mode: str,
 ) -> None:
-    """Append a violation record to .along/diagnostics/hooks_audit.jsonl."""
+    """Append a violation record to .along/diagnostics/hooks_audit.jsonl.
+
+    `decision` is `warn` for a shadow-mode record (nothing was blocked); `target` is the
+    redacted command or path the gate judged, so false positives can be measured.
+    [debt--gate-simplification]
+    """
     if not repo_root:
         repo_root = repo.find_repo_root()
     if not repo_root:
@@ -250,16 +266,22 @@ def record_audit_entry(
         diagnostics_dir = repo.ensure_diagnostics_dir(repo_root)
         audit_file = os.path.join(diagnostics_dir, "hooks_audit.jsonl")
         redactor = _get_audit_redactor()
+        target = audit_target(event)
+        decision = result.decision.value
+        if mode == HookMode.SHADOW and decision != "allow":
+            decision = "warn"
         entry = {
             "timestamp": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
             "gate": redactor.sanitize_text(result.gate_name) if result.gate_name else result.gate_name,
-            "decision": result.decision.value,
+            "decision": decision,
             "mode": mode,
             "runtime": redactor.sanitize_text(event.runtime) if event.runtime else event.runtime,
             "tool": redactor.sanitize_text(event.tool_name) if event.tool_name else event.tool_name,
             "reason": redactor.sanitize_text(result.reason) if result.reason else result.reason,
             "conversation_id": redactor.sanitize_text(event.conversation_id) if isinstance(event.conversation_id, str) else event.conversation_id,
             "step_idx": event.step_idx,
+            # Appended last: earlier keys keep their order for existing readers.
+            "target": redactor.sanitize_text(target) if target else None,
         }
         with open(audit_file, "a", encoding="utf-8") as handle:
             handle.write(json.dumps(entry) + "\n")

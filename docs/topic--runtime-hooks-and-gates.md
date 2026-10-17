@@ -4,11 +4,10 @@ slug: runtime-hooks-and-gates
 title: Runtime Lifecycle Hooks & Mechanical Gates
 type: architecture
 created: 2026-09-11
-updated: 2026-10-12
-tags: [hooks, gates, runtime, enforcement, antigravity, claude, codex, typography, cli-safety, circuit-breaker, attribution]
+updated: 2026-10-17
+tags: [hooks, gates, runtime, enforcement, antigravity, claude, codex, typography, cli-safety, destructive-command, attribution]
 sources:
   - path: scripts/alongkit/attribution.py
-  - path: scripts/alongkit/circuit.py
   - path: scripts/alongkit/repochecks.py
   - path: scripts/alongkit/hooks/engine.py
   - path: scripts/along_hook.py
@@ -16,7 +15,8 @@ sources:
   - path: scripts/alongkit/repo.py
   - path: scripts/alongkit/hooks/adapters/claude.py
   - path: scripts/alongkit/hooks/adapters/codex.py
-  - path: scripts/alongkit/hooks/toolnature.py
+  - path: scripts/alongkit/hooks/turnstate.py
+  - path: scripts/alongkit/hooks/deletion.py
 ---
 
 # Runtime Lifecycle Hooks & Mechanical Gates
@@ -53,7 +53,7 @@ The Along Runtime Hook and Gate System establishes deterministic, programmatic i
 |  2. Stateless Content & Command Gates (alongkit.hooks.gates):           |
 |     - TypographyGate: blocks non-ASCII typography (table in typography) |
 |     - ProjectionProtectionGate: blocks manual edits to ISSUES.md/INDEX  |
-|     - CliSafetyGate: blocks heredocs, inline python writers, wipes      |
+|     - CliSafetyGate: warns on heredocs, inline writers, global installs |
 |                                                                         |
 |  3. Runtime Adapters (alongkit.hooks.adapters):                         |
 |     - AntigravityAdapter: JSON { decision: "deny" | "allow" }          |
@@ -73,8 +73,8 @@ The Along Runtime Hook and Gate System establishes deterministic, programmatic i
 - `GateResult`: Carries the final decision, remediation message, gate identifier, and optional argument overwrites.
 
 ### 2.2 Gate Implementations (`alongkit.hooks.gates`)
-1. **`TypographyGate`**:
-   - Intercepts file mutation tools (`write_to_file`, `replace_file_content`).
+1. **`TypographyGate`** (`typography`):
+   - Runs at commit only (`enforcement: [git, ci]`: pre-commit, CI and `along lint`); there is no runtime hook on file writes.
    - Uses `alongkit.typography.findings()` to scan text payloads.
    - Forbids em-dashes (U+2014), en-dashes (U+2013), math minus (U+2212), curly quotes (U+201C, U+201D), guillemets (U+00AB, U+00BB), ellipsis glyphs (U+2026), and non-breaking spaces (U+00A0, U+202F, U+200B).
    - Exempts localized resource directories (`locales/`, `i18n/`, `translations/`).
@@ -85,7 +85,7 @@ The Along Runtime Hook and Gate System establishes deterministic, programmatic i
    - Instructs agents to mutate atomic files (`.along/ISSUES/<type>--<slug>.md`) and run compiler sync commands.
 3. **`CliSafetyGate`**:
    - Intercepts command execution tools (`run_command`, `execute_command`, `bash`).
-   - Scans command strings for forbidden patterns: heredocs (`<<EOF`), inline Python file writers (`python -c "open('...', 'w')"`), destructive unstaged Git wipes (`git reset --hard`, `git clean -f`), and unauthorized global package managers (`npm install -g`).
+   - Scans command strings for heredocs (`<<EOF`), inline Python file writers (`python -c "open('...', 'w')"`) and unauthorized global package managers (`npm install -g`). It is a warning in every profile (`cli_safety`); `git reset --hard` and `git clean -f` belong to `destructive_command` (see 2.11).
    - The echo/printf file-writer rule (`alongkit.hooks.shellwrite`) is quote-aware: it flags only `echo` / `printf` / `Write-Output ... > file`, `>> file`, `1> file`, `&> file` and `echo ... | tee file`. `2>/dev/null`, `>/dev/null`, `2>&1`, `&>/dev/null`, `>&2`, other pipes and a `>` inside quotes pass.
 4. **`DocRoutingComplianceGate`** (`doc_routing_compliance`):
    - Intercepts file mutation tools (`write_to_file`, `replace_file_content`, etc.).
@@ -95,7 +95,7 @@ The Along Runtime Hook and Gate System establishes deterministic, programmatic i
    - Enforced across runtime hooks, git `pre-commit`, `--ci`, `along kb sync`, and `along doctor`.
 
 ### 2.3 Declarative Extension & Traceability Matrix
-Beyond hardcoded Python gates, Along provides an extensible, declarative YAML gate catalogue (`default_gates.yaml` and `.along/rules/gates.yaml`) enforcing 26 canonical gates, 7 of them git/CI-only repository-state checks (including `require_plan_approval` for inquiry read-only locks, `circuit_breaker`, `worktree_env_readiness`, and `workspace_containment`, which keeps file, search and shell-cwd paths inside the workspace; see [Declarative Gates](./topic--declarative-gates-and-traceability.md)), verified bi-directionally against prose badges (`[gate: <id>]`) via `along hook verify`.
+Beyond hardcoded Python gates, Along provides an extensible, declarative YAML gate catalogue (`default_gates.yaml` and `.along/rules/gates.yaml`) enforcing 33 canonical gates, 11 of them git/CI-only commit-time checks (typography, anti-stub, AI co-author trailers, code fences, links, entry point, filenames, exports, issue lifecycle, session records, secrets; run on demand by `along lint`). Runtime gates include `require_plan_approval` (file-tool target path before the write, `git status` at turn end), `destructive_command`, `worktree_env_readiness` and `workspace_containment`, which keeps file, search and shell-cwd paths inside the workspace; see [Declarative Gates](./topic--declarative-gates-and-traceability.md). The catalogue is verified bi-directionally against prose badges (`[gate: <id>]`) via `along hook verify`.
 For full specification and architecture, see [Declarative Gate Engine & Traceability Matrix](./topic--declarative-gates-and-traceability.md).
 
 
@@ -121,29 +121,24 @@ For full specification and architecture, see [Declarative Gate Engine & Traceabi
 - Subcommand `along run <cmd...>` (and `along_hook.py run <cmd...>`): Command proxy wrapper evaluating `run_command` through `HookEngine` prior to execution. Provides mechanical gate enforcement in environments without native PreToolUse lifecycle hooks (OpenCode, CI, and external terminals).
 - Subcommand `along hook verify`: Audits bi-directional traceability between prose badges and YAML gates.
 
-### 2.6 Systemic Anomaly Circuit Breaker (`alongkit.circuit`)
-When deep infrastructure or toolchain failures occur (corrupted `.git/index`, NTFS file locks, permission denials, missing system binaries, or repeated syntax edit thrashing), probabilistic LLMs often enter destructive self-healing loops (e.g. attempting unauthorized global package installations or repeatedly overwriting corrupted files).
-
-The Circuit Breaker (`[gate: circuit-breaker]`) acts as a programmatic hard stop:
-- **5 Systemic Anomaly Classes**:
-  - Class 1: VCS & Repository State Corruption (truncated `.git/index`, bad index signature, stale `index.lock`, loose object corruption). Read only from git's own output (`fatal:` / `error:` lines of a `git` command); a test suite or tool that prints these signatures is data, and quality gates (`run_repository_tests`, `syntax_gate`) never classify. Before tripping, an independent `git status` must fail too; when it succeeds, a warning is printed instead.
-  - Class 2: OS & Filesystem Contention (NTFS/POSIX sharing violations, `EACCES`, `EBUSY`, permission denied, disk full).
-  - Class 3: Global Environment & Toolchain Defects (missing `uv`/`git`/`python`, unauthorized global package manager commands like `pip install` or `npm install -g`).
-  - Class 4: Process Cascades & Zombie Hangs (process timeouts, zombie runners).
-  - Class 5: Syntax Churn & Self-Destructive Edit Loops (consecutive syntax compilation failures on the same file >= 2 times).
-- **Zero-Retry Tripping**: Trips immediately to `TRIPPED` state in `.along/diagnostics/circuit_breaker.json`, prints a standardized high-visibility human escalation banner with the evidence (source command and first output line), and blocks modifying tool calls via `PreToolUse`.
-- **No Trap**: Read-only commands (`git status`, `along doctor`, file reads) and `along circuit` still run while tripped, so a false trip can be diagnosed. Stop gates whose demand needs a held command (`projection_sync_before_stop`, `wrap_before_stop`, ...) report the pending step instead of rejecting the turn.
-- **Pre-Flight Health Probe & Resumption Gate**: Requires human remediation and execution of `along circuit reset`, which executes `run_health_probe()` (verifying `.git/index` size, that `git status` reads it, absence of stale locks, and clean AST syntax) before unlocking agent tools. The cleared anomaly moves to `history` with `resolved_at`.
+### 2.6 End-of-Turn Result Check (`alongkit.hooks.turnstate`)
+Gates do not predict harm from command text: whether a shell command writes is not decidable before it runs (`debt--gate-simplification`). `require_plan_approval` (catalogue `event: [PreToolUse, Stop]`) judges facts instead:
+- **Before a file-writing tool** (`PreToolUse`): the target path. It holds a write to a repository file that is not a planning or session artifact while no plan is approved. Shell commands are never checked before they run.
+- **Baseline** (`UserPromptSubmit`): `turnstate.snapshot` records `git status --porcelain -uall` plus content hashes of the dirty files as `turn_baseline` in the session activity trace.
+- **At turn end** (`Stop`): `turnstate.changed_since` compares the working tree with the baseline. Paths the turn changed outside Along state (`.along/**`, except `.along/scripts/**`) and planning artifacts, with no approved plan, hold the turn once: `PLAN_REQUIRED [gate: require-plan-approval]: this turn changed <files> ... Ask the user: approve (...) or revert (...)`. Files already dirty before the turn and unchanged are not attributed to it.
+- **One continuation**: Claude Code's `stop_hook_active` keeps the hold to a single continuation. Antigravity still gets ASK for file-tool holds.
+- **Commits** (`along commit`, `git commit`) are not held by this gate.
+- **Process hangs** are handled by runner timeouts; there is no circuit breaker and Stop gates do not wait on one.
 
 ### 2.7 Commit Attribution Policy (`alongkit.attribution`)
-Agent runtimes append `Co-Authored-By:` trailers naming themselves (for example `Claude ... <noreply@anthropic.com>`). GitHub resolves the trailer email to an account and lists the vendor as a repository contributor; undoing it later needs a history rewrite and a force-push. `[gate: commit-no-ai-coauthor]` keeps the trailers out in three layers:
+Agent runtimes append `Co-Authored-By:` trailers naming themselves (for example `Claude ... <noreply@anthropic.com>`). GitHub resolves the trailer email to an account and lists the vendor as a repository contributor; undoing it later needs a history rewrite and a force-push. The `commit_no_ai_coauthor` gate (`enforcement: [git, ci]`) and the attribution settings keep the trailers out in three layers:
 
 | Layer | Where | What it does |
 | :--- | :--- | :--- |
 | Runtime config | `along hook install --runtime claude` | Sets `attribution.commit = ""` and legacy `includeCoAuthoredBy = false` in `settings.json`; other keys are kept. |
 | Runtime config | `along hook install --runtime cursor --global` | Sets `attribution.attributeCommitsToAgent = false` in `~/.cursor/cli-config.json`. |
 | Reconcile | `along hook attribution [--runtime claude\|cursor\|all]`, `install.ps1` / `install.sh`, every `/along-update` run | `reconcile_attribution` writes only the attribution keys above, only for runtime homes that already exist, even when the install is up to date. `--no-hooks` skips it in `/along-update`. |
-| Gate | `commit_no_ai_coauthor` (`predicates.check_ai_coauthor`) | Denies `git commit` whose command line or `-F` message file carries an AI co-author trailer. Human co-authors pass. |
+| Gate | `commit_no_ai_coauthor` (`predicates.check_ai_coauthor`) | Rejects a commit whose message carries an AI co-author trailer, at commit time (commit-msg hook, CI, `along lint`). Human co-authors pass. |
 | Commit engine | `/along-commit` | Strips AI co-author trailers from the message before committing. |
 
 Codex and Antigravity document no attribution key; for them the gate and `/along-commit` are the only layers. Opt out per repository with `.along/config.json`:
@@ -159,20 +154,19 @@ Several agent sessions may work in one repository at once, so gates never read a
 - **Resolution** (`session.resolve_active_session`): `ALONG_ISSUE_SLUG` (runner) > own binding > the single in-progress blackboard not bound to another session > none. Several unbound candidates are `ambiguous`: gates refuse and point at `along start <slug>`. A single candidate names the issue, but its blackboard's `plan_approved` counts only for the session bound to it (or a runner's `ALONG_ISSUE_SLUG`): an unbound session with a known id never inherits the approval of a blackboard whose session ended. Runtimes that pass no session id keep it.
 - **Plan approval**: `along start` binds with `phase: planning`, `plan_approved: false`. Approval is recorded per session when the user accepts a plan in Claude Code (`PostToolUse` on `ExitPlanMode`; the plan text from `tool_input.plan` is written into the blackboard `plan.md`, or kept as `pending_plan` in the binding until the first `along start`), or by `along plan approve [<slug>] [--plan-file <path>]` after the user's explicit yes, which is refused while `plan.md` is still the scaffold (`session.is_scaffold_plan`); an approval given before `along start` carries over to the first bound slug, and an `ExitPlanMode` approval carries over to a newly started slug until the user's next message (the plan is recorded under the new slug). `along start --approved` is for scripted runs.
 - **User reply check** (`session.record_user_prompt`, `session.check_cli_approval`): the Claude Code `UserPromptSubmit` hook records the time of the user's last message in `.along/.session/prompts/<key>.json` (it does not bind the session). CLI approvals (`along plan approve`, `along start --approved`, `along scratch approve|phase --approve|update --approve`) are refused when the plan file changed after that message ("plan changed after the user's last message; show it and wait for a reply"); with no recorded message they pass as `approved_via: cli-unverified`. Bindings record `approved_via` (`exit-plan-mode` | `cli` | `cli-unverified`), `approved_at` and `plan_sha256`. The denial hint reads: "Call EnterPlanMode, write the plan, then ExitPlanMode. If plan mode is unavailable, show the plan in chat and wait for the user's reply; run 'along plan approve' only after that reply."
-- **Compound commands**: before approval a compound command passes when each segment is read-only, an Along state / maintenance command or a verification run (`shellparse.is_plan_gate_exempt`). Read-only Along subcommands (`_ALONG_READ`) include `sanitize` (check mode), `issue show`, `milestone show`, `kb search`, `gates check` and `gates stats`. Along state commands (`issue`, `start`, `scratch`, `plan`, `decision`, `milestone`, `session`, `wrap`, `kb sync`), Along maintenance commands (`update`, `init`, `migrate`, `doctor`, `hook install`, `git setup|sync`, `rules attach|restore`; not `uninstall`) and writes to `.along/ISSUES|RISKS|SPIKES|SESSIONS|.session|diagnostics` pass `require_plan_approval`, so an issue can be written and started before a plan exists. `along commit` is not a state command (see completion tokens below).
+- **What the plan gate holds** (see 2.6): file-tool writes to repository files before approval, and at turn end the files the turn changed according to `git status`. Shell commands are never classified before they run. File-tool writes to `.along/ISSUES|RISKS|SPIKES|SESSIONS|.session|diagnostics` and planning artifacts (`implementation_plan.md`, `walkthrough.md`, `living_plan.md`) pass, and the end-of-turn check ignores Along state under `.along/` (except `.along/scripts/`), so an issue can be written and started before a plan exists.
 - **Unbound sessions**: `require_plan_approval` and `test_before_stop` hold only sessions bound to an issue (`along start`, or `ALONG_ISSUE_SLUG` from a runner). A repository that wants unbound sessions held too sets `enforce_unbound: true` for those gates in `.along/rules/gates.yaml` (this repository does). `require_active_issue` is unaffected: source edits still need an in-progress issue.
-- **Completion tokens**: `along wrap` purges the blackboard and every binding of the wrapped slug. The wrapping session, if its plan for that slug was approved, keeps a token in its binding (`completed: [{slug, approved_at, wrapped_at}]`; `slug` and approval cleared). Without an approved plan, `require_plan_approval` lets an `along commit` through only when its `-i/--issue <slug>` (bare or `<type>--<slug>`) is a token of this session (`shellparse.along_commit_issue`, `session.completion_tokens`). The token is used up by the successful `along commit` of that issue, ignored after 72 h (by `wrapped_at`), survives `along start <other>`, and leaves with the binding (`along session gc`). `along scratch purge` leaves no token. Everything else stays held, with the cause in the message: no `-i`, no token in this session, a token held by another session, `--fix-typography` (rewrites files), a write redirect, a commit chained with a mutation, raw `git commit` / `git push`. A bound session with an approved plan commits as before.
-- **Read-only shell commands**: before approval, `alongkit.hooks.shellparse.is_read_only_command` lets a shell call through only when every segment reads: inspection commands and pure filters (`cat`, `grep`, `head`, `tail`, `cut`, `sort`, `uniq`, `tr`, `diff`, `od`, `date`, `Test-Path`, `Select-Object`, `Measure-Object`, `Get-ChildItem`, `Get-Content`, `Compare-Object`, `Out-String`, `Out-Null`, `Out-Host`), `sed` without `-i`, `-f` or `w`/`W`/`e` script commands, `awk` without `-i inplace`, `-f`, `system()` or print redirection/pipes, `find` without `-exec`/`-delete`/`-fprint*`, and test runs. PowerShell script blocks (`ForEach-Object { ... }`, `Measure-Command { ... }`, `Where-Object { ... }`, bare `{ ... }`) pass when every statement inside reads (including pipeline expressions like `$_.Name`). Bash arithmetic expansions (`$(( ... ))`) pass when all enclosed substitutions are read-only. Redirections into null devices, temporary paths (`$env:TEMP`, `%TEMP%`, `/tmp`), `.along/artifacts/` and `.along/.session/` do not count as working-tree mutations. Along CLI invocations (`along`, `along_exec.py`, `scripts/along_*.py`, `.along/scripts/*.py`, `along-*`) carrying `--help` or `-h` pass regardless of subcommand. Git passes for subcommands that only read (`status`, `diff`, `log`, `show`, `rev-parse`, `describe`, `ls-remote`, `ls-files`, `ls-tree`, `cat-file`, `rev-list`, `for-each-ref`, `show-ref`, `blame`, `shortlog`, `merge-base`, `grep`, ...) and for the listing forms of `branch`, `tag` (bare, `-l`, `--contains`, `--sort`, `-v`, ...), `remote` (bare, `-v`, `show`, `get-url`), `stash list|show`, `config --get*|--list|get|list`, `reflog [show]`, `worktree list` and `notes list|show`; creating, deleting or reconfiguring forms stay held. Global options pass only when they neither run nor write (`--no-pager`, `-P`, `-C <dir>`); `-c`, `--upload-pack`, `grep -O` and `--ext-diff` can run a command and stay held. `git fetch` updates refs and is not read-only.
-- **Verification commands** (`shellparse.is_verification_command`) pass in every phase: builds, tests, linters and type checkers (`dotnet build|test`, `cargo build|check|test|clippy`, `go build|vet|test`, `npm|pnpm|yarn [run] build|test|lint|typecheck|check`, `tsc`, `mypy`, `pyright`, `ruff check`, `eslint`, `along build|test`). They write build output, never sources; `--fix`, formatters, snapshot updates and output redirection are excluded. Without this, test-before-stop could demand a run the plan gate forbids. `$(...)` and backquote substitutions are classified recursively, and shell keywords (`for ... in`, `do`, `done`, `if`, `then`, `else`, `fi`, `while`) defer to the commands they wrap.
+- **Completion tokens**: `along wrap` purges the blackboard and every binding of the wrapped slug. The wrapping session, if its plan for that slug was approved, keeps a token in its binding (`completed: [{slug, approved_at, wrapped_at}]`; `slug` and approval cleared). The token is ignored after 72 h (by `wrapped_at`), survives `along start <other>`, and leaves with the binding (`along session gc`). `along scratch purge` leaves no token. Tokens and closeout approvals serve `along session close` and the `wrapped_work_uncommitted` warning; commits are not held by `require_plan_approval`.
+- **Shell parsing** (`alongkit.hooks.shellparse`): only `split_segments()` and `words()` remain, used to find the explicit forms of `destructive_command` (2.11) and entity deletions (`entity_deletion_protection`). Command substitutions become the placeholder word `SUBST`. There is no read-only or verification classification, so tests and builds run in every phase without a special case.
 - **Session root**: the hook evaluates against the session's project, not the agent's current shell cwd (which follows `cd`). With Claude Code, `CLAUDE_PROJECT_DIR` anchors the root whenever the cwd lies inside it (`repo.find_session_root`), so session bindings and containment survive a `cd` into a nested `.along/` context.
 - **Entity reference integrity**: the Stop predicate runs only after an entity file changed and blocks only problems absent at `HEAD` (`gitgates.baseline_entity_problems` validates a `git archive` snapshot of every `.along/` entity dir); problems already committed are left to `along doctor --entities`. Schema findings on archived issues (`.along/ISSUES/done/`: enums, dates, slug, dangling milestone) are warnings marked `(archived issue)`, so an older archive never fails `along update` or `issue sync`; dangling issue references stay errors there too. `along doctor --fix` is not read-only for the plan gate. References resolve upward (enclosing contexts up to the outermost one below home, crossing nested git / submodule boundaries; the snapshot check adds the working-tree keys of contexts above the git top, `gitgates.outer_context_keys`) and downward (nested subproject contexts, `entities.descendant_entity_keys`) and sideways (sibling contexts of the same git repository, `entities.sibling_entity_keys`).
 - **Repository-level `.along/.session/state.json`** is read only for runtimes that pass no session id; `purge` removes it when it points at the purged slug.
 - **Housekeeping**: `along plan status`, `along session bindings`, `along session gc [--dry-run]` (bindings older than 72 h or without a blackboard). `along scratch purge` / `along wrap` remove the slug's bindings (`along wrap` keeps the wrapping session's completion token).
-- **Activity trace** (`test_before_stop`): per session in `.along/diagnostics/activity/<key>.json`; edits under `.along/` are not source edits, and documentation edits (Markdown anywhere, anything under a `docs/`) count only when the gate sets `count_docs: true` (this repository does, since its suite tests Markdown). Under `count_docs: true`, doc-only edits can be satisfied by a scoped run of Markdown-facing tests (`along test --doc` or `python .along/scripts/test.py --doc`, running declared `doc_tests: [...]` from `.along/rules/gates.yaml`) rather than the full suite. The activity trace tracks `last_doc_test_time` separately from `last_test_time`. Only what the gates let through is recorded: an edit on `PostToolUse` (the tool succeeded), a test run on `PreToolUse` after every gate allowed it, so changes made outside the session or writes a gate rejected never count. Where `.along/scripts/test.py` exists only `along test` / that script count as a test run; raw runners are named in the Stop message. The gate is quiet while the circuit breaker is tripped, since no command could run.
+- **Activity trace** (`test_before_stop`): per session in `.along/diagnostics/activity/<key>.json`; edits under `.along/` are not source edits, and documentation edits (Markdown anywhere, anything under a `docs/`) count only when the gate sets `count_docs: true` (this repository does, since its suite tests Markdown). Under `count_docs: true`, doc-only edits can be satisfied by a scoped run of Markdown-facing tests (`along test --doc` or `python .along/scripts/test.py --doc`, running declared `doc_tests: [...]` from `.along/rules/gates.yaml`) rather than the full suite. The activity trace tracks `last_doc_test_time` separately from `last_test_time`. Only what the gates let through is recorded: an edit on `PostToolUse` (the tool succeeded), a test run on `PreToolUse` after every gate allowed it, so changes made outside the session or writes a gate rejected never count. Where `.along/scripts/test.py` exists only `along test` / that script count as a test run; raw runners are named in the Stop message. The same trace holds `turn_baseline` (2.6).
 - **Execution trace** (`session.trace_event`): the bound issue's `.along/.session/<slug>/execution_trace.md` records, in direct and role-based mode, every repository edit (`PostToolUse`, except `.along/.session/**` and diagnostics; repeated edits of a path collapse to `(xN)`), enforced gate denials (`engine.py` -> `predicates.record_gate_denial`), plan recorded / approved, phase, step and retry changes (`session.update_state`), and test runs with their result from `along test` and the wrap / commit test gate (`gates.run_repository_tests`). Raw runners are not traced (no Bash `PostToolUse`). Unbound sessions write nothing; the trace keeps the newest 400 entries. See [Session Lifecycle](./topic--session-lifecycle.md).
 - **Session event ledger** (ADR-2026-10-05--session-event-ledger-feeds-telemetry): the same capture points append one versioned record `{schema, ts, session, slug, kind, path, path_kind, ok}` (`kind`: edit, test, plan, approve; `path_kind`: source, docs, state; `path` relative to the workspace root) to `.along/.session/<slug>/events.jsonl` (`session.record_event`, append only, at most 2000 events per issue, oldest edits dropped first). It is the source of truth for attribution and closeout readiness (`alongkit.closeout`); the session log keeps it as `### Attributed Files`. A failed append is reported on stderr and counted in `.along/diagnostics/ledger_errors.json`, which blocks that issue's closeout. With a runner Tracer, the PostToolUse span event carries the same record (`along.session.key`, `along.event.*`, `along.issue.slug`; fail-open).
 - **Test reuse** (`alongkit.testruns`): every test run is recorded with the tree hash of the working tree (`git write-tree` through a throwaway index; `.along/` except `.along/scripts/`, KB projections and `__pycache__` left out) in `.along/diagnostics/test_runs.json`. The Stop gate (`test_before_stop`) as well as `along wrap`, `along commit` and `along bump` reuse the last run on the same tree when it was green (`testruns.green_run_for(repo_root, tree_hash)`), allowing clean or reverted trees to pass immediately without re-running tests. `along bump` records a green run for the post-bump tree so `along wrap` can reuse it. `along test` always runs.
-- **Diagnostics** (`hooks_audit.jsonl`, activity traces, `hook_heartbeat.json`, circuit breaker) are machine-local: `.along/diagnostics/` carries its own `*` `.gitignore`. They go to the resolved state directory (`repo.diagnostics_dir`); without one they go to `~/.along/diagnostics/workspaces/<path>/`. The hooks never create a `.along/` of their own.
+- **Diagnostics** (`hooks_audit.jsonl`, activity traces, `hook_heartbeat.json`) are machine-local: `.along/diagnostics/` carries its own `*` `.gitignore`. They go to the resolved state directory (`repo.diagnostics_dir`); without one they go to `~/.along/diagnostics/workspaces/<path>/`. The hooks never create a `.along/` of their own.
 
 ### 2.9 along-team Step Discipline & Wrap Record
 - `along scratch init` creates a `role-based` blackboard (`--mode direct` opts out); `along start` creates a `direct` one. `[gate: team-step-active]` denies source edits in a role-based session while no step is `in-progress`; `[gate: team-reviews-before-stop]` blocks the turn end while a `passed` step lacks `reviews/step-N.md`.
@@ -186,37 +180,21 @@ Several agent sessions may work in one repository at once, so gates never read a
 - **`projection_sync_before_stop`** (`predicates.check_projection_sync_before_stop`): compares content (the compiled board vs `ISSUES.md`, not mtimes) in every context and rewrites a stale board itself, reporting `Auto-synced stale projection(s): ...` on stderr. It never blocks.
 - **`wrapped_work_uncommitted`** (Stop): lists in full only the current session's issues (its completion tokens, its bound slug, issues whose ledger names this session); other sessions' issues collapse to "N other session issue(s) have uncommitted attributed files ('along session list')". Without a session id everything is listed.
 - **`subproject_boundary`** (`predicates.check_subproject_boundary`): decided from the target file path and the session binding, never the shell cwd. A session bound to a subproject issue may write root `.along/` entities only on that issue's parent chain (`_bound_subproject_owns_root_entity`, `_parent_chain_slugs`); an umbrella issue covers its children at any depth (`ISSUES/` and `done/`).
-- **Gate tiers** (`hooks.config.GATE_TIERS`): `invariant` gates (`workspace_containment`, `no_tracked_secrets`, `projection_protection`, `rule_pack_protection`, `circuit_breaker`) always enforce, cannot be shadowed or disabled by repository config and have no bypass. `advisory` gates (`wrapped_work_uncommitted`, `projection_sync_before_stop`) always run in shadow. All other gates are `process` gates that follow the configured mode.
+- **Gate tiers** (`hooks.config.GATE_TIERS`): `invariant` gates (`workspace_containment`, `no_tracked_secrets`, `projection_protection`, `rule_pack_protection`, `entity_deletion_protection`) always enforce, cannot be shadowed or disabled by repository config and have no bypass. `advisory` gates (`wrapped_work_uncommitted`, `projection_sync_before_stop`) always run in shadow. All other gates are `process` gates that follow the configured mode.
 - **Bypass accountability** (`alongkit.bypass`): `along commit -n --reason`, `along wrap -n --reason` (or `--force-reason`), `along wrap --force-reason` (when a check is actually forced), `along bump -n --reason`, `along scratch fallback --reason` and `along scratch purge --force --reason` need a non-empty reason. Where user messages are recorded (Claude Code `UserPromptSubmit`), the gate must have failed in this session and the user must have replied after the failure; otherwise the bypass is allowed and marked `unverified`. Every bypass goes to the session trace and to `.along/diagnostics/hooks_audit.jsonl` (`decision: bypass`); a commit also carries an `Along-Bypass: <gate>; <verified|unverified>; <reason>` trailer.
-- **Gate stats** (`alongkit.gatestats`): `along gates stats [--since YYYY-MM-DD]` prints per-gate blocked / warned / bypassed counts from `hooks_audit.jsonl`. `along doctor` warns about gates set to shadow by config and about the most-bypassed gates (a gate bypassed about as often as it blocks is wrong or too strict).
+- **Audit record**: each `hooks_audit.jsonl` entry ends with `target`, the command or file path the gate judged (redacted with the telemetry Redactor, cut to 200 chars). A shadow-mode record carries `decision: "warn"`, not the raw `deny`, so an advisory gate such as `wrapped_work_uncommitted` no longer shows up as denials.
+- **Gate stats** (`alongkit.gatestats`): `along gates stats [--since YYYY-MM-DD]` prints per-gate blocked / warned / bypassed counts from `hooks_audit.jsonl`, plus "Repeated blocks": identical (gate, target) blocks >= 3 in one conversation, a loop indicator (entries without `target` fall back to the reason). `along doctor` warns about gates set to shadow by config and about the most-bypassed gates (a gate bypassed about as often as it blocks is wrong or too strict).
 
-### 2.11 Tool Nature Classification & Layered Rules (`alongkit.hooks.toolnature`)
-Agent tool calls and shell command segments are classified into five operational natures plus an unclassified state:
-- `read-only`: Reads repository, filesystem, or tool state without side effects (`cat`, `git status`, `along kb search`, file reads).
-- `verification`: Runs test suites, type checkers, linters, or builds that write throwaway artifacts or build caches without mutating source code (`pytest`, `along test`, `tsc`, `ruff check`).
-- `workspace-write`: Modifies files, branches, or workspace state (`write_to_file`, `git commit`, `along wrap`).
-- `external`: Interacts with external systems, networks, remote APIs, or cloud infrastructure (`curl`, `gh pr create`, `docker push`).
-- `destructive`: Permanently removes or destroys data or history (`git reset --hard`, `rm -rf`, `dropdb`). Always prompts for user confirmation.
-- `unknown`: Unclassified tool or command invocation. The `require_plan_approval` gate holds the execution and prompts the agent to ask the user for classification.
+### 2.11 Destructive Command Gate (`alongkit.hooks.deletion`)
+`destructive_command` (`predicates.check_destructive_command`, `PreToolUse` on shell tools) looks only at explicit forms, segment by segment:
+- Recursive deletes: `rm -r` / `-rf` / `--recursive`, `Remove-Item -Recurse` (`ri`, PowerShell `rm` / `rd` / `del` with `-Recurse`), `del /s`, `erase /s`, `rd /s`, `rmdir /s`.
+- History rewrites: `git clean -f`, `git reset --hard`, `git push --force` (`-f`, `--force-with-lease`).
 
-**Resolution Mechanics & Rule Hierarchy**:
-1. **Layered Resolution** (nearest / highest precedence wins):
-   - Repository layer: `.along/rules/gates.yaml` (`tools:` mapping) or `.along/tool_rules.yaml`.
-   - Global user pack: `~/.along/user-pack/tool_rules.yaml` (managed via Git, audited by `along doctor`).
-   - Rule packs: `.along/rules/**/*.yaml`.
-   - Built-in defaults: `alongkit.hooks.toolnature.DEFAULT_TOOL_RULES`.
-2. **Compound Command Analysis**:
-   - Shell command lines are split into pipelines (`|`) and chained segments (`&&`, `||`, `;`).
-   - Each segment is normalized and classified independently.
-   - The overall command takes the most dangerous nature among all segments (danger order: `read-only` < `verification` < `workspace-write` < `external` < `destructive`, with `unknown` causing gate hold).
-   - Shell output write redirections (`>`, `>>`) elevate `read-only` and `verification` commands to `workspace-write` unless targeted at null devices (`/dev/null`, `NUL`) or temporary directories.
-3. **Declarative Rule Engine & Code Classifiers**:
-   - Rules match normalized calls by tool, wildcard/piped subcommand patterns (`subcommand: "diff|status"` or `status*`), required flags (`flags`, `any_flags`), forbidden flags (`no_flags`), flag values (`flag_value`), or argument regex (`arg_regex`).
-   - Dynamic code classifiers handle complex command syntax for `git`, `python`, `sed`, `awk`, `find`, and `along`.
-4. **CLI Management**:
-   - `along tool classify "<tool_or_pattern>" <class> [--global]`: Persists a rule override to the repository or global user pack.
-   - `along tool list`: Displays all active rules and their declaring layer.
-   - `along tool explain "<command>"`: Provides segment-by-segment classification details and danger ranking.
+When it holds:
+- A delete target is empty, holds an unexpandable variable or a command substitution, is outside the repository (children of the system temp directory excepted), is or contains the repository root, or holds uncommitted work (`git status --porcelain` non-empty under it). Ignored files such as `node_modules` do not count; a non-existent path passes.
+- `git reset --hard` when tracked files are modified; `git clean -f` when its dry run (`git clean -n`) would remove something; `git push --force` always.
+
+The message reads `DESTRUCTIVE [gate: destructive-command]: '<segment>': <why>. Fix: <fix>.` Decision: ASK in interactive sessions, DENY in autonomous ones (`ALONG_AUTONOMOUS=1` or Claude Code `bypassPermissions`). Everything else passes; scripts and other tools are out of reach by design (the container covers them, see `debt--gate-simplification`).
 
 ---
 
@@ -272,7 +250,7 @@ When an agent emits a tool call, the execution loop flows through the hook harne
    - In `enforce` mode, gate violations result in an immediate `deny` decision with actionable remediation text. Silent auto-replacement is avoided so LLMs receive explicit negative feedback and learn rule adherence.
 3. **Dual-Mode Governance (Shadow vs Enforce)**:
    - Configurable per-gate in `.along/config.json` or via `ALONG_HOOK_MODE`.
-   - In `shadow` mode, violations emit a stderr warning and append a structured event to `.along/diagnostics/hooks_audit.jsonl` without halting tool execution.
+   - In `shadow` mode, violations emit a stderr warning and append a structured event (`decision: "warn"`) to `.along/diagnostics/hooks_audit.jsonl` without halting tool execution.
 4. **Hermetic Test Guarantees**:
    - All hook engine unit tests target temporary directories (`tempfile.mkdtemp()`).
    - The test suite strictly asserts that `.along/diagnostics/` is never written into the repository root during automated testing.
@@ -292,7 +270,7 @@ When an agent emits a tool call, the execution loop flows through the hook harne
 
 ## 4a. Protocol Rule Enforcement Audit
 
-Every rule of the managed `AGENTS.md` block, classified: **a** enforced by a gate or test, **b** mechanically checkable but not yet enforced, **c** judgment-only. Layers come from the catalogue `enforcement` field (`along hook verify` prints the full matrix). Class-a rules are one line in `AGENTS.md` with a gate tag; the gate's error message carries the detail.
+Every rule of the managed `AGENTS.md` block, classified: **a** enforced by a gate or test, **b** mechanically checkable but not yet enforced, **c** judgment-only. Layers come from the catalogue `enforcement` field (`along hook verify` prints the full matrix). Class-a rules are one line in `AGENTS.md` with a gate tag; the gate's error message carries the detail. Commit-time checks (typography, anti-stub, AI co-author, code fences, links, entry point, filenames, secrets) carry no tag: `AGENTS.md` lists them on one line as checked by `along lint` (pre-commit and CI), not while you work.
 
 | Rule | Class | Enforced by | Layer |
 | :--- | :--- | :--- | :--- |
@@ -305,7 +283,7 @@ Every rule of the managed `AGENTS.md` block, classified: **a** enforced by a gat
 | Context isolation | c | - | - |
 | No code without issue | a | `require_active_issue` | runtime |
 | Commit binding | a | `commit_issue_binding` | runtime, git, ci |
-| No AI co-authors | a | `commit_no_ai_coauthor` | runtime, git, ci |
+| No AI co-authors | a | `commit_no_ai_coauthor` | git, ci |
 | Canonical keys, reference by key (front-matter reference fields) | a | `entity_reference_integrity` (a path or unknown key is dangling) | runtime, git, ci |
 | Never delete a referenced entity; rename / supersede | a | `entity_reference_integrity`, `along issue rename` / `supersede` | runtime, git, ci |
 | ADRs never edited, only superseded | c | - | - |
@@ -315,26 +293,27 @@ Every rule of the managed `AGENTS.md` block, classified: **a** enforced by a gat
 | Stable entry point | a | `stable_entry_point` (also `along kb-sync --check`) | git, ci |
 | Portable links | a | `portable_links` (also `along kb-sync --check`) | git, ci |
 | Fact grounding, doc blast radius, routing tree | c | - | - |
-| Fast retrieval | a | `fast_retrieval` | runtime |
+| Fast retrieval (`along kb-search` recommended) | c | - | - |
 | Manual document lock | a | `doc_manual_lock` | runtime, git, ci |
-| Managed rule packs (`.along/rules/**/*.md`) not edited by agents | a | `rule_pack_protection` (runtime: file tools and shell writes, `along rules ...` excepted; git / ci: body matches the managed header hash) | runtime, git, ci |
+| Managed rule packs (`.along/rules/**/*.md`) not edited by agents | a | `rule_pack_protection` (runtime: file tools only; shell edits are caught at commit, where git / ci check that the body matches the managed header hash) | runtime, git, ci |
 | Lifecycle hooks first, token hygiene, post-change review | c | - | - |
 | Checklist: tests (edits under `.along/scripts/` count as source edits) | a | `test_before_stop` | runtime |
 | Checklist: session log | a | `wrap_before_stop` | runtime |
 | Checklist: uncommitted wrapped work | a | `wrapped_work_uncommitted` | runtime |
 | Checklist: projections | a | `projection_sync_before_stop`, projection freshness in `along gates check` | runtime, git, ci |
 | Checklist: file integrity, review, reconciliation, HISTORY, compaction | c | - | - |
-| Environment isolation (no global installs) | a | `cli_safety` | runtime |
+| Environment isolation (no global installs) | a | `cli_safety` (warning) | runtime |
 | Workspace containment | a | `workspace_containment` | runtime |
+| Explicit recursive deletes and history rewrites (`rm -rf`, `git reset --hard`, `git clean -f`, `git push --force`) on unrecoverable targets | a | `destructive_command` (ASK interactive, DENY autonomous) | runtime |
 | Anti-deletion, anchored edits | c | - | - |
-| No stubs or skeletons | a | `anti_stub_injection` | runtime, git, ci |
-| Clean ASCII (incl. BOM) | a | `typography`, `along sanitize` | runtime, git, ci |
+| No stubs or skeletons | a | `anti_stub_injection`, `along lint` | git, ci |
+| Clean ASCII (incl. BOM) | a | `typography`, `along sanitize`, `along lint` | git, ci |
 | Code fence languages | a | `code_fence_language` | git, ci |
-| File content via tools only | a | `cli_safety` | runtime |
+| File content via tools only | a | `cli_safety` (warning) | runtime |
 | CLI black-box invariance | c | - (Treat Along CLI as strict opaque black box; no engine source inspection in consumer repos) | - |
 | Verify written files | c | - | - |
 | Hermetic tests | a | `tests/test_zz_hermetic_suite.py` (this repo) | ci |
-| Inquiry read-only | a | `require_plan_approval` | runtime |
+| Plan approval before repository changes (file-tool target path; files changed by the turn at Stop) | a | `require_plan_approval` | runtime |
 | Complexity escalation to `along-team` | c | - | - |
 | along-team step loop and reviews | a | `team_step_active`, `team_reviews_before_stop`, `along scratch purge` / `along wrap` refusal | runtime |
 | Bounded subagent step prompt footprint | a | `bounded_prompt_gate` (`[gate: bounded-prompt-gate]`, hard limit 32 KB, soft warning 16 KB, attention leak detection) | runtime |
@@ -380,14 +359,14 @@ Complex procedural ceremonies and rigid review checklists impose significant tok
 | Profile | Target Tier | Behavior |
 | :--- | :--- | :--- |
 | `strict` | Standard & Junior models | Full procedural ceremony, mandatory plan approval for all mutations, low complexity escalation thresholds, full 9-step completion checklist. |
-| `standard` | Default baseline | Preserves default Along behavior: 32 gates active, role-based escalation for multi-file/cross-system tasks. |
-| `light` | Frontier / Strong models | Streamlines procedural ceremony: warns rather than blocks on procedural gates (`require_plan_approval`, `code_fence_language`, `fast_retrieval`, `team_step_active`), compacts the Stage Completion Checklist to 5 core invariants, and allows direct execution with user alignment. |
+| `standard` | Default baseline | Preserves default Along behavior: all 33 catalogue gates at their default severity, role-based escalation for multi-file/cross-system tasks. |
+| `light` | Frontier / Strong models | Streamlines procedural ceremony: warns rather than blocks on procedural gates (`require_plan_approval`, `code_fence_language`, `team_step_active`), compacts the Stage Completion Checklist to 5 core invariants, and allows direct execution with user alignment. |
 
 ### 6.2 State-Layer Invariance
 
 Regardless of active profile (`strict`, `standard`, or `light`), immutable state integrity gates and safety invariants ALWAYS evaluate to `block`:
-- **State-Layer Gates**: `require_active_issue`, `projection_protection`, `typography`, `test_before_stop`.
-- **Invariant Safety Gates**: `workspace_containment`, `circuit_breaker`, `no_tracked_secrets`, `rule_pack_protection`, `entity_deletion_protection`.
+- **State-Layer Gates**: `require_active_issue`, `projection_protection`, `test_before_stop`.
+- **Invariant Safety Gates**: `workspace_containment`, `no_tracked_secrets`, `rule_pack_protection`, `entity_deletion_protection`.
 
 ### 6.3 Resolution Hierarchy
 

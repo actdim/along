@@ -235,11 +235,11 @@ def build_policy(repo_root: str, options: Optional[Dict[str, Any]] = None,
     )
 
 
-def is_autonomous(event: HookEvent, policy: ContainmentPolicy) -> bool:
-    """Autonomous runs get DENY instead of ASK for out-of-scope reads."""
-    if policy.on_violation == "deny":
+def is_autonomous(event: HookEvent, policy: Optional[ContainmentPolicy] = None) -> bool:
+    """Autonomous runs get DENY instead of ASK (no user to ask)."""
+    if policy is not None and policy.on_violation == "deny":
         return True
-    if policy.on_violation == "ask":
+    if policy is not None and policy.on_violation == "ask":
         return False
     if os.environ.get(AUTONOMOUS_ENV, "").strip().lower() in ("1", "true", "yes"):
         return True

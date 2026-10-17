@@ -55,6 +55,8 @@ class DeclarativeGateDefinition:
     #: `allowed_roots` / `write_scope` of workspace_containment).
     options: Dict[str, Any] = field(default_factory=dict)
     enabled: bool = True
+    #: Further events the gate runs on (`event: [PreToolUse, Stop]` in YAML).
+    extra_events: List[HookEventType] = field(default_factory=list)
 
 
 #: Keys of a gate entry that belong to the definition; every other key is an option.
@@ -88,7 +90,7 @@ class DeclarativeGate(BaseGate):
 
     def evaluate(self, event: HookEvent) -> GateResult:
         # Event type filter
-        if event.event_type != self.defn.event_type:
+        if event.event_type != self.defn.event_type and event.event_type not in self.defn.extra_events:
             return GateResult(decision=GateDecision.ALLOW, gate_name=self.name)
 
         # Tool name filter
@@ -144,31 +146,16 @@ class DeclarativeGate(BaseGate):
                     if isinstance(res, GateResult):
                         if not res.gate_name:
                             res.gate_name = self.name
-                        return self._yield_to_breaker(res, event, effective_root)
+                        return res
                     elif res:
-                        return self._yield_to_breaker(GateResult(
+                        return GateResult(
                             decision=GateDecision.DENY,
                             reason=str(res) or rule.error_message,
                             gate_name=self.name,
                             exit_code=2,
-                        ), event, effective_root)
+                        )
 
         return GateResult(decision=GateDecision.ALLOW, gate_name=self.name)
-
-    def _yield_to_breaker(self, result: GateResult, event: HookEvent,
-                          repo_root: Optional[str]) -> GateResult:
-        """A Stop gate does not reject the turn while the circuit breaker is tripped.
-
-        Its demand (sync, wrap, tests) needs commands the breaker holds, so rejecting would
-        trap the agent. The pending step is reported instead [bug--stop-gates-breaker-deadlock].
-        """
-        if event.event_type != HookEventType.STOP or result.decision != GateDecision.DENY or not repo_root:
-            return result
-        from .. import circuit
-        if not circuit.is_breaker_tripped(repo_root):
-            return result
-        print(f"[Pending, circuit breaker tripped] {result.reason}", file=sys.stderr)
-        return GateResult(decision=GateDecision.ALLOW, reason=result.reason, gate_name=self.name)
 
 
 def parse_gate_dict(raw: Dict[str, Any]) -> DeclarativeGateDefinition:
@@ -179,12 +166,15 @@ def parse_gate_dict(raw: Dict[str, Any]) -> DeclarativeGateDefinition:
 
     title = str(raw.get("title", gate_id))
     description = str(raw.get("description", ""))
-    event_str = str(raw.get("event", "PreToolUse")).strip()
-
-    try:
-        event_type = HookEventType(event_str)
-    except ValueError:
-        event_type = HookEventType.PRE_TOOL_USE
+    event_raw = raw.get("event", "PreToolUse")
+    event_names = [str(e).strip() for e in event_raw] if isinstance(event_raw, list) else [str(event_raw).strip()]
+    event_types: List[HookEventType] = []
+    for name in event_names:
+        try:
+            event_types.append(HookEventType(name))
+        except ValueError:
+            continue
+    event_type = event_types[0] if event_types else HookEventType.PRE_TOOL_USE
 
     tools_raw = raw.get("tools", [])
     if isinstance(tools_raw, str):
@@ -271,6 +261,7 @@ def parse_gate_dict(raw: Dict[str, Any]) -> DeclarativeGateDefinition:
         profiles=profiles,
         options={str(k): v for k, v in raw.items() if str(k) not in _GATE_KEYS},
         enabled=raw.get("enabled", True) is not False,
+        extra_events=event_types[1:],
     )
 
 
@@ -296,6 +287,7 @@ def merge_override(base: DeclarativeGateDefinition, override: DeclarativeGateDef
         tools=override.tools if "tools" in raw else base.tools,
         match_args=override.match_args if "match_args" in raw else base.match_args,
         event_type=override.event_type if "event" in raw else base.event_type,
+        extra_events=override.extra_events if "event" in raw else base.extra_events,
         rules=override.rules if ("rule" in raw or "rules" in raw) else base.rules,
         enforcement=override.enforcement if "enforcement" in raw else base.enforcement,
         profiles=merged_profiles,

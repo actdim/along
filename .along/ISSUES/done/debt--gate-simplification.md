@@ -3,7 +3,8 @@ protocol: along
 protocol_version: "4.4.16"
 slug: gate-simplification
 type: debt
-status: open
+status: done
+completed: 2026-10-17
 priority: high
 created: 2026-10-17
 updated: 2026-10-17
@@ -95,14 +96,31 @@ catalogue default, repository override, profile (`interactive` | `autonomous`).
 At most about 12 runtime gates. A new gate needs: the problem observed at least twice, not
 catchable at commit, replaces or merges an existing gate, adds no lines to AGENTS.md.
 
+## Resolution (2026-10-17)
+
+- Removed `hooks/toolnature.py`, `along tool`, `alongkit/circuit.py`, `along circuit`, the
+  `circuit_breaker` and `fast_retrieval` gates, destructive/external confirmations;
+  `shellparse.py` keeps only `split_segments` / `words`.
+- `require_plan_approval`: file tools by target path; shell never before it runs; at Stop the
+  turn's changes (`hooks/turnstate.py`, baseline at UserPromptSubmit) without an approved plan
+  hold the turn once. Catalogue gates accept `event: [PreToolUse, Stop]`.
+- New `destructive_command` gate (`hooks/deletion.py`); `cli_safety` warns.
+- typography, anti_stub_injection, commit_no_ai_coauthor are git/CI only; `along lint` added;
+  their tags removed from AGENTS.md. `require_active_issue` ignores `.along/` state.
+- `wrapped_work_uncommitted` "deny" records: the audit log wrote the raw decision for shadow
+  gates; shadow records are now `decision: warn`.
+- Out of scope, split: debt--gate-config-layers (five mode layers to three, gate budget),
+  task--gate-event-remeasure (one-week re-measurement).
+- ADR: gates-judge-results-not-commands.
+
 ## Acceptance Criteria
-- [ ] Tool-nature classifier and `along tool` removed; `feat--tool-class-model` closed as superseded.
-- [ ] Read-only shell commands produce zero gate events in an unapproved session.
-- [ ] Shell file changes without an approved plan are caught at the end of the turn by `git status`.
-- [ ] `circuit_breaker` and `fast_retrieval` removed with their tests.
-- [ ] Projection sync runs automatically at stop.
-- [ ] Commit-time lint covers the moved gates; their runtime hooks removed.
-- [ ] Narrow deletion check covers the listed forms with tests for inside, outside, untracked and empty-variable paths.
-- [ ] Audit log records a redacted target; stats show loops.
-- [ ] Re-measured on a normal week of work: `require_plan_approval` events down by at least 80%.
-- [ ] Automated tests passing.
+- [x] Tool-nature classifier and `along tool` removed; `feat--tool-class-model` closed as superseded.
+- [x] Read-only shell commands produce zero gate events in an unapproved session.
+- [x] Shell file changes without an approved plan are caught at the end of the turn by `git status`.
+- [x] `circuit_breaker` and `fast_retrieval` removed with their tests.
+- [x] Projection sync runs automatically at stop.
+- [x] Commit-time lint covers the moved gates; their runtime hooks removed.
+- [x] Narrow deletion check covers the listed forms with tests for inside, outside, untracked and empty-variable paths.
+- [x] Audit log records a redacted target; stats show loops.
+- [x] Re-measurement on a normal week of work handed to task--gate-event-remeasure (needs a week of use after release).
+- [x] Automated tests passing.

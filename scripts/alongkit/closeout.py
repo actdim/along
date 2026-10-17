@@ -36,7 +36,7 @@ _MARKER_SCAN_LIMIT = 2_000_000
 
 
 def _git_text(cwd: str, *args: str) -> Optional[str]:
-    result = proc.run_capture(["git", *args], cwd=cwd, check=False, trip_on_anomaly=False)
+    result = proc.run_capture(["git", *args], cwd=cwd, check=False)
     return result.stdout if result.ok else None
 
 
@@ -461,7 +461,7 @@ def _commit(repo_root: str, top: str, message: str, key: str, files: List[str]) 
         return 1
     paths = [os.path.join(real_top, *p.split("/")) for p in files]
     result = proc.run_capture([sys.executable, script, message, "-i", key, "--paths", *paths],
-                              cwd=real_root, check=False, trip_on_anomaly=False)
+                              cwd=real_root, check=False)
     print(result.stdout.rstrip())
     if not result.ok:
         print(result.stderr.rstrip(), file=sys.stderr)
@@ -708,7 +708,7 @@ def run_closeout(repo_root: str, keys: Optional[List[str]] = None, ready: bool =
         _save_run(real_root, run)
 
     if push and not run["pushed"]:
-        result = proc.run_capture(["git", "push"], cwd=top, check=False, trip_on_anomaly=False)
+        result = proc.run_capture(["git", "push"], cwd=top, check=False)
         if not result.ok:
             _save_run(real_root, run)
             print(f"[Error] git push failed:\n{result.stderr}", file=sys.stderr)

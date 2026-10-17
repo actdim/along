@@ -307,10 +307,10 @@ flowchart TD
 - **Architectural Rationale**:
   - *Targeted Snippet Window Extraction*: Instead of reading whole multi-kilobyte documents into prompt context, retrieves concise word-boundary aligned snippet windows (typically under 150 tokens), verifiable via `--stats`.
   - *Multi-Tier Relevance Scoring & IDF Weighting*: Ranks results using word-boundary token matching, lightweight stemming, smoothed inverse document frequency (IDF), and exact phrase matching with AND semantics by default (`--any` for OR).
-  - *Deterministic Fast-Retrieval Gate (`[gate: fast-retrieval]`)*: Programmatically blocks agents from executing manual directory `grep_search` or `find_by_name` across `docs/` and `.along/`, enforcing sub-100ms single-shot query execution to prevent token exhaustion and inspection loop latency.
+  - *Recommended, Not Enforced*: Agents SHOULD query `along kb-search` before grepping or reading whole files under `docs/` and `.along/` to save tokens. No gate blocks `grep_search` / `find_by_name` there (the former `fast_retrieval` gate was removed in `debt--gate-simplification`).
 - **Invocation Triggers**:
   - *Explicit*: `/along-kb-search "<query>" [--category <cat>] [--any] [--prefix] [--stats]`, `along kb-search` (fallback: `python ~/.along/bin/along_exec.py kb-search`).
-  - *Semantic / Automatic*: Mandatory first step for agents when researching domain architecture, investigating existing decisions, or mapping blast radius.
+  - *Semantic / Automatic*: Recommended first step for agents when researching domain architecture, investigating existing decisions, or mapping blast radius.
 - **Entities Operated On**: `docs/`, `.along/ISSUES/`, `.along/DECISIONS.md`, `.along/MILESTONES/`, `.along/RISKS/`, `.along/SPIKES/`, `.along/SESSIONS/`.
 - **Ecosystem Chaining**: Used by Scout and Supervisor in `along-team` during Phase 1 (Research).
 

@@ -117,9 +117,13 @@ class TestGatePredicate(TemporaryRepoCase):
         self.opt_out()
         self.assertIsNone(check_ai_coauthor(_command_event(f'git commit -m "x" -m "{CLAUDE_TRAILER}"'), self.root))
 
-    def test_gate_registered_in_catalogue(self):
+    def test_gate_registered_in_catalogue_as_commit_time(self):
+        # [debt--gate-simplification]: checked by the commit-msg hook and CI, not at runtime.
+        from alongkit.hooks.declarative import DEFAULT_GATES_FILE, load_gate_definitions
+        defs = {d.id: d for d in load_gate_definitions(DEFAULT_GATES_FILE)}
+        self.assertEqual(defs["commit_no_ai_coauthor"].enforcement, ["git", "ci"])
         names = {getattr(g, "name", "") for g in get_all_declarative_gates(self.root)}
-        self.assertIn("commit_no_ai_coauthor", names)
+        self.assertNotIn("commit_no_ai_coauthor", names)
 
 
 class TestClaudeSettings(TemporaryRepoCase):

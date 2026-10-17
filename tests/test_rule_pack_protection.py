@@ -88,22 +88,13 @@ class TestRulePackRuntimeGate(unittest.TestCase):
             res = self.gate.evaluate(self._file_event(target))
             self.assertEqual(res.decision, GateDecision.ALLOW, target)
 
-    def test_shell_writes_denied(self):
+    def test_shell_commands_are_left_to_the_commit_check(self):
+        # [debt--gate-simplification]: shell edits to a pack fail its header hash at commit
+        # (TestRulePackRepoCheck); the runtime gate does not guess from command text.
         for command in ("cp web.md .along/rules/platforms/web.md",
-                        "Copy-Item notes.md .along\\rules\\platforms\\web.md",
-                        "git status && mv x.md .along/rules/languages/python.md",
-                        "cat extra.md >> .along/rules/platforms/web.md"):
-            res = self.gate.evaluate(self._shell_event(command))
-            self.assertEqual(res.decision, GateDecision.DENY, command)
-            self.assertIn("[gate: rule-pack-protection]", res.reason)
-
-    def test_shell_reads_and_along_rules_allowed(self):
-        for command in ("cat .along/rules/platforms/web.md",
-                        "git diff -- .along/rules/platforms/web.md",
+                        "cat .along/rules/platforms/web.md",
                         "along rules restore platforms/web.md",
-                        "python scripts/along_exec.py rules restore .along/rules/platforms/web.md",
-                        "cp a.yaml .along/rules/gates.yaml",
-                        "ls rules/platforms"):
+                        "cp a.yaml .along/rules/gates.yaml"):
             res = self.gate.evaluate(self._shell_event(command))
             self.assertEqual(res.decision, GateDecision.ALLOW, command)
 

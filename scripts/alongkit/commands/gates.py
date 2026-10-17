@@ -79,18 +79,32 @@ def handle_git_command(repo_root: str, args: List[str]):
     sys.exit(1)
 
 
+def handle_lint_command(repo_root: str, args: List[str]):
+    """`along lint`: the commit-time checks on demand (`along gates check`). [debt--gate-simplification]"""
+    if args and args[0] in ("-h", "--help", "help"):
+        print("Usage: along lint [--ci] [--range COMMIT_RANGE] [--no-links] [--json]")
+        print("  Commit-time checks (typography, code fences, links, filenames, secrets, stubs,")
+        print("  rule packs, entities) on staged changes; same as 'along gates check'.")
+        sys.exit(0)
+    handle_gates_command(repo_root, ["check", *args])
+
+
 def handle_gates_command(repo_root: str, args: List[str]):
     if not args or args[0] in ("-h", "--help", "help"):
         print("Usage: along gates check [--hook {pre-commit,commit-msg}] [--ci] [--range COMMIT_RANGE] [--no-links] [--json] [hook_args...]")
         print("  Run the commit-time gate subset outside agent runtimes (git hooks, CI).")
         print("       along gates stats [--since YYYY-MM-DD]")
-        print("  Per-gate counts of blocks, shadow warnings and recorded bypasses.")
+        print("  Per-gate counts of blocks, shadow warnings and recorded bypasses, and repeated")
+        print("  identical blocks per conversation (agent loops).")
         sys.exit(0)
 
     subcmd = args[0].lower()
     if subcmd == "stats":
         from alongkit import gatestats
-        print(gatestats.format_table(gatestats.collect(repo_root, flag_value(args, "--since"))))
+        since = flag_value(args, "--since")
+        print(gatestats.format_table(gatestats.collect(repo_root, since)))
+        print()
+        print(gatestats.format_loops(gatestats.loops(repo_root, since)))
         sys.exit(0)
     if subcmd != "check":
         print(f"[Error] Unknown gates subcommand: {subcmd}. Use check or stats.", file=sys.stderr)

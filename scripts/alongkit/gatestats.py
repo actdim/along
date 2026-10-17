@@ -13,7 +13,7 @@ from __future__ import annotations
 import json
 import os
 from dataclasses import dataclass
-from typing import Dict, List, Optional
+from typing import Any, Dict, List, Optional, Tuple
 
 if __name__ == "__main__":
     raise SystemExit(
@@ -41,16 +41,28 @@ def audit_path(repo_root: str) -> str:
     return os.path.join(repo.diagnostics_dir(repo_root), "hooks_audit.jsonl")
 
 
-def collect(repo_root: str, since: Optional[str] = None) -> List[GateStats]:
-    """Per-gate counts, most blocked first; `since` (YYYY-MM-DD) drops older entries."""
+#: Identical blocks in one conversation from which `along gates stats` reports a loop.
+LOOP_THRESHOLD = 3
+
+
+@dataclass
+class GateLoop:
+    """The same gate blocked the same target this many times in one conversation."""
+    conversation: str
+    gate: str
+    target: str
+    count: int
+
+
+def _entries(repo_root: str, since: Optional[str] = None) -> List[Dict[str, Any]]:
     path = audit_path(repo_root)
-    stats: Dict[str, GateStats] = {}
     if not os.path.isfile(path):
         return []
     try:
         lines = textio.read_text(path, strict=False).splitlines()
     except OSError:
         return []
+    out: List[Dict[str, Any]] = []
     for line in lines:
         try:
             entry = json.loads(line)
@@ -60,6 +72,18 @@ def collect(repo_root: str, since: Optional[str] = None) -> List[GateStats]:
             continue
         if since and str(entry.get("timestamp") or "")[:10] < since:
             continue
+        out.append(entry)
+    return out
+
+
+def _is_block(entry: Dict[str, Any]) -> bool:
+    return entry.get("mode") != "shadow" and str(entry.get("decision") or "") in ("deny", "ask", "force_ask")
+
+
+def collect(repo_root: str, since: Optional[str] = None) -> List[GateStats]:
+    """Per-gate counts, most blocked first; `since` (YYYY-MM-DD) drops older entries."""
+    stats: Dict[str, GateStats] = {}
+    for entry in _entries(repo_root, since):
         gate = str(entry.get("gate") or "unknown")
         decision = str(entry.get("decision") or "")
         item = stats.setdefault(gate, GateStats(gate))
@@ -70,6 +94,35 @@ def collect(repo_root: str, since: Optional[str] = None) -> List[GateStats]:
         elif decision in ("deny", "ask", "force_ask"):
             item.blocked += 1
     return sorted(stats.values(), key=lambda s: (-s.blocked, -s.bypassed, s.gate))
+
+
+def loops(repo_root: str, since: Optional[str] = None, threshold: int = LOOP_THRESHOLD) -> List[GateLoop]:
+    """Repeated identical blocks per conversation: an agent retrying what a gate holds.
+
+    Identical means same gate and same target (older entries without `target`: same reason).
+    [debt--gate-simplification]
+    """
+    counts: Dict[Tuple[str, str, str], int] = {}
+    for entry in _entries(repo_root, since):
+        if not _is_block(entry) or not entry.get("conversation_id"):
+            continue
+        target = str(entry.get("target") or entry.get("reason") or "")
+        key = (str(entry["conversation_id"]), str(entry.get("gate") or "unknown"), target)
+        counts[key] = counts.get(key, 0) + 1
+    found = [GateLoop(c, g, t, n) for (c, g, t), n in counts.items() if n >= threshold]
+    return sorted(found, key=lambda lp: (-lp.count, lp.gate, lp.conversation))
+
+
+def format_loops(rows: List[GateLoop], limit: int = 10) -> str:
+    if not rows:
+        return f"No repeated blocks (>= {LOOP_THRESHOLD} identical in one conversation)."
+    out = [f"Repeated blocks (>= {LOOP_THRESHOLD} identical in one conversation):"]
+    for lp in rows[:limit]:
+        target = lp.target if len(lp.target) <= 80 else lp.target[:77] + "..."
+        out.append(f"  {lp.count:4d}x  {lp.gate}  [{lp.conversation[:12]}]  {target}")
+    if len(rows) > limit:
+        out.append(f"  ... {len(rows) - limit} more")
+    return "\n".join(out)
 
 
 def format_table(rows: List[GateStats]) -> str:

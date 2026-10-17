@@ -38,18 +38,16 @@ gates:
       handler: alongkit.hooks.predicates.check_staged_conflict_markers
       error: "Git commit rejected by [gate: commit-no-conflict-markers]: Unresolved git merge conflict markers detected in staged content."
 
+  # Commit-time content checks (alongkit.gitgates: pre-commit diff, commit-msg, CI): no
+  # runtime layer, `along lint` runs them on demand. [debt--gate-simplification]
   - id: commit_no_ai_coauthor
     profiles:
       strict: block
       standard: block
       light: block
-    enforcement: [runtime, git, ci]
+    enforcement: [git, ci]
     title: "Git Commit AI Co-Author Protection"
     description: "Blocks commits whose message names an AI agent in a Co-Authored-By trailer"
-    event: PreToolUse
-    tools: [run_command, execute_command, bash, shell]
-    match_args:
-      CommandLine: '\bgit\s+(?:-C\s+\S+\s+)?commit\b'
     rule:
       type: predicate
       handler: alongkit.hooks.predicates.check_ai_coauthor
@@ -60,11 +58,9 @@ gates:
       strict: block
       standard: block
       light: warn
-    enforcement: [runtime, git, ci]
+    enforcement: [git, ci]
     title: "Anti-Stub Truncation Protection"
     description: "Blocks lazy truncation skeletons and placeholder comments"
-    event: PreToolUse
-    tools: [write_to_file, write_file, replace_file_content, edit_file, patch_file, create_file]
     rule:
       type: regex_forbidden
       field: [CodeContent, ReplacementContent, content]
@@ -72,18 +68,34 @@ gates:
       error: "Write rejected by [gate: anti-stub-injection]: Truncation placeholder or code skeleton stub detected. Supply complete implementation."
 
   - id: cli_safety
+    # A warning: heredocs and inline writers are style, not harm. Recursive deletes and
+    # history rewrites are destructive_command's.
     profiles:
-      strict: block
-      standard: block
-      light: block
-    title: "Destructive Shell Command Protection"
-    description: "Blocks destructive shell commands, heredocs, and inline writers"
+      strict: warn
+      standard: warn
+      light: warn
+    title: "Inline Shell Writer Warning"
+    description: "Warns on heredocs, inline file writers and global package installs"
     event: PreToolUse
     tools: [run_command, execute_command, bash, shell]
     rule:
       type: predicate
       handler: alongkit.hooks.predicates.check_cli_safety
       error: "CLI Safety Gate Violation [gate: cli-safety]."
+
+  - id: destructive_command
+    profiles:
+      strict: block
+      standard: block
+      light: block
+    title: "Destructive Command Check"
+    description: "Asks (interactive) or denies (autonomous) explicit recursive deletes, git clean -f, git reset --hard and git push --force when the target is outside the repository, empty, unexpandable or holds uncommitted work"
+    event: PreToolUse
+    tools: [run_command, execute_command, bash, shell]
+    rule:
+      type: predicate
+      handler: alongkit.hooks.predicates.check_destructive_command
+      error: "Command held by [gate: destructive-command]."
 
   - id: projection_protection
     tier: invariant
@@ -107,14 +119,14 @@ gates:
       strict: block
       standard: block
       light: block
-    # runtime: file tools and shell commands that write .along/rules/**/*.md (`along rules ...`
-    # excepted). git / ci: alongkit.gitgates.check_rule_packs - a staged or tracked rule pack
-    # carries the managed header and its body matches the header hash.
+    # runtime: file tools that write .along/rules/**/*.md. git / ci:
+    # alongkit.gitgates.check_rule_packs - a staged or tracked rule pack carries the managed
+    # header and its body matches the header hash (catches shell edits too).
     enforcement: [runtime, git, ci]
     title: "Managed Rule Pack Protection"
     description: "Blocks agent edits to managed rule packs (.along/rules/**/*.md); gates.yaml stays editable"
     event: PreToolUse
-    tools: [write_to_file, write_file, replace_file_content, edit_file, patch_file, create_file, run_command, execute_command, bash, shell]
+    tools: [write_to_file, write_file, replace_file_content, edit_file, patch_file, create_file]
     rule:
       type: predicate
       handler: alongkit.hooks.predicates.check_rule_pack_protection
@@ -139,11 +151,9 @@ gates:
       strict: block
       standard: block
       light: block
-    enforcement: [runtime, git, ci]
+    enforcement: [git, ci]
     title: "Clean ASCII Typography"
     description: "Enforces clean ASCII characters and bans non-ASCII dashes, quotes, ellipsis, and invisible spaces"
-    event: PreToolUse
-    tools: [write_to_file, write_file, replace_file_content, edit_file, patch_file, create_file]
     rule:
       type: predicate
       handler: alongkit.hooks.predicates.check_typography
@@ -161,18 +171,9 @@ gates:
     rule:
       type: predicate
       handler: alongkit.hooks.predicates.check_active_issue
+      # Along's own state under any .along/ is never anchored (its lifecycle hooks under
+      # .along/scripts/ are code and are).
       exclude_paths:
-        - '.along/ISSUES/**'
-        - '.along/.session/**'
-        - '.along/diagnostics/**'
-        - '.along/SESSIONS/**'
-        - '.along/DECISIONS/**'
-        - '.along/MILESTONES/**'
-        - '.along/RISKS/**'
-        - '.along/SPIKES/**'
-        - '.along/CHECKLISTS/**'
-        - '.along/*.md'
-        - '.along/HISTORY.md'
         - 'docs/**'
         - 'CHANGELOG.md'
       error: "Code edit rejected by [gate: require-active-issue]: Modifying repository source code requires an active issue with 'status: in-progress' in .along/ISSUES/. Create an issue first."
@@ -454,51 +455,22 @@ gates:
       handler: alongkit.hooks.predicates.check_worktree_env_readiness
       error: "Worktree environment readiness violation detected by [gate: worktree-env-readiness]."
 
-  - id: circuit_breaker
-    tier: invariant
-    profiles:
-      strict: block
-      standard: block
-      light: block
-    title: "Systemic Anomaly Circuit Breaker"
-    description: "Blocks modifying tools and shell commands when the circuit breaker is tripped"
-    event: PreToolUse
-    tools: [write_to_file, write_file, replace_file_content, edit_file, patch_file, create_file, run_command, execute_command, bash, shell]
-    rule:
-      type: predicate
-      handler: alongkit.hooks.predicates.check_circuit_breaker
-      error: "Tool execution rejected by [gate: circuit-breaker]: The systemic anomaly circuit breaker is TRIPPED."
-
   - id: require_plan_approval
     profiles:
       strict: block
       standard: block
       light: warn
-    title: "Inquiry Read-Only Mode & Plan Approval Enforcement"
-    description: "Blocks modifying repository files and executing state-mutating commands in inquiry phase without an approved plan"
-    event: PreToolUse
+    title: "Plan Approval Before Repository Changes"
+    description: "Holds file-tool writes by target path, and at turn end the files the turn changed (git status since the user's message), while no plan is approved; shell commands are never classified"
+    event: [PreToolUse, Stop]
     tools: []
-    # Read-only and verification commands (build, test, lint, typecheck) always pass. Sessions
-    # not bound to an issue are not held unless enforce_unbound: true (.along/rules/gates.yaml).
+    # Sessions not bound to an issue are not held unless enforce_unbound: true
+    # (.along/rules/gates.yaml).
     enforce_unbound: false
     rule:
       type: predicate
       handler: alongkit.hooks.predicates.check_mutation_authorization
-      error: "Mutation rejected by [gate: require-plan-approval]: Plan approval required before repository mutations."
-
-  - id: fast_retrieval
-    profiles:
-      strict: block
-      standard: block
-      light: warn
-    title: "Fast Knowledge Base & Memory Retrieval"
-    description: "Blocks manual directory search across docs/ and .along/ directories, enforcing along kb-search"
-    event: PreToolUse
-    tools: [grep_search, grep, find_by_name, find_files, file_search]
-    rule:
-      type: predicate
-      handler: alongkit.hooks.predicates.check_fast_retrieval
-      error: "Manual directory search across docs/ or .along/ rejected by [gate: fast-retrieval]."
+      error: "Change rejected by [gate: require-plan-approval]: plan approval required."
 
   - id: bounded_prompt_gate
     profiles:

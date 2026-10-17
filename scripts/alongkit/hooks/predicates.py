@@ -18,7 +18,7 @@ import sys
 from typing import Any, Dict, List, Optional, Tuple
 
 from .. import attribution, entities, frontmatter, kb, proc, repo, sanitizer, session, testruns, textio, typography
-from . import shellparse, shellwrite, toolnature
+from . import shellparse, shellwrite
 from .models import GateDecision, GateResult, HookEvent, HookEventType
 
 
@@ -27,11 +27,9 @@ GOVERNED_TYPOGRAPHY_SUFFIXES: Tuple[str, ...] = (
     ".sh", ".ps1", ".bat", ".rs", ".go", ".txt",
 )
 
-SAFE_READ_TOOLS: Tuple[str, ...] = (
-    "view_file", "read_file", "view_image", "grep_search", "find_by_name",
-    "list_dir", "list_directory", "read_url_content", "search_web",
-    "manage_task", "schedule", "send_message", "ask_question",
-    "list_resources", "read_resource",
+#: Canonical file-writing tools (adapters map runtime tool names onto these).
+WRITE_TOOLS: Tuple[str, ...] = (
+    "write_to_file", "write_file", "replace_file_content", "edit_file", "patch_file", "create_file",
 )
 
 
@@ -42,9 +40,6 @@ PROTECTED_PROJECTIONS: Tuple[str, ...] = (
 
 #: Managed rule packs copied by `along rules attach`; `.along/rules/gates.yaml` is not one.
 RULE_PACK_PATH_RE = re.compile(r"(?:^|/)\.along/rules/(?:[^/]+/)*[^/]+\.md$", re.IGNORECASE)
-#: A rule pack path as it appears inside a shell command (either slash style).
-RULE_PACK_SHELL_RE = re.compile(r"\.along[/\\]+rules[/\\]+(?:[^\s/\\'\"]+[/\\]+)*[^\s/\\'\"]+\.md\b",
-                                re.IGNORECASE)
 
 DANGEROUS_CLI_PATTERNS: List[Tuple[re.Pattern, str]] = [
     # Any heredoc delimiter (<<EOF, <<'PY', <<-"END"), but not the bash here-string <<<
@@ -67,8 +62,6 @@ DANGEROUS_CLI_PATTERNS: List[Tuple[re.Pattern, str]] = [
      "In-place shell edit (sed -i / perl -i)"),
     (re.compile(r"python\d*(?:\.exe)?\s+-c\s+.*open\(.*['\"][wa]['\"].*\)", re.DOTALL | re.IGNORECASE), "Inline Python file writer"),
     (re.compile(r"python\d*(?:\.exe)?\s+-c\s+['\"].*(?:import\s+(?:alongkit|along_exec)|from\s+(?:alongkit|along_exec)|sys\.path\.insert).*", re.DOTALL | re.IGNORECASE), "Ad-hoc internal module probe via python -c [gate: cli_safety] (use Along CLI, code search tools, or a scratch/ script)"),
-    (re.compile(r"git\s+reset\s+--hard", re.IGNORECASE), "Destructive unstaged Git wipe (git reset --hard)"),
-    (re.compile(r"git\s+clean\s+-[a-zA-Z]*f", re.IGNORECASE), "Destructive Git clean (git clean -f)"),
     (re.compile(r"npm\s+install\s+(-g|--global)", re.IGNORECASE), "Global package manager mutation (npm -g)"),
     (re.compile(r"pip\s+install\s+(?!-e\s)(?!.*--target)(?!.*--user)[a-zA-Z0-9_\-]+", re.IGNORECASE), "Global package manager mutation (pip install)"),
     (re.compile(r"(choco|winget|apt-get|brew)\s+install", re.IGNORECASE), "Global system package installation"),
@@ -111,6 +104,12 @@ MUTATION_WHITELIST_PATTERNS: Tuple[str, ...] = (
     "implementation_plan.md",
     "walkthrough.md",
     "living_plan.md",
+    # Projections Along compiles outside .along/ (`along kb sync`, `along decision sync`,
+    # wrap); see closeout.PROJECTION_FILES. [debt--gate-simplification]
+    "docs/INDEX.md",
+    "docs/decisions/**",
+    "llms.txt",
+    "llms-full.txt",
 )
 
 #: Edits the execution trace leaves out: the blackboard itself and machine-local diagnostics.
@@ -276,6 +275,13 @@ def record_tool_activity(event: HookEvent, repo_root: str) -> None:
     # [bug--plan-approval-self-and-lost]
     if event.event_type == HookEventType.USER_PROMPT_SUBMIT:
         session.record_user_prompt(repo_root, event_session_key(event))
+        # Working-tree baseline of the turn: require_plan_approval judges shell work at Stop
+        # by what changed since. [debt--gate-simplification]
+        from . import turnstate
+        trace_key = event_session_key(event)
+        trace = load_activity_trace(repo_root, trace_key)
+        trace["turn_baseline"] = turnstate.snapshot(repo_root)
+        save_activity_trace(repo_root, trace, trace_key)
         return
 
     # Claude Code runs ExitPlanMode's PostToolUse only after the user accepted the plan; the
@@ -292,15 +298,6 @@ def record_tool_activity(event: HookEvent, repo_root: str) -> None:
     now_iso = datetime.now(timezone.utc).isoformat()
     key = event_session_key(event)
     trace = load_activity_trace(repo_root, key)
-
-    # Post-execution destructive single-use authorization consumption
-    if event.event_type == HookEventType.POST_TOOL_USE:
-        try:
-            nature_res = toolnature.classify_event(event, repo_root=repo_root)
-            if nature_res.tool_class == toolnature.ToolClass.DESTRUCTIVE:
-                session.consume_destructive_confirmation(repo_root, key=key)
-        except (OSError, ValueError, TypeError, KeyError, AttributeError):
-            pass
 
     # Track file edits: repository files outside .along/ (agent state is not source), plus the
     # lifecycle hooks in .along/scripts/ [feat--rule-pack-protection-gate].
@@ -486,33 +483,11 @@ _RULE_PACK_REMEDIATION = (
 
 
 def check_rule_pack_protection(event: HookEvent, repo_root: str, **kwargs: Any) -> Optional[str]:
-    """Deny agent writes to managed rule packs (`.along/rules/**/*.md`).
+    """Deny agent file-tool writes to managed rule packs (`.along/rules/**/*.md`).
 
-    File tools are matched on their target; shell commands on any non-read-only segment that
-    names a rule pack, except `along rules ...` (attach / restore write them on purpose).
+    Shell commands are not predicted: a rule pack changed by any means fails its header hash
+    at commit (`gitgates.check_rule_packs`). [debt--gate-simplification]
     """
-    if event.tool_name in ("run_command", "execute_command", "bash", "shell"):
-        cmd = _extract_command(event)
-        if not cmd or not RULE_PACK_SHELL_RE.search(cmd):
-            return None
-        segments = shellparse.split_segments(cmd)
-        if segments is None:
-            segments = [cmd]
-        for seg in segments:
-            match = RULE_PACK_SHELL_RE.search(seg)
-            if not match:
-                continue
-            sub = shellparse.along_subcommand(seg)
-            if sub is not None and (sub == "rules" or sub.startswith("rules ")):
-                continue
-            if shellparse.is_read_only_command(seg):
-                continue
-            return (
-                f"Rule Pack Protection Violation [gate: rule-pack-protection]: the command writes to "
-                f"'{match.group(0)}'. {_RULE_PACK_REMEDIATION}"
-            )
-        return None
-
     target = _extract_target_file(event)
     rel = _repo_relative(target, repo_root) if target else None
     if not rel or not is_rule_pack_path(rel):
@@ -697,6 +672,29 @@ def check_entity_deletion_protection(event: HookEvent, repo_root: str, **kwargs:
     return None
 
 
+def check_destructive_command(event: HookEvent, repo_root: str, **kwargs: Any) -> Optional[Any]:
+    """Hold an explicit recursive delete or history rewrite that git could not undo.
+
+    ASK in interactive sessions, DENY in autonomous ones. See `alongkit.hooks.deletion`.
+    [debt--gate-simplification]
+    """
+    cmd = _extract_command(event)
+    if not cmd or not repo_root:
+        return None
+    from . import containment, deletion
+    args = event.tool_args or {}
+    cwd = next((str(args[k]) for k in containment.CWD_ARG_KEYS if args.get(k)), "") \
+        or event.workspace_root or repo_root
+    if not os.path.isabs(cwd):
+        cwd = os.path.join(repo_root, cwd)
+    reason = deletion.find_problem(cmd, cwd, repo_root)
+    if not reason:
+        return None
+    decision = GateDecision.DENY if containment.is_autonomous(event) else GateDecision.ASK
+    return GateResult(decision=decision, reason=reason, gate_name="destructive_command",
+                      exit_code=2 if decision == GateDecision.DENY else 0)
+
+
 def check_cli_safety(event: HookEvent, repo_root: str, **kwargs: Any) -> Optional[str]:
     """Check command line for dangerous shell patterns and destructive commands."""
     entity_err = check_entity_deletion_protection(event, repo_root, **kwargs)
@@ -749,7 +747,7 @@ def check_staged_conflict_markers(event: HookEvent, repo_root: str, **kwargs: An
         return None
     commit_all = bool(_COMMIT_ALL_FLAG.search(cmd[len("git commit"):]))
     diff_cmd = ["git", "diff", "HEAD" if commit_all else "--cached", "-U0", "--no-color", "--no-ext-diff"]
-    result = proc.run_capture(diff_cmd, cwd=repo_root, trip_on_anomaly=False)
+    result = proc.run_capture(diff_cmd, cwd=repo_root)
     if result.returncode != 0:
         return None
     hits = find_added_conflict_markers(result.stdout or "")
@@ -808,160 +806,78 @@ def _enforce_unbound(options: Optional[Dict[str, Any]]) -> bool:
 
 def check_mutation_authorization(event: HookEvent, repo_root: str, options: Optional[Dict[str, Any]] = None,
                                  **kwargs: Any) -> Optional[Any]:
-    """Intercept file mutations and shell commands outside execution phase without plan approval.
+    """Hold repository changes made without an approved plan, judged by facts, not predictions.
+
+    - PreToolUse of a file-writing tool: the target path (in the repository, not a planning or
+      session artifact) and no approved plan.
+    - Stop: what the turn changed in the working tree (`turnstate`, baseline taken at the
+      user's message) outside Along state and planning artifacts, with no approved plan. This
+      covers shell commands, which are never classified before they run.
 
     Sessions not bound to an issue are not held unless the repository sets
-    `enforce_unbound: true` for this gate; read-only and verification commands (build,
-    test, lint, typecheck) pass in every phase. See [bug--hook-activation-and-gate-deadlock].
+    `enforce_unbound: true`. [debt--gate-simplification]
     """
-    if event.event_type != HookEventType.PRE_TOOL_USE:
+    if not repo_root:
         return None
-
     tool = event.tool_name
-    if tool in SAFE_READ_TOOLS:
-        return None
-
-    cmd = ""
-    # Check file modification tools
-    if tool in ("write_to_file", "write_file", "replace_file_content", "edit_file", "patch_file", "create_file"):
-        target = _extract_target_file(event)
-        if not target or not repo_root:
+    if event.event_type == HookEventType.PRE_TOOL_USE:
+        if tool not in WRITE_TOOLS:
             return None
-
+        rel_target = _repo_relative(_extract_target_file(event), repo_root)
         # Outside the repository root (brain artifacts, temporary directories): not ours.
-        rel_target = _repo_relative(target, repo_root)
-        if rel_target is None:
+        if rel_target is None or _matches_in_context(rel_target, repo_root, list(MUTATION_WHITELIST_PATTERNS)):
             return None
-
-        # Check whitelisted session/planning/diagnostics paths (in any context)
-        if _matches_in_context(rel_target, repo_root, list(MUTATION_WHITELIST_PATTERNS)):
+        changed = [rel_target]
+    elif event.event_type == HookEventType.STOP:
+        baseline = load_activity_trace(repo_root, event_session_key(event)).get("turn_baseline")
+        if not isinstance(baseline, dict):
             return None
-
-    # Check shell commands
-    elif tool in ("run_command", "execute_command", "bash", "shell"):
-        cmd = _extract_command(event).strip()
-        if not cmd:
+        from . import turnstate
+        changed = [p for p in turnstate.changed_since(repo_root, baseline) if _is_plan_governed(p, repo_root)]
+        if not changed:
             return None
-        if shellparse.is_plan_gate_exempt(cmd):
-            return None
-        # `along wrap` left this session a completion token for the issue it commits, or the
-        # user approved closing it out [feat--parallel-session-closeout] REQ-6.
-        commit_issue = shellparse.along_commit_issue(cmd)
-        if commit_issue:
-            commit_slug = entities.parse_key(commit_issue)[1]
-            ckey = event_session_key(event)
-            if commit_slug in session.completion_tokens(repo_root, ckey) \
-                    or commit_slug in session.closeout_approved(repo_root, ckey):
-                return None
-
-    # Classify tool nature
-    from . import toolnature
-    nature_res = toolnature.classify_event(event, repo_root=repo_root)
-    t_class = nature_res.tool_class
-
-    # Read-only and verification: allowed in every phase
-    if t_class in (toolnature.ToolClass.READ_ONLY, toolnature.ToolClass.VERIFICATION):
+    else:
         return None
 
     key = event_session_key(event)
-    slug, how = session.resolve_active_session(repo_root, key)
-    approved = session.is_plan_approved(repo_root, slug=slug, key=key)
-    phase = session.get_session_phase(repo_root, slug=slug, key=key)
-
-    # Destructive tools: require confirmation
-    if t_class == toolnature.ToolClass.DESTRUCTIVE:
-        desc = nature_res.rule_desc or "destructive operation"
-        destructive_confirmed = session.is_destructive_confirmed(repo_root, slug=slug, key=key)
-        if approved and (phase == "execution" or not slug) and destructive_confirmed:
-            session.consume_destructive_confirmation(repo_root, slug=slug, key=key)
-            return None
-        reason = (
-            f"Destructive Action [gate: require-plan-approval]: Tool or command '{cmd or tool}' is classified as destructive ({desc}). "
-            "Execution requires explicit confirmation. In interactive environments approve prompt, or run 'along plan approve --confirm-destructive' after the user's explicit yes."
-        )
-        if event.runtime == "antigravity":
-            return GateResult(
-                decision=GateDecision.ASK,
-                reason=reason,
-                gate_name="require_plan_approval",
-            )
-        return reason
-
-    # Sessions not bound to an issue are not held for workspace writes / external unless enforce_unbound: true
     if not _enforce_unbound(options) and is_unbound(repo_root, key):
         return None
-
-    # Unknown tools: hold with unclassified reason directing the agent to ask user
-    if t_class == toolnature.ToolClass.UNKNOWN:
-        pat = nature_res.unclassified_pattern or (cmd.split()[0] if cmd else tool)
-        reason = (
-            f"Unclassified Tool Nature [gate: require-plan-approval]: Tool or command '{pat}' has unclassified nature. "
-            f"Ask the user for its nature (read-only, verification, workspace-write, external, destructive) "
-            f"and record it via 'along tool classify \"{pat}\" <class>'."
-        )
-        if event.runtime == "antigravity":
-            return GateResult(
-                decision=GateDecision.ASK,
-                reason=reason,
-                gate_name="require_plan_approval",
-            )
-        return reason
-
-    # External tools: allowed after plan approval (or if explicitly confirmed)
-    if t_class == toolnature.ToolClass.EXTERNAL:
-        if (approved and (phase == "execution" or not slug)) or session.is_external_confirmed(repo_root, slug=slug, key=key):
+    slug, how = session.resolve_active_session(repo_root, key)
+    if session.is_plan_approved(repo_root, slug=slug, key=key):
+        phase = session.get_session_phase(repo_root, slug=slug, key=key)
+        if phase == "execution" or not slug:
             return None
 
-    # Workspace-write: require plan approval (allow if approved or in execution phase)
-    if approved and (phase == "execution" or not slug):
-        return None
-
-    # Violation: inquiry phase or unapproved plan
     target = f"issue '{slug}'" if slug else "this session"
     if how == "ambiguous":
         target = "this session (several in-progress issues, none bound to it)"
-    elif how == "single" and key:
-        target = f"this session (not bound to an issue; in-progress '{slug}' is not bound to it)"
-    reason = (
-        f"Inquiry Read-Only Invariance [gate: require-plan-approval]: "
-        f"No approved plan for {target} (phase: '{phase}', plan_approved: {str(approved).lower()}). "
-        "Call EnterPlanMode, write the plan, then ExitPlanMode. Outside plan mode, write the "
-        "plan to a file and run 'along plan approve --plan-file <path>' after the user's explicit yes. "
-        "Use 'along start <slug>' to bind this session to an issue."
-    )
-    if tool in ("run_command", "execute_command", "bash", "shell") and shellparse.is_along_commit(cmd):
-        reason += " " + _held_commit_reason(repo_root, key, cmd)
-
+    approve = "EnterPlanMode / ExitPlanMode, or 'along plan approve --plan-file <path>' after the user's yes"
+    if event.event_type == HookEventType.STOP:
+        shown = ", ".join(changed[:5]) + (f" (+{len(changed) - 5})" if len(changed) > 5 else "")
+        return (f"PLAN_REQUIRED [gate: require-plan-approval]: this turn changed {shown} with no approved "
+                f"plan for {target}. Ask the user: approve ({approve}) or revert ('git checkout -- <files>' / "
+                "delete the new files).")
+    reason = (f"PLAN_REQUIRED [gate: require-plan-approval]: no approved plan for {target} to edit "
+              f"'{changed[0]}'. Fix: {approve}.")
     if event.runtime == "antigravity":
-        return GateResult(
-            decision=GateDecision.ASK,
-            reason=reason,
-            gate_name="require_plan_approval",
-        )
+        return GateResult(decision=GateDecision.ASK, reason=reason, gate_name="require_plan_approval")
     return reason
 
 
-def _held_commit_reason(repo_root: str, key: Optional[str], cmd: str) -> str:
-    """Why an `along commit` without an approved plan is held, and what to run instead.
+def _is_along_state(rel: str) -> bool:
+    """A path under any `.along/` except its lifecycle hooks in `.along/scripts/` (code)."""
+    parts = repo.normalize_posix(rel).lower().split("/")
+    if ".along" not in parts:
+        return False
+    idx = parts.index(".along")
+    return not (len(parts) > idx + 2 and parts[idx + 1] == "scripts")
 
-    See [bug--commit-blocked-after-wrap] REQ-7.
-    """
-    issue = shellparse.along_commit_issue(cmd)
-    if issue is None:
-        return ("This 'along commit' rewrites files (--fix-typography), redirects output or is chained "
-                "with a mutation: run the plain 'along commit -i <slug> ...' on its own.")
-    if not issue:
-        return ("Without an approved plan, 'along commit' passes only for an issue this session wrapped: "
-                "pass '-i <slug>'.")
-    slug = entities.parse_key(issue)[1]
-    owners = [k for k in session.completion_token_owners(repo_root, slug) if k != key]
-    if owners:
-        return (f"Issue '{slug}' was wrapped by another agent session ({', '.join(owners)}): commit it from "
-                "that session.")
-    return (f"This session holds no completion token for '{slug}' and no closeout approval for it: "
-            f"'along wrap {slug}' in the session that had its plan approved leaves a token; a closeout needs the "
-            f"user's yes, then 'along plan approve --closeout {slug}'; otherwise bind the issue ('along start') "
-            "and get the plan approved.")
+
+def _is_plan_governed(rel: str, repo_root: str) -> bool:
+    """A path whose change needs an approved plan: not Along state, not a planning artifact."""
+    if _matches_in_context(rel, repo_root, list(MUTATION_WHITELIST_PATTERNS)):
+        return False
+    return not _is_along_state(rel)
 
 
 def check_active_issue(event: HookEvent, repo_root: str, exclude_paths: Optional[List[str]] = None, **kwargs: Any) -> Optional[str]:
@@ -970,27 +886,17 @@ def check_active_issue(event: HookEvent, repo_root: str, exclude_paths: Optional
     if not target or not repo_root:
         return None
 
-    excludes = exclude_paths or [
-        ".along/ISSUES/**",
-        ".along/.session/**",
-        ".along/diagnostics/**",
-        ".along/SESSIONS/**",
-        ".along/DECISIONS/**",
-        ".along/MILESTONES/**",
-        ".along/RISKS/**",
-        ".along/SPIKES/**",
-        ".along/CHECKLISTS/**",
-        ".along/*.md",
-        ".along/HISTORY.md",
-        "docs/**",
-        "CHANGELOG.md",
-    ]
+    excludes = exclude_paths or ["docs/**", "CHANGELOG.md"]
 
     # Outside the repository root (brain artifacts, temp files, another drive): not ours.
     rel_target = _repo_relative(target, repo_root)
     if rel_target is None:
         return None
 
+    # Along's own state (any .along/, any context) is never anchored; .along/scripts/ is code.
+    # [debt--gate-simplification]
+    if _is_along_state(rel_target):
+        return None
     if _matches_in_context(rel_target, repo_root, excludes):
         return None
 
@@ -1126,17 +1032,13 @@ def check_test_before_stop(event: HookEvent, repo_root: str, options: Optional[D
                            **kwargs: Any) -> Optional[str]:
     """Ensure automated tests were run after code modifications before stopping turn.
 
-    Quiet for sessions not bound to an issue (unless `enforce_unbound: true`) and while the
-    circuit breaker blocks commands, since no test could run then.
+    Quiet for sessions not bound to an issue (unless `enforce_unbound: true`).
     """
     if not repo_root:
         return None
 
     key = event_session_key(event)
     if not _enforce_unbound(options) and is_unbound(repo_root, key):
-        return None
-    from .. import circuit
-    if circuit.get_breaker_state(repo_root)[0] == circuit.CircuitState.TRIPPED:
         return None
 
     # [feat--test-gate-cost-reduction] REQ-1: if the working tree has a recorded green run,
@@ -1347,7 +1249,7 @@ def _entity_files_changed(repo_root: str) -> bool:
     sdir = repo.state_dir(real_root)
     rel = repo.canonical_relpath(sdir, real_root)
     result = proc.run_capture(["git", "status", "--porcelain", "-uall", "--", rel], cwd=real_root,
-                              check=False, trip_on_anomaly=False)
+                              check=False)
     if not result.ok:
         return True
     prefix = rel.rstrip("/") + "/"
@@ -1643,100 +1545,6 @@ def check_worktree_env_readiness(event: HookEvent, repo_root: str, **kwargs: Any
                     )
         except (OSError, json.JSONDecodeError):
             pass
-
-    return None
-
-
-def check_circuit_breaker(event: HookEvent, repo_root: str, **kwargs: Any) -> Optional[str]:
-    """Block execution if the systemic anomaly circuit breaker is tripped."""
-    if not repo_root:
-        return None
-
-    # Recovery and status commands must never be blocked by the breaker
-    cmd = _extract_command(event)
-    if cmd and re.search(r"\b(along|along_exec\.py)\s+circuit\b", cmd):
-        return None
-    # Read-only inspection (git status, along doctor, cat) cannot worsen the fault and is how a
-    # false trip is diagnosed [bug--stop-gates-breaker-deadlock].
-    if cmd and cmd.strip() and shellparse.is_read_only_command(cmd):
-        return None
-
-    from .. import circuit
-    state, anomaly = circuit.get_breaker_state(repo_root)
-    if state == circuit.CircuitState.TRIPPED:
-        sig = anomaly.signature if anomaly else "Environment failure"
-        cls_name = anomaly.anomaly_class.value if anomaly else "Systemic Anomaly"
-        evidence = ""
-        if anomaly and (anomaly.source or anomaly.detail):
-            first = anomaly.detail.splitlines()[0][:160] if anomaly.detail else ""
-            evidence = f" Evidence: source '{anomaly.source or 'unknown'}', output '{first}'."
-        return (
-            f"Circuit Breaker Violation [gate: circuit-breaker]: Tool execution is blocked because "
-            f"the systemic anomaly circuit breaker is TRIPPED ({cls_name}: {sig}).{evidence} "
-            "Read-only commands still run. Human remediation is required: run 'along circuit status'; "
-            "if the evidence is not a real fault, 'along circuit verify' then 'along circuit reset'."
-        )
-    return None
-
-
-def check_fast_retrieval(event: HookEvent, repo_root: str, **kwargs: Any) -> Optional[str]:
-    """
-    Block manual directory searches (grep_search, find_by_name) targeting docs/ or .along/ directories.
-    Directs agents to use 'along kb-search <query>' for fast, sub-100ms indexed retrieval.
-    """
-    tool = (event.tool_name or "").lower()
-    args = event.tool_args or {}
-
-    target_path = ""
-    if tool in ("grep_search", "grep"):
-        target_path = (
-            args.get("SearchPath")
-            or args.get("search_path")
-            or args.get("path")
-            or ""
-        )
-        if target_path:
-            # If target_path points to an existing regular file, allow targeted inspection
-            norm_abs = target_path
-            if repo_root and not os.path.isabs(norm_abs):
-                norm_abs = os.path.join(repo_root, norm_abs)
-            if os.path.isfile(norm_abs):
-                return None
-
-    elif tool in ("find_by_name", "find_files", "file_search"):
-        target_path = (
-            args.get("SearchDirectory")
-            or args.get("search_directory")
-            or args.get("directory")
-            or args.get("path")
-            or ""
-        )
-
-    if not target_path:
-        return None
-
-    norm = repo.normalize_posix(target_path).strip().lower()
-    if repo_root:
-        root_norm = repo.normalize_posix(repo_root).rstrip("/").lower()
-        if norm.startswith(root_norm + "/"):
-            norm = norm[len(root_norm) + 1:]
-        elif norm == root_norm:
-            # Whole repo search - permitted
-            return None
-
-    while norm.startswith("./"):
-        norm = norm[2:]
-    norm = norm.lstrip("/")
-
-    if (
-        norm == "docs" or norm.startswith("docs/")
-        or norm == ".along" or norm.startswith(".along/")
-    ):
-        return (
-            f"Manual Search Rejected [gate: fast-retrieval]: Manual directory search across '{target_path}' "
-            "is forbidden to prevent latency and LLM token exhaustion. "
-            "Execute 'along kb-search \"<query>\"' instead for sub-100ms indexed retrieval."
-        )
 
     return None
 

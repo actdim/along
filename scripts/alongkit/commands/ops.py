@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-alongkit.commands.ops - Operational CLI commands: rules, tool nature, budget, circuit breaker, patch, devenv, and run runner.
+alongkit.commands.ops - Operational CLI commands: rules, budget, patch, devenv, and run runner.
 [debt--split-along-exec-and-entities]
 """
 
@@ -17,10 +17,9 @@ import os
 import shlex
 import shutil
 import sys
-from datetime import datetime, timezone
 from typing import List, Optional
 
-from .. import circuit, proc, repo
+from .. import proc, repo
 
 
 def handle_rules_command(repo_root: str, args: List[str]):
@@ -103,67 +102,6 @@ def handle_rules_command(repo_root: str, args: List[str]):
         sys.exit(0)
     else:
         print(f"[Error] Unknown rules subcommand: {subcmd}. Available: attach, status, diff, restore.", file=sys.stderr)
-        sys.exit(1)
-
-
-def handle_tool_command(repo_root: str, args: List[str]):
-    if not args or args[0] in ("-h", "--help", "help"):
-        print("Usage: along tool [classify|list|explain]")
-        print("Subcommands:")
-        print("  classify <pattern> <class> [--global]")
-        print("                  Record tool nature classification in repo or global user pack")
-        print("  list [--json]   List classified tools, defaults, and active rules across layers")
-        print("  explain \"<cmd>\" Explain tool nature classification and matching rules")
-        sys.exit(0)
-
-    subcmd = args[0].lower()
-    from alongkit.hooks import toolnature
-
-    if subcmd == "classify":
-        if len(args) < 3:
-            print("[Error] Missing arguments for 'along tool classify'.", file=sys.stderr)
-            print("Usage: along tool classify <pattern> <class> [--global]", file=sys.stderr)
-            sys.exit(1)
-        pattern = args[1]
-        tool_class = args[2]
-        is_global = "--global" in args
-        try:
-            msg = toolnature.classify_tool(pattern, tool_class, repo_root=repo_root, is_global=is_global)
-            print(f"-> {msg}")
-            sys.exit(0)
-        except ValueError as e:
-            print(f"[Error] {e}", file=sys.stderr)
-            sys.exit(1)
-
-    elif subcmd == "list":
-        is_json = "--json" in args
-        tools = toolnature.list_tools(repo_root=repo_root)
-        if is_json:
-            print(json.dumps(tools, indent=2))
-            sys.exit(0)
-        print("=== Classified Tools & Nature Rules ===")
-        print(f"{'Tool':<20} {'Default':<18} {'Rules':<6} {'Layer'}")
-        print("-" * 55)
-        for t in tools:
-            name = t["tool"]
-            default_cls = t["default"]
-            num_rules = len(t["rules"])
-            layer = t["layer"]
-            print(f"{name:<20} {default_cls:<18} {num_rules:<6} {layer}")
-        sys.exit(0)
-
-    elif subcmd == "explain":
-        if len(args) < 2:
-            print("[Error] Missing command to explain.", file=sys.stderr)
-            print("Usage: along tool explain \"<command>\"", file=sys.stderr)
-            sys.exit(1)
-        cmd_to_explain = args[1]
-        explanation = toolnature.explain_command(cmd_to_explain, repo_root=repo_root)
-        print(explanation)
-        sys.exit(0)
-
-    else:
-        print(f"[Error] Unknown tool subcommand: '{subcmd}'. Available: classify, list, explain.", file=sys.stderr)
         sys.exit(1)
 
 
@@ -266,107 +204,6 @@ def handle_devenv_command(repo_root: str, args: List[str]):
         sys.exit(1)
     print(f"-> {msg}")
     sys.exit(0)
-
-
-def handle_circuit_command(repo_root: str, args: List[str]):
-    sub = args[0].lower() if args else "status"
-
-    if sub in ("status", "info"):
-        as_json = "--json" in args
-        state, anomaly = circuit.get_breaker_state(repo_root)
-        if as_json:
-            out = {
-                "state": state.value,
-                "anomaly": anomaly.to_dict() if anomaly else None,
-            }
-            print(json.dumps(out, indent=2))
-        else:
-            if state == circuit.CircuitState.TRIPPED and anomaly:
-                print(circuit.format_escalation_report(anomaly))
-            else:
-                print(f"[Circuit Breaker] Status: {state.value.upper()} (Normal Operation)")
-        sys.exit(0 if state != circuit.CircuitState.TRIPPED else 1)
-
-    elif sub == "trip":
-        cls_num = 1
-        reason = "Manual circuit breaker trip requested"
-        idx = 1
-        while idx < len(args):
-            arg = args[idx]
-            if arg in ("--class", "-c") and idx + 1 < len(args):
-                try:
-                    cls_num = int(args[idx + 1])
-                except ValueError:
-                    print(f"[Error] --class expects an integer (1-5), got '{args[idx + 1]}'", file=sys.stderr)
-                    sys.exit(1)
-                idx += 2
-            elif arg in ("--reason", "-r", "--sig") and idx + 1 < len(args):
-                reason = args[idx + 1]
-                idx += 2
-            else:
-                idx += 1
-
-        cls_map = {
-            1: circuit.AnomalyClass.CLASS_1_VCS_CORRUPTION,
-            2: circuit.AnomalyClass.CLASS_2_OS_CONTENTION,
-            3: circuit.AnomalyClass.CLASS_3_GLOBAL_ENV,
-            4: circuit.AnomalyClass.CLASS_4_PROCESS_CASCADE,
-            5: circuit.AnomalyClass.CLASS_5_SYNTAX_CHURN,
-        }
-        selected_cls = cls_map.get(cls_num, circuit.AnomalyClass.CLASS_1_VCS_CORRUPTION)
-        now_iso = datetime.now(timezone.utc).isoformat()
-        rem_map = {
-            1: circuit.REMEDIATION_CLASS_1,
-            2: circuit.REMEDIATION_CLASS_2,
-            3: circuit.REMEDIATION_CLASS_3,
-            4: circuit.REMEDIATION_CLASS_4,
-            5: circuit.REMEDIATION_CLASS_5,
-        }
-        anomaly = circuit.AnomalyMatch(
-            anomaly_class=selected_cls,
-            signature=reason,
-            detail="Tripped manually via along circuit trip",
-            impact="Automated tool execution is halted.",
-            remediation=rem_map.get(cls_num, circuit.REMEDIATION_CLASS_1),
-            timestamp=now_iso,
-        )
-        circuit.trip_breaker(repo_root, anomaly)
-        sys.exit(0)
-
-    elif sub == "reset":
-        force = "--force" in args or "-f" in args
-        success, msg = circuit.reset_breaker(repo_root, force=force)
-        if success:
-            print(f"[OK] {msg}")
-            sys.exit(0)
-        else:
-            print(f"[FAIL] {msg}", file=sys.stderr)
-            sys.exit(1)
-
-    elif sub in ("verify", "check", "probe"):
-        healthy, issues = circuit.run_health_probe(repo_root)
-        if healthy:
-            print("[OK] Environment health probe PASSED. No systemic anomalies detected.")
-            sys.exit(0)
-        else:
-            print("[FAIL] Environment health probe FAILED:")
-            for iss in issues:
-                print(f"  - {iss}")
-            sys.exit(1)
-
-    elif sub in ("-h", "--help", "help"):
-        print("Usage: along circuit [status|trip|reset|verify] [options]")
-        print("")
-        print("Commands:")
-        print("  status [--json]           Display current circuit breaker state and active anomaly report")
-        print("  trip [--class N] [-r MSG] Manually trip the circuit breaker with a specified anomaly class (1-5)")
-        print("  reset [--force]           Verify environment health probe and reset circuit breaker to CLOSED")
-        print("  verify                    Execute environment health probe without altering breaker state")
-        sys.exit(0)
-
-    else:
-        print(f"[Error] Unknown circuit subcommand: '{sub}'. Run 'along circuit --help'.", file=sys.stderr)
-        sys.exit(1)
 
 
 def handle_run_command(repo_root: Optional[str], args: List[str]):

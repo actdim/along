@@ -160,8 +160,7 @@ class TestDoctorRuntimeSection(unittest.TestCase):
         env["ALONG_RUNTIME"] = "cowork"
         env.pop("ALONG_AGENT", None)
         with hermetic.repo_fixture(prefix="along-rt-doctor-") as fixture:
-            res = proc.run_capture([sys.executable, along_exec, "doctor"], cwd=fixture, env=env,
-                                   trip_on_anomaly=False)
+            res = proc.run_capture([sys.executable, along_exec, "doctor"], cwd=fixture, env=env)
             self.assertIn("--- Runtime: cowork ---", res.stdout)
             self.assertIn("Gate enforcement: advisory", res.stdout)
             self.assertIn("Python", res.stdout)

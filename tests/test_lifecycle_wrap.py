@@ -199,17 +199,11 @@ class TestLifecycleWrap(unittest.TestCase):
         self.assertEqual(len(lines2), 1)
 
     def test_02c_along_history_append_cli_and_state_gate(self):
-        """along history append updates existing entries and passes Along state gate."""
-        from alongkit.hooks import shellparse
-
+        """along history append updates existing entries."""
         history_file = os.path.join(self.root, ".along", "HISTORY.md")
         textio.write_text(history_file, "# History\n\n_Log:_\n")
 
-        # 1. State command classification passes mutation authorization
-        cmd = "along history append fixture-sample-task 'Updated custom summary'"
-        self.assertTrue(shellparse.is_along_state_command(cmd))
-
-        # 2. Append new entry
+        # Append new entry
         code = lifecycle.append_history_entry(
             self.root,
             "fixture-sample-task",

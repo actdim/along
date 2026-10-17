@@ -443,15 +443,17 @@ class TestCloseoutApproval(LedgerFixture):
                           conversation_id=sid)
         return check_mutation_authorization(event, self.root, options={"enforce_unbound": True})
 
-    def test_fresh_session_commits_approved_issues_only(self):
+    def test_commits_are_not_held_and_closeout_approval_is_no_plan_approval(self):
+        # [debt--gate-simplification]: shell commands, commits included, are never held up front.
         fresh = session.session_key("claude", "fresh")
-        self.assertIn("closeout approval", self.gate('along commit "x" -i alpha --paths a.py') or "")
-        session.record_closeout_approval(self.root, fresh, ["alpha", "beta"])
         self.assertIsNone(self.gate('along commit "x" -i alpha --paths a.py'))
-        self.assertIsNone(self.gate('along commit "x" -i feat--beta --paths b.py'))
-        self.assertIsNotNone(self.gate('along commit "x" -i gamma --paths c.py'))
-        self.assertIsNotNone(self.gate('along commit "x" -i alpha --paths a.py', sid="other"))
-        self.assertIsNotNone(self.gate("touch src/a.py"), "a closeout approval is not a plan approval")
+        session.record_closeout_approval(self.root, fresh, ["alpha", "beta"])
+        from alongkit.hooks.predicates import check_mutation_authorization
+        edit = HookEvent(event_type=HookEventType.PRE_TOOL_USE, tool_name="write_to_file",
+                         tool_args={"TargetFile": "src/a.py", "CodeContent": "x\n"}, workspace_root=self.root,
+                         runtime="claude", conversation_id="fresh")
+        self.assertIsNotNone(check_mutation_authorization(edit, self.root, options={"enforce_unbound": True}),
+                             "a closeout approval is not a plan approval")
 
     def test_consumed_and_expiring(self):
         from datetime import datetime, timedelta, timezone

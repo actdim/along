@@ -44,7 +44,7 @@ def _create(fixture, slug, summary, *extra):
     return proc.run_capture(
         [sys.executable, ALONG_EXEC, "session", "create", slug, "--summary", summary,
          "--agent", "test-suite", *extra],
-        cwd=fixture, env=hermetic.isolated_home_env(), trip_on_anomaly=False,
+        cwd=fixture, env=hermetic.isolated_home_env(),
     )
 
 
@@ -83,10 +83,9 @@ class TestSessionCreate(unittest.TestCase):
         with hermetic.repo_fixture(prefix="along-session-git-") as fixture:
             git = ["git", "-c", "user.email=t@example.com", "-c", "user.name=t"]
             for args in (["init", "-q", "-b", "feature-x"], ["add", "-A"], ["commit", "-q", "-m", "init"]):
-                r = proc.run_capture(git + args, cwd=fixture, trip_on_anomaly=False)
+                r = proc.run_capture(git + args, cwd=fixture)
                 self.assertEqual(r.returncode, 0, r.stderr)
-            head = proc.run_capture(["git", "rev-parse", "--short", "HEAD"], cwd=fixture,
-                                    trip_on_anomaly=False).stdout.strip()
+            head = proc.run_capture(["git", "rev-parse", "--short", "HEAD"], cwd=fixture).stdout.strip()
             res = _create(fixture, "git-facts", "summary")
             self.assertEqual(res.returncode, 0, res.stderr)
             fm, _ = _read_session(fixture, "git-facts")

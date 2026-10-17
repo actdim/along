@@ -44,7 +44,7 @@ EXCLUDED_PATHSPECS: tuple = (
 
 
 def _tree_git(top: str, args: List[str], env: Dict[str, str]) -> Optional[str]:
-    result = proc.run_capture(["git", *args], cwd=top, env=env, check=False, trip_on_anomaly=False)
+    result = proc.run_capture(["git", *args], cwd=top, env=env, check=False)
     return result.stdout.strip() if result.ok else None
 
 

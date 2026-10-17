@@ -70,8 +70,11 @@ class TestCliSafetyMatrix(unittest.TestCase):
         for command in ALLOWED:
             self.assertIsNone(check_cli_safety(_cmd(command), REPO_ROOT), command)
 
-    def test_enforced_by_default(self):
-        self.assertTrue(HooksConfig().is_enforcing("cli_safety"))
+    def test_warns_by_default(self):
+        # [debt--gate-simplification]: style, not harm; destructive_command holds real deletes.
+        config = HooksConfig()
+        self.assertTrue(config.is_enabled("cli_safety"))
+        self.assertFalse(config.is_enforcing("cli_safety"))
 
 
 #: [bug--cli-safety-redirect-false-positive]: (command, writes a file with echo/printf?)
