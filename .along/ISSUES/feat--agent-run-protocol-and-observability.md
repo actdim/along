@@ -63,6 +63,13 @@ Establish Along as an execution control plane and observability layer for autono
 - `[feat--cross-runtime-supervisor-orchestrator]`: Cross-runtime supervisor orchestrator dispatching along-team roles across heterogeneous agent CLIs.
 - `[docs--operations-and-autonomous-systems-paradigm]`: Documentation paradigm shift to dual-mode software engineering and autonomous operations.
 
+## Re-parenting (2026-10-17)
+
+The runnable path (orchestrator, daemon, Telegram gateway, runtime adapters, stdin bridge) moved
+under the MVP epic `feat--autonomous-multi-runtime-mvp`, which defers OpenTelemetry export. This
+epic keeps the observability scope: AEP/ARP schema, OTel/OpenInference mapping and OTLP sinks,
+built later on top of the run records from `feat--cross-runtime-handoff-entities`.
+
 ## Acceptance Criteria
 - [ ] Universal AEP/ARP event schema formalized and validated.
 - [ ] OpenTelemetry telemetry pipeline exporting spans to OTLP endpoints (gRPC/HTTP).

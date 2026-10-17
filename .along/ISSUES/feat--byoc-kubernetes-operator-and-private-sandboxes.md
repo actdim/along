@@ -42,6 +42,13 @@ Enterprises with strict security policies prohibit uploading source code or exec
 ### 3. Docker Compose Appliance (Lightweight On-Premise)
 - Self-contained `docker-compose.yml` distribution for smaller organizations or air-gapped single-server deployments (Hetzner, on-prem bare-metal) running OpenObserve, local sandboxes, and Telegram/Mattermost gateways.
 
+## Note (2026-10-17)
+
+The single-server Docker path is now `feat--isolated-environment-docker` under
+`feat--autonomous-multi-runtime-mvp` (ADR-2026-10-17--docker-isolation-now-gvisor-later). This issue
+keeps the enterprise scope (Kubernetes operator, micro-VM sandboxes, multi-service appliance) as
+v6 vision and should reuse that environment image instead of defining a second one.
+
 ## Acceptance Criteria
 - [ ] Kubernetes Operator successfully reconciles `AgentExecutionEnvironment` resources.
 - [ ] Ephemeral sandboxes execute tasks and terminate with zero orphaned resources.

@@ -12,7 +12,7 @@ agent: claude
 tags: [gates, shellparse, powershell]
 milestone: v4.5.0-multi-user-merge-automation
 blocked_by: []
-related: [bug--plan-gate-blocks-readonly-git, bug--plan-gate-blocks-help, feat--tool-nature-classification, feat--tool-class-model]
+related: [bug--plan-gate-blocks-readonly-git, bug--plan-gate-blocks-help, feat--tool-nature-classification, debt--gate-simplification]
 ---
 
 # Read-only commands and test runs blocked in inquiry phase

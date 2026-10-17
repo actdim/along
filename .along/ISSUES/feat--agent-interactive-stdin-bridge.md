@@ -11,8 +11,8 @@ agent: antigravity
 tags: [telegram, bridge, stdin, interactive, human-in-the-loop, clarification, ask-question]
 milestone: v5.0.0-agent-run-protocol-and-observability
 blocked_by: [feat--agent-execution-gate-telegram]
-related: [feat--agent-runtime-runner-antigravity, feat--agent-runtime-adapters-claude-codex-opencode]
-parent: feat--agent-run-protocol-and-observability
+related: [feat--agent-runtime-runner-antigravity, feat--agent-runtime-adapters-claude-codex-opencode, feat--cross-runtime-handoff-entities]
+parent: feat--autonomous-multi-runtime-mvp
 ---
 
 # Telegram Interactive Clarification & Stdin Bridge
@@ -64,6 +64,18 @@ Without an interactive clarification bridge, remote agent runs on a VPS either s
 - If the operator fails to respond before timeout:
   - If a recommended option was marked by the agent, automatically select the recommended default and log a warning.
   - Otherwise, terminate the run safely with status `TIMED_OUT_WAITING_FOR_INPUT` without leaving orphaned background processes.
+
+## Revised Approach (2026-10-17)
+
+Intercepting blocking stdin reads of third-party CLI processes is fragile and runtime-specific.
+Under `feat--autonomous-multi-runtime-mvp` runtimes run non-interactively, so they cannot block on
+stdin. The replacement is the file-based question protocol in `feat--cross-runtime-handoff-entities`:
+the agent writes `.along/.session/<slug>/questions/<id>.md` and exits with outcome `needs-input`;
+the Telegram gateway renders it (option buttons or reply text) and writes the answer back; the
+orchestrator starts the next run, whose brief contains the answer. The timeout and recommended-default
+rules from this issue still apply. Direct stdin injection stays out of scope unless the spike
+`spike--headless-runtimes-on-linux` shows a runtime that cannot work without it. Once the question
+protocol ships, close this issue as superseded by `feat--cross-runtime-handoff-entities`.
 
 ## Acceptance Criteria
 - [ ] Multi-choice questions (`ask_question`) rendered as inline Telegram callback buttons.

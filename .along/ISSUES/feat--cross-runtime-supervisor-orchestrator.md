@@ -10,9 +10,9 @@ updated: 2026-10-13
 agent: antigravity
 tags: [orchestration, multi-runtime, supervisor, along-team, claude-code, antigravity, tiered-models]
 milestone: v5.0.0-agent-run-protocol-and-observability
-blocked_by: [feat--agent-runtime-adapters-claude-codex-opencode, feat--structured-blackboard-state-machine]
+blocked_by: [feat--agent-runtime-adapters-claude-codex-opencode, feat--structured-blackboard-state-machine, spike--headless-runtimes-on-linux, feat--cross-runtime-handoff-entities]
 related: [docs--tiered-model-workflow-guide, feat--clean-turn-context-isolation-in-along-team, feat--vps-runner-daemon]
-parent: feat--agent-run-protocol-and-observability
+parent: feat--autonomous-multi-runtime-mvp
 ---
 
 # Cross-Runtime Supervisor Orchestration for Heterogeneous Multi-Agent Loops
@@ -79,6 +79,18 @@ There is no supervisor engine capable of orchestrating external CLI processes se
 ### 5. Process Lifecycle Supervision & Safety
 - Enforces strict process timeouts for each phase.
 - Handles `SIGINT` / `SIGTERM` gracefully: terminates active child processes, cleans up temporary files, and leaves `.along/.session/<slug>/` in a recoverable state.
+
+## MVP Scope (2026-10-17)
+
+Re-scoped under `feat--autonomous-multi-runtime-mvp`:
+- MVP roles: implementer and reviewer only, with the fix-retry loop. Scout and architect come after the loop works.
+- Runtimes and launch commands come from `spike--headless-runtimes-on-linux` (Antigravity may be replaced on Linux).
+- All handoff goes through the files defined in `feat--cross-runtime-handoff-entities`: the prompt
+  payload is `along brief <slug> --role <role>`, the reviewer writes a front-matter verdict, every
+  run writes a run record, a run that needs input writes a question file and exits `needs-input`.
+- The orchestrator holds the issue claim in `state.json` and is the only process that pushes.
+- Runs execute inside the environment container (`feat--isolated-environment-docker`) under the
+  autonomous gate profile (`feat--autonomous-gate-profile`), so runtimes use their no-confirmation modes.
 
 ## Acceptance Criteria
 

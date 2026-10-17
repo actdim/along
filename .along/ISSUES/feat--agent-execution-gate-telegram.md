@@ -10,9 +10,9 @@ updated: 2026-09-23
 agent: antigravity
 tags: [telegram, live-card, execution-gate, permission-hook, fail-safe, human-in-the-loop, task-dispatch, multi-room, mini-app, semi-autonomous]
 milestone: v5.0.0-agent-run-protocol-and-observability
-blocked_by: [feat--agent-run-protocol-core]
-related: [feat--agent-runtime-runner-antigravity, feat--agent-chat-adapters-discord-slack-mattermost-matrix]
-parent: feat--agent-run-protocol-and-observability
+blocked_by: [feat--agent-run-protocol-core, feat--vps-runner-daemon]
+related: [feat--agent-runtime-runner-antigravity, feat--agent-chat-adapters-discord-slack-mattermost-matrix, feat--autonomous-gate-profile, feat--cross-runtime-handoff-entities]
+parent: feat--autonomous-multi-runtime-mvp
 ---
 
 # Telegram Remote Operational Gateway & Execution Gate
@@ -116,6 +116,20 @@ Operators need visibility into pending issues and project status before initiati
   - Configurable decision timeout (default: 120 seconds). If unapproved, the hook automatically aborts with exit code 1 (`Action rejected: decision timed out`).
 - **Secret Redaction**:
   - All command strings, environment variables, and output snippets displayed in Telegram are sanitized to strip API tokens, private keys, and passwords.
+
+## MVP Scope (2026-10-17)
+
+Re-scoped under `feat--autonomous-multi-runtime-mvp`. MVP covers only:
+- One chat, one allowlisted operator `user_id` (configured in the environment `env.yaml`).
+- Commands: `/run <slug>`, `/task "<title>"`, `/status`.
+- One in-place status card per run, rendered from run records (`feat--cross-runtime-handoff-entities`).
+- Buttons: Approve and Reject for the escalation list of `feat--autonomous-gate-profile`; Answer for
+  open question files (option buttons or reply text). Answers are written to the question file, not to process stdin.
+- Fail-safe timeout with default deny; secret redaction of everything shown.
+
+Deferred until after the MVP (keep the specification above as the target): Telegram Mini App and
+dashboard tunnel, inline issue search and paginated `/issues`, multi-room and forum-topic routing,
+operator roles, multi-operator race resolution.
 
 ## Acceptance Criteria
 - [ ] Bidirectional task initiation supported via `/run <slug>` and `/task <title>`.

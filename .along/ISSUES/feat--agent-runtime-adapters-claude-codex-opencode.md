@@ -10,9 +10,9 @@ updated: 2026-09-27
 agent: antigravity
 tags: [runtime, claude-code, codex, opencode, adapters, local-models, ollama]
 milestone: v5.0.0-agent-run-protocol-and-observability
-blocked_by: [feat--agent-run-protocol-core]
-related: [feat--agent-runtime-runner-antigravity]
-parent: feat--agent-run-protocol-and-observability
+blocked_by: [feat--agent-run-protocol-core, spike--headless-runtimes-on-linux]
+related: [feat--agent-runtime-runner-antigravity, feat--cross-runtime-handoff-entities]
+parent: feat--autonomous-multi-runtime-mvp
 ---
 
 # Multi-Runtime Adapters: Claude Code, OpenAI Codex & OpenCode
@@ -41,6 +41,15 @@ Development teams employ different AI agent CLIs across projects. Some use comme
 
 ### 4. Generic CLI Fallback Adapter
 - Universal wrapper for uninstrumented CLIs: process lifecycle monitoring, exit code tracking, and line-buffered stdout/stderr capture.
+
+## MVP Scope (2026-10-17)
+
+For `feat--autonomous-multi-runtime-mvp` the adapter's job is launching and supervising a headless
+run, not telemetry: build the command line from a brief and a role profile (model, no-confirmation
+flag, budget limits), run it with a timeout, read the final result and exit code, and write a run
+record (`feat--cross-runtime-handoff-entities`). Facts come from `spike--headless-runtimes-on-linux`.
+Mapping to OpenTelemetry / OpenInference spans is deferred. Antigravity is covered by
+`feat--agent-runtime-runner-antigravity` (done, Windows); its Linux status is a spike question.
 
 ## Acceptance Criteria
 - [ ] Claude Code adapter tested in headless execution mode.

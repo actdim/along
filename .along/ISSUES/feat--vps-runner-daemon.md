@@ -10,9 +10,9 @@ updated: 2026-09-27
 agent: antigravity
 tags: [vps, runner, daemon, service, worker-pool, long-polling, webhook, systemd]
 milestone: v5.0.0-agent-run-protocol-and-observability
-blocked_by: [feat--agent-run-protocol-core]
-related: [feat--agent-execution-gate-telegram, feat--agent-runtime-runner-antigravity]
-parent: feat--agent-run-protocol-and-observability
+blocked_by: [feat--agent-run-protocol-core, feat--isolated-environment-docker]
+related: [feat--agent-execution-gate-telegram, feat--agent-runtime-runner-antigravity, feat--cross-runtime-supervisor-orchestrator]
+parent: feat--autonomous-multi-runtime-mvp
 ---
 
 # VPS Runner Host Daemon & Background Process Supervisor
@@ -56,6 +56,17 @@ Autonomous agent execution on remote servers requires an always-on host process 
 - Supervise child agent processes (Antigravity, Claude Code, Codex, OpenCode) with timeout monitors.
 - Handle `SIGTERM` / `SIGINT` gracefully: notify Telegram status card of interruption, release locks, and clean up child processes.
 - Persistent run state file (`~/.along/daemon-state.json`) prevents duplicate runs across daemon restarts.
+
+## MVP Scope (2026-10-17)
+
+Re-scoped under `feat--autonomous-multi-runtime-mvp`:
+- The daemon is the entrypoint of the environment container (`feat--isolated-environment-docker`);
+  Docker `restart: unless-stopped` replaces the systemd unit for the MVP.
+- Telegram long polling only. Webhook mode, priority queue and concurrency above 1 are deferred.
+- One run per repository at a time; the claim in `state.json` (`feat--cross-runtime-handoff-entities`) guards it.
+- The daemon hands work to the orchestrator (`feat--cross-runtime-supervisor-orchestrator`); it does not drive runtimes itself.
+- Run state lives in run records inside the repository, not in `~/.along/daemon-state.json`.
+- No OTel flush in the MVP; the JSONL event log and the Telegram card are the observability surface.
 
 ## Acceptance Criteria
 - [ ] `along daemon` CLI implemented supporting start, stop, status, and logs.

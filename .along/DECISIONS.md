@@ -3,7 +3,7 @@
 
 Compiled index of Architectural Decision Records stored in `.along/DECISIONS/`.
 
-## Active Decisions (43)
+## Active Decisions (44)
 
 - [Along v2.0.0: Rebranding, Isolated .along/ Directory, along-* Skill Prefixes, and protocol: along Metadata](DECISIONS/ADR-2026-08-27--along-v200-rebranding-and-namespace-isolation.md)
 - [Autonomous Multi-Mode Repository Dashboard & Analytics Engine](DECISIONS/ADR-2026-08-27--autonomous-multi-mode-dashboard-and-analytics-engine.md)
@@ -48,6 +48,7 @@ Compiled index of Architectural Decision Records stored in `.along/DECISIONS/`.
 - [Subproject boundary is a nested .git or an explicit along init](DECISIONS/ADR-2026-10-06--subproject-boundary-is-git-or-explicit-init.md)
 - [An Along installation is Along state, never an AGENTS.md](DECISIONS/ADR-2026-10-07--along-installation-is-state-not-agents-md.md)
 - [Gate friction fixes of 2026-10-11](DECISIONS/ADR-2026-10-11--gate-friction-fixes.md)
+- [Autonomous mode isolation: one Docker container per environment now, gVisor runtime later](DECISIONS/ADR-2026-10-17--docker-isolation-now-gvisor-later.md)
 
 ## Superseded & Retired Decisions (6)
 
