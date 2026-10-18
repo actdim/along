@@ -485,6 +485,9 @@ def planned_files(source_root: str, homes: Homes,
             protocol = os.path.join(skills_dir, "along-init", "protocol.md")
             if os.path.isfile(protocol):
                 plan[os.path.join(helper, "protocol.md")] = protocol
+            reference = os.path.join(skills_dir, "along-init", "protocol-reference.md")
+            if os.path.isfile(reference):
+                plan[os.path.join(helper, "protocol-reference.md")] = reference
     return plan
 
 

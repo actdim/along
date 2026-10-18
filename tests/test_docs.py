@@ -10,29 +10,39 @@ REPO_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
 
 class TestDocumentationRules(unittest.TestCase):
-    def test_agents_md_prohibits_shell_code_probing(self):
-        """AGENTS.md and skills/along-init/protocol.md must prohibit ad-hoc python -c probing."""
-        agents_path = os.path.join(REPO_ROOT, "AGENTS.md")
-        protocol_path = os.path.join(REPO_ROOT, "skills", "along-init", "protocol.md")
+    # Full rule wording moved from the AGENTS.md core to the on-demand protocol reference
+    # (source and docs/ projection) in [debt--agents-md-core-slimming]; the core keeps a
+    # one-line pointer.
+    REFERENCE_PATHS = (
+        os.path.join(REPO_ROOT, "skills", "along-init", "protocol-reference.md"),
+        os.path.join(REPO_ROOT, "docs", "topic--along-protocol.md"),
+    )
+    CORE_PATHS = (
+        os.path.join(REPO_ROOT, "AGENTS.md"),
+        os.path.join(REPO_ROOT, "skills", "along-init", "protocol.md"),
+    )
 
-        for path in (agents_path, protocol_path):
+    def test_agents_md_prohibits_shell_code_probing(self):
+        """The protocol reference must prohibit ad-hoc python -c probing; the core names it."""
+        for path in self.REFERENCE_PATHS:
             content = textio.read_text(path)
             self.assertIn("No Ad-Hoc Shell Code Probing", content)
             self.assertIn("python -c", content)
             self.assertIn("alongkit", content)
             self.assertIn("view_file", content)
             self.assertIn("along graph-", content)
+        for path in self.CORE_PATHS:
+            self.assertIn("python -c", textio.read_text(path))
 
     def test_agents_md_prohibits_cli_reverse_engineering(self):
-        """AGENTS.md and skills/along-init/protocol.md must prohibit reading Along engine source code."""
-        agents_path = os.path.join(REPO_ROOT, "AGENTS.md")
-        protocol_path = os.path.join(REPO_ROOT, "skills", "along-init", "protocol.md")
-
-        for path in (agents_path, protocol_path):
+        """The protocol reference must prohibit reading Along engine source code; the core names it."""
+        for path in self.REFERENCE_PATHS:
             content = textio.read_text(path)
             self.assertIn("CLI Black-Box Invariance", content)
             self.assertIn("opaque black-box", content)
             self.assertIn("alongkit", content)
+        for path in self.CORE_PATHS:
+            self.assertIn("black box", textio.read_text(path))
 
     def test_along_team_skill_documents_anti_pattern(self):
         """skills/along-team/SKILL.md must document the anti-pattern shell code probing."""

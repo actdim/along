@@ -334,9 +334,9 @@ Attaches engineering guidelines and rule packs to the project.
 ### `along budget` (alias `along context-budget`)
 Audits repository token footprint and context budgets against protocol limits.
 - **Options**:
-  - `--check`: Exits with status code 1 if any measured file exceeds configured budget thresholds (e.g. `AGENTS.md` exceeding 14 KB).
+  - `--check`: Exits with status code 1 if any measured file exceeds configured budget thresholds (e.g. `AGENTS.md` exceeding 7 KB).
   - `--json`: Outputs structured JSON report for CI/CD gates.
-- **AGENTS.md limits**: `agents_md_bytes` (14336) measures `AGENTS.md` without its "Project specifics" section; `project_specifics_bytes` (4096) is a soft limit on that section that only warns, with the hint to move details into `docs/topic--*.md`. Both are overridable in the `budget` block of `.along/config.json`.
+- **AGENTS.md limits**: `agents_md_bytes` (7168) measures `AGENTS.md` without its "Project specifics" section (the managed core; procedure lives in `docs/topic--along-protocol.md`); `project_specifics_bytes` (4096) is a soft limit on that section that only warns, with the hint to move details into `docs/topic--*.md`. Both are overridable in the `budget` block of `.along/config.json`.
 - **Usage**:
   ```bash
   along budget

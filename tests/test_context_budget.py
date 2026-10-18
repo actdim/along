@@ -66,23 +66,33 @@ class TestContextBudgetEngine(unittest.TestCase):
         self.assertTrue(report["all_passed"], "Live repo must satisfy all context budget limits")
 
     def test_agents_md_hard_size_limit(self):
-        """AGENTS.md without "Project specifics" MUST stay under 14 KB (REQ-4 of
-        debt--agents-md-context-budget-pruning; specifics are budgeted apart since
+        """AGENTS.md without "Project specifics" MUST stay under 7 KB (core-only since
+        debt--agents-md-core-slimming; specifics are budgeted apart since
         debt--agents-md-budget-project-specifics)."""
         agents_md = os.path.join(REPO_ROOT, "AGENTS.md")
         size = os.path.getsize(agents_md) - budget.project_specifics_bytes(agents_md)
         self.assertLess(
-            size, 14336,
-            f"AGENTS.md (without Project specifics) is {size} bytes, exceeds 14 KB budget ceiling (14336 B)"
+            size, 7168,
+            f"AGENTS.md (without Project specifics) is {size} bytes, exceeds 7 KB budget ceiling (7168 B)"
         )
 
+    def test_managed_block_hard_size_limit(self):
+        """The managed protocol block in AGENTS.md MUST stay at or under 6 KB
+        (REQ-3 of debt--agents-md-core-slimming)."""
+        with open(os.path.join(REPO_ROOT, "AGENTS.md"), "rb") as f:
+            raw = f.read().decode("utf-8")
+        end = "<!-- END ALONG-PROTOCOL -->"
+        block = raw[: raw.index(end) + len(end)]
+        size = len(block.encode("utf-8"))
+        self.assertLessEqual(size, 6144, f"managed block is {size} bytes, exceeds 6 KB ceiling (6144 B)")
+
     def test_protocol_md_hard_size_limit(self):
-        """Canonical template MUST stay under 14 KB (REQ-4)."""
+        """Canonical template MUST stay at or under 6 KB (REQ-3 of debt--agents-md-core-slimming)."""
         protocol_md = os.path.join(REPO_ROOT, "skills", "along-init", "protocol.md")
         size = os.path.getsize(protocol_md)
-        self.assertLess(
-            size, 14336,
-            f"protocol.md is {size} bytes, exceeds 14 KB budget ceiling (14336 B)"
+        self.assertLessEqual(
+            size, 6144,
+            f"protocol.md is {size} bytes, exceeds 6 KB budget ceiling (6144 B)"
         )
 
 

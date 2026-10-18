@@ -29,6 +29,8 @@ What the engine does, so you can verify the report:
    - **Existing file with markers**: only the text between the markers is replaced (legacy `ACTDIM-AGENTS-PROTOCOL` markers included).
    - **Hand-written file without markers**: the block goes on top; the original text stays below unchanged, under `## Project specifics` unless that heading already exists.
    - **Missing file**: created with the block and an empty `## Project specifics`.
+   - **Profile**: the block is rendered for the active gate strictness profile (`--profile`, else repository config); `<!-- profile: ... -->` sections in the source are resolved and stripped.
+   - **Protocol reference** (FULL roots only): `protocol-reference.md` is rendered to `docs/topic--along-protocol.md` (`type: reference`, `write_policy: manual`), the on-demand procedure the core block points to. A managed copy is refreshed on every run; a hand-written file at that path (no managed marker) is left alone with a warning.
 2. **`CLAUDE.md`** imports `AGENTS.md` (`See @AGENTS.md for project instructions and guidance.`); the line is prepended only when missing.
 3. **`.gitattributes`**: `*.md text eol=lf`, `.along/HISTORY.md merge=union`, `.along/DECISIONS.md merge=union` appended when missing.
 4. **`.along/` skeleton, create-only**: `ISSUES.md`, `ISSUES/done/`, `DECISIONS/`, `GLOSSARY.md`, `HISTORY.md`, `SESSIONS/<YYYY>/`, `docs/INDEX.md`. Existing state is never overwritten. The migration (item 7) adds `MILESTONES/`, `RISKS/`, `SPIKES/`, `CHECKLISTS/` and `.code-review-graph-ignore`.

@@ -245,9 +245,13 @@ class TestAlongSkillsAndScripts(unittest.TestCase):
         `[debt--protocol-quality-audit-remediation]`, caught here in the projection it
         damaged.
         """
+        from alongkit import scaffold
         with open(os.path.join(REPO_ROOT, "skills", "along-init", "protocol.md"),
                   "r", encoding="utf-8") as f:
-            source = f.read().replace("\r\n", "\n").strip()
+            # The block is the source rendered for the default profile (profile markers
+            # resolved and stripped) [debt--agents-md-core-slimming].
+            source = scaffold.render_protocol_block(
+                f.read().replace("\r\n", "\n"), profile="standard").strip()
         with open(os.path.join(REPO_ROOT, "AGENTS.md"), "r", encoding="utf-8") as f:
             agents = f.read().replace("\r\n", "\n")
 
@@ -264,6 +268,23 @@ class TestAlongSkillsAndScripts(unittest.TestCase):
                 lineterm="", n=1))[:40])
             self.fail("the managed block has drifted from its source. Regenerate it with "
                       f"/along-init rather than editing AGENTS.md by hand:\n{diff}")
+
+    def test_03b2_protocol_reference_matches_its_source(self):
+        """docs/topic--along-protocol.md is the rendered skills/along-init/protocol-reference.md.
+
+        Same projection rule as the AGENTS.md block: regenerate with `along update`
+        (or `along init`), never edit the article by hand. [debt--agents-md-core-slimming]
+        """
+        from alongkit import scaffold
+        with open(os.path.join(REPO_ROOT, "skills", "along-init", "protocol-reference.md"),
+                  "r", encoding="utf-8") as f:
+            expected = scaffold.render_protocol_reference(f.read(), "standard")
+        with open(os.path.join(REPO_ROOT, "docs", "topic--along-protocol.md"),
+                  "r", encoding="utf-8") as f:
+            actual = f.read().replace("\r\n", "\n")
+        self.assertTrue(scaffold.is_managed_reference(actual))
+        self.assertEqual(actual, expected,
+                         "docs/topic--along-protocol.md drifted from its source; run `along update`.")
 
     def test_03c_protocol_pins_no_stale_version_examples(self):
         """
@@ -2425,12 +2446,14 @@ class TestAlongSkillsAndScripts(unittest.TestCase):
             self.assertFalse(os.path.exists(index_path), "Corrupted 0-byte index must be removed")
 
         # 6. Protocol & Rules verification (REQ-1, REQ-2)
-        agents_md = os.path.join(REPO_ROOT, "AGENTS.md")
-        protocol_md = os.path.join(REPO_ROOT, "skills", "along-init", "protocol.md")
+        # Full wording lives in the on-demand reference since [debt--agents-md-core-slimming];
+        # the source and its docs/ projection must both carry it.
+        reference_src = os.path.join(REPO_ROOT, "skills", "along-init", "protocol-reference.md")
+        reference_doc = os.path.join(REPO_ROOT, "docs", "topic--along-protocol.md")
         commit_skill = os.path.join(REPO_ROOT, "skills", "along-commit", "SKILL.md")
         team_skill = os.path.join(REPO_ROOT, "skills", "along-team", "SKILL.md")
 
-        for p in [agents_md, protocol_md]:
+        for p in [reference_src, reference_doc]:
             with open(p, "r", encoding="utf-8") as f:
                 content = f.read()
             self.assertIn("Inquiry Read-Only Invariance (Zero-Mutation Rule on Questions)", content)

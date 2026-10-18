@@ -193,6 +193,7 @@ class TestInstalledLayoutPlan(InstallerCase):
             self.assertIn(os.path.join(commands, skill + ".md"), plan)
         helper = os.path.join(homes.opencode, "actdim-along")
         self.assertIn(os.path.join(helper, "protocol.md"), plan)
+        self.assertIn(os.path.join(helper, "protocol-reference.md"), plan)
         self.assertIn(os.path.join(helper, "alongkit", "repo.py"), plan)
 
     def test_the_user_configuration_is_not_owned_by_the_install(self):

@@ -67,13 +67,25 @@ def resolve_init_target(explicit):
     return os.path.abspath(top) if top else os.path.abspath(os.getcwd())
 
 
-def load_protocol_text(root):
+def resolve_protocol_path(root):
     candidates = [os.path.join(root, "skills", "along-init", "protocol.md")]
     candidates += get_source_protocol_paths() + get_global_skill_paths()
     for path in candidates:
         if os.path.isfile(path):
-            return textio.read_text(path, strict=False).strip()
+            return path
     return None
+
+
+def load_protocol_text(root):
+    path = resolve_protocol_path(root)
+    return textio.read_text(path, strict=False).strip() if path else None
+
+
+def load_protocol_reference_text(root):
+    """The on-demand reference shipped next to the protocol that `load_protocol_text` uses."""
+    path = resolve_protocol_path(root)
+    source = scaffold.reference_source_for(path) if path else None
+    return textio.read_text(source, strict=False) if source else None
 
 
 def _note(report, key, path, root):
@@ -111,6 +123,31 @@ def scaffold_agents_md(mig, root, protocol_text, report, profile=None):
     _note(report, "updated", path, root)
     if not had_markers:
         report["adopted_handwritten_agents_md"] = True
+
+
+def scaffold_protocol_reference(mig, root, reference_text, report, profile=None):
+    """Write the managed `docs/topic--along-protocol.md` at a FULL root [debt--agents-md-core-slimming]."""
+    if not reference_text or report.get("protocol_variant") == "REF":
+        return
+    if profile is None:
+        from alongkit import profiles
+        profile = profiles.resolve_active_profile(root)
+    path = os.path.join(root, *scaffold.REFERENCE_DOC_RELPATH)
+    existing = textio.read_text(path) if os.path.isfile(path) else None
+    rendered = scaffold.render_protocol_reference(reference_text, profile)
+    action = scaffold.reference_action(existing, rendered)
+    if action == "foreign":
+        report.setdefault("warnings", []).append(
+            f"{repo.normalize_posix(repo.safe_relpath(path, root))} exists without the Along managed "
+            "marker; left as is (rename it to receive the protocol reference).")
+        _note(report, "untouched", path, root)
+        return
+    if action == "untouched":
+        _note(report, "untouched", path, root)
+        return
+    mig.makedirs(os.path.dirname(path))
+    mig.write(path, rendered)
+    _note(report, "created" if action == "create" else "updated", path, root)
 
 
 def scaffold_claude_md(mig, root, report):
@@ -220,6 +257,8 @@ def print_report(report):
             print(f"   LINKS      repointed in {link}")
     for step in report["pipeline"]:
         print(f"   PIPELINE   {step['step']}: {step['status']}")
+    for warning in report.get("warnings", []):
+        print(f"   WARN       {warning}")
     todo = []
     if vision and vision["action"] == "merged-needs-restructure":
         todo.append("Decompose the 'along:imported-vision' section of .along/VISION.md (scope / non-goals / "
@@ -273,6 +312,7 @@ def main(argv=None) -> int:
                               state_dir=os.path.join(root, repo.STATE_DIR), printer=quiet)
 
     scaffold_agents_md(mig, root, protocol_text, report, profile=args.profile)
+    scaffold_protocol_reference(mig, root, load_protocol_reference_text(root), report, profile=args.profile)
     scaffold_claude_md(mig, root, report)
     scaffold_gitattributes(mig, root, report)
     scaffold_state_dir(mig, root, report)

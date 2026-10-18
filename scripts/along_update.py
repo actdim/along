@@ -272,7 +272,36 @@ def find_existing_agent_contexts(repo_root):
                 contexts.insert(0, root)
     return contexts
 
-def apply_migration_to_context(ctx_dir, protocol_text, migrate_script, is_root=True, ancestor_root=None, dry_run=False, no_hooks=False):
+def refresh_protocol_reference(ctx_dir, reference_text, profile):
+    """Refresh the managed `docs/topic--along-protocol.md`; False only on a write error.
+
+    A hand-written file at that path (no managed marker) is left alone with a warning.
+    [debt--agents-md-core-slimming]
+    """
+    path = os.path.join(ctx_dir, *scaffold.REFERENCE_DOC_RELPATH)
+    existing = None
+    if os.path.isfile(path):
+        with open(path, "r", encoding="utf-8", errors="ignore") as f:
+            existing = f.read()
+    rendered = scaffold.render_protocol_reference(reference_text, profile)
+    action = scaffold.reference_action(existing, rendered)
+    if action == "foreign":
+        print(f"   [WARN] {path} has no Along managed marker; protocol reference not written.", file=sys.stderr)
+        return True
+    if action == "untouched":
+        return True
+    try:
+        os.makedirs(os.path.dirname(path), exist_ok=True)
+        with open(path, "w", encoding="utf-8", newline="\n") as f:
+            f.write(rendered)
+    except OSError as exc:
+        print(f"   [WARN] Could not write {path}: {exc}", file=sys.stderr)
+        return False
+    print(f"   [OK] {'Created' if action == 'create' else 'Refreshed'} protocol reference docs/topic--along-protocol.md.")
+    return True
+
+
+def apply_migration_to_context(ctx_dir, protocol_text, migrate_script, is_root=True, ancestor_root=None, dry_run=False, no_hooks=False, reference_text=None):
     context_ok = True
     rel_display = safe_relpath(ctx_dir, ancestor_root or ctx_dir)
     if rel_display in (".", ""):
@@ -288,8 +317,15 @@ def apply_migration_to_context(ctx_dir, protocol_text, migrate_script, is_root=T
     agents_md = os.path.join(ctx_dir, "AGENTS.md")
 
     # FULL at an architecture root, REF inside a nested folder of the same git working
-    # tree; a submodule root is its own architecture root (alongkit.scaffold).
-    block = scaffold.protocol_block_for(ctx_dir, protocol_text)["block"]
+    # tree; a submodule root is its own architecture root (alongkit.scaffold). The
+    # active gate strictness profile shapes both the block and the reference article.
+    from alongkit import profiles
+    profile = profiles.resolve_active_profile(ctx_dir)
+    block_info = scaffold.protocol_block_for(ctx_dir, protocol_text, profile=profile)
+    block = block_info["block"]
+    if block_info["variant"] == "FULL" and reference_text:
+        if not refresh_protocol_reference(ctx_dir, reference_text, profile):
+            context_ok = False
 
     if os.path.islink(agents_md) and not os.path.exists(agents_md):
         print(f"   [WARN] Broken symlink detected: {agents_md}; skipping AGENTS.md update for this context.", file=sys.stderr)
@@ -567,6 +603,11 @@ def run_update(repo_root, check_only=False, dry_run=False, force=False, local_on
 
     with open(protocol_src, "r", encoding="utf-8") as f:
         protocol_text = f.read().strip()
+    reference_text = None
+    reference_src = scaffold.reference_source_for(protocol_src)
+    if reference_src:
+        with open(reference_src, "r", encoding="utf-8") as f:
+            reference_text = f.read()
 
     migrate_script = None
     local_mig = os.path.join(repo_root, "scripts", "migrate_protocol.py")
@@ -614,7 +655,8 @@ def run_update(repo_root, check_only=False, dry_run=False, force=False, local_on
                 is_root=is_root,
                 ancestor_root=ancestor,
                 dry_run=dry_run,
-                no_hooks=no_hooks
+                no_hooks=no_hooks,
+                reference_text=reference_text
             )
             if not ok:
                 all_contexts_ok = False

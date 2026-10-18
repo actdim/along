@@ -52,6 +52,16 @@ _WRAPPER_BEGIN_RE = re.compile(r"^<!-- BEGIN (?:ALONG-PROTOCOL|ACTDIM-AGENTS-PRO
 _WRAPPER_END_RE = re.compile(r"\r?\n?<!-- END (?:ALONG-PROTOCOL|ACTDIM-AGENTS-PROTOCOL) -->$")
 _SPECIFICS_HEADING_RE = re.compile(r"^#{1,6}[ \t]+Project specifics[ \t]*$", re.MULTILINE)
 
+#: Profile-scoped sections in protocol sources [debt--agents-md-core-slimming].
+_PROFILE_OPEN_RE = re.compile(r"^<!--\s*profile:\s*(!?)\s*([a-z][a-z,\s]*?)\s*-->$")
+_PROFILE_CLOSE_RE = re.compile(r"^<!--\s*/profile\s*-->$")
+
+#: The on-demand protocol reference: shipped next to `protocol.md`, written by
+#: `along init` / `along update` to the repository's Knowledge Base at FULL roots.
+REFERENCE_SOURCE_NAME = "protocol-reference.md"
+REFERENCE_DOC_RELPATH = ("docs", "topic--along-protocol.md")
+REFERENCE_MARKER = "<!-- ALONG-PROTOCOL-REFERENCE (managed by along-init"
+
 CLAUDE_IMPORT_LINE = "See @AGENTS.md for project instructions and guidance."
 
 VISION_FILENAME = "VISION.md"
@@ -77,68 +87,68 @@ def strip_protocol_wrapper(protocol_text: str) -> str:
     return _WRAPPER_END_RE.sub("", text.strip()).strip()
 
 
+def render_profile_sections(text: str, profile: Optional[str]) -> str:
+    """`text` with only the profile-scoped sections the active profile keeps, markers removed.
+
+    A section opens with `<!-- profile: light -->` (kept for the named profiles) or
+    `<!-- profile: !light -->` (kept for every other profile) on its own line and closes
+    with `<!-- /profile -->`. Lines outside sections are always kept. [debt--agents-md-core-slimming]
+    """
+    active = profile or "standard"
+    out: List[str] = []
+    keep = True
+    for line in text.splitlines():
+        stripped = line.strip()
+        opened = _PROFILE_OPEN_RE.match(stripped)
+        if opened:
+            names = {n.strip() for n in opened.group(2).split(",") if n.strip()}
+            keep = (active in names) != bool(opened.group(1))
+            continue
+        if _PROFILE_CLOSE_RE.match(stripped):
+            keep = True
+            continue
+        if keep:
+            out.append(line)
+    rendered = "\n".join(out)
+    return rendered + "\n" if text.endswith("\n") else rendered
+
+
 def adapt_protocol_for_profile(protocol_text: str, profile: str) -> str:
-    """Adapt protocol rules and checklist verbosity according to gate strictness profile."""
-    if not profile or profile == "standard":
-        return protocol_text
-
-    text = protocol_text
-    if profile == "light":
-        # Header annotation
-        text = re.sub(r"^(# ALONG-PROTOCOL v[0-9.]+)(.*)$", r"\1 (profile: light)", text, flags=re.MULTILINE)
-
-        # Plan approval easing
-        old_plan = (
-            "- **Session Binding & Plan Approval** [gate: require-plan-approval]: `along start <slug>` binds THIS agent "
-            "session to the issue; parallel sessions keep their own bindings. Source edits unlock after the user approves the plan "
-            "(`EnterPlanMode` -> `ExitPlanMode`; outside plan mode, write the plan to a file and run "
-            "`along plan approve --plan-file <path>` after the user's explicit yes). `along plan status` shows the binding."
-        )
-        new_plan = (
-            "- **Session Binding & Plan Alignment**: `along start <slug>` binds THIS agent session to the issue; "
-            "parallel sessions keep their own bindings. Formal plan mode is recommended for complex architectural "
-            "refactors; direct execution with user alignment is permitted."
-        )
-        if old_plan in text:
-            text = text.replace(old_plan, new_plan)
-
-        # Multi-agent escalation easing
-        old_esc = (
-            "- **Mandatory Adaptive Complexity Escalation & Execution Mode Routing**: When scope touches > 3 files, "
-            "crosses subsystems, or refactors core engines: single-agent execution is forbidden - route to `along-team`. "
-            "Plans MUST declare `Execution Mode: Direct` or `Role-Based`. Role-based blackboards (`along scratch init`) "
-            "are held to the step loop [gate: team-step-active] [gate: team-reviews-before-stop]; dropping it needs "
-            "`along scratch fallback <slug> --reason \"...\"`."
-        )
-        new_esc = (
-            "- **Adaptive Complexity Escalation & Execution Mode Routing**: Complex multi-subsystem refactors may "
-            "route to `along-team` when needed. Direct execution with user alignment is permitted for focused tasks."
-        )
-        if old_esc in text:
-            text = text.replace(old_esc, new_esc)
-
-        # Compact 5-step checklist
-        checklist_block_match = re.search(
-            r"## Stage & Session Completion Checklist\r?\nWhen a stage or session completes, agents MUST execute in this order:\r?\n"
-            r"(?:[0-9]+\. \[ \].*?\r?\n)+",
-            text
-        )
-        if checklist_block_match:
-            compact_checklist = (
-                "## Stage & Session Completion Checklist\n"
-                "When a stage or session completes, agents MUST execute in this order:\n"
-                "1. [ ] **Tests** [gate: test_before_stop]: Run via `/along-test` with quiet flags. Zero failures.\n"
-                "2. [ ] **File Integrity**: `git status -u` - all new/modified files non-zero size, no empty placeholders.\n"
-                "3. [ ] **Entity Reconciliation**: Close issues (`done` + move to `done/`), update milestones, resolve risks, conclude spikes.\n"
-                "4. [ ] **Session Log & Wrap** [gate: wrap_before_stop]: `along wrap <slug>` records session log and appends to `.along/HISTORY.md`.\n"
-                "5. [ ] **Projections** [gate: projection_sync_before_stop]: Run `/along-issue-sync` and `/along-decision-sync`.\n"
-            )
-            text = text[:checklist_block_match.start()] + compact_checklist + text[checklist_block_match.end():]
-
-    elif profile == "strict":
-        text = re.sub(r"^(# ALONG-PROTOCOL v[0-9.]+)(.*)$", r"\1 (profile: strict)", text, flags=re.MULTILINE)
-
+    """Protocol core for a gate strictness profile: its sections, plus a header note off `standard`."""
+    text = render_profile_sections(protocol_text, profile)
+    if profile and profile != "standard":
+        text = re.sub(r"^(# ALONG-PROTOCOL v[0-9.]+)(.*)$", rf"\1 (profile: {profile})", text, flags=re.MULTILINE)
     return text
+
+
+def render_protocol_reference(reference_text: str, profile: Optional[str] = None) -> str:
+    """The managed `docs/topic--along-protocol.md` article rendered for `profile`."""
+    text = reference_text.replace("\r\n", "\n").strip() + "\n"
+    return render_profile_sections(text, profile)
+
+
+def is_managed_reference(text: str) -> bool:
+    """True when an existing reference article was written by Along (safe to refresh)."""
+    return REFERENCE_MARKER in text
+
+
+def reference_source_for(protocol_path: str) -> Optional[str]:
+    """`protocol-reference.md` shipped next to a resolved `protocol.md`, if present."""
+    candidate = os.path.join(os.path.dirname(protocol_path), REFERENCE_SOURCE_NAME)
+    return candidate if os.path.isfile(candidate) else None
+
+
+def reference_action(existing: Optional[str], rendered: str) -> str:
+    """What refreshing the reference article means: create, update, untouched or foreign.
+
+    `foreign` is a hand-written file at the same path without the managed marker; it is
+    never overwritten.
+    """
+    if existing is None:
+        return "create"
+    if not is_managed_reference(existing):
+        return "foreign"
+    return "untouched" if existing.replace("\r\n", "\n") == rendered else "update"
 
 
 def render_protocol_block(protocol_text: str, ref_path: Optional[str] = None, profile: Optional[str] = None) -> str:

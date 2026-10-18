@@ -272,6 +272,8 @@ When an agent emits a tool call, the execution loop flows through the hook harne
 
 Every rule of the managed `AGENTS.md` block, classified: **a** enforced by a gate or test, **b** mechanically checkable but not yet enforced, **c** judgment-only. Layers come from the catalogue `enforcement` field (`along hook verify` prints the full matrix). Class-a rules are one line in `AGENTS.md` with a gate tag; the gate's error message carries the detail. Commit-time checks (typography, anti-stub, AI co-author, code fences, links, entry point, filenames, secrets) carry no tag: `AGENTS.md` lists them on one line as checked by `along lint` (pre-commit and CI), not while you work.
 
+Since `debt--agents-md-core-slimming` the managed block is a core of at most 6 KB: where state lives, issue anchoring, every gate tag with one line, and class-c rules as one-liners. The full wording of every rule below, plus situational procedure (completion checklist, documentation routing tree, concurrency and merge, parallel closeout, along-team routing, tool-use rules), lives in [Along Protocol Reference](./topic--along-protocol.md). Its source is `skills/along-init/protocol-reference.md`; `along init` / `along update` render it into each FULL root's `docs/`. `tests/test_scaffold_profiles.py` checks that no gate tag leaves the core and no named rule leaves the reference.
+
 | Rule | Class | Enforced by | Layer |
 | :--- | :--- | :--- | :--- |
 | Nearest context boundary, precedence, session-start reading | c | - | - |
@@ -361,6 +363,8 @@ Complex procedural ceremonies and rigid review checklists impose significant tok
 | `strict` | Standard & Junior models | Full procedural ceremony, mandatory plan approval for all mutations, low complexity escalation thresholds, full 9-step completion checklist. |
 | `standard` | Default baseline | Preserves default Along behavior: all 33 catalogue gates at their default severity, role-based escalation for multi-file/cross-system tasks. |
 | `light` | Frontier / Strong models | Streamlines procedural ceremony: warns rather than blocks on procedural gates (`require_plan_approval`, `code_fence_language`, `team_step_active`), compacts the Stage Completion Checklist to 5 core invariants, and allows direct execution with user alignment. |
+
+Profile-specific prose is declared in the protocol sources, not patched in by code: a line `<!-- profile: light -->` (or `<!-- profile: !light -->`, or a comma list) opens a section that only the named profiles keep (or that every other profile keeps), and `<!-- /profile -->` closes it. `alongkit.scaffold.render_profile_sections` resolves the sections and strips the markers for both the `AGENTS.md` core and `docs/topic--along-protocol.md`. `along init` and `along update` both render for the resolved active profile.
 
 ### 6.2 State-Layer Invariance
 

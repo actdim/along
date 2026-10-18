@@ -291,6 +291,7 @@ install_opencode() {  # generate flat commands + place along-init helper
     find "$helper/dashboard" -name "__pycache__" -type d -prune -exec rm -rf {} + 2>/dev/null || true
   fi
   [ -f "$src/along-init/protocol.md" ] && cp -f "$src/along-init/protocol.md" "$helper/protocol.md"
+  [ -f "$src/along-init/protocol-reference.md" ] && cp -f "$src/along-init/protocol-reference.md" "$helper/protocol-reference.md"
 
   local d name sk desc out
   for d in "$src"/*/; do

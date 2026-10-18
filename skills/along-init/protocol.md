@@ -1,104 +1,52 @@
 <!-- BEGIN ALONG-PROTOCOL root (managed by along-init - do not edit by hand) -->
 # ALONG-PROTOCOL v4.4.16
 
-This repo carries its own agent context, provider-agnostically. Follow it every session, whatever tool you are.
+This repo carries its own agent context, provider-agnostically. Follow it every session, whatever tool you are. This is the core; procedures (completion checklist, doc routing, merges, along-team, tool-use rules) live in `docs/topic--along-protocol.md` - pull the section you need via `/along-kb-search`. A gate's error message carries its detail.
 
-## Scope, Precedence & Subproject Placement
-- **Nearest Context Boundary**: Any folder may carry its own `AGENTS.md` + `.along/`; use the NEAREST ones for the area you're working in. On conflict, the more specific wins.
-- **Subproject Localization** [gate: subproject-boundary]: In submodules, nested repos or symlinked folders: all entities (issues, sessions, ADRs, history) MUST be created in the NEAREST `.along/`. Agents are STRICTLY FORBIDDEN from dumping subproject changes into the workspace root `.along/`.
-- **Multi-Subproject Work** [gate: subproject-boundary]: A change spanning subprojects needs an issue in each touched `.along/`, or a root umbrella issue whose child issues there carry `parent: <umbrella key>`. Edits under a subproject `.along/` are checked by path.
-- **Subproject Boundary**: only a nested `.git` or a user-run `along init` makes a subproject; never init a manifest folder.
-- **Precedence**: Nearest `.along/` > higher-level `.along/` > global config (`~/.claude/CLAUDE.md`, `~/.codex/AGENTS.md`, `~/.gemini/config/GEMINI.md`).
+## Where state lives
+- **Nearest wins**: any folder may carry its own `AGENTS.md` + `.along/`; use the NEAREST for the area you work in. Nearest `.along/` > higher-level `.along/` > global config. Only a nested `.git` or a user-run `along init` makes a subproject.
+- **Read at session start** (not auto-loaded): `.along/ISSUES.md`, `.along/CONSTRAINTS.md`, your issue `.along/ISSUES/<type>--<slug>.md`; when relevant `.along/VISION.md`, `.along/GLOSSARY.md`. They reflect the state WHEN WRITTEN - verify named files/APIs/flags against the code.
+- **Entities**: issues (`feat|bug|debt|task|docs`), ADRs (`.along/DECISIONS/`, never edited - superseded), milestones, risks, spikes, sessions. Keys `<type>--<slug>`, referenced by key, never by path; schemas in `docs/topic--domain-model.md`. Create them from intent unprompted (build/fix -> issue, blocked -> risk, compare -> spike, release -> milestone).
+- **Projections** (`ISSUES.md`, `DECISIONS.md`, `CONSTRAINTS.md`, `docs/INDEX.md`) are compiled: on conflict take either side and re-run the sync.
 
-## At session start - read these yourself (they are NOT auto-loaded)
-Use the NEAREST `.along/` for the area you're working in (fall back to a higher-level one if the folder has none):
-1. `AGENTS.md` (nearest) - conventions to follow.
-2. `.along/ISSUES.md` - active issue board (or query `/along-kb-search`).
-3. `.along/CONSTRAINTS.md` - active architectural constraints (or full log in `.along/DECISIONS.md` / `.along/DECISIONS/`).
-4. Active Issue file `.along/ISSUES/<type>--<slug>.md` for your task.
-Also, when relevant: `.along/VISION.md`, `.along/GLOSSARY.md`. These reflect the state WHEN WRITTEN - verify any named file/API/flag against the real code first.
+## Anchor work to an issue
+1. Find or create the issue with `status: in-progress`; `along start <slug>` binds this session.
+<!-- profile: !light -->
+2. Source edits unlock after the user approves the plan (`EnterPlanMode` -> `ExitPlanMode`, or `along plan approve --plan-file <path>` after their explicit yes). Questions get read-only answers; 1-line typo/comment edits are exempt.
+<!-- /profile -->
+<!-- profile: light -->
+2. Align the plan with the user; formal plan mode is recommended for complex refactors. Questions get read-only answers.
+<!-- /profile -->
+3. Commit via `/along-commit`: bound to the slug, no AI `Co-Authored-By:` trailers.
+4. Finish with the completion checklist, ending in `along wrap <slug> --summary "..." (--decisions <ADR...> | --no-decisions)`.
 
-## Multi-Agent & Multi-Branch Concurrency
-- **Zero-Manual-Merge Rule** [gate: projection-protection]: On merge conflicts in derived projections (`ISSUES.md`, `INDEX.md`, `DECISIONS.md`), accept either side and run `/along-issue-sync`, `/along-kb-sync`, or `/along-decision-sync` to recompile. `along git setup` registers merge drivers that do this automatically; afterwards run `along git sync`.
-- **Append-Only Merge Driver**: `.along/HISTORY.md` and legacy monolithic `.along/DECISIONS.md` are append-only. Configure `.gitattributes` with `merge=union`. Modular ADR files in `.along/DECISIONS/` are isolated per-file to eliminate merge collisions.
-- **Untracked Exports** [gate: untracked-exports]: `.along/dashboard.html`, `.along/DASHBOARD.md` and per-machine `.along/diagnostics/` stay out of Git.
-- **Context Isolation**: Context is localized to the target issue file, session-scoped blackboard (`.along/.session/<slug>/`), and completed session logs.
-- **Parallel Closeout**: `along session list`; on the user's yes `along plan approve --closeout --ready`, then `along session close --ready`.
+## Gates
+Runtime hooks enforce these where installed; elsewhere (`along doctor` shows the level) self-apply every one and use the `along` CLI instead of raw tools.
+- [gate: require-active-issue] [gate: require-plan-approval] - no source edit without an in-progress issue and an approved plan.
+- [gate: subproject-boundary] - a subproject's entities go in ITS `.along/`; cross-subproject work needs an issue in each, or a root umbrella with `parent:` children.
+- [gate: workspace-containment] - read/write inside the workspace (plus temp); other roots need `allowed_roots`; never credential stores.
+- [gate: projection-protection] - never hand-edit or hand-merge projections.
+- [gate: commit-issue-binding] - every commit names the active issue.
+- [gate: issue-lifecycle] [gate: entity-reference-integrity] [gate: entity-deletion-protection] - close via `along wrap` / `along issue done`; rename or supersede, never delete a referenced entity.
+- [gate: doc-manual-lock] - `write_policy: manual` docs change only under a `docs--<slug>` issue.
+- [gate: rule-pack-protection] - never edit `.along/rules/**/*.md` (`along rules attach` owns them).
+- [gate: doc-routing-compliance] - ADR vs `README.md` vs `docs/topic--*.md` routing tree.
+- [gate: untracked-exports] - dashboards and `.along/diagnostics/` stay out of Git.
+- [gate: cli_safety] - file content via file tools, never heredocs or `python -c`; no global installs.
+- [gate: team-step-active] [gate: team-reviews-before-stop] - an `along-team` blackboard holds you to its step loop.
+- [gate: test_before_stop] [gate: wrap_before_stop] [gate: projection_sync_before_stop] - before stopping: tests green, session wrapped, projections synced.
+- Commit-time (`along lint`, pre-commit + CI): ASCII typography, fence languages, relative links, no `docs/` -> `.along/` links, Windows-safe names, no secrets, no stubs.
+- Bypass is the user's call: `-n`, `--force-reason`, `scratch fallback` need `--reason` after their reply; recorded in `along gates stats`.
 
-## Mandatory Issue Anchoring
-- **No Code Without Issue** [gate: require-active-issue]: Before modifying source code, agents MUST identify or create an issue in `.along/ISSUES/<type>--<slug>.md` and set `status: in-progress`.
-- **Session Binding & Plan Approval** [gate: require-plan-approval]: `along start <slug>` binds THIS agent session to the issue; parallel sessions keep their own bindings. Source edits unlock after the user approves the plan (`EnterPlanMode` -> `ExitPlanMode`; outside plan mode, write the plan to a file and run `along plan approve --plan-file <path>` after the user's explicit yes). `along plan status` shows the binding.
-- **Exemptions**: Read-only Q&A and 1-line micro-edits (typo fixes, comments) do not require issues.
-- **Commit Binding** [gate: commit-issue-binding]: Every commit via `/along-commit` MUST bind to the active issue slug.
-- **No AI Co-Authors**: Commit messages MUST NOT carry `Co-Authored-By:` trailers naming an AI agent (GitHub lists the vendor as a contributor). `along hook install` turns runtime attribution off; opt out via `.along/config.json` `commits.allow_ai_coauthor: true`.
-
-## Entity Ecosystem
-- **Entity types**: Issues (`feat`, `bug`, `debt`, `task`, `docs`), Decisions (ADRs), Milestones, Risks, Spikes, Checklists, Sessions. Full YAML schemas: `docs/topic--domain-model.md`.
-- **Canonical keys**: `<type>--<slug>` (e.g. `feat--token-refresh`). Reference by key, NEVER by file path.
-- **ADRs**: Modular records in `.along/DECISIONS/ADR-YYYY-MM-DD--<slug>.md` (with legacy fallback to monolithic `DECISIONS.md`). Never edit past entries - mark superseded. Recompile projections (`.along/DECISIONS.md` board and `.along/CONSTRAINTS.md`) via `/along-decision-sync` or `along decision sync`.
-- **Issue lifecycle** [gate: issue-lifecycle]: Complete active issues via `along wrap <slug>` (or `along issue done <slug> --status cancelled|superseded`). Closing as done requires `validate_issue_completion` (no scaffold placeholders, mandatory Acceptance Criteria, all `- [x]` closed).
-- **Entity references** [gate: entity-reference-integrity] [gate: entity-deletion-protection]: Never delete an entity other entities reference; use `along issue rename` / `along issue supersede`.
-- **Auto-entity creation**: Agents MUST automatically detect user intent (build/fix/refactor -> Issue, blocked/rate-limit -> Risk, compare/benchmark -> Spike, release/sprint -> Milestone) and create entities without prompting the user.
-
-## Knowledge Base & Documentation
-- **Stable Entry Point**: `README.md` and `docs/` never link into `.along/`; route through `docs/INDEX.md` or `docs/topic--<slug>.md`.
-- **Portable Links**: Relative Markdown links only.
-- **Fact Grounding**: Agents MUST extract facts from actual code, `README.md`, `docs/`, and `package.json`. Generic LLM placeholders are strictly prohibited.
-- **Fast Retrieval**: Agents SHOULD query `/along-kb-search` before reading whole documentation files.
-- **Doc Blast Radius**: After non-trivial code changes, agents MUST map affected symbols to `docs/topic--*.md` articles and update them before completing the task.
-- **Manual Document Lock** [gate: doc-manual-lock]: Documents marked with `write_policy: manual` (or `locked: true`) are protected from automated agent modification during blast radius sweeps. Modifications require an explicit documentation issue (`docs--<slug>`).
-- **Managed Rule Packs** [gate: rule-pack-protection]: Never edit `.along/rules/**/*.md`; `along rules attach` owns them. Project guidelines go to `docs/topic--<slug>.md` or "Project specifics"; revert with `along rules restore`. `.along/rules/gates.yaml` and `.along/scripts/` stay repo-owned.
-- **Documentation Routing Tree** [gate: doc-routing-compliance]:
-  - Architectural choice / trade-off -> `.along/DECISIONS/` (ADR)
-  - Public overview / pitch / landing page -> `README.md`
-  - Technical interface contract / CLI spec -> `docs/topic--<slug>.md` (`type: reference`)
-  - Conceptual explanation / comparison / philosophy -> `docs/topic--<slug>.md` (`type: explanation`, `write_policy: manual`)
-  - Procedural walkthrough / runbook -> `docs/topic--<slug>.md` (`type: guide`)
-
-## While working
-- **Decisions**: Create new ADRs via `/along-decision-sync` or `along decision create <slug> --title "..."`. Add terms to `.along/GLOSSARY.md`.
-- **Token hygiene**: Use quiet flags (`pytest -q`, `dotnet test -v q`), filter outputs, inspect targeted line ranges.
-- **Lifecycle hooks first**: Agents MUST use `/along-test`, `/along-build`, `/along-dev` (or `.along/scripts/*.py`) before raw shell commands.
-- **Post-change review**: Agents MUST inspect diffs and evaluate blast radius via `along graph-impact` (or static search fallback). Silent skips are forbidden.
-
-## Stage & Session Completion Checklist
-When a stage or session completes, agents MUST execute in this order:
-1. [ ] **Tests** [gate: test_before_stop]: Run via `/along-test` with quiet flags. Zero failures.
-2. [ ] **File Integrity**: `git status -u` - all new/modified files non-zero size, no empty placeholders.
-3. [ ] **Code Review**: Inspect diff for side effects, verify REQ-N coverage, evaluate blast radius via `along graph-impact` (or static search), verify architectural decision compliance.
-4. [ ] **Entity Reconciliation**: Close issues (`done` + move to `done/`), update milestones, resolve risks, conclude spikes.
-5. [ ] **Doc Blast Radius**: Update affected `docs/topic--*.md`, `README.md` and Project specifics; add new terms to `.along/GLOSSARY.md`; touch `.along/VISION.md` only if scope/roadmap changed; run `/along-kb-sync`.
-6. [ ] **Session Log & Wrap** [gate: wrap_before_stop]: `along wrap <slug> --summary "<summary>" (--decisions <ADR...> | --no-decisions)` writes `.along/SESSIONS/<YYYY>/<date>--<slug>.md` with the blackboard record, compiles projections, and appends to `.along/HISTORY.md` (provide `--summary` or let it fallback to issue title).
-7. [ ] **Projections** [gate: projection_sync_before_stop]: Run `/along-issue-sync` and `/along-decision-sync`.
-8. [ ] **HISTORY**: Verify line in `.along/HISTORY.md` (appended automatically by `along wrap`; update via `along history append <slug> "..."` if needed).
-9. [ ] **Compaction**: Advise user to run `/compact`.
-
-## Rules
-- **Contract-First Lifecycle**:
-  - Agents MUST execute `.along/scripts/<action>.py` or `/along-test`, `/along-build`, `/along-dev` before raw shell commands.
-  - When `.along/scripts/` is missing, `along test`/`along build` auto-detects and synthesizes hooks.
-  - In submodules, execute the hook from that subproject's own `.along/scripts/`.
-- **Environment Isolation**:
-  - Agents MUST NOT install system-wide or global packages when a script fails. Fix the architecture (missing `bootstrap.ensure_deps()`, incorrect `uv` wrapper), not the environment.
-- **Workspace Containment** [gate: workspace-containment]: Read and write only inside the workspace. Writes elsewhere are limited to the temp dir and runtime artifact dirs. Other repos need `allowed_roots` (`.along/rules/gates.yaml`, issue frontmatter, `along start --allow-root`). Never touch credential stores (`~/.ssh`, `~/.aws`).
-- **Runtimes Without Along Hooks** (Claude Cowork, Cursor, OpenCode, plain shells): gates are advisory there. Agents MUST self-apply every gate-tagged rule and use the `along` CLI for tests, commits, entity changes, and wrap instead of raw tools. `along doctor` reports the enforcement level.
-- **File Modification & Anti-Deletion**:
-  - Never delete, truncate, or overwrite existing documentation, comments, or code unless explicitly instructed.
-  - After batch edits or migrations, agents MUST run `git diff --stat` and inspect unexpected size reductions.
-  - No stubs or skeletons in place of populated code.
-  - Anchor edits on minimal unique chunks. Restore unintended deletions immediately.
-- **Clean ASCII**: ASCII punctuation only (no typographic dashes, quotes, ellipsis, bullets, NBSP/zero-width chars or BOM); `along sanitize --write` fixes them.
-- **Markdown**: Every code fence names a language.
-- **Commit-time checks**: typography, code fences, links, filenames, secrets, stubs and AI co-authors are checked by `along lint` (pre-commit and CI), not while you work.
-- **Bypass Is The User's Call**: `-n`, `--force-reason`, `scratch fallback` need `--reason` and the user's reply after the failure; each bypass is recorded (`along gates stats`).
-- **File Content Via Tools Only** [gate: cli_safety]: Create/edit files with the agent's file tools. NEVER carry content in heredocs, `python -c`, or inline shell. Write scripts to a file first.
-- **No Ad-Hoc Shell Code Probing**: Agents must never use `python -c` or inline shell commands to probe internal module symbols or inspect functions. Internal engine packages (`alongkit`, `scripts`) are not installed into the global Python environment, and ad-hoc shell probing produces confusing error traces instead of actionable information. Prescribed inspection tools: static file tools (`view_file`, `grep_search`), AST tools (`along graph-*`), official CLI subcommands (`along <command> --help`), or dedicated hermetic tests in `tests/`.
-- **CLI Black-Box Invariance**: Agents MUST treat the Along CLI and development tools as strict opaque black-box executables. Reading Along engine source code (`.along/bin/*.py`, `~/.along/bin/`, `alongkit/**`, `along_*.py`) to inspect internals, arguments, or data structures is STRICTLY FORBIDDEN unless working on the Along repository itself. Always use `along <command> --help` or official documentation in `docs/`. If an Along command returns an error or fails validation, report the exact CLI error output to the user immediately. Do not attempt to reverse-engineer or debug the Along engine.
-- **Verify Written Files**: After writing/patching, confirm parsing (`python -m compileall -q`, `bash -n`, etc.) before moving on.
-- **Hermetic Tests**: Tests MUST target throwaway fixtures (`tempfile.mkdtemp()`), never the live repository. Read-only access to live state is allowed. Keep a meta-test that verifies `git status --porcelain -u` stays clean.
-- **Inquiry Read-Only Invariance (Zero-Mutation Rule on Questions)** [gate: require-plan-approval]: On interrogative prompts ("is X done?", "why did Y fail?"), write/modify tools are STRICTLY PROHIBITED. Return a read-only audit report and ask for confirmation before modifying anything.
-- **Mandatory Adaptive Complexity Escalation & Execution Mode Routing**: When scope touches > 3 files, crosses subsystems, or refactors core engines: single-agent execution is forbidden - route to `along-team`. Plans MUST declare `Execution Mode: Direct` or `Role-Based`. Role-based blackboards (`along scratch init`) are held to the step loop [gate: team-step-active] [gate: team-reviews-before-stop]; dropping it needs `along scratch fallback <slug> --reason "..."`.
-- Windows-safe filenames: dates `YYYY-MM-DD`, date first.
-- Keep `ISSUES.md` compact: `along context-budget --check` enforces the limit.
-- Never write secrets into tracked files.
+## Judgment rules
+- Ground facts in code, `README.md` and `docs/`; no generic placeholders. Query `/along-kb-search` before reading whole docs; update affected `docs/topic--*.md` after non-trivial changes.
+- Use `/along-test`, `/along-build`, `/along-dev` before raw commands, with quiet flags. Review your diff and blast radius (`along graph-impact`).
+- Never delete or truncate docs, comments or code unless told; no stubs; check `git diff --stat` after batch edits. Verify written files parse. Tests stay hermetic.
+<!-- profile: !light -->
+- Scope > 3 files, crossing subsystems or refactoring core engines: route to `along-team`; plans MUST declare `Execution Mode: Direct` or `Role-Based`.
+<!-- /profile -->
+<!-- profile: light -->
+- Complex multi-subsystem refactors may route to `along-team`; direct execution with user alignment is permitted.
+<!-- /profile -->
+- Treat the `along` CLI as a black box (`along <cmd> --help`, no engine source outside the Along repo); report its errors verbatim.
 <!-- END ALONG-PROTOCOL -->

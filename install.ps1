@@ -412,6 +412,9 @@ function Install-OpenCode {
     if (Test-Path (Join-Path $src 'along-init\protocol.md')) {
         Copy-Item -Force (Join-Path $src 'along-init\protocol.md') (Join-Path $helper 'protocol.md')
     }
+    if (Test-Path (Join-Path $src 'along-init\protocol-reference.md')) {
+        Copy-Item -Force (Join-Path $src 'along-init\protocol-reference.md') (Join-Path $helper 'protocol-reference.md')
+    }
 
     foreach ($d in Get-ChildItem -Directory $src) {
         $raw = (Get-Content -Raw -Encoding UTF8 (Join-Path $d.FullName 'SKILL.md')) -replace "`r`n", "`n"

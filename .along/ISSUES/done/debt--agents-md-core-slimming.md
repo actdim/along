@@ -3,10 +3,11 @@ protocol: along
 protocol_version: "4.4.1"
 slug: agents-md-core-slimming
 type: debt
-status: open
+status: done
+completed: 2026-10-18
 priority: medium
 created: 2026-09-29
-updated: 2026-09-29
+updated: 2026-10-18
 agent: claude
 tags: [agents-md, context-budget, progressive-disclosure]
 milestone: v4.6.0-structured-state-and-blackboard-engine
@@ -30,7 +31,12 @@ related: [feat--gate-strictness-profiles, feat--progressive-disclosure-and-conte
 
 ## Acceptance Criteria
 
-- [ ] Managed block <= 6 KB, enforced by test
-- [ ] No rule is lost: every removed paragraph has a destination article or an enforcing gate (checked against the audit from `debt--prose-rules-to-deterministic-checks`)
-- [ ] `along-update` on a fixture repo preserves `## Project specifics`
-- [ ] Automated tests passing
+- [x] Managed block <= 6 KB, enforced by test: `protocol.md` 14110 -> 5316 B source, rendered block 4911 B; `AGENTS.md` 16169 -> 6970 B. `tests/test_context_budget.py` checks <= 6144 B for both, and `agents_md_bytes` drops 14336 -> 7168.
+- [x] No rule is lost: the full wording moves to `skills/along-init/protocol-reference.md`, which `along init` / `along update` render to `docs/topic--along-protocol.md`. `tests/test_scaffold_profiles.py` checks that every pre-slimming gate tag stays in the core and every named rule is in the reference.
+- [x] `along-update` on a fixture repo preserves `## Project specifics`, writes the reference and keeps the `light` profile (`TestAlongUpdateRefresh`).
+- [x] Automated tests passing (1419 OK)
+
+## Notes
+
+- REQ-4: profile sections (`<!-- profile: light -->` / `<!-- profile: !light -->` ... `<!-- /profile -->`) replace the string-replacement adaptation in `alongkit.scaffold`. `along update` now renders for the active profile; before this change it dropped it.
+- The reference file carries a fixed `created:` so that `along kb-sync` does not stamp dates into the managed copy.
