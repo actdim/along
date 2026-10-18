@@ -1341,7 +1341,10 @@ def _kb_sync_subprojects(
         standard_slugs = {
             fname.replace(".md", "").replace("topic--", "").lower()
             for fname, _, _, _ in STANDARD_ARTICLES
-        } | {"index", "architecture", "domain-model", "setup-and-workflow"}
+        } | {"index", "architecture", "domain-model", "setup-and-workflow",
+             # Engine-written per context: along-dep-scan's registry and the managed
+             # protocol reference at every FULL root [debt--agents-md-core-slimming].
+             "dependencies", "along-protocol"}
 
         slug_registry = {}
         for art in articles:

@@ -600,6 +600,31 @@ class TestKbSyncCliIntegration(unittest.TestCase):
             res_override = proc.run_python([kb_script, root, "--strict"], cwd=root)
             self.assertEqual(res_override.returncode, 0, res_override.stdout + res_override.stderr)
 
+    def test_engine_per_context_slugs_never_collide(self):
+        """`dependencies` (along-dep-scan) and `along-protocol` (protocol reference) are written
+        per context by the engine, so the same slug in a root and a subproject is no collision."""
+        with hermetic.repo_fixture() as root:
+            kb_script = os.path.join(SCRIPTS_DIR, "along_kb_sync.py")
+            sub_dir = os.path.join(root, "packages", "ui-core")
+            os.makedirs(os.path.join(sub_dir, "docs"), exist_ok=True)
+            textio.write_text(os.path.join(sub_dir, "package.json"), '{"name": "@actdim/ui-core"}')
+            for slug, title in (("dependencies", "Dependencies"), ("along-protocol", "Along Protocol Reference")):
+                for ctx, label in ((root, "Root"), (sub_dir, "Subproject")):
+                    textio.write_text(os.path.join(ctx, "docs", f"topic--{slug}.md"), (
+                        "---\n"
+                        "protocol: along\n"
+                        f"slug: {slug}\n"
+                        f"title: {label} {title}\n"
+                        "type: reference\n"
+                        "---\n\n"
+                        f"# {label} {title}\n\n"
+                        "Engine-written per-context article.\n\n"
+                        "## Details\n\n"
+                        "Generated content.\n"
+                    ))
+            res = proc.run_python([kb_script, root, "--strict"], cwd=root)
+            self.assertNotIn("slug collision", res.stdout.lower() + res.stderr.lower(), res.stdout)
+
 
 if __name__ == "__main__":
     unittest.main()

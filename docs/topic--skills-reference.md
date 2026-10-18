@@ -8,11 +8,11 @@ updated: 2026-09-19
 tags: [skills, commands, reference, runners, lifecycle, automation, multi-agent]
 sources:
   - path: skills/along-init/SKILL.md
-    hash: "bd418df91bfe5842a62660ea53089ac4fd9854a5d01b09f46a55c523b10aee55"
+    hash: "d0936b0e170988a347400ed8c219bda35092cf23bf881ea2de6353b8bb7bc771"
   - path: skills/along-kb-sync/SKILL.md
     hash: "e43f8e63715f943e940edd5abf260b6ea45bf69f784213bac3b1bd7327f75527"
   - path: skills/along-update/SKILL.md
-    hash: "db5cd83f793ab76deba0cac3c932eefa59f9b70cf11656e0cfd1a70c8da941ba"
+    hash: "4630138bdeafa292c59e0efc9a6b4b960fd48b0a6f2ecd5db0f8dfefeae62645"
 ---
 
 # Skills & Slash Commands Technical Reference

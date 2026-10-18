@@ -4060,7 +4060,8 @@ For complete options, flags, and teardown mechanics, see [Along CLI Command Refe
 ## 6. Writing Tests: the Hermetic Rule
 
 Agents write most of the tests in this repository, so the rule that keeps the suite
-trustworthy is stated here as well as in the protocol block of `AGENTS.md`.
+trustworthy is stated here as well as in the protocol (a one-liner in the `AGENTS.md` core, the full rule
+in [Along Protocol Reference](./topic--along-protocol.md)).
 
 **A test must never point an engine at the repository that contains it.** The engines
 write: `migrate_protocol.py` normalizes front-matter, sanitizes typography, and rewrites

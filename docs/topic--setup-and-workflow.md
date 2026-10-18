@@ -10,7 +10,7 @@ sources:
   - path: README.md
     hash: "742705a98e1e98608b43a4f7421f9fb62471e304357adfffc96f29ebd2b7bbac"
   - path: AGENTS.md
-    hash: "d3cf40bcdb2d985decb6937e7b7b838666599607788cf6d3bf64245312fdd92d"
+    hash: "d85f836e9c5864fcf2a497351fe1ad5f87e8149c6dbfee6945e2e7eaef4ed9f5"
 ---
 
 # Setup & Developer Workflow
@@ -491,7 +491,8 @@ For complete options, flags, and teardown mechanics, see [Along CLI Command Refe
 ## 6. Writing Tests: the Hermetic Rule
 
 Agents write most of the tests in this repository, so the rule that keeps the suite
-trustworthy is stated here as well as in the protocol block of `AGENTS.md`.
+trustworthy is stated here as well as in the protocol (a one-liner in the `AGENTS.md` core, the full rule
+in [Along Protocol Reference](./topic--along-protocol.md)).
 
 **A test must never point an engine at the repository that contains it.** The engines
 write: `migrate_protocol.py` normalizes front-matter, sanitizes typography, and rewrites
