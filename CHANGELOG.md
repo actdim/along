@@ -2,6 +2,26 @@
 
 All notable changes to this project, newest first.
 
+## v4.5.0 - 2026-10-18
+
+- fix(kb-sync): treat engine-written per-context slugs (dependencies, along-protocol) as standard so strict release gate does not flag them as cross-project collisions; repin reviewed source hashes; hermetic rule now points to the protocol reference (refs #release-v4-5-0)
+- docs: Describe the AGENTS.md core + managed docs/topic--along-protocol.md reference in setup guide, skills reference and along-init/along-update skills; include pending roadmap edits (STE CNL issue, v4.6.0/v5.0.0 milestones) (refs #release-v4-5-0)
+- chore: Regenerate AGENTS.md core block and docs/topic--along-protocol.md projection from protocol sources (refs #agents-md-core-slimming)
+- refactor: Slim AGENTS.md managed block to a 4.9 KB core (state locations, issue anchoring, gate list, judgment rules); full procedure moved to managed on-demand docs/topic--along-protocol.md rendered by along init/update; marker-based profile sections; update honours active profile (refs #agents-md-core-slimming)
+- refactor: DECISIONS.md board as a sliding window of the newest active ADRs with compact superseded lines (refs #decisions-board-sliding-window)
+- refactor: Gates judge results, not commands: remove tool-nature classifier, circuit breaker and fast_retrieval; plan gate checks file targets and end-of-turn git status; narrow destructive_command gate; content rules commit-time via along lint; audit target field and loop stats (refs #gate-simplification)
+- docs: Plan autonomous multi-runtime MVP: epic, headless-runtimes spike, Docker-now gVisor-later ADR, gate and entity simplification debts, handoff entities, re-scoped daemon/Telegram/orchestrator issues (refs #autonomous-multi-runtime-mvp)
+- refactor: Prune and limit migration backups in .along (refs #migration-backup-retention-and-cleanup)
+- refactor: remove monolithic scripts/alongkit/entities.py in favor of alongkit/entities package (refs #split-along-exec-and-entities)
+- refactor: Decomposed along_exec.py (2128 to 394 lines) and alongkit/entities.py (2453 lines) into modular command and entity subsystems with full backward compatibility (refs #split-along-exec-and-entities)
+- fix: Improve session-record-append-only gate for deletions, renames, and subproject consolidation (refs #session-record-gate-lifecycle-resilience)
+- chore: sync dependency registry and dashboard KB projections (refs #migrate-to-actdim-ui-core)
+- chore: Migrate dashboard UI foundations to @actdim/ui-core (refs #migrate-to-actdim-ui-core)
+- docs: Sync recent features documentation across CLI reference and lifecycle guides (refs #sync-recent-features-documentation)
+- task(issues): Track bug--session-record-gate-lifecycle-resilience (refs #session-record-gate-lifecycle-resilience)
+- task(issues): Track missing migrate-to-actdim-ui-core and ste-cnl-specification-engine issues (refs #migrate-to-actdim-ui-core)
+- docs: Document Monorepo Workspaces vs Git Submodules in release cycles (refs #monorepo-submodule-release-workflow)
+
 ## v4.4.16 - 2026-10-16
 
 - feat: Implement issue stub validation, lifecycle quality gates, and doctor audit (refs #issue-stub-validation-and-lifecycle-gates)
