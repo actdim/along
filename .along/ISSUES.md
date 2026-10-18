@@ -1,7 +1,7 @@
 # Active Issues
 
 ## Active
-<!-- No active issues -->
+- [ ] `(task)` [release-v4-5-0](ISSUES/task--release-v4-5-0.md)
 
 ## Backlog
 - [ ] `(debt)` [along-core-extras-split](ISSUES/debt--along-core-extras-split.md)

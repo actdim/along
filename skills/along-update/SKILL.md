@@ -32,7 +32,8 @@ along update [target_root] [options]
 
 ## What the update changes in each context
 For every folder with `AGENTS.md`, `.along/` or `.agents/` (root first, then nested):
-- **Protocol block** (shared with `along init`, `alongkit.scaffold`): FULL at an architecture root, a short REF in a nested folder of the same git working tree; a git submodule root gets FULL. A hand-written `AGENTS.md` without markers gets the block on top and keeps its text under `## Project specifics`.
+- **Protocol block** (shared with `along init`, `alongkit.scaffold`): FULL at an architecture root, a short REF in a nested folder of the same git working tree; a git submodule root gets FULL. A hand-written `AGENTS.md` without markers gets the block on top and keeps its text under `## Project specifics`. The block is rendered for the active gate strictness profile.
+- **Protocol reference**: at a FULL root, the managed `docs/topic--along-protocol.md` (the on-demand procedure the core block points to) is created or refreshed from `protocol-reference.md`; a hand-written file at that path without the managed marker is left alone with a warning.
 - **Migration** (`along migrate --apply`), including Step 13: a root `VISION.md` is moved into `.along/VISION.md` (or deduplicated, or merged under an `along:imported-vision needs-restructure` marker) and deleted; links to it are repointed (public files -> `docs/INDEX.md`). This check runs even when the context is already on the current version. Root notes (`ROADMAP.md`, `ARCHITECTURE.md`, `SPEC.md`, `TODO.md`, `DESIGN.md`) are listed.
 
 ### Agent actions after the update (mandatory, same run)

@@ -81,6 +81,7 @@ flowchart TD
 - **What it is**: The foundation bootstrapping engine for Along in any repository. Scaffolds or refreshes root `AGENTS.md` (carrying the managed protocol block), `CLAUDE.md`, `.gitattributes` (with `merge=union`), and the `.along/` directory skeleton (`ISSUES/`, `DECISIONS.md`, `MILESTONES/`, `RISKS/`, `SPIKES/`, `CHECKLISTS/`, `SESSIONS/`, `docs/`).
 - **Architectural Rationale**:
   - *Idempotent Managed Block*: Never overwrites custom human developer instructions in `AGENTS.md`; only refreshes the block between `<!-- BEGIN ALONG-PROTOCOL ... -->` and `<!-- END ALONG-PROTOCOL -->`.
+  - *Core + On-Demand Reference*: the block is a small always-loaded core; situational procedure lives in the managed `docs/topic--along-protocol.md` (rendered from `skills/along-init/protocol-reference.md` at FULL roots, refreshed only while it carries the managed marker), pulled via `/along-kb-search`. Both are rendered for the active gate strictness profile.
   - *Non-Destructive Initialization*: Creates directories and template files only if missing, preserving existing project history.
   - *Deterministic Engine, Judgment by the Agent*: `along init` performs every mechanical step (FULL/REF protocol block bounded by the git working tree, hand-written `AGENTS.md` adoption under `## Project specifics`, root `VISION.md` moved into `.along/VISION.md`, rule packs, merge drivers, hooks, migration). The agent then decomposes an imported VISION section, routes root notes (`ROADMAP.md`, `ARCHITECTURE.md`, ...) and runs the re-run dialog.
 - **Invocation Triggers**:
