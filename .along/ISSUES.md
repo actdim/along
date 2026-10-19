@@ -55,9 +55,9 @@
 - [ ] `(task)` [reconcile-dashboard-ui-core-conventions](ISSUES/task--reconcile-dashboard-ui-core-conventions.md)
 
 ## Done (recent)
+- [x] `(bug)` [wrap-misses-engine-writes](ISSUES/done/bug--wrap-misses-engine-writes.md)
 - [x] `(task)` [release-v4-5-0](ISSUES/done/task--release-v4-5-0.md)
 - [x] `(debt)` [agents-md-core-slimming](ISSUES/done/debt--agents-md-core-slimming.md)
 - [~] `(feat)` [tool-class-model](ISSUES/done/feat--tool-class-model.md)
 - [x] `(debt)` [gate-simplification](ISSUES/done/debt--gate-simplification.md)
-- [x] `(debt)` [decisions-board-sliding-window](ISSUES/done/debt--decisions-board-sliding-window.md)
-<!-- 276 older completed issue(s) archived in .along/ISSUES/done/ -->
+<!-- 277 older completed issue(s) archived in .along/ISSUES/done/ -->

@@ -1558,7 +1558,7 @@ Protocol tools provide specialized repository maintenance, release management, a
 Transactional end-of-stage wrap engine.
 - Validates quality gates, inspects git diffs, updates active issue status, moves files to `done/`, writes session logs, recompiles projections, appends to `HISTORY.md`, and atomically commits wrapped work.
 - **Check-then-write**: every check (team steps, plan, completion of `- [ ]` checklist items in issue Acceptance Criteria and living plan, tests, zero-byte audit, entity graph) runs before the first write; a failed wrap leaves the tree unchanged. KB sync runs after the transaction commits and only warns on failure.
-- **Atomic auto-commit**: Automatically commits attributed files, issue status change, session log, and updated projections in a single atomic commit linked to the issue slug. Pass `--no-commit` to keep changes staged/unstaged on disk.
+- **Atomic auto-commit**: Automatically commits attributed files, issue status change, session log, and updated projections in a single atomic commit linked to the issue slug. `docs/topic--along-protocol.md` and any `AGENTS.md` changed only inside its managed blocks (engine refreshes) are included too. Pass `--no-commit` to keep changes staged/unstaged on disk.
 - **Options**:
   - `-s, --status <status>`: Closing status (`done`, `superseded`, `cancelled`, `duplicate`). Default: `done`.
   - `-m, --summary "<text>"`: One-line summary for `.along/HISTORY.md` index (falls back to issue title if omitted).
@@ -2982,6 +2982,12 @@ fails if the engine calls `shutil.move`, `os.remove` or their neighbours directl
 - Runs on every migration, including an up-to-date repository; a second run finds nothing, outside git it does nothing, `--dry-run` only lists the paths.
 - From then on the `untracked_exports` gate rejects staging them again, and `along doctor` reports any that remain.
 
+### `v4.5.1`: Retired Gate Artifacts (Step 15)
+- The circuit breaker and the tool-nature classifier were removed in `debt--gate-simplification`; nothing reads what they left. `.along/diagnostics/circuit_breaker.json`, `.along/diagnostics/syntax_churn.json` and `.along/tool_rules.yaml` are deleted after a backup to `.along/.migration-backup/`.
+- A top-level `tools:` section in `.along/rules/gates.yaml` is ignored by the gate loader. Since the file is repository-owned, the step only reports it (`[WARN]`, recorded as `review`); remove it by hand.
+- The live activity traces (`.along/diagnostics/activity_trace.json`, `.along/diagnostics/activity/`) stay.
+- Runs on every migration, including an up-to-date repository (as a heal pass); a second run finds nothing, `--dry-run` only lists the paths.
+
 ---
 
 ## Document: docs/topic--parallel-sessions.md (Parallel Sessions & Closeout Guide)
@@ -3574,7 +3580,7 @@ Every way a blackboard leaves the repository writes it into the issue's session 
 
 ## 6. Committing wrapped work
 
-- **Atomic wrap auto-commit**: By default, `along wrap` automatically creates an atomic Git commit linked to the wrapped issue slug (`<type>: <summary> (refs #<slug>)`), bundling all attributed files, the moved issue file in `done/`, today's session log, and recompiled projections.
+- **Atomic wrap auto-commit**: By default, `along wrap` automatically creates an atomic Git commit linked to the wrapped issue slug (`<type>: <summary> (refs #<slug>)`), bundling all attributed files, the moved issue file in `done/`, today's session log, and recompiled projections. Engine-written files carry no edit events, so two rules cover them. The managed `docs/topic--along-protocol.md` counts as a projection. A changed `AGENTS.md` (root or nested) is included when its only difference from `HEAD` lies inside the managed `ALONG-PROTOCOL` / `ALONG-RULES` blocks; a hand edit outside them leaves it to attribution. `along session close` applies the same rules.
 - **Opting out with `--no-commit`**: When `--no-commit` is passed, `along wrap` leaves changes uncommitted. The wrap purge removes the session's binding but preserves a completion token, so a subsequent manual `along commit -i <slug> --paths ...` passes the plan gate without a new approval and consumes the token.
 - **Parallel closeout**: Several issues finished in parallel are closed in one step with `along session close`; the record of each one then also lists its attributed files. See [Parallel Sessions](./topic--parallel-sessions.md).
 

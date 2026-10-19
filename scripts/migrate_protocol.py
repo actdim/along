@@ -902,12 +902,15 @@ def run_migrations(repo_root, dry_run=True, force=False, backup=True, verbose=Fa
         heal_vision = bool(scaffold.find_root_file(repo_root, scaffold.VISION_FILENAME)
                            and os.path.isdir(along_dir))
         heal_diagnostics = bool(gitgates.tracked_diagnostics(repo_root))
-        if heal_vision or heal_diagnostics:
+        heal_retired = bool(retired_gate_artifacts(repo_root))
+        if heal_vision or heal_diagnostics or heal_retired:
             mig = migration.Migration(repo_root, dry_run=dry_run, state_dir=along_dir, backup=backup)
             if heal_vision:
                 step_reconcile_root_vision_and_notes(mig, repo_root)
             if heal_diagnostics:
                 step_untrack_diagnostics(mig, repo_root)
+            if heal_retired:
+                step_remove_retired_gate_artifacts(mig, repo_root)
             for line in mig.summary():
                 print(line)
             return 1 if mig.errors else 0
@@ -1030,6 +1033,9 @@ def run_migrations(repo_root, dry_run=True, force=False, backup=True, verbose=Fa
     # Step 14: per-machine diagnostics leave the git index
     step_untrack_diagnostics(mig, repo_root)
 
+    # Step 15: state and config of the retired circuit breaker and tool-nature classifier
+    step_remove_retired_gate_artifacts(mig, repo_root)
+
     # The state marker is written last, so a run that died halfway is not recorded as
     # a completed migration.
     if not dry_run and not errors and not mig.errors:
@@ -1101,6 +1107,60 @@ def step_untrack_diagnostics(mig, repo_root):
     for path in paths:
         mig.record("untrack diagnostics", path, "git rm --cached (kept on disk)")
     return paths
+
+
+#: Files only the circuit breaker (`alongkit.circuit`) and the tool-nature classifier
+#: (`alongkit.hooks.toolnature`) read; both were removed in `debt--gate-simplification`.
+RETIRED_DIAGNOSTICS = ("circuit_breaker.json", "syntax_churn.json")
+RETIRED_STATE_FILES = ("tool_rules.yaml",)
+
+
+def retired_gate_artifacts(repo_root):
+    """Existing retired breaker/classifier files under `repo_root` (absolute paths)."""
+    along_dir = os.path.join(repo_root, repo.STATE_DIR)
+    if not os.path.isdir(along_dir):
+        return []
+    diag = os.path.join(along_dir, "diagnostics")
+    candidates = [os.path.join(diag, name) for name in RETIRED_DIAGNOSTICS]
+    candidates += [os.path.join(along_dir, name) for name in RETIRED_STATE_FILES]
+    return [p for p in candidates if os.path.isfile(p)]
+
+
+def _gates_yaml_has_tool_rules(repo_root):
+    """True when `.along/rules/gates.yaml` still carries a top-level `tools:` section."""
+    path = os.path.join(repo_root, repo.STATE_DIR, "rules", "gates.yaml")
+    if not os.path.isfile(path):
+        return False
+    try:
+        text = textio.read_text(path, strict=False)
+    except (OSError, UnicodeDecodeError):
+        return False
+    return re.search(r"^tools\s*:", text, re.MULTILINE) is not None
+
+
+def step_remove_retired_gate_artifacts(mig, repo_root):
+    """Step 15 [v4.5.1]: remove what the retired circuit breaker and tool-nature classifier left.
+
+    `circuit_breaker.json` / `syntax_churn.json` (per-machine breaker state) and
+    `.along/tool_rules.yaml` (classifier rules) are read by nothing since
+    `debt--gate-simplification`; they are discarded with a backup. A `tools:` section in
+    the repository-owned `.along/rules/gates.yaml` is reported, never rewritten. The live
+    activity traces (`activity_trace.json`, `activity/`) stay. A second run is a no-op.
+    See [bug--wrap-misses-engine-writes].
+    """
+    print("-> Step 15 [v4.5.1]: Removing retired circuit-breaker and tool-classifier artifacts...")
+    removed = retired_gate_artifacts(repo_root)
+    for path in removed:
+        mig.discard(path, "retired with the circuit breaker / tool-nature classifier (debt--gate-simplification)")
+    if _gates_yaml_has_tool_rules(repo_root):
+        gates_yaml = os.path.join(repo_root, repo.STATE_DIR, "rules", "gates.yaml")
+        mig.record("review", gates_yaml, "top-level 'tools:' section is ignored since the tool-nature "
+                   "classifier was removed; delete it by hand")
+        print("   [WARN] .along/rules/gates.yaml has a 'tools:' section the engine no longer reads; "
+              "remove it by hand.")
+    if not removed:
+        print("   [OK] No retired gate artifacts.")
+    return removed
 
 
 def step_migrate_v2_2_5_link_rewriting_and_integrity(mig, repo_root, detected_version="1.0.0"):

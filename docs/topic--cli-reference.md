@@ -363,7 +363,7 @@ Protocol tools provide specialized repository maintenance, release management, a
 Transactional end-of-stage wrap engine.
 - Validates quality gates, inspects git diffs, updates active issue status, moves files to `done/`, writes session logs, recompiles projections, appends to `HISTORY.md`, and atomically commits wrapped work.
 - **Check-then-write**: every check (team steps, plan, completion of `- [ ]` checklist items in issue Acceptance Criteria and living plan, tests, zero-byte audit, entity graph) runs before the first write; a failed wrap leaves the tree unchanged. KB sync runs after the transaction commits and only warns on failure.
-- **Atomic auto-commit**: Automatically commits attributed files, issue status change, session log, and updated projections in a single atomic commit linked to the issue slug. Pass `--no-commit` to keep changes staged/unstaged on disk.
+- **Atomic auto-commit**: Automatically commits attributed files, issue status change, session log, and updated projections in a single atomic commit linked to the issue slug. `docs/topic--along-protocol.md` and any `AGENTS.md` changed only inside its managed blocks (engine refreshes) are included too. Pass `--no-commit` to keep changes staged/unstaged on disk.
 - **Options**:
   - `-s, --status <status>`: Closing status (`done`, `superseded`, `cancelled`, `duplicate`). Default: `done`.
   - `-m, --summary "<text>"`: One-line summary for `.along/HISTORY.md` index (falls back to issue title if omitted).

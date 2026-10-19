@@ -784,7 +784,10 @@ def _auto_commit_wrapped_work(
             if pk in changed_keys:
                 dirty_projections.append(changed_keys[pk])
 
-    commit_paths = sorted(dict.fromkeys(dirty_attributed + dirty_entities + dirty_projections))
+    # Engine-refreshed managed blocks carry no edit events [bug--wrap-misses-engine-writes].
+    dirty_managed = closeout.managed_only_agents_changes(repo_root, changes)
+
+    commit_paths = sorted(dict.fromkeys(dirty_attributed + dirty_entities + dirty_projections + dirty_managed))
     if not commit_paths:
         return 0
 

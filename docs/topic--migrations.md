@@ -133,3 +133,9 @@ fails if the engine calls `shutil.move`, `os.remove` or their neighbours directl
 - Runs on every migration, including an up-to-date repository; a second run finds nothing, outside git it does nothing, `--dry-run` only lists the paths.
 - From then on the `untracked_exports` gate rejects staging them again, and `along doctor` reports any that remain.
 
+### `v4.5.1`: Retired Gate Artifacts (Step 15)
+- The circuit breaker and the tool-nature classifier were removed in `debt--gate-simplification`; nothing reads what they left. `.along/diagnostics/circuit_breaker.json`, `.along/diagnostics/syntax_churn.json` and `.along/tool_rules.yaml` are deleted after a backup to `.along/.migration-backup/`.
+- A top-level `tools:` section in `.along/rules/gates.yaml` is ignored by the gate loader. Since the file is repository-owned, the step only reports it (`[WARN]`, recorded as `review`); remove it by hand.
+- The live activity traces (`.along/diagnostics/activity_trace.json`, `.along/diagnostics/activity/`) stay.
+- Runs on every migration, including an up-to-date repository (as a heal pass); a second run finds nothing, `--dry-run` only lists the paths.
+

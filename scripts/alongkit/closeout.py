@@ -383,8 +383,49 @@ def _item(ctx: str, slug: str, bindings: List[Dict[str, Any]], prefix: str,
 RUN_FILENAME: str = ".closeout.json"
 RUN_SCHEMA: int = 1
 #: Projections a wrap regenerates; they go into the last commit of a closeout.
+#: `docs/topic--along-protocol.md` is engine-managed (`along init` / `along update`) and has
+#: no edit events, so it rides with the projections [bug--wrap-misses-engine-writes].
 PROJECTION_FILES: Tuple[str, ...] = (".along/ISSUES.md", ".along/HISTORY.md", "docs/INDEX.md",
-                                     "docs/decisions/INDEX.md", "llms.txt", "llms-full.txt")
+                                     "docs/decisions/INDEX.md", "llms.txt", "llms-full.txt",
+                                     "docs/topic--along-protocol.md")
+
+_RULES_BLOCK_RE = re.compile(r"<!-- BEGIN ALONG-RULES -->.*?<!-- END ALONG-RULES -->", re.DOTALL)
+
+
+def _without_managed_blocks(text: str) -> str:
+    from .scaffold import MANAGED_BLOCK_RE
+    text = text.replace("\r\n", "\n")
+    return _RULES_BLOCK_RE.sub("", MANAGED_BLOCK_RE.sub("", text))
+
+
+def managed_only_agents_changes(repo_root: str, changes: Optional[Dict[str, str]] = None) -> List[str]:
+    """Changed tracked `AGENTS.md` files (top-relative) whose only change against `HEAD` lies
+    inside the managed blocks (`ALONG-PROTOCOL`, `ALONG-RULES`).
+
+    The engine rewrites those blocks (`along init` / `along update` / `along rules attach`)
+    without recording edit events; a file whose text outside the blocks also changed is
+    hand-edited and left to attribution. [bug--wrap-misses-engine-writes]
+    """
+    top = git_top(repo_root)
+    if not top:
+        return []
+    if changes is None:
+        changes = git_changes(repo_root)
+    found: List[str] = []
+    for path, status in changes.items():
+        if repo.normalize_posix(path).split("/")[-1] != "AGENTS.md" or "?" in status or "D" in status:
+            continue
+        head = _git_text(top, "show", f"HEAD:{repo.normalize_posix(path)}")
+        work_path = os.path.join(top, *repo.normalize_posix(path).split("/"))
+        if head is None or not os.path.isfile(work_path):
+            continue
+        try:
+            work = textio.read_text(work_path, strict=False)
+        except (OSError, UnicodeDecodeError):
+            continue
+        if _without_managed_blocks(head) == _without_managed_blocks(work):
+            found.append(path)
+    return sorted(found)
 _COMMIT_TYPES = {"feat": "feat", "bug": "fix", "debt": "refactor", "task": "chore", "docs": "docs"}
 
 
@@ -696,7 +737,9 @@ def run_closeout(repo_root: str, keys: Optional[List[str]] = None, ready: bool =
                         else (f"{root_prefix}/{p}".lstrip("/") if root_prefix else p)) for p in PROJECTION_FILES]
         # Docs and state the wraps rewrote (KB provenance) go with the projections.
         projections += [p for p in run.get("byproducts", []) if _is_wrap_byproduct(p)]
-        changed = {path_key(p) for p in git_changes(real_root)}
+        current_changes = git_changes(real_root)
+        projections += managed_only_agents_changes(real_root, current_changes)
+        changed = {path_key(p) for p in current_changes}
         projections = [p for p in dict.fromkeys(projections) if path_key(p) in changed]
         if projections:
             code = _commit(real_root, top, _commit_message(run["keys"], run["titles"], projections=True),
