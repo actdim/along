@@ -3,7 +3,8 @@ protocol: along
 protocol_version: "4.4.16"
 slug: entity-model-slimming
 type: debt
-status: in-progress
+status: done
+completed: 2026-10-19
 priority: medium
 created: 2026-10-17
 updated: 2026-10-19

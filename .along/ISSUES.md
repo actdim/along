@@ -1,7 +1,7 @@
 # Active Issues
 
 ## Active
-- [ ] `(debt)` [entity-model-slimming](ISSUES/debt--entity-model-slimming.md)
+<!-- No active issues -->
 
 ## Backlog
 - [ ] `(debt)` [along-core-extras-split](ISSUES/debt--along-core-extras-split.md)
@@ -56,9 +56,9 @@
 - [ ] `(task)` [reconcile-dashboard-ui-core-conventions](ISSUES/task--reconcile-dashboard-ui-core-conventions.md)
 
 ## Done (recent)
+- [x] `(debt)` [entity-model-slimming](ISSUES/done/debt--entity-model-slimming.md)
 - [x] `(bug)` [wrap-misses-engine-writes](ISSUES/done/bug--wrap-misses-engine-writes.md)
 - [x] `(task)` [release-v4-5-0](ISSUES/done/task--release-v4-5-0.md)
 - [x] `(debt)` [agents-md-core-slimming](ISSUES/done/debt--agents-md-core-slimming.md)
 - [~] `(feat)` [tool-class-model](ISSUES/done/feat--tool-class-model.md)
-- [x] `(debt)` [gate-simplification](ISSUES/done/debt--gate-simplification.md)
-<!-- 278 older completed issue(s) archived in .along/ISSUES/done/ -->
+<!-- 279 older completed issue(s) archived in .along/ISSUES/done/ -->
