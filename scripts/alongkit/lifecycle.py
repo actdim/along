@@ -525,7 +525,8 @@ def write_session_record(repo_root: str, tx: "transaction.FileTransaction", slug
     The one writer behind `along wrap`, `along scratch purge` and `along issue done`
     [bug--session-records-not-captured]. `completed` adds the issue key to `issues_completed`
     [feat--wrap-session-log-from-blackboard]. `decisions` (wrap's answer) adds the Decisions
-    section; None leaves it out. A later record of the same day is appended as
+    section; None leaves it out. The paths attributed to `slug` go to the `files:` front
+    matter (merged on a later record). A later record of the same day is appended as
     `## Blackboard Record (<n>, <ts>)` instead of being dropped; `reason` (a forced purge) is
     written into the record.
     """
@@ -535,6 +536,10 @@ def write_session_record(repo_root: str, tx: "transaction.FileTransaction", slug
     log_path = session_log_path(repo_root, slug, today)
     key = f"{issue.get('type', 'task')}--{slug}"
     blackboard = session.render_blackboard_markdown(repo_root, slug, reason=reason)
+    # Attribution survives the purge as the log's `files:` front matter, which
+    # `closeout.done_issues_attribution` reads back [feat--parallel-session-closeout] REQ-2,
+    # [debt--entity-model-slimming].
+    files = sorted(session.attributed_files(repo_root, slug))
     decisions_md = None
     if decisions is not None:
         decisions_md = "\n".join(f"- [{d}]" for d in decisions) if decisions else \
@@ -554,6 +559,9 @@ def write_session_record(repo_root: str, tx: "transaction.FileTransaction", slug
             extra = [d for d in (decisions or []) if d not in known]
             if extra:
                 updates["decisions"] = known + extra
+            logged = [str(x) for x in (fm.get("files") or [])]
+            if any(f not in logged for f in files):
+                updates["files"] = sorted(set(logged) | set(files))
             if updates:
                 content = frontmatter.update(content, updates)
         addition = ""
@@ -589,9 +597,9 @@ def write_session_record(repo_root: str, tx: "transaction.FileTransaction", slug
         "issues_advanced": [],
         "issues_completed": [key] if completed else [],
         "decisions": list(decisions or []),
-        "risks_logged": [],
-        "spikes_conducted": [],
     })
+    if files:
+        fm_out["files"] = files
     title = (issue.get("frontmatter") or {}).get("title") or slug.replace("-", " ").capitalize()
     body = f"# Session: {title}\n\n## Summary\n{fm_out['summary']}\n\n"
     if decisions_md:
@@ -691,6 +699,29 @@ def orphan_blackboards(repo_root: str) -> List[Tuple[str, str]]:
         elif issue.get("status") in entities.CLOSED_ISSUE_STATUSES:
             found.append((entry.name, f"issue {issue.get('status')}"))
     return found
+
+
+def gc_closed_blackboards(repo_root: str, dry_run: bool = False) -> List[str]:
+    """Archive and remove unbound blackboards whose issue is already closed.
+
+    `along session gc` calls it, so a blackboard a crashed or older wrap left behind does
+    not linger [debt--entity-model-slimming]. The record goes into the session log first
+    (`archive_and_purge`); a blackboard whose issue is missing, or that holds unknown
+    files, is only reported. Returns the slugs removed (or that would be).
+    """
+    removed: List[str] = []
+    for slug, why in orphan_blackboards(repo_root):
+        if not why.startswith("issue ") or why.startswith("issue missing"):
+            continue
+        if dry_run:
+            removed.append(slug)
+            continue
+        try:
+            if archive_and_purge(repo_root, slug, source="session gc"):
+                removed.append(slug)
+        except (OSError, RuntimeError, ValueError) as exc:
+            print(f"[Warning] Blackboard '{slug}' kept: {exc}", file=sys.stderr)
+    return removed
 
 
 def purge_archived(repo_root: str, slug: str, complete: bool = False) -> bool:
@@ -799,7 +830,7 @@ def _auto_commit_wrapped_work(
 
     itype = str((issue or {}).get("type") or "task").lower()
     title = extract_issue_title(issue_content or "", issue, slug)
-    type_map = {"feat": "feat", "bug": "fix", "debt": "refactor", "task": "chore", "docs": "docs"}
+    type_map = {"feat": "feat", "bug": "fix", "debt": "refactor", "task": "chore", "docs": "docs", "spike": "chore"}
     ctype = type_map.get(itype, "chore")
     commit_desc = summary.strip() if summary and summary.strip() else title
     commit_msg = f"{ctype}: {commit_desc} (refs #{slug})"
@@ -1211,7 +1242,7 @@ def execute_wrap(
             block = frontmatter.split(new_content)
             if block:
                 sibling_link_re = re.compile(
-                    r'(\[[^\]]+\]\()(?:\./)?(?<!\.\./)((?:feat|bug|debt|task|docs)--[a-z0-9-]+\.md\b)'
+                    r'(\[[^\]]+\]\()(?:\./)?(?<!\.\./)(' + entities.ISSUE_TYPE_ALTERNATION + r'--[a-z0-9-]+\.md\b)'
                 )
                 body_lines = block.body.splitlines(keepends=True)
                 adjusted_body_lines = []

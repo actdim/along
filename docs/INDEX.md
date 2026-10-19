@@ -59,6 +59,7 @@ flowchart TD
     T_CLI_REFERENCE -.->|references| T_PARALLEL_SESSIONS
     T_CLI_REFERENCE -.->|references| T_SESSION_LIFECYCLE
     T_DECLARATIVE_GATES_AND_TRACEABILITY -.->|references| T_RUNTIME_HOOKS_AND_GATES
+    T_DOMAIN_MODEL -.->|references| T_MIGRATIONS
     T_LLM_WIKI_ARCHITECTURE -.->|references| T_SYSTEM_COMPARISONS
     T_LLM_WIKI_ARCHITECTURE -.->|references| T_ARCHITECTURE
     T_LLM_WIKI_ARCHITECTURE -.->|references| T_DOMAIN_MODEL
@@ -94,7 +95,7 @@ flowchart TD
 - **[Along CLI Command Reference](./topic--cli-reference.md)** (reference) `cli`, `commands`, `router`, `lifecycle`, `tools`, `reference`
 - **[Declarative Gate Engine & Protocol Traceability Matrix](./topic--declarative-gates-and-traceability.md)** (architecture) `hooks`, `gates`, `declarative`, `traceability`, `verification`, `protocol`, `predicates`
 - **[Dependencies & Submodules AI Documentation and Rules](./topic--dependencies.md)** (topic) `dependencies`, `ai-context`, `submodules`, `vendor`, `rules`
-- **[Domain Model & Entity Ecosystem](./topic--domain-model.md)** (domain-model) `domain-model`, `entities`, `schemas`, `dag`, `metadata`, `issues`, `milestones`, `risks`, `spikes`, `checklists`, `sessions`
+- **[Domain Model & Entity Ecosystem](./topic--domain-model.md)** (domain-model) `domain-model`, `entities`, `schemas`, `dag`, `metadata`, `issues`, `milestones`, `spikes`, `sessions`
 - **[License](./topic--license.md)** (license) `license`, `mit`
 - **[Topic-Based Knowledge Base Architecture & Paradigm](./topic--llm-wiki-architecture.md)** (topic) `topic-based-authoring`, `diataxis`, `tf-idf`, `architecture`, `knowledge-base`, `token-efficiency`, `indexing`, `methodology`, `search`, `karpathy`
 - **[Protocol & Repository Migrations Guide](./topic--migrations.md)** (guide) `migrations`, `upgrade`, `protocol`, `changelog`, `versioning`, `data-safety`

@@ -17,7 +17,11 @@ import re
 from datetime import date, datetime
 from typing import Dict, List, Optional, Tuple
 
-ISSUE_TYPES: tuple = ("feat", "bug", "debt", "task", "docs")
+#: `spike` is a timeboxed experiment with an `## Outcome` section; it replaced the separate
+#: SPIKES/ entity [debt--entity-model-slimming].
+ISSUE_TYPES: tuple = ("feat", "bug", "debt", "task", "docs", "spike")
+#: Regex alternation of the issue types, for patterns matching `<type>--<slug>` names.
+ISSUE_TYPE_ALTERNATION: str = "(?:" + "|".join(ISSUE_TYPES) + ")"
 ISSUE_STATUSES: tuple = (
     "open",
     "in-progress",
@@ -32,10 +36,6 @@ DELIVERED_ISSUE_STATUSES: tuple = ("done",)
 PRIORITIES: tuple = ("critical", "high", "medium", "low")
 
 MILESTONE_STATUSES: tuple = ("open", "in-progress", "completed")
-RISK_SEVERITIES: tuple = ("critical", "high", "medium", "low")
-RISK_STATUSES: tuple = ("active", "mitigated", "resolved")
-SPIKE_STATUSES: tuple = ("hypothesis", "evaluating", "concluded")
-CHECKLIST_CATEGORIES: tuple = ("pre-commit", "stage-completion", "release", "security")
 DECISION_STATUSES: tuple = ("accepted", "superseded", "retired", "proposed", "rejected", "deprecated", "active")
 ACTIVE_DECISION_STATUSES: tuple = ("accepted", "active")
 
@@ -45,11 +45,12 @@ ENTITY_DIRS: Dict[str, str] = {
     "issue": "ISSUES",
     "session": "SESSIONS",
     "milestone": "MILESTONES",
-    "risk": "RISKS",
-    "spike": "SPIKES",
-    "checklist": "CHECKLISTS",
     "decision": "DECISIONS",
 }
+
+#: Entity folders of the protocol before [debt--entity-model-slimming]. Migration Step 16
+#: converts their records; nothing else reads them.
+LEGACY_ENTITY_DIRS: Tuple[str, ...] = ("RISKS", "SPIKES", "CHECKLISTS")
 
 REFERENCE_FIELDS: Tuple[str, ...] = ("related", "blocked_by", "parent", "superseded_by", "duplicate_of")
 MILESTONE_REFERENCE_FIELDS: Tuple[str, ...] = ("target_issues",)

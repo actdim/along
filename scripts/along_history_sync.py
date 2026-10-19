@@ -192,8 +192,6 @@ milestone: null
 issues_advanced: []
 issues_completed: [{slug}]
 decisions: []
-risks_logged: []
-spikes_conducted: []
 ---
 
 # Session Log: {subject}

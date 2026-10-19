@@ -27,16 +27,13 @@ from .query import (
     sibling_entity_keys,
 )
 from .vocabulary import (
-    CHECKLIST_CATEGORIES,
     CLOSED_ISSUE_STATUSES,
     DECISION_STATUSES,
     ISSUE_STATUSES,
     ISSUE_TYPES,
+    LEGACY_ENTITY_DIRS,
     MILESTONE_STATUSES,
     PRIORITIES,
-    RISK_SEVERITIES,
-    RISK_STATUSES,
-    SPIKE_STATUSES,
     canonical_key,
     is_iso_date,
 )
@@ -100,6 +97,7 @@ def validate_entities(repo_root: str, ancestors: bool = True,
         known_entity_keys.add(m["slug"])
         known_entity_keys.add(f"milestone--{m['slug']}")
 
+    # RISKS/SPIKES/CHECKLISTS are legacy folders a not yet migrated context may still hold.
     for kind, dirname in (("risk", "RISKS"), ("spike", "SPIKES"), ("checklist", "CHECKLISTS"), ("decision", "DECISIONS")):
         edir = os.path.join(sdir, dirname)
         if os.path.isdir(edir):
@@ -277,87 +275,14 @@ def validate_entities(repo_root: str, ancestors: bool = True,
                         "Milestones cannot share the same release version."
                     ))
 
-    # 3. Validate Auxiliary Entities (RISKS, SPIKES, CHECKLISTS)
-    checklists_dir = os.path.join(sdir, "CHECKLISTS")
-    if os.path.isdir(checklists_dir):
-        for fname in os.listdir(checklists_dir):
-            if not fname.endswith(".md"):
-                continue
-            scanned += 1
-            fpath = os.path.join(checklists_dir, fname)
-            rel = repo.canonical_relpath(fpath, repo_root)
-            try:
-                c = textio.read_text(fpath)
-                fm, _, _ = frontmatter.try_parse(c, path=fpath)
-            except OSError:
-                continue
-            if not fm:
-                errors.append((rel, "missing or unparseable YAML front-matter"))
-                continue
-            if fm.get("protocol") != "along":
-                errors.append((rel, f"missing or invalid protocol: '{fm.get('protocol')}' (expected 'along')"))
-            if not fm.get("slug"):
-                errors.append((rel, "missing mandatory field: 'slug'"))
-            if not fm.get("title"):
-                errors.append((rel, "missing mandatory field: 'title'"))
-            cat = fm.get("category")
-            if cat and cat not in CHECKLIST_CATEGORIES:
-                errors.append((rel, f"invalid category: '{cat}' (allowed: {', '.join(CHECKLIST_CATEGORIES)})"))
-
-    risks_dir = os.path.join(sdir, "RISKS")
-    if os.path.isdir(risks_dir):
-        for fname in os.listdir(risks_dir):
-            if not fname.endswith(".md"):
-                continue
-            scanned += 1
-            fpath = os.path.join(risks_dir, fname)
-            rel = repo.canonical_relpath(fpath, repo_root)
-            try:
-                c = textio.read_text(fpath)
-                fm, _, _ = frontmatter.try_parse(c, path=fpath)
-            except OSError:
-                continue
-            if not fm:
-                errors.append((rel, "missing or unparseable YAML front-matter"))
-                continue
-            if fm.get("protocol") != "along":
-                errors.append((rel, f"missing or invalid protocol: '{fm.get('protocol')}' (expected 'along')"))
-            if not fm.get("slug"):
-                errors.append((rel, "missing mandatory field: 'slug'"))
-            if not fm.get("title"):
-                errors.append((rel, "missing mandatory field: 'title'"))
-            sev = fm.get("severity")
-            if sev and sev not in RISK_SEVERITIES:
-                errors.append((rel, f"invalid severity: '{sev}' (allowed: {', '.join(RISK_SEVERITIES)})"))
-            rstatus = fm.get("status")
-            if rstatus and rstatus not in RISK_STATUSES:
-                errors.append((rel, f"invalid status: '{rstatus}' (allowed: {', '.join(RISK_STATUSES)})"))
-
-    spikes_dir = os.path.join(sdir, "SPIKES")
-    if os.path.isdir(spikes_dir):
-        for fname in os.listdir(spikes_dir):
-            if not fname.endswith(".md"):
-                continue
-            scanned += 1
-            fpath = os.path.join(spikes_dir, fname)
-            rel = repo.canonical_relpath(fpath, repo_root)
-            try:
-                c = textio.read_text(fpath)
-                fm, _, _ = frontmatter.try_parse(c, path=fpath)
-            except OSError:
-                continue
-            if not fm:
-                errors.append((rel, "missing or unparseable YAML front-matter"))
-                continue
-            if fm.get("protocol") != "along":
-                errors.append((rel, f"missing or invalid protocol: '{fm.get('protocol')}' (expected 'along')"))
-            if not fm.get("slug"):
-                errors.append((rel, "missing mandatory field: 'slug'"))
-            if not fm.get("title"):
-                errors.append((rel, "missing mandatory field: 'title'"))
-            sstatus = fm.get("status")
-            if sstatus and sstatus not in SPIKE_STATUSES:
-                errors.append((rel, f"invalid status: '{sstatus}' (allowed: {', '.join(SPIKE_STATUSES)})"))
+    # 3. Legacy entity folders (RISKS, SPIKES, CHECKLISTS) are converted by migration
+    # Step 16 [debt--entity-model-slimming]; until then their keys stay resolvable (above)
+    # and the folder is reported, not validated.
+    for dirname in LEGACY_ENTITY_DIRS:
+        ldir = os.path.join(sdir, dirname)
+        if os.path.isdir(ldir) and any(f.endswith(".md") for f in os.listdir(ldir)):
+            warnings.append((repo.canonical_relpath(ldir, repo_root),
+                             "legacy entity folder; run `along update` (migration Step 16) to convert it"))
 
     # 4. Validate Sessions
     sessions_dir = os.path.join(sdir, "SESSIONS")

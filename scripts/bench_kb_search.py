@@ -69,7 +69,7 @@ def calculate_percentiles(latencies: Sequence[float]) -> Tuple[float, float]:
 def generate_synthetic_entities(count: int = 1000, seed: int = 42) -> List[Dict[str, Any]]:
     """Generate a reproducible synthetic fixture of structured entities."""
     rng = random.Random(seed)
-    categories = ["kb", "issue", "decision", "milestone", "risk", "spike"]
+    categories = ["kb", "issue", "decision", "milestone", "session"]
     terms_pool = [
         "architecture", "boundary", "concurrency", "deployment", "enforcement",
         "framework", "governance", "hermetic", "indexing", "junction",

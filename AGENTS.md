@@ -6,7 +6,7 @@ This repo carries its own agent context, provider-agnostically. Follow it every 
 ## Where state lives
 - **Nearest wins**: any folder may carry its own `AGENTS.md` + `.along/`; use the NEAREST for the area you work in. Nearest `.along/` > higher-level `.along/` > global config. Only a nested `.git` or a user-run `along init` makes a subproject.
 - **Read at session start** (not auto-loaded): `.along/ISSUES.md`, `.along/CONSTRAINTS.md`, your issue `.along/ISSUES/<type>--<slug>.md`; when relevant `.along/VISION.md`, `.along/GLOSSARY.md`. They reflect the state WHEN WRITTEN - verify named files/APIs/flags against the code.
-- **Entities**: issues (`feat|bug|debt|task|docs`), ADRs (`.along/DECISIONS/`, never edited - superseded), milestones, risks, spikes, sessions. Keys `<type>--<slug>`, referenced by key, never by path; schemas in `docs/topic--domain-model.md`. Create them from intent unprompted (build/fix -> issue, blocked -> risk, compare -> spike, release -> milestone).
+- **Entities**: issues (`feat|bug|debt|task|docs|spike`), ADRs (`.along/DECISIONS/`, never edited - superseded), milestones, sessions. Keys `<type>--<slug>`, referenced by key, never by path; schemas in `docs/topic--domain-model.md`. Create them from intent unprompted (build/fix -> issue, blocked -> issue tagged `risk`, compare -> `spike` issue, release -> milestone).
 - **Projections** (`ISSUES.md`, `DECISIONS.md`, `CONSTRAINTS.md`, `docs/INDEX.md`) are compiled: on conflict take either side and re-run the sync.
 
 ## Anchor work to an issue

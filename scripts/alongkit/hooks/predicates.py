@@ -97,10 +97,8 @@ MUTATION_WHITELIST_PATTERNS: Tuple[str, ...] = (
     ".along/.session/**",
     ".along/diagnostics/**",
     ".along/SESSIONS/**",
-    # Planning artifacts: an issue, risk or spike is how a plan is written down.
+    # Planning artifacts: an issue (spike issues included) is how a plan is written down.
     ".along/ISSUES/**",
-    ".along/RISKS/**",
-    ".along/SPIKES/**",
     "implementation_plan.md",
     "walkthrough.md",
     "living_plan.md",
@@ -610,7 +608,7 @@ def check_doc_routing_compliance(event: HookEvent, repo_root: str, **kwargs: Any
 
 
 _ENTITY_DIR_PATTERN = re.compile(
-    r"\.along[/\\]+(?:ISSUES|DECISIONS|MILESTONES|RISKS|SPIKES)(?:[/\\]|$)",
+    r"\.along[/\\]+(?:ISSUES|DECISIONS|MILESTONES)(?:[/\\]|$)",
     re.IGNORECASE,
 )
 _SHELL_DELETION_CMD_RE = re.compile(
@@ -641,7 +639,7 @@ def _extract_all_target_paths(event: HookEvent) -> List[str]:
 
 
 def check_entity_deletion_protection(event: HookEvent, repo_root: str, **kwargs: Any) -> Optional[str]:
-    """Intercept file deletion tools and shell commands deleting issue/ADR/milestone/risk/spike files."""
+    """Intercept file deletion tools and shell commands deleting issue/ADR/milestone files."""
     tool = (event.tool_name or "").lower()
 
     # 1. File deletion tools
@@ -650,7 +648,7 @@ def check_entity_deletion_protection(event: HookEvent, repo_root: str, **kwargs:
             if _ENTITY_DIR_PATTERN.search(p):
                 return (
                     "Entity file deletion rejected by [gate: entity-reference-integrity]: "
-                    "Deleting an issue, ADR, milestone, risk, or spike file is forbidden. "
+                    "Deleting an issue, ADR or milestone file is forbidden. "
                     "Use 'along issue supersede' / 'along issue rename' (split: supersede into several keys)."
                 )
 
@@ -665,7 +663,7 @@ def check_entity_deletion_protection(event: HookEvent, repo_root: str, **kwargs:
                 if _ENTITY_DIR_PATTERN.search(seg) and _SHELL_DELETION_CMD_RE.search(seg):
                     return (
                         "Entity file deletion rejected by [gate: entity-reference-integrity]: "
-                        "Deleting an issue, ADR, milestone, risk, or spike file is forbidden. "
+                        "Deleting an issue, ADR or milestone file is forbidden. "
                         "Use 'along issue supersede' / 'along issue rename' (split: supersede into several keys)."
                     )
 
@@ -1240,7 +1238,7 @@ def _resync_issues_board(ctx: str) -> bool:
     return True
 
 
-_ENTITY_DIRS = ("ISSUES/", "MILESTONES/", "RISKS/", "SPIKES/", "CHECKLISTS/", "DECISIONS/", "SESSIONS/")
+_ENTITY_DIRS = ("ISSUES/", "MILESTONES/", "DECISIONS/", "SESSIONS/")
 
 
 def _entity_files_changed(repo_root: str) -> bool:

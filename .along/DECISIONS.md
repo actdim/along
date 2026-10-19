@@ -1,8 +1,9 @@
 <!-- Generated projection from .along/DECISIONS/*.md. Do not edit by hand. Run: along decision sync -->
 # Decisions (ADR Projection Board)
 
-## Active Decisions (45, newest 30 shown)
+## Active Decisions (46, newest 30 shown)
 
+- [Entity model slimmed: spike is an issue type, risks and checklists retired](DECISIONS/ADR-2026-10-19--entity-model-slimmed.md)
 - [Gates judge results, not commands](DECISIONS/ADR-2026-10-17--gates-judge-results-not-commands.md)
 - [Autonomous mode isolation: one Docker container per environment now, gVisor runtime later](DECISIONS/ADR-2026-10-17--docker-isolation-now-gvisor-later.md)
 - [Gate friction fixes of 2026-10-11](DECISIONS/ADR-2026-10-11--gate-friction-fixes.md)
@@ -32,9 +33,8 @@
 - [Engineering Provenance, Dual-Track UI Projections, and Loop Trace Disambiguation](DECISIONS/ADR-2026-09-06--engineering-provenance-and-dual-track-artifact-loop.md)
 - [Scope and Enforcement Mode of the ASCII Typography Rule](DECISIONS/ADR-2026-09-01--typography-rule-scope.md)
 - [Shared Implementation Package for the Engines (scripts/alongkit/)](DECISIONS/ADR-2026-09-01--shared-engine-package.md)
-- [Requirement Traceability Matrix, Public Surface Discovery & Reviewer Coverage Gate](DECISIONS/ADR-2026-09-01--requirement-traceability-and-public-surface-gate.md)
 
-Older decisions (15): docs/decisions/INDEX.md
+Older decisions (16): docs/decisions/INDEX.md
 
 ## Superseded & Retired Decisions (6)
 

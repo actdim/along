@@ -2,13 +2,16 @@
 protocol: along
 protocol_version: "2.6.0"
 slug: antigravity-git-index-truncation
-title: "Upstream Antigravity VS Code Extension Git Index Truncation"
-severity: high
-status: resolved
-owner: user
-mitigation: "Resolved upstream in v1.3.0 via fs.promises.utimes and isGitLensActive gate."
+type: debt
+status: done
+priority: high
 created: 2026-09-07
 updated: 2026-09-10
+completed: 2026-09-10
+tags: [risk]
+blocked_by: []
+related: []
+owner: user
 ---
 
 # Upstream Antigravity Extension Git Index Truncation Bug and Mitigation
@@ -44,3 +47,11 @@ Fixed upstream in Google Antigravity VS Code Extension v1.3.0 (`extension.js`):
 - [x] Check `extension.js` in the new extension version directory.
 - [x] Verify if Google upstream has fixed the race condition: confirmed fixed in v1.3.0 using `fs.promises.utimes` and `isGitLensActive`.
 - [x] Risk marked as `status: resolved`.
+
+## Mitigation
+
+Resolved upstream in v1.3.0 via fs.promises.utimes and isGitLensActive gate.
+
+
+## Acceptance Criteria
+- [x] Risk resolved (migrated from RISKS/, status: resolved)

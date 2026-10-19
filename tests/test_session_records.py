@@ -295,7 +295,7 @@ class TestArchiveAndPurge(ArchiveFixture):
         self.assertFalse(os.path.isdir(self.sdir))
         log = self.log_text()
         self.assertIn("## Blackboard Record", log)
-        self.assertIn("1. the direct plan", log)
+        self.assertNotIn("1. the direct plan", log, "the plan is not copied [debt--entity-model-slimming]")
         self.assertIn("archived by scratch purge", log)
         self.assertIn("issues_completed: []", log)
 
@@ -309,21 +309,21 @@ class TestArchiveAndPurge(ArchiveFixture):
 
     def test_scaffold_is_not_rendered_as_content(self):
         rendered = session.render_blackboard_markdown(self.root, self.SLUG)
-        self.assertIn("No plan recorded.", rendered)
+        self.assertNotIn("### Plan", rendered)
         self.assertNotIn("Step 1: Step 1", rendered)
         self.assertNotIn("| 1 | Step 1 | pending", rendered)
         self.assertNotIn("Target Symbols and Files", rendered)
 
     def test_same_day_second_record_is_kept(self):
         from alongkit import lifecycle
-        session.record_plan(self.root, self.SLUG, "1. first", "test")
+        session.append_trace(self.root, self.SLUG, "first record")
         lifecycle.archive_and_purge(self.root, self.SLUG, source="test")
         session.init_session(self.root, self.SLUG)
-        session.record_plan(self.root, self.SLUG, "1. second", "test")
+        session.append_trace(self.root, self.SLUG, "second record")
         lifecycle.archive_and_purge(self.root, self.SLUG, source="test")
         log = self.log_text()
-        self.assertIn("1. first", log)
-        self.assertIn("1. second", log)
+        self.assertIn("first record", log)
+        self.assertIn("second record", log)
         self.assertIn("## Blackboard Record (2, ", log)
 
     def test_issue_done_archives_the_blackboard_and_records_completion(self):
@@ -333,7 +333,6 @@ class TestArchiveAndPurge(ArchiveFixture):
         self.assertFalse(os.path.isdir(self.sdir))
         log = self.log_text()
         self.assertIn("task--fixture-sample-task", log)
-        self.assertIn("1. done plan", log)
         self.assertIn("archived by issue done", log)
 
     def test_issue_done_without_blackboard_still_logs_completion(self):
@@ -602,7 +601,6 @@ class TestWrapRecord(ArchiveFixture):
                                       force_reason="plan given verbally")
         self.assertEqual(code, 0)
         log = self.log_text()
-        self.assertIn("No plan recorded.", log)
         self.assertIn("Wrapped without a recorded plan: plan given verbally", log)
 
     def test_failed_wrap_keeps_the_blackboard(self):

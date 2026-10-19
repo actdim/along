@@ -8,7 +8,7 @@ updated: 2026-09-19
 tags: [skills, commands, reference, runners, lifecycle, automation, multi-agent]
 sources:
   - path: skills/along-init/SKILL.md
-    hash: "d0936b0e170988a347400ed8c219bda35092cf23bf881ea2de6353b8bb7bc771"
+    hash: "9e3c3052d051eb87f3d590aedc06550b963996dc86da0e1e22485a710c17e5a6"
   - path: skills/along-kb-sync/SKILL.md
     hash: "e43f8e63715f943e940edd5abf260b6ea45bf69f784213bac3b1bd7327f75527"
   - path: skills/along-update/SKILL.md
@@ -78,7 +78,7 @@ flowchart TD
 ## 1. Bootstrap & Repository Protocol Management
 
 ### `along-init`
-- **What it is**: The foundation bootstrapping engine for Along in any repository. Scaffolds or refreshes root `AGENTS.md` (carrying the managed protocol block), `CLAUDE.md`, `.gitattributes` (with `merge=union`), and the `.along/` directory skeleton (`ISSUES/`, `DECISIONS.md`, `MILESTONES/`, `RISKS/`, `SPIKES/`, `CHECKLISTS/`, `SESSIONS/`, `docs/`).
+- **What it is**: The foundation bootstrapping engine for Along in any repository. Scaffolds or refreshes root `AGENTS.md` (carrying the managed protocol block), `CLAUDE.md`, `.gitattributes` (with `merge=union`), and the `.along/` directory skeleton (`ISSUES/`, `DECISIONS.md`, `MILESTONES/`, `SESSIONS/`, `docs/`; `GLOSSARY.md` and the `VISION.md` skeleton only where the context is not nested under a FULL ancestor).
 - **Architectural Rationale**:
   - *Idempotent Managed Block*: Never overwrites custom human developer instructions in `AGENTS.md`; only refreshes the block between `<!-- BEGIN ALONG-PROTOCOL ... -->` and `<!-- END ALONG-PROTOCOL -->`.
   - *Core + On-Demand Reference*: the block is a small always-loaded core; situational procedure lives in the managed `docs/topic--along-protocol.md` (rendered from `skills/along-init/protocol-reference.md` at FULL roots, refreshed only while it carries the managed marker), pulled via `/along-kb-search`. Both are rendered for the active gate strictness profile.
@@ -304,7 +304,7 @@ flowchart TD
 ---
 
 ### `along-kb-search`
-- **What it is**: Ultra-fast, token-efficient multi-scope search engine across Knowledge Base (`docs/`) and living project memory (`ISSUES/`, `DECISIONS.md`, `MILESTONES/`, `RISKS/`, `SESSIONS/`).
+- **What it is**: Ultra-fast, token-efficient multi-scope search engine across Knowledge Base (`docs/`) and living project memory (`ISSUES/` including spikes, `DECISIONS.md`, `MILESTONES/`, `SESSIONS/`). Categories: `all`, `kb`, `issue`, `decision`, `milestone`, `session`.
 - **Architectural Rationale**:
   - *Targeted Snippet Window Extraction*: Instead of reading whole multi-kilobyte documents into prompt context, retrieves concise word-boundary aligned snippet windows (typically under 150 tokens), verifiable via `--stats`.
   - *Multi-Tier Relevance Scoring & IDF Weighting*: Ranks results using word-boundary token matching, lightweight stemming, smoothed inverse document frequency (IDF), and exact phrase matching with AND semantics by default (`--any` for OR).
@@ -312,7 +312,7 @@ flowchart TD
 - **Invocation Triggers**:
   - *Explicit*: `/along-kb-search "<query>" [--category <cat>] [--any] [--prefix] [--stats]`, `along kb-search` (fallback: `python ~/.along/bin/along_exec.py kb-search`).
   - *Semantic / Automatic*: Recommended first step for agents when researching domain architecture, investigating existing decisions, or mapping blast radius.
-- **Entities Operated On**: `docs/`, `.along/ISSUES/`, `.along/DECISIONS.md`, `.along/MILESTONES/`, `.along/RISKS/`, `.along/SPIKES/`, `.along/SESSIONS/`.
+- **Entities Operated On**: `docs/`, `.along/ISSUES/`, `.along/DECISIONS.md`, `.along/MILESTONES/`, `.along/SESSIONS/`.
 - **Ecosystem Chaining**: Used by Scout and Supervisor in `along-team` during Phase 1 (Research).
 
 ---
@@ -360,7 +360,7 @@ flowchart TD
 ### `along-wrap`
 - **What it is**: Unified session and stage wrap-up orchestrator. Executes the mandatory completion checklist: runs tests, checks documentation blast radius, moves finished issues to `done/`, reconciles `ISSUES.md`, appends to `HISTORY.md`, compiles engineering provenance, and purges session blackboards.
 - **Architectural Rationale**:
-  - *Consolidated Lifecycle & Engineering Provenance*: Eliminates fragmentation between session wrap-up and stage wrap-up, providing a single deterministic checklist. For multi-step tasks or `along-team` runs, compiles the 3-part provenance into the session log (`## Initial Implementation Plan`, `## Execution & Loop Trace`, `## Verification Walkthrough & Gate Manifest`).
+  - *Consolidated Lifecycle & Engineering Provenance*: Eliminates fragmentation between session wrap-up and stage wrap-up, providing a single deterministic checklist. For multi-step tasks or `along-team` runs, writes the blackboard into the session log as a `## Blackboard Record` (step table, research, execution trace, notes, reviews); attributed paths go to the `files:` front matter and the approved plan is not copied.
   - *Automated Garbage Collection*: Completely cleans up ephemeral blackboard directories (`.along/.session/<slug>/`), ensuring zero leftover state files.
 - **Invocation Triggers**:
   - *Explicit*: `/along-wrap`, `along wrap` (fallback: `python ~/.along/bin/along_exec.py wrap`).

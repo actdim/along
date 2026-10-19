@@ -102,6 +102,14 @@ def _issue_create(repo_root: str, args: List[str], issues_dir: str, today: str):
     milestone_line = f"milestone: {milestone}\n" if milestone else ""
     target_file = os.path.join(issues_dir, f"{itype}--{islug}.md")
     tags_str = f"[{', '.join(tags)}]" if tags else "[]"
+    if itype == "spike":
+        # A spike concludes with what was learned; `## Outcome` is filled before it is wrapped.
+        body = ("Describe the spike: the question, the hypothesis and the timebox.\n\n"
+                "## Acceptance Criteria\n- [ ] Task requirement 1\n- [ ] Outcome recorded\n\n"
+                "## Outcome\n")
+    else:
+        body = ("Describe the feature, requirements, and background context here.\n\n"
+                "## Acceptance Criteria\n- [ ] Task requirement 1\n- [ ] Automated tests passing\n")
     content = f"""---
 protocol: along
 protocol_version: "{CURRENT_PROTOCOL_VERSION}"
@@ -119,12 +127,7 @@ related: []
 
 # {title}
 
-Describe the feature, requirements, and background context here.
-
-## Acceptance Criteria
-- [ ] Task requirement 1
-- [ ] Automated tests passing
-"""
+{body}"""
     textio.write_text(target_file, content, newline="\n", atomic=True)
     print(f"-> Created issue: {target_file}")
 
@@ -223,7 +226,7 @@ def _issue_done(repo_root: str, args: List[str], issues_dir: str, done_dir: str,
     block = frontmatter.split(content)
     if block:
         sibling_link_re = re.compile(
-            r'(\[[^\]]+\]\()(?:\./)?(?<!\.\./)((?:feat|bug|debt|task|docs)--[a-z0-9-]+\.md\b)'
+            r'(\[[^\]]+\]\()(?:\./)?(?<!\.\./)(' + entities.ISSUE_TYPE_ALTERNATION + r'--[a-z0-9-]+\.md\b)'
         )
         body_lines = block.body.splitlines(keepends=True)
         adjusted_body_lines = []
@@ -306,7 +309,7 @@ def _issue_reopen(repo_root: str, args: List[str], issues_dir: str, done_dir: st
                                  remove=("completed", "superseded_by", "duplicate_of"))
     block = frontmatter.split(content)
     if block:
-        back = re.compile(r'(\[[^\]]+\]\()\.\./((?:feat|bug|debt|task|docs)--[a-z0-9-]+\.md\b)')
+        back = re.compile(r'(\[[^\]]+\]\()\.\./(' + entities.ISSUE_TYPE_ALTERNATION + r'--[a-z0-9-]+\.md\b)')
         body, in_fence = [], False
         for line in block.body.splitlines(keepends=True):
             if line.strip().startswith(("```", "~~~")):

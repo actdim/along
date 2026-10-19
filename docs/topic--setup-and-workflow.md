@@ -8,9 +8,9 @@ updated: 2026-09-27
 tags: [setup-workflow, installation, lifecycle, runners, developer-workflow, testing]
 sources:
   - path: README.md
-    hash: "742705a98e1e98608b43a4f7421f9fb62471e304357adfffc96f29ebd2b7bbac"
+    hash: "b484c5a6e8c8fb26a99582aab02af16fc9223ee6dcc2e5324c461fa69917d64b"
   - path: AGENTS.md
-    hash: "d85f836e9c5864fcf2a497351fe1ad5f87e8149c6dbfee6945e2e7eaef4ed9f5"
+    hash: "0cb05514b12e5bef94ec6ce94df1d464db480fa4d35aebe1e27106123d236512"
 ---
 
 # Setup & Developer Workflow
@@ -194,7 +194,7 @@ along init
    - `docs/topic--along-protocol.md`: the managed on-demand protocol reference (completion checklist, documentation routing tree, merge rules, along-team routing, full rule wording) the core points to; refreshed on every `along init` / `along update`, written only at a FULL root.
 2. `CLAUDE.md`: Scaffolds the standard `@AGENTS.md` import line.
 3. `.gitattributes`: Configures `merge=union` for `.along/HISTORY.md` and `.along/DECISIONS.md` to prevent merge collisions across branches.
-4. `.along/`: Creates the persistent repository memory skeleton (`ISSUES/`, `DECISIONS/`, `MILESTONES/`, `RISKS/`, `SPIKES/`, `CHECKLISTS/`, `SESSIONS/`, `docs/`).
+4. `.along/`: Creates the persistent repository memory skeleton (`ISSUES/`, `DECISIONS/`, `MILESTONES/`, `SESSIONS/`, `docs/`; `GLOSSARY.md` and the `VISION.md` skeleton at the repository root - a nested context under a FULL ancestor creates them on first use).
 5. `VISION.md`: A root `VISION.md` is moved into `.along/VISION.md` (or merged under a `needs-restructure` marker the agent resolves); there is never a second copy.
 6. Pipeline: rule packs, git merge drivers, runtime hooks, migration.
 
@@ -427,7 +427,7 @@ sequenceDiagram
 ```
 
 ### Step 1: Morning Sync & Task Triage
-- Launch `/along-dash` to inspect sprint KPIs, active blockers in `.along/RISKS/`, and the entity DAG.
+- Launch `/along-dash` to inspect sprint KPIs, active blockers (issues tagged `risk`), and the entity DAG.
 - Review active issues in `.along/ISSUES.md` or inspect milestone progress via `along milestone list` and `along milestone show <slug>`.
 
 ### Step 2: Task Claiming & Atomic Session Start

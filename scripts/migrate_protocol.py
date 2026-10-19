@@ -5,9 +5,8 @@ migrate_protocol.py - Version-aware migration engine for ALONG-PROTOCOL.
 Executes sequential, version-specific migration steps on target repository's structure:
   - v1.0.0 -> v1.1.0: Tasks -> Issues directory & kebab-case renaming
   - v1.1.0 -> v1.3.0: Knowledge Base (.agents/KB/) & .code-review-graph-ignore scaffolding
-  - v1.3.3 -> v1.5.0: Entity Ecosystem (MILESTONES, RISKS, SPIKES, CHECKLISTS),
-                     retroactive Milestone synthesis from past sessions/done issues,
-                     standard Checklists synthesis, and complete YAML front-matter enrichment.
+  - v1.3.3 -> v1.5.0: Entity Ecosystem (MILESTONES) and complete YAML front-matter
+                     enrichment (RISKS, SPIKES, CHECKLISTS are no longer scaffolded).
   - v1.5.7 -> v2.0.0: Transition to Along ecosystem:
                      - Migrates verified protocol files from .agents/ to .along/
                      - Injects `protocol: along` into all entity YAML front-matters
@@ -17,6 +16,8 @@ Executes sequential, version-specific migration steps on target repository's str
   - v2.2.27 -> v3.0.0: Version SSOT cleanup & KB schema decoupling:
                      - Strips legacy `protocol_version` from docs/*.md front-matter
                      - Strips ` [vX.Y.Z]` title suffixes from local skills/*/SKILL.md
+  - v4.6.0 (Step 16): RISKS/ -> `debt` issues tagged `risk`, SPIKES/ -> `spike--<slug>`
+                     issues, scaffolded CHECKLISTS/ removed, custom ones -> docs/
 
 Usage:
     python scripts/migrate_protocol.py [TARGET_REPO_ROOT] [--dry-run|--apply] [--force]
@@ -184,60 +185,18 @@ def step_migrate_v1_3_kb_scaffolding(mig, repo_root, working_dir):
 # Step 3: v1.3.3 -> v1.5.0 (Entity Ecosystem, Retro-Synthesis & Checklists)
 # ----------------------------------------------------------------------
 def _v1_5_ensure_directory_skeleton(working_dir, today_year, mig):
+    """Folders every context uses. RISKS/, SPIKES/ and CHECKLISTS/ are no longer scaffolded
+    and the standard checklists are no longer synthesized [debt--entity-model-slimming]."""
     dirs = [
         os.path.join(working_dir, "ISSUES", "done"),
         os.path.join(working_dir, "SESSIONS", today_year),
         os.path.join(working_dir, "MILESTONES"),
-        os.path.join(working_dir, "RISKS"),
-        os.path.join(working_dir, "SPIKES"),
-        os.path.join(working_dir, "CHECKLISTS"),
     ]
     for d in dirs:
         mig.makedirs(d)
         gitkeep = os.path.join(d, ".gitkeep")
         if not os.path.isdir(d) or len(os.listdir(d)) == 0:
             mig.touch(gitkeep)
-
-
-def _v1_5_synthesize_standard_checklists(working_dir, today_str, mig):
-    checklists_dir = os.path.join(working_dir, "CHECKLISTS")
-    standard_checklists = {
-        "stage-completion.md": {
-            "slug": "stage-completion",
-            "title": "Mandatory Stage Completion & Wrap-Up",
-            "category": "stage-completion",
-            "body": "# Mandatory Stage Completion Checklist\n\n"
-                    "1. [ ] Automated tests, linting, and builds run with quiet flags.\n"
-                    "2. [ ] All completed issues moved to `ISSUES/done/` with `status: done` and `completed: YYYY-MM-DD`.\n"
-                    "3. [ ] Related milestone progress percentage updated.\n"
-                    "4. [ ] Active session log written to `SESSIONS/`.\n"
-                    "5. [ ] ISSUES board updated and lean.\n"
-                    "6. [ ] Documentation in `docs/` updated if interfaces changed.\n"
-                    "7. [ ] Prompt user to compact session (`/compact`).\n"
-        },
-        "pre-commit.md": {
-            "slug": "pre-commit",
-            "title": "Pre-Commit Quality Gate",
-            "category": "pre-commit",
-            "body": "# Pre-Commit Verification Checklist\n\n"
-                    "1. [ ] Code compiles and unit tests pass.\n"
-                    "2. [ ] Mandatory git diff inspected for zero unintended deletions.\n"
-                    "3. [ ] No API keys, secrets, or sensitive credentials committed.\n"
-                    "4. [ ] Filenames are Windows-safe (no colons, YYYY-MM-DD dates).\n"
-        }
-    }
-    for filename, data in standard_checklists.items():
-        cpath = os.path.join(checklists_dir, filename)
-        if not os.path.exists(cpath):
-            fm = {
-                "protocol": "along",
-                "slug": data["slug"],
-                "title": data["title"],
-                "category": data["category"],
-                "created": today_str,
-                "updated": today_str
-            }
-            mig.write(cpath, dump_yaml_frontmatter(fm, data["body"]))
 
 
 #: Milestone slugs older migrations synthesized (from Along's own release history) and
@@ -367,8 +326,7 @@ def _v1_5_enrich_sessions_frontmatter(working_dir, today_str, mig):
         for key, value in defaults:
             if key not in fields:
                 updates[key] = value
-        for key in ('issues_advanced', 'issues_completed', 'decisions',
-                    'risks_logged', 'spikes_conducted'):
+        for key in ('issues_advanced', 'issues_completed', 'decisions'):
             if key not in fields:
                 updates[key] = []
 
@@ -382,7 +340,6 @@ def step_migrate_v1_5_entity_ecosystem(mig, repo_root, working_dir):
     today_year = datetime.now().strftime("%Y")
 
     _v1_5_ensure_directory_skeleton(working_dir, today_year, mig)
-    _v1_5_synthesize_standard_checklists(working_dir, today_str, mig)
 
     done_issues = glob.glob(os.path.join(working_dir, "ISSUES", "done", "*.md"))
     active_issues = glob.glob(os.path.join(working_dir, "ISSUES", "*.md"))
@@ -903,7 +860,8 @@ def run_migrations(repo_root, dry_run=True, force=False, backup=True, verbose=Fa
                            and os.path.isdir(along_dir))
         heal_diagnostics = bool(gitgates.tracked_diagnostics(repo_root))
         heal_retired = bool(retired_gate_artifacts(repo_root))
-        if heal_vision or heal_diagnostics or heal_retired:
+        heal_entities = bool(legacy_entity_dirs(repo_root))
+        if heal_vision or heal_diagnostics or heal_retired or heal_entities:
             mig = migration.Migration(repo_root, dry_run=dry_run, state_dir=along_dir, backup=backup)
             if heal_vision:
                 step_reconcile_root_vision_and_notes(mig, repo_root)
@@ -911,6 +869,8 @@ def run_migrations(repo_root, dry_run=True, force=False, backup=True, verbose=Fa
                 step_untrack_diagnostics(mig, repo_root)
             if heal_retired:
                 step_remove_retired_gate_artifacts(mig, repo_root)
+            if heal_entities:
+                step_slim_entity_model(mig, repo_root)
             for line in mig.summary():
                 print(line)
             return 1 if mig.errors else 0
@@ -1035,6 +995,9 @@ def run_migrations(repo_root, dry_run=True, force=False, backup=True, verbose=Fa
 
     # Step 15: state and config of the retired circuit breaker and tool-nature classifier
     step_remove_retired_gate_artifacts(mig, repo_root)
+
+    # Step 16: risks and spikes become issues, scaffolded checklists go
+    step_slim_entity_model(mig, repo_root)
 
     # The state marker is written last, so a run that died halfway is not recorded as
     # a completed migration.
@@ -1161,6 +1124,232 @@ def step_remove_retired_gate_artifacts(mig, repo_root):
     if not removed:
         print("   [OK] No retired gate artifacts.")
     return removed
+
+
+#: Risk/spike statuses that close the converted issue (it goes to `ISSUES/done/`).
+_CLOSED_RISK_STATUSES = ("resolved", "mitigated", "closed", "done")
+_CLOSED_SPIKE_STATUSES = ("concluded", "done", "closed")
+#: Checklists migration Step 3 used to synthesize; the AGENTS.md checklist replaced them.
+SCAFFOLD_CHECKLISTS = ("pre-commit.md", "stage-completion.md")
+_REFERENCE_FIELDS = ("parent", "blocked_by", "related", "superseded_by", "duplicate_of", "target_issues")
+
+
+def legacy_entity_dirs(repo_root):
+    """Existing `.along/RISKS|SPIKES|CHECKLISTS/` folders under `repo_root` (absolute paths)."""
+    from alongkit import entities
+    along_dir = os.path.join(repo_root, repo.STATE_DIR)
+    return [os.path.join(along_dir, d) for d in entities.LEGACY_ENTITY_DIRS
+            if os.path.isdir(os.path.join(along_dir, d))]
+
+
+def _legacy_records(directory):
+    return sorted(os.path.join(directory, f) for f in os.listdir(directory)
+                  if f.endswith(".md") and os.path.isfile(os.path.join(directory, f)))
+
+
+def _existing_issue_keys(along_dir):
+    keys = set()
+    for sub in ("ISSUES", os.path.join("ISSUES", "done")):
+        d = os.path.join(along_dir, sub)
+        if os.path.isdir(d):
+            keys |= {f[:-3] for f in os.listdir(d) if f.endswith(".md")}
+    return keys
+
+
+def _front_matter_list(value):
+    if value is None:
+        return []
+    return [str(v) for v in value] if isinstance(value, (list, tuple)) else [str(value)]
+
+
+def _converted_issue(fm, body, *, itype, slug, closed, criterion, sections, extra_tags=(),
+                     extra_related=(), drop=()):
+    """Front matter and body of an issue converted from a legacy RISKS/SPIKES record.
+
+    Unknown front-matter keys are carried over, so nothing the record held is lost.
+    """
+    from alongkit import entities
+    from alongkit.version import CURRENT_PROTOCOL_VERSION
+    today = datetime.now().strftime("%Y-%m-%d")
+    priority = str(fm.get("priority") or fm.get("severity") or "medium").lower()
+    if priority not in entities.PRIORITIES:
+        priority = "medium"
+    out = {
+        "protocol": "along",
+        "protocol_version": frontmatter.quoted(fm.get("protocol_version") or CURRENT_PROTOCOL_VERSION),
+        "slug": slug,
+        "type": itype,
+        "status": "done" if closed else "open",
+        "priority": priority,
+        "created": str(fm.get("created") or today),
+        "updated": str(fm.get("updated") or today),
+    }
+    if closed:
+        out["completed"] = str(fm.get("completed") or fm.get("updated") or today)
+    tags = _front_matter_list(fm.get("tags"))
+    out["tags"] = tags + [t for t in extra_tags if t not in tags]
+    out["blocked_by"] = _front_matter_list(fm.get("blocked_by"))
+    related = _front_matter_list(fm.get("related"))
+    out["related"] = related + [r for r in extra_related if r not in related]
+    skip = set(out) | {"title", "status", "severity", "priority", "type", "tags", "blocked_by", "related"} | set(drop)
+    for key, value in fm.items():
+        if key not in skip:
+            out[key] = value
+    text = body.strip("\n")
+    title = str(fm.get("title") or slug.replace("-", " ").capitalize())
+    if not re.search(r"^# ", text, re.MULTILINE):
+        text = f"# {title}\n\n{text}" if text else f"# {title}"
+    for heading, content in sections:
+        if f"## {heading}" not in text:
+            text += f"\n\n## {heading}\n" + (f"\n{content}\n" if content else "")
+    if "## Acceptance Criteria" not in text:
+        text += f"\n\n## Acceptance Criteria\n- [{'x' if closed else ' '}] {criterion}\n"
+    return out, text.rstrip("\n") + "\n"
+
+
+def _convert_legacy_record(mig, src, along_dir, taken, *, kind):
+    """Write one RISKS/SPIKES record as an issue; return (old_keys, new_key) or None when kept."""
+    from alongkit import entities
+    try:
+        fm, body, err = frontmatter.try_parse(textio.read_text(src, strict=False), path=src)
+    except (OSError, UnicodeDecodeError) as exc:
+        mig.record("keep", src, f"unreadable: {exc}")
+        return None
+    if err is not None or not fm:
+        mig.record("keep", src, "no parseable front matter; convert by hand")
+        print(f"   [AGENT ACTION] {mig.rel(src)} has no parseable front matter; turn it into an issue by hand.")
+        return None
+    stem = os.path.basename(src)[:-3]
+    raw_slug = str(fm.get("slug") or stem)
+    status = str(fm.get("status") or "").lower()
+    if kind == "risk":
+        slug = raw_slug[len("risk--"):] if raw_slug.startswith("risk--") else raw_slug
+        itype, closed = "debt", status in _CLOSED_RISK_STATUSES
+        sections = [("Mitigation", str(fm.get("mitigation") or "").strip())]
+        criterion = f"Risk resolved (migrated from RISKS/, status: {status or 'unknown'})" if closed \
+            else "Risk mitigated, accepted or resolved"
+        new_fm, new_body = _converted_issue(fm, body, itype=itype, slug=slug, closed=closed,
+                                            criterion=criterion, sections=sections,
+                                            extra_tags=("risk",), drop=("mitigation",))
+        old_keys = {raw_slug, slug, f"risk--{slug}"}
+    else:
+        slug = entities.parse_key(raw_slug)[1]
+        itype, closed = "spike", status in _CLOSED_SPIKE_STATUSES
+        sections = [("Hypothesis", str(fm.get("hypothesis") or "").strip()),
+                    ("Outcome", str(fm.get("outcome") or "").strip())]
+        if not fm.get("hypothesis"):
+            sections = sections[1:]
+        adr = str(fm.get("resulting_adr") or "").strip()
+        criterion = "Outcome recorded"
+        new_fm, new_body = _converted_issue(fm, body, itype=itype, slug=slug, closed=closed,
+                                            criterion=criterion, sections=sections,
+                                            extra_related=(adr,) if adr else (),
+                                            drop=("hypothesis", "outcome", "resulting_adr"))
+        old_keys = {raw_slug, f"spike--{slug}"}
+    key = entities.canonical_key(itype, slug)
+    if key in taken:
+        mig.record("keep", src, f"issue {key} already exists; merge by hand")
+        print(f"   [AGENT ACTION] {mig.rel(src)} collides with existing issue {key}; merge it by hand.")
+        return None
+    dst = os.path.normpath(os.path.join(along_dir, "ISSUES", "done" if closed else "", f"{key}.md"))
+    mig.makedirs(os.path.dirname(dst))
+    mig.write(dst, frontmatter.render(new_fm, new_body),
+              detail=f"converted from {mig.rel(src)}", announce=True)
+    mig.discard(src, f"converted to issue {key}")
+    taken.add(key)
+    return old_keys, key
+
+
+def _rewrite_references(mig, along_dir, mapping):
+    """Point front-matter references at the converted issue keys."""
+    if not mapping:
+        return
+    paths = []
+    for sub in ("ISSUES", "MILESTONES", "DECISIONS"):
+        paths += glob.glob(os.path.join(along_dir, sub, "**", "*.md"), recursive=True)
+    for path in sorted(set(paths)):
+        try:
+            content = textio.read_text(path, strict=False)
+        except (OSError, UnicodeDecodeError):
+            continue
+        fm, _body, err = frontmatter.try_parse(content, path=path)
+        if err is not None or not fm:
+            continue
+        updates = {}
+        for field in _REFERENCE_FIELDS:
+            value = fm.get(field)
+            if isinstance(value, (list, tuple)):
+                new = [mapping.get(str(v), str(v)) for v in value]
+                if new != [str(v) for v in value]:
+                    updates[field] = new
+            elif value is not None and str(value) in mapping:
+                updates[field] = mapping[str(value)]
+        if updates:
+            mig.write(path, frontmatter.update(content, updates, path=path),
+                      detail="references to converted risk/spike records")
+
+
+def step_slim_entity_model(mig, repo_root):
+    """Step 16 [v4.6.0]: RISKS/, SPIKES/ and CHECKLISTS/ leave the entity model.
+
+    A risk becomes a `debt` issue tagged `risk` (severity -> priority, `mitigation` -> a
+    `## Mitigation` section); a spike becomes a `spike--<slug>` issue (`hypothesis` /
+    `outcome` -> sections, `resulting_adr` -> `related`). Resolved risks and concluded
+    spikes land in `ISSUES/done/`. Front-matter references to the old keys are rewritten.
+    The two synthesized checklists are discarded; any other checklist moves to
+    `docs/topic--<slug>.md`. Every removal is backed up, a collision is kept and reported,
+    and a second run is a no-op. See [debt--entity-model-slimming].
+    """
+    print("-> Step 16 [v4.6.0]: Converting legacy RISKS/, SPIKES/ and CHECKLISTS/ records...")
+    along_dir = os.path.join(repo_root, repo.STATE_DIR)
+    dirs = legacy_entity_dirs(repo_root)
+    if not dirs:
+        print("   [OK] No legacy entity folders.")
+        return []
+    taken = _existing_issue_keys(along_dir)
+    mapping, converted = {}, []
+    issue_slugs = {k.split("--", 1)[-1] for k in taken}
+    for kind, dirname in (("risk", "RISKS"), ("spike", "SPIKES")):
+        d = os.path.join(along_dir, dirname)
+        if not os.path.isdir(d):
+            continue
+        for src in _legacy_records(d):
+            result = _convert_legacy_record(mig, src, along_dir, taken, kind=kind)
+            if result is None:
+                continue
+            old_keys, key = result
+            converted.append(key)
+            for old in old_keys:
+                # A bare slug that also names an existing issue stays with that issue.
+                if old != key and not (old == key.split("--", 1)[1] and old in issue_slugs):
+                    mapping[old] = key
+    _rewrite_references(mig, along_dir, mapping)
+
+    checklists = os.path.join(along_dir, "CHECKLISTS")
+    if os.path.isdir(checklists):
+        for src in _legacy_records(checklists):
+            name = os.path.basename(src)
+            if name in SCAFFOLD_CHECKLISTS:
+                mig.discard(src, "scaffolded checklist; the AGENTS.md completion checklist replaces it")
+                continue
+            dst = os.path.join(repo_root, "docs", f"topic--{name[:-3]}.md")
+            if os.path.exists(dst):
+                mig.record("keep", src, f"{mig.rel(dst)} exists; merge by hand")
+                print(f"   [AGENT ACTION] Merge checklist {mig.rel(src)} into {mig.rel(dst)} by hand.")
+                continue
+            mig.write(dst, textio.read_text(src, strict=False), detail=f"checklist moved from {mig.rel(src)}",
+                      announce=True)
+            mig.discard(src, f"moved to {mig.rel(dst)}")
+            print(f"   [AGENT ACTION] Review the front matter of {mig.rel(dst)} as a docs topic (`along kb sync`).")
+
+    for d in dirs:
+        gitkeep = os.path.join(d, ".gitkeep")
+        if os.path.isfile(gitkeep) and len(os.listdir(d)) == 1:
+            mig.discard(gitkeep, "legacy entity folder emptied")
+        if mig.dry_run:
+            continue
+        mig.rmdir_if_empty(d)
+    return converted
 
 
 def step_migrate_v2_2_5_link_rewriting_and_integrity(mig, repo_root, detected_version="1.0.0"):

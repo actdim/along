@@ -150,6 +150,19 @@ def _to_top(path: str, prefix: str) -> str:
     return path if prefix in ("", ".") else f"{prefix}/{path}"
 
 
+def _session_log_files(content: str) -> Dict[str, Dict[str, Any]]:
+    """Attributed paths of a session log: the `files:` front matter, else the legacy table.
+
+    Logs written before [debt--entity-model-slimming] carry a `### Attributed Files`
+    table instead of the front-matter list.
+    """
+    parsed, _body, _err = frontmatter.try_parse(content)
+    listed = (parsed or {}).get("files")
+    if isinstance(listed, (list, tuple)) and listed:
+        return {str(p): {"path_kind": session.path_kind(str(p))} for p in listed if p}
+    return _parse_attributed_files_table(content)
+
+
 def _parse_attributed_files_table(content: str) -> Dict[str, Dict[str, Any]]:
     files: Dict[str, Dict[str, Any]] = {}
     lines = content.splitlines()
@@ -177,7 +190,8 @@ def _parse_attributed_files_table(content: str) -> Dict[str, Dict[str, Any]]:
 def done_issues_attribution(repo_root: str) -> Dict[str, Dict[str, Any]]:
     """{done_issue_key: {"slug": slug, "session_log": log_path, "files": {path: info}, "entity_files": [paths]}}
 
-    Parses `### Attributed Files` tables from session logs and issue files in .along/ISSUES/done/.
+    Reads the `files:` front matter (or the legacy `### Attributed Files` table) of the
+    session logs of the issues in .along/ISSUES/done/.
     [bug--wrapped-work-left-uncommitted] REQ-2.
     """
     real_root = os.path.realpath(os.path.abspath(repo_root))
@@ -229,7 +243,7 @@ def done_issues_attribution(repo_root: str) -> Dict[str, Dict[str, Any]]:
                     ltext = textio.read_text(lpath, strict=False)
                 except (OSError, UnicodeDecodeError):
                     continue
-                parsed_files = _parse_attributed_files_table(ltext)
+                parsed_files = _session_log_files(ltext)
                 for p, info in parsed_files.items():
                     top_p = repo.canonical_relpath(os.path.join(ctx, p), top)
                     if top_p not in files:
@@ -426,7 +440,7 @@ def managed_only_agents_changes(repo_root: str, changes: Optional[Dict[str, str]
         if _without_managed_blocks(head) == _without_managed_blocks(work):
             found.append(path)
     return sorted(found)
-_COMMIT_TYPES = {"feat": "feat", "bug": "fix", "debt": "refactor", "task": "chore", "docs": "docs"}
+_COMMIT_TYPES = {"feat": "feat", "bug": "fix", "debt": "refactor", "task": "chore", "docs": "docs", "spike": "chore"}
 
 
 def run_file(repo_root: str) -> str:

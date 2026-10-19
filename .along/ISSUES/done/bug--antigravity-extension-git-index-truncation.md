@@ -11,7 +11,7 @@ agent: antigravity
 tags: [antigravity, git, upstream, bug]
 blocked_by: []
 related: [bug--remove-git-locking-workarounds]
-superseded_by: antigravity-git-index-truncation
+superseded_by: debt--antigravity-git-index-truncation
 milestone: v1.3.0-knowledge-base-and-graph
 ---
 
@@ -41,6 +41,6 @@ milestone: v1.3.0-knowledge-base-and-graph
 1. Backed up `extension.js` to `extension.js.bak` in `~/.vscode/extensions/google.google-antigravity-1.2.0/`.
 2. Inserted early `return;` at the beginning of `touchGitIndexForUri()` (around line 300255), completely preventing the extension from truncating `.git/index`.
 
-## Periodic Verification & Decommission Criteria
-- [x] Converted to tracked risk `antigravity-git-index-truncation` in `.along/RISKS/`.
+## Acceptance Criteria (Periodic Verification & Decommission)
+- [x] Converted to tracked risk `antigravity-git-index-truncation` in `.along/RISKS/` (since 2026-10-19 the issue `debt--antigravity-git-index-truncation`).
 - [x] Local mitigation verified active.

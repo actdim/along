@@ -59,7 +59,7 @@ Along addresses these challenges through a dual-tier structure: an evergreen arc
 | :--- | :--- |
 | **Zero-Vector In-Repo Intelligence** | Fast TF-IDF multi-scope retrieval engine (`along-kb-search`) unifying docs, ADR constraints, active issues, and session logs into word-boundary aligned snippets (<= 150 words), avoiding full-file context ingestion and significantly reducing exploration prompt tokens without external vector DBs or daemon processes (see [benchmarks](scripts/bench_kb_search.py)). |
 | **Dual-Tier Memory Architecture** | Clean architectural separation: Evergreen LLM-Wiki (`docs/`) with AST code symbol grounding and SHA-256 drift detection vs. Living Transactional Governance (`.along/`) with DAG issues, immutable session history, and atomic projections. |
-| **Persistent In-Repo Memory** | Durable, git-tracked memory (`.along/`): DAG issues, append-only ADR logs, milestones, risks, and session records that travel with the codebase. |
+| **Persistent In-Repo Memory** | Durable, git-tracked memory (`.along/`): DAG issues (spikes and `risk`-tagged blockers included), append-only ADR logs, milestones, and session records that travel with the codebase. |
 | **Autonomous Multi-Agent Teams** | Sequential living-plan state machine (`along-team`): Supervisor -> Scout -> Architect -> Implementer -> Reviewer with session blackboards, retry limits, and single-agent degradation. |
 | **Runtime Worktree Workspace Isolation** | Ephemeral Git worktree isolation (`along worktree`, `/along-team --worktree`) satisfying the 3-part Environment Readiness Contract: NTFS junctions / symlinks for dependencies (`node_modules`, `.venv`), `.env` configuration copying, real-time session blackboard sharing, and Windows file lock resilient teardown. |
 | **Runtime Mechanical Prose Enforcement** | Active agent lifecycle interception (`PreToolUse`, `Stop`) turning markdown guidelines into hard runtime errors across Claude Code, Antigravity, and Codex, with machine-checked bi-directional traceability (`along hook verify`). |
@@ -146,7 +146,7 @@ The repository's complete technical specification is maintained as a living LLM-
 | :--- | :--- | :--- |
 | **System Architecture** | Provider flow, context boundaries, code intelligence, and bridge layers. | [System Architecture & Flow](./docs/topic--architecture.md) |
 | **CLI Command Reference** | Unified console command dictionary, subcommands, flags, and exit codes. | [Along CLI Command Reference](./docs/topic--cli-reference.md) |
-| **Domain Model & Entities** | Machine-parseable schemas for Issues, ADRs, Milestones, and Risks. | [Domain Model & Entity Ecosystem](./docs/topic--domain-model.md) |
+| **Domain Model & Entities** | Machine-parseable schemas for Issues, ADRs, Milestones, and Sessions. | [Domain Model & Entity Ecosystem](./docs/topic--domain-model.md) |
 | **Setup & Workflows** | Installation matrix, repository onboarding, and session lifecycle. | [Setup, Installation & Workflows](./docs/topic--setup-and-workflow.md) |
 | **LLM-Wiki Architecture** | Andrej Karpathy paradigm, source isolation, and token efficiency. | [LLM-Wiki Architecture & Paradigm](./docs/topic--llm-wiki-architecture.md) |
 | **Runtime Hooks & Gates** | Agent lifecycle interception harness across Antigravity, Claude, and Codex, plus the runtime capability matrix: where gates are mechanical and where (Claude Cowork, Cursor, OpenCode) they are advisory. | [Runtime Lifecycle Hooks & Mechanical Gates](./docs/topic--runtime-hooks-and-gates.md) |

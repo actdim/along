@@ -78,6 +78,7 @@ Every way a blackboard leaves the repository writes it into the issue's session 
 | `along wrap <slug> --no-decisions -m "..."` | record, `issues_completed`, decisions | purged after the wrap committed |
 | `along issue done <slug>` | record (if any), `issues_completed` for `done` | purged after the move committed |
 | `along scratch purge <slug> [--force --reason "..."]` | record, with the reason when forced | purged after the log is written |
+| `along session gc` | record, for unbound blackboards whose issue is closed | purged after the log is written |
 
 - `along wrap` refuses a blackboard whose plan was never recorded, unless
   `--force-reason "..."` says why; the reason is kept in the trace and the session log.
@@ -89,9 +90,13 @@ Every way a blackboard leaves the repository writes it into the issue's session 
   - Zero-byte audit across the working tree;
   - Entity reference integrity (`--force-reason` passes the check).
   KB sync runs after the transaction commits and only warns when it fails.
-- Template placeholders (scaffold plan, empty research headings, the generic step list) are not
-  written as content: a missing plan shows as `No plan recorded.` Non-scaffold findings (`research.md`)
-  and notes (`notes.md`) are preserved under `### Research` and `### Notes`.
+- The log keeps its front matter, `## Summary`, `## Decisions` and the `## Blackboard Record`
+  (step table, `### Research` if edited, `### Execution Trace`, `### Notes`, reviews, structured
+  working context). The approved plan is not copied into the log (git and the plan gate hold it),
+  and template placeholders (empty research headings, the generic step list) are not written.
+- Attributed paths go to the front-matter list `files:` (merged on a same-day second record), not
+  to a table. `along session close`, `along start`, `along doctor` and the stop gate read `files:`,
+  and still read the legacy `### Attributed Files` table of older logs.
 - Purge operations refuse across all commands (`along wrap`, `along scratch purge`, `along issue done`,
   `along session close`) if an unknown non-scaffold file is present in the blackboard.
 - A second record of the same issue on the same day is appended as
@@ -105,11 +110,14 @@ Every way a blackboard leaves the repository writes it into the issue's session 
 - **session-record-append-only** (`along commit`, `along gates check`, CI): a change may not
   remove or rewrite lines inside a `## Blackboard Record` of a committed session log. The Summary
   and Decisions sections stay editable.
-- **`along doctor`**: warns about orphan blackboards (no session bound, issue closed or missing).
-  `along scratch purge <slug>` archives and removes one. Run `along doctor issues` to audit scaffold stubs.
+- **`along doctor`**: warns about orphan blackboards (no session bound, issue closed or missing)
+  and suggests `along session gc` or `along scratch purge <slug>`. `along session gc` archives into
+  the session log and removes unbound blackboards whose issue is already closed (blackboards of
+  missing issues are only reported); `along scratch purge <slug>` archives and removes one. Run
+  `along doctor issues` to audit scaffold stubs.
 
 ## 6. Committing wrapped work
 
 - **Atomic wrap auto-commit**: By default, `along wrap` automatically creates an atomic Git commit linked to the wrapped issue slug (`<type>: <summary> (refs #<slug>)`), bundling all attributed files, the moved issue file in `done/`, today's session log, and recompiled projections. Engine-written files carry no edit events, so two rules cover them. The managed `docs/topic--along-protocol.md` counts as a projection. A changed `AGENTS.md` (root or nested) is included when its only difference from `HEAD` lies inside the managed `ALONG-PROTOCOL` / `ALONG-RULES` blocks; a hand edit outside them leaves it to attribution. `along session close` applies the same rules.
 - **Opting out with `--no-commit`**: When `--no-commit` is passed, `along wrap` leaves changes uncommitted. The wrap purge removes the session's binding but preserves a completion token, so a subsequent manual `along commit -i <slug> --paths ...` passes the plan gate without a new approval and consumes the token.
-- **Parallel closeout**: Several issues finished in parallel are closed in one step with `along session close`; the record of each one then also lists its attributed files. See [Parallel Sessions](./topic--parallel-sessions.md).
+- **Parallel closeout**: Several issues finished in parallel are closed in one step with `along session close`; the log of each one then also lists its attributed files in `files:`. See [Parallel Sessions](./topic--parallel-sessions.md).

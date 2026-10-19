@@ -19,7 +19,7 @@ ActDim Along provides repositories with an isolated, durable, and human-readable
   - Automated scanner for Node (`package.json`), Python (`pyproject.toml`, `requirements.txt`), and Rust (`Cargo.toml`).
   - Detects library AI rules (`AGENTS.md`, `CLAUDE.md`, `llms.txt`, package manifest AI keys) and builds an idempotent catalog in `docs/topic--dependencies.md`.
 - **Entity Ecosystem & Graph Tracking**:
-  - Structured YAML frontmatter (`protocol: along`) for Issues (`.along/ISSUES/`), Milestones (`.along/MILESTONES/`), Risks (`.along/RISKS/`), Spikes (`.along/SPIKES/`), and Sessions (`.along/SESSIONS/`).
+  - Structured YAML frontmatter (`protocol: along`) for Issues (`.along/ISSUES/`; types `feat|bug|debt|task|docs|spike`, risks are issues tagged `risk`), Milestones (`.along/MILESTONES/`), and Sessions (`.along/SESSIONS/`).
   - Unidirectional dependency tracking (`blocked_by`, `related`, `parent`) evaluated dynamically without path breakage.
 - **Append-Only Architectural Decision Records (`.along/DECISIONS.md`)**:
   - Single-file ADR log allowing agents to load all active architectural constraints in a single read.

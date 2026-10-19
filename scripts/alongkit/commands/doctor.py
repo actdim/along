@@ -306,7 +306,8 @@ def handle_doctor_command(repo_root: str, args: List[str]):
     if orphans:
         print(f"[WARN] {len(orphans)} orphan blackboard(s) in .along/.session/: "
               + ", ".join(f"{slug} ({why})" for slug, why in orphans)
-              + ". Run `along scratch purge <slug>`: it archives the record into the session log first.")
+              + ". Run `along session gc` (closed issues) or `along scratch purge <slug>`: both archive "
+              "the record into the session log first.")
         warnings += 1
     else:
         print("[OK] No orphan blackboards.")

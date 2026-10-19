@@ -112,8 +112,6 @@ def _render_session_log(repo_root: str, *, today: str, slug: str, agent: str, su
         "issues_advanced": advanced,
         "issues_completed": completed,
         "decisions": list(decisions),
-        "risks_logged": [],
-        "spikes_conducted": [],
     })
     body = (
         f"# Session: {slug.replace('-', ' ').capitalize()}\n\n"
@@ -156,7 +154,7 @@ def build_parser() -> argparse.ArgumentParser:
 
     sub.add_parser("bindings", help="List agent-session bindings")
 
-    p_gc = sub.add_parser("gc", help="Garbage collect stale bindings")
+    p_gc = sub.add_parser("gc", help="Garbage collect stale bindings and blackboards of closed issues")
     p_gc.add_argument("--dry-run", action="store_true", help="Simulate without removing")
 
     p_list = sub.add_parser("list", help="List closeout readiness")
@@ -175,7 +173,7 @@ def handle_session_command(repo_root: str, args: List[str]):
     if not args or args[0] in ("-h", "--help", "help"):
         print("Usage: along_exec.py session create <slug> --summary \"Summary text\" [--issues \"slug1,slug2\"] [--decisions \"ADR-slug\"]")
         print("       along_exec.py session bindings          List agent-session bindings")
-        print("       along_exec.py session gc [--dry-run]    Remove stale or orphaned bindings")
+        print("       along_exec.py session gc [--dry-run]    Remove stale bindings; archive blackboards of closed issues")
         print("       along_exec.py session list [--json]     Readiness of every issue in progress, binding and blackboard")
         print("       along_exec.py session close <slug>... | --ready [--dry-run] [--push]")
         print("                                               Close out finished work: tests once, wrap, commit by attribution,")
@@ -207,6 +205,10 @@ def handle_session_command(repo_root: str, args: List[str]):
         removed = session.gc_bindings(repo_root, dry_run=parsed.dry_run)
         verb = "Would remove" if parsed.dry_run else "Removed"
         print(f"-> {verb} {len(removed)} stale binding(s){': ' + ', '.join(removed) if removed else ''}.")
+        boards = lifecycle.gc_closed_blackboards(repo_root, dry_run=parsed.dry_run)
+        verb = "Would archive and remove" if parsed.dry_run else "Archived and removed"
+        print(f"-> {verb} {len(boards)} blackboard(s) of closed issues"
+              f"{': ' + ', '.join(boards) if boards else ''}.")
         sys.exit(0)
 
     if subcmd == "list":
@@ -288,14 +290,11 @@ def handle_session_command(repo_root: str, args: List[str]):
         textio.write_text(target_file, content, newline="\n", atomic=True)
         print(f"-> Created session log: {target_file}")
 
-        # Update HISTORY.md
-        history_file = os.path.join(repo_root, ".along", "HISTORY.md")
-        if os.path.exists(history_file):
-            h_content = textio.read_text(history_file)
-            entry = f"{today} - {slug} - {agent} - {summary} - [.along/SESSIONS/{year}/{today}--{slug}.md](./SESSIONS/{year}/{today}--{slug}.md)"
-            if entry not in h_content:
-                h_content = h_content.strip() + f"\n{entry}\n"
-                textio.write_text(history_file, h_content, newline="\n")
+        # HISTORY.md: one line per slug, through the same writer as wrap
+        # [debt--entity-model-slimming].
+        if os.path.exists(os.path.join(repo_root, ".along", "HISTORY.md")):
+            lifecycle.append_history_entry(repo_root, slug, summary=summary, agent=agent, today=today,
+                                           session_log_path=target_file)
         sys.exit(0)
 
     elif subcmd == "wrap":

@@ -30,7 +30,7 @@ export interface IDashboardApiClient {
     /**
      * List all issues
      * @param status (optional) Filter by status (open, in-progress, blocked, done)
-     * @param type (optional) Filter by type (feat, bug, debt, task, docs)
+     * @param type (optional) Filter by type (feat, bug, debt, task, docs, spike)
      * @param priority (optional) Filter by priority (critical, high, medium, low)
      * @param milestone (optional) Filter by milestone slug
      * @return Successful Response
@@ -233,7 +233,7 @@ export class DashboardApiClient implements IDashboardApiClient {
     /**
      * List all issues
      * @param status (optional) Filter by status (open, in-progress, blocked, done)
-     * @param type (optional) Filter by type (feat, bug, debt, task, docs)
+     * @param type (optional) Filter by type (feat, bug, debt, task, docs, spike)
      * @param priority (optional) Filter by priority (critical, high, medium, low)
      * @param milestone (optional) Filter by milestone slug
      * @return Successful Response
@@ -1069,7 +1069,7 @@ export interface ValidationError {
     ctx: any;
 }
 
-export type IssueSchemaType = "feat" | "bug" | "debt" | "task" | "docs";
+export type IssueSchemaType = "feat" | "bug" | "debt" | "task" | "docs" | "spike";
 
 export type IssueSchemaStatus = "open" | "in-progress" | "blocked" | "done" | "superseded" | "cancelled" | "duplicate";
 

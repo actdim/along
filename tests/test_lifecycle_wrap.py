@@ -486,7 +486,9 @@ class TestLifecycleWrap(unittest.TestCase):
         self.assertEqual(fm["decisions"], [])
         self.assertIn("## Blackboard Record", content)
         self.assertIn("Implementer finished step 1", content)
-        self.assertIn("#### Living Plan", content)
+        # The plan is not copied into the log [debt--entity-model-slimming].
+        self.assertNotIn("Living Plan", content)
+        self.assertNotIn("### Plan", content)
         self.assertIn("no architectural decisions", content)
         self.assertFalse(os.path.isdir(sdir))
 

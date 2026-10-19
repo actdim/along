@@ -236,6 +236,12 @@ class TestAlongInit(_TempRepo):
         res = self.run_init(nested, *FAST_FLAGS)
         self.assertEqual(res.returncode, 0, res.stderr)
         self.assertIn("ref=../../AGENTS.md", read_fixture(os.path.join(nested, "AGENTS.md")))
+        # A subproject gets no empty stubs; they are created on first use [debt--entity-model-slimming].
+        for rel in ("GLOSSARY.md", "VISION.md"):
+            self.assertFalse(os.path.exists(os.path.join(nested, ".along", rel)), rel)
+        self.assertTrue(os.path.isfile(os.path.join(nested, ".along", "ISSUES.md")))
+        self.assertTrue(os.path.isfile(self.path(".along", "GLOSSARY.md")), "the root keeps its glossary")
+        self.assertTrue(os.path.isfile(self.path(".along", "VISION.md")), "the root keeps its vision")
 
 
 class TestMigrationStandalonePass(unittest.TestCase):

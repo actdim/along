@@ -88,7 +88,7 @@ def format_commit_message(raw_msg, active_issue):
     if not conv_match and active_issue:
         itype = active_issue["type"]
         # Map Along issue types to Conventional Commits
-        type_map = {"feat": "feat", "bug": "fix", "debt": "refactor", "task": "chore", "docs": "docs"}
+        type_map = {"feat": "feat", "bug": "fix", "debt": "refactor", "task": "chore", "docs": "docs", "spike": "chore"}
         ctype = type_map.get(itype, "chore")
         msg = f"{ctype}: {msg}"
 

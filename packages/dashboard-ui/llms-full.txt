@@ -238,16 +238,14 @@ The Along Dashboard UI models and visualizes the provider-agnostic entity graph 
 
 The dashboard renders the following core Along entities:
 
-1. **Issues (`feat`, `bug`, `debt`, `task`, `docs`)**:
-   Units of engineering work stored in `.along/ISSUES/<type>--<slug>.md`. Categorized into Kanban columns based on `status: open | in-progress | blocked | done`.
+1. **Issues (`feat`, `bug`, `debt`, `task`, `docs`, `spike`)**:
+   Units of engineering work stored in `.along/ISSUES/<type>--<slug>.md`. Categorized into Kanban columns based on `status: open | in-progress | blocked | done`. A risk or blocker is an issue tagged `risk`.
 2. **Decisions (ADRs)**:
    Architectural decision records stored in `.along/DECISIONS/ADR-YYYY-MM-DD--<slug>.md`. Tracked by status (`accepted`, `superseded`, `deprecated`).
 3. **Milestones**:
    Sprint and release targets stored in `.along/MILESTONES/vX.Y.Z--<slug>.md`. Aggregates target issue completion ratios.
 4. **Sessions**:
    Historical agent execution summaries stored in `.along/SESSIONS/<YYYY>/<date>--<slug>.md`.
-5. **Risks, Spikes, and Checklists**:
-   Supplementary project memory items tracked in `.along/RISKS/`, `.along/SPIKES/`, and `.along/CHECKLISTS/`.
 
 ---
 

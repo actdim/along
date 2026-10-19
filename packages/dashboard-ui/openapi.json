@@ -91,11 +91,11 @@
             "in": "query",
             "required": false,
             "schema": {
-              "description": "Filter by type (feat, bug, debt, task, docs)",
+              "description": "Filter by type (feat, bug, debt, task, docs, spike)",
               "type": "string",
               "nullable": true
             },
-            "description": "Filter by type (feat, bug, debt, task, docs)"
+            "description": "Filter by type (feat, bug, debt, task, docs, spike)"
           },
           {
             "name": "priority",
@@ -823,7 +823,8 @@
               "bug",
               "debt",
               "task",
-              "docs"
+              "docs",
+              "spike"
             ],
             "title": "Type",
             "description": "Issue type",

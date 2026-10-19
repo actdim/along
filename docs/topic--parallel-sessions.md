@@ -85,7 +85,8 @@ What `along session close` does:
    staged, or without the approval for every issue it would close.
 2. Plans the commits from the attribution, before anything changes.
 3. Runs the test suite once. If it fails, nothing is wrapped or committed.
-4. Wraps each issue: the blackboard (with its attributed files) goes into the session log, the
+4. Wraps each issue: the blackboard goes into the session log (its attributed files into the
+   `files:` front matter), the
    issue moves to `done/`, `HISTORY.md` gets a line.
 5. Commits by attribution, each commit through `along commit` with its gates:
    - files attributed to one issue: one commit for that issue, with its issue file and session log;
@@ -103,7 +104,8 @@ their blockers and left untouched.
 
 Done issues with uncommitted attributed files: `along session close <done-slug>` can also be invoked
 directly for an issue that was already wrapped. It reconstructs the attributed file list from the
-issue's session log (`## Attributed Files` table) and commits those files cleanly without re-wrapping.
+issue's session log (the `files:` front matter, or the `### Attributed Files` table of a log
+written before that list existed) and commits those files cleanly without re-wrapping.
 
 ## 4. When something fails
 

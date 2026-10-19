@@ -35,7 +35,7 @@ from .vocabulary import (
     today_iso,
 )
 
-_REFERENCING_DIRS: Tuple[str, ...] = ("ISSUES", "RISKS", "SPIKES", "CHECKLISTS", "DECISIONS")
+_REFERENCING_DIRS: Tuple[str, ...] = ("ISSUES", "DECISIONS")
 _DANGLING_MILESTONE = "dangling milestone reference: "
 _DELETE_LIST_FIELDS: Tuple[str, ...] = ("related", "blocked_by", "target_issues")
 _DELETE_BLOCKING_FIELDS: Tuple[str, ...] = ("parent", "superseded_by", "duplicate_of")

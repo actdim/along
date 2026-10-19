@@ -8,11 +8,11 @@ updated: 2026-09-22
 tags: [architecture, boundaries, multi-agent, blackboard, concurrency, ast, flow]
 sources:
   - path: README.md
-    hash: "742705a98e1e98608b43a4f7421f9fb62471e304357adfffc96f29ebd2b7bbac"
+    hash: "b484c5a6e8c8fb26a99582aab02af16fc9223ee6dcc2e5324c461fa69917d64b"
   - path: dashboard/app.py
     hash: "1a0b0c9e4b40adf717712a6c3c14bebb72728d579ae37ca844bf39eecc287fd7"
   - path: skills/along-dash/SKILL.md
-    hash: "44b1f9dfd4da3313fd2e3f12beb6057079a9244968638ab43a241d7b55d985d9"
+    hash: "bc4e3facc23c5db30bff64974643c48d380e9e1bc77c8101cd1f21090fb9a3c0"
 ---
 
 # System Architecture & Flow
@@ -347,7 +347,7 @@ sequenceDiagram
     Agent-->>Human: Present concise executive summary
 ```
 
-1. **Intent Recognition (Zero-Friction Tracking)**: Natural developer prompts ("Build feature X", "Fix bug Y", "Investigate library Z") automatically trigger the creation of typed issues (`feat`, `bug`, `spike`) in `.along/ISSUES/` without requiring manual file management.
+1. **Intent Recognition (Zero-Friction Tracking)**: Natural developer prompts ("Build feature X", "Fix bug Y", "Investigate library Z") automatically trigger the creation of typed issues (`feat`, `bug`, `spike`; a blocker is an issue tagged `risk`) in `.along/ISSUES/` without requiring manual file management.
 2. **Mandatory Issue Anchoring**: All non-trivial code modifications must bind to an active issue in `.along/ISSUES/` with `status: in-progress`.
 3. **Autonomous Execution**: The agent executes the task via `/along-team` or direct fast-path.
 4. **Verification Gate**: Automated tests, file integrity audits, and AST blast radius checks are executed before finalizing changes.
@@ -450,7 +450,7 @@ To prevent multi-agent coordination data from leaking across sessions or clutter
 - **Lifecycle**:
   1. *Allocated*: `along start` (direct) or `along scratch init` (role-based).
   2. *Updated*: Plan capture at approval, trace by the hooks, step state by `along scratch update`.
-  3. *Archived*: `along wrap`, `along scratch purge` and `along issue done` write the Blackboard Record into `.along/SESSIONS/<YYYY>/<date>--<slug>.md` (append-only once committed).
+  3. *Archived*: `along wrap`, `along scratch purge`, `along issue done` and `along session gc` (unbound blackboards of closed issues) write the Blackboard Record into `.along/SESSIONS/<YYYY>/<date>--<slug>.md` (append-only once committed); attributed paths go to its `files:` front matter, the plan itself is not copied.
   4. *Purged*: Deleted only after the record is committed.
 
 See [Session Lifecycle](./topic--session-lifecycle.md).

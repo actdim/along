@@ -4,14 +4,14 @@ description: Launch the Along dynamic executive dashboard, inspect entity DAG de
 ---
 
 # Along Dashboard & Knowledge Base Engine (`/along-dash`)
-Inspect, visualize, and analyze repository status across all `.along/` entities (`ISSUES`, `MILESTONES`, `RISKS`, `SPIKES`, `CHECKLISTS`, `SESSIONS`, `KB`, and ADR decisions) with live FastAPI backend, Swagger contracts, Knowledge Base search engine, and React 19 UI.
+Inspect, visualize, and analyze repository status across all `.along/` entities (`ISSUES` - spikes and `risk`-tagged issues included, `MILESTONES`, `SESSIONS`, `KB`, and ADR decisions) with live FastAPI backend, Swagger contracts, Knowledge Base search engine, and React 19 UI.
 
 ---
 
 ## When to Use
 
 1. The user asks for a dashboard, status report, project analytics, or DAG dependency graph (e.g., "show dashboard", "launch dashboard", "generate repo report", `/along-dash`).
-2. Reviewing milestone progress, active blockers, risk mitigation status, and completed accomplishments.
+2. Reviewing milestone progress, active blockers, risk mitigation status (issues tagged `risk`), and completed accomplishments.
 3. Searching the structured Knowledge Base (`docs/`, `DECISIONS.md`) interactively.
 
 ---

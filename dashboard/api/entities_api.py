@@ -23,7 +23,7 @@ def get_collector() -> EntityCollector:
 @router.get("/issues", response_model=List[IssueSchema], summary="List all issues")
 def list_issues(
     status: Optional[str] = Query(None, description="Filter by status (open, in-progress, blocked, done)"),
-    type: Optional[str] = Query(None, description="Filter by type (feat, bug, debt, task, docs)"),
+    type: Optional[str] = Query(None, description="Filter by type (feat, bug, debt, task, docs, spike)"),
     priority: Optional[str] = Query(None, description="Filter by priority (critical, high, medium, low)"),
     milestone: Optional[str] = Query(None, description="Filter by milestone slug"),
     collector: EntityCollector = Depends(get_collector),

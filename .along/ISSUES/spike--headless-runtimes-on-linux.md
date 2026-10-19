@@ -3,11 +3,12 @@ protocol: along
 protocol_version: "4.4.16"
 slug: headless-runtimes-on-linux
 type: spike
-title: "Headless agent runtimes on Linux: launch, auth, output, exit codes, hooks"
-status: hypothesis
+status: open
+priority: medium
 created: 2026-10-17
 updated: 2026-10-17
 tags: [spike, runtimes, headless, linux, docker, claude-code, codex, opencode, antigravity]
+blocked_by: []
 related: [feat--autonomous-multi-runtime-mvp, feat--agent-runtime-adapters-claude-codex-opencode, feat--cross-runtime-supervisor-orchestrator, feat--isolated-environment-docker]
 ---
 

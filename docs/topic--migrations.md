@@ -8,7 +8,7 @@ updated: 2026-09-22
 tags: [migrations, upgrade, protocol, changelog, versioning, data-safety]
 sources:
   - path: scripts/migrate_protocol.py
-    hash: "bd221404228ecd47db741ac74ccce966da29b3e8887dacfa6b4d6a5dbc638dd7"
+    hash: "aec3f779c8530ff61f4e2d5711a16b191a282b03d98845f337011d477795890e"
 ---
 
 # Protocol & Repository Migrations Guide
@@ -36,7 +36,7 @@ do nothing to the repository unless given `-Migrate` / `--migrate`.
 flowchart TD
     A["Legacy Repo (v1.0)"] -->|Step 1: Tasks to Issues| B["v1.1.0 (ISSUES structure)"]
     B -->|Step 2: Scaffolding KB & Graph| C["v1.3.0 (Knowledge Base & Graph)"]
-    C -->|Step 3: Entity Ecosystem| D["v1.5.0 (Milestones, Risks, Checklists)"]
+    C -->|Step 3: Entity Ecosystem| D["v1.5.0 (Milestones, Done Issues, Sessions)"]
     D -->|Step 4: Along Directory| E["v2.0.0 (Along Ecosystem & protocol: along)"]
     E -->|Step 7: LLM-Wiki & docs/| F["v2.1.0 (docs/ KB, In-Place Provenance, Domain-First Skills)"]
     F -->|Step 10: Version SSOT Cleanup| G["v3.0.0 (Version SSOT & KB Schema Decoupling)"]
@@ -99,7 +99,7 @@ fails if the engine calls `shutil.move`, `os.remove` or their neighbours directl
 - Creates `.code-review-graph-ignore` with standard excludes (`node_modules/`, `dist/`, `build/`, `SESSIONS/`).
 
 ### `v1.3.0` -> `v1.5.0`: Entity Ecosystem & Retro-Synthesis
-- Scaffolds `.along/MILESTONES/`, `.along/RISKS/`, `.along/SPIKES/`, `.along/CHECKLISTS/`, and `.along/ISSUES/done/`.
+- Scaffolds `.along/MILESTONES/`, `.along/ISSUES/done/` and `.along/SESSIONS/<YYYY>/` (risk, spike and checklist folders are no longer created; see Step 16).
 - Retroactively synthesizes completed milestones from Git history and session logs.
 - Sanitizes non-ASCII typography (replacing em-dashes with standard ASCII hyphens).
 
@@ -138,4 +138,13 @@ fails if the engine calls `shutil.move`, `os.remove` or their neighbours directl
 - A top-level `tools:` section in `.along/rules/gates.yaml` is ignored by the gate loader. Since the file is repository-owned, the step only reports it (`[WARN]`, recorded as `review`); remove it by hand.
 - The live activity traces (`.along/diagnostics/activity_trace.json`, `.along/diagnostics/activity/`) stay.
 - Runs on every migration, including an up-to-date repository (as a heal pass); a second run finds nothing, `--dry-run` only lists the paths.
+
+### `v4.6.0`: Entity Model Slimming (Step 16)
+- The separate risk, spike and checklist entities were removed in `debt--entity-model-slimming`; `step_slim_entity_model` converts what `.along/RISKS/`, `.along/SPIKES/` and `.along/CHECKLISTS/` still hold:
+  - a risk becomes a `debt--<slug>` issue tagged `risk` (severity -> priority, mitigation -> `## Mitigation`); a resolved or mitigated risk is closed as `done` in `ISSUES/done/`;
+  - a spike becomes a `spike--<slug>` issue (hypothesis and outcome -> sections, `resulting_adr` -> `related`); a concluded spike is closed as `done`;
+  - front-matter references are rewritten (`risk--x` or a bare risk slug -> `debt--x`);
+  - the scaffolded `pre-commit.md` and `stage-completion.md` are discarded after a backup (the completion checklist lives in `AGENTS.md` / `docs/topic--along-protocol.md` and is printed by `along wrap`); any other checklist moves to `docs/topic--<slug>.md`.
+- The emptied folders are removed. A collision is kept and reported, every removal is backed up to `.along/.migration-backup/`.
+- Runs on every migration, including an up-to-date repository (as a heal pass), so `along update` applies it; a second run finds nothing, `--dry-run` only lists the operations.
 

@@ -270,13 +270,13 @@ gates:
       light: block
     enforcement: [runtime, git, ci]
     title: "Entity File Deletion Protection"
-    description: "Blocks deleting issue, ADR, milestone, risk, or spike files; use along issue supersede / along issue rename"
+    description: "Blocks deleting issue, ADR or milestone files; use along issue supersede / along issue rename"
     event: PreToolUse
     tools: [delete_file, remove_file, unlink, delete, file_delete, remove, run_command, execute_command, bash, shell]
     rule:
       type: predicate
       handler: alongkit.hooks.predicates.check_entity_deletion_protection
-      error: "Entity file deletion rejected by [gate: entity-deletion-protection]: Deleting an issue, ADR, milestone, risk, or spike file is forbidden. Use 'along issue supersede' / 'along issue rename' (split: supersede into several keys)."
+      error: "Entity file deletion rejected by [gate: entity-deletion-protection]: Deleting an issue, ADR or milestone file is forbidden. Use 'along issue supersede' / 'along issue rename' (split: supersede into several keys)."
 
   - id: entity_reference_integrity
     profiles:

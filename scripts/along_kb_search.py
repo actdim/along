@@ -219,63 +219,9 @@ def collect_all_entries(repo_root, verbose=False):
             except (OSError, ValueError, AttributeError, TypeError, frontmatter.FrontmatterError) as exc:
                 _record_skip(rel_path, exc)
 
-    # 5. Risks & Blockers (.along/RISKS/*.md)
-    risks_dir = os.path.join(along_dir, "RISKS")
-    if os.path.exists(risks_dir):
-        for f in os.listdir(risks_dir):
-            if not f.endswith(".md"):
-                continue
-            fp = os.path.join(risks_dir, f)
-            rel_path = os.path.relpath(fp, repo_root).replace("\\", "/")
-            try:
-                with open(fp, "r", encoding="utf-8", errors="replace") as p:
-                    raw = p.read()
-                fm, body = parse_frontmatter(raw)
-                entries.append({
-                    "category": "risk",
-                    "category_label": f"Risk ({fm.get('severity', 'medium')})",
-                    "title": fm.get("title", f.replace(".md", "").title()),
-                    "slug": fm.get("slug", f.replace(".md", "")),
-                    "type": "risk",
-                    "tags": ["risk", "blocker", fm.get("severity", "medium")],
-                    "status": fm.get("status", "active"),
-                    "file_path": rel_path,
-                    "abs_path": fp,
-                    "raw": raw,
-                    "body": body
-                })
-            except (OSError, ValueError, AttributeError, TypeError, frontmatter.FrontmatterError) as exc:
-                _record_skip(rel_path, exc)
+    # Risks and spikes are issues since [debt--entity-model-slimming]; section 2 indexes them.
 
-    # 6. Spikes & R&D (.along/SPIKES/*.md)
-    spikes_dir = os.path.join(along_dir, "SPIKES")
-    if os.path.exists(spikes_dir):
-        for f in os.listdir(spikes_dir):
-            if not f.endswith(".md"):
-                continue
-            fp = os.path.join(spikes_dir, f)
-            rel_path = os.path.relpath(fp, repo_root).replace("\\", "/")
-            try:
-                with open(fp, "r", encoding="utf-8", errors="replace") as p:
-                    raw = p.read()
-                fm, body = parse_frontmatter(raw)
-                entries.append({
-                    "category": "spike",
-                    "category_label": "Spike R&D",
-                    "title": fm.get("title", f.replace(".md", "").title()),
-                    "slug": fm.get("slug", f.replace(".md", "")),
-                    "type": "spike",
-                    "tags": ["spike", "experiment"],
-                    "status": fm.get("status", "evaluating"),
-                    "file_path": rel_path,
-                    "abs_path": fp,
-                    "raw": raw,
-                    "body": body
-                })
-            except (OSError, ValueError, AttributeError, TypeError, frontmatter.FrontmatterError) as exc:
-                _record_skip(rel_path, exc)
-
-    # 7. Session Logs (.along/SESSIONS/**/*.md)
+    # 5. Session Logs (.along/SESSIONS/**/*.md)
     sess_dir = os.path.join(along_dir, "SESSIONS")
     if os.path.exists(sess_dir):
         for root, _, files in os.walk(sess_dir):
@@ -897,7 +843,7 @@ def main():
     parser.add_argument("query", nargs="?", default="", help="Search query terms or \"quoted phrases\"")
     parser.add_argument("--repo", default=".", help="Target repository root")
     parser.add_argument("--limit", type=int, default=8, help="Maximum results to return")
-    parser.add_argument("--category", choices=["all", "kb", "issue", "decision", "milestone", "risk", "spike", "session"], default="all", help="Filter by knowledge category")
+    parser.add_argument("--category", choices=["all", "kb", "issue", "decision", "milestone", "session"], default="all", help="Filter by knowledge category")
     parser.add_argument("--tag", default=None, help="Filter by specific tag")
     parser.add_argument("--any", action="store_true", help="Match ANY query term (OR semantics, default is AND)")
     parser.add_argument("--prefix", action="store_true", help="Match word prefixes in addition to whole words")

@@ -5,12 +5,12 @@ title: Domain Model & Entity Ecosystem
 type: domain-model
 created: 2026-08-30
 updated: 2026-09-22
-tags: [domain-model, entities, schemas, dag, metadata, issues, milestones, risks, spikes, checklists, sessions]
+tags: [domain-model, entities, schemas, dag, metadata, issues, milestones, spikes, sessions]
 sources:
   - path: AGENTS.md
-    hash: "d85f836e9c5864fcf2a497351fe1ad5f87e8149c6dbfee6945e2e7eaef4ed9f5"
+    hash: "0cb05514b12e5bef94ec6ce94df1d464db480fa4d35aebe1e27106123d236512"
   - path: dashboard/schemas/entities.py
-    hash: "14cd9c6263d6909ab8b678d1c70f98bda3e70f270cecf970d01d5377324b511a"
+    hash: "365e4096e0103403487a1785ac13dab45376c73ed2b179d14dac263b15285f8c"
 ---
 
 # Domain Model & Entity Ecosystem
@@ -27,18 +27,15 @@ The entity ecosystem provides a structured data layer that is simultaneously hum
 flowchart TD
     subgraph PlanningAndEpics["Planning & Target Scope"]
         MILESTONE["Milestones (.along/MILESTONES/)"]
-        SPIKE["Spikes & R&D (.along/SPIKES/)"]
-        RISK["Risks & Blockers (.along/RISKS/)"]
     end
 
     subgraph CoreUnitsOfWork["Core Units of Work"]
-        ISSUE["Issues (.along/ISSUES/<type>--<slug>.md)"]
+        ISSUE["Issues (.along/ISSUES/<type>--<slug>.md), incl. spike and risk-tagged issues"]
         DONE_ISSUE["Completed Issues (.along/ISSUES/done/)"]
     end
 
     subgraph GovernanceAndQuality["Governance & Architecture"]
         ADR["Decisions / ADRs (.along/DECISIONS/)"]
-        CHECKLIST["Checklists (.along/CHECKLISTS/)"]
     end
 
     subgraph LivingMemory["Living Memory & Journals"]
@@ -48,13 +45,11 @@ flowchart TD
     end
 
     MILESTONE -->|targets| ISSUE
-    SPIKE -->|evaluates & yields| ADR
-    RISK -->|blocks or relates| ISSUE
+    ISSUE -->|spike yields| ADR
     ISSUE -->|moves to done/| DONE_ISSUE
     ISSUE -->|advances| SESSION
     ADR -->|governs| ISSUE
-    CHECKLIST -->|verifies| SESSION
-    SESSION -->|appends| HISTORY
+    SESSION -->|wrap appends one line| HISTORY
     ISSUE -->|documents in| KB
 ```
 
@@ -62,10 +57,10 @@ flowchart TD
 
 ## 2. Granular Entity Taxonomy & Schemas
 
-Along defines 9 distinct entity types, each fulfilling a specific role in repository memory and lifecycle management:
+Along defines 6 entity types, each fulfilling a specific role in repository memory and lifecycle management. Risks, spikes and checklists are no longer separate entities: a risk or blocker is an issue tagged `risk`, a spike is a `spike` issue, and the completion checklist lives in `AGENTS.md` and is printed by `along wrap` ([debt--entity-model-slimming]; `along update` converts old `RISKS/`, `SPIKES/` and `CHECKLISTS/` folders through migration Step 16, see [Migrations](./topic--migrations.md)).
 
 ### 1. Issues (`.along/ISSUES/<type>--<slug>.md`)
-Atomic units of engineering work. Along categorizes issues into **5 distinct types**:
+Atomic units of engineering work. Along categorizes issues into **6 types**:
 
 | Issue Type | Purpose & Scope | Example Slug |
 | :--- | :--- | :--- |
@@ -74,6 +69,9 @@ Atomic units of engineering work. Along categorizes issues into **5 distinct typ
 | **`debt`** | Technical debt payoff, code refactoring, performance optimization, or dead code elimination. | `debt--dynstruct-migration` |
 | **`task`** | Routine chores, infrastructure setup, CI/CD configuration, or dependency updates. | `task--setup-vitest-runner` |
 | **`docs`** | Knowledge base authoring, architectural specifications, or developer workflow guides. | `docs--skills-architecture-overhaul` |
+| **`spike`** | Timeboxed experiment, benchmark or library evaluation before an architectural commitment. Carries an `## Outcome` section; a concluded spike is closed as `done` and its result usually becomes an ADR (`related:`). | `spike--duckdb-vs-sqlite` |
+
+A **risk or blocker** (rate limit, external dependency, upstream defect) is an ordinary issue, usually `debt`, tagged `risk`, with a `## Mitigation` section; the issue it blocks lists it in `blocked_by`.
 
 #### YAML Front-Matter Schema:
 ```yaml
@@ -91,7 +89,7 @@ agent: antigravity
 tags: [auth, security, tokens]
 milestone: v2.3.0-security
 blocked_by: [feat--db-schema-migrations]
-related: [risk--token-revocation-latency]
+related: [debt--token-revocation-latency]
 parent: feat--identity-platform
 superseded_by: null
 duplicate_of: null
@@ -110,7 +108,7 @@ Detailed problem statement, constraints, and verifiable acceptance criteria.
 #### Lifecycle States:
 - **`open`**: Backlog item, not currently being executed.
 - **`in-progress`**: Actively being developed by an agent or human. Initiated atomically via `along start <slug> [--worktree]`. Non-trivial code edits require an active issue.
-- **`blocked`**: Waiting on an external dependency (`blocked_by`), API key, or active risk.
+- **`blocked`**: Waiting on an external dependency (`blocked_by`), API key, or a `risk`-tagged issue.
 - **`done`**: Delivered terminal state. Fully implemented, verified by tests and code review. Closed via `along issue done <slug>` or `/along-wrap`. Mandatory field `completed: YYYY-MM-DD` is set, and the file is moved to `.along/ISSUES/done/<type>--<slug>.md`. Only `done` issues count towards milestone and sprint completion metrics.
 - **`superseded`**: Non-delivered terminal state. Replaced by another issue or architectural decision. Closed via `along issue supersede <old-key> --by <new-key>` (rewrites inbound references) or `along issue done <slug> --status superseded --superseded-by <slug>`. Mandatory field `completed: YYYY-MM-DD` is set, `superseded_by: <target-slug>` references the replacement entity, and the file is moved to `.along/ISSUES/done/`.
 - **`cancelled`**: Non-delivered terminal state. Abandoned or intentionally dropped requirements. Closed via `along issue done <slug> --status cancelled`. Mandatory field `completed: YYYY-MM-DD` is set, and the file is moved to `.along/ISSUES/done/`.
@@ -206,75 +204,8 @@ Milestones and issues maintain a **bidirectional relationship** orchestrated by 
 
 ---
 
-### 4. Risks & Blockers (`.along/RISKS/<slug>.md`)
-Track external dependencies, rate limits, security considerations, and potential blockers before they halt development.
-
-#### Schema:
-```yaml
----
-protocol: along
-protocol_version: "3.9.4"
-slug: token-revocation-latency
-title: Redis Token Blacklist Synchronization Latency
-severity: high
-status: active
-owner: agent
-mitigation: Use short-lived 5-minute access tokens with asymmetric JWT signatures.
-created: 2026-09-01
-updated: 2026-09-01
----
-```
-
----
-
-### 5. Spikes & R&D Experiments (`.along/SPIKES/<slug>.md`)
-Timeboxed research experiments, benchmark comparisons, and library evaluations conducted prior to architectural commitment.
-
-#### Schema:
-```yaml
----
-protocol: along
-protocol_version: "3.9.4"
-slug: duckdb-vs-sqlite-benchmarks
-title: Local Vector Indexing: DuckDB vs SQLite FTS5
-status: concluded
-hypothesis: SQLite FTS5 with BM25 ranking provides lower memory footprint and zero external C-extensions.
-outcome: SQLite FTS5 outperformed DuckDB on snippet retrieval (<5ms) with zero dependencies.
-resulting_adr: ADR-2026-08-30--llm-wiki-docs-architecture-and-singular-skills-refactoring
-created: 2026-08-30
----
-```
-
----
-
-### 6. Checklists & Quality Gates (`.along/CHECKLISTS/<slug>.md`)
-Reusable verification rubrics for pre-commit checks, stage completions, releases, and security audits.
-
-#### Schema:
-```yaml
----
-protocol: along
-protocol_version: "3.9.4"
-slug: stage-completion
-title: Mandatory Stage Completion Verification Checklist
-category: stage-completion
-items:
-  - id: zero_byte_gate
-    text: Verify git status -u has non-zero size for all created files.
-    verified: true
-  - id: unit_tests
-    text: Run automated unit tests with quiet flags (zero failures).
-    verified: true
-  - id: blast_radius
-    text: Check downstream callers via code-review-graph and map to docs.
-    verified: true
----
-```
-
----
-
-### 7. Work Sessions (`.along/SESSIONS/<YYYY>/<YYYY-MM-DD>--<slug>.md`)
-Chronological work journal recording accomplishments, touched files, reviewer feedback, and blast radius summaries for every working session.
+### 4. Work Sessions (`.along/SESSIONS/<YYYY>/<YYYY-MM-DD>--<slug>.md`)
+Chronological work journal written by `along wrap` (and `along issue done`, `along scratch purge`, `along session gc`) before the session blackboard is deleted. A log does not repeat git or the plan: it keeps the front matter, the summary, the decisions, and the blackboard record (step table, research, execution trace, notes, reviews). The paths attributed to the issue are kept as the `files:` front matter, which `along session close`, `along start` and `along doctor` read to find uncommitted work of wrapped issues (logs written before v4.6.0 carry an `### Attributed Files` table instead, still read).
 
 #### Schema:
 ```yaml
@@ -287,30 +218,32 @@ branch: main
 commit: a1b2c3d
 summary: Complete overhaul of docs/ Knowledge Base and full 18-skill reference.
 milestone: v2.2.0-along
-issues_advanced:
-  - docs--comprehensive-knowledge-base-and-skills-architecture
+issues_advanced: []
 issues_completed:
   - docs--comprehensive-knowledge-base-and-skills-architecture
 decisions: []
-risks_logged: []
-spikes_conducted: []
+files:
+  - docs/topic--skills-reference.md
+  - skills/along-wrap/SKILL.md
 ---
 ```
 
 ---
 
-### 8. Project History Chronicle (`.along/HISTORY.md`)
-Single-line append-only chronological log of major milestones, features, and session completions:
+### 5. Project History Chronicle (`.along/HISTORY.md`)
+Single-line append-only chronological log, one line per slug, written by `along wrap` (and `along history append` / `along session create`, which go through the same writer). It is the one-line record of a completion; the issue body stays in `ISSUES/done/` and the details in the session log:
 ```markdown
 # History
 
-2026-09-01 - skills-architecture-overhaul - antigravity - Rebuild Knowledge Base and 18-skill reference - [Session](./SESSIONS/2026/2026-09-01--skills-architecture-overhaul.md)
+2026-09-01 - skills-architecture-overhaul - antigravity - Rebuild Knowledge Base and 18-skill reference - [Session Log](./SESSIONS/2026/2026-09-01--skills-architecture-overhaul.md)
 ```
 
 ---
 
-### 9. Knowledge Base (`docs/topic--*.md`, `docs/INDEX.md`)
+### 6. Knowledge Base (`docs/topic--*.md`, `docs/INDEX.md`)
 Curated, cross-linked LLM-Wiki articles maintaining domain architecture, API contracts, dependencies, and developer guides.
+
+`.along/VISION.md` and `.along/GLOSSARY.md` complete the context: the repository root gets them on `along init`; a nested context (subproject) creates them on first use.
 
 ---
 
@@ -342,7 +275,7 @@ To ensure zero administrative overhead for developers, Along host agents automat
 | *"Fix bug X"*, *"Fix crash on Y"* | **`bug ISSUE`** | Auto-creates `.along/ISSUES/bug--<slug>.md` with `priority: high`. |
 | *"Refactor module X"*, *"Clean up Y"* | **`debt ISSUE`** | Auto-creates `.along/ISSUES/debt--<slug>.md`. |
 | *"Update documentation for X"* | **`docs ISSUE`** | Auto-creates `.along/ISSUES/docs--<slug>.md`. |
-| *"Rate limit hit"*, *"Blocked on API key"* | **`RISK / BLOCKER`** | Auto-creates `.along/RISKS/<slug>.md` (`status: active`); marks issue `status: blocked`. |
-| *"Benchmark X vs Y"*, *"Test if Z works"* | **`SPIKE`** | Auto-creates `.along/SPIKES/<slug>.md`. Documents outcome and logs resulting ADR in `DECISIONS.md`. |
+| *"Rate limit hit"*, *"Blocked on API key"* | **`risk`-tagged ISSUE** | Auto-creates `.along/ISSUES/debt--<slug>.md` tagged `risk` with a `## Mitigation` section; the blocked issue gets `status: blocked` and `blocked_by: [debt--<slug>]`. |
+| *"Benchmark X vs Y"*, *"Test if Z works"* | **`spike ISSUE`** | Auto-creates `.along/ISSUES/spike--<slug>.md` (`along issue create spike <slug>`); records the `## Outcome` and the resulting ADR before it is wrapped. |
 | *"Target for next sprint"*, *"Release v2.0"* | **`MILESTONE`** | Auto-creates `.along/MILESTONES/<slug>.md`; binds target issues. |
 | *"I'm done for today"*, *"Wrap up"* | **`SESSION & WRAP`** | Executes `/along-wrap`: verifies tests, records session log, moves completed issues to `done/`, updates `HISTORY.md`. |

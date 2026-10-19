@@ -1307,7 +1307,7 @@ def _is_scaffold_steps(steps: List[Dict[str, Any]]) -> bool:
 
 
 def render_blackboard_markdown(repo_root: str, slug: str, reason: Optional[str] = None) -> str:
-    """The blackboard as a session-log section (plan, steps, reviews, trace), or ''.
+    """The blackboard as a session-log section (steps, research, trace, notes, reviews), or ''.
 
     `along wrap`, `along scratch purge` and `along issue done` write it into the session log
     before the blackboard is deleted. Scaffold placeholders (template plan, empty research
@@ -1347,26 +1347,11 @@ def render_blackboard_markdown(repo_root: str, slug: str, reason: Optional[str] 
             has_review = "yes" if os.path.isfile(review_file(repo_root, slug, n)) else "no"
             out.append(f"| {n} | {s.get('title', '')} | {s.get('status', '')} | {s.get('retries', 0)} | {has_review} |")
         out.append("")
-    # Attribution survives the purge in the session log [feat--parallel-session-closeout] REQ-2.
-    files = attributed_files(repo_root, slug)
-    if files:
-        out.append("### Attributed Files\n")
-        out.append("| Path | Kind | Edits | Last edit | Sessions |")
-        out.append("| --- | --- | --- | --- | --- |")
-        for path in sorted(files):
-            f = files[path]
-            out.append(f"| `{path}` | {f['path_kind']} | {f['edits']} | {f['last']} | {', '.join(f['sessions'])} |")
-        out.append("")
-    for title, name in (("Plan", PLAN_FILENAME), ("Research", "research.md"), ("Execution Trace", TRACE_FILENAME)):
+    # Attributed files go to the log's `files:` front matter (`attributed_file_list`), and
+    # the approved plan is not copied: git and the plan gate already hold both
+    # [debt--entity-model-slimming].
+    for title, name in (("Research", "research.md"), ("Execution Trace", TRACE_FILENAME)):
         text = _read(name)
-        if name == PLAN_FILENAME:
-            if not text or is_scaffold_plan(text):
-                living_text = _read("living_plan.md")
-                if living_text and not is_scaffold_plan(living_text):
-                    text = living_text
-            if not text or is_scaffold_plan(text):
-                out.append(f"### {title}\n\nNo plan recorded.\n")
-                continue
         if name == "research.md" and is_scaffold_research(text):
             continue
         if text:
@@ -1439,8 +1424,8 @@ def unrecorded_files(repo_root: str, slug: str) -> List[str]:
     A file is considered recorded or safely accounted for if:
     - state.json (engine state, rendered in header and steps table)
     - blackboard.json (structured working context, rendered in Structured Working Context)
-    - events.jsonl (engine ledger, rendered in Attributed Files)
-    - plan.md, living_plan.md (rendered under Plan or recognized scaffold)
+    - events.jsonl (engine ledger, kept as the log's `files:` front matter)
+    - plan.md, living_plan.md (checked by the plan gate at wrap; not copied into the log)
     - research.md (rendered under Research if edited, or recognized scaffold)
     - execution_trace.md (rendered under Execution Trace)
     - notes.md (rendered under Notes)

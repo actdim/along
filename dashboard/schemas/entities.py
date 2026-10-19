@@ -18,7 +18,7 @@ class BaseEntitySchema(BaseModel):
 
 class IssueSchema(BaseEntitySchema):
     """Schema for .along/ISSUES/<type>--<slug>.md."""
-    type: Literal["feat", "bug", "debt", "task", "docs"] = Field(
+    type: Literal["feat", "bug", "debt", "task", "docs", "spike"] = Field(
         default="feat", description="Issue type"
     )
     status: Literal[

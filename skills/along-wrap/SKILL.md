@@ -52,11 +52,11 @@ All checks (team steps, plan, tests, zero-byte audit, entity graph) run before t
 2. **Docs, Conventions, Glossary & Vision Check** (mandatory; `along wrap` prints this reminder):
    - `README.md`: does the completed work change the public overview, install steps or CLI usage? Update it.
    - `AGENTS.md` `## Project specifics`: did build / test / run commands or project conventions change? Update them (never the managed protocol block).
-   - `.along/GLOSSARY.md`: add every domain term introduced or clarified during the session (`- **Term** - definition.`).
-   - `.along/VISION.md`: touch it only if scope or roadmap changed (tick a shipped roadmap item, add or drop a non-goal). Resolve any `along:imported-vision needs-restructure` section you find.
+   - `.along/GLOSSARY.md`: add every domain term introduced or clarified during the session (`- **Term** - definition.`). A nested context has none until its first term: create the file then.
+   - `.along/VISION.md`: touch it only if scope or roadmap changed (create it on first use in a nested context) (tick a shipped roadmap item, add or drop a non-goal). Resolve any `along:imported-vision needs-restructure` section you find.
 3. **Session Log & Engineering Provenance**:
-   - `along wrap` writes (or extends) `.along/SESSIONS/<YYYY>/<YYYY-MM-DD>--<slug>.md` in the issue's `.along/`, with `issues_completed: [<type>--<slug>]`, the decisions answer and the blackboard record (plan, step table, research, execution trace, reviews). Add the narrative (what changed, verification) to that file, before or after the wrap.
-   - When orchestrating non-trivial multi-step tasks, compile the 3 Engineering Provenance sections: Baseline Plan, Execution Trace, and Verification Walkthrough.
+   - `along wrap` writes (or extends) `.along/SESSIONS/<YYYY>/<YYYY-MM-DD>--<slug>.md` in the issue's `.along/`, with `issues_completed: [<type>--<slug>]`, the decisions answer, the attributed paths as the front-matter list `files:` and the blackboard record under `## Blackboard Record` (step table, research if edited, execution trace, notes, reviews, structured working context). The approved plan is not copied into the log. Add the narrative (what changed, verification) to `## Summary` of that file, before or after the wrap.
+   - When orchestrating non-trivial multi-step tasks, add the Verification Walkthrough to that narrative; the Execution Trace is already in the blackboard record.
    - **Decisions**: ask yourself whether the session made an architectural choice or trade-off. If yes, record ADRs (`along decision create`) and pass them with `--decisions`; otherwise pass `--no-decisions`.
 
 ### Phase B: Automated Finalization (CLI Engine)

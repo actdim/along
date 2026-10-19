@@ -174,7 +174,16 @@ def scaffold_gitattributes(mig, root, report):
     _note(report, "updated" if existing else "created", path, root)
 
 
-def scaffold_state_dir(mig, root, report):
+def is_nested_context(root):
+    """True when `root` sits under a FULL-protocol ancestor in the same git tree (REF block).
+
+    A nested context gets no GLOSSARY.md and no VISION skeleton: they are created on first
+    use, so subprojects do not collect empty stubs [debt--entity-model-slimming].
+    """
+    return scaffold.find_full_protocol_ancestor(root) is not None
+
+
+def scaffold_state_dir(mig, root, report, nested=False):
     along_dir = os.path.join(root, repo.STATE_DIR)
     year = str(date.today().year)
     mig.makedirs(along_dir)
@@ -185,7 +194,8 @@ def scaffold_state_dir(mig, root, report):
             mig.touch(os.path.join(directory, ".gitkeep"))
             _note(report, "created", directory, root)
     write_if_missing(mig, os.path.join(along_dir, "ISSUES.md"), ISSUES_BOARD, report, root)
-    write_if_missing(mig, os.path.join(along_dir, "GLOSSARY.md"), GLOSSARY, report, root)
+    if not nested:
+        write_if_missing(mig, os.path.join(along_dir, "GLOSSARY.md"), GLOSSARY, report, root)
     write_if_missing(mig, os.path.join(along_dir, "HISTORY.md"), HISTORY, report, root)
     diag_dir = os.path.join(along_dir, "diagnostics")
     if not os.path.isdir(diag_dir):
@@ -194,7 +204,7 @@ def scaffold_state_dir(mig, root, report):
     write_if_missing(mig, os.path.join(diag_dir, ".gitignore"), "*\n", report, root)
 
 
-def scaffold_vision(mig, root, report):
+def scaffold_vision(mig, root, report, nested=False):
     along_vision = os.path.join(root, repo.STATE_DIR, scaffold.VISION_FILENAME)
     root_vision = scaffold.find_root_file(root, scaffold.VISION_FILENAME)
     if root_vision and not os.path.isdir(os.path.dirname(along_vision)):
@@ -209,6 +219,8 @@ def scaffold_vision(mig, root, report):
             "source": repo.normalize_posix(repo.safe_relpath(str(result["source"]), root)),
             "links": [repo.normalize_posix(repo.safe_relpath(p, root)) for p in result["links"]],
         }
+        return
+    if nested:
         return
     write_if_missing(mig, along_vision, scaffold.vision_template(), report, root)
 
@@ -315,8 +327,9 @@ def main(argv=None) -> int:
     scaffold_protocol_reference(mig, root, load_protocol_reference_text(root), report, profile=args.profile)
     scaffold_claude_md(mig, root, report)
     scaffold_gitattributes(mig, root, report)
-    scaffold_state_dir(mig, root, report)
-    scaffold_vision(mig, root, report)
+    nested = is_nested_context(root)
+    scaffold_state_dir(mig, root, report, nested=nested)
+    scaffold_vision(mig, root, report, nested=nested)
     write_if_missing(mig, os.path.join(root, "docs", "INDEX.md"),
                      scaffold.minimal_docs_index(date.today().isoformat()), report, root)
     report["root_notes"] = [os.path.basename(p) for p in scaffold.find_root_notes(root)]

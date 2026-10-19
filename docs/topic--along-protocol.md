@@ -51,12 +51,12 @@ Also, when relevant: `.along/VISION.md`, `.along/GLOSSARY.md`. These reflect the
 
 ## Entity Ecosystem
 
-- **Entity types**: Issues (`feat`, `bug`, `debt`, `task`, `docs`), Decisions (ADRs), Milestones, Risks, Spikes, Checklists, Sessions. Full YAML schemas: `docs/topic--domain-model.md`.
+- **Entity types**: Issues (`feat`, `bug`, `debt`, `task`, `docs`, `spike`), Decisions (ADRs), Milestones, Sessions. A risk or blocker is an issue tagged `risk`; a spike is a `spike--<slug>` issue with an `## Outcome` section. Full YAML schemas: `docs/topic--domain-model.md`.
 - **Canonical keys**: `<type>--<slug>` (e.g. `feat--token-refresh`). Reference by key, NEVER by file path.
 - **ADRs**: Modular records in `.along/DECISIONS/ADR-YYYY-MM-DD--<slug>.md` (with legacy fallback to monolithic `DECISIONS.md`). Never edit past entries - mark superseded. Recompile projections (`.along/DECISIONS.md` board and `.along/CONSTRAINTS.md`) via `/along-decision-sync` or `along decision sync`. Create new ADRs via `/along-decision-sync` or `along decision create <slug> --title "..."`. Add terms to `.along/GLOSSARY.md`.
 - **Issue lifecycle** [gate: issue-lifecycle]: Complete active issues via `along wrap <slug>` (or `along issue done <slug> --status cancelled|superseded`). Closing as done requires `validate_issue_completion` (no scaffold placeholders, mandatory Acceptance Criteria, all `- [x]` closed).
 - **Entity references** [gate: entity-reference-integrity] [gate: entity-deletion-protection]: Never delete an entity other entities reference; use `along issue rename` / `along issue supersede`.
-- **Auto-entity creation**: Agents MUST automatically detect user intent (build/fix/refactor -> Issue, blocked/rate-limit -> Risk, compare/benchmark -> Spike, release/sprint -> Milestone) and create entities without prompting the user.
+- **Auto-entity creation**: Agents MUST automatically detect user intent (build/fix/refactor -> Issue, blocked/rate-limit -> Issue tagged `risk`, compare/benchmark -> `spike` Issue, release/sprint -> Milestone) and create entities without prompting the user.
 
 ## Knowledge Base & Documentation
 
@@ -90,9 +90,9 @@ When a stage or session completes, agents MUST execute in this order:
 1. [ ] **Tests** [gate: test_before_stop]: Run via `/along-test` with quiet flags. Zero failures.
 2. [ ] **File Integrity**: `git status -u` - all new/modified files non-zero size, no empty placeholders.
 3. [ ] **Code Review**: Inspect diff for side effects, verify REQ-N coverage, evaluate blast radius via `along graph-impact` (or static search), verify architectural decision compliance.
-4. [ ] **Entity Reconciliation**: Close issues (`done` + move to `done/`), update milestones, resolve risks, conclude spikes.
-5. [ ] **Doc Blast Radius**: Update affected `docs/topic--*.md`, `README.md` and Project specifics; add new terms to `.along/GLOSSARY.md`; touch `.along/VISION.md` only if scope/roadmap changed; run `/along-kb-sync`.
-6. [ ] **Session Log & Wrap** [gate: wrap_before_stop]: `along wrap <slug> --summary "<summary>" (--decisions <ADR...> | --no-decisions)` writes `.along/SESSIONS/<YYYY>/<date>--<slug>.md` with the blackboard record, compiles projections, and appends to `.along/HISTORY.md` (provide `--summary` or let it fallback to issue title).
+4. [ ] **Entity Reconciliation**: Close issues (`done` + move to `done/`), update milestones, record the `## Outcome` of a spike.
+5. [ ] **Doc Blast Radius**: Update affected `docs/topic--*.md`, `README.md` and Project specifics; add new terms to `.along/GLOSSARY.md` (create it on first use); touch `.along/VISION.md` only if scope/roadmap changed; run `/along-kb-sync`.
+6. [ ] **Session Log & Wrap** [gate: wrap_before_stop]: `along wrap <slug> --summary "<summary>" (--decisions <ADR...> | --no-decisions)` writes `.along/SESSIONS/<YYYY>/<date>--<slug>.md` (summary, decisions, attributed `files:`, blackboard record), compiles projections, and appends to `.along/HISTORY.md` (provide `--summary` or let it fallback to issue title).
 7. [ ] **Projections** [gate: projection_sync_before_stop]: Run `/along-issue-sync` and `/along-decision-sync`.
 8. [ ] **HISTORY**: Verify line in `.along/HISTORY.md` (appended automatically by `along wrap`; update via `along history append <slug> "..."` if needed).
 9. [ ] **Compaction**: Advise user to run `/compact`.

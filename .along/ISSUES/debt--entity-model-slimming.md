@@ -3,10 +3,10 @@ protocol: along
 protocol_version: "4.4.16"
 slug: entity-model-slimming
 type: debt
-status: open
+status: in-progress
 priority: medium
 created: 2026-10-17
-updated: 2026-10-17
+updated: 2026-10-19
 agent: claude-code
 tags: [entities, simplification, debt]
 parent: feat--autonomous-multi-runtime-mvp
@@ -53,11 +53,34 @@ Repositories: along, public/dotnet, mempart (root plus 6 package subprojects).
 
 Migration goes through `migrate_protocol.py` (risks to issues, spikes to issues, checklist removal).
 
+## Outcome (2026-10-19)
+
+1. Risk type removed (vocabulary, validation, gates, kb-search, protocol, docs). Migration Step 16
+   converts a risk into `debt--<slug>` tagged `risk` with a `## Mitigation` section.
+2. `spike` added to `ISSUE_TYPES`; `along issue create spike` scaffolds `## Outcome`; Step 16 moves
+   SPIKES/ records; dashboard issue type literal accepts `spike`.
+3. Step 3 no longer scaffolds RISKS/SPIKES/CHECKLISTS or the two checklists; Step 16 discards
+   them (backup) and moves custom checklists to `docs/topic--<slug>.md`.
+4. Session log: no `### Plan` copy and no `### Attributed Files` table. The attribution is read
+   back by closeout, `along start`, doctor and the stop gate, so it moved to the `files:` front
+   matter instead of disappearing; old logs' tables are still read.
+5. Wrap already purged the blackboard; `along session gc` now archives and removes leftover
+   blackboards of closed issues.
+6. Nested contexts get no GLOSSARY.md / VISION.md skeleton on init. RISKS/SPIKES came only from
+   migration Step 3 (fixed in 3).
+7. HISTORY.md stays one line per slug; `along session create` now uses the same writer.
+8. Dashboard exports stay with `debt--along-core-extras-split`; risk/spike dashboard views:
+   `debt--dashboard-retire-risk-spike-views`.
+9. Migration backups: `BACKUP_KEEP = 1`, pruned on every migration write, so `along update` in
+   dotnet and mempart reduces them to one snapshot (not run there from this session).
+
+ADR: ADR-2026-10-19--entity-model-slimmed.
+
 ## Acceptance Criteria
-- [ ] Risk and Checklist entity types removed from schemas, scaffolding, projections and docs; migration converts existing records.
-- [ ] Spikes stored as `spike--<slug>` issues; migration moves existing spikes.
-- [ ] Session log template slimmed; wrap no longer copies the plan and file table.
-- [ ] Wrap cleans the blackboard of a completed issue.
-- [ ] Subprojects no longer get empty VISION, GLOSSARY, RISKS or SPIKES on init.
-- [ ] `docs/topic--domain-model.md` updated.
-- [ ] Automated tests passing.
+- [x] Risk and Checklist entity types removed from schemas, scaffolding, projections and docs; migration converts existing records.
+- [x] Spikes stored as `spike--<slug>` issues; migration moves existing spikes.
+- [x] Session log template slimmed; wrap no longer copies the plan and file table.
+- [x] Wrap cleans the blackboard of a completed issue.
+- [x] Subprojects no longer get empty VISION, GLOSSARY, RISKS or SPIKES on init.
+- [x] `docs/topic--domain-model.md` updated.
+- [x] Automated tests passing.

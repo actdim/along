@@ -132,12 +132,27 @@ class TestLedger(LedgerFixture):
         self.assertIn("disk full", errors["alpha"]["last_error"])
 
     def test_record_keeps_attributed_files(self):
+        """Attribution moves to the log's `files:` front matter [debt--entity-model-slimming]."""
+        from alongkit import closeout, entities, frontmatter, lifecycle, transaction
         self.start("alpha", self.key_a)
         self.edit("src/a.py")
         self.edit("src/a.py")
         rendered = session.render_blackboard_markdown(self.root, "alpha")
-        self.assertIn("### Attributed Files", rendered)
-        self.assertIn("| `src/a.py` | source | 2 |", rendered)
+        self.assertNotIn("### Attributed Files", rendered)
+        tx = transaction.FileTransaction(self.root, label="test-record")
+        log = lifecycle.write_session_record(self.root, tx, "alpha", today=entities.today_iso())
+        tx.commit()
+        fm, _body = frontmatter.parse(textio.read_text(log))
+        self.assertEqual(fm["files"], ["src/a.py"])
+        self.assertEqual(closeout._session_log_files(textio.read_text(log)),
+                         {"src/a.py": {"path_kind": "source"}})
+
+    def test_legacy_attributed_files_table_is_still_read(self):
+        from alongkit import closeout
+        legacy = ("---\nprotocol: along\nslug: alpha\n---\n\n## Blackboard Record\n\n"
+                  "### Attributed Files\n\n| Path | Kind | Edits | Last edit | Sessions |\n"
+                  "| --- | --- | --- | --- | --- |\n| `src/old.py` | source | 1 | t | s |\n")
+        self.assertEqual(closeout._session_log_files(legacy), {"src/old.py": {"path_kind": "source"}})
 
     def test_unknown_lines_and_old_records_are_tolerated(self):
         self.start("alpha", self.key_a)
@@ -652,8 +667,10 @@ class TestCloseoutScenario(unittest.TestCase):
         self.assertEqual(session.closeout_approved(self.root, self.closer), [], "approval consumed")
         log = textio.read_text(os.path.join(self.root, ".along", "SESSIONS", entities.today_iso()[:4],
                                             f"{entities.today_iso()}--alpha.md"))
-        self.assertIn("### Attributed Files", log)
-        self.assertIn("`src/shared.py`", log)
+        from alongkit import frontmatter
+        fm, _body = frontmatter.parse(log)
+        self.assertIn("src/shared.py", fm["files"])
+        self.assertNotIn("### Attributed Files", log)
 
     def test_resume_after_a_failed_commit(self):
         from alongkit import closeout

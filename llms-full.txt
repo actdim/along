@@ -67,7 +67,7 @@ Along addresses these challenges through a dual-tier structure: an evergreen arc
 | :--- | :--- |
 | **Zero-Vector In-Repo Intelligence** | Fast TF-IDF multi-scope retrieval engine (`along-kb-search`) unifying docs, ADR constraints, active issues, and session logs into word-boundary aligned snippets (<= 150 words), avoiding full-file context ingestion and significantly reducing exploration prompt tokens without external vector DBs or daemon processes (see [benchmarks](scripts/bench_kb_search.py)). |
 | **Dual-Tier Memory Architecture** | Clean architectural separation: Evergreen LLM-Wiki (`docs/`) with AST code symbol grounding and SHA-256 drift detection vs. Living Transactional Governance (`.along/`) with DAG issues, immutable session history, and atomic projections. |
-| **Persistent In-Repo Memory** | Durable, git-tracked memory (`.along/`): DAG issues, append-only ADR logs, milestones, risks, and session records that travel with the codebase. |
+| **Persistent In-Repo Memory** | Durable, git-tracked memory (`.along/`): DAG issues (spikes and `risk`-tagged blockers included), append-only ADR logs, milestones, and session records that travel with the codebase. |
 | **Autonomous Multi-Agent Teams** | Sequential living-plan state machine (`along-team`): Supervisor -> Scout -> Architect -> Implementer -> Reviewer with session blackboards, retry limits, and single-agent degradation. |
 | **Runtime Worktree Workspace Isolation** | Ephemeral Git worktree isolation (`along worktree`, `/along-team --worktree`) satisfying the 3-part Environment Readiness Contract: NTFS junctions / symlinks for dependencies (`node_modules`, `.venv`), `.env` configuration copying, real-time session blackboard sharing, and Windows file lock resilient teardown. |
 | **Runtime Mechanical Prose Enforcement** | Active agent lifecycle interception (`PreToolUse`, `Stop`) turning markdown guidelines into hard runtime errors across Claude Code, Antigravity, and Codex, with machine-checked bi-directional traceability (`along hook verify`). |
@@ -154,7 +154,7 @@ The repository's complete technical specification is maintained as a living LLM-
 | :--- | :--- | :--- |
 | **System Architecture** | Provider flow, context boundaries, code intelligence, and bridge layers. | [System Architecture & Flow](./docs/topic--architecture.md) |
 | **CLI Command Reference** | Unified console command dictionary, subcommands, flags, and exit codes. | [Along CLI Command Reference](./docs/topic--cli-reference.md) |
-| **Domain Model & Entities** | Machine-parseable schemas for Issues, ADRs, Milestones, and Risks. | [Domain Model & Entity Ecosystem](./docs/topic--domain-model.md) |
+| **Domain Model & Entities** | Machine-parseable schemas for Issues, ADRs, Milestones, and Sessions. | [Domain Model & Entity Ecosystem](./docs/topic--domain-model.md) |
 | **Setup & Workflows** | Installation matrix, repository onboarding, and session lifecycle. | [Setup, Installation & Workflows](./docs/topic--setup-and-workflow.md) |
 | **LLM-Wiki Architecture** | Andrej Karpathy paradigm, source isolation, and token efficiency. | [LLM-Wiki Architecture & Paradigm](./docs/topic--llm-wiki-architecture.md) |
 | **Runtime Hooks & Gates** | Agent lifecycle interception harness across Antigravity, Claude, and Codex, plus the runtime capability matrix: where gates are mechanical and where (Claude Cowork, Cursor, OpenCode) they are advisory. | [Runtime Lifecycle Hooks & Mechanical Gates](./docs/topic--runtime-hooks-and-gates.md) |
@@ -234,7 +234,7 @@ This repo carries its own agent context, provider-agnostically. Follow it every 
 ## Where state lives
 - **Nearest wins**: any folder may carry its own `AGENTS.md` + `.along/`; use the NEAREST for the area you work in. Nearest `.along/` > higher-level `.along/` > global config. Only a nested `.git` or a user-run `along init` makes a subproject.
 - **Read at session start** (not auto-loaded): `.along/ISSUES.md`, `.along/CONSTRAINTS.md`, your issue `.along/ISSUES/<type>--<slug>.md`; when relevant `.along/VISION.md`, `.along/GLOSSARY.md`. They reflect the state WHEN WRITTEN - verify named files/APIs/flags against the code.
-- **Entities**: issues (`feat|bug|debt|task|docs`), ADRs (`.along/DECISIONS/`, never edited - superseded), milestones, risks, spikes, sessions. Keys `<type>--<slug>`, referenced by key, never by path; schemas in `docs/topic--domain-model.md`. Create them from intent unprompted (build/fix -> issue, blocked -> risk, compare -> spike, release -> milestone).
+- **Entities**: issues (`feat|bug|debt|task|docs|spike`), ADRs (`.along/DECISIONS/`, never edited - superseded), milestones, sessions. Keys `<type>--<slug>`, referenced by key, never by path; schemas in `docs/topic--domain-model.md`. Create them from intent unprompted (build/fix -> issue, blocked -> issue tagged `risk`, compare -> `spike` issue, release -> milestone).
 - **Projections** (`ISSUES.md`, `DECISIONS.md`, `CONSTRAINTS.md`, `docs/INDEX.md`) are compiled: on conflict take either side and re-run the sync.
 
 ## Anchor work to an issue
@@ -623,12 +623,12 @@ Also, when relevant: `.along/VISION.md`, `.along/GLOSSARY.md`. These reflect the
 
 ## Entity Ecosystem
 
-- **Entity types**: Issues (`feat`, `bug`, `debt`, `task`, `docs`), Decisions (ADRs), Milestones, Risks, Spikes, Checklists, Sessions. Full YAML schemas: `docs/topic--domain-model.md`.
+- **Entity types**: Issues (`feat`, `bug`, `debt`, `task`, `docs`, `spike`), Decisions (ADRs), Milestones, Sessions. A risk or blocker is an issue tagged `risk`; a spike is a `spike--<slug>` issue with an `## Outcome` section. Full YAML schemas: `docs/topic--domain-model.md`.
 - **Canonical keys**: `<type>--<slug>` (e.g. `feat--token-refresh`). Reference by key, NEVER by file path.
 - **ADRs**: Modular records in `.along/DECISIONS/ADR-YYYY-MM-DD--<slug>.md` (with legacy fallback to monolithic `DECISIONS.md`). Never edit past entries - mark superseded. Recompile projections (`.along/DECISIONS.md` board and `.along/CONSTRAINTS.md`) via `/along-decision-sync` or `along decision sync`. Create new ADRs via `/along-decision-sync` or `along decision create <slug> --title "..."`. Add terms to `.along/GLOSSARY.md`.
 - **Issue lifecycle** [gate: issue-lifecycle]: Complete active issues via `along wrap <slug>` (or `along issue done <slug> --status cancelled|superseded`). Closing as done requires `validate_issue_completion` (no scaffold placeholders, mandatory Acceptance Criteria, all `- [x]` closed).
 - **Entity references** [gate: entity-reference-integrity] [gate: entity-deletion-protection]: Never delete an entity other entities reference; use `along issue rename` / `along issue supersede`.
-- **Auto-entity creation**: Agents MUST automatically detect user intent (build/fix/refactor -> Issue, blocked/rate-limit -> Risk, compare/benchmark -> Spike, release/sprint -> Milestone) and create entities without prompting the user.
+- **Auto-entity creation**: Agents MUST automatically detect user intent (build/fix/refactor -> Issue, blocked/rate-limit -> Issue tagged `risk`, compare/benchmark -> `spike` Issue, release/sprint -> Milestone) and create entities without prompting the user.
 
 ## Knowledge Base & Documentation
 
@@ -662,9 +662,9 @@ When a stage or session completes, agents MUST execute in this order:
 1. [ ] **Tests** [gate: test_before_stop]: Run via `/along-test` with quiet flags. Zero failures.
 2. [ ] **File Integrity**: `git status -u` - all new/modified files non-zero size, no empty placeholders.
 3. [ ] **Code Review**: Inspect diff for side effects, verify REQ-N coverage, evaluate blast radius via `along graph-impact` (or static search), verify architectural decision compliance.
-4. [ ] **Entity Reconciliation**: Close issues (`done` + move to `done/`), update milestones, resolve risks, conclude spikes.
-5. [ ] **Doc Blast Radius**: Update affected `docs/topic--*.md`, `README.md` and Project specifics; add new terms to `.along/GLOSSARY.md`; touch `.along/VISION.md` only if scope/roadmap changed; run `/along-kb-sync`.
-6. [ ] **Session Log & Wrap** [gate: wrap_before_stop]: `along wrap <slug> --summary "<summary>" (--decisions <ADR...> | --no-decisions)` writes `.along/SESSIONS/<YYYY>/<date>--<slug>.md` with the blackboard record, compiles projections, and appends to `.along/HISTORY.md` (provide `--summary` or let it fallback to issue title).
+4. [ ] **Entity Reconciliation**: Close issues (`done` + move to `done/`), update milestones, record the `## Outcome` of a spike.
+5. [ ] **Doc Blast Radius**: Update affected `docs/topic--*.md`, `README.md` and Project specifics; add new terms to `.along/GLOSSARY.md` (create it on first use); touch `.along/VISION.md` only if scope/roadmap changed; run `/along-kb-sync`.
+6. [ ] **Session Log & Wrap** [gate: wrap_before_stop]: `along wrap <slug> --summary "<summary>" (--decisions <ADR...> | --no-decisions)` writes `.along/SESSIONS/<YYYY>/<date>--<slug>.md` (summary, decisions, attributed `files:`, blackboard record), compiles projections, and appends to `.along/HISTORY.md` (provide `--summary` or let it fallback to issue title).
 7. [ ] **Projections** [gate: projection_sync_before_stop]: Run `/along-issue-sync` and `/along-decision-sync`.
 8. [ ] **HISTORY**: Verify line in `.along/HISTORY.md` (appended automatically by `along wrap`; update via `along history append <slug> "..."` if needed).
 9. [ ] **Compaction**: Advise user to run `/compact`.
@@ -1037,7 +1037,7 @@ sequenceDiagram
     Agent-->>Human: Present concise executive summary
 ```
 
-1. **Intent Recognition (Zero-Friction Tracking)**: Natural developer prompts ("Build feature X", "Fix bug Y", "Investigate library Z") automatically trigger the creation of typed issues (`feat`, `bug`, `spike`) in `.along/ISSUES/` without requiring manual file management.
+1. **Intent Recognition (Zero-Friction Tracking)**: Natural developer prompts ("Build feature X", "Fix bug Y", "Investigate library Z") automatically trigger the creation of typed issues (`feat`, `bug`, `spike`; a blocker is an issue tagged `risk`) in `.along/ISSUES/` without requiring manual file management.
 2. **Mandatory Issue Anchoring**: All non-trivial code modifications must bind to an active issue in `.along/ISSUES/` with `status: in-progress`.
 3. **Autonomous Execution**: The agent executes the task via `/along-team` or direct fast-path.
 4. **Verification Gate**: Automated tests, file integrity audits, and AST blast radius checks are executed before finalizing changes.
@@ -1140,7 +1140,7 @@ To prevent multi-agent coordination data from leaking across sessions or clutter
 - **Lifecycle**:
   1. *Allocated*: `along start` (direct) or `along scratch init` (role-based).
   2. *Updated*: Plan capture at approval, trace by the hooks, step state by `along scratch update`.
-  3. *Archived*: `along wrap`, `along scratch purge` and `along issue done` write the Blackboard Record into `.along/SESSIONS/<YYYY>/<date>--<slug>.md` (append-only once committed).
+  3. *Archived*: `along wrap`, `along scratch purge`, `along issue done` and `along session gc` (unbound blackboards of closed issues) write the Blackboard Record into `.along/SESSIONS/<YYYY>/<date>--<slug>.md` (append-only once committed); attributed paths go to its `files:` front matter, the plan itself is not copied.
   4. *Purged*: Deleted only after the record is committed.
 
 See [Session Lifecycle](./topic--session-lifecycle.md).
@@ -1321,7 +1321,7 @@ Validates repository compliance with the Along protocol. Audits `.along/` direct
 - **Vision & root notes**: warns about a root `VISION.md` next to `.along/`, an unresolved `along:imported-vision needs-restructure` section in `.along/VISION.md`, and root notes (`ROADMAP.md`, `ARCHITECTURE.md`, `SPEC.md`, `TODO.md`, `DESIGN.md`) that the agent must route into the Knowledge Base.
 - **Tracked diagnostics**: warns when files under any `.along/diagnostics/` are still tracked in git (committed before the directory ignored itself) and names `along migrate --apply` (or `git rm --cached`) as the fix.
 - **Nested installs**: warns about nested `.along/` contexts that sit in no nested git repository (possibly created per manifest folder by older versions) and lists them. It changes nothing: consolidating them into the root is a manual per-repository task. A deliberate nested context is silenced with `"subproject": {"intentional": true}` in its `.along/config.json`. See ADR `subproject-boundary-is-git-or-explicit-init`.
-- **Sessions**: warns about orphan blackboards (no session bound, issue closed or missing), session bindings older than 72 h or without a blackboard (`along session gc`), and issues in progress with no session bound. See [Parallel Sessions](./topic--parallel-sessions.md).
+- **Sessions**: warns about orphan blackboards (no session bound, issue closed or missing; fix with `along session gc` or `along scratch purge <slug>`), session bindings older than 72 h or without a blackboard (`along session gc`), and issues in progress with no session bound. See [Parallel Sessions](./topic--parallel-sessions.md).
 - **Verification & gates**: prints the test policy line (`Verify: tests: ...`, see `along test`; `tests: none` is a warning, an invalid policy such as a missing `reason` / `tracked_by` an error), active gate strictness profile (`strict`, `standard`, `light`), warns about gates shadowed by repository config and names the most-bypassed gates (see `along gates stats`).
 - **Options**:
   - `entities`, `--entities`: Performs deep validation of the entity DAG graph, verifying parent/child relationships, `blocked_by` dependencies, and detecting circular references. References resolve against the current `.along/`, every enclosing `.along/` up to the outermost context below home (crossing nested git / submodule boundaries), every nested subproject `.along/` below it, and every sibling `.along/` of the same git repository (nested git repositories and dependency/build dirs are not entered). Schema findings on archived issues (`.along/ISSUES/done/`) are warnings.
@@ -1340,7 +1340,7 @@ Validates repository compliance with the Along protocol. Audits `.along/` direct
 ### `along issue`
 Manages atomic issue files in `.along/ISSUES/` and recompiles the active board projection (`.along/ISSUES.md`).
 - **Subcommands**:
-  - `along issue create <type> <slug> --title "Title" [options...]`: Creates a new issue file. Valid types: `feat`, `bug`, `debt`, `task`, `docs`.
+  - `along issue create <type> <slug> --title "Title" [options...]`: Creates a new issue file. Valid types: `feat`, `bug`, `debt`, `task`, `docs`, `spike`. A `spike` is scaffolded with an `## Outcome` section, filled before it is closed as `done`. A risk or blocker is an ordinary issue (usually `debt`) tagged `risk` with a `## Mitigation` section.
     - Options: `--priority {high,medium,low,critical}`, `--tags "t1,t2"`, `--agent <name>`, `--milestone <name>`.
   - `along issue update <slug> [options...]` (alias: `along issue edit`): Updates frontmatter metadata of an existing issue, preserving YAML comments and ordering.
     - Options:
@@ -1357,7 +1357,7 @@ Manages atomic issue files in `.along/ISSUES/` and recompiles the active board p
   - `along issue reopen <slug>`: Moves a closed issue from `.along/ISSUES/done/` back to `.along/ISSUES/`, sets `status: open`, removes `completed` / `superseded_by` / `duplicate_of`, restores sibling links and recompiles `.along/ISSUES.md` (one transaction). Session logs that list it as completed stay as they are. Resume with `along start <slug>`.
   - `along issue sync`: Recompiles `.along/ISSUES.md` deterministically from atomic files in `.along/ISSUES/` and `.along/ISSUES/done/`, then runs the entity reference integrity gate (`validate_entities`): dangling references or schema / enum violations that are absent at `HEAD` exit `1` in `enforce` mode and only warn in `shadow` mode; problems already present at `HEAD` are printed as a warning and never fail it. A `parent` found in an enclosing context is printed as `<key>: parent <parent> (found in <ctx>)`.
   - `along issue list`: Lists all active in-progress and open issues in the terminal.
-  - `along issue rename <old-key> <new-key>`: Renames an issue (type and/or slug; a bare slug keeps the type). Rewrites the file name and `slug`/`type`, then every inbound reference in the nearest `.along/`: `related`, `blocked_by`, `parent`, `superseded_by`, `duplicate_of` in issues, risks, spikes, checklists and ADRs, milestone `target_issues`, and session `issues_advanced` / `issues_completed`.
+  - `along issue rename <old-key> <new-key>`: Renames an issue (type and/or slug; a bare slug keeps the type). Rewrites the file name and `slug`/`type`, then every inbound reference in the nearest `.along/`: `related`, `blocked_by`, `parent`, `superseded_by`, `duplicate_of` in issues and ADRs, milestone `target_issues`, and session `issues_advanced` / `issues_completed`.
   - `along issue cancel <slug>`: Same as `along issue done <slug> --status cancelled`.
   - `along issue delete <slug>`: Removes an issue created by mistake: strips it from `related` / `blocked_by` lists and milestone `target_issues`, deletes the file and recompiles milestones and the board. Refused when a session log, a `parent` / `superseded_by` / `duplicate_of` reference or a commit message names it; cancel or supersede such an issue instead.
   - `along issue supersede <old-key> --by <new-key>`: Closes the old issue as `superseded` with `superseded_by: <new-key>` and moves it to `done/` (the file is kept, so session history stays valid). Dependency fields of other entities (`related`, `blocked_by`, `parent`, ...) are rewritten to the successor; session logs are left as they are.
@@ -1416,13 +1416,13 @@ Manages session logs in `.along/SESSIONS/` and records engineering provenance.
 - **Subcommands**:
   - `along session create <slug> --summary "Summary" [options...]`: Initializes a new session log.
     - Options: `--issues "slug1,slug2"`, `--decisions "ADR-slug"`, `--agent <name>`, `--milestone <name>`, `--commit <sha>`.
-    - Front-matter is emitted through `ruamel.yaml`; `branch` and `commit` come from git (omitted outside a repository). Named issues are filed by their status: closed ones under `issues_completed`, the rest under `issues_advanced` (canonical keys); `## Work Completed` lists each with its title and status. The body records test evidence when a passing `along test` run was recorded for the current working tree (in this context or an enclosing one) or the runtime hooks recorded a run after the last edit.
+    - Front-matter is emitted through `ruamel.yaml`; `branch` and `commit` come from git (omitted outside a repository). Named issues are filed by their status: closed ones under `issues_completed`, the rest under `issues_advanced` (canonical keys); `## Work Completed` lists each with its title and status. The body records test evidence when a passing `along test` run was recorded for the current working tree (in this context or an enclosing one) or the runtime hooks recorded a run after the last edit. The `HISTORY.md` line is written through the same one-line-per-slug writer as `along wrap`.
   - `along session wrap <slug> [options...]`: Same as `along wrap` (see below), including the required `--decisions` / `--no-decisions` answer.
     - Options: `--status {done,superseded,cancelled,duplicate}`, `--summary "Summary"`, `--decisions "ADR-a,ADR-b"` or `--no-decisions`, `--force-reason "..."`, `--dry-run`, `-n`.
   - `along session bindings`: Lists agent-session bindings (session key, issue, approval, last update).
-  - `along session gc [--dry-run]`: Removes bindings older than 72 hours or pointing at a purged blackboard.
+  - `along session gc [--dry-run]`: Removes bindings older than 72 hours or pointing at a purged blackboard. Also archives (into the session log) and removes unbound blackboards whose issue is already closed; blackboards of missing issues are only reported.
   - `along session list [--json]`: Readiness of every issue in progress, every bound issue and every blackboard: sessions and their last event, attributed files (exclusive / shared with which issues, still uncommitted), last edit vs last test run, acceptance criteria ticked / total, plan recorded, verdict `ready` / `blocked` with reasons; for the repository: uncommitted changes grouped by wrapped issue, truly unattributed and staged paths, a merge / rebase in progress, conflict markers.
-  - `along session close <slug>... | --ready [--dry-run] [--push]`: Closes out finished work in one step. Needs the user's approval recorded with `along plan approve --closeout` in this session. Refuses during a merge / rebase / cherry-pick, with conflicts or with staged files. Plans the commits first, runs the tests once (nothing is touched when they fail), wraps each issue, then commits by attribution: one commit per issue (its files, issue move, session log), one combined commit per set of issues sharing files (all refs), the projections last. Files also attributed to an issue not closed now are held back; unattributed changes are never committed. Also supports already wrapped done issues (`along session close <done-slug>`), reading attributed files from their session log and committing them without re-wrapping. `--push` pushes once at the end. Idempotent: a re-run (`along session close`) resumes from `.along/.session/.closeout.json`. Issues that are not ready are listed and left untouched.
+  - `along session close <slug>... | --ready [--dry-run] [--push]`: Closes out finished work in one step. Needs the user's approval recorded with `along plan approve --closeout` in this session. Refuses during a merge / rebase / cherry-pick, with conflicts or with staged files. Plans the commits first, runs the tests once (nothing is touched when they fail), wraps each issue, then commits by attribution: one commit per issue (its files, issue move, session log), one combined commit per set of issues sharing files (all refs), the projections last. Files also attributed to an issue not closed now are held back; unattributed changes are never committed. Also supports already wrapped done issues (`along session close <done-slug>`), reading attributed files from their session log (`files:` front matter, or the legacy `### Attributed Files` table) and committing them without re-wrapping. `--push` pushes once at the end. Idempotent: a re-run (`along session close`) resumes from `.along/.session/.closeout.json`. Issues that are not ready are listed and left untouched.
 - **Usage**:
   ```bash
   along session list
@@ -1566,7 +1566,7 @@ Transactional end-of-stage wrap engine.
   - `--dry-run`: Simulate wrap-up operations without writing or moving files.
   - `-n, --no-verify --reason "<text>"`: Skip pre-flight automated tests (`--force-reason` also serves as the reason). A recorded bypass, see [Runtime Lifecycle Hooks & Mechanical Gates](./topic--runtime-hooks-and-gates.md).
   - `-a, --agent "<name>"`: Explicit agent name.
-  - `-d, --decisions "ADR-a,ADR-b"` or `--no-decisions` (one is required): The answer to "were architectural decisions made?". The session log for today is written or extended with `issues_completed: [<type>--<slug>]`, the decisions, and the blackboard record (plan, step table, research, execution trace, reviews). A second record of the same issue on the same day is appended as `## Blackboard Record (<n>, <ts>)`. The blackboard is purged only after the wrap transaction committed.
+  - `-d, --decisions "ADR-a,ADR-b"` or `--no-decisions` (one is required): The answer to "were architectural decisions made?". The session log for today is written or extended with `issues_completed: [<type>--<slug>]`, the decisions, the attributed paths as the front-matter list `files:`, and the blackboard record (step table, research, execution trace, notes, reviews; the plan is not copied). A second record of the same issue on the same day is appended as `## Blackboard Record (<n>, <ts>)`. The blackboard is purged only after the wrap transaction committed.
   - `--force-reason "<text>"`: Wrap past open steps, uncompleted checklist items, or a scaffold plan (refused otherwise, exit 2); it also passes the entity-reference-integrity gate. The reason is recorded in the trace and the session log; when a check is actually forced it is a recorded bypass.
 - **Uncommitted work warning**: when `--no-commit` is used and files attributed to the issue remain uncommitted after wrap, warns with the list of paths and emits the exact `along commit -i <slug> --paths ...` command.
 - **Completion token**: the purge removes the session's binding; when this session had an approved plan for the slug, it keeps a completion token so a manual `along commit -i <slug>` passes the plan gate without a new approval (see `along commit`).
@@ -1598,7 +1598,7 @@ Idempotent compiler and integrity gate for the living LLM-Wiki in `docs/`.
 Targeted snippet retrieval engine across `docs/` and `.along/` living memory.
 - Uses token-based Inverse Document Frequency (IDF) scoring to extract relevant headings and paragraphs, minimizing prompt token consumption.
 - **Options**:
-  - `--category <cat>`: Filters by category (`topic`, `issue`, `decision`, `session`).
+  - `--category <cat>`: Filters by category (`all`, `kb`, `issue`, `decision`, `milestone`, `session`). Spikes are indexed as issues.
   - `--any`: Matches any query token (OR match).
   - `--prefix`: Enables prefix matching.
   - `--stats`: Outputs query timing and corpus indexing statistics.
@@ -1667,8 +1667,8 @@ Multi-stack project version incrementer and release packager.
 ### `along init`
 Deterministic scaffolder behind `/along-init` (`scripts/along_init.py`). Idempotent; existing state is never overwritten.
 - **AGENTS.md**: FULL protocol block at an architecture root; a short REF block (`ref=<relpath>`) in a nested folder whose ancestor inside the same git working tree carries the FULL block. A git repository or submodule root always gets FULL. A hand-written file without markers gets the block on top and keeps its text under `## Project specifics`.
-- **Files**: `CLAUDE.md` import line, `.gitattributes` merge lines, `.along/` skeleton (`ISSUES.md`, `ISSUES/done/`, `DECISIONS/`, `GLOSSARY.md`, `HISTORY.md`, `SESSIONS/<YYYY>/`), `docs/INDEX.md`.
-- **VISION**: a root `VISION.md` ends up only in `.along/VISION.md` (moved, deduplicated, or merged under an `along:imported-vision needs-restructure` marker); links to it are repointed (public files -> `docs/INDEX.md`). Otherwise a skeleton with `## Scope`, `## Non-goals`, `## Roadmap` is created.
+- **Files**: `CLAUDE.md` import line, `.gitattributes` merge lines, `.along/` skeleton (`ISSUES.md`, `ISSUES/done/`, `DECISIONS/`, `GLOSSARY.md`, `HISTORY.md`, `SESSIONS/<YYYY>/`), `docs/INDEX.md`. A nested context that gets a REF block creates no `GLOSSARY.md` and no `VISION.md` skeleton; they are created on first use.
+- **VISION**: a root `VISION.md` ends up only in `.along/VISION.md` (moved, deduplicated, or merged under an `along:imported-vision needs-restructure` marker); links to it are repointed (public files -> `docs/INDEX.md`). Otherwise a skeleton with `## Scope`, `## Non-goals`, `## Roadmap` is created (FULL contexts only).
 - **Pipeline**: `along rules attach`, `along git setup` (git roots), `along hook install --runtime all`, `along migrate --apply`.
 - **Report**: CREATED / UPDATED / UNTOUCHED files, VISION outcome, repointed links, `AGENT ACTIONS` (imported VISION section, root notes `ROADMAP.md` / `ARCHITECTURE.md` / `SPEC.md` / `TODO.md` / `DESIGN.md`, adopted hand-written `AGENTS.md`) and, when `.along/` already existed, `RE-RUN QUESTIONS` for the user.
 - **Options**: `--dry-run`, `--json`, `--profile <strict|standard|light>`, `--no-rules`, `--no-git`, `--no-hooks`, `--no-migrate`.
@@ -1682,7 +1682,7 @@ Deterministic scaffolder behind `/along-init` (`scripts/along_init.py`). Idempot
 
 ### `along update`
 Self-update engine for the Along protocol and skills suite.
-- Refreshes the managed protocol block in every context with the same rules as `along init` (FULL/REF, hand-written adoption) and runs the migration, whose Step 13 reconciles a root `VISION.md` even on an up-to-date repository.
+- Refreshes the managed protocol block in every context with the same rules as `along init` (FULL/REF, hand-written adoption) and runs the migration, whose heal passes (Step 13: root `VISION.md`; Step 16: legacy risk, spike and checklist records) run even on an up-to-date repository.
 - Reconciles local repository files, managed protocol blocks, and global user skills (`~/.claude/`, `~/.gemini/`, `~/.codex/`) against the latest upstream release from GitHub.
 - Automatically scaffolds and reconciles global runtime lifecycle hooks in user home configurations (`~/.gemini/config/hooks.json`, `~/.claude/settings.json`, and `~/.codex/hooks.json`) and recursively purges legacy local hooks and workaround scripts from consumer repositories.
 - Performs pre-flight hook cleanup and per-context exception isolation so that corrupt or locked files in one subproject do not abort the update for remaining contexts.
@@ -2241,18 +2241,15 @@ The entity ecosystem provides a structured data layer that is simultaneously hum
 flowchart TD
     subgraph PlanningAndEpics["Planning & Target Scope"]
         MILESTONE["Milestones (.along/MILESTONES/)"]
-        SPIKE["Spikes & R&D (.along/SPIKES/)"]
-        RISK["Risks & Blockers (.along/RISKS/)"]
     end
 
     subgraph CoreUnitsOfWork["Core Units of Work"]
-        ISSUE["Issues (.along/ISSUES/<type>--<slug>.md)"]
+        ISSUE["Issues (.along/ISSUES/<type>--<slug>.md), incl. spike and risk-tagged issues"]
         DONE_ISSUE["Completed Issues (.along/ISSUES/done/)"]
     end
 
     subgraph GovernanceAndQuality["Governance & Architecture"]
         ADR["Decisions / ADRs (.along/DECISIONS/)"]
-        CHECKLIST["Checklists (.along/CHECKLISTS/)"]
     end
 
     subgraph LivingMemory["Living Memory & Journals"]
@@ -2262,13 +2259,11 @@ flowchart TD
     end
 
     MILESTONE -->|targets| ISSUE
-    SPIKE -->|evaluates & yields| ADR
-    RISK -->|blocks or relates| ISSUE
+    ISSUE -->|spike yields| ADR
     ISSUE -->|moves to done/| DONE_ISSUE
     ISSUE -->|advances| SESSION
     ADR -->|governs| ISSUE
-    CHECKLIST -->|verifies| SESSION
-    SESSION -->|appends| HISTORY
+    SESSION -->|wrap appends one line| HISTORY
     ISSUE -->|documents in| KB
 ```
 
@@ -2276,10 +2271,10 @@ flowchart TD
 
 ## 2. Granular Entity Taxonomy & Schemas
 
-Along defines 9 distinct entity types, each fulfilling a specific role in repository memory and lifecycle management:
+Along defines 6 entity types, each fulfilling a specific role in repository memory and lifecycle management. Risks, spikes and checklists are no longer separate entities: a risk or blocker is an issue tagged `risk`, a spike is a `spike` issue, and the completion checklist lives in `AGENTS.md` and is printed by `along wrap` ([debt--entity-model-slimming]; `along update` converts old `RISKS/`, `SPIKES/` and `CHECKLISTS/` folders through migration Step 16, see [Migrations](./topic--migrations.md)).
 
 ### 1. Issues (`.along/ISSUES/<type>--<slug>.md`)
-Atomic units of engineering work. Along categorizes issues into **5 distinct types**:
+Atomic units of engineering work. Along categorizes issues into **6 types**:
 
 | Issue Type | Purpose & Scope | Example Slug |
 | :--- | :--- | :--- |
@@ -2288,6 +2283,9 @@ Atomic units of engineering work. Along categorizes issues into **5 distinct typ
 | **`debt`** | Technical debt payoff, code refactoring, performance optimization, or dead code elimination. | `debt--dynstruct-migration` |
 | **`task`** | Routine chores, infrastructure setup, CI/CD configuration, or dependency updates. | `task--setup-vitest-runner` |
 | **`docs`** | Knowledge base authoring, architectural specifications, or developer workflow guides. | `docs--skills-architecture-overhaul` |
+| **`spike`** | Timeboxed experiment, benchmark or library evaluation before an architectural commitment. Carries an `## Outcome` section; a concluded spike is closed as `done` and its result usually becomes an ADR (`related:`). | `spike--duckdb-vs-sqlite` |
+
+A **risk or blocker** (rate limit, external dependency, upstream defect) is an ordinary issue, usually `debt`, tagged `risk`, with a `## Mitigation` section; the issue it blocks lists it in `blocked_by`.
 
 #### YAML Front-Matter Schema:
 ```yaml
@@ -2305,7 +2303,7 @@ agent: antigravity
 tags: [auth, security, tokens]
 milestone: v2.3.0-security
 blocked_by: [feat--db-schema-migrations]
-related: [risk--token-revocation-latency]
+related: [debt--token-revocation-latency]
 parent: feat--identity-platform
 superseded_by: null
 duplicate_of: null
@@ -2324,7 +2322,7 @@ Detailed problem statement, constraints, and verifiable acceptance criteria.
 #### Lifecycle States:
 - **`open`**: Backlog item, not currently being executed.
 - **`in-progress`**: Actively being developed by an agent or human. Initiated atomically via `along start <slug> [--worktree]`. Non-trivial code edits require an active issue.
-- **`blocked`**: Waiting on an external dependency (`blocked_by`), API key, or active risk.
+- **`blocked`**: Waiting on an external dependency (`blocked_by`), API key, or a `risk`-tagged issue.
 - **`done`**: Delivered terminal state. Fully implemented, verified by tests and code review. Closed via `along issue done <slug>` or `/along-wrap`. Mandatory field `completed: YYYY-MM-DD` is set, and the file is moved to `.along/ISSUES/done/<type>--<slug>.md`. Only `done` issues count towards milestone and sprint completion metrics.
 - **`superseded`**: Non-delivered terminal state. Replaced by another issue or architectural decision. Closed via `along issue supersede <old-key> --by <new-key>` (rewrites inbound references) or `along issue done <slug> --status superseded --superseded-by <slug>`. Mandatory field `completed: YYYY-MM-DD` is set, `superseded_by: <target-slug>` references the replacement entity, and the file is moved to `.along/ISSUES/done/`.
 - **`cancelled`**: Non-delivered terminal state. Abandoned or intentionally dropped requirements. Closed via `along issue done <slug> --status cancelled`. Mandatory field `completed: YYYY-MM-DD` is set, and the file is moved to `.along/ISSUES/done/`.
@@ -2420,75 +2418,8 @@ Milestones and issues maintain a **bidirectional relationship** orchestrated by 
 
 ---
 
-### 4. Risks & Blockers (`.along/RISKS/<slug>.md`)
-Track external dependencies, rate limits, security considerations, and potential blockers before they halt development.
-
-#### Schema:
-```yaml
----
-protocol: along
-protocol_version: "3.9.4"
-slug: token-revocation-latency
-title: Redis Token Blacklist Synchronization Latency
-severity: high
-status: active
-owner: agent
-mitigation: Use short-lived 5-minute access tokens with asymmetric JWT signatures.
-created: 2026-09-01
-updated: 2026-09-01
----
-```
-
----
-
-### 5. Spikes & R&D Experiments (`.along/SPIKES/<slug>.md`)
-Timeboxed research experiments, benchmark comparisons, and library evaluations conducted prior to architectural commitment.
-
-#### Schema:
-```yaml
----
-protocol: along
-protocol_version: "3.9.4"
-slug: duckdb-vs-sqlite-benchmarks
-title: Local Vector Indexing: DuckDB vs SQLite FTS5
-status: concluded
-hypothesis: SQLite FTS5 with BM25 ranking provides lower memory footprint and zero external C-extensions.
-outcome: SQLite FTS5 outperformed DuckDB on snippet retrieval (<5ms) with zero dependencies.
-resulting_adr: ADR-2026-08-30--llm-wiki-docs-architecture-and-singular-skills-refactoring
-created: 2026-08-30
----
-```
-
----
-
-### 6. Checklists & Quality Gates (`.along/CHECKLISTS/<slug>.md`)
-Reusable verification rubrics for pre-commit checks, stage completions, releases, and security audits.
-
-#### Schema:
-```yaml
----
-protocol: along
-protocol_version: "3.9.4"
-slug: stage-completion
-title: Mandatory Stage Completion Verification Checklist
-category: stage-completion
-items:
-  - id: zero_byte_gate
-    text: Verify git status -u has non-zero size for all created files.
-    verified: true
-  - id: unit_tests
-    text: Run automated unit tests with quiet flags (zero failures).
-    verified: true
-  - id: blast_radius
-    text: Check downstream callers via code-review-graph and map to docs.
-    verified: true
----
-```
-
----
-
-### 7. Work Sessions (`.along/SESSIONS/<YYYY>/<YYYY-MM-DD>--<slug>.md`)
-Chronological work journal recording accomplishments, touched files, reviewer feedback, and blast radius summaries for every working session.
+### 4. Work Sessions (`.along/SESSIONS/<YYYY>/<YYYY-MM-DD>--<slug>.md`)
+Chronological work journal written by `along wrap` (and `along issue done`, `along scratch purge`, `along session gc`) before the session blackboard is deleted. A log does not repeat git or the plan: it keeps the front matter, the summary, the decisions, and the blackboard record (step table, research, execution trace, notes, reviews). The paths attributed to the issue are kept as the `files:` front matter, which `along session close`, `along start` and `along doctor` read to find uncommitted work of wrapped issues (logs written before v4.6.0 carry an `### Attributed Files` table instead, still read).
 
 #### Schema:
 ```yaml
@@ -2501,30 +2432,32 @@ branch: main
 commit: a1b2c3d
 summary: Complete overhaul of docs/ Knowledge Base and full 18-skill reference.
 milestone: v2.2.0-along
-issues_advanced:
-  - docs--comprehensive-knowledge-base-and-skills-architecture
+issues_advanced: []
 issues_completed:
   - docs--comprehensive-knowledge-base-and-skills-architecture
 decisions: []
-risks_logged: []
-spikes_conducted: []
+files:
+  - docs/topic--skills-reference.md
+  - skills/along-wrap/SKILL.md
 ---
 ```
 
 ---
 
-### 8. Project History Chronicle (`.along/HISTORY.md`)
-Single-line append-only chronological log of major milestones, features, and session completions:
+### 5. Project History Chronicle (`.along/HISTORY.md`)
+Single-line append-only chronological log, one line per slug, written by `along wrap` (and `along history append` / `along session create`, which go through the same writer). It is the one-line record of a completion; the issue body stays in `ISSUES/done/` and the details in the session log:
 ```markdown
 # History
 
-2026-09-01 - skills-architecture-overhaul - antigravity - Rebuild Knowledge Base and 18-skill reference - [Session](./SESSIONS/2026/2026-09-01--skills-architecture-overhaul.md)
+2026-09-01 - skills-architecture-overhaul - antigravity - Rebuild Knowledge Base and 18-skill reference - [Session Log](./SESSIONS/2026/2026-09-01--skills-architecture-overhaul.md)
 ```
 
 ---
 
-### 9. Knowledge Base (`docs/topic--*.md`, `docs/INDEX.md`)
+### 6. Knowledge Base (`docs/topic--*.md`, `docs/INDEX.md`)
 Curated, cross-linked LLM-Wiki articles maintaining domain architecture, API contracts, dependencies, and developer guides.
+
+`.along/VISION.md` and `.along/GLOSSARY.md` complete the context: the repository root gets them on `along init`; a nested context (subproject) creates them on first use.
 
 ---
 
@@ -2556,8 +2489,8 @@ To ensure zero administrative overhead for developers, Along host agents automat
 | *"Fix bug X"*, *"Fix crash on Y"* | **`bug ISSUE`** | Auto-creates `.along/ISSUES/bug--<slug>.md` with `priority: high`. |
 | *"Refactor module X"*, *"Clean up Y"* | **`debt ISSUE`** | Auto-creates `.along/ISSUES/debt--<slug>.md`. |
 | *"Update documentation for X"* | **`docs ISSUE`** | Auto-creates `.along/ISSUES/docs--<slug>.md`. |
-| *"Rate limit hit"*, *"Blocked on API key"* | **`RISK / BLOCKER`** | Auto-creates `.along/RISKS/<slug>.md` (`status: active`); marks issue `status: blocked`. |
-| *"Benchmark X vs Y"*, *"Test if Z works"* | **`SPIKE`** | Auto-creates `.along/SPIKES/<slug>.md`. Documents outcome and logs resulting ADR in `DECISIONS.md`. |
+| *"Rate limit hit"*, *"Blocked on API key"* | **`risk`-tagged ISSUE** | Auto-creates `.along/ISSUES/debt--<slug>.md` tagged `risk` with a `## Mitigation` section; the blocked issue gets `status: blocked` and `blocked_by: [debt--<slug>]`. |
+| *"Benchmark X vs Y"*, *"Test if Z works"* | **`spike ISSUE`** | Auto-creates `.along/ISSUES/spike--<slug>.md` (`along issue create spike <slug>`); records the `## Outcome` and the resulting ADR before it is wrapped. |
 | *"Target for next sprint"*, *"Release v2.0"* | **`MILESTONE`** | Auto-creates `.along/MILESTONES/<slug>.md`; binds target issues. |
 | *"I'm done for today"*, *"Wrap up"* | **`SESSION & WRAP`** | Executes `/along-wrap`: verifies tests, records session log, moves completed issues to `done/`, updates `HISTORY.md`. |
 
@@ -2885,7 +2818,7 @@ do nothing to the repository unless given `-Migrate` / `--migrate`.
 flowchart TD
     A["Legacy Repo (v1.0)"] -->|Step 1: Tasks to Issues| B["v1.1.0 (ISSUES structure)"]
     B -->|Step 2: Scaffolding KB & Graph| C["v1.3.0 (Knowledge Base & Graph)"]
-    C -->|Step 3: Entity Ecosystem| D["v1.5.0 (Milestones, Risks, Checklists)"]
+    C -->|Step 3: Entity Ecosystem| D["v1.5.0 (Milestones, Done Issues, Sessions)"]
     D -->|Step 4: Along Directory| E["v2.0.0 (Along Ecosystem & protocol: along)"]
     E -->|Step 7: LLM-Wiki & docs/| F["v2.1.0 (docs/ KB, In-Place Provenance, Domain-First Skills)"]
     F -->|Step 10: Version SSOT Cleanup| G["v3.0.0 (Version SSOT & KB Schema Decoupling)"]
@@ -2948,7 +2881,7 @@ fails if the engine calls `shutil.move`, `os.remove` or their neighbours directl
 - Creates `.code-review-graph-ignore` with standard excludes (`node_modules/`, `dist/`, `build/`, `SESSIONS/`).
 
 ### `v1.3.0` -> `v1.5.0`: Entity Ecosystem & Retro-Synthesis
-- Scaffolds `.along/MILESTONES/`, `.along/RISKS/`, `.along/SPIKES/`, `.along/CHECKLISTS/`, and `.along/ISSUES/done/`.
+- Scaffolds `.along/MILESTONES/`, `.along/ISSUES/done/` and `.along/SESSIONS/<YYYY>/` (risk, spike and checklist folders are no longer created; see Step 16).
 - Retroactively synthesizes completed milestones from Git history and session logs.
 - Sanitizes non-ASCII typography (replacing em-dashes with standard ASCII hyphens).
 
@@ -2987,6 +2920,15 @@ fails if the engine calls `shutil.move`, `os.remove` or their neighbours directl
 - A top-level `tools:` section in `.along/rules/gates.yaml` is ignored by the gate loader. Since the file is repository-owned, the step only reports it (`[WARN]`, recorded as `review`); remove it by hand.
 - The live activity traces (`.along/diagnostics/activity_trace.json`, `.along/diagnostics/activity/`) stay.
 - Runs on every migration, including an up-to-date repository (as a heal pass); a second run finds nothing, `--dry-run` only lists the paths.
+
+### `v4.6.0`: Entity Model Slimming (Step 16)
+- The separate risk, spike and checklist entities were removed in `debt--entity-model-slimming`; `step_slim_entity_model` converts what `.along/RISKS/`, `.along/SPIKES/` and `.along/CHECKLISTS/` still hold:
+  - a risk becomes a `debt--<slug>` issue tagged `risk` (severity -> priority, mitigation -> `## Mitigation`); a resolved or mitigated risk is closed as `done` in `ISSUES/done/`;
+  - a spike becomes a `spike--<slug>` issue (hypothesis and outcome -> sections, `resulting_adr` -> `related`); a concluded spike is closed as `done`;
+  - front-matter references are rewritten (`risk--x` or a bare risk slug -> `debt--x`);
+  - the scaffolded `pre-commit.md` and `stage-completion.md` are discarded after a backup (the completion checklist lives in `AGENTS.md` / `docs/topic--along-protocol.md` and is printed by `along wrap`); any other checklist moves to `docs/topic--<slug>.md`.
+- The emptied folders are removed. A collision is kept and reported, every removal is backed up to `.along/.migration-backup/`.
+- Runs on every migration, including an up-to-date repository (as a heal pass), so `along update` applies it; a second run finds nothing, `--dry-run` only lists the operations.
 
 ---
 
@@ -3069,7 +3011,8 @@ What `along session close` does:
    staged, or without the approval for every issue it would close.
 2. Plans the commits from the attribution, before anything changes.
 3. Runs the test suite once. If it fails, nothing is wrapped or committed.
-4. Wraps each issue: the blackboard (with its attributed files) goes into the session log, the
+4. Wraps each issue: the blackboard goes into the session log (its attributed files into the
+   `files:` front matter), the
    issue moves to `done/`, `HISTORY.md` gets a line.
 5. Commits by attribution, each commit through `along commit` with its gates:
    - files attributed to one issue: one commit for that issue, with its issue file and session log;
@@ -3087,7 +3030,8 @@ their blockers and left untouched.
 
 Done issues with uncommitted attributed files: `along session close <done-slug>` can also be invoked
 directly for an issue that was already wrapped. It reconstructs the attributed file list from the
-issue's session log (`## Attributed Files` table) and commits those files cleanly without re-wrapping.
+issue's session log (the `files:` front matter, or the `### Attributed Files` table of a log
+written before that list existed) and commits those files cleanly without re-wrapping.
 
 ## 4. When something fails
 
@@ -3242,25 +3186,25 @@ Several agent sessions may work in one repository at once, so gates never read a
 - **Resolution** (`session.resolve_active_session`): `ALONG_ISSUE_SLUG` (runner) > own binding > the single in-progress blackboard not bound to another session > none. Several unbound candidates are `ambiguous`: gates refuse and point at `along start <slug>`. A single candidate names the issue, but its blackboard's `plan_approved` counts only for the session bound to it (or a runner's `ALONG_ISSUE_SLUG`): an unbound session with a known id never inherits the approval of a blackboard whose session ended. Runtimes that pass no session id keep it.
 - **Plan approval**: `along start` binds with `phase: planning`, `plan_approved: false`. Approval is recorded per session when the user accepts a plan in Claude Code (`PostToolUse` on `ExitPlanMode`; the plan text from `tool_input.plan` is written into the blackboard `plan.md`, or kept as `pending_plan` in the binding until the first `along start`), or by `along plan approve [<slug>] [--plan-file <path>]` after the user's explicit yes, which is refused while `plan.md` is still the scaffold (`session.is_scaffold_plan`); an approval given before `along start` carries over to the first bound slug, and an `ExitPlanMode` approval carries over to a newly started slug until the user's next message (the plan is recorded under the new slug). `along start --approved` is for scripted runs.
 - **User reply check** (`session.record_user_prompt`, `session.check_cli_approval`): the Claude Code `UserPromptSubmit` hook records the time of the user's last message in `.along/.session/prompts/<key>.json` (it does not bind the session). CLI approvals (`along plan approve`, `along start --approved`, `along scratch approve|phase --approve|update --approve`) are refused when the plan file changed after that message ("plan changed after the user's last message; show it and wait for a reply"); with no recorded message they pass as `approved_via: cli-unverified`. Bindings record `approved_via` (`exit-plan-mode` | `cli` | `cli-unverified`), `approved_at` and `plan_sha256`. The denial hint reads: "Call EnterPlanMode, write the plan, then ExitPlanMode. If plan mode is unavailable, show the plan in chat and wait for the user's reply; run 'along plan approve' only after that reply."
-- **What the plan gate holds** (see 2.6): file-tool writes to repository files before approval, and at turn end the files the turn changed according to `git status`. Shell commands are never classified before they run. File-tool writes to `.along/ISSUES|RISKS|SPIKES|SESSIONS|.session|diagnostics` and planning artifacts (`implementation_plan.md`, `walkthrough.md`, `living_plan.md`) pass, and the end-of-turn check ignores Along state under `.along/` (except `.along/scripts/`), so an issue can be written and started before a plan exists.
+- **What the plan gate holds** (see 2.6): file-tool writes to repository files before approval, and at turn end the files the turn changed according to `git status`. Shell commands are never classified before they run. File-tool writes to `.along/ISSUES|SESSIONS|.session|diagnostics` (spike issues included) and planning artifacts (`implementation_plan.md`, `walkthrough.md`, `living_plan.md`) pass, and the end-of-turn check ignores Along state under `.along/` (except `.along/scripts/`), so an issue can be written and started before a plan exists.
 - **Unbound sessions**: `require_plan_approval` and `test_before_stop` hold only sessions bound to an issue (`along start`, or `ALONG_ISSUE_SLUG` from a runner). A repository that wants unbound sessions held too sets `enforce_unbound: true` for those gates in `.along/rules/gates.yaml` (this repository does). `require_active_issue` is unaffected: source edits still need an in-progress issue.
 - **Completion tokens**: `along wrap` purges the blackboard and every binding of the wrapped slug. The wrapping session, if its plan for that slug was approved, keeps a token in its binding (`completed: [{slug, approved_at, wrapped_at}]`; `slug` and approval cleared). The token is ignored after 72 h (by `wrapped_at`), survives `along start <other>`, and leaves with the binding (`along session gc`). `along scratch purge` leaves no token. Tokens and closeout approvals serve `along session close` and the `wrapped_work_uncommitted` warning; commits are not held by `require_plan_approval`.
 - **Shell parsing** (`alongkit.hooks.shellparse`): only `split_segments()` and `words()` remain, used to find the explicit forms of `destructive_command` (2.11) and entity deletions (`entity_deletion_protection`). Command substitutions become the placeholder word `SUBST`. There is no read-only or verification classification, so tests and builds run in every phase without a special case.
 - **Session root**: the hook evaluates against the session's project, not the agent's current shell cwd (which follows `cd`). With Claude Code, `CLAUDE_PROJECT_DIR` anchors the root whenever the cwd lies inside it (`repo.find_session_root`), so session bindings and containment survive a `cd` into a nested `.along/` context.
 - **Entity reference integrity**: the Stop predicate runs only after an entity file changed and blocks only problems absent at `HEAD` (`gitgates.baseline_entity_problems` validates a `git archive` snapshot of every `.along/` entity dir); problems already committed are left to `along doctor --entities`. Schema findings on archived issues (`.along/ISSUES/done/`: enums, dates, slug, dangling milestone) are warnings marked `(archived issue)`, so an older archive never fails `along update` or `issue sync`; dangling issue references stay errors there too. `along doctor --fix` is not read-only for the plan gate. References resolve upward (enclosing contexts up to the outermost one below home, crossing nested git / submodule boundaries; the snapshot check adds the working-tree keys of contexts above the git top, `gitgates.outer_context_keys`) and downward (nested subproject contexts, `entities.descendant_entity_keys`) and sideways (sibling contexts of the same git repository, `entities.sibling_entity_keys`).
 - **Repository-level `.along/.session/state.json`** is read only for runtimes that pass no session id; `purge` removes it when it points at the purged slug.
-- **Housekeeping**: `along plan status`, `along session bindings`, `along session gc [--dry-run]` (bindings older than 72 h or without a blackboard). `along scratch purge` / `along wrap` remove the slug's bindings (`along wrap` keeps the wrapping session's completion token).
+- **Housekeeping**: `along plan status`, `along session bindings`, `along session gc [--dry-run]` (bindings older than 72 h or without a blackboard; unbound blackboards of closed issues are archived into the session log and removed, those of missing issues only reported). `along scratch purge` / `along wrap` remove the slug's bindings (`along wrap` keeps the wrapping session's completion token).
 - **Activity trace** (`test_before_stop`): per session in `.along/diagnostics/activity/<key>.json`; edits under `.along/` are not source edits, and documentation edits (Markdown anywhere, anything under a `docs/`) count only when the gate sets `count_docs: true` (this repository does, since its suite tests Markdown). Under `count_docs: true`, doc-only edits can be satisfied by a scoped run of Markdown-facing tests (`along test --doc` or `python .along/scripts/test.py --doc`, running declared `doc_tests: [...]` from `.along/rules/gates.yaml`) rather than the full suite. The activity trace tracks `last_doc_test_time` separately from `last_test_time`. Only what the gates let through is recorded: an edit on `PostToolUse` (the tool succeeded), a test run on `PreToolUse` after every gate allowed it, so changes made outside the session or writes a gate rejected never count. Where `.along/scripts/test.py` exists only `along test` / that script count as a test run; raw runners are named in the Stop message. The same trace holds `turn_baseline` (2.6).
 - **Execution trace** (`session.trace_event`): the bound issue's `.along/.session/<slug>/execution_trace.md` records, in direct and role-based mode, every repository edit (`PostToolUse`, except `.along/.session/**` and diagnostics; repeated edits of a path collapse to `(xN)`), enforced gate denials (`engine.py` -> `predicates.record_gate_denial`), plan recorded / approved, phase, step and retry changes (`session.update_state`), and test runs with their result from `along test` and the wrap / commit test gate (`gates.run_repository_tests`). Raw runners are not traced (no Bash `PostToolUse`). Unbound sessions write nothing; the trace keeps the newest 400 entries. See [Session Lifecycle](./topic--session-lifecycle.md).
-- **Session event ledger** (ADR-2026-10-05--session-event-ledger-feeds-telemetry): the same capture points append one versioned record `{schema, ts, session, slug, kind, path, path_kind, ok}` (`kind`: edit, test, plan, approve; `path_kind`: source, docs, state; `path` relative to the workspace root) to `.along/.session/<slug>/events.jsonl` (`session.record_event`, append only, at most 2000 events per issue, oldest edits dropped first). It is the source of truth for attribution and closeout readiness (`alongkit.closeout`); the session log keeps it as `### Attributed Files`. A failed append is reported on stderr and counted in `.along/diagnostics/ledger_errors.json`, which blocks that issue's closeout. With a runner Tracer, the PostToolUse span event carries the same record (`along.session.key`, `along.event.*`, `along.issue.slug`; fail-open).
+- **Session event ledger** (ADR-2026-10-05--session-event-ledger-feeds-telemetry): the same capture points append one versioned record `{schema, ts, session, slug, kind, path, path_kind, ok}` (`kind`: edit, test, plan, approve; `path_kind`: source, docs, state; `path` relative to the workspace root) to `.along/.session/<slug>/events.jsonl` (`session.record_event`, append only, at most 2000 events per issue, oldest edits dropped first). It is the source of truth for attribution and closeout readiness (`alongkit.closeout`); the session log keeps the attributed paths as the front-matter list `files:` (older logs carry a `### Attributed Files` table, still read). A failed append is reported on stderr and counted in `.along/diagnostics/ledger_errors.json`, which blocks that issue's closeout. With a runner Tracer, the PostToolUse span event carries the same record (`along.session.key`, `along.event.*`, `along.issue.slug`; fail-open).
 - **Test reuse** (`alongkit.testruns`): every test run is recorded with the tree hash of the working tree (`git write-tree` through a throwaway index; `.along/` except `.along/scripts/`, KB projections and `__pycache__` left out) in `.along/diagnostics/test_runs.json`. The Stop gate (`test_before_stop`) as well as `along wrap`, `along commit` and `along bump` reuse the last run on the same tree when it was green (`testruns.green_run_for(repo_root, tree_hash)`), allowing clean or reverted trees to pass immediately without re-running tests. `along bump` records a green run for the post-bump tree so `along wrap` can reuse it. `along test` always runs.
 - **Diagnostics** (`hooks_audit.jsonl`, activity traces, `hook_heartbeat.json`) are machine-local: `.along/diagnostics/` carries its own `*` `.gitignore`. They go to the resolved state directory (`repo.diagnostics_dir`); without one they go to `~/.along/diagnostics/workspaces/<path>/`. The hooks never create a `.along/` of their own.
 
 ### 2.9 along-team Step Discipline & Wrap Record
 - `along scratch init` creates a `role-based` blackboard (`--mode direct` opts out); `along start` creates a `direct` one. `[gate: team-step-active]` denies source edits in a role-based session while no step is `in-progress`; `[gate: team-reviews-before-stop]` blocks the turn end while a `passed` step lacks `reviews/step-N.md`.
 - `along scratch purge` and `along wrap` refuse while role-based steps are open or reviews are missing; `--force --reason` / `--force-reason` records why in `execution_trace.md`. `along scratch fallback <slug> --reason` switches to single-agent execution with the reason in the trace.
-- `along wrap` requires `--decisions ADR-...` or `--no-decisions`, writes (or extends) today's session log with `issues_completed: [<type>--<slug>]`, the decisions answer and the blackboard record (plan, step table, research, trace, reviews), and purges the blackboard only after its transaction committed. It refuses a blackboard whose `plan.md` is the scaffold unless `--force-reason`.
-- One archive path (`lifecycle.write_session_record`, `lifecycle.archive_and_purge`) serves `along wrap`, `along scratch purge` and `along issue done`: no blackboard is deleted without its record; scaffold placeholders are not rendered; a forced purge's reason goes into the record; a second record on the same day is appended as `## Blackboard Record (<n>, <ts>)`.
+- `along wrap` requires `--decisions ADR-...` or `--no-decisions`, writes (or extends) today's session log with `issues_completed: [<type>--<slug>]`, the decisions answer, the attributed paths as `files:` and the blackboard record (step table, research, trace, notes, reviews; the plan is not copied), and purges the blackboard only after its transaction committed. It refuses a blackboard whose `plan.md` is the scaffold unless `--force-reason`.
+- One archive path (`lifecycle.write_session_record`, `lifecycle.archive_and_purge`) serves `along wrap`, `along scratch purge`, `along issue done` and `along session gc`: no blackboard is deleted without its record; scaffold placeholders are not rendered; a forced purge's reason goes into the record; a second record on the same day is appended as `## Blackboard Record (<n>, <ts>)`.
 - `wrap_before_stop` (Stop): every issue closed as `done` today (local date) must be in `issues_completed` of a session log of today. `along doctor` warns about orphan blackboards (no binding, issue closed or missing), stale bindings and issues in progress with no session bound.
 - `session_record_append_only` (git, ci; `gitgates.check_session_records`, also run by `along commit`): a change never removes or rewrites lines inside a `## Blackboard Record` section of a committed session log; the Summary stays editable.
 
@@ -3548,6 +3492,7 @@ Every way a blackboard leaves the repository writes it into the issue's session 
 | `along wrap <slug> --no-decisions -m "..."` | record, `issues_completed`, decisions | purged after the wrap committed |
 | `along issue done <slug>` | record (if any), `issues_completed` for `done` | purged after the move committed |
 | `along scratch purge <slug> [--force --reason "..."]` | record, with the reason when forced | purged after the log is written |
+| `along session gc` | record, for unbound blackboards whose issue is closed | purged after the log is written |
 
 - `along wrap` refuses a blackboard whose plan was never recorded, unless
   `--force-reason "..."` says why; the reason is kept in the trace and the session log.
@@ -3559,9 +3504,13 @@ Every way a blackboard leaves the repository writes it into the issue's session 
   - Zero-byte audit across the working tree;
   - Entity reference integrity (`--force-reason` passes the check).
   KB sync runs after the transaction commits and only warns when it fails.
-- Template placeholders (scaffold plan, empty research headings, the generic step list) are not
-  written as content: a missing plan shows as `No plan recorded.` Non-scaffold findings (`research.md`)
-  and notes (`notes.md`) are preserved under `### Research` and `### Notes`.
+- The log keeps its front matter, `## Summary`, `## Decisions` and the `## Blackboard Record`
+  (step table, `### Research` if edited, `### Execution Trace`, `### Notes`, reviews, structured
+  working context). The approved plan is not copied into the log (git and the plan gate hold it),
+  and template placeholders (empty research headings, the generic step list) are not written.
+- Attributed paths go to the front-matter list `files:` (merged on a same-day second record), not
+  to a table. `along session close`, `along start`, `along doctor` and the stop gate read `files:`,
+  and still read the legacy `### Attributed Files` table of older logs.
 - Purge operations refuse across all commands (`along wrap`, `along scratch purge`, `along issue done`,
   `along session close`) if an unknown non-scaffold file is present in the blackboard.
 - A second record of the same issue on the same day is appended as
@@ -3575,14 +3524,17 @@ Every way a blackboard leaves the repository writes it into the issue's session 
 - **session-record-append-only** (`along commit`, `along gates check`, CI): a change may not
   remove or rewrite lines inside a `## Blackboard Record` of a committed session log. The Summary
   and Decisions sections stay editable.
-- **`along doctor`**: warns about orphan blackboards (no session bound, issue closed or missing).
-  `along scratch purge <slug>` archives and removes one. Run `along doctor issues` to audit scaffold stubs.
+- **`along doctor`**: warns about orphan blackboards (no session bound, issue closed or missing)
+  and suggests `along session gc` or `along scratch purge <slug>`. `along session gc` archives into
+  the session log and removes unbound blackboards whose issue is already closed (blackboards of
+  missing issues are only reported); `along scratch purge <slug>` archives and removes one. Run
+  `along doctor issues` to audit scaffold stubs.
 
 ## 6. Committing wrapped work
 
 - **Atomic wrap auto-commit**: By default, `along wrap` automatically creates an atomic Git commit linked to the wrapped issue slug (`<type>: <summary> (refs #<slug>)`), bundling all attributed files, the moved issue file in `done/`, today's session log, and recompiled projections. Engine-written files carry no edit events, so two rules cover them. The managed `docs/topic--along-protocol.md` counts as a projection. A changed `AGENTS.md` (root or nested) is included when its only difference from `HEAD` lies inside the managed `ALONG-PROTOCOL` / `ALONG-RULES` blocks; a hand edit outside them leaves it to attribution. `along session close` applies the same rules.
 - **Opting out with `--no-commit`**: When `--no-commit` is passed, `along wrap` leaves changes uncommitted. The wrap purge removes the session's binding but preserves a completion token, so a subsequent manual `along commit -i <slug> --paths ...` passes the plan gate without a new approval and consumes the token.
-- **Parallel closeout**: Several issues finished in parallel are closed in one step with `along session close`; the record of each one then also lists its attributed files. See [Parallel Sessions](./topic--parallel-sessions.md).
+- **Parallel closeout**: Several issues finished in parallel are closed in one step with `along session close`; the log of each one then also lists its attributed files in `files:`. See [Parallel Sessions](./topic--parallel-sessions.md).
 
 ---
 
@@ -3769,7 +3721,7 @@ along init
    - `docs/topic--along-protocol.md`: the managed on-demand protocol reference (completion checklist, documentation routing tree, merge rules, along-team routing, full rule wording) the core points to; refreshed on every `along init` / `along update`, written only at a FULL root.
 2. `CLAUDE.md`: Scaffolds the standard `@AGENTS.md` import line.
 3. `.gitattributes`: Configures `merge=union` for `.along/HISTORY.md` and `.along/DECISIONS.md` to prevent merge collisions across branches.
-4. `.along/`: Creates the persistent repository memory skeleton (`ISSUES/`, `DECISIONS/`, `MILESTONES/`, `RISKS/`, `SPIKES/`, `CHECKLISTS/`, `SESSIONS/`, `docs/`).
+4. `.along/`: Creates the persistent repository memory skeleton (`ISSUES/`, `DECISIONS/`, `MILESTONES/`, `SESSIONS/`, `docs/`; `GLOSSARY.md` and the `VISION.md` skeleton at the repository root - a nested context under a FULL ancestor creates them on first use).
 5. `VISION.md`: A root `VISION.md` is moved into `.along/VISION.md` (or merged under a `needs-restructure` marker the agent resolves); there is never a second copy.
 6. Pipeline: rule packs, git merge drivers, runtime hooks, migration.
 
@@ -4002,7 +3954,7 @@ sequenceDiagram
 ```
 
 ### Step 1: Morning Sync & Task Triage
-- Launch `/along-dash` to inspect sprint KPIs, active blockers in `.along/RISKS/`, and the entity DAG.
+- Launch `/along-dash` to inspect sprint KPIs, active blockers (issues tagged `risk`), and the entity DAG.
 - Review active issues in `.along/ISSUES.md` or inspect milestone progress via `along milestone list` and `along milestone show <slug>`.
 
 ### Step 2: Task Claiming & Atomic Session Start
@@ -4187,7 +4139,7 @@ flowchart TD
 ## 1. Bootstrap & Repository Protocol Management
 
 ### `along-init`
-- **What it is**: The foundation bootstrapping engine for Along in any repository. Scaffolds or refreshes root `AGENTS.md` (carrying the managed protocol block), `CLAUDE.md`, `.gitattributes` (with `merge=union`), and the `.along/` directory skeleton (`ISSUES/`, `DECISIONS.md`, `MILESTONES/`, `RISKS/`, `SPIKES/`, `CHECKLISTS/`, `SESSIONS/`, `docs/`).
+- **What it is**: The foundation bootstrapping engine for Along in any repository. Scaffolds or refreshes root `AGENTS.md` (carrying the managed protocol block), `CLAUDE.md`, `.gitattributes` (with `merge=union`), and the `.along/` directory skeleton (`ISSUES/`, `DECISIONS.md`, `MILESTONES/`, `SESSIONS/`, `docs/`; `GLOSSARY.md` and the `VISION.md` skeleton only where the context is not nested under a FULL ancestor).
 - **Architectural Rationale**:
   - *Idempotent Managed Block*: Never overwrites custom human developer instructions in `AGENTS.md`; only refreshes the block between `<!-- BEGIN ALONG-PROTOCOL ... -->` and `<!-- END ALONG-PROTOCOL -->`.
   - *Core + On-Demand Reference*: the block is a small always-loaded core; situational procedure lives in the managed `docs/topic--along-protocol.md` (rendered from `skills/along-init/protocol-reference.md` at FULL roots, refreshed only while it carries the managed marker), pulled via `/along-kb-search`. Both are rendered for the active gate strictness profile.
@@ -4413,7 +4365,7 @@ flowchart TD
 ---
 
 ### `along-kb-search`
-- **What it is**: Ultra-fast, token-efficient multi-scope search engine across Knowledge Base (`docs/`) and living project memory (`ISSUES/`, `DECISIONS.md`, `MILESTONES/`, `RISKS/`, `SESSIONS/`).
+- **What it is**: Ultra-fast, token-efficient multi-scope search engine across Knowledge Base (`docs/`) and living project memory (`ISSUES/` including spikes, `DECISIONS.md`, `MILESTONES/`, `SESSIONS/`). Categories: `all`, `kb`, `issue`, `decision`, `milestone`, `session`.
 - **Architectural Rationale**:
   - *Targeted Snippet Window Extraction*: Instead of reading whole multi-kilobyte documents into prompt context, retrieves concise word-boundary aligned snippet windows (typically under 150 tokens), verifiable via `--stats`.
   - *Multi-Tier Relevance Scoring & IDF Weighting*: Ranks results using word-boundary token matching, lightweight stemming, smoothed inverse document frequency (IDF), and exact phrase matching with AND semantics by default (`--any` for OR).
@@ -4421,7 +4373,7 @@ flowchart TD
 - **Invocation Triggers**:
   - *Explicit*: `/along-kb-search "<query>" [--category <cat>] [--any] [--prefix] [--stats]`, `along kb-search` (fallback: `python ~/.along/bin/along_exec.py kb-search`).
   - *Semantic / Automatic*: Recommended first step for agents when researching domain architecture, investigating existing decisions, or mapping blast radius.
-- **Entities Operated On**: `docs/`, `.along/ISSUES/`, `.along/DECISIONS.md`, `.along/MILESTONES/`, `.along/RISKS/`, `.along/SPIKES/`, `.along/SESSIONS/`.
+- **Entities Operated On**: `docs/`, `.along/ISSUES/`, `.along/DECISIONS.md`, `.along/MILESTONES/`, `.along/SESSIONS/`.
 - **Ecosystem Chaining**: Used by Scout and Supervisor in `along-team` during Phase 1 (Research).
 
 ---
@@ -4469,7 +4421,7 @@ flowchart TD
 ### `along-wrap`
 - **What it is**: Unified session and stage wrap-up orchestrator. Executes the mandatory completion checklist: runs tests, checks documentation blast radius, moves finished issues to `done/`, reconciles `ISSUES.md`, appends to `HISTORY.md`, compiles engineering provenance, and purges session blackboards.
 - **Architectural Rationale**:
-  - *Consolidated Lifecycle & Engineering Provenance*: Eliminates fragmentation between session wrap-up and stage wrap-up, providing a single deterministic checklist. For multi-step tasks or `along-team` runs, compiles the 3-part provenance into the session log (`## Initial Implementation Plan`, `## Execution & Loop Trace`, `## Verification Walkthrough & Gate Manifest`).
+  - *Consolidated Lifecycle & Engineering Provenance*: Eliminates fragmentation between session wrap-up and stage wrap-up, providing a single deterministic checklist. For multi-step tasks or `along-team` runs, writes the blackboard into the session log as a `## Blackboard Record` (step table, research, execution trace, notes, reviews); attributed paths go to the `files:` front matter and the approved plan is not copied.
   - *Automated Garbage Collection*: Completely cleans up ephemeral blackboard directories (`.along/.session/<slug>/`), ensuring zero leftover state files.
 - **Invocation Triggers**:
   - *Explicit*: `/along-wrap`, `along wrap` (fallback: `python ~/.along/bin/along_exec.py wrap`).

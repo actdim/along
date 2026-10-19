@@ -126,6 +126,7 @@ export const useIssuesView = (
                 <option value="debt">Tech Debt (debt)</option>
                 <option value="task">Task (task)</option>
                 <option value="docs">Docs (docs)</option>
+                <option value="spike">Spike (spike)</option>
               </select>
 
               <select

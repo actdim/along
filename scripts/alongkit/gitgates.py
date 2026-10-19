@@ -366,8 +366,7 @@ def check_doc_routing(paths: Sequence[str], layer: str, read) -> List[Violation]
 
 
 ENTITY_GATE = "entity_reference_integrity"
-ENTITY_SUBDIRS: Tuple[str, ...] = ("ISSUES", "MILESTONES", "RISKS", "SPIKES", "CHECKLISTS",
-                                   "DECISIONS", "SESSIONS")
+ENTITY_SUBDIRS: Tuple[str, ...] = ("ISSUES", "MILESTONES", "DECISIONS", "SESSIONS")
 
 
 def touches_entities(paths: Iterable[str]) -> bool:

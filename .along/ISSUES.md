@@ -1,12 +1,12 @@
 # Active Issues
 
 ## Active
-<!-- No active issues -->
+- [ ] `(debt)` [entity-model-slimming](ISSUES/debt--entity-model-slimming.md)
 
 ## Backlog
 - [ ] `(debt)` [along-core-extras-split](ISSUES/debt--along-core-extras-split.md)
 - [ ] `(debt)` [canonical-path-gate-expansion](ISSUES/debt--canonical-path-gate-expansion.md)
-- [ ] `(debt)` [entity-model-slimming](ISSUES/debt--entity-model-slimming.md)
+- [ ] `(debt)` [dashboard-retire-risk-spike-views](ISSUES/debt--dashboard-retire-risk-spike-views.md)
 - [ ] `(debt)` [gate-config-layers](ISSUES/debt--gate-config-layers.md)
 - [ ] `(docs)` [arxiv-academic-paper-preprint](ISSUES/docs--arxiv-academic-paper-preprint.md)
 - [ ] `(docs)` [engineering-deepdive-medium-devto](ISSUES/docs--engineering-deepdive-medium-devto.md)
@@ -50,6 +50,7 @@
 - [ ] `(feat)` [system-invariants-and-health-probes](ISSUES/feat--system-invariants-and-health-probes.md)
 - [ ] `(feat)` [vps-runner-daemon](ISSUES/feat--vps-runner-daemon.md)
 - [ ] `(feat)` [zero-step-state-recovery-and-drift-detection](ISSUES/feat--zero-step-state-recovery-and-drift-detection.md)
+- [ ] `(spike)` [headless-runtimes-on-linux](ISSUES/spike--headless-runtimes-on-linux.md)
 - [ ] `(task)` [gate-event-remeasure](ISSUES/task--gate-event-remeasure.md)
 - [ ] `(task)` [integrate-actdim-ui-core-runtime](ISSUES/task--integrate-actdim-ui-core-runtime.md)
 - [ ] `(task)` [reconcile-dashboard-ui-core-conventions](ISSUES/task--reconcile-dashboard-ui-core-conventions.md)
@@ -60,4 +61,4 @@
 - [x] `(debt)` [agents-md-core-slimming](ISSUES/done/debt--agents-md-core-slimming.md)
 - [~] `(feat)` [tool-class-model](ISSUES/done/feat--tool-class-model.md)
 - [x] `(debt)` [gate-simplification](ISSUES/done/debt--gate-simplification.md)
-<!-- 277 older completed issue(s) archived in .along/ISSUES/done/ -->
+<!-- 278 older completed issue(s) archived in .along/ISSUES/done/ -->
