@@ -16,7 +16,7 @@ Executes sequential, version-specific migration steps on target repository's str
   - v2.2.27 -> v3.0.0: Version SSOT cleanup & KB schema decoupling:
                      - Strips legacy `protocol_version` from docs/*.md front-matter
                      - Strips ` [vX.Y.Z]` title suffixes from local skills/*/SKILL.md
-  - v4.6.0 (Step 16): RISKS/ -> `debt` issues tagged `risk`, SPIKES/ -> `spike--<slug>`
+  - v4.5.1 (Step 16): RISKS/ -> `debt` issues tagged `risk`, SPIKES/ -> `spike--<slug>`
                      issues, scaffolded CHECKLISTS/ removed, custom ones -> docs/
 
 Usage:

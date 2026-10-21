@@ -9,6 +9,7 @@ priority: medium
 created: 2026-10-17
 updated: 2026-10-19
 agent: claude-code
+milestone: v4.5.1-entity-model-slimming-and-hotfixes
 tags: [entities, simplification, debt]
 parent: feat--autonomous-multi-runtime-mvp
 blocked_by: []

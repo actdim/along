@@ -9,6 +9,7 @@ priority: high
 created: 2026-10-19
 updated: 2026-10-19
 agent: claude
+milestone: v4.5.1-entity-model-slimming-and-hotfixes
 tags: [wrap, closeout, migration, diagnostics]
 blocked_by: []
 related: [debt--agents-md-core-slimming, debt--gate-simplification]

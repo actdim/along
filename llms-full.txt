@@ -2921,7 +2921,7 @@ fails if the engine calls `shutil.move`, `os.remove` or their neighbours directl
 - The live activity traces (`.along/diagnostics/activity_trace.json`, `.along/diagnostics/activity/`) stay.
 - Runs on every migration, including an up-to-date repository (as a heal pass); a second run finds nothing, `--dry-run` only lists the paths.
 
-### `v4.6.0`: Entity Model Slimming (Step 16)
+### `v4.5.1`: Entity Model Slimming (Step 16)
 - The separate risk, spike and checklist entities were removed in `debt--entity-model-slimming`; `step_slim_entity_model` converts what `.along/RISKS/`, `.along/SPIKES/` and `.along/CHECKLISTS/` still hold:
   - a risk becomes a `debt--<slug>` issue tagged `risk` (severity -> priority, mitigation -> `## Mitigation`); a resolved or mitigated risk is closed as `done` in `ISSUES/done/`;
   - a spike becomes a `spike--<slug>` issue (hypothesis and outcome -> sections, `resulting_adr` -> `related`); a concluded spike is closed as `done`;
