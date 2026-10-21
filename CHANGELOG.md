@@ -2,6 +2,17 @@
 
 All notable changes to this project, newest first.
 
+## v4.5.1 - 2026-10-21
+
+- chore: setup v4.5.1 hotfix milestone and carry over v4.5.2
+- fix: Quote description string in along-issue-sync frontmatter (refs #along-issue-sync-frontmatter-quotes)
+- fix: Quote description string in along-issue-sync frontmatter to fix YAML parsing in Antigravity (refs #along-issue-sync-frontmatter-quotes)
+- refactor: Entity model slimmed: spike is an issue type, risk and checklist types retired via migration Step 16, session logs keep files: front matter without plan/file-table copies, session gc archives closed-issue blackboards, nested contexts get no empty VISION/GLOSSARY (refs #entity-model-slimming)
+- refactor: Slim the entity model: spike becomes an issue type, risk and checklist types retire (migration Step 16 converts RISKS/SPIKES/CHECKLISTS with backup and reference rewrite), session logs keep attributed paths as files: front matter without plan or file-table copies, session gc archives blackboards of closed issues, nested contexts get no empty VISION/GLOSSARY, ADR-2026-10-19--entity-model-slimmed (refs #entity-model-slimming)
+- chore: Refresh dashboard-ui KB index projection (refs #wrap-misses-engine-writes)
+- fix: Wrap and session close commit engine-refreshed files (docs/topic--along-protocol.md, AGENTS.md changed only inside managed blocks); migration Step 15 removes retired circuit-breaker and tool-classifier artifacts with backup (refs #wrap-misses-engine-writes)
+- chore: Doc sweep for the AGENTS.md core + protocol reference split, kb-sync per-context slug fix, global reinstall, release v4.5.0 tagged and pushed (refs #release-v4-5-0)
+
 ## v4.5.0 - 2026-10-18
 
 - fix(kb-sync): treat engine-written per-context slugs (dependencies, along-protocol) as standard so strict release gate does not flag them as cross-project collisions; repin reviewed source hashes; hermetic rule now points to the protocol reference (refs #release-v4-5-0)
