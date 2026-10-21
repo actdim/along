@@ -9,7 +9,7 @@ created: 2026-10-15
 updated: 2026-10-15
 agent: antigravity
 tags: [gates, lifecycle, safety, blackboard]
-milestone: v4.5.1-anti-silent-fallback-gate
+milestone: v4.5.2-anti-silent-fallback-gate
 blocked_by: []
 related: []
 ---

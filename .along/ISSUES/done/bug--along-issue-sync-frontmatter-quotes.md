@@ -9,6 +9,7 @@ priority: high
 created: 2026-10-21
 updated: 2026-10-21
 agent: antigravity
+milestone: v4.5.1-hotfix-skill-frontmatter
 tags: []
 blocked_by: []
 related: []
