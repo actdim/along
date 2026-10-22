@@ -6,7 +6,7 @@ type: feat
 status: open
 priority: high
 created: 2026-10-17
-updated: 2026-10-17
+updated: 2026-10-23
 agent: claude-code
 tags: [vps, docker, isolation, environment, mvp]
 milestone: v5.0.0-agent-run-protocol-and-observability
@@ -33,9 +33,11 @@ along env up myproj --repo git@github.com:actdim/along.git
   - `env.yaml` (about 10 lines): repository URL, branch, runtimes, Telegram chat id, egress allowlist additions.
   - `secrets.env`: model API keys, repo-scoped git token, Telegram bot token. Never committed.
   - generated `compose.yaml`.
-- Volumes: repository clone, runtime auth home (`~/.claude`, `~/.codex`, ...), package caches.
-- Image: Ubuntu base, Python with Along, Node, git, the runtimes selected by the spike. Published
-  image plus a Dockerfile for local builds.
+- Volumes: repository clone, runtime auth homes (`~/.claude`, `~/.claude.json`, `~/.opencode`, `~/.codex`), package caches.
+- Image: Ubuntu 24.04 base, Python with Along, Node 20 LTS, git, and the CLI runtimes selected by
+  `spike--headless-runtimes-on-linux` (Claude Code `@anthropic-ai/claude-code`, OpenCode `opencode`,
+  and optional fallback `gemini-cli`/`codex`). Google Antigravity is ruled out and excluded.
+  Published image plus a Dockerfile for local builds.
 - Container runs as a non-root user; the repository volume is the only writable project path.
 - Egress allowlist by default: model APIs, GitHub, PyPI, npm registry, `api.telegram.org`
   (firewall init script in the style of the Claude Code reference devcontainer `init-firewall.sh`).

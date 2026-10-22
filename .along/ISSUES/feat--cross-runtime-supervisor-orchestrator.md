@@ -6,7 +6,7 @@ type: feat
 status: open
 priority: high
 created: 2026-10-13
-updated: 2026-10-13
+updated: 2026-10-23
 agent: antigravity
 tags: [orchestration, multi-runtime, supervisor, along-team, claude-code, antigravity, tiered-models]
 milestone: v5.0.0-agent-run-protocol-and-observability
@@ -46,13 +46,20 @@ There is no supervisor engine capable of orchestrating external CLI processes se
       args: ["--dangerously-skip-permissions"]
     architect:
       runtime: claude-code
+      args: ["--dangerously-skip-permissions"]
     implementer:
-      runtime: antigravity
-      model: flash
+      # Linux Docker recommendation from spike--headless-runtimes-on-linux:
+      # Use Claude Haiku tier, or OpenCode with Gemini Flash / local Ollama.
+      # Antigravity is desktop GUI only and retained for Windows local dev.
+      runtime: claude-code
+      model: claude-3-5-haiku-20241022
+      args: ["--dangerously-skip-permissions"]
     reviewer:
       runtime: claude-code
+      model: claude-3-7-sonnet-20250219
+      args: ["--dangerously-skip-permissions"]
   ```
-- Allow per-issue or per-session override via CLI flags (`along team orchestrate <slug> --implementer antigravity --reviewer claude`).
+- Allow per-issue or per-session override via CLI flags (`along team orchestrate <slug> --implementer claude-code --reviewer claude-code`).
 
 ### 2. Headless Phase Execution & Artifact Handoff
 - The supervisor runs each phase through the respective runtime runner (`alongkit.runner`):
@@ -84,7 +91,9 @@ There is no supervisor engine capable of orchestrating external CLI processes se
 
 Re-scoped under `feat--autonomous-multi-runtime-mvp`:
 - MVP roles: implementer and reviewer only, with the fix-retry loop. Scout and architect come after the loop works.
-- Runtimes and launch commands come from `spike--headless-runtimes-on-linux` (Antigravity may be replaced on Linux).
+- Runtimes and launch commands come from `spike--headless-runtimes-on-linux`: on Linux Docker,
+  Claude Code and OpenCode are the primary runtimes; Antigravity is ruled out for Linux containers
+  (retained for Windows desktop) and replaced by Claude Haiku or OpenCode/Gemini Flash.
 - All handoff goes through the files defined in `feat--cross-runtime-handoff-entities`: the prompt
   payload is `along brief <slug> --role <role>`, the reviewer writes a front-matter verdict, every
   run writes a run record, a run that needs input writes a question file and exits `needs-input`.
@@ -96,7 +105,7 @@ Re-scoped under `feat--autonomous-multi-runtime-mvp`:
 
 - [ ] CLI command `along team orchestrate <slug>` implemented in `scripts/along_exec.py`.
 - [ ] Role-to-runtime configuration schema supported and validated.
-- [ ] Multi-runtime phase execution tested with Antigravity and Claude Code adapters.
+- [ ] Multi-runtime phase execution tested with Claude Code, OpenCode, and Antigravity adapters.
 - [ ] Phase handoff succeeds using file-based blackboard state without cross-process memory leakage.
 - [ ] Reviewer failure correctly triggers Implementer re-execution within the retry limit.
 - [ ] Clean ASCII formatting with zero forbidden typography characters (`along sanitize` passes).

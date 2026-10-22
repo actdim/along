@@ -50,15 +50,14 @@
 - [ ] `(feat)` [system-invariants-and-health-probes](ISSUES/feat--system-invariants-and-health-probes.md)
 - [ ] `(feat)` [vps-runner-daemon](ISSUES/feat--vps-runner-daemon.md)
 - [ ] `(feat)` [zero-step-state-recovery-and-drift-detection](ISSUES/feat--zero-step-state-recovery-and-drift-detection.md)
-- [ ] `(spike)` [headless-runtimes-on-linux](ISSUES/spike--headless-runtimes-on-linux.md)
 - [ ] `(task)` [gate-event-remeasure](ISSUES/task--gate-event-remeasure.md)
 - [ ] `(task)` [integrate-actdim-ui-core-runtime](ISSUES/task--integrate-actdim-ui-core-runtime.md)
 - [ ] `(task)` [reconcile-dashboard-ui-core-conventions](ISSUES/task--reconcile-dashboard-ui-core-conventions.md)
 
 ## Done (recent)
+- [x] `(spike)` [headless-runtimes-on-linux](ISSUES/done/spike--headless-runtimes-on-linux.md)
 - [x] `(feat)` [anti-silent-fallback-gate](ISSUES/done/feat--anti-silent-fallback-gate.md)
 - [x] `(feat)` [ste-cnl-specification-engine](ISSUES/done/feat--ste-cnl-specification-engine.md)
 - [~] `(feat)` [automated-ui-screenshots-and-visual-verification](ISSUES/done/feat--automated-ui-screenshots-and-visual-verification.md)
 - [x] `(task)` [release-v4-5-1](ISSUES/done/task--release-v4-5-1.md)
-- [x] `(bug)` [along-issue-sync-frontmatter-quotes](ISSUES/done/bug--along-issue-sync-frontmatter-quotes.md)
-<!-- 284 older completed issue(s) archived in .along/ISSUES/done/ -->
+<!-- 285 older completed issue(s) archived in .along/ISSUES/done/ -->
