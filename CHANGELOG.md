@@ -2,6 +2,15 @@
 
 All notable changes to this project, newest first.
 
+## v4.5.2 - 2026-10-23
+
+- feat: Anti-silent-fallback gate: gate denials are ledger events settled by retry, plan approval or a user-verified ack; Stop gate unresolved_gate_denial; along gates denials/ack; closeout, wrap and issue done refuse unsettled denials (--force-reason under bypass rules). (refs #anti-silent-fallback-gate)
+- feat: Gate denials are ledger events settled by retry, approval or user-verified ack; Stop gate unresolved_gate_denial; along gates denials/ack; closeout, wrap and issue done refuse unsettled denials (--force-reason under bypass rules); ADR-2026-10-23--gate-denials-are-ledger-events (refs #anti-silent-fallback-gate)
+- chore: Supersede automated-ui-screenshots with along-webdev-runner, add along-report-engine and along-storage-providers issues, refresh milestone progress (refs #along-webdev-runner)
+- feat(ste): implement Controlled Natural Language specification engine and issue scaffold (refs #ste-cnl-specification-engine)
+- feat: Implement STE-CNL specification format convention and issue scaffold (refs #ste-cnl-specification-engine)
+- docs: reconcile v4.5.1 release history, milestone, and Step 16 migration scope
+
 ## v4.5.1 - 2026-10-21
 
 - chore: setup v4.5.1 hotfix milestone and carry over v4.5.2

@@ -1,4 +1,4 @@
-# ActDim Along (v4.5.1) - Full Documentation Context
+# ActDim Along (v4.5.2) - Full Documentation Context
 
 > [![Tests](https://github.com/actdim/along/actions/workflows/tests.yml/badge.svg)](https://github.com/actdim/along/actions/workflows/tests.yml) - Python 3.10-3.13 on Linux and Windows.
 
@@ -6,11 +6,11 @@
 
 ## Document: README.md (Overview)
 
-# ActDim Along (v4.5.1)
+# ActDim Along (v4.5.2)
 
 [![Tests](https://github.com/actdim/along/actions/workflows/tests.yml/badge.svg)](https://github.com/actdim/along/actions/workflows/tests.yml) - Python 3.10-3.13 on Linux and Windows.
 
-ActDim Along is a provider-agnostic context and memory protocol for AI coding agents (`ALONG-PROTOCOL v4.5.1`) that provides persistent in-repo task tracking, an evergreen architecture wiki, and mechanical quality gates across Claude Code, Google Antigravity, OpenAI Codex, and OpenCode.
+ActDim Along is a provider-agnostic context and memory protocol for AI coding agents (`ALONG-PROTOCOL v4.5.2`) that provides persistent in-repo task tracking, an evergreen architecture wiki, and mechanical quality gates across Claude Code, Google Antigravity, OpenAI Codex, and OpenCode.
 
 ---
 
@@ -227,7 +227,7 @@ MIT License. See [LICENSE](./LICENSE) for details.
 ## Document: AGENTS.md (Agent Conventions & Protocol)
 
 <!-- BEGIN ALONG-PROTOCOL root (managed by along-init - do not edit by hand) -->
-# ALONG-PROTOCOL v4.5.1
+# ALONG-PROTOCOL v4.5.2
 
 This repo carries its own agent context, provider-agnostically. Follow it every session, whatever tool you are. This is the core; procedures (completion checklist, doc routing, merges, along-team, tool-use rules) live in `docs/topic--along-protocol.md` - pull the section you need via `/along-kb-search`. A gate's error message carries its detail.
 
@@ -3817,7 +3817,7 @@ along init
 *(Or invoke `/along-init` directly inside your AI agent prompt: the skill runs `along init` and then does the judgment steps.)*
 
 ### What `along init` Configures:
-1. `AGENTS.md`: Generates the root protocol context with the managed `ALONG-PROTOCOL v4.5.1` block (a short REF block in a nested folder of the same git repository; a hand-written file keeps its text under `## Project specifics`). The block is a small core (state locations, issue anchoring, gates) rendered for the active gate strictness profile.
+1. `AGENTS.md`: Generates the root protocol context with the managed `ALONG-PROTOCOL v4.5.2` block (a short REF block in a nested folder of the same git repository; a hand-written file keeps its text under `## Project specifics`). The block is a small core (state locations, issue anchoring, gates) rendered for the active gate strictness profile.
    - `docs/topic--along-protocol.md`: the managed on-demand protocol reference (completion checklist, documentation routing tree, merge rules, along-team routing, full rule wording) the core points to; refreshed on every `along init` / `along update`, written only at a FULL root.
 2. `CLAUDE.md`: Scaffolds the standard `@AGENTS.md` import line.
 3. `.gitattributes`: Configures `merge=union` for `.along/HISTORY.md` and `.along/DECISIONS.md` to prevent merge collisions across branches.
