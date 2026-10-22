@@ -1,7 +1,7 @@
 # Active Issues
 
 ## Active
-- [ ] `(feat)` [anti-silent-fallback-gate](ISSUES/feat--anti-silent-fallback-gate.md)
+<!-- No active issues -->
 
 ## Backlog
 - [ ] `(debt)` [along-core-extras-split](ISSUES/debt--along-core-extras-split.md)
@@ -56,9 +56,9 @@
 - [ ] `(task)` [reconcile-dashboard-ui-core-conventions](ISSUES/task--reconcile-dashboard-ui-core-conventions.md)
 
 ## Done (recent)
+- [x] `(feat)` [anti-silent-fallback-gate](ISSUES/done/feat--anti-silent-fallback-gate.md)
 - [x] `(feat)` [ste-cnl-specification-engine](ISSUES/done/feat--ste-cnl-specification-engine.md)
 - [~] `(feat)` [automated-ui-screenshots-and-visual-verification](ISSUES/done/feat--automated-ui-screenshots-and-visual-verification.md)
 - [x] `(task)` [release-v4-5-1](ISSUES/done/task--release-v4-5-1.md)
 - [x] `(bug)` [along-issue-sync-frontmatter-quotes](ISSUES/done/bug--along-issue-sync-frontmatter-quotes.md)
-- [x] `(debt)` [entity-model-slimming](ISSUES/done/debt--entity-model-slimming.md)
-<!-- 283 older completed issue(s) archived in .along/ISSUES/done/ -->
+<!-- 284 older completed issue(s) archived in .along/ISSUES/done/ -->

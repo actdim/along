@@ -3,7 +3,8 @@ protocol: along
 protocol_version: "4.4.14"
 slug: anti-silent-fallback-gate
 type: feat
-status: in-progress
+status: done
+completed: 2026-10-23
 priority: high
 created: 2026-10-15
 updated: 2026-10-23
