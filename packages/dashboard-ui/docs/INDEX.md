@@ -4,7 +4,7 @@ slug: INDEX
 title: Along Dashboard UI (`@along/dashboard-ui`) - Knowledge Base Topic Index
 type: index
 created: 2026-09-29
-updated: 2026-10-21
+updated: 2026-10-22
 tags: [index, kb, topics, map]
 ---
 

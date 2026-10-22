@@ -188,7 +188,10 @@ TASK / GOAL
 ### Phase 0: Analyze & Requirement Extraction (Supervisor)
 1. Bind and initialize: `along start <slug>` (binds this agent session to the issue; parallel sessions keep their own bindings), then `along scratch init <slug> [--title <title>] [--steps <N>]`, which makes the blackboard `role-based`. Inspect status with `along scratch state <slug>` and `along plan status`. If `.along/.session/<slug>/state.json` already exists and `--restart` is not passed, resume from `current_step` with recorded step status and retry counters intact.
 2. Read target `.along/ISSUES/<type>--<slug>.md` (or user prompt) and `.along/DECISIONS.md`.
-3. Construct an explicit **Requirement Traceability Matrix** decomposing the user request into atomic requirements (`REQ-1`, `REQ-2`, `REQ-3`).
+3. Construct an explicit **Requirement Traceability Matrix** decomposing the user request into atomic requirements (`REQ-1`, `REQ-2`, `REQ-3`) adhering to the Controlled Natural Language (STE-CNL) pattern:
+   - Pattern: `[Subject] + MUST | MUST NOT + [one verifiable action] + [object] + [condition]`.
+   - Exactly one observable, testable action per requirement.
+   - Forbid vague qualifiers: `should`, `could`, `might`, `preferably`, `appropriate`, `various`, `as needed`, `etc.`.
 4. Classify task size (`S`, `M`, or `L/XL`). Announce routing decision and requirement matrix.
 5. **Workspace Mode & Environment Readiness Gate** [gate: worktree-env-readiness]: Evaluate `--worktree` flag, configuration (`workspace: worktree`), and semantic isolation intent. If worktree mode is requested, verify runtime and filesystem readiness via `along worktree is_supported` or engine verification. If a cross-OS mount is detected, degrade gracefully to in-place mode (`workspace: inherit`) with an explicit warning. If other readiness prerequisites cannot be guaranteed (uncommitted merge conflicts, broken repository), agent **MUST IMMEDIATELY HALT WITH AN ERROR**. Silent unannounced fallback is prohibited. Announce selected workspace mode (`workspace: worktree` or `workspace: inherit`).
 
@@ -203,7 +206,7 @@ TASK / GOAL
    - Search (`grep`) for all occurrences of modified entities across public entry points (`README.md`, `AGENTS.md`, `docs/`, `package.json`).
    - Run `/along-graph-impact` (or `along graph-impact <target>`) on planned modifications to evaluate callers, affected flows, and candidate test suites before finalizing steps.
    - Run `/along-graph-arch` (or `along graph-arch`) when refactoring core modules to detect coupling hotspots and avoid architectural regressions.
-2. Formulate a **Living Plan** with 2 to 5 ordered steps mapped to `REQ-N` (`Revision 1 - Baseline`).
+2. Formulate a **Living Plan** with 2 to 5 ordered steps mapped to `REQ-N` (`Revision 1 - Baseline`). All requirements mapped to steps MUST strictly follow the STE-CNL pattern (`[Subject] + MUST | MUST NOT + [one verifiable action] + [object] + [condition]`) without vague terms (`should`, `appropriate`, `as needed`), ensuring implementer models execute them literally without ambiguity.
 3. Each plan MUST declare an explicit `## Execution Mode` (`Direct` | `Role-Based (along-team)`) based on the Adaptive Complexity Escalation thresholds. Each step must define: target files/symbols, expected behavior mapped to `REQ-N`, and verifiable acceptance criteria.
 4. **Dual-Track UI & Artifact Projection**:
    - **Track 1 (Host IDE UI Projection)**: When running under Google Antigravity, project the Living Plan to `<appDataDir>/brain/<id>/implementation_plan.md` with `ArtifactMetadata` (`RequestFeedback: true`, `UserFacing: true`). This triggers Antigravity's native interactive design doc card with user checkboxes and the "Proceed" button.

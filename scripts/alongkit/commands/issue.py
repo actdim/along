@@ -108,7 +108,8 @@ def _issue_create(repo_root: str, args: List[str], issues_dir: str, today: str):
                 "## Acceptance Criteria\n- [ ] Task requirement 1\n- [ ] Outcome recorded\n\n"
                 "## Outcome\n")
     else:
-        body = ("Describe the feature, requirements, and background context here.\n\n"
+        body = ("Describe the problem, goals, and background context here.\n\n"
+                "## Requirements\n- REQ-1: [Subject] MUST [one verifiable action] [object] [condition].\n\n"
                 "## Acceptance Criteria\n- [ ] Task requirement 1\n- [ ] Automated tests passing\n")
     content = f"""---
 protocol: along

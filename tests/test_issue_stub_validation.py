@@ -90,6 +90,29 @@ class TestIssueStubValidationUnit(unittest.TestCase):
         self.assertTrue(is_stub)
         self.assertTrue(any("Describe the feature" in r for r in reasons))
 
+    def test_01b_detects_ste_scaffold_placeholders(self):
+        ste_scaffold = """---
+protocol: along
+slug: ste-feature
+type: feat
+status: open
+---
+# STE Feature
+
+Describe the problem, goals, and background context here.
+
+## Requirements
+- REQ-1: [Subject] MUST [one verifiable action] [object] [condition].
+
+## Acceptance Criteria
+- [ ] Task requirement 1
+- [ ] Automated tests passing
+"""
+        is_stub, reasons = entities.is_issue_stub(ste_scaffold)
+        self.assertTrue(is_stub)
+        self.assertTrue(any("Describe the problem" in r for r in reasons))
+        self.assertTrue(any("[Subject] MUST" in r for r in reasons))
+
     def test_02_detects_task_requirement_1_even_if_checked(self):
         content = """---
 protocol: along

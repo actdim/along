@@ -598,6 +598,14 @@ class TestIssueCreateCommand(unittest.TestCase):
         self.assertIn("## Backlog\n<!-- No backlog issues -->", content_empty)
         self.assertIn("## Done (recent)\n<!-- No completed issues -->", content_empty)
 
+    def test_24f_create_generates_ste_cnl_requirements_scaffold(self):
+        res = self._run_create("feat", "ste-test-feature")
+        self.assertEqual(res.returncode, 0, f"{res.stdout}\n{res.stderr}")
+        data, content = self._read_issue("feat--ste-test-feature.md")
+        self.assertIn("## Requirements", content)
+        self.assertIn("REQ-1: [Subject] MUST [one verifiable action] [object] [condition].", content)
+        self.assertIn("## Acceptance Criteria", content)
+
 
 class TestDoctorEntitiesCommand(unittest.TestCase):
     """

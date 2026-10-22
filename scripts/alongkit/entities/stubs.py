@@ -21,8 +21,9 @@ from .vocabulary import DELIVERED_ISSUE_STATUSES
 _CRITERION_RE = re.compile(r"^\s*[-*]\s+\[([ xX])\]\s+")
 
 SCAFFOLD_PLACEHOLDER_PATTERNS: Tuple[re.Pattern, ...] = (
-    re.compile(r"^\s*Describe the (?:feature|bug|technical debt|documentation|spike)(?:[,\s]|$)", re.IGNORECASE),
+    re.compile(r"^\s*Describe the (?:feature|bug|technical debt|documentation|spike|problem)(?:[,\s]|$)", re.IGNORECASE),
     re.compile(r"^\s*Task requirement \d+\b", re.IGNORECASE),
+    re.compile(r"\[Subject\]\s+MUST", re.IGNORECASE),
 )
 
 
