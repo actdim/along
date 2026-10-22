@@ -11,7 +11,7 @@ agent: antigravity
 tags: [code-review, impact-analysis, quality-gate, mcp]
 milestone: v2.0.0-along-transition
 blocked_by: []
-related: [feat--automated-ui-screenshots-and-visual-verification, feat--agentic-goals-and-mandatory-checklists]
+related: [feat--along-webdev-runner, feat--agentic-goals-and-mandatory-checklists]
 ---
 
 # Agentic Code Review & Blast Radius Impact Assessment Protocol
@@ -30,4 +30,10 @@ Establish a mandatory, automated **Agentic Code Review & Impact Radius Assessmen
    - Updated `skills/along-wrap-session/SKILL.md` and `skills/along-wrap-stage/SKILL.md` to enforce Code Review as a mandatory step in the wrap-up pipeline.
 3. **ADR #008 Logged**:
    - Logged architectural decision in `.along/DECISIONS.md`.
+
+## Acceptance Criteria
+- [x] Code Review & Blast Radius assessment guidelines added to `AGENTS.md` and `protocol.md`.
+- [x] Completion checklist carries the code review item (diff inspection, impact radius, ADR compliance).
+- [x] Wrap-up skills enforce code review as a mandatory step.
+- [x] Architectural decision recorded in `.along/DECISIONS.md`.
 

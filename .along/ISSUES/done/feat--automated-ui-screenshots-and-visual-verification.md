@@ -2,15 +2,17 @@
 protocol: along
 slug: automated-ui-screenshots-and-visual-verification
 type: feat
-status: open
+status: superseded
+completed: 2026-10-22
 priority: medium
 created: 2026-08-27
-updated: 2026-09-10
+updated: 2026-10-22
 agent: antigravity
 tags: [ui, visual-testing, web, verification, screenshots, backlog]
 milestone: v2.0.0-along-transition
 blocked_by: []
 related: [feat--agentic-code-review-and-impact-radius-assessment]
+superseded_by: feat--along-webdev-runner
 ---
 
 # Automated UI Screenshots & Visual Verification Attached to Issues
@@ -40,9 +42,7 @@ When agents build frontend features, UI components, or fix visual layout bugs, t
   ```
 - Expose visual comparisons in the executive dashboard (`/along-dash`).
 
-## Acceptance Criteria
-- [ ] Visual verification capture runner specified and integrated.
-- [ ] Standard convention for saving and embedding visual proof in `.along/ISSUES/` established.
-- [ ] Slash command / CLI script implemented for capturing local web routes.
-- [ ] Dashboard updated to preview attached visual verification assets.
+## Acceptance Criteria (Superseded)
+- [x] Scope handed over to `feat--along-webdev-runner` (browser runner, capture, diagnostics) and `feat--along-report-engine` (embedding visual proof into reports).
+- [x] No implementation landed under this issue; the original criteria (capture runner, proof embedding convention, CLI, dashboard preview) are tracked by the superseding issues.
 
