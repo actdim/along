@@ -167,6 +167,8 @@ gates:
     title: "Mandatory Issue Anchoring"
     description: "Blocks modifying repository source code without an in-progress issue"
     event: PreToolUse
+    # Its denials are the way to anchoring, not abandoned work [feat--anti-silent-fallback-gate].
+    denial: procedural
     tools: [write_to_file, write_file, replace_file_content, edit_file, patch_file, create_file]
     rule:
       type: predicate
@@ -220,6 +222,20 @@ gates:
       type: predicate
       handler: alongkit.hooks.predicates.check_test_before_stop
       error: "Turn completion rejected by [gate: test-before-stop]: Source files were modified, but automated tests have not been executed afterward. Run tests via '/along-test' or 'python .along/scripts/test.py'."
+
+  - id: unresolved_gate_denial
+    profiles:
+      strict: block
+      standard: block
+      light: warn
+    title: "Unresolved Gate Denials Before Turn Termination"
+    description: "Blocks turn completion while a tool call a gate denied in this turn was neither redone within the gate's rules nor acknowledged to the user (along gates ack)"
+    event: Stop
+    enforce_unbound: false
+    rule:
+      type: predicate
+      handler: alongkit.hooks.predicates.check_unresolved_denials
+      error: "Turn completion rejected by [gate: unresolved-gate-denial]: a denied tool call is unresolved. Redo it within the gate's rules, or tell the user and run 'along gates ack'."
 
   - id: wrap_before_stop
     profiles:
@@ -467,6 +483,8 @@ gates:
     # Sessions not bound to an issue are not held unless enforce_unbound: true
     # (.along/rules/gates.yaml).
     enforce_unbound: false
+    # Its denials settle once the plan is approved [feat--anti-silent-fallback-gate].
+    denial: procedural
     rule:
       type: predicate
       handler: alongkit.hooks.predicates.check_mutation_authorization

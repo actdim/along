@@ -242,20 +242,95 @@ def save_activity_trace(repo_root: str, data: Dict[str, Any], key: Optional[str]
         pass
 
 
-def record_gate_denial(event: HookEvent, repo_root: Optional[str], gate: str, reason: Optional[str]) -> None:
-    """An enforced gate held the event: note it in the bound issue's execution trace.
+#: Open denials kept per agent session in the activity trace (for retry matching).
+OPEN_DENIALS_MAX: int = 50
 
-    See [bug--session-records-not-captured] REQ-2.
+
+def _target_digest(event: HookEvent) -> Optional[str]:
+    """Stable digest of the command or path an event acts on (raw, never stored as text)."""
+    import hashlib
+    from .config import audit_target
+    target = audit_target(event)
+    return hashlib.sha256(target.encode("utf-8")).hexdigest()[:16] if target else None
+
+
+def record_gate_denial(event: HookEvent, repo_root: Optional[str], gate: str, reason: Optional[str],
+                       procedural: bool = False) -> None:
+    """An enforced gate held the event: note it in the bound issue's execution trace and, for a
+    held tool call, as a `deny` event in its ledger (once per gate and target while open).
+
+    `procedural` marks gates whose denial is the normal way to the plan (settled by a later
+    approval). Stop denials are not tool calls: their gate holds the turn by itself.
+    See [bug--session-records-not-captured] REQ-2, [feat--anti-silent-fallback-gate].
     """
     if not repo_root:
         return
+    key = event_session_key(event)
     first = (reason or "").strip().splitlines()[0] if (reason or "").strip() else ""
     first = first if len(first) <= 160 else first[:157] + "..."
-    session.trace_event(repo_root, event_session_key(event), f"denied [{gate}] {event.tool_name}: {first}",
-                        collapse=True)
+    session.trace_event(repo_root, key, f"denied [{gate}] {event.tool_name}: {first}", collapse=True)
     # A later bypass flag for this gate must follow a failure the user saw.
     from .. import bypass
-    bypass.record_hook_denial(repo_root, gate, event_session_key(event))
+    bypass.record_hook_denial(repo_root, gate, key)
+    if event.event_type == HookEventType.PRE_TOOL_USE:
+        _record_denial_event(event, repo_root, key, gate, first, procedural)
+
+
+def _record_denial_event(event: HookEvent, repo_root: str, key: Optional[str], gate: str,
+                         reason: str, procedural: bool) -> None:
+    import hashlib
+    from .config import _get_audit_redactor, audit_target
+    if not session.bound_blackboard(repo_root, key)[1]:
+        return
+    digest = _target_digest(event)
+    trace = load_activity_trace(repo_root, key)
+    open_denials = [d for d in trace.get("open_denials") or [] if isinstance(d, dict)]
+    if any(d.get("gate") == gate and d.get("digest") == digest for d in open_denials):
+        return
+    now = session._utc_now_iso()
+    target = audit_target(event)
+    redactor = _get_audit_redactor()
+    seed = f"{now}|{gate}|{event.tool_name}|{digest}|{len(open_denials)}"
+    did = "d-" + hashlib.sha256(seed.encode("utf-8")).hexdigest()[:6]
+    record = session.record_event(repo_root, key, "deny", extra={
+        "id": did, "gate": gate, "tool": event.tool_name,
+        "target": redactor.sanitize_text(target) if target else None,
+        "reason": redactor.sanitize_text(reason) if reason else None,
+        "procedural": True if procedural else None,
+    })
+    if not record or procedural:
+        return
+    open_denials.append({"id": did, "gate": gate, "digest": digest, "ts": now})
+    trace["open_denials"] = open_denials[-OPEN_DENIALS_MAX:]
+    save_activity_trace(repo_root, trace, key)
+
+
+def _resolve_retried_denials(event: HookEvent, repo_root: str, key: Optional[str],
+                             trace: Dict[str, Any]) -> None:
+    """An allowed event on the target of an open denial settles it (`resolve`, via retry).
+
+    A file write counts once it succeeded (PostToolUse); any other tool when the gates let
+    it through (PreToolUse) or once it ran (PostToolUse, after the user allowed an ask).
+    """
+    open_denials = [d for d in trace.get("open_denials") or [] if isinstance(d, dict)]
+    if not open_denials or event.event_type not in (HookEventType.PRE_TOOL_USE, HookEventType.POST_TOOL_USE):
+        return
+    if event.tool_name in WRITE_TOOLS and event.event_type != HookEventType.POST_TOOL_USE:
+        return
+    digest = _target_digest(event)
+    if not digest:
+        return
+    remaining = []
+    for denial in open_denials:
+        if denial.get("digest") == digest:
+            session.record_event(repo_root, key, "resolve", extra={"id": denial.get("id"), "via": "retry"})
+            session.trace_event(repo_root, key, f"resolved denial {denial.get('id')} [{denial.get('gate')}] by retry",
+                                collapse=True)
+        else:
+            remaining.append(denial)
+    if len(remaining) != len(open_denials):
+        trace["open_denials"] = remaining
+        save_activity_trace(repo_root, trace, key)
 
 
 def record_tool_activity(event: HookEvent, repo_root: str) -> None:
@@ -296,6 +371,7 @@ def record_tool_activity(event: HookEvent, repo_root: str) -> None:
     now_iso = datetime.now(timezone.utc).isoformat()
     key = event_session_key(event)
     trace = load_activity_trace(repo_root, key)
+    _resolve_retried_denials(event, repo_root, key, trace)
 
     # Track file edits: repository files outside .along/ (agent state is not source), plus the
     # lifecycle hooks in .along/scripts/ [feat--rule-pack-protection-gate].
@@ -1023,6 +1099,36 @@ def check_team_reviews_before_stop(event: HookEvent, repo_root: str, **kwargs: A
         f"Turn Completion Rejected [gate: team-reviews-before-stop]: along-team steps {missing} of '{slug}' "
         f"are passed without a review record ({files} in .along/.session/{slug}/). Write the Reviewer's "
         "verdict there, or set the step back to in-progress."
+    )
+
+
+def check_unresolved_denials(event: HookEvent, repo_root: str, options: Optional[Dict[str, Any]] = None,
+                             **kwargs: Any) -> Optional[str]:
+    """Hold turn completion while a tool call a gate denied in this turn is neither retried
+    within the gate's rules nor acknowledged (`along gates ack`): no silent fallback.
+
+    The turn starts at the user's last message; without one on record every open denial of
+    the bound issue counts. Quiet for unbound sessions (unless `enforce_unbound: true`).
+    [feat--anti-silent-fallback-gate]
+    """
+    if not repo_root:
+        return None
+    key = event_session_key(event)
+    if not _enforce_unbound(options) and is_unbound(repo_root, key):
+        return None
+    ctx, slug = session.bound_blackboard(repo_root, key)
+    if not ctx or not slug:
+        return None
+    turn_start = session.last_user_prompt_at(repo_root, key)
+    held = [d for d in session.denial_status(ctx, slug)
+            if d["state"] == session.DENIAL_OPEN and (turn_start is None or str(d["ts"]) >= turn_start)]
+    if not held:
+        return None
+    return (
+        f"Turn Completion Rejected [gate: unresolved-gate-denial]: {len(held)} tool call(s) denied by a gate "
+        f"in this turn are unresolved: {session.format_denials(held)}. Either redo the work within the "
+        "gate's rules, or tell the user plainly what was not done and why, then record it with "
+        f"'along gates ack <id> --note \"...\"' (or --all). Do not report the task as complete."
     )
 
 

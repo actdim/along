@@ -25,7 +25,7 @@ Each issue in progress has a blackboard in `.along/.session/<slug>/` (not tracke
 | `plan.md` | the approved plan, with `## Revision N` sections | `ExitPlanMode`, `along plan approve --plan-file`, the agent |
 | `research.md` | findings (role-based work) | the agent |
 | `execution_trace.md` | edits, test runs and results, gate denials, approvals, phase and step changes | hooks and Along commands |
-| `events.jsonl` | the event ledger: one record per edit, test run, plan and approval, used for attribution | hooks and Along commands |
+| `events.jsonl` | the event ledger: one record per edit, test run, plan, approval and gate denial (with its resolve / ack), used for attribution and closeout | hooks and Along commands |
 | `reviews/step-N.md` | step verdicts (role-based work) | the agent |
 
 `along start` creates a `direct` blackboard, `along scratch init` a `role-based` one (held to the

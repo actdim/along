@@ -158,7 +158,8 @@ Manages atomic issue files in `.along/ISSUES/` and recompiles the active board p
   - `along issue show <slug> [--json]` (alias: `along issue get`): Displays detailed summary of an issue, including frontmatter metadata, priority, status, milestone, and body excerpt.
     - Options: `--json` outputs structured JSON payload.
   - `along issue done <slug> [options...]`: Marks the issue as completed, records `completed: YYYY-MM-DD`, and moves the file into `.along/ISSUES/done/`. In the same transaction the issue's blackboard (if any) is archived into today's session log `.along/SESSIONS/<YYYY>/<date>--<slug>.md` and, with status `done`, the key is added to its `issues_completed` (the log is created without a blackboard too); the blackboard is purged after the commit. See [Session Lifecycle](./topic--session-lifecycle.md).
-    - Options: `--status {done,superseded,cancelled,duplicate}`, `--superseded-by <slug>`, `--duplicate-of <slug>`.
+    - Options: `--status {done,superseded,cancelled,duplicate}`, `--superseded-by <slug>`, `--duplicate-of <slug>`, `--force-reason "..."`.
+    - Closing as `done` / `superseded` refuses while the blackboard holds gate denials that are open or acknowledged without a user reply since (see `along gates denials`); `--force-reason` passes under the bypass rules (the refusal first, then the user's reply) and is recorded. `cancelled` / `duplicate` are not held. [feat--anti-silent-fallback-gate]
   - `along issue reopen <slug>`: Moves a closed issue from `.along/ISSUES/done/` back to `.along/ISSUES/`, sets `status: open`, removes `completed` / `superseded_by` / `duplicate_of`, restores sibling links and recompiles `.along/ISSUES.md` (one transaction). Session logs that list it as completed stay as they are. Resume with `along start <slug>`.
   - `along issue sync`: Recompiles `.along/ISSUES.md` deterministically from atomic files in `.along/ISSUES/` and `.along/ISSUES/done/`, then runs the entity reference integrity gate (`validate_entities`): dangling references or schema / enum violations that are absent at `HEAD` exit `1` in `enforce` mode and only warn in `shadow` mode; problems already present at `HEAD` are printed as a warning and never fail it. A `parent` found in an enclosing context is printed as `<key>: parent <parent> (found in <ctx>)`.
   - `along issue list`: Lists all active in-progress and open issues in the terminal.
@@ -636,10 +637,14 @@ Runs the commit-time gate subset (catalogue entries with `git` or `ci` in `enfor
   - `along gates check --hook commit-msg <file>`: Issue binding and AI co-author trailers in the message.
   - `along gates check --ci [--range R] [--no-links] [--json]`: Every non-merge commit message in the range, the range diff, projection freshness of the checkout, and link integrity (`along kb-sync --check`). The range defaults to `origin/$GITHUB_BASE_REF...HEAD` for PRs, `$ALONG_CI_BEFORE..HEAD` for pushes, else `HEAD^..HEAD`. Used by `.github/workflows/tests.yml`.
   - `along gates stats [--since YYYY-MM-DD]`: Per-gate blocked / warned / bypassed counts aggregated from `.along/diagnostics/hooks_audit.jsonl` (shadow-mode records, `decision: "warn"`, count as warnings; `decision: bypass` entries as bypasses), then "Repeated blocks": identical (gate, target) blocks >= 3 in one conversation, a loop indicator. Each audit entry ends with `target` (the judged command or file path, redacted, at most 200 chars); entries without it fall back to the reason. Read-only.
+  - `along gates denials [--slug SLUG] [--json]`: Gate denials of the bound issue (or `--slug`) from its event ledger: `open`, `resolved (retry)` (the same command or path later went through; a write counts once it succeeded), `resolved (approve)` (a `denial: procedural` gate - `require_plan_approval`, `require_active_issue` - after the plan approval), or `acked` (verified once the user replied after the ack). Read-only. [feat--anti-silent-fallback-gate]
+  - `along gates ack (ID... | --all) --note "..." [--slug SLUG]`: Records that the user was told what a denied tool call left undone (`ack` ledger event plus a trace line). Releases [gate: unresolved_gate_denial] at turn end; `along wrap`, `along issue done` and `along session close` accept it once the user has replied after it. Exit `2` without `--note` or with an unknown id.
 - **Usage**:
   ```bash
   along gates check --ci --range origin/main...HEAD
   along gates stats --since 2026-10-01
+  along gates denials
+  along gates ack d-1a2b3c --note "force push not done: held by the gate, left to the user"
   ```
 
 ### `along lint`

@@ -28,6 +28,13 @@ FALLBACK_GATES: List[BaseGate] = [
 ]
 
 
+def _is_procedural(gate: BaseGate) -> bool:
+    """A catalogue entry with `denial: procedural`: its denials are the normal way to the
+    plan and settle on a later approval. [feat--anti-silent-fallback-gate]"""
+    options = getattr(getattr(gate, "defn", None), "options", None) or {}
+    return str(options.get("denial") or "").strip().lower() == "procedural"
+
+
 class HookEngine:
     """Orchestrates gate evaluation for an incoming HookEvent."""
 
@@ -79,7 +86,8 @@ class HookEngine:
                 record_audit_entry(effective_root, event, result, gate_mode)
 
                 if self.config.is_enforcing(gate.name):
-                    record_gate_denial(event, effective_root, result.gate_name or gate.name, result.reason)
+                    record_gate_denial(event, effective_root, result.gate_name or gate.name, result.reason,
+                                       procedural=_is_procedural(gate))
                     if result.decision in (GateDecision.ASK, GateDecision.FORCE_ASK):
                         # Runtimes with a native ask keep it; the rest cannot prompt.
                         if event.runtime not in ASK_CAPABLE_RUNTIMES:

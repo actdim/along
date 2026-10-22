@@ -378,6 +378,8 @@ def _item(ctx: str, slug: str, bindings: List[Dict[str, Any]], prefix: str,
         reasons.append(f"acceptance criteria {criteria[0]}/{criteria[1]} ticked")
     if ledger_error:
         reasons.append(f"event ledger write failed {ledger_error.get('count')} time(s): attribution incomplete")
+    if has_blackboard:
+        reasons.extend(session.denial_blockers(ctx, slug))
 
     key = entities.canonical_key(issue["type"], issue["slug"]) if issue else slug
     return {

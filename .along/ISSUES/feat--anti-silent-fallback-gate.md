@@ -3,10 +3,10 @@ protocol: along
 protocol_version: "4.4.14"
 slug: anti-silent-fallback-gate
 type: feat
-status: open
+status: in-progress
 priority: high
 created: 2026-10-15
-updated: 2026-10-15
+updated: 2026-10-23
 agent: antigravity
 tags: [gates, lifecycle, safety, blackboard]
 milestone: v4.5.2-anti-silent-fallback-gate
@@ -46,12 +46,18 @@ As a result, LLM agents frequently exhibit silent fallback behavior: when a tool
    - Handler `alongkit.hooks.predicates.check_unresolved_denials` checks for unresolved denials incurred during the current turn.
    - Reject turn completion if unacknowledged pre-tool denials occurred during the turn.
 
+## Design Change (approved plan, 2026-10-22)
+
+Built on existing machinery instead of a new journal and flag ([ADR-2026-10-23--gate-denials-are-ledger-events]):
+- Denials are `deny` events in the issue's event ledger (`.along/.session/<slug>/events.jsonl`), settled by `resolve` (retry on the same target, or a later `approve` for `denial: procedural` gates) or disclosed by `ack` (`along gates ack --note`), verified once the user replied after it.
+- The explicit override is the existing `--force-reason` under `bypass.guard(wrap-checks)` (a reason, the refusal first, the user's reply after it), now also on `along issue done`, instead of a new `--bypass-denial` flag.
+
 ## Acceptance Criteria
 
-- [ ] Gate denials (`decision: deny`) during an active session are appended to `.along/.session/<slug>/gate_denials.jsonl`.
-- [ ] `along issue done` and `along wrap` verify `.along/.session/<slug>/gate_denials.jsonl` and block execution if unresolved denials exist.
-- [ ] Added `--bypass-denial "<reason>"` flag to `along issue done` and `along wrap` to record explicit human acknowledgement.
-- [ ] Added declarative `unresolved_gate_denial` gate on `Stop` event in `default_gates.yaml`.
-- [ ] Hermetic tests verify denial logging, closeout blocking, stop-gate triggering, and resolution via retry or explicit bypass.
-- [ ] Clean ASCII check (`along sanitize`) passes and tests pass with zero failures.
+- [x] Enforced gate denials of a bound session's tool calls are recorded as `deny` events in `.along/.session/<slug>/events.jsonl` (gate, tool, redacted target, reason, id).
+- [x] `along issue done` and `along wrap` (delivered statuses) and closeout readiness refuse while denials are open or acknowledged without a user reply since.
+- [x] Explicit human override: `--force-reason "<reason>"` on `along wrap` and `along issue done` under the bypass rules; disclosure via `along gates ack <id> --note "..."`; listing via `along gates denials`.
+- [x] Added declarative `unresolved_gate_denial` gate on `Stop` event in `default_gates.yaml` (strict/standard block, light warn).
+- [x] Hermetic tests (`tests/test_anti_silent_fallback.py`) verify denial logging, retry and approval resolution, stop-gate triggering and release by ack, closeout blocking, and the `--force-reason` path.
+- [x] Clean ASCII check (`along sanitize`) passes and tests pass with zero failures.
 

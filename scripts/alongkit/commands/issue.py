@@ -148,7 +148,7 @@ related: []
 
 def _issue_done(repo_root: str, args: List[str], issues_dir: str, done_dir: str, today: str):
     if len(args) < 2:
-        print("[Error] Usage: along_exec.py issue done <slug> [--status done|superseded|cancelled|duplicate] [--superseded-by <key>] [--duplicate-of <key>]", file=sys.stderr)
+        print("[Error] Usage: along_exec.py issue done <slug> [--status done|superseded|cancelled|duplicate] [--superseded-by <key>] [--duplicate-of <key>] [--force-reason \"...\"]", file=sys.stderr)
         sys.exit(1)
     require_entity_name(args[1].lower(), "along issue done|cancel <slug> [--status ...]")
 
@@ -157,6 +157,7 @@ def _issue_done(repo_root: str, args: List[str], issues_dir: str, done_dir: str,
     parser.add_argument("--status", "-s", default="done")
     parser.add_argument("--superseded-by", default=None)
     parser.add_argument("--duplicate-of", default=None)
+    parser.add_argument("--force-reason", default=None)
     parsed, extra = parser.parse_known_args(args[1:])
     check_unknown_args(extra, "along issue done")
 
@@ -253,6 +254,20 @@ def _issue_done(repo_root: str, args: List[str], issues_dir: str, done_dir: str,
             for f in unrecorded:
                 print(f"  - {f}", file=sys.stderr)
             sys.exit(2)
+    # [feat--anti-silent-fallback-gate]: a denied tool call is redone or disclosed to the user;
+    # --force-reason passes under the bypass rules (reason, the user's reply after the failure).
+    if has_blackboard and target_status in entities.DELIVERED_ISSUE_STATUSES:
+        denial_reasons = session.denial_blockers(repo_root, bare_slug)
+        if denial_reasons:
+            from alongkit import bypass
+            if not parsed.force_reason:
+                bypass.record_failure(repo_root, bypass.WRAP_CHECKS)
+                print(f"[Error] Cannot close issue '{islug}' as {target_status}: gate denials are not settled:\n"
+                      + "\n".join(f"  - {r}" for r in denial_reasons)
+                      + "\n  See 'along gates denials', or pass --force-reason \"...\".", file=sys.stderr)
+                sys.exit(2)
+            if bypass.guard(repo_root, bypass.WRAP_CHECKS, parsed.force_reason, slug=bare_slug) is None:
+                sys.exit(2)
     tx = transaction.FileTransaction(repo_root, label=f"issue-done-{bare_slug}")
     try:
         tx.protect(found_file)
@@ -673,6 +688,7 @@ def handle_issue_command(repo_root: str, args: List[str]):
         print("  create <type> <slug> --title \"Title\" [--priority high|medium|low] [--tags \"t1,t2\"] [--agent <name>] [--milestone <name>|--no-milestone]")
         print("  update <slug> [--milestone <name>] [--priority <high|medium|low>] [--status <status>] [--tags <t1,t2>] [--title <title>]")
         print("  done   <slug> [--status done|superseded|cancelled|duplicate] [--superseded-by <key>] [--duplicate-of <key>]")
+        print("                            [--force-reason \"...\"]  (past unsettled gate denials, after the user's reply)")
         print("  cancel <slug>             Close as cancelled (moved to done/)")
         print("  delete <slug>             Remove an issue created by mistake (refused once sessions, commits")
         print("                            or parent/superseded_by/duplicate_of references name it)")

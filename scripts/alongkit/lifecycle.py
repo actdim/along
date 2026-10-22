@@ -1101,6 +1101,20 @@ def execute_wrap(
             return 2
         forced.append(f"Wrapped without a recorded plan: {force_reason}")
 
+    # [feat--anti-silent-fallback-gate]: a denied tool call is redone or disclosed to the user.
+    denial_reasons = session.denial_blockers(repo_root, clean_slug) \
+        if has_blackboard and status in entities.DELIVERED_ISSUE_STATUSES else []
+    if denial_reasons:
+        if not force_reason:
+            _check_failed()
+            print(f"[Error] Wrap aborted: gate denials of '{clean_slug}' are not settled:\n"
+                  + "\n".join(f"  - {r}" for r in denial_reasons)
+                  + "\n  See 'along gates denials', or pass --force-reason \"...\".", file=sys.stderr)
+            return 2
+        if not _force_allowed():
+            return 2
+        forced.append(f"Wrapped with unsettled gate denials ({'; '.join(denial_reasons)}): {force_reason}")
+
     if has_blackboard:
         unrecorded = session.unrecorded_files(repo_root, clean_slug)
         if unrecorded:

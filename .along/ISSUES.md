@@ -1,7 +1,7 @@
 # Active Issues
 
 ## Active
-<!-- No active issues -->
+- [ ] `(feat)` [anti-silent-fallback-gate](ISSUES/feat--anti-silent-fallback-gate.md)
 
 ## Backlog
 - [ ] `(debt)` [along-core-extras-split](ISSUES/debt--along-core-extras-split.md)
@@ -21,7 +21,6 @@
 - [ ] `(feat)` [along-report-engine](ISSUES/feat--along-report-engine.md)
 - [ ] `(feat)` [along-storage-providers](ISSUES/feat--along-storage-providers.md)
 - [ ] `(feat)` [along-webdev-runner](ISSUES/feat--along-webdev-runner.md)
-- [ ] `(feat)` [anti-silent-fallback-gate](ISSUES/feat--anti-silent-fallback-gate.md)
 - [ ] `(feat)` [autonomous-gate-profile](ISSUES/feat--autonomous-gate-profile.md)
 - [ ] `(feat)` [autonomous-multi-runtime-mvp](ISSUES/feat--autonomous-multi-runtime-mvp.md)
 - [ ] `(feat)` [byoc-kubernetes-operator-and-private-sandboxes](ISSUES/feat--byoc-kubernetes-operator-and-private-sandboxes.md)

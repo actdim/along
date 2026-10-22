@@ -90,7 +90,7 @@ When a stage or session completes, agents MUST execute in this order:
 1. [ ] **Tests** [gate: test_before_stop]: Run via `/along-test` with quiet flags. Zero failures.
 2. [ ] **File Integrity**: `git status -u` - all new/modified files non-zero size, no empty placeholders.
 3. [ ] **Code Review**: Inspect diff for side effects, verify REQ-N coverage, evaluate blast radius via `along graph-impact` (or static search), verify architectural decision compliance.
-4. [ ] **Entity Reconciliation**: Close issues (`done` + move to `done/`), update milestones, record the `## Outcome` of a spike.
+4. [ ] **Entity Reconciliation**: Close issues (`done` + move to `done/`), update milestones, record the `## Outcome` of a spike. [gate: unresolved_gate_denial]: every tool call a gate denied is redone within the gate's rules or disclosed (`along gates denials`, `along gates ack <id> --note "..."`); `along wrap` / `along issue done` refuse until the user has replied to a disclosure (`--force-reason` after their reply).
 5. [ ] **Doc Blast Radius**: Update affected `docs/topic--*.md`, `README.md` and Project specifics; add new terms to `.along/GLOSSARY.md` (create it on first use); touch `.along/VISION.md` only if scope/roadmap changed; run `/along-kb-sync`.
 6. [ ] **Session Log & Wrap** [gate: wrap_before_stop]: `along wrap <slug> --summary "<summary>" (--decisions <ADR...> | --no-decisions)` writes `.along/SESSIONS/<YYYY>/<date>--<slug>.md` (summary, decisions, attributed `files:`, blackboard record), compiles projections, and appends to `.along/HISTORY.md` (provide `--summary` or let it fallback to issue title).
 7. [ ] **Projections** [gate: projection_sync_before_stop]: Run `/along-issue-sync` and `/along-decision-sync`.

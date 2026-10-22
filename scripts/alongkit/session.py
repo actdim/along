@@ -1062,7 +1062,10 @@ def trace_test_run(repo_root: str, ok: bool, source: str) -> Optional[str]:
 
 EVENTS_FILENAME: str = "events.jsonl"
 EVENT_SCHEMA: int = 1
-EVENT_KINDS: Tuple[str, ...] = ("edit", "test", "tool", "plan", "approve")
+EVENT_KINDS: Tuple[str, ...] = ("edit", "test", "tool", "plan", "approve", "deny", "resolve", "ack")
+#: Fields an `extra` dict may add to a ledger record (gate denials and their outcome).
+#: [feat--anti-silent-fallback-gate]
+EVENT_EXTRA_FIELDS: Tuple[str, ...] = ("id", "gate", "tool", "target", "reason", "procedural", "via", "note")
 PATH_KINDS: Tuple[str, ...] = ("source", "docs", "state")
 #: Events kept per issue; when exceeded, the oldest edit events go first.
 EVENTS_MAX: int = 2000
@@ -1120,12 +1123,17 @@ def _report_ledger_error(repo_root: str, slug: str, error: str) -> None:
 
 
 def append_event(ctx: str, slug: str, key: Optional[str], kind: str, path: Optional[str] = None,
-                 ok: Optional[bool] = None) -> Optional[Dict[str, Any]]:
+                 ok: Optional[bool] = None, extra: Optional[Dict[str, Any]] = None) -> Optional[Dict[str, Any]]:
     """Append one ledger record to the blackboard of `slug` in `ctx`. `path` is already
-    workspace-relative. A failed write is reported (stderr + ledger_errors.json), not raised."""
+    workspace-relative. `extra` adds the `EVENT_EXTRA_FIELDS` it holds (others are dropped);
+    the record stays schema 1, readers ignore fields they do not know.
+    A failed write is reported (stderr + ledger_errors.json), not raised."""
     event: Dict[str, Any] = {"schema": EVENT_SCHEMA, "ts": _utc_now_iso(), "session": key, "slug": slug,
                              "kind": kind, "path": path, "path_kind": path_kind(path) if path else None,
                              "ok": ok}
+    for field in EVENT_EXTRA_FIELDS:
+        if extra and extra.get(field) is not None:
+            event[field] = extra[field]
     target = events_path(ctx, slug)
     try:
         with open(target, "a", encoding="utf-8", newline="\n") as handle:
@@ -1139,13 +1147,13 @@ def append_event(ctx: str, slug: str, key: Optional[str], kind: str, path: Optio
 
 
 def record_event(repo_root: str, key: Optional[str], kind: str, path: Optional[str] = None,
-                 ok: Optional[bool] = None) -> Optional[Dict[str, Any]]:
+                 ok: Optional[bool] = None, extra: Optional[Dict[str, Any]] = None) -> Optional[Dict[str, Any]]:
     """Ledger record for the issue session `key` is bound to; `path` relative to `repo_root`.
     Nothing for an unbound session (its changes stay unattributed)."""
     ctx, slug = bound_blackboard(repo_root, key)
     if not slug or not ctx:
         return None
-    return append_event(ctx, slug, key, kind, workspace_path(repo_root, path) if path else None, ok)
+    return append_event(ctx, slug, key, kind, workspace_path(repo_root, path) if path else None, ok, extra)
 
 
 def load_events(ctx: str, slug: str) -> List[Dict[str, Any]]:
@@ -1200,6 +1208,91 @@ def attributed_files(ctx: str, slug: str) -> Dict[str, Dict[str, Any]]:
         if event.get("session") and event["session"] not in entry["sessions"]:
             entry["sessions"].append(event["session"])
     return files
+
+
+# ---------------------------------------------------------------------------
+# Gate denials [feat--anti-silent-fallback-gate]
+#
+# An enforced gate denial is a `deny` ledger event. It is settled by a `resolve` event (the
+# same target later went through), by a later `approve` event when the gate is procedural
+# (the denial was the way to the plan), or disclosed by an `ack` event that counts once the
+# user has replied after it.
+# ---------------------------------------------------------------------------
+
+DENIAL_OPEN: str = "open"
+DENIAL_RESOLVED: str = "resolved"
+DENIAL_ACKED: str = "acked"
+
+
+def denial_status(ctx: str, slug: str) -> List[Dict[str, Any]]:
+    """Every gate denial of `slug`, oldest first: id, gate, tool, target, reason, ts, session,
+    state (open | resolved | acked), via (retry | approve), note, and for an ack `verified`
+    (True: the user replied after it; False: not yet; None: the runtime records no user
+    messages, so the ack is allowed unverified, as for bypasses)."""
+    denials: Dict[str, Dict[str, Any]] = {}
+    order: List[str] = []
+    approvals: List[int] = []
+    for idx, event in enumerate(load_events(ctx, slug)):
+        kind = event.get("kind")
+        did = str(event.get("id") or "")
+        if kind == "approve":
+            approvals.append(idx)
+        elif kind == "deny" and did:
+            if did not in denials:
+                order.append(did)
+            denials[did] = {"id": did, "gate": event.get("gate"), "tool": event.get("tool"),
+                            "target": event.get("target"), "reason": event.get("reason"),
+                            "ts": event.get("ts"), "session": event.get("session"),
+                            "procedural": bool(event.get("procedural")), "idx": idx,
+                            "state": DENIAL_OPEN, "via": None, "note": None, "verified": None,
+                            "ack_ts": None, "ack_session": None}
+        elif kind == "resolve" and did in denials:
+            denials[did].update(state=DENIAL_RESOLVED, via=event.get("via") or "retry")
+        elif kind == "ack" and did in denials and denials[did]["state"] != DENIAL_RESOLVED:
+            denials[did].update(state=DENIAL_ACKED, note=event.get("note"),
+                                ack_ts=event.get("ts"), ack_session=event.get("session"))
+    out: List[Dict[str, Any]] = []
+    for did in order:
+        item = denials[did]
+        if item["state"] != DENIAL_RESOLVED and item["procedural"] and any(a > item["idx"] for a in approvals):
+            item.update(state=DENIAL_RESOLVED, via="approve")
+        if item["state"] == DENIAL_ACKED:
+            prompt = last_user_prompt_at(ctx, item["ack_session"])
+            if prompt is None:
+                item["verified"] = None
+            else:
+                p_at, a_at = _iso_to_epoch(prompt), _iso_to_epoch(str(item["ack_ts"]))
+                item["verified"] = bool(p_at is not None and a_at is not None and p_at > a_at)
+        del item["idx"]
+        out.append(item)
+    return out
+
+
+def denial_blockers(ctx: str, slug: str) -> List[str]:
+    """Why `slug` cannot close because of its gate denials (empty when nothing holds it)."""
+    items = denial_status(ctx, slug)
+    open_items = [d for d in items if d["state"] == DENIAL_OPEN]
+    waiting = [d for d in items if d["state"] == DENIAL_ACKED and d["verified"] is False]
+    reasons: List[str] = []
+    if open_items:
+        reasons.append(f"{len(open_items)} gate denial(s) unresolved ({format_denials(open_items, 3)}): "
+                       "retry within the gate's rules, or tell the user and run 'along gates ack'")
+    if waiting:
+        reasons.append(f"{len(waiting)} acknowledged gate denial(s) awaiting the user's reply "
+                       f"({format_denials(waiting, 3)})")
+    return reasons
+
+
+def format_denials(items: List[Dict[str, Any]], limit: int = 5) -> str:
+    """`id [gate] target` for the first `limit` denials, `; `-separated."""
+    parts = []
+    for d in items[:limit]:
+        target = str(d.get("target") or d.get("tool") or "")
+        target = target if len(target) <= 60 else target[:57] + "..."
+        parts.append(f"{d['id']} [{d.get('gate')}] {target}".rstrip())
+    if len(items) > limit:
+        parts.append(f"+{len(items) - limit} more")
+    return "; ".join(parts)
 
 
 # ---------------------------------------------------------------------------
@@ -1346,6 +1439,15 @@ def render_blackboard_markdown(repo_root: str, slug: str, reason: Optional[str] 
             n = int(s.get("step", 0))
             has_review = "yes" if os.path.isfile(review_file(repo_root, slug, n)) else "no"
             out.append(f"| {n} | {s.get('title', '')} | {s.get('status', '')} | {s.get('retries', 0)} | {has_review} |")
+        out.append("")
+    # Denied tool calls that were not redone: what the work left out [feat--anti-silent-fallback-gate].
+    unsettled = [d for d in denial_status(repo_root, slug) if d["state"] != DENIAL_RESOLVED]
+    if unsettled:
+        out.append("### Disclosed Gate Denials\n")
+        for d in unsettled:
+            state = "acknowledged" if d["state"] == DENIAL_ACKED else "never resolved"
+            out.append(f"- {d['id']} [{d.get('gate')}] {d.get('target') or d.get('tool') or ''} "
+                       f"({state}){': ' + str(d['note']) if d.get('note') else ''}")
         out.append("")
     # Attributed files go to the log's `files:` front matter (`attributed_file_list`), and
     # the approved plan is not copied: git and the plan gate already hold both

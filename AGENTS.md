@@ -30,6 +30,7 @@ Runtime hooks enforce these where installed; elsewhere (`along doctor` shows the
 - [gate: cli_safety] - file content via file tools, never heredocs or `python -c`; no global installs.
 - [gate: team-step-active] [gate: team-reviews-before-stop] - an `along-team` blackboard holds you to its step loop.
 - [gate: test_before_stop] [gate: wrap_before_stop] [gate: projection_sync_before_stop] - before stopping: tests green, session wrapped, projections synced.
+- [gate: unresolved_gate_denial] - a denied tool call is redone within the gate's rules or told to the user (`along gates ack`), never dropped silently; closing waits for their reply.
 - Commit-time (`along lint`, pre-commit + CI): ASCII typography, fence languages, relative links, no `docs/` -> `.along/` links, Windows-safe names, no secrets, no stubs.
 - Bypass is the user's call: `-n`, `--force-reason`, `scratch fallback` need `--reason` after their reply; recorded in `along gates stats`.
 
