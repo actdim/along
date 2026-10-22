@@ -18,8 +18,10 @@
 - [ ] `(feat)` [agent-run-protocol-and-observability](ISSUES/feat--agent-run-protocol-and-observability.md)
 - [ ] `(feat)` [agent-runtime-adapters-claude-codex-opencode](ISSUES/feat--agent-runtime-adapters-claude-codex-opencode.md)
 - [ ] `(feat)` [along-plan-strategies](ISSUES/feat--along-plan-strategies.md)
+- [ ] `(feat)` [along-report-engine](ISSUES/feat--along-report-engine.md)
+- [ ] `(feat)` [along-storage-providers](ISSUES/feat--along-storage-providers.md)
+- [ ] `(feat)` [along-webdev-runner](ISSUES/feat--along-webdev-runner.md)
 - [ ] `(feat)` [anti-silent-fallback-gate](ISSUES/feat--anti-silent-fallback-gate.md)
-- [ ] `(feat)` [automated-ui-screenshots-and-visual-verification](ISSUES/feat--automated-ui-screenshots-and-visual-verification.md)
 - [ ] `(feat)` [autonomous-gate-profile](ISSUES/feat--autonomous-gate-profile.md)
 - [ ] `(feat)` [autonomous-multi-runtime-mvp](ISSUES/feat--autonomous-multi-runtime-mvp.md)
 - [ ] `(feat)` [byoc-kubernetes-operator-and-private-sandboxes](ISSUES/feat--byoc-kubernetes-operator-and-private-sandboxes.md)
@@ -46,7 +48,6 @@
 - [ ] `(feat)` [per-model-rework-metrics](ISSUES/feat--per-model-rework-metrics.md)
 - [ ] `(feat)` [pi-harness-support](ISSUES/feat--pi-harness-support.md)
 - [ ] `(feat)` [planning-fields-and-ordering-gates](ISSUES/feat--planning-fields-and-ordering-gates.md)
-- [ ] `(feat)` [ste-cnl-specification-engine](ISSUES/feat--ste-cnl-specification-engine.md)
 - [ ] `(feat)` [system-invariants-and-health-probes](ISSUES/feat--system-invariants-and-health-probes.md)
 - [ ] `(feat)` [vps-runner-daemon](ISSUES/feat--vps-runner-daemon.md)
 - [ ] `(feat)` [zero-step-state-recovery-and-drift-detection](ISSUES/feat--zero-step-state-recovery-and-drift-detection.md)
@@ -56,9 +57,9 @@
 - [ ] `(task)` [reconcile-dashboard-ui-core-conventions](ISSUES/task--reconcile-dashboard-ui-core-conventions.md)
 
 ## Done (recent)
+- [x] `(feat)` [ste-cnl-specification-engine](ISSUES/done/feat--ste-cnl-specification-engine.md)
+- [~] `(feat)` [automated-ui-screenshots-and-visual-verification](ISSUES/done/feat--automated-ui-screenshots-and-visual-verification.md)
+- [x] `(task)` [release-v4-5-1](ISSUES/done/task--release-v4-5-1.md)
 - [x] `(bug)` [along-issue-sync-frontmatter-quotes](ISSUES/done/bug--along-issue-sync-frontmatter-quotes.md)
 - [x] `(debt)` [entity-model-slimming](ISSUES/done/debt--entity-model-slimming.md)
-- [x] `(bug)` [wrap-misses-engine-writes](ISSUES/done/bug--wrap-misses-engine-writes.md)
-- [x] `(task)` [release-v4-5-0](ISSUES/done/task--release-v4-5-0.md)
-- [x] `(debt)` [agents-md-core-slimming](ISSUES/done/debt--agents-md-core-slimming.md)
-<!-- 280 older completed issue(s) archived in .along/ISSUES/done/ -->
+<!-- 283 older completed issue(s) archived in .along/ISSUES/done/ -->
