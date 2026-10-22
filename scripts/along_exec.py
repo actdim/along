@@ -21,6 +21,7 @@ from alongkit.commands import (
     handle_decision_command,
     handle_devenv_command,
     handle_doctor_command,
+    handle_env_command,
     handle_gates_command,
     handle_git_command,
     handle_history_command,
@@ -79,6 +80,7 @@ TOOL_MAPPINGS = {
     "hook": "along_hook.py", "hooks": "along_hook.py",
     "resolve": "along_resolve.py",
     "conflict-check": "along_conflict_check.py", "conflictcheck": "along_conflict_check.py",
+    "env": "along_env.py",
 }
 
 LIFECYCLE_ACTIONS = {"build", "test", "dev", "debug"}
@@ -149,6 +151,7 @@ Entity Management Commands:
   gates check    Commit-time gates outside agent runtimes [--hook pre-commit|commit-msg] [--ci [--range R] [--no-links]] [--json]
   lint           Commit-time checks on demand (alias of 'gates check')
   rules          Rule packs management (attach, status, diff, restore)
+  env            Isolated Docker environment management (up, down, status, logs, shell, update)
   budget         Measure context footprint and check token budgets (--json, --check)
   context-budget Measure context footprint and check token budgets (--json, --check)
   telemetry status Check pending WAL telemetry spool and endpoint connectivity (--json)
@@ -255,6 +258,7 @@ def main():
         "gates": handle_gates_command,
         "lint": handle_lint_command,
         "rules": handle_rules_command,
+        "env": handle_env_command,
         "budget": handle_budget_command,
         "context-budget": handle_budget_command,
         "patch": handle_patch_command,

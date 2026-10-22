@@ -15,6 +15,7 @@ if __name__ == "__main__":
 
 from .decision import handle_decision_command
 from .doctor import handle_doctor_command
+from .env import handle_env_command
 from .gates import handle_gates_command, handle_git_command, handle_lint_command
 from .issue import handle_issue_command
 from .lifecycle import (
@@ -41,6 +42,7 @@ __all__ = [
     "handle_decision_command",
     "handle_devenv_command",
     "handle_doctor_command",
+    "handle_env_command",
     "handle_gates_command",
     "handle_git_command",
     "handle_history_command",

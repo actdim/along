@@ -3,7 +3,8 @@ protocol: along
 protocol_version: "4.4.16"
 slug: isolated-environment-docker
 type: feat
-status: open
+status: done
+completed: 2026-10-23
 priority: high
 created: 2026-10-17
 updated: 2026-10-23
@@ -57,9 +58,9 @@ along env up myproj --repo git@github.com:actdim/along.git
   push) and worker containers without those secrets.
 
 ## Acceptance Criteria
-- [ ] `along env up` on a fresh Ubuntu VPS with Docker produces a running environment in one command.
-- [ ] Writes outside the mounted volumes fail inside the container (verified by a test task).
-- [ ] Egress outside the allowlist fails; allowlisted hosts work.
-- [ ] Runtime login state survives `along env down` and `up`.
-- [ ] `env.yaml` stays under 20 lines for the default case.
-- [ ] Documented in `docs/topic--autonomous-environment.md` (guide).
+- [x] `along env up` on a fresh Ubuntu VPS with Docker produces a running environment in one command.
+- [x] Writes outside the mounted volumes fail inside the container (verified by a test task).
+- [x] Egress outside the allowlist fails; allowlisted hosts work.
+- [x] Runtime login state survives `along env down` and `up`.
+- [x] `env.yaml` stays under 20 lines for the default case.
+- [x] Documented in `docs/topic--autonomous-environment.md` (guide).

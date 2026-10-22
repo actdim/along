@@ -23,6 +23,8 @@ flowchart TD
     INDEX --> T_ALONG_PROTOCOL
     T_ARCHITECTURE["System Architecture & Flow"]
     INDEX --> T_ARCHITECTURE
+    T_AUTONOMOUS_ENVIRONMENT["Autonomous Environment Architecture & Docker Isolation"]
+    INDEX --> T_AUTONOMOUS_ENVIRONMENT
     T_CLI_REFERENCE["Along CLI Command Reference"]
     INDEX --> T_CLI_REFERENCE
     T_DECLARATIVE_GATES_AND_TRACEABILITY["Declarative Gate Engine & Protocol Traceability Matrix"]
@@ -94,6 +96,7 @@ flowchart TD
 - **[Agent Run Protocol (ARP/AEP) & OpenTelemetry Engine](./topic--agent-run-protocol.md)** (architecture) `telemetry`, `opentelemetry`, `openinference`, `tracing`, `arp`, `aep`, `redactor`, `offloader`, `spool`
 - **[Along Protocol Reference](./topic--along-protocol.md)** (reference) `protocol`, `agents-md`, `checklist`, `routing`, `concurrency`, `along-team`, `conventions`
 - **[System Architecture & Flow](./topic--architecture.md)** (architecture) `architecture`, `boundaries`, `multi-agent`, `blackboard`, `concurrency`, `ast`, `flow`
+- **[Autonomous Environment Architecture & Docker Isolation](./topic--autonomous-environment.md)** (topic) `architecture`, `docker`, `isolation`, `autonomous`, `environment`, `security`, `vps`
 - **[Along CLI Command Reference](./topic--cli-reference.md)** (reference) `cli`, `commands`, `router`, `lifecycle`, `tools`, `reference`
 - **[Declarative Gate Engine & Protocol Traceability Matrix](./topic--declarative-gates-and-traceability.md)** (architecture) `hooks`, `gates`, `declarative`, `traceability`, `verification`, `protocol`, `predicates`
 - **[Dependencies & Submodules AI Documentation and Rules](./topic--dependencies.md)** (topic) `dependencies`, `ai-context`, `submodules`, `vendor`, `rules`

@@ -33,6 +33,7 @@ ActDim Along provides repositories with an isolated, durable, and human-readable
 - [docs/topic--agent-run-protocol.md](docs/topic--agent-run-protocol.md): Agent Run Protocol (ARP/AEP) & OpenTelemetry Engine.
 - [docs/topic--along-protocol.md](docs/topic--along-protocol.md): Along Protocol Reference.
 - [docs/topic--architecture.md](docs/topic--architecture.md): System Architecture & Flow.
+- [docs/topic--autonomous-environment.md](docs/topic--autonomous-environment.md): Autonomous Environment Architecture & Docker Isolation.
 - [docs/topic--cli-reference.md](docs/topic--cli-reference.md): Along CLI Command Reference.
 - [docs/topic--declarative-gates-and-traceability.md](docs/topic--declarative-gates-and-traceability.md): Declarative Gate Engine & Protocol Traceability Matrix.
 - [docs/topic--dependencies.md](docs/topic--dependencies.md): Dependencies & Submodules AI Documentation and Rules.

@@ -37,7 +37,6 @@
 - [ ] `(feat)` [enterprise-governance-and-compliance-pack](ISSUES/feat--enterprise-governance-and-compliance-pack.md)
 - [ ] `(feat)` [external-issue-trackers-sync-and-import](ISSUES/feat--external-issue-trackers-sync-and-import.md)
 - [ ] `(feat)` [golang-ecosystem-support](ISSUES/feat--golang-ecosystem-support.md)
-- [ ] `(feat)` [isolated-environment-docker](ISSUES/feat--isolated-environment-docker.md)
 - [ ] `(feat)` [jvm-ecosystem-support](ISSUES/feat--jvm-ecosystem-support.md)
 - [ ] `(feat)` [multi-runtime-and-omnichannel-expansion](ISSUES/feat--multi-runtime-and-omnichannel-expansion.md)
 - [ ] `(feat)` [native-ast-blast-radius-analyzer](ISSUES/feat--native-ast-blast-radius-analyzer.md)
@@ -55,8 +54,8 @@
 
 ## Done (recent)
 - [x] `(spike)` [headless-runtimes-on-linux](ISSUES/done/spike--headless-runtimes-on-linux.md)
+- [x] `(feat)` [isolated-environment-docker](ISSUES/done/feat--isolated-environment-docker.md)
 - [x] `(feat)` [anti-silent-fallback-gate](ISSUES/done/feat--anti-silent-fallback-gate.md)
 - [x] `(debt)` [along-core-extras-split](ISSUES/done/debt--along-core-extras-split.md)
 - [x] `(feat)` [ste-cnl-specification-engine](ISSUES/done/feat--ste-cnl-specification-engine.md)
-- [~] `(feat)` [automated-ui-screenshots-and-visual-verification](ISSUES/done/feat--automated-ui-screenshots-and-visual-verification.md)
-<!-- 286 older completed issue(s) archived in .along/ISSUES/done/ -->
+<!-- 287 older completed issue(s) archived in .along/ISSUES/done/ -->
