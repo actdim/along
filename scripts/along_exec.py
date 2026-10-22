@@ -17,6 +17,7 @@ bootstrap.ensure_deps()
 
 from alongkit import entities, frontmatter, gates, lifecycle, proc, repo
 from alongkit.commands import (
+    handle_brief_command,
     handle_budget_command,
     handle_decision_command,
     handle_devenv_command,
@@ -59,6 +60,7 @@ RECENT_DONE_LIMIT = entities.RECENT_DONE_LIMIT
 compile_issues_board = entities.compile_issues_board
 
 TOOL_MAPPINGS = {
+    "brief": "along_brief.py",
     "kb-sync": "along_kb_sync.py", "kbsync": "along_kb_sync.py",
     "kb-search": "along_kb_search.py", "kbsearch": "along_kb_search.py",
     "dep-scan": "along_dep_scan.py", "depscan": "along_dep_scan.py",
@@ -88,7 +90,7 @@ HELP_FLAGS = ("-h", "--help")
 
 _BOARD_COMMANDS = frozenset({
     "issue", "milestone", "milestones", "start", "begin", "session", "plan", "decision",
-    "scratch", "worktree", "wrap", "commit",
+    "scratch", "worktree", "wrap", "commit", "brief",
 })
 
 
@@ -151,6 +153,7 @@ Entity Management Commands:
   gates check    Commit-time gates outside agent runtimes [--hook pre-commit|commit-msg] [--ci [--range R] [--no-links]] [--json]
   lint           Commit-time checks on demand (alias of 'gates check')
   rules          Rule packs management (attach, status, diff, restore)
+  brief          Generate deterministic role-based brief (along brief <slug> --role <role>)
   env            Isolated Docker environment management (up, down, status, logs, shell, update)
   budget         Measure context footprint and check token budgets (--json, --check)
   context-budget Measure context footprint and check token budgets (--json, --check)
@@ -266,6 +269,7 @@ def main():
         "dev-env": handle_devenv_command,
         "devenv": handle_devenv_command,
         "run": handle_run_command,
+        "brief": handle_brief_command,
     }
 
     if cmd in native_routers and _wants_help(extra_args):

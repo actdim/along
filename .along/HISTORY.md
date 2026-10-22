@@ -224,3 +224,4 @@ _Index of sessions (newest last). One line per session:_
 2026-10-23 - headless-runtimes-on-linux - antigravity - Spike headless agent runtimes on Linux - [Session Log](./SESSIONS/2026/2026-10-23--headless-runtimes-on-linux.md)
 2026-10-23 - along-core-extras-split - antigravity - Define Along Core and modular extras architecture - [Session Log](./SESSIONS/2026/2026-10-23--along-core-extras-split.md)
 2026-10-23 - isolated-environment-docker - antigravity - Implement along env isolated Docker environment CLI and assets - [Session Log](./SESSIONS/2026/2026-10-23--isolated-environment-docker.md)
+2026-10-23 - cross-runtime-handoff-entities - antigravity - Implement cross-runtime handoff entities, run records, claims, and along brief - [Session Log](./SESSIONS/2026/2026-10-23--cross-runtime-handoff-entities.md)

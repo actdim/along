@@ -3,10 +3,11 @@ protocol: along
 protocol_version: "4.4.16"
 slug: cross-runtime-handoff-entities
 type: feat
-status: open
+status: done
+completed: 2026-10-23
 priority: high
 created: 2026-10-17
-updated: 2026-10-17
+updated: 2026-10-23
 agent: claude-code
 tags: [multi-runtime, handoff, blackboard, entities, mvp]
 milestone: v5.0.0-agent-run-protocol-and-observability
@@ -76,8 +77,8 @@ generating a brief from the files above, not by forwarding sessions.
 | orchestrator | `state.json`, run records, verdicts, questions | step transitions, claims, retries |
 
 ## Acceptance Criteria
-- [ ] Schemas for run record, review verdict, question and claim documented in `docs/topic--domain-model.md` and validated.
-- [ ] `along brief <slug> --role <role>` implemented, deterministic, and size-bounded.
-- [ ] A run exiting with `needs-input` leaves an open question file; answering it lets the next run proceed.
-- [ ] A second run cannot claim an issue with a live claim; an expired claim can be taken over.
-- [ ] Automated tests passing.
+- [x] Schemas for run record, review verdict, question and claim documented in `docs/topic--domain-model.md` and validated.
+- [x] `along brief <slug> --role <role>` implemented, deterministic, and size-bounded.
+- [x] A run exiting with `needs-input` leaves an open question file; answering it lets the next run proceed.
+- [x] A second run cannot claim an issue with a live claim; an expired claim can be taken over.
+- [x] Automated tests passing.

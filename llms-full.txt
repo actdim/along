@@ -2720,6 +2720,90 @@ Curated, cross-linked LLM-Wiki articles maintaining domain architecture, API con
 
 ---
 
+### 7. Cross-Runtime Session Entities (`.along/.session/<slug>/`)
+Ephemeral coordination bus enabling disparate vendor runtimes (Claude Code, OpenAI Codex, OpenCode, Antigravity) to execute multi-step workflows without shared memory:
+
+#### 1. Run Records (`.along/.session/<slug>/runs/<run-id>.json`)
+Tracks individual agent runtime executions within an issue session:
+```json
+{
+  "run_id": "run-20261023T014500Z-abcd",
+  "role": "implementer",
+  "runtime": "claude-code",
+  "model": "claude-3-7-sonnet",
+  "step": 1,
+  "start": "2026-10-23T01:45:00Z",
+  "end": "2026-10-23T01:48:30Z",
+  "exit_code": 0,
+  "outcome": "done",
+  "changed_files": ["scripts/alongkit/handoff.py"],
+  "usage": { "input_tokens": 12000, "output_tokens": 1500 },
+  "handoff_note": "handoff.md"
+}
+```
+- **Outcomes**: `done`, `fail`, `needs-input`, `timeout`, `in-progress`.
+- **Usage**: Serves as single source of truth for operator cards and observability.
+
+#### 2. Machine-Readable Review Verdicts (`reviews/step-N.md`)
+Enforces automated gate evaluation via YAML front-matter without brittle prose parsing:
+```yaml
+---
+verdict: fail
+defects:
+  - severity: blocking
+    description: "Missing collision prevention check when acquiring live claim"
+    file: "scripts/alongkit/handoff.py"
+    line: 215
+---
+
+# Step 1 Code Review
+Detailed reviewer critique and evaluation against acceptance criteria.
+```
+- **Severities**: `blocking` (must fix, fails verdict), `important` (should fix, fails verdict), `nit` (informational, passes verdict).
+- **Invariance**: Verdict MUST be `fail` when blocking or important defects are present.
+
+#### 3. Questions Entity (`.along/.session/<slug>/questions/<id>.md`)
+Asynchronous operator clarification mechanism replacing interactive stdin bridges:
+```yaml
+---
+id: q-1
+status: answered
+question: "Which database backend should be selected for session caching?"
+options:
+  - "In-memory dict"
+  - "SQLite blackboard"
+recommended: "In-memory dict"
+answer: "In-memory dict"
+answered_by: "operator"
+created_at: "2026-10-23T01:40:00Z"
+answered_at: "2026-10-23T01:42:00Z"
+---
+
+Additional context regarding throughput requirements.
+```
+- When an agent requires human decision, it writes a question, exits with outcome `needs-input`, and awaits operator resolution.
+
+#### 4. Claim Management (`state.json` `claimed_by`)
+Prevents concurrency collisions across autonomous runner daemons:
+```json
+{
+  "claimed_by": {
+    "run_id": "run-20261023T014500Z-abcd",
+    "runtime": "antigravity",
+    "claimed_at": "2026-10-23T01:45:00Z",
+    "expires_at": "2026-10-23T02:15:00Z"
+  }
+}
+```
+- Active claims block secondary runs on the same issue.
+- Expired claims (`now >= expires_at`) can be taken over automatically.
+
+#### 5. Handoff Notes & Brief Engine (`handoff.md` & `along brief`)
+- **Handoff Note** (`handoff.md`): Compact note (under 25 lines) written at run completion detailing what was done, what remains, and traps.
+- **Brief Engine** (`along brief <slug> --role <role>`): Compiles deterministic, compact, size-bounded prompt payload containing issue goal, `REQ-N`, criteria, step plan, constraints, open defects, answered questions, handoff note, git diff stat, and review policies.
+
+---
+
 ## 3. Graph Invariance & Canonical Slug Linking
 
 To prevent link breakage and dependency graph drift, Along enforces **Canonical Slug Invariance**:

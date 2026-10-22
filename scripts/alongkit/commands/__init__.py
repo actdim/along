@@ -13,6 +13,7 @@ if __name__ == "__main__":
         "Run: python .along/scripts/test.py"
     )
 
+from .brief import handle_brief_command
 from .decision import handle_decision_command
 from .doctor import handle_doctor_command
 from .env import handle_env_command
@@ -38,6 +39,7 @@ from .telemetry import handle_telemetry_command
 from .worktree import handle_worktree_command
 
 __all__ = [
+    "handle_brief_command",
     "handle_budget_command",
     "handle_decision_command",
     "handle_devenv_command",

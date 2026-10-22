@@ -81,6 +81,7 @@ packages = ["scripts/alongkit"]
 # them after an install that has no `scripts/` directory on disk. Listed one by one
 # rather than as a directory, which would nest a second copy of `alongkit` itself;
 # `test_engine_manifest_matches_scripts_dir` asserts this list stays complete.
+"scripts/along_brief.py" = "alongkit/engines/along_brief.py"
 "scripts/along_commit.py" = "alongkit/engines/along_commit.py"
 "scripts/along_conflict_check.py" = "alongkit/engines/along_conflict_check.py"
 "scripts/along_dash.py" = "alongkit/engines/along_dash.py"

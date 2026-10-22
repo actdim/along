@@ -27,7 +27,6 @@
 - [ ] `(feat)` [clean-turn-context-isolation-in-along-team](ISSUES/feat--clean-turn-context-isolation-in-along-team.md)
 - [ ] `(feat)` [cowork-plugin-skill-packaging](ISSUES/feat--cowork-plugin-skill-packaging.md)
 - [ ] `(feat)` [cpp-ecosystem-support](ISSUES/feat--cpp-ecosystem-support.md)
-- [ ] `(feat)` [cross-runtime-handoff-entities](ISSUES/feat--cross-runtime-handoff-entities.md)
 - [ ] `(feat)` [cross-runtime-supervisor-orchestrator](ISSUES/feat--cross-runtime-supervisor-orchestrator.md)
 - [ ] `(feat)` [cursor-agent-and-rules-integration](ISSUES/feat--cursor-agent-and-rules-integration.md)
 - [ ] `(feat)` [dart-flutter-ecosystem-support](ISSUES/feat--dart-flutter-ecosystem-support.md)
@@ -55,7 +54,7 @@
 ## Done (recent)
 - [x] `(spike)` [headless-runtimes-on-linux](ISSUES/done/spike--headless-runtimes-on-linux.md)
 - [x] `(feat)` [isolated-environment-docker](ISSUES/done/feat--isolated-environment-docker.md)
+- [x] `(feat)` [cross-runtime-handoff-entities](ISSUES/done/feat--cross-runtime-handoff-entities.md)
 - [x] `(feat)` [anti-silent-fallback-gate](ISSUES/done/feat--anti-silent-fallback-gate.md)
 - [x] `(debt)` [along-core-extras-split](ISSUES/done/debt--along-core-extras-split.md)
-- [x] `(feat)` [ste-cnl-specification-engine](ISSUES/done/feat--ste-cnl-specification-engine.md)
-<!-- 287 older completed issue(s) archived in .along/ISSUES/done/ -->
+<!-- 288 older completed issue(s) archived in .along/ISSUES/done/ -->
