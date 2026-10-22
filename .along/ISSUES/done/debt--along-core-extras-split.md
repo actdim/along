@@ -3,10 +3,11 @@ protocol: along
 protocol_version: "4.2.0"
 slug: along-core-extras-split
 type: debt
-status: open
+status: done
+completed: 2026-10-23
 priority: low
 created: 2026-09-27
-updated: 2026-09-27
+updated: 2026-10-23
 agent: cowork
 tags: [architecture, scope, packaging, versioning]
 blocked_by: []
@@ -30,6 +31,6 @@ In 54 days the project grew to about 42k lines of Python, 21 skills, 16 gates, 7
 
 ## Acceptance Criteria
 
-- [ ] Core ADR accepted and reflected in VISION.md and README
-- [ ] `pip install actdim-along` installs only Core dependencies
-- [ ] Automated tests passing
+- [x] Core ADR accepted and reflected in VISION.md and README
+- [x] `pip install actdim-along` installs only Core dependencies
+- [x] Automated tests passing

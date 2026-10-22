@@ -27,13 +27,28 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
-# The dashboard is a separate surface: a consumer that only needs the entity lifecycle
-# and the knowledge base must not pay for a web stack.
+# Along Core requires only ruamel.yaml. Optional capabilities are grouped into extras.
+# Additional protocol modules (along-team multi-agent orchestration, worktree sandboxing,
+# code-review-graph AST indexing, and dep-scan) are zero-external-dependency modules
+# activated on demand.
+
+# Executive web dashboard and OpenAPI analytics service.
 dash = [
     "fastapi>=0.110.0",
     "uvicorn>=0.28.0",
     "pydantic>=2.0.0",
     "rich>=13.0.0",
+]
+
+# Telemetry integration: OpenTelemetry spans and OTLP trace export.
+telemetry = [
+    "opentelemetry-api>=1.20.0",
+    "opentelemetry-sdk>=1.20.0",
+]
+
+# All optional extensions: dashboard and telemetry.
+all = [
+    "actdim-along[dash,telemetry]",
 ]
 
 [dependency-groups]

@@ -22,6 +22,24 @@ curl -fsSL https://raw.githubusercontent.com/actdim/along/main/install.sh | bash
 
 The installer bootstraps the repository into `~/.cache/actdim-along/repo` (via shallow `git clone` or archive fallback) and configures skills across Claude Code, OpenAI Codex, Google Antigravity, and OpenCode.
 
+### Python Package Installation (Core vs. Extras)
+
+Along is distributed on PyPI as `actdim-along`. Install Along Core with minimal dependencies or include modular extras:
+
+```bash
+# Core only: minimal runtime dependency (ruamel.yaml>=0.18)
+pip install actdim-along
+
+# Web Dashboard: FastAPI, Uvicorn, Pydantic, and Rich
+pip install actdim-along[dash]
+
+# Telemetry: OpenTelemetry and OpenInference tracing and OTLP export
+pip install actdim-along[telemetry]
+
+# Full suite: install all optional extras
+pip install actdim-along[all]
+```
+
 #### Manual / Local Checkout Installation
 If you prefer to clone the repository manually or are developing Along:
 ```powershell
@@ -117,6 +135,17 @@ flowchart TD
 - **Unified Retrieval Engine (`along kb-search`)**:
   - Unifies both tiers in a single fast local query without vector embeddings, cloud dependencies, or background daemon processes.
   - Returns word-boundary aligned snippets (< 150 tokens) directly to agent prompts, avoiding full-file context ingestion (measured in [scripts/bench_kb_search.py](scripts/bench_kb_search.py)).
+
+### Along Core vs. Modular Extras Architecture
+
+Along enforces a strict minimal-core architecture:
+- **Along Core (`actdim-along`)**: In-repo memory (`.along/`), entity lifecycle (`ISSUES/`, `DECISIONS/`, `MILESTONES/`), projections (`ISSUES.md`, `CONSTRAINTS.md`, `docs/INDEX.md`), bounded snippet retrieval (`along kb-search`), standard lifecycle contracts (`build`, `test`, `dev`, `commit`, `wrap`), and mechanical safety gates. Core runtime dependencies remain strictly minimal (`ruamel.yaml>=0.18`).
+- **Modular Extras**:
+  - `actdim-along[dash]`: Web dashboard UI, Cytoscape DAG visualization, and OpenAPI analytics server.
+  - `actdim-along[telemetry]`: OpenTelemetry / OpenInference tracing and OTLP trace export.
+  - `actdim-along[all]`: All optional extras combined.
+  - Optional protocol modules (`along-team`, git worktree sandboxing, `code-review-graph` AST tools, `along-dep-scan`) operate on-demand with zero extra package dependencies.
+- **Protocol Versioning**: Protocol specification version (`ALONG-PROTOCOL vX.Y.Z`) changes strictly on format or schema updates. Tooling enhancements release as minors; breaking format changes are batched into rare majors with migration automation (`along migrate`).
 
 ---
 

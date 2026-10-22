@@ -32,6 +32,35 @@ ActDim Along is a provider-agnostic, zero-friction agent memory, documentation, 
    - Execution and Verification: `along-build`, `along-test`, `along-dev`, `along-commit`, `along-version-bump`
    - Workspace, Dependencies and Teams: `along-dep-scan`, `along-team`, `along-dash`
 
+## Along Core and Modular Extras Architecture
+
+To maintain reliability, rapid verification, and zero bloat, Along cleanly separates minimal Core capabilities from optional extras (see ADR: Core and Modular Extras Architecture):
+
+### 1. Along Core (`actdim-along`)
+- **Memory Layout**: Git-native transactional memory (`.along/`) with atomic entity files (`ISSUES/`, `DECISIONS/`, `MILESTONES/`, `SESSIONS/`), compiled projections (`ISSUES.md`, `CONSTRAINTS.md`, `docs/INDEX.md`), and lifecycle scripts (`.along/scripts/`).
+- **Retrieval**: Zero-vector local TF-IDF search (`along-kb-search`) returning bounded snippets (<= 150 words) across `docs/` and `.along/` without external vector databases or daemon processes.
+- **Lifecycle and Verification Contracts**: Unified lifecycle commands (`along-build`, `along-test`, `along-dev`), issue-bound conventional commits (`along-commit`), and transactional session wrapping (`along-wrap`).
+- **Essential Mechanical Gates**: Active issue binding (`require-active-issue`), plan approval (`require-plan-approval`), ASCII typography cleanliness, projection protection, and commit issue binding, enforced via runtime hooks and portable baseline git hooks/CI (`along gates check`).
+- **Minimal Core Dependencies**: Runtime dependencies are restricted strictly to `ruamel.yaml>=0.18`.
+
+### 2. Modular Extras and Extensions
+- **Web Dashboard and Analytics (`actdim-along[dash]`)**: Executive web dashboard, Cytoscape DAG visualization, and OpenAPI service (FastAPI, Uvicorn, Pydantic, Rich).
+- **Telemetry and Tracing (`actdim-along[telemetry]`)**: OpenTelemetry / OpenInference tracing and remote OTLP export tooling.
+- **Full Suite (`actdim-along[all]`)**: Installs all optional extras (`actdim-along[dash,telemetry]`).
+- **Modular Protocol Capabilities**: Advanced extensions like `along-team` multi-agent loops, git worktree sandboxing, `along-graph-sync` AST code review graphs, and `along-dep-scan` operate with zero extra runtime package dependencies.
+
+### 3. Installation Matrix
+- Core only: `pip install actdim-along`
+- Core + Dashboard: `pip install actdim-along[dash]`
+- Core + Telemetry: `pip install actdim-along[telemetry]`
+- All extensions: `pip install actdim-along[all]`
+
+### 4. Protocol Versioning Policy
+- **Protocol Version**: The protocol specification version (`ALONG-PROTOCOL vX.Y.Z`) increments ONLY upon format, schema, or structural protocol changes.
+- **Toolchain Features**: New features and non-breaking capabilities release as minor toolchain versions.
+- **Breaking Format Changes**: Batched into rare major releases accompanied by automated migrations (`along migrate`).
+- **Fixes and Hardening**: Bug fixes and documentation improvements release as patch versions.
+
 ## Non-goals
 
 - **No Proprietary Vendor Lock-in**: Never rely on tool-specific closed formats. Everything is stored in plain Markdown, YAML frontmatter, and JSON, operating seamlessly across Claude Code, Google Antigravity, OpenAI Codex, OpenCode, and standard shells.

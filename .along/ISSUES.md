@@ -4,7 +4,6 @@
 <!-- No active issues -->
 
 ## Backlog
-- [ ] `(debt)` [along-core-extras-split](ISSUES/debt--along-core-extras-split.md)
 - [ ] `(debt)` [canonical-path-gate-expansion](ISSUES/debt--canonical-path-gate-expansion.md)
 - [ ] `(debt)` [dashboard-retire-risk-spike-views](ISSUES/debt--dashboard-retire-risk-spike-views.md)
 - [ ] `(debt)` [gate-config-layers](ISSUES/debt--gate-config-layers.md)
@@ -57,7 +56,7 @@
 ## Done (recent)
 - [x] `(spike)` [headless-runtimes-on-linux](ISSUES/done/spike--headless-runtimes-on-linux.md)
 - [x] `(feat)` [anti-silent-fallback-gate](ISSUES/done/feat--anti-silent-fallback-gate.md)
+- [x] `(debt)` [along-core-extras-split](ISSUES/done/debt--along-core-extras-split.md)
 - [x] `(feat)` [ste-cnl-specification-engine](ISSUES/done/feat--ste-cnl-specification-engine.md)
 - [~] `(feat)` [automated-ui-screenshots-and-visual-verification](ISSUES/done/feat--automated-ui-screenshots-and-visual-verification.md)
-- [x] `(task)` [release-v4-5-1](ISSUES/done/task--release-v4-5-1.md)
-<!-- 285 older completed issue(s) archived in .along/ISSUES/done/ -->
+<!-- 286 older completed issue(s) archived in .along/ISSUES/done/ -->
