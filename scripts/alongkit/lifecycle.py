@@ -733,6 +733,23 @@ def purge_archived(repo_root: str, slug: str, complete: bool = False) -> bool:
         return False
 
 
+def _issue_folder_changes(dest_file: Optional[str], top: str, changed_keys: Dict[str, str]) -> List[str]:
+    """Changed paths of the wrap's move besides the ticket in done/: the ticket at its open
+    place (deleted) and the issue's folder (its plan) at both places.
+    [bug--wrap-misses-moved-issue-folder]"""
+    from . import closeout
+    if not dest_file:
+        return []
+    issues_dir = os.path.dirname(os.path.dirname(dest_file))
+    name = os.path.basename(dest_file)
+    found = []
+    for path in [os.path.join(issues_dir, name)] + closeout.issue_folder_files(issues_dir, name):
+        pk = closeout.path_key(repo.canonical_relpath(path, top))
+        if pk in changed_keys:
+            found.append(changed_keys[pk])
+    return found
+
+
 def _warn_uncommitted_work(
     repo_root: str,
     slug: str,
@@ -755,7 +772,7 @@ def _warn_uncommitted_work(
     if not dirty_attributed:
         return []
 
-    dirty_entities: List[str] = []
+    dirty_entities: List[str] = _issue_folder_changes(dest_file, top, changed_keys)
     for path in (dest_file, log_path):
         if path and os.path.exists(path):
             top_rel = repo.canonical_relpath(path, top)
@@ -798,7 +815,7 @@ def _auto_commit_wrapped_work(
     attributed_paths = [repo.canonical_relpath(os.path.join(repo_root, p), top) for p in attributed_map]
     dirty_attributed = [changed_keys[closeout.path_key(p)] for p in attributed_paths if closeout.path_key(p) in changed_keys]
 
-    dirty_entities: List[str] = []
+    dirty_entities: List[str] = _issue_folder_changes(dest_file, top, changed_keys)
     for path in (dest_file, log_path):
         if path and os.path.exists(path):
             top_rel = repo.canonical_relpath(path, top)

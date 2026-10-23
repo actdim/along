@@ -441,7 +441,11 @@ class TestWrapBeforeStop(ArchiveFixture):
         os.makedirs(os.path.join(self.root, "src"), exist_ok=True)
         textio.write_text(os.path.join(self.root, "src", "file.py"), "code = 1\n")
 
-        code = lifecycle.execute_wrap(self.root, self.SLUG, status="done", no_verify=True, decisions=[])
+        # Wrapped without its auto-commit: the attributed work stays uncommitted. (A default wrap
+        # commits it all; this test once relied on the old ticket's deletion being left behind,
+        # [bug--wrap-misses-moved-issue-folder].)
+        code = lifecycle.execute_wrap(self.root, self.SLUG, status="done", no_verify=True, decisions=[],
+                                      no_commit=True)
         self.assertEqual(code, 0)
 
         warn = check_uncommitted_wrap_before_stop(None, self.root)

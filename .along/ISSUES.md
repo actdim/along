@@ -1,7 +1,7 @@
 # Active Issues
 
 ## Active
-<!-- No active issues -->
+- [ ] `(bug)` [wrap-misses-moved-issue-folder](ISSUES/bug--wrap-misses-moved-issue-folder.md)
 
 ## Backlog
 - [ ] `(debt)` [canonical-path-gate-expansion](ISSUES/debt--canonical-path-gate-expansion.md)

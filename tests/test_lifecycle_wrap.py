@@ -577,6 +577,41 @@ class TestLifecycleWrap(unittest.TestCase):
         status = proc.run_capture(["git", "status", "--porcelain", "src/module.py"], cwd=self.root)
         self.assertEqual(status.stdout.strip(), "")
 
+    def _git_fixture_with_issue_plan(self):
+        """Git fixture whose issue keeps a committed plan in its folder (ISSUES/<key>/plan.md)."""
+        for cmd in (["git", "init", "-q"], ["git", "config", "user.email", "t@example.com"],
+                    ["git", "config", "user.name", "T"], ["git", "add", "-A"],
+                    ["git", "commit", "-q", "-m", "init"]):
+            proc.run_capture(cmd, cwd=self.root)
+        plan = os.path.join(self.root, ".along", "ISSUES", "task--fixture-sample-task", "plan.md")
+        self.assertTrue(os.path.isfile(plan))
+        session.append_event(self.root, "fixture-sample-task", "sess-1", "edit", "src/module.py")
+        os.makedirs(os.path.join(self.root, "src"), exist_ok=True)
+        textio.write_text(os.path.join(self.root, "src", "module.py"), "print('plan')\n")
+
+    def test_16c_wrap_auto_commit_includes_the_moved_issue_folder(self):
+        """[bug--wrap-misses-moved-issue-folder] REQ-1: the plan moved to done/ is committed too."""
+        self._git_fixture_with_issue_plan()
+        with patch("sys.stdout", new_callable=io.StringIO):
+            code = lifecycle.execute_wrap(self.root, "fixture-sample-task", status="done",
+                                          no_verify=True, decisions=[])
+        self.assertEqual(code, 0)
+        status = proc.run_capture(["git", "status", "--porcelain", "-uall", ".along/ISSUES"], cwd=self.root)
+        self.assertEqual(status.stdout.strip(), "", "the moved issue folder must not be left behind")
+        tracked = proc.run_capture(["git", "ls-files", ".along/ISSUES/done/task--fixture-sample-task/plan.md"],
+                                   cwd=self.root)
+        self.assertEqual(tracked.stdout.strip(), ".along/ISSUES/done/task--fixture-sample-task/plan.md")
+
+    def test_16d_wrap_warning_lists_the_moved_issue_folder(self):
+        """[bug--wrap-misses-moved-issue-folder] REQ-2: the no-commit warning names the moved plan."""
+        self._git_fixture_with_issue_plan()
+        with patch("sys.stdout", new_callable=io.StringIO) as mock_stdout:
+            code = lifecycle.execute_wrap(self.root, "fixture-sample-task", status="done",
+                                          no_verify=True, decisions=[], no_commit=True)
+            out = mock_stdout.getvalue()
+        self.assertEqual(code, 0)
+        self.assertIn(".along/ISSUES/done/task--fixture-sample-task/plan.md", out)
+
     def test_17_wrap_docs_only_with_session_ledger_skips_test_gate(self):
         """[bug--wrap-docs-only-test-skip] REQ-1: docs-only changes in session ledger skip wrap test gate."""
         textio.write_text(os.path.join(self.root, ".along", "config.json"),
