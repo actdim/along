@@ -3,7 +3,8 @@ protocol: along
 protocol_version: "4.5.2"
 slug: exit-plan-text-not-captured
 type: bug
-status: in-progress
+status: done
+completed: 2026-10-23
 priority: high
 created: 2026-10-23
 updated: 2026-10-23
@@ -33,6 +34,6 @@ file (`~/.claude/plans/<name>.md`) and the tool result carries it:
 - REQ-2: The captured text MUST reach `session.record_accepted_plan`, so a bound slug's issue plan holds it.
 
 ## Acceptance Criteria
-- [ ] A regression test with the real payload shape (empty `tool_input`, plan in `tool_response`) records the plan text in the issue plan.
-- [ ] A regression test with only the plan file path records the file's text.
-- [ ] `python .along/scripts/test.py -q` is green.
+- [x] A regression test with the real payload shape (empty `tool_input`, plan in `tool_response`) records the plan text in the issue plan.
+- [x] A regression test with only the plan file path records the file's text.
+- [x] `python .along/scripts/test.py -q` is green.
