@@ -759,6 +759,18 @@ def _extract_review_policy(repo_root: str) -> str:
     )
 
 
+def _plan_guidance(repo_root: str, slug: str, role: str) -> str:
+    """Where the plan lives and who may change it. [feat--pre-approved-plans]"""
+    rel = repo.normalize_posix(repo.safe_relpath(session.plan_path(repo_root, slug), repo_root))
+    if role in ("scout", "architect"):
+        return (f"The plan lives in `{rel}` (one living file for the issue). Write the baseline there as "
+                "'Step N: ...' lines mapped to the requirements.")
+    return (f"The plan lives in `{rel}`. Correct it whenever the work requires, without asking anyone: append "
+            f"a revision with the reason (`along plan revise {slug} --plan-file <path> --reason \"...\"`) and keep "
+            f"going. Only a problem the ticket's requirements cannot absorb goes to the user: "
+            f"`along plan rework {slug} --reason \"...\"`, then stop with outcome needs-input.")
+
+
 def generate_brief(
     repo_root: str,
     slug: str,
@@ -817,6 +829,9 @@ def generate_brief(
         "",
         "## Acceptance Criteria",
         criteria if criteria else "No acceptance criteria declared.",
+        "",
+        "## Plan",
+        _plan_guidance(repo_root, slug, role_norm),
         "",
         "## Current Step",
         step_info,

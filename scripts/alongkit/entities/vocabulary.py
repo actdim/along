@@ -134,6 +134,17 @@ def issue_filename(entity_type: str, slug: str) -> str:
     return f"{canonical_key(entity_type, slug)}.md"
 
 
+def is_issue_ticket_path(path: str) -> bool:
+    """`.along/ISSUES/<key>.md` or `.along/ISSUES/done/<key>.md`: a ticket, not a file kept in
+    an issue's folder (`ISSUES/<key>/plan.md`). [feat--pre-approved-plans]"""
+    parts = path.replace("\\", "/").split("/")
+    for idx in range(len(parts) - 2, -1, -1):
+        if parts[idx] == "ISSUES" and (idx == 0 or parts[idx - 1] in (".along", ".agents")):
+            rest = parts[idx + 1:]
+            return (len(rest) == 1 or (len(rest) == 2 and rest[0] == "done")) and rest[-1].endswith(".md")
+    return False
+
+
 def session_filename(day: str, slug: str) -> str:
     """File name of a session log: date first, so a directory listing sorts by time."""
     return f"{day}--{slug}.md"

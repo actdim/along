@@ -68,7 +68,7 @@ When subagent spawning is unavailable (OpenAI Codex, OpenCode) or disabled/throt
    - `=== PHASE 3: IMPLEMENTER (STEP N EXECUTION) ===`
    - `=== PHASE 4: REVIEWER (RUBRIC AUDIT & TESTS) ===`
    - `=== PHASE 5: REASSESS (VERDICT & RETRY EVALUATION) ===`
-2. **Blackboard Persistence**: State is externalized to disk at `.along/.session/<slug>/` (`state.json`, `plan.md`, `research.md`, `reviews/step-<N>.md`, `execution_trace.md`). Initialized via `along scratch init <slug>`. Inspect state at any time via `along scratch state <slug>` (`--json`). Resumption automatically reads `state.json` and resumes from `current_step` unless `--restart` is passed.
+2. **Blackboard Persistence**: State is externalized to disk at `.along/.session/<slug>/` (`state.json`, `research.md`, `reviews/step-<N>.md`, `execution_trace.md`); the Living Plan is the issue's plan, `.along/ISSUES/<type>--<slug>/plan.md`. Initialized via `along scratch init <slug>`. Inspect state at any time via `along scratch state <slug>` (`--json`). Resumption automatically reads `state.json` and resumes from `current_step` unless `--restart` is passed.
 3. **Explicit Review Verdicts**: The agent evaluates the step against the Reviewer Rubric and outputs a mandatory verdict block:
    ```text
    VERDICT: PASS
@@ -210,7 +210,8 @@ TASK / GOAL
 3. Each plan MUST declare an explicit `## Execution Mode` (`Direct` | `Role-Based (along-team)`) based on the Adaptive Complexity Escalation thresholds. Each step must define: target files/symbols, expected behavior mapped to `REQ-N`, and verifiable acceptance criteria.
 4. **Dual-Track UI & Artifact Projection**:
    - **Track 1 (Host IDE UI Projection)**: When running under Google Antigravity, project the Living Plan to `<appDataDir>/brain/<id>/implementation_plan.md` with `ArtifactMetadata` (`RequestFeedback: true`, `UserFacing: true`). This triggers Antigravity's native interactive design doc card with user checkboxes and the "Proceed" button.
-   - **Track 2 (Permanent Along Memory)**: In all environments (Antigravity, Claude Code, OpenAI Codex, OpenCode), write the plan to disk at `.along/.session/<slug>/plan.md` (and `living_plan.md`) and present in chat for confirmation.
+   - **Track 2 (Permanent Along Memory)**: In all environments (Antigravity, Claude Code, OpenAI Codex, OpenCode), write the plan to the issue's plan, `.along/ISSUES/<type>--<slug>/plan.md` (committed with the ticket; `along plan status <slug>` prints the path), and present in chat for confirmation. Only a blackboard without an issue keeps `.along/.session/<slug>/plan.md`.
+   - **Approved ahead**: when the ticket already says `plan_status: approved` and `along start` reported "Using the approved plan", skip this phase: the plan is approved and `along-team` executes it.
 5. **Plan Approval Gate** [gate: require-plan-approval]: source edits stay blocked until the user approves the plan. In Claude Code present it through plan mode (`ExitPlanMode`); the user's acceptance is recorded for this session automatically, plan text included. If plan mode is unavailable, show the plan in chat and wait for the user's reply; run `along plan approve <slug>` only after that reply. It is refused while `plan.md` is still the scaffold, so write the plan into `plan.md` first (or pass `--plan-file <path>`), and refused when the plan file changed after the user's last message (show the revised plan and wait again). Never approve on your own judgment.
 
 ### Phase 3 to 5: Step Loop (Step N)
@@ -223,8 +224,9 @@ For each step in the Living Plan:
      - Trigger **`[Fix Loop]`**: Provide worker with exact error trace, failing test assertion, and diff. Increment step retry counter on disk: `along scratch update <slug> --step <N> --inc-retry`. If retry count exceeds 2, halt immediately with an escalation alert to the human user.
      - Record attempt in `.along/.session/<slug>/execution_trace.md` (`type: fix_loop`, step, attempt, outcome).
    - If `FAIL` on structural flaws (unforeseen dependencies, missing APIs, invalid assumptions, or Fix Loop retry exhaustion):
-     - Trigger **`[Re-plan Loop]`**: Architect increments plan revision (`Revision N+1`), updates `plan_revision` on disk (`along scratch update <slug> --plan-rev <N+1>`), re-architects remaining steps, updates `.along/.session/<slug>/plan.md` (and `living_plan.md`, plus updated `implementation_plan.md` in Antigravity), and restarts Step Loop from the revised step.
+     - Trigger **`[Re-plan Loop]`**: Architect increments plan revision (`Revision N+1`), updates `plan_revision` on disk (`along scratch update <slug> --plan-rev <N+1>`), re-architects remaining steps, appends the revision with its reason to the issue's plan (`along plan revise <slug> --plan-file <path> --reason "..."`; plus updated `implementation_plan.md` in Antigravity), and restarts Step Loop from the revised step.
      - Record revision in `.along/.session/<slug>/execution_trace.md` (`type: replan_loop`, reason, revision).
+     - A re-plan within the ticket's requirements and acceptance criteria needs no new user approval: the plan belongs to the team once approved, and the committed plan shows each revision and its reason. Escalate to the user only a problem the ticket cannot absorb (a requirement cannot be met or must change, or a decision only the user can make): `along plan rework <slug> --reason "..."`, halt, ask.
 
 ### Phase 6: Autonomous Goal Completion (`/goal` Mode)
 When running in autonomous `/goal` mode:

@@ -237,7 +237,8 @@ def main(argv=None):
         for path in staged_files:
             norm_p = path.replace("\\", "/")
             if "/.along/ISSUES/" in norm_p or norm_p.startswith(".along/ISSUES/"):
-                if not norm_p.endswith(".md"):
+                # Files kept in an issue's folder (its plan) are not tickets.
+                if not entities.is_issue_ticket_path(norm_p):
                     continue
                 abs_p = os.path.join(repo_root, *path.split("/"))
                 if not os.path.isfile(abs_p):

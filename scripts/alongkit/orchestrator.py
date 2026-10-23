@@ -297,8 +297,7 @@ class CrossRuntimeOrchestrator:
             return {"phase": "architect", "status": "failed", "outcome": outcome}
 
         # Validate plan.md and requirement extraction
-        session_dir = session.get_session_dir(self.repo_root, self.slug)
-        plan_file = os.path.join(session_dir, "plan.md")
+        plan_file = session.plan_path(self.repo_root, self.slug)
         if not self.dry_run:
             if not os.path.isfile(plan_file) or os.path.getsize(plan_file) == 0:
                 session.update_state(self.repo_root, self.slug, status="failed")
@@ -326,6 +325,43 @@ class CrossRuntimeOrchestrator:
             session.save_state(self.repo_root, self.slug, st)
 
         return {"phase": "architect", "status": "done", "outcome": "done"}
+
+    def run_issue_plan_phase(self) -> Optional[Dict[str, Any]]:
+        """Use the issue's approved plan in place of the architect. [feat--pre-approved-plans]
+
+        None when the issue has no plan yet (the architect writes one). A plan approved on this
+        machine is taken as is: steps extracted, session approved, no architect run. A plan the
+        user still has to approve or rework, or one approved without an approval event here,
+        halts with needs-input: the orchestrator never approves it for the user.
+        """
+        state = session.issue_plan_state(self.repo_root, self.slug)
+        if state is None:
+            return None
+        if not session.load_state(self.repo_root, self.slug):
+            session.init_session(self.repo_root, self.slug, execution_mode="role-based")
+        if state != session.PLAN_READY:
+            reason = {
+                session.PLAN_UNCONFIRMED: "plan_status is approved but not confirmed on this machine; "
+                                          "the user must approve the plan here",
+                "needs-approval": "the plan waits for the user's approval",
+                "needs-rework": "the plan needs rework with the user",
+            }.get(state, f"plan_status is {state}")
+            session.update_state(self.repo_root, self.slug, status="needs-input")
+            return {"phase": "plan", "status": "needs-input", "reason": reason}
+        if self.dry_run:
+            return {"phase": "plan", "status": "done", "outcome": "done"}
+        extracted = extract_steps_from_plan(session.read_plan(self.repo_root, self.slug))
+        st = session.load_state(self.repo_root, self.slug) or {}
+        if extracted:
+            st["steps"] = extracted
+            st["total_steps"] = len(extracted)
+        st["approved_by"] = "user (issue plan)"
+        session.save_state(self.repo_root, self.slug, st)
+        session.approve_plan(self.repo_root, slug=self.slug)
+        session.append_trace(self.repo_root, self.slug,
+                             f"plan approved (approved issue plan; approved_via: {session.APPROVED_VIA_ISSUE_PLAN})")
+        self.execution_log.append({"phase": "plan", "record": {"outcome": "done", "source": "issue plan"}})
+        return {"phase": "plan", "status": "done", "outcome": "done"}
 
     def run_step_loop(self) -> Dict[str, Any]:
         """Execute Phase 3 & 4: Implementer & Reviewer Step Loop."""
@@ -554,6 +590,9 @@ class CrossRuntimeOrchestrator:
         skip_architect: bool = False,
     ) -> Dict[str, Any]:
         """Execute complete orchestration lifecycle."""
+        # An issue run straight from the daemon has no blackboard yet; the claim lives in it.
+        if session.load_state(self.repo_root, self.slug) is None and session.issue_file(self.repo_root, self.slug):
+            session.init_session(self.repo_root, self.slug, execution_mode="role-based")
         claimed = handoff.acquire_claim(
             self.repo_root,
             self.slug,
@@ -590,7 +629,7 @@ class CrossRuntimeOrchestrator:
                     return scout_res
 
             if not skip_architect:
-                arch_res = self.run_architect_phase()
+                arch_res = self.run_issue_plan_phase() or self.run_architect_phase()
                 if arch_res.get("status") != "done":
                     return arch_res
 

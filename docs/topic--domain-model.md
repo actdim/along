@@ -93,6 +93,7 @@ related: [debt--token-revocation-latency]
 parent: feat--identity-platform
 superseded_by: null
 duplicate_of: null
+plan_status: approved           # optional: needs-approval | approved | needs-rework
 ---
 
 # Issue Title
@@ -113,6 +114,17 @@ Detailed problem statement, constraints, and verifiable acceptance criteria.
 - **`superseded`**: Non-delivered terminal state. Replaced by another issue or architectural decision. Closed via `along issue supersede <old-key> --by <new-key>` (rewrites inbound references) or `along issue done <slug> --status superseded --superseded-by <slug>`. Mandatory field `completed: YYYY-MM-DD` is set, `superseded_by: <target-slug>` references the replacement entity, and the file is moved to `.along/ISSUES/done/`.
 - **`cancelled`**: Non-delivered terminal state. Abandoned or intentionally dropped requirements. Closed via `along issue done <slug> --status cancelled`. Mandatory field `completed: YYYY-MM-DD` is set, and the file is moved to `.along/ISSUES/done/`.
 - **`duplicate`**: Non-delivered terminal state. Redundant issue covered by another entity. Closed via `along issue done <slug> --status duplicate --duplicate-of <slug>`. Mandatory field `completed: YYYY-MM-DD` is set, `duplicate_of: <primary-slug>` references the primary entity, and the file is moved to `.along/ISSUES/done/`.
+
+#### Issue Plan (`.along/ISSUES/<type>--<slug>/plan.md`):
+The ticket says what and why; the plan says how. An issue's plan lives in the folder named after its ticket, is committed with it, and moves with it (`along wrap`, `along issue done`, `reopen`, `rename`, `supersede`; `delete` removes it). It is one living file: the approved baseline as `## Revision 1`, then each correction made during the work as the next revision with a `Reason:` line, and `## Rework requested` notes. Session blackboards and `along-team` read and write this file (`session.plan_path`); a blackboard without an issue keeps its own `plan.md`.
+
+`plan_status` in the ticket front-matter records where the plan stands:
+- **`needs-approval`**: written, waiting for the user's yes (set by the agent).
+- **`approved`**: ready to run. Set only by `along plan approve` after the user's explicit yes, which also appends an approval event to the machine-local `.along/.session/plan-approvals.jsonl`. `along start` and the orchestrator trust `approved` only with such an event on this machine; otherwise they ask the user again. File-tool edits that set `approved` are denied by `require-plan-approval`.
+- **`needs-rework`**: the plan cannot be followed within the ticket (`along plan rework <slug> --reason "..."`); the user decides how to proceed.
+- absent: no plan yet.
+
+The board (`.along/ISSUES.md`) shows `plan ready`, `plan: needs approval` or `plan: needs rework` after the entry. See `docs/topic--along-protocol.md` "Issue Plans & Approving Ahead" for the flow.
 
 #### Quality Gates & Anti-Stub Validation (`validate_issue_completion`):
 To prevent empty scaffolding or hallucinated completions from degrading project memory:

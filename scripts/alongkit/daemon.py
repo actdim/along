@@ -718,8 +718,10 @@ class RunnerDaemon:
                 self.log(f"Task '{clean_slug}' completed successfully.")
                 self._send_telegram(chat_id, f"Task '{clean_slug}' completed successfully.")
             elif status_out == "needs-input":
-                self.log(f"Task '{clean_slug}' paused: needs operator input.")
-                self._send_telegram(chat_id, f"Task '{clean_slug}' paused: awaiting operator input.")
+                reason = res.get("reason") if isinstance(res, dict) else None
+                self.log(f"Task '{clean_slug}' paused: needs operator input." + (f" {reason}" if reason else ""))
+                self._send_telegram(chat_id, f"Task '{clean_slug}' paused: awaiting operator input."
+                                    + (f" Reason: {reason}." if reason else ""))
             elif status_out == "blocked":
                 reason = res.get("reason", "unknown") if isinstance(res, dict) else ""
                 self.log(f"Task '{clean_slug}' blocked: {reason}", level="WARNING")

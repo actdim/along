@@ -530,6 +530,30 @@ def _exit_plan_approval_current(repo_root: str, key: str, binding: Dict[str, Any
     return approved is not None and (last_epoch is None or last_epoch <= approved)
 
 
+def pending_accepted_plan(repo_root: str, key: Optional[str]) -> Optional[str]:
+    """Plan text the user accepted (ExitPlanMode) in session `key` before any slug was bound,
+    with no user message since: it can still be given to an issue. [feat--pre-approved-plans]"""
+    binding = load_binding(repo_root, key) if key else None
+    if not binding or binding.get("approved_slug") or not binding.get("approved_plan"):
+        return None
+    if not _exit_plan_approval_current(repo_root, str(key), binding):
+        return None
+    return str(binding["approved_plan"])
+
+
+def release_pending_plan(repo_root: str, key: Optional[str]) -> None:
+    """The pending accepted plan went to an issue ahead of its start: it must not also carry
+    to whatever this session starts next."""
+    binding = load_binding(repo_root, key) if key else None
+    if not binding:
+        return
+    for field in ("pending_plan", "approved_plan"):
+        binding.pop(field, None)
+    if not binding.get("approved_slug"):
+        binding["plan_approved"] = False
+    save_binding(repo_root, str(key), binding)
+
+
 def mark_approval(repo_root: str, key: Optional[str], via: str, plan_text: Optional[str] = None) -> None:
     """Record how the binding's current approval was given (`approved_via`, plan hash)."""
     if not key:
@@ -590,6 +614,9 @@ def record_accepted_plan(repo_root: str, key: Optional[str], plan_text: Optional
             save_binding(repo_root, key, binding)
     saved = record_plan_approval(repo_root, key, APPROVED_VIA_EXIT_PLAN_MODE, plan_text)
     ctx = binding_context(repo_root, binding) or repo_root
+    if slug and plan_text and plan_text.strip():
+        # The accepted plan is the issue's plan now: keep its status with the ticket.
+        approve_issue_plan(ctx, str(slug), APPROVED_VIA_EXIT_PLAN_MODE, key=key)
     if slug and load_state(ctx, str(slug)):
         sha = plan_sha256(plan_text)
         append_trace(ctx, str(slug), "plan approved (ExitPlanMode) approved_via: exit-plan-mode"
@@ -1338,8 +1365,77 @@ def is_scaffold_plan(text: Optional[str]) -> bool:
     return True
 
 
+# ---------------------------------------------------------------------------
+# Issue plans [feat--pre-approved-plans]
+#
+# An issue's plan lives next to its ticket, `.along/ISSUES/<type>--<slug>/plan.md`: committed,
+# moved with the ticket, one living file for the whole issue (approved baseline, then
+# revisions). Blackboards without an issue keep plan.md in their own directory.
+#
+# The ticket's `plan_status` says where the plan stands. `approved` is trusted only together
+# with an approval event the CLI appended to `.along/.session/plan-approvals.jsonl`, which
+# file tools may not write; a status written by hand, or approved on another machine, has
+# no event here and the user is asked again.
+# ---------------------------------------------------------------------------
+
+PLAN_STATUS_FIELD: str = "plan_status"
+PLAN_STATUSES: Tuple[str, ...] = ("needs-approval", "approved", "needs-rework")
+PLAN_APPROVALS_FILENAME: str = "plan-approvals.jsonl"
+APPROVED_VIA_ISSUE_PLAN = "issue-plan"
+#: `issue_plan_state` results beyond the statuses themselves.
+PLAN_READY = "ready"
+PLAN_UNCONFIRMED = "unconfirmed"
+
+
+def _bare_slug(slug: str) -> str:
+    return slug.split("--", 1)[1] if "--" in slug else slug
+
+
+def issue_file(repo_root: str, slug: str) -> Optional[str]:
+    """The ticket of `slug` (or `<type>--<slug>`), open or done, found by file name."""
+    base = os.path.join(repo.state_dir(repo_root), "ISSUES")
+    bare = _bare_slug(slug)
+    for directory in (base, os.path.join(base, "done")):
+        if not os.path.isdir(directory):
+            continue
+        for name in sorted(os.listdir(directory)):
+            stem = name[:-3]
+            if name.endswith(".md") and (stem == slug or stem.split("--", 1)[-1] == bare) \
+                    and os.path.isfile(os.path.join(directory, name)):
+                return os.path.join(directory, name)
+    return None
+
+
+def issue_dir_for(issue_path: str) -> str:
+    """The folder that goes with a ticket file: the ticket path without `.md`."""
+    return os.path.splitext(issue_path)[0]
+
+
+def issue_plan_file(repo_root: str, slug: str) -> Optional[str]:
+    path = issue_file(repo_root, slug)
+    return os.path.join(issue_dir_for(path), PLAN_FILENAME) if path else None
+
+
 def plan_path(repo_root: str, slug: str) -> str:
-    return os.path.join(get_session_dir(repo_root, slug), PLAN_FILENAME)
+    """The issue's plan when the issue exists, else the blackboard's own plan.md.
+
+    A plan an agent wrote into the blackboard of an issue (older instructions, sessions begun
+    before plans moved to the issue folder) is moved into the issue folder on first use.
+    """
+    board_plan = os.path.join(get_session_dir(repo_root, slug), PLAN_FILENAME)
+    issue_plan = issue_plan_file(repo_root, slug)
+    if not issue_plan:
+        return board_plan
+    if not os.path.exists(issue_plan) and os.path.isfile(board_plan):
+        text = textio.read_text(board_plan, strict=False)
+        if not is_scaffold_plan(text):
+            os.makedirs(os.path.dirname(issue_plan), exist_ok=True)
+            textio.write_text(issue_plan, text, newline="\n")
+        try:
+            os.remove(board_plan)
+        except OSError:
+            pass
+    return issue_plan
 
 
 def read_plan(repo_root: str, slug: str) -> str:
@@ -1348,12 +1444,33 @@ def read_plan(repo_root: str, slug: str) -> str:
 
 
 def plan_recorded(repo_root: str, slug: str) -> bool:
-    """True when the slug's blackboard holds a plan beyond the scaffold."""
+    """True when the slug's plan holds more than the scaffold."""
     return not is_scaffold_plan(read_plan(repo_root, slug))
 
 
-def record_plan(repo_root: str, slug: str, text: str, source: str, key: Optional[str] = None) -> int:
-    """Write an approved plan into the blackboard's plan.md; returns its revision number.
+def _write_plan_revision(path: str, slug: str, text: str, source: str, reason: Optional[str] = None) -> int:
+    """Write `text` into the plan at `path` as its next revision; 0 when it is the latest already."""
+    current = textio.read_text(path, strict=False) if os.path.isfile(path) else ""
+    stamp = f"({_utc_now_iso()}, {source})"
+    why = f"Reason: {reason.strip()}\n\n" if reason and reason.strip() else ""
+    if is_scaffold_plan(current):
+        revision = 1
+        content = f"# Living Plan: {_bare_slug(slug)}\n\n## Revision 1 {stamp}\n\n{why}{text}\n"
+    else:
+        if current.rstrip().endswith(text):
+            return 0
+        found = [int(n) for n in _PLAN_REVISION.findall(current)]
+        # A plan written into plan.md directly (along-team) is revision 1.
+        revision = (max(found) if found else 1) + 1
+        content = current.rstrip("\n") + f"\n\n## Revision {revision} {stamp}\n\n{why}{text}\n"
+    os.makedirs(os.path.dirname(path), exist_ok=True)
+    textio.write_text(path, content, newline="\n")
+    return revision
+
+
+def record_plan(repo_root: str, slug: str, text: str, source: str, key: Optional[str] = None,
+                reason: Optional[str] = None) -> int:
+    """Write a plan into the slug's plan (`plan_path`); returns its revision number.
 
     The scaffold is replaced by revision 1; a later plan is appended as the next revision, so
     earlier revisions stay. A plan identical to the latest one is not recorded again (0).
@@ -1363,22 +1480,128 @@ def record_plan(repo_root: str, slug: str, text: str, source: str, key: Optional
         return 0
     if not load_state(repo_root, slug):
         init_session(repo_root, slug)
-    current = read_plan(repo_root, slug)
-    stamp = f"({_utc_now_iso()}, {source})"
-    if is_scaffold_plan(current):
-        revision = 1
-        content = f"# Living Plan: {slug}\n\n## Revision 1 {stamp}\n\n{text}\n"
-    else:
-        if current.rstrip().endswith(text):
-            return 0
-        found = [int(n) for n in _PLAN_REVISION.findall(current)]
-        # A plan written into plan.md directly (along-team) is revision 1.
-        revision = (max(found) if found else 1) + 1
-        content = current.rstrip("\n") + f"\n\n## Revision {revision} {stamp}\n\n{text}\n"
-    textio.write_text(plan_path(repo_root, slug), content, newline="\n")
-    append_trace(repo_root, slug, f"plan recorded: revision {revision} ({source})")
-    append_event(repo_root, slug, key or current_session_key(), "plan")
+    revision = _write_plan_revision(plan_path(repo_root, slug), slug, text, source, reason)
+    if revision:
+        append_trace(repo_root, slug, f"plan recorded: revision {revision} ({source})"
+                     + (f": {reason.strip()}" if reason and reason.strip() else ""))
+        append_event(repo_root, slug, key or current_session_key(), "plan")
     return revision
+
+
+def write_issue_plan(repo_root: str, slug: str, text: str, source: str, reason: Optional[str] = None) -> int:
+    """Record a plan for an issue that has not started: no blackboard is created."""
+    path = issue_plan_file(repo_root, slug)
+    text = (text or "").strip()
+    if not path or not text:
+        return 0
+    return _write_plan_revision(path, slug, text, source, reason)
+
+
+def plan_status(repo_root: str, slug: str) -> Optional[str]:
+    """The ticket's `plan_status`, or None (no ticket, or no plan yet)."""
+    from . import frontmatter
+    path = issue_file(repo_root, slug)
+    if not path:
+        return None
+    try:
+        fm, _, _ = frontmatter.try_parse(textio.read_text(path, strict=False), path=path)
+    except (OSError, ValueError):
+        return None
+    value = str(fm.get(PLAN_STATUS_FIELD) or "").strip().lower()
+    return value or None
+
+
+def set_plan_status(repo_root: str, slug: str, status: str) -> None:
+    from . import frontmatter
+    if status not in PLAN_STATUSES:
+        raise ValueError(f"Invalid plan status '{status}'. Allowed: {', '.join(PLAN_STATUSES)}")
+    path = issue_file(repo_root, slug)
+    if not path:
+        raise ValueError(f"Issue '{slug}' not found.")
+    content = textio.read_text(path)
+    textio.write_text(path, frontmatter.update(content, {PLAN_STATUS_FIELD: status}, path=path), newline="\n")
+
+
+def _plan_approvals_file(repo_root: str) -> str:
+    return os.path.join(repo.state_dir(repo_root), ".session", PLAN_APPROVALS_FILENAME)
+
+
+def plan_approval_events(repo_root: str, slug: str) -> List[Dict[str, Any]]:
+    """Approval log entries for `slug`, oldest first."""
+    path = _plan_approvals_file(repo_root)
+    if not os.path.isfile(path):
+        return []
+    bare = _bare_slug(slug)
+    out: List[Dict[str, Any]] = []
+    for line in textio.read_text(path, strict=False).splitlines():
+        try:
+            item = json.loads(line)
+        except json.JSONDecodeError:
+            continue
+        if isinstance(item, dict) and item.get("slug") == bare:
+            out.append(item)
+    return out
+
+
+def record_plan_approval_event(repo_root: str, slug: str, event: str, via: Optional[str] = None,
+                               key: Optional[str] = None, reason: Optional[str] = None) -> Dict[str, Any]:
+    """Append `approve` / `rework` for `slug` to the approval log (written only by the CLI)."""
+    item: Dict[str, Any] = {"slug": _bare_slug(slug), "event": event, "at": _utc_now_iso()}
+    if via:
+        item["via"] = via
+    if key:
+        item["session"] = key
+    if reason:
+        item["reason"] = reason
+    path = _plan_approvals_file(repo_root)
+    os.makedirs(os.path.dirname(path), exist_ok=True)
+    with open(path, "a", encoding="utf-8", newline="\n") as handle:
+        handle.write(json.dumps(item) + "\n")
+    return item
+
+
+def plan_approval_confirmed(repo_root: str, slug: str, since: Optional[str] = None) -> bool:
+    """True when the latest approval event for `slug` (newer than `since`) is an approval."""
+    events = plan_approval_events(repo_root, slug)
+    if not events or events[-1].get("event") != "approve":
+        return False
+    if since:
+        at, floor = _iso_to_epoch(events[-1].get("at") or ""), _iso_to_epoch(since)
+        return at is not None and floor is not None and at >= floor
+    return True
+
+
+def issue_plan_state(repo_root: str, slug: str) -> Optional[str]:
+    """`ready` (approved, confirmed here, plan present), `unconfirmed` (approved without an
+    approval event here), the other `plan_status` values, or None (no plan)."""
+    status = plan_status(repo_root, slug)
+    if status != "approved":
+        return status
+    path = issue_plan_file(repo_root, slug)
+    if not path or is_scaffold_plan(textio.read_text(path, strict=False) if os.path.isfile(path) else ""):
+        return None
+    return PLAN_READY if plan_approval_confirmed(repo_root, slug) else PLAN_UNCONFIRMED
+
+
+def approve_issue_plan(repo_root: str, slug: str, via: str, key: Optional[str] = None) -> bool:
+    """Mark the ticket's plan approved and log the approval. False when there is no ticket."""
+    if not issue_file(repo_root, slug):
+        return False
+    set_plan_status(repo_root, slug, "approved")
+    record_plan_approval_event(repo_root, slug, "approve", via=via, key=key)
+    return True
+
+
+def request_plan_rework(repo_root: str, slug: str, reason: str, key: Optional[str] = None) -> None:
+    """The plan cannot be followed within the ticket: `needs-rework`, the reason kept in the plan."""
+    set_plan_status(repo_root, slug, "needs-rework")
+    record_plan_approval_event(repo_root, slug, "rework", key=key, reason=reason)
+    path = issue_plan_file(repo_root, slug)
+    if path:
+        current = textio.read_text(path, strict=False) if os.path.isfile(path) else ""
+        note = f"## Rework requested ({_utc_now_iso()})\n\n{reason.strip()}\n"
+        os.makedirs(os.path.dirname(path), exist_ok=True)
+        textio.write_text(path, (current.rstrip("\n") + "\n\n" if current.strip() else "") + note, newline="\n")
 
 
 def missing_reviews(repo_root: str, slug: str) -> List[int]:
@@ -1473,7 +1696,12 @@ def render_blackboard_markdown(repo_root: str, slug: str, reason: Optional[str] 
         out.append("")
     # Attributed files go to the log's `files:` front matter (`attributed_file_list`), and
     # the approved plan is not copied: git and the plan gate already hold both
-    # [debt--entity-model-slimming].
+    # [debt--entity-model-slimming]. An issue's plan is committed in its issue folder.
+    plan_file = issue_plan_file(repo_root, slug)
+    if plan_file and os.path.isfile(plan_file):
+        revisions = len(_PLAN_REVISION.findall(textio.read_text(plan_file, strict=False)))
+        out.append(f"Plan: kept with the issue (`{os.path.basename(issue_dir_for(plan_file))}/plan.md`, "
+                   f"{revisions or 1} revision(s)).\n")
     for title, name in (("Research", "research.md"), ("Execution Trace", TRACE_FILENAME)):
         text = _read(name)
         if name == "research.md" and is_scaffold_research(text):
@@ -1685,9 +1913,9 @@ def init_session(
         state["profile"] = profile
     save_state(repo_root, slug, state)
 
-    # Initialize plan.md
+    # Initialize plan.md; an issue's plan lives in its issue folder and gets no scaffold.
     plan_file = os.path.join(session_dir, "plan.md")
-    if not os.path.exists(plan_file) or force_restart:
+    if issue_plan_file(repo_root, slug) is None and (not os.path.exists(plan_file) or force_restart):
         step_lines = "\n".join(f"- [ ] Step {s['step']}: {s['title']}" for s in steps_list)
         plan_content = (
             f"# Living Plan: {slug}\n\n"

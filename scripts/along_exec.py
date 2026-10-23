@@ -116,8 +116,10 @@ Entity Management Commands:
   status         Instant terminal summary of repository state, active issues, and recent sessions
   doctor         Validate .along/ structure, .gitattributes, and ADR headers (--entities for entity graph; --entities --fix drops dangling milestone fields)
   start          Mark issue in-progress, initialize blackboard, bind this agent session [--approved] [--worktree]
-  plan approve   [<slug>]  Record the user's plan approval for this session (after an explicit yes)
-  plan status    Show this session's bound issue, phase and approval
+  plan approve   [<slug>]  Record the user's plan approval (after an explicit yes); before 'start' it approves ahead
+  plan revise    <slug> --plan-file <path> --reason "..."  Append a correction to the issue plan
+  plan rework    <slug> --reason "..."  Mark the plan needs-rework (cannot be followed within the ticket)
+  plan status    [<slug>]  Show this session's bound issue, phase and approval, and the issue plan
   issue create   <type> <slug> --title "Title" [--priority high|medium|low] [--tags "t1,t2"] [--agent <name>] [--milestone <name>]
   issue update   <slug> [--milestone <name>] [--priority <priority>] [--status <status>] [--tags <tags>] [--title <title>]
   issue show     <slug> [--json]

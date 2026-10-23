@@ -25,9 +25,7 @@ from .common import check_unknown_args, require_entity_name
 def cli_approval_or_exit(repo_root: str, slug: str) -> str:
     """Hold a CLI plan approval of `slug` to the user's last message; its `approved_via`."""
     key = session.current_session_key()
-    refusal, via = session.check_cli_approval(
-        repo_root, key, os.path.join(session.get_session_dir(repo_root, slug), "plan.md")
-    )
+    refusal, via = session.check_cli_approval(repo_root, key, session.plan_path(repo_root, slug))
     if refusal:
         print(f"[Error] Plan approval refused: {refusal}.", file=sys.stderr)
         sys.exit(2)

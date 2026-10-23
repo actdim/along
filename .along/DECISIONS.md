@@ -1,8 +1,9 @@
 <!-- Generated projection from .along/DECISIONS/*.md. Do not edit by hand. Run: along decision sync -->
 # Decisions (ADR Projection Board)
 
-## Active Decisions (48, newest 30 shown)
+## Active Decisions (49, newest 30 shown)
 
+- [Issue plans live with the ticket; only the CLI approves them](DECISIONS/ADR-2026-10-23--issue-plans-approved-ahead.md)
 - [Gate Denials Are Ledger Events; Closing Requires Resolution or User-Verified Disclosure](DECISIONS/ADR-2026-10-23--gate-denials-are-ledger-events.md)
 - [Along Core and Modular Extras Architecture](DECISIONS/ADR-2026-10-23--along-core-and-modular-extras.md)
 - [Entity model slimmed: spike is an issue type, risks and checklists retired](DECISIONS/ADR-2026-10-19--entity-model-slimmed.md)
@@ -32,9 +33,8 @@
 - [Ban file:// Scheme in Markdown Links in Favor of Standard Relative Links](DECISIONS/ADR-2026-09-07--ban-file-uri-scheme-in-markdown-links.md)
 - [Authored vs Compiled Documentation Boundaries and Automated Consistency Gates](DECISIONS/ADR-2026-09-07--authored-vs-compiled-documentation-boundaries.md)
 - [Provider-Agnostic Subagent Primitives and Single-Agent Degradation in along-team](DECISIONS/ADR-2026-09-06--provider-agnostic-subagent-abstraction.md)
-- [Engineering Provenance, Dual-Track UI Projections, and Loop Trace Disambiguation](DECISIONS/ADR-2026-09-06--engineering-provenance-and-dual-track-artifact-loop.md)
 
-Older decisions (18): docs/decisions/INDEX.md
+Older decisions (19): docs/decisions/INDEX.md
 
 ## Superseded & Retired Decisions (6)
 

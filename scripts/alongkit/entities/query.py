@@ -20,6 +20,7 @@ from .vocabulary import (
     DELIVERED_ISSUE_STATUSES,
     ROOT_QUALIFIER,
     canonical_key,
+    is_issue_ticket_path,
     parse_key,
 )
 
@@ -341,7 +342,7 @@ def _context_entity_keys(along_dir: str, keys: set) -> None:
         pattern = os.path.join(along_dir, dirname, "**", "*.md")
         for fpath in glob.glob(pattern, recursive=True):
             fname = os.path.basename(fpath)
-            if fname in _PROJECTION_FILES:
+            if fname in _PROJECTION_FILES or (dirname == "ISSUES" and not is_issue_ticket_path(fpath)):
                 continue
             stem = fname[:-3]
             keys.add(stem)

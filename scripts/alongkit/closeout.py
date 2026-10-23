@@ -253,6 +253,8 @@ def done_issues_attribution(repo_root: str) -> Dict[str, Dict[str, Any]]:
                 repo.canonical_relpath(entry.path, top),
                 repo.canonical_relpath(os.path.join(sdir, "ISSUES", entry.name), top),
             ]
+            entity_files += [repo.canonical_relpath(p, top)
+                             for p in issue_folder_files(os.path.join(sdir, "ISSUES"), entry.name)]
             for lpath in log_files:
                 entity_files.append(repo.canonical_relpath(lpath, top))
 
@@ -543,6 +545,19 @@ def _is_wrap_byproduct(path: str) -> bool:
     return session.path_kind(path) in ("state", "docs") or name in ("llms.txt", "llms-full.txt")
 
 
+def issue_folder_files(issues_dir: str, ticket_name: str) -> List[str]:
+    """Files of a ticket's folder (its plan) at both places a wrap touches: the open folder
+    (deleted by the move) and the folder in done/. [feat--pre-approved-plans]"""
+    stem = ticket_name[:-3] if ticket_name.endswith(".md") else ticket_name
+    folders = [os.path.join(issues_dir, stem), os.path.join(issues_dir, "done", stem)]
+    names: List[str] = []
+    for folder in folders:
+        if os.path.isdir(folder):
+            for root, _dirs, files in os.walk(folder):
+                names += [repo.canonical_relpath(os.path.join(root, f), folder) for f in files]
+    return [os.path.join(folder, *n.split("/")) for folder in folders for n in dict.fromkeys(names)]
+
+
 def _entity_files(repo_root: str, top: str, key: str, today: str) -> List[str]:
     """Top-relative paths of an issue's entity files a wrap touched: the issue file at both
     places (the move) and today's session log."""
@@ -556,6 +571,7 @@ def _entity_files(repo_root: str, top: str, key: str, today: str) -> List[str]:
     issues_dir = os.path.join(repo.state_dir(real_root), "ISSUES")
     paths = [os.path.join(issues_dir, name), os.path.join(issues_dir, "done", name),
              lifecycle.session_log_path(real_root, issue["slug"], today)]
+    paths += issue_folder_files(issues_dir, name)
     sessions_dir = os.path.join(repo.state_dir(real_root), "SESSIONS")
     if os.path.isdir(sessions_dir):
         for yentry in os.scandir(sessions_dir):

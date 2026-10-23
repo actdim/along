@@ -29,6 +29,7 @@ from .vocabulary import (
     REFERENCE_FIELDS,
     SESSION_REFERENCE_FIELDS,
     canonical_key,
+    is_issue_ticket_path,
     is_valid_slug,
     issue_filename,
     parse_key,
@@ -39,6 +40,40 @@ _REFERENCING_DIRS: Tuple[str, ...] = ("ISSUES", "DECISIONS")
 _DANGLING_MILESTONE = "dangling milestone reference: "
 _DELETE_LIST_FIELDS: Tuple[str, ...] = ("related", "blocked_by", "target_issues")
 _DELETE_BLOCKING_FIELDS: Tuple[str, ...] = ("parent", "superseded_by", "duplicate_of")
+
+
+def move_issue_folder(src_issue_file: str, dest_issue_file: str, tx: Any = None) -> bool:
+    """Move the folder that goes with a ticket (`<key>/`, holding its plan) to follow it.
+
+    `<dir>/feat--x.md` owns `<dir>/feat--x/`. With `dest_issue_file` None the folder is removed
+    (the ticket was deleted). Files are protected in `tx` (a FileTransaction) when given.
+    True when there was a folder. [feat--pre-approved-plans]
+    """
+    import shutil
+
+    from .. import repo
+
+    src_dir = os.path.splitext(src_issue_file)[0]
+    if not os.path.isdir(src_dir):
+        return False
+    dest_dir = os.path.splitext(dest_issue_file)[0] if dest_issue_file else None
+    if dest_dir and os.path.normcase(os.path.abspath(src_dir)) == os.path.normcase(os.path.abspath(dest_dir)):
+        return True
+    for root, _dirs, files in os.walk(src_dir):
+        for name in files:
+            path = os.path.join(root, name)
+            if tx is not None:
+                tx.protect(path)
+                if dest_dir:
+                    tx.protect(os.path.join(dest_dir, *repo.canonical_relpath(path, src_dir).split("/")))
+    if dest_dir:
+        if os.path.exists(dest_dir):
+            raise ValueError(f"Cannot move '{src_dir}': '{dest_dir}' already exists.")
+        os.makedirs(os.path.dirname(dest_dir), exist_ok=True)
+        shutil.move(src_dir, dest_dir)
+    else:
+        shutil.rmtree(src_dir)
+    return True
 
 
 def update_issue_frontmatter(repo_root: str, slug: str, updates: Dict[str, Any]) -> Tuple[str, Dict[str, Any]]:
@@ -229,7 +264,8 @@ def _entity_files(sdir: str, dirname: str) -> List[str]:
     import glob
 
     return sorted(p for p in glob.glob(os.path.join(sdir, dirname, "**", "*.md"), recursive=True)
-                  if os.path.basename(p) not in _PROJECTION_FILES)
+                  if os.path.basename(p) not in _PROJECTION_FILES
+                  and (dirname != "ISSUES" or is_issue_ticket_path(p)))
 
 
 def rewrite_inbound_references(repo_root: str, old_key: str, new_key: Union[str, Sequence[str]],
@@ -298,6 +334,7 @@ def rename_issue(repo_root: str, old: str, new: str) -> Dict[str, Any]:
                                  path=src)
     textio.write_text(dest, updated, newline="\n", atomic=True)
     os.remove(src)
+    move_issue_folder(src, dest)
 
     changed = rewrite_inbound_references(repo_root, old_key, new_key, skip=[dest])
     sync_milestones(repo_root)
@@ -358,6 +395,7 @@ def supersede_issue(repo_root: str, old: str, by: Union[str, Sequence[str]]) -> 
     textio.write_text(dest, updated, newline="\n", atomic=True)
     if os.path.normcase(os.path.abspath(src)) != os.path.normcase(os.path.abspath(dest)):
         os.remove(src)
+        move_issue_folder(src, dest)
 
     sync_milestones(repo_root)
     sync_issues_board(repo_root)
@@ -414,6 +452,7 @@ def delete_issue(repo_root: str, key: str) -> Dict[str, Any]:
     for fpath, content, updates in edits:
         textio.write_text(fpath, frontmatter.update(content, updates, path=fpath), newline="\n")
     os.remove(issue["file_path"])
+    move_issue_folder(issue["file_path"], None)
     sync_milestones(repo_root)
     sync_issues_board(repo_root)
     return {"key": old_key, "file_path": issue["file_path"], "rewritten": [e[0] for e in edits]}

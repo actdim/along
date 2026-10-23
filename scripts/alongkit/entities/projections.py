@@ -18,6 +18,12 @@ from typing import Any, Dict, Optional
 
 from .vocabulary import RECENT_DONE_LIMIT
 
+_PLAN_STATUS_NOTES: Dict[str, str] = {
+    "approved": " - plan ready",
+    "needs-approval": " - plan: needs approval",
+    "needs-rework": " - plan: needs rework",
+}
+
 BOARD_ENTRY_RE = re.compile(
     r"^-\s+\[(?P<box>[ xX~])\]\s+`\((?P<type>\w+)\)`\s+\[(?P<slug>[^\]]+)\]\((?P<link>[^\)]+)\)"
 )
@@ -61,15 +67,18 @@ def compile_issues_board(repo_root: str, recent_done_limit: int = RECENT_DONE_LI
                 islug = parts[1] if len(parts) > 1 else f[:-3]
                 fpath = os.path.join(issues_dir, f)
                 istatus = "open"
+                plan_note = ""
                 try:
                     content = textio.read_text(fpath)
                     fm, _, _ = frontmatter.try_parse(content, path=fpath)
                     if fm.get("status"):
                         istatus = str(fm["status"]).lower()
+                    # The ticket's plan status [feat--pre-approved-plans]; a marker only, never approval.
+                    plan_note = _PLAN_STATUS_NOTES.get(str(fm.get("plan_status") or "").strip().lower(), "")
                 except OSError:
                     pass
 
-                entry = f"- [ ] `({itype})` [{islug}](ISSUES/{f})"
+                entry = f"- [ ] `({itype})` [{islug}](ISSUES/{f}){plan_note}"
                 if istatus == "in-progress":
                     active_items.append(entry)
                 else:

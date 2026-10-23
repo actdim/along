@@ -24,8 +24,7 @@ from .common import flag_value, require_entity_name
 def _cli_approval_or_exit(repo_root: str, slug: str) -> str:
     """Hold a CLI plan approval of slug to the user's last message; its approved_via."""
     key = session.current_session_key()
-    refusal, via = session.check_cli_approval(
-        repo_root, key, os.path.join(session.get_session_dir(repo_root, slug), "plan.md"))
+    refusal, via = session.check_cli_approval(repo_root, key, session.plan_path(repo_root, slug))
     if refusal:
         print(f"[Error] Plan approval refused: {refusal}.", file=sys.stderr)
         sys.exit(2)
@@ -171,17 +170,26 @@ def handle_start_command(repo_root: str, args: List[str]):
     key = session.current_session_key()
 
     if "--approved" in args:
-        refusal, via = session.check_cli_approval(repo_root, key, os.path.join(sdir, "plan.md"))
+        refusal, via = session.check_cli_approval(repo_root, key, session.plan_path(repo_root, issue["slug"]))
         if refusal:
             print(f"[Error] --approved refused: {refusal}.", file=sys.stderr)
             sys.exit(2)
+    # A plan approved ahead (`along plan approve <slug>` before start) runs without a second
+    # approval, when the approval was given on this machine. [feat--pre-approved-plans]
+    plan_state = session.issue_plan_state(repo_root, issue["slug"])
+    ready = plan_state == session.PLAN_READY
     binding = session.bind_session(repo_root, issue["slug"], key=key,
-                                   approved=True if "--approved" in args else None,
+                                   approved=True if ("--approved" in args or ready) else None,
                                    profile=profile_val)
     if "--approved" in args:
         session.mark_approval(repo_root, key, via)
         session.append_trace(repo_root, issue["slug"], f"plan approved (along start --approved; approved_via: {via})")
-    approved = "--approved" in args or session.is_plan_approved(repo_root, slug=issue["slug"], key=key)
+    elif ready:
+        session.mark_approval(repo_root, key, session.APPROVED_VIA_ISSUE_PLAN, session.read_plan(repo_root, issue["slug"]))
+        session.append_trace(repo_root, issue["slug"],
+                             f"plan approved (approved issue plan; approved_via: {session.APPROVED_VIA_ISSUE_PLAN})")
+        session.append_event(repo_root, issue["slug"], key, "approve")
+    approved = "--approved" in args or ready or session.is_plan_approved(repo_root, slug=issue["slug"], key=key)
     st = session.set_session_phase(repo_root, "execution" if approved else "planning",
                                    slug=issue["slug"], plan_approved=approved)
     print(f"-> Initialized session blackboard: {sdir} "
@@ -192,6 +200,18 @@ def handle_start_command(repo_root: str, args: List[str]):
         print("-> No agent session id in the environment; gates fall back to the single in-progress issue.")
     if profile_val:
         print(f"-> Active profile set to '{profile_val}'.")
+    plan_rel = repo.normalize_posix(repo.safe_relpath(session.plan_path(repo_root, issue["slug"]), repo_root))
+    if ready:
+        print(f"-> Using the approved plan in {plan_rel}; no further approval needed. Correct it as the work "
+              f"requires ('along plan revise'); only a problem the ticket cannot absorb goes to the user "
+              f"('along plan rework').")
+    elif plan_state == session.PLAN_UNCONFIRMED and not approved:
+        print(f"-> The ticket says plan_status: approved, but that approval is not confirmed on this machine "
+              f"(approved elsewhere, or set by hand). Show {plan_rel} to the user and run "
+              f"'along plan approve {issue['slug']}' after their yes.")
+    elif plan_state == "needs-rework" and not approved:
+        print(f"-> The plan in {plan_rel} needs rework (see its last 'Rework requested' note): revise it with the "
+              f"user, then approve it.")
     if not approved:
         print("-> Edits unlock after the user approves the plan. Call EnterPlanMode, write the plan, then "
               "ExitPlanMode. Outside plan mode, write the plan to a file and run "
@@ -224,10 +244,16 @@ def handle_plan_command(repo_root: str, args: List[str]):
     if not args or args[0] in ("-h", "--help", "help"):
         print("Usage: along plan approve [<slug>] [--plan-file <path>]")
         print("                                     Record the user's approval of the plan (run only after an explicit yes);")
-        print("                                     --plan-file writes the approved plan into the blackboard plan.md")
+        print("                                     --plan-file writes the approved plan into the issue's plan")
+        print("                                     (.along/ISSUES/<key>/plan.md). Before 'along start' it approves the")
+        print("                                     plan ahead: the next 'along start <slug>' runs it without asking again")
+        print("       along plan revise <slug> --plan-file <path> --reason \"...\"")
+        print("                                     Append a correction made during the work as the plan's next revision")
+        print("       along plan rework <slug> --reason \"...\"")
+        print("                                     The plan cannot be followed within the ticket: mark it needs-rework")
         print("       along plan approve --closeout <slug>... | --closeout --ready")
         print("                                     Record the user's approval to close these issues out (after an explicit yes)")
-        print("       along plan status             Show this session's binding, phase and approval")
+        print("       along plan status [<slug>]    Show this session's binding, phase and approval, and the issue plan")
         sys.exit(0)
     sub = args[0].lower()
     key = session.current_session_key()
@@ -260,8 +286,10 @@ def handle_plan_command(repo_root: str, args: List[str]):
         if plan_file and not slug:
             print("[Error] --plan-file needs an issue: 'along start <slug>' first, or pass <slug>.", file=sys.stderr)
             sys.exit(2)
+        if slug and session.load_state(repo_root, slug) is None:
+            _approve_ahead(repo_root, slug, key, plan_file)
         if slug:
-            plan_path = plan_file or os.path.join(session.get_session_dir(repo_root, slug), "plan.md")
+            plan_path = plan_file or session.plan_path(repo_root, slug)
         else:
             plan_path = None
         refusal, via = session.check_cli_approval(repo_root, key, plan_path)
@@ -301,8 +329,9 @@ def handle_plan_command(repo_root: str, args: List[str]):
                 except OSError:
                     pass
             session.set_session_phase(repo_root, "execution", slug=slug, plan_approved=True)
-            plan_now = textio.read_text(os.path.join(session.get_session_dir(repo_root, slug), "plan.md"), strict=False)
+            plan_now = session.read_plan(repo_root, slug)
             session.mark_approval(repo_root, key, via, plan_now)
+            session.approve_issue_plan(repo_root, slug, via, key=key)
             sha = session.plan_sha256(plan_now)
             trace_extra = f", plan_sha256: {sha[:12]}" if sha else ""
             session.append_trace(repo_root, slug, f"plan approved (along plan approve) approved_via: {via}{trace_extra}")
@@ -315,15 +344,125 @@ def handle_plan_command(repo_root: str, args: List[str]):
             print("[Error] No issue bound and no agent session id; run 'along start <slug>' first.", file=sys.stderr)
             sys.exit(1)
         sys.exit(0)
+    if sub in ("revise", "rework"):
+        slug = _require_plan_issue(repo_root, args, f"along plan {sub} <slug>")
+        reason = (flag_value(args, "--reason") or "").strip()
+        if not reason:
+            print(f"[Error] --reason is required: say why the plan {'changed' if sub == 'revise' else 'cannot be followed'}.",
+                  file=sys.stderr)
+            sys.exit(2)
+        started = session.load_state(repo_root, slug) is not None
+        if sub == "revise":
+            plan_file = flag_value(args, "--plan-file")
+            if not plan_file:
+                print("[Error] --plan-file is required: the corrected plan (or the part that changed).", file=sys.stderr)
+                sys.exit(2)
+            try:
+                text = textio.read_text(plan_file, strict=False)
+            except OSError as exc:
+                print(f"[Error] Cannot read --plan-file '{plan_file}': {exc}", file=sys.stderr)
+                sys.exit(2)
+            if started:
+                rev = session.record_plan(repo_root, slug, text, "along plan revise", key=key, reason=reason)
+            else:
+                rev = session.write_issue_plan(repo_root, slug, text, "along plan revise", reason=reason)
+            if not rev:
+                print("-> Plan unchanged: it already ends with this text.")
+            else:
+                print(f"-> Recorded plan revision {rev} for '{slug}' (status: {session.plan_status(repo_root, slug) or 'none'}).")
+            sys.exit(0)
+        session.request_plan_rework(repo_root, slug, reason, key=key)
+        if started:
+            session.set_session_phase(repo_root, "planning", slug=slug, plan_approved=False)
+            session.append_trace(repo_root, slug, f"plan needs rework: {reason}")
+        print(f"-> Plan of '{slug}' marked needs-rework. Stop and ask the user: the ticket cannot be met "
+              "as planned. Revise the plan with them, then 'along plan approve' after their yes.")
+        sys.exit(0)
     if sub == "status":
-        slug, how = session.resolve_active_session(repo_root, key)
+        named = args[1].lower() if len(args) > 1 and not args[1].startswith("-") else None
+        slug, how = (entities.parse_key(named)[1], "named") if named else session.resolve_active_session(repo_root, key)
         print(f"Session key: {key or 'none (no session id in environment)'}")
         print(f"Issue:       {slug or '-'} ({how})")
         print(f"Phase:       {session.get_session_phase(repo_root, slug=slug, key=key)}")
         print(f"Approved:    {str(session.is_plan_approved(repo_root, slug=slug, key=key)).lower()}")
+        if slug and session.issue_file(repo_root, slug):
+            state = session.issue_plan_state(repo_root, slug)
+            shown = {session.PLAN_READY: "approved (ready; confirmed on this machine)",
+                     session.PLAN_UNCONFIRMED: "approved in the ticket, not confirmed on this machine"}.get(state, state)
+            plan_rel = repo.normalize_posix(repo.safe_relpath(session.plan_path(repo_root, slug), repo_root))
+            print(f"Issue plan:  {shown or 'none'} ({plan_rel})")
         sys.exit(0)
-    print(f"[Error] Unknown plan subcommand '{sub}'. Use: approve, status.", file=sys.stderr)
+    print(f"[Error] Unknown plan subcommand '{sub}'. Use: approve, revise, rework, status.", file=sys.stderr)
     sys.exit(2)
+
+
+def _require_plan_issue(repo_root: str, args: List[str], usage: str) -> str:
+    """The open issue named in args[1], by bare slug; exits on a missing or closed issue."""
+    if len(args) < 2 or args[1].startswith("-"):
+        print(f"[Error] Usage: {usage}", file=sys.stderr)
+        sys.exit(2)
+    issue = entities.find_issue_by_slug(repo_root, args[1].lower())
+    if not issue:
+        print(f"[Error] Issue '{args[1]}' not found in .along/ISSUES/.", file=sys.stderr)
+        sys.exit(1)
+    if issue.get("done") or issue.get("status") in entities.CLOSED_ISSUE_STATUSES:
+        print(f"[Error] Issue '{issue['slug']}' is closed; reopen it first ('along issue reopen {issue['slug']}').",
+              file=sys.stderr)
+        sys.exit(1)
+    return str(issue["slug"])
+
+
+def _approve_ahead(repo_root: str, slug: str, key: Optional[str], plan_file: Optional[str]) -> None:
+    """Approve the plan of an issue that has not started; the next `along start` runs it.
+
+    The plan comes from --plan-file, from this session's plan-mode acceptance (ExitPlanMode
+    before any issue was bound), or from the issue's own plan.md. The CLI approval is held to
+    the user's last message exactly like a started issue's. No blackboard is created.
+    [feat--pre-approved-plans]
+    """
+    slug = _require_plan_issue(repo_root, ["approve", slug], "along plan approve <slug>")
+    issue = entities.find_issue_by_slug(repo_root, slug) or {}
+    try:
+        is_stub, stub_reasons = entities.is_issue_stub(textio.read_text(issue.get("file_path", ""), strict=False))
+    except OSError:
+        is_stub, stub_reasons = False, []
+    if is_stub:
+        print(f"[Error] Plan approval refused: issue '{slug}' contains unfilled scaffold placeholders:\n"
+              + "\n".join(f"  - {r}" for r in stub_reasons), file=sys.stderr)
+        sys.exit(2)
+
+    accepted = None if plan_file else session.pending_accepted_plan(repo_root, key)
+    if accepted:
+        text, via, source = accepted, session.APPROVED_VIA_EXIT_PLAN_MODE, "ExitPlanMode"
+    else:
+        source_path = plan_file or session.issue_plan_file(repo_root, slug)
+        refusal, via = session.check_cli_approval(repo_root, key, source_path)
+        if refusal:
+            print(f"[Error] Plan approval refused: {refusal}.", file=sys.stderr)
+            print("  Write the plan, show it to the user and run 'along plan approve <slug> --plan-file <path>' "
+                  "after their explicit yes.", file=sys.stderr)
+            sys.exit(2)
+        text, source = None, "plan approve --plan-file"
+        if plan_file:
+            try:
+                text = textio.read_text(plan_file, strict=False)
+            except OSError as exc:
+                print(f"[Error] Cannot read --plan-file '{plan_file}': {exc}", file=sys.stderr)
+                sys.exit(2)
+    if text:
+        session.write_issue_plan(repo_root, slug, text, source)
+    if not session.plan_recorded(repo_root, slug):
+        print(f"[Error] No plan for '{slug}': pass '--plan-file <path>' or write .along/ISSUES/<key>/plan.md.",
+              file=sys.stderr)
+        sys.exit(2)
+    session.approve_issue_plan(repo_root, slug, via, key=key)
+    if accepted:
+        session.release_pending_plan(repo_root, key)
+    entities.sync_issues_board(repo_root, recent_done_limit=entities.RECENT_DONE_LIMIT)
+    plan_rel = repo.normalize_posix(repo.safe_relpath(session.plan_path(repo_root, slug), repo_root))
+    print(f"-> Plan approved ahead for '{slug}' (via: {via}); kept in {plan_rel}. "
+          f"The next 'along start {slug}' runs it without asking again.")
+    sys.exit(0)
 
 
 def handle_status_command(repo_root: str, args: List[str]):

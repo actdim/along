@@ -274,6 +274,7 @@ def _issue_done(repo_root: str, args: List[str], issues_dir: str, done_dir: str,
         tx.protect(dest_file)
         textio.write_text(dest_file, content, newline="\n", atomic=True)
         os.remove(found_file)
+        entities.move_issue_folder(found_file, dest_file, tx)
         print(f"-> Moved issue to done: {dest_file}")
 
         if has_blackboard:
@@ -338,6 +339,7 @@ def _issue_reopen(repo_root: str, args: List[str], issues_dir: str, done_dir: st
         tx.protect(dest)
         textio.write_text(dest, content, newline="\n", atomic=True)
         os.remove(found)
+        entities.move_issue_folder(found, dest, tx)
         board = os.path.join(repo.state_dir(repo_root), "ISSUES.md")
         if os.path.exists(board):
             tx.protect(board)

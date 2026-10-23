@@ -116,7 +116,16 @@ MUTATION_WHITELIST_PATTERNS: Tuple[str, ...] = (
 APPROVAL_RECORD_PATTERNS: Tuple[str, ...] = (
     ".along/.session/bindings/**",
     ".along/.session/*/state.json",
+    # The issue-plan approval log [feat--pre-approved-plans].
+    ".along/.session/plan-approvals.jsonl",
 )
+
+#: Issue tickets, whose `plan_status: approved` only `along plan approve` may set.
+ISSUE_TICKET_PATTERNS: Tuple[str, ...] = (
+    ".along/ISSUES/*.md",
+    ".along/ISSUES/done/*.md",
+)
+_PLAN_APPROVED_RE = re.compile(r"^\s*plan_status\s*:\s*[\"']?approved[\"']?\s*$", re.MULTILINE | re.IGNORECASE)
 
 #: Edits the execution trace leaves out: the blackboard itself and machine-local diagnostics.
 TRACE_EXCLUDED_PATTERNS: Tuple[str, ...] = (
@@ -917,6 +926,12 @@ def check_mutation_authorization(event: HookEvent, repo_root: str, options: Opti
                 "(session binding or blackboard state). It is written only by the along CLI "
                 "('along start', 'along plan approve', 'along scratch ...'), never by a file tool."
             )
+        if _sets_plan_approved(event, rel_target, repo_root):
+            return (
+                f"PLAN_REQUIRED [gate: require-plan-approval]: '{rel_target}' would set plan_status: approved. "
+                "Only 'along plan approve <slug>' sets it, after the user's explicit yes to the plan; "
+                "set needs-approval and show the plan to the user."
+            )
         if _matches_in_context(rel_target, repo_root, list(MUTATION_WHITELIST_PATTERNS)):
             return None
         changed = [rel_target]
@@ -925,7 +940,13 @@ def check_mutation_authorization(event: HookEvent, repo_root: str, options: Opti
         if not isinstance(baseline, dict):
             return None
         from . import turnstate
-        changed = [p for p in turnstate.changed_since(repo_root, baseline) if _is_plan_governed(p, repo_root)]
+        turn_changes = turnstate.changed_since(repo_root, baseline)
+        forged = _unlogged_plan_approvals(turn_changes, repo_root)
+        if forged:
+            return (f"PLAN_REQUIRED [gate: require-plan-approval]: this turn set plan_status: approved in "
+                    f"{', '.join(forged)} without 'along plan approve'. Revert it to needs-approval and ask "
+                    "the user to approve the plan.")
+        changed = [p for p in turn_changes if _is_plan_governed(p, repo_root)]
         if not changed:
             return None
     else:
@@ -962,6 +983,53 @@ def check_mutation_authorization(event: HookEvent, repo_root: str, options: Opti
     if event.runtime == "antigravity":
         return GateResult(decision=GateDecision.ASK, reason=reason, gate_name="require_plan_approval")
     return reason
+
+
+def _is_ticket(rel: str, repo_root: str) -> bool:
+    """An issue ticket (`.along/ISSUES/<key>.md`, or in `done/`), not a file in an issue folder."""
+    rel = repo.normalize_posix(rel)
+    return _matches_in_context(rel, repo_root, list(ISSUE_TICKET_PATTERNS)) and entities.is_issue_ticket_path(rel)
+
+
+def _ticket_context(repo_root: str, rel: str) -> str:
+    """The directory owning the `.along/` a ticket lives in (a subproject's, or the root)."""
+    rel = repo.normalize_posix(rel)
+    head = rel[:rel.rfind(".along/")].rstrip("/") if ".along/" in rel else ""
+    return os.path.join(repo_root, head) if head else repo_root
+
+
+def _sets_plan_approved(event: HookEvent, rel_target: str, repo_root: str) -> bool:
+    """A file-tool write to a ticket that adds `plan_status: approved` it does not have yet."""
+    if not _is_ticket(rel_target, repo_root):
+        return False
+    if not _PLAN_APPROVED_RE.search(_extract_content(event) or str(event.tool_args.get("new_string") or "")):
+        return False
+    path = os.path.join(repo_root, rel_target)
+    try:
+        current = textio.read_text(path, strict=False) if os.path.isfile(path) else ""
+    except OSError:
+        current = ""
+    return not _PLAN_APPROVED_RE.search(current)
+
+
+def _unlogged_plan_approvals(changed: List[str], repo_root: str) -> List[str]:
+    """Tickets changed this turn that say `plan_status: approved` while the CLI's approval log
+    does not end with an approval for them (a shell write past the file-tool guard). A ticket
+    approved earlier and edited for another reason this turn is not reported."""
+    tickets = [p for p in changed if _is_ticket(p, repo_root)]
+    if not tickets:
+        return []
+    forged = []
+    for rel in tickets:
+        path = os.path.join(repo_root, rel)
+        try:
+            text = textio.read_text(path, strict=False) if os.path.isfile(path) else ""
+        except OSError:
+            continue
+        if _PLAN_APPROVED_RE.search(text) and not session.plan_approval_confirmed(
+                _ticket_context(repo_root, rel), os.path.basename(rel)[:-3]):
+            forged.append(rel)
+    return forged
 
 
 def _is_along_state(rel: str) -> bool:

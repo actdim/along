@@ -1279,6 +1279,7 @@ def execute_wrap(
             textio.write_text(dest_file, new_content, newline="\n")
             if os.path.abspath(src_file) != os.path.abspath(dest_file):
                 os.remove(src_file)
+                entities.move_issue_folder(src_file, dest_file, tx)
             print(f"-> Moved issue to done: {repo.safe_relpath(dest_file, repo_root)}")
         else:
             tx.protect(src_file)
