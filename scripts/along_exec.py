@@ -19,6 +19,7 @@ from alongkit import entities, frontmatter, gates, lifecycle, proc, repo
 from alongkit.commands import (
     handle_brief_command,
     handle_budget_command,
+    handle_daemon_command,
     handle_decision_command,
     handle_devenv_command,
     handle_doctor_command,
@@ -85,6 +86,7 @@ TOOL_MAPPINGS = {
     "resolve": "along_resolve.py",
     "conflict-check": "along_conflict_check.py", "conflictcheck": "along_conflict_check.py",
     "env": "along_env.py",
+    "daemon": "along_daemon.py",
 }
 
 LIFECYCLE_ACTIONS = {"build", "test", "dev", "debug"}
@@ -92,7 +94,7 @@ HELP_FLAGS = ("-h", "--help")
 
 _BOARD_COMMANDS = frozenset({
     "issue", "milestone", "milestones", "start", "begin", "session", "plan", "decision",
-    "scratch", "worktree", "wrap", "commit", "brief", "orchestrate", "team",
+    "scratch", "worktree", "wrap", "commit", "brief", "orchestrate", "team", "daemon",
 })
 
 
@@ -158,6 +160,7 @@ Entity Management Commands:
   brief          Generate deterministic role-based brief (along brief <slug> --role <role>)
   orchestrate    Execute cross-runtime multi-agent loop (along orchestrate <slug> [options])
   team           Along team multi-agent orchestration (along team orchestrate <slug> [options])
+  daemon         VPS runner host daemon and Telegram ingress dispatcher
   env            Isolated Docker environment management (up, down, status, logs, shell, update)
   budget         Measure context footprint and check token budgets (--json, --check)
   context-budget Measure context footprint and check token budgets (--json, --check)
@@ -276,6 +279,7 @@ def main():
         "brief": handle_brief_command,
         "orchestrate": handle_orchestrate_command,
         "team": handle_team_command,
+        "daemon": handle_daemon_command,
     }
 
     if cmd in native_routers and _wants_help(extra_args):

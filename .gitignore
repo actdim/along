@@ -53,6 +53,7 @@ site/
 
 # Machine-local diagnostics and runtime audit logs
 .along/diagnostics/
+.along/.daemon/
 
 # Raw command output offloaded by telemetry and distilled lifecycle runs
 .along/artifacts/

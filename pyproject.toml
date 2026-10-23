@@ -84,6 +84,7 @@ packages = ["scripts/alongkit"]
 "scripts/along_brief.py" = "alongkit/engines/along_brief.py"
 "scripts/along_commit.py" = "alongkit/engines/along_commit.py"
 "scripts/along_conflict_check.py" = "alongkit/engines/along_conflict_check.py"
+"scripts/along_daemon.py" = "alongkit/engines/along_daemon.py"
 "scripts/along_dash.py" = "alongkit/engines/along_dash.py"
 "scripts/along_dep_scan.py" = "alongkit/engines/along_dep_scan.py"
 "scripts/along_env.py" = "alongkit/engines/along_env.py"

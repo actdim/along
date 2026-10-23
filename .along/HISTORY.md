@@ -228,3 +228,4 @@ _Index of sessions (newest last). One line per session:_
 2026-10-23 - autonomous-gate-profile - antigravity - Implement autonomous gate profile and deterministic decision engine - [Session Log](./SESSIONS/2026/2026-10-23--autonomous-gate-profile.md)
 2026-10-23 - agent-runtime-adapters-claude-codex-opencode - antigravity - Implement multi-runtime adapters for Claude Code, Codex, OpenCode, and generic CLI - [Session Log](./SESSIONS/2026/2026-10-23--agent-runtime-adapters-claude-codex-opencode.md)
 2026-10-23 - cross-runtime-supervisor-orchestrator - antigravity - Implement cross-runtime supervisor orchestrator for tiered multi-agent loops - [Session Log](./SESSIONS/2026/2026-10-23--cross-runtime-supervisor-orchestrator.md)
+2026-10-23 - vps-runner-daemon - antigravity - Implement VPS runner daemon and Telegram ingress loop - [Session Log](./SESSIONS/2026/2026-10-23--vps-runner-daemon.md)

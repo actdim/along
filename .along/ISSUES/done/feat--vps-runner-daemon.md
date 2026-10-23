@@ -3,10 +3,11 @@ protocol: along
 protocol_version: "4.1.0"
 slug: vps-runner-daemon
 type: feat
-status: open
+status: done
+completed: 2026-10-23
 priority: high
 created: 2026-09-27
-updated: 2026-09-27
+updated: 2026-10-23
 agent: antigravity
 tags: [vps, runner, daemon, service, worker-pool, long-polling, webhook, systemd]
 milestone: v5.0.0-agent-run-protocol-and-observability
@@ -69,8 +70,8 @@ Re-scoped under `feat--autonomous-multi-runtime-mvp`:
 - No OTel flush in the MVP; the JSONL event log and the Telegram card are the observability surface.
 
 ## Acceptance Criteria
-- [ ] `along daemon` CLI implemented supporting start, stop, status, and logs.
-- [ ] Long-polling Telegram event dispatcher functional without inbound network ports.
-- [ ] Worker pool safely isolates concurrent or sequential runs in dedicated worktrees.
-- [ ] Systemd unit template tested and verified for Linux VPS deployments.
-- [ ] Clean process cleanup and state recovery verified upon unexpected termination.
+- [x] `along daemon` CLI implemented supporting start, stop, status, and logs.
+- [x] Long-polling Telegram event dispatcher functional without inbound network ports.
+- [x] Worker pool safely isolates concurrent or sequential runs in dedicated worktrees.
+- [x] Systemd unit template tested and verified for Linux VPS deployments.
+- [x] Clean process cleanup and state recovery verified upon unexpected termination.

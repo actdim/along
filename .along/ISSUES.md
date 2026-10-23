@@ -42,7 +42,6 @@
 - [ ] `(feat)` [pi-harness-support](ISSUES/feat--pi-harness-support.md)
 - [ ] `(feat)` [planning-fields-and-ordering-gates](ISSUES/feat--planning-fields-and-ordering-gates.md)
 - [ ] `(feat)` [system-invariants-and-health-probes](ISSUES/feat--system-invariants-and-health-probes.md)
-- [ ] `(feat)` [vps-runner-daemon](ISSUES/feat--vps-runner-daemon.md)
 - [ ] `(feat)` [zero-step-state-recovery-and-drift-detection](ISSUES/feat--zero-step-state-recovery-and-drift-detection.md)
 - [ ] `(task)` [gate-event-remeasure](ISSUES/task--gate-event-remeasure.md)
 - [ ] `(task)` [integrate-actdim-ui-core-runtime](ISSUES/task--integrate-actdim-ui-core-runtime.md)
@@ -50,8 +49,8 @@
 
 ## Done (recent)
 - [x] `(spike)` [headless-runtimes-on-linux](ISSUES/done/spike--headless-runtimes-on-linux.md)
+- [x] `(feat)` [vps-runner-daemon](ISSUES/done/feat--vps-runner-daemon.md)
 - [x] `(feat)` [isolated-environment-docker](ISSUES/done/feat--isolated-environment-docker.md)
 - [x] `(feat)` [cross-runtime-supervisor-orchestrator](ISSUES/done/feat--cross-runtime-supervisor-orchestrator.md)
 - [x] `(feat)` [cross-runtime-handoff-entities](ISSUES/done/feat--cross-runtime-handoff-entities.md)
-- [x] `(feat)` [autonomous-gate-profile](ISSUES/done/feat--autonomous-gate-profile.md)
-<!-- 291 older completed issue(s) archived in .along/ISSUES/done/ -->
+<!-- 292 older completed issue(s) archived in .along/ISSUES/done/ -->

@@ -1,0 +1,22 @@
+[Unit]
+Description=Along VPS Runner Daemon
+After=network.target network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=along
+Group=along
+WorkingDirectory=/workspace
+EnvironmentFile=-/etc/along/runner.env
+ExecStart=/usr/local/bin/along daemon start --foreground
+Restart=always
+RestartSec=10
+KillSignal=SIGTERM
+TimeoutStopSec=30
+LimitNOFILE=65535
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target
