@@ -2,6 +2,29 @@
 
 All notable changes to this project, newest first.
 
+## v4.5.3 - 2026-10-23
+
+- fix: CI code-fence-language gate failed on docs/topic--autonomous-environment.md:37; the isolation diagram fence now declares text. gates check --ci, typography and link checks pass locally. (refs #ci-fence-language-missing)
+- fix(docs): declare text language on the isolation diagram fence (CI code-fence-language gate) (refs #ci-fence-language-missing)
+- fix: ExitPlanMode PostToolUse capture now reads the accepted plan from tool_input.plan, tool_response.plan, or the plan file (planFilePath / filePath); current Claude Code sends an empty tool_input. Regression tests with the real payload shape; replayed the real payload through the repo hook to record this issue's plan. (refs #exit-plan-text-not-captured)
+- fix(hooks): ExitPlanMode capture reads the plan from tool_response.plan or the plan file, not only tool_input.plan (refs #exit-plan-text-not-captured)
+- fix: along wrap auto-commit and its uncommitted-work warning now include the issue folder moved to done/ and the ticket's old path; regression tests 16c/16d. (refs #wrap-misses-moved-issue-folder)
+- fix(wrap): auto-commit and uncommitted-work warning include the moved issue folder and the ticket's old path (refs #wrap-misses-moved-issue-folder)
+- chore(along): commit the issue plan moved to done/ by wrap (refs #pre-approved-plans)
+- feat: Issue plans live in .along/ISSUES/<key>/plan.md and can be approved ahead of along start; plan_status approved is set only by along plan approve (machine-local approval log, file-tool guard, Stop check); along plan revise/rework; the orchestrator runs an approved plan instead of its architect. (refs #pre-approved-plans)
+- feat(plans): issue plans live with the ticket and can be approved ahead of along start; plan_status approved is set only by the CLI (approval log, gate guard, Stop check); along plan revise/rework; orchestrator runs an approved plan instead of its architect (refs #pre-approved-plans)
+- chore: drop the pre-wrap copy of the issue moved to done/ (refs #plan-approval-self-approval-bypass)
+- fix: Removed agent-writable approval markers (plan.md text, issue front-matter, state.json role keys) from is_plan_approved; restored the session ownership check in every profile; require-plan-approval now denies file-tool writes to session bindings and blackboard state.json; 7 regression tests (13 checks fail on the old code). (refs #plan-approval-self-approval-bypass)
+- fix(gates): plan gate accepts only CLI-written approval; restore session ownership check (refs #plan-approval-self-approval-bypass)
+- feat(daemon): implement VPS runner daemon and Telegram ingress loop (refs #vps-runner-daemon)
+- feat(orchestration): implement cross-runtime supervisor orchestrator for tiered multi-agent loops (refs #cross-runtime-supervisor-orchestrator)
+- feat(runtime): implement multi-runtime adapters for Claude Code, Codex, OpenCode, and generic CLI (refs #agent-runtime-adapters-claude-codex-opencode)
+- feat(gates): implement autonomous gate profile and deterministic decision engine (refs #autonomous-gate-profile)
+- feat(handoff): implement cross-runtime handoff entities, run records, claims, and along brief (refs #cross-runtime-handoff-entities)
+- feat(docker): implement along env isolated Docker environment CLI and assets (refs #isolated-environment-docker)
+- refactor(core): define along core and modular extras architecture (refs #along-core-extras-split)
+- docs(spike): assess headless agent runtimes on Linux and update downstream architecture (refs #headless-runtimes-on-linux)
+
 ## v4.5.2 - 2026-10-23
 
 - feat: Anti-silent-fallback gate: gate denials are ledger events settled by retry, plan approval or a user-verified ack; Stop gate unresolved_gate_denial; along gates denials/ack; closeout, wrap and issue done refuse unsettled denials (--force-reason under bypass rules). (refs #anti-silent-fallback-gate)
