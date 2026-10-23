@@ -1,7 +1,7 @@
 # Active Issues
 
 ## Active
-- [ ] `(bug)` [plan-approval-self-approval-bypass](ISSUES/bug--plan-approval-self-approval-bypass.md)
+<!-- No active issues -->
 
 ## Backlog
 - [ ] `(debt)` [canonical-path-gate-expansion](ISSUES/debt--canonical-path-gate-expansion.md)
@@ -53,4 +53,4 @@
 - [x] `(feat)` [isolated-environment-docker](ISSUES/done/feat--isolated-environment-docker.md)
 - [x] `(feat)` [cross-runtime-supervisor-orchestrator](ISSUES/done/feat--cross-runtime-supervisor-orchestrator.md)
 - [x] `(feat)` [cross-runtime-handoff-entities](ISSUES/done/feat--cross-runtime-handoff-entities.md)
-<!-- 292 older completed issue(s) archived in .along/ISSUES/done/ -->
+<!-- 293 older completed issue(s) archived in .along/ISSUES/done/ -->
