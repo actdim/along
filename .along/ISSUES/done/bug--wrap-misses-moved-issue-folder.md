@@ -3,7 +3,8 @@ protocol: along
 protocol_version: "4.5.2"
 slug: wrap-misses-moved-issue-folder
 type: bug
-status: in-progress
+status: done
+completed: 2026-10-23
 priority: medium
 created: 2026-10-23
 updated: 2026-10-23
