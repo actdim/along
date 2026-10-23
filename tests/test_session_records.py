@@ -85,12 +85,14 @@ class RecordFixture(unittest.TestCase):
                 code = int(exc.code or 0)
         return code, out.getvalue(), err.getvalue()
 
-    def exit_plan_mode(self, plan):
+    def exit_plan_mode(self, plan, tool_response=None):
         tool_input = {} if plan is None else {"plan": plan}
+        raw = {"tool_name": "ExitPlanMode", "tool_input": tool_input}
+        if tool_response is not None:
+            raw["tool_response"] = tool_response
         event = HookEvent(event_type=HookEventType.POST_TOOL_USE, tool_name="ask_question",
                           tool_args=dict(tool_input), workspace_root=self.root, runtime="claude",
-                          conversation_id="sess-a",
-                          raw_payload={"tool_name": "ExitPlanMode", "tool_input": tool_input})
+                          conversation_id="sess-a", raw_payload=raw)
         record_tool_activity(event, self.root)
 
 
@@ -183,6 +185,24 @@ class TestExitPlanModeCapture(RecordFixture):
         self.assertIn("accepted before start", self.plan_text("alpha"))
         self.assertTrue(session.is_plan_approved(self.root, key=self.key))
         self.assertNotIn("pending_plan", session.load_binding(self.root, self.key) or {})
+
+    def test_current_claude_payload_plan_in_tool_response(self):
+        # Claude Code calls ExitPlanMode with an empty input; the plan comes back in the tool
+        # result together with the plan file path. [bug--exit-plan-text-not-captured]
+        self.start("alpha")
+        plan_file = os.path.join(self.root, "plans", "hidden-tinkering-lecun.md")
+        self.exit_plan_mode(None, tool_response={"plan": "# Fix\n\n1. read tool_response.plan\n",
+                                                 "isAgent": False, "filePath": plan_file})
+        self.assertIn("read tool_response.plan", self.plan_text("alpha"))
+        self.assertIn("plan recorded: revision 1 (ExitPlanMode)", self.trace_text("alpha"))
+        self.assertTrue(session.is_plan_approved(self.root, key=self.key))
+
+    def test_plan_file_path_only(self):
+        self.start("alpha")
+        plan_file = os.path.join(self.root, "plans", "hidden-tinkering-lecun.md")
+        textio.write_text(plan_file, "1. read from the plan file\n", newline="\n")
+        self.exit_plan_mode(None, tool_response={"isAgent": False, "filePath": plan_file})
+        self.assertIn("read from the plan file", self.plan_text("alpha"))
 
     def test_no_plan_text_still_approves(self):
         self.start("alpha")

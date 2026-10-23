@@ -350,6 +350,30 @@ def _resolve_retried_denials(event: HookEvent, repo_root: str, key: Optional[str
         save_activity_trace(repo_root, trace, key)
 
 
+def _exit_plan_mode_text(event: HookEvent) -> Optional[str]:
+    """The plan the user accepted through ExitPlanMode, wherever the payload carries it.
+
+    Claude Code calls ExitPlanMode with an empty input and writes the plan to a plan file;
+    the tool result carries `{"plan", "isAgent", "filePath"}`. Older or normalized payloads
+    put `plan` (and `planFilePath`) in the input. [bug--exit-plan-text-not-captured]
+    """
+    payload = event.raw_payload or {}
+    tool_input = payload.get("tool_input") if isinstance(payload.get("tool_input"), dict) else {}
+    response = payload.get("tool_response") if isinstance(payload.get("tool_response"), dict) else {}
+    for plan in ((event.tool_args or {}).get("plan"), tool_input.get("plan"), response.get("plan")):
+        if isinstance(plan, str) and plan.strip():
+            return plan
+    for path in (tool_input.get("planFilePath"), response.get("filePath")):
+        if isinstance(path, str) and path and os.path.isfile(path):
+            try:
+                text = textio.read_text(path, strict=False)
+            except OSError:
+                continue
+            if text.strip():
+                return text
+    return None
+
+
 def record_tool_activity(event: HookEvent, repo_root: str) -> None:
     """Record file modifications and test runs to track lifecycle state.
 
@@ -375,14 +399,11 @@ def record_tool_activity(event: HookEvent, repo_root: str) -> None:
         return
 
     # Claude Code runs ExitPlanMode's PostToolUse only after the user accepted the plan; the
-    # plan text (tool_input.plan) goes into the blackboard. See [feat--plan-approval-exit-plan-mode],
-    # [bug--session-records-not-captured].
+    # plan text goes into the blackboard. See [feat--plan-approval-exit-plan-mode],
+    # [bug--session-records-not-captured], [bug--exit-plan-text-not-captured].
     raw_tool = str((event.raw_payload or {}).get("tool_name") or "")
     if event.event_type == HookEventType.POST_TOOL_USE and raw_tool == "ExitPlanMode":
-        plan = (event.tool_args or {}).get("plan")
-        if not isinstance(plan, str):
-            plan = ((event.raw_payload or {}).get("tool_input") or {}).get("plan")
-        session.record_accepted_plan(repo_root, event_session_key(event), plan if isinstance(plan, str) else None)
+        session.record_accepted_plan(repo_root, event_session_key(event), _exit_plan_mode_text(event))
         return
 
     now_iso = datetime.now(timezone.utc).isoformat()
