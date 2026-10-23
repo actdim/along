@@ -3,7 +3,8 @@ protocol: along
 protocol_version: "4.5.2"
 slug: ci-fence-language-missing
 type: bug
-status: in-progress
+status: done
+completed: 2026-10-23
 priority: high
 created: 2026-10-23
 updated: 2026-10-23
@@ -11,6 +12,7 @@ agent: claude-code
 tags: [ci, docs]
 blocked_by: []
 related: []
+plan_status: approved
 ---
 
 # CI gate fails: code fence without language in topic--autonomous-environment.md

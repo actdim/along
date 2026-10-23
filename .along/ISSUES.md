@@ -1,7 +1,7 @@
 # Active Issues
 
 ## Active
-- [ ] `(bug)` [ci-fence-language-missing](ISSUES/bug--ci-fence-language-missing.md)
+<!-- No active issues -->
 
 ## Backlog
 - [ ] `(debt)` [canonical-path-gate-expansion](ISSUES/debt--canonical-path-gate-expansion.md)
@@ -53,4 +53,4 @@
 - [x] `(feat)` [pre-approved-plans](ISSUES/done/feat--pre-approved-plans.md)
 - [x] `(feat)` [isolated-environment-docker](ISSUES/done/feat--isolated-environment-docker.md)
 - [x] `(feat)` [cross-runtime-supervisor-orchestrator](ISSUES/done/feat--cross-runtime-supervisor-orchestrator.md)
-<!-- 296 older completed issue(s) archived in .along/ISSUES/done/ -->
+<!-- 297 older completed issue(s) archived in .along/ISSUES/done/ -->

@@ -1267,7 +1267,7 @@ As codified in [ADR-2026-10-17--docker-isolation-now-gvisor-later](./decisions/A
 
 Each environment managed by `along env` adheres to an explicit isolation invariant:
 
-```
+```text
 Host / VPS (/srv/along/envs/<name>/)
 ├── env.yaml        (Declarative settings, under 20 lines)
 ├── secrets.env     (API keys, git token, telegram credentials)
