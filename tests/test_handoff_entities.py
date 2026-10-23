@@ -468,6 +468,139 @@ Multi-vendor runtimes require compact, deterministic context payloads to execute
         self.assertEqual(data["role"], "reviewer")
         self.assertIn("Handoff Brief: Reviewer", data["payload"])
 
+    def test_brief_skips_malformed_defects(self):
+        # A defect list an agent wrote by hand may hold plain strings. REQ-9
+        textio.write_text(
+            session.review_file(self.repo, self.slug, 1),
+            "---\nverdict: fail\ndefects:\n  - just a string\n  - severity: blocking\n    description: Real defect\n---\n",
+            newline="\n",
+        )
+        payload = handoff.generate_brief(self.repo, self.slug, role="implementer")
+        self.assertIn("Real defect", payload)
+
+
+class TestReviewVerdictsFailClosed(unittest.TestCase):
+    """A review that does not validly say `pass` is not a pass. [bug--orchestrator-review-fail-open]"""
+
+    def setUp(self):
+        self.repo = hermetic.make_repo_fixture(prefix="along-handoff-failclosed-")
+        self.slug = "failclosed-task"
+        session.init_session(self.repo, self.slug, title="Fail Closed Task", total_steps=2)
+
+    def tearDown(self):
+        shutil.rmtree(self.repo, ignore_errors=True)
+
+    def _write_review(self, frontmatter_text: str) -> None:
+        textio.write_text(session.review_file(self.repo, self.slug, 1), f"---\n{frontmatter_text}---\n", newline="\n")
+
+    def test_missing_verdict_is_not_pass(self):
+        self._write_review("defects: []\n")
+        meta, _body = handoff.parse_review_verdict(
+            textio.read_text(session.review_file(self.repo, self.slug, 1)))
+        self.assertNotEqual(meta["verdict"], "pass")
+        review = handoff.load_review_verdict(self.repo, self.slug, 1)
+        self.assertFalse(review["valid"])
+        self.assertNotEqual(review["verdict"], "pass")
+
+    def test_inconsistent_verdicts_are_invalid(self):
+        for text in ("verdict: fail\ndefects:\n  - severity: nit\n    description: Style\n",
+                     "verdict: pass\ndefects:\n  - severity: blocking\n    description: Broken\n",
+                     "verdict: pass\ndefects: not-a-list\n"):
+            with self.subTest(text=text):
+                self._write_review(text)
+                review = handoff.load_review_verdict(self.repo, self.slug, 1)
+                self.assertFalse(review["valid"])
+                self.assertTrue(review["errors"])
+
+    def test_valid_pass_is_valid(self):
+        handoff.write_review_verdict(self.repo, self.slug, step=1, verdict="pass", defects=[])
+        review = handoff.load_review_verdict(self.repo, self.slug, 1)
+        self.assertTrue(review["valid"])
+        self.assertEqual(review["verdict"], "pass")
+
+
+class TestIdentifierValidation(unittest.TestCase):
+    """Slugs, run ids and question ids never leave the blackboard. [bug--orchestrator-review-fail-open] REQ-8"""
+
+    def setUp(self):
+        self.repo = hermetic.make_repo_fixture(prefix="along-handoff-ids-")
+        self.slug = "ids-task"
+        session.init_session(self.repo, self.slug, title="Ids Task", total_steps=1)
+
+    def tearDown(self):
+        shutil.rmtree(self.repo, ignore_errors=True)
+
+    def test_unsafe_ids_are_rejected(self):
+        for bad in ("../escape", "a/b", "..", "a\\b", ""):
+            with self.subTest(bad=bad):
+                with self.assertRaises(ValueError):
+                    handoff.create_run_record(self.repo, self.slug, run_id=bad, role="implementer", runtime="generic")
+                with self.assertRaises(ValueError):
+                    handoff.create_question(self.repo, self.slug, question="Q?", qid=bad or "..")
+                with self.assertRaises(ValueError):
+                    handoff.get_runs_dir(self.repo, bad)
+        self.assertFalse(os.path.exists(os.path.join(repo.state_dir(self.repo), "escape.json")))
+
+    def test_existing_id_shapes_still_work(self):
+        for run_id in ("run-001", "orch-0123456789ab", "0123456789abcdef0123456789abcdef", "run.v2_x"):
+            handoff.create_run_record(self.repo, self.slug, run_id=run_id, role="implementer", runtime="generic")
+            self.assertIsNotNone(handoff.load_run_record(self.repo, self.slug, f"{run_id}.json"))
+        handoff.create_question(self.repo, self.slug, question="Q?")
+        self.assertIsNotNone(handoff.load_question(self.repo, self.slug, "q-1"))
+
+
+class TestClaimExclusivity(unittest.TestCase):
+    """Claims are a cross-process mutex, not a lost-update race. [bug--orchestrator-review-fail-open] REQ-5"""
+
+    def setUp(self):
+        self.repo = hermetic.make_repo_fixture(prefix="along-handoff-claimlock-")
+        self.slug = "claimlock-task"
+        session.init_session(self.repo, self.slug, title="Claim Lock Task", total_steps=1)
+
+    def tearDown(self):
+        shutil.rmtree(self.repo, ignore_errors=True)
+
+    def test_concurrent_acquirers_get_exactly_one_claim(self):
+        import threading
+        from unittest import mock
+
+        # Both acquirers read state.json before either writes it, unless the lock serialises them.
+        barrier = threading.Barrier(2, timeout=0.5)
+        real_load = session.load_state
+
+        def slow_load(repo_root, slug):
+            state = real_load(repo_root, slug)
+            try:
+                barrier.wait()
+            except threading.BrokenBarrierError:
+                pass
+            return state
+
+        results = {}
+
+        def acquire(run_id):
+            results[run_id] = handoff.acquire_claim(self.repo, self.slug, run_id=run_id, runtime="generic")
+
+        with mock.patch.object(handoff.session, "load_state", side_effect=slow_load):
+            threads = [threading.Thread(target=acquire, args=(rid,)) for rid in ("run-a", "run-b")]
+            for t in threads:
+                t.start()
+            for t in threads:
+                t.join(timeout=10)
+
+        self.assertEqual(sorted(results), ["run-a", "run-b"])
+        self.assertEqual(sum(1 for ok in results.values() if ok), 1, f"Expected one winner, got {results}")
+        winner = next(rid for rid, ok in results.items() if ok)
+        self.assertEqual(handoff.get_claim(self.repo, self.slug)["run_id"], winner)
+
+    def test_stale_lock_file_is_recovered(self):
+        lock_path = os.path.join(session.get_session_dir(self.repo, self.slug), handoff.CLAIM_LOCK_FILENAME)
+        textio.write_text(lock_path, "99999")
+        old = datetime.now().timestamp() - handoff.CLAIM_LOCK_STALE_SECONDS - 5
+        os.utime(lock_path, (old, old))
+        self.assertTrue(handoff.acquire_claim(self.repo, self.slug, run_id="run-a", runtime="generic"))
+        self.assertFalse(os.path.exists(lock_path))
+
 
 if __name__ == "__main__":
     unittest.main()

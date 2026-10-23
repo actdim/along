@@ -97,11 +97,21 @@ def handle_orchestrate_command(repo_root: str, args: List[str]) -> int:
             print(f"-> [Orchestrator] Timed out during {result.get('phase', 'execution')}.", file=sys.stderr)
         elif status == "failed":
             print(f"-> [Orchestrator] Orchestration failed: {result.get('reason', 'step failed')}", file=sys.stderr)
+        elif status == "dry-run":
+            print(f"-> [Orchestrator] Dry run for '{target_slug}': nothing was run or changed.")
+            for ph in result.get("phases", []):
+                where = f" step {ph['step']}" if "step" in ph else ""
+                if "role" in ph:
+                    brief = ph.get("brief_bytes")
+                    detail = f"{ph['runtime']}, timeout {ph['timeout']}s" + (f", brief {brief} bytes" if brief else "")
+                    print(f"   - {ph['phase']}{where}: {detail}")
+                else:
+                    print(f"   - {ph['phase']}: {ph.get('source', '')}")
         else:
             print(f"-> [Orchestrator] Finished with status '{status}'.")
 
     status = result.get("status")
-    if status == "completed" or status == "needs-input":
+    if status in ("completed", "needs-input", "dry-run"):
         return 0
     return 1
 

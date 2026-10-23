@@ -3,7 +3,7 @@ protocol: along
 protocol_version: "4.5.3"
 slug: orchestrator-review-fail-open
 type: bug
-status: open
+status: in-progress
 priority: high
 created: 2026-10-23
 updated: 2026-10-23
@@ -11,6 +11,7 @@ agent: claude-code
 tags: [orchestrator, handoff, autonomous, security, regression]
 blocked_by: []
 related: [feat--cross-runtime-supervisor-orchestrator, feat--cross-runtime-handoff-entities, feat--pre-approved-plans]
+plan_status: approved
 ---
 
 # Orchestrator and handoff pass steps on missing or broken reviews
@@ -49,14 +50,14 @@ runs a whole issue unattended, so a step that passes without a real review ships
 - REQ-9: Brief generation MUST skip malformed defect entries instead of raising.
 
 ## Acceptance Criteria
-- [ ] Reviewer exits 0 with no review file: the step fails with a blocking defect and is retried.
-- [ ] A review file without `verdict`, or with `verdict: fail` and no severe defect: the step fails.
-- [ ] Implementer outcome `fail`: no reviewer run, retry counter incremented, defect recorded.
-- [ ] Dry run: `state.json`, run records and claims are byte-identical before and after; result status `dry-run` lists the phases; CLI exits 0.
-- [ ] Two concurrent `acquire_claim` calls for different run ids: exactly one succeeds.
-- [ ] A claim taken over by another run is not released by the orchestrator's `finally`.
-- [ ] `create_run_record(run_id="../x")`, `create_question(qid="../x")` and a slug with `/` or `..` raise `ValueError`.
-- [ ] Regression tests cover each criterion and fail on the old code; `python .along/scripts/test.py` is green.
+- [x] Reviewer exits 0 with no review file: the step fails with a blocking defect and is retried.
+- [x] A review file without `verdict`, or with `verdict: fail` and no severe defect: the step fails.
+- [x] Implementer outcome `fail`: no reviewer run, retry counter incremented, defect recorded.
+- [x] Dry run: `state.json`, run records and claims are byte-identical before and after; result status `dry-run` lists the phases; CLI exits 0.
+- [x] Two concurrent `acquire_claim` calls for different run ids: exactly one succeeds.
+- [x] A claim taken over by another run is not released by the orchestrator's `finally`.
+- [x] `create_run_record(run_id="../x")`, `create_question(qid="../x")` and a slug with `/` or `..` raise `ValueError`.
+- [x] Regression tests cover each criterion and fail on the old code; `python .along/scripts/test.py` is green.
 
 ## Notes
 - The architect self-approving its own plan in autonomous runs is a gate-policy question and

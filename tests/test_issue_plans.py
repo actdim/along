@@ -318,7 +318,10 @@ class _Runner(BaseRunner):
     def execute_run(self, brief, role="implementer", model=None, timeout=None, step=None,
                     run_id=None, handoff_note=None, dry_run=None):
         self.calls.append(role)
-        self.last_result = RunResult(run_id="r", outcome="done", exit_code=0, stdout="", stderr="",
+        # A step passes only on a valid verdict; this reviewer prints it on stdout.
+        # [bug--orchestrator-review-fail-open]
+        stdout = "---\nverdict: pass\ndefects: []\n---\n" if role == "reviewer" else ""
+        self.last_result = RunResult(run_id="r", outcome="done", exit_code=0, stdout=stdout, stderr="",
                                      changed_files=[], handoff_note=None, record={})
         return {"outcome": "done", "exit_code": 0, "changed_files": []}
 

@@ -454,6 +454,125 @@ class TestNeedsInputAndTimeoutHandling(unittest.TestCase):
         self.assertEqual(st["status"], "failed")
 
 
+class TestReviewFailClosed(unittest.TestCase):
+    """No step passes without a valid review; failures and dry runs are honest.
+
+    [bug--orchestrator-review-fail-open]
+    """
+
+    def setUp(self) -> None:
+        self.repo = hermetic.make_repo_fixture(prefix="along-test-orch-failclosed-")
+        self.slug = "fixture-sample-task"
+        session.init_session(self.repo, self.slug, title="Fixture Sample Task")
+        session.approve_plan(self.repo, self.slug)
+
+    def tearDown(self) -> None:
+        shutil.rmtree(self.repo, ignore_errors=True)
+
+    def _orch(self, **kwargs) -> orchestrator.CrossRuntimeOrchestrator:
+        return orchestrator.CrossRuntimeOrchestrator(repo_root=self.repo, slug=self.slug, **kwargs)
+
+    def _open_defects(self) -> str:
+        bb = session.load_blackboard(self.repo, self.slug) or {}
+        return json.dumps(bb.get("open_defects") or {})
+
+    def test_reviewer_without_verdict_fails_the_step(self) -> None:
+        orch = self._orch(max_retries=1)
+        orch._instantiate_runner = lambda role: MockRunner(repo_root=self.repo, issue_slug=self.slug)
+        res = orch.run_step_loop()
+        self.assertEqual(res["status"], "failed", "A step without any review verdict must not pass")
+        self.assertIn("no machine-readable verdict", self._open_defects())
+
+    def test_invalid_review_files_fail_the_step(self) -> None:
+        for text in ("defects: []\n",
+                     "verdict: fail\ndefects:\n  - severity: nit\n    description: Style only\n"):
+            with self.subTest(text=text):
+                # run_step_loop called directly keeps its claim; orchestrate() is what releases it.
+                handoff.release_claim(self.repo, self.slug, run_id="", force=True)
+                session.update_state(self.repo, self.slug, current_step=1, status="in-progress")
+                st = session.load_state(self.repo, self.slug)
+                for s in st.get("steps", []):
+                    s["retries"] = 0
+                session.save_state(self.repo, self.slug, st)
+
+                def on_review(runner, role, step, brief, text=text):
+                    if role == "reviewer":
+                        textio.write_text(session.review_file(self.repo, self.slug, step),
+                                          f"---\n{text}---\n", newline="\n")
+
+                orch = self._orch(max_retries=0)
+                orch._instantiate_runner = lambda role: MockRunner(
+                    repo_root=self.repo, issue_slug=self.slug, on_execute=on_review)
+                res = orch.run_step_loop()
+                self.assertEqual(res["status"], "failed")
+                self.assertIn("invalid", self._open_defects())
+
+    def test_implementer_failure_skips_review_and_counts_an_attempt(self) -> None:
+        reviewer_calls = []
+
+        def runner_factory(role):
+            if role == "implementer":
+                return MockRunner(repo_root=self.repo, issue_slug=self.slug, outcome="fail", exit_code=1)
+            return MockRunner(repo_root=self.repo, issue_slug=self.slug,
+                              on_execute=lambda *a: reviewer_calls.append(a))
+
+        orch = self._orch(max_retries=1)
+        orch._instantiate_runner = runner_factory
+        res = orch.run_step_loop()
+        self.assertEqual(res["status"], "failed")
+        self.assertEqual(reviewer_calls, [], "A failed implementation must not be reviewed")
+        self.assertIn("Implementer run failed", self._open_defects())
+
+    def test_dry_run_changes_nothing(self) -> None:
+        session_dir = session.get_session_dir(self.repo, self.slug)
+
+        def snapshot():
+            out = {}
+            for root, _dirs, files in os.walk(session_dir):
+                for name in files:
+                    path = os.path.join(root, name)
+                    with open(path, "rb") as fh:
+                        out[os.path.relpath(path, session_dir)] = fh.read()
+            return out
+
+        before = snapshot()
+        res = orchestrator.run_orchestration(
+            repo_root=self.repo, slug=self.slug, dry_run=True,
+            runner_factory=lambda runtime, **kw: MockRunner(**kw),
+        )
+        self.assertEqual(res["status"], "dry-run")
+        self.assertTrue(any(ph.get("phase") == "implementer" for ph in res["phases"]))
+        self.assertEqual(snapshot(), before, "A dry run must not touch the blackboard")
+        self.assertIsNone(handoff.get_claim(self.repo, self.slug))
+
+    def test_claim_taken_over_mid_run_blocks_and_is_left_alone(self) -> None:
+        def runner_factory(role):
+            if role == "implementer":
+                def take_over(runner, r, step, brief):
+                    handoff.acquire_claim(self.repo, self.slug, run_id="other-run", runtime="codex", force=True)
+                return MockRunner(repo_root=self.repo, issue_slug=self.slug, on_execute=take_over)
+            return MockRunner(repo_root=self.repo, issue_slug=self.slug)
+
+        orch = self._orch()
+        orch._instantiate_runner = runner_factory
+        res = orch.orchestrate(skip_scout=True, skip_architect=True)
+        self.assertEqual(res["status"], "blocked")
+        claim = handoff.get_claim(self.repo, self.slug)
+        self.assertIsNotNone(claim, "The orchestrator must not release a claim another run holds")
+        self.assertEqual(claim["run_id"], "other-run")
+
+    def test_runner_timeout_defaults_to_default_timeout(self) -> None:
+        captured = []
+
+        def factory(runtime, **kw):
+            captured.append(kw.get("timeout"))
+            return MockRunner(**kw)
+
+        orch = self._orch(runner_factory=factory)
+        orch._instantiate_runner("implementer")
+        self.assertEqual(captured, [orchestrator.DEFAULT_TIMEOUT])
+
+
 class TestCliOrchestratorCommands(unittest.TestCase):
     """Verify CLI routing for along orchestrate and along team."""
 

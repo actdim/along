@@ -282,6 +282,7 @@ Tracks individual agent runtime executions within an issue session:
 ```
 - **Outcomes**: `done`, `fail`, `needs-input`, `timeout`, `in-progress`.
 - **Usage**: Serves as single source of truth for operator cards and observability.
+- **Identifiers**: `run_id`, question ids and the slug are single path components (`[A-Za-z0-9][A-Za-z0-9._-]*`, no `..`); anything else is rejected.
 
 #### 2. Machine-Readable Review Verdicts (`reviews/step-N.md`)
 Enforces automated gate evaluation via YAML front-matter without brittle prose parsing:
@@ -300,6 +301,7 @@ Detailed reviewer critique and evaluation against acceptance criteria.
 ```
 - **Severities**: `blocking` (must fix, fails verdict), `important` (should fix, fails verdict), `nit` (informational, passes verdict).
 - **Invariance**: Verdict MUST be `fail` when blocking or important defects are present.
+- **Fail closed**: the orchestrator passes a step only on a valid `verdict: pass`. A missing review, a missing `verdict`, or a verdict that breaks the invariance (`fail` with only nits, `pass` with a blocking defect) fails the step with a blocking defect, as does an implementer run with outcome `fail` (no review runs).
 
 #### 3. Questions Entity (`.along/.session/<slug>/questions/<id>.md`)
 Asynchronous operator clarification mechanism replacing interactive stdin bridges:
@@ -336,6 +338,9 @@ Prevents concurrency collisions across autonomous runner daemons:
 ```
 - Active claims block secondary runs on the same issue.
 - Expired claims (`now >= expires_at`) can be taken over automatically.
+- Acquire and release run under `claim.lock` in the session directory (created exclusively; a lock older than 30 s is treated as stale), so two runners never both take the same claim.
+- The orchestrator renews its claim before every runner invocation (TTL = run timeout + 300 s), stops with `blocked` when another run holds it, and releases only its own claim.
+- `along orchestrate --dry-run` previews phases, runtimes and brief sizes without claiming or changing the blackboard.
 
 #### 5. Handoff Notes & Brief Engine (`handoff.md` & `along brief`)
 - **Handoff Note** (`handoff.md`): Compact note (under 25 lines) written at run completion detailing what was done, what remains, and traps.

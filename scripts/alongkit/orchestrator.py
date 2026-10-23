@@ -38,6 +38,8 @@ from .runner import BaseRunner, RunResult, get_runner
 SUPPORTED_ROLES: Tuple[str, ...] = ("scout", "architect", "implementer", "reviewer")
 DEFAULT_MAX_RETRIES: int = 3
 DEFAULT_TIMEOUT: int = 1800
+#: The claim outlives one run by this much, so a renewal before the next run never finds it expired.
+CLAIM_TTL_MARGIN_SECONDS: int = 300
 
 DEFAULT_ROLES: Dict[str, Dict[str, Any]] = {
     "scout": {
@@ -206,13 +208,42 @@ class CrossRuntimeOrchestrator:
         self.active_runner: Optional[BaseRunner] = None
         self.execution_log: List[Dict[str, Any]] = []
 
+    def _role_timeout(self, role: str) -> int:
+        """Per-run timeout for `role`: role config, then the orchestrator's, then DEFAULT_TIMEOUT."""
+        return int(self.role_config.get(role, {}).get("timeout") or self.timeout or DEFAULT_TIMEOUT)
+
+    def _renew_claim(self, role: str) -> bool:
+        """Take or extend this run's claim before a runner starts; False when another run holds it.
+
+        [bug--orchestrator-review-fail-open] REQ-6
+        """
+        if session.load_state(self.repo_root, self.slug) is None:
+            session.init_session(self.repo_root, self.slug, execution_mode="role-based")
+        return handoff.acquire_claim(
+            self.repo_root,
+            self.slug,
+            run_id=self.run_id,
+            runtime="supervisor",
+            ttl_seconds=self._role_timeout(role) + CLAIM_TTL_MARGIN_SECONDS,
+        )
+
+    def _claim_lost(self, phase: str, step: Optional[int] = None) -> Dict[str, Any]:
+        result: Dict[str, Any] = {
+            "status": "blocked",
+            "phase": phase,
+            "reason": f"Issue '{self.slug}' is now claimed by another run; this run stopped before '{phase}'.",
+        }
+        if step is not None:
+            result["step"] = step
+        return result
+
     def _instantiate_runner(self, role: str) -> BaseRunner:
         """Instantiate configured runner adapter for a given role."""
         r_cfg = self.role_config.get(role, {})
         runtime = r_cfg.get("runtime", "claude-code")
         model = r_cfg.get("model")
         extra_args = r_cfg.get("args") or []
-        r_timeout = r_cfg.get("timeout") or self.timeout
+        r_timeout = self._role_timeout(role)
 
         factory = self.runner_factory or get_runner
         runner = factory(
@@ -235,6 +266,8 @@ class CrossRuntimeOrchestrator:
 
         session.set_session_phase(self.repo_root, phase="inquiry", slug=self.slug)
         brief = handoff.generate_brief(self.repo_root, self.slug, role="scout")
+        if not self._renew_claim("scout"):
+            return self._claim_lost("scout")
         runner = self._instantiate_runner("scout")
         record = runner.execute_run(brief=brief, role="scout", step=None, dry_run=self.dry_run)
         self.execution_log.append({"phase": "scout", "record": record})
@@ -279,6 +312,8 @@ class CrossRuntimeOrchestrator:
         """Execute Phase 2: Architect / Living Plan."""
         session.set_session_phase(self.repo_root, phase="planning", slug=self.slug)
         brief = handoff.generate_brief(self.repo_root, self.slug, role="architect")
+        if not self._renew_claim("architect"):
+            return self._claim_lost("architect")
         runner = self._instantiate_runner("architect")
         record = runner.execute_run(brief=brief, role="architect", step=None, dry_run=self.dry_run)
         self.execution_log.append({"phase": "architect", "record": record})
@@ -363,6 +398,135 @@ class CrossRuntimeOrchestrator:
         self.execution_log.append({"phase": "plan", "record": {"outcome": "done", "source": "issue plan"}})
         return {"phase": "plan", "status": "done", "outcome": "done"}
 
+    def _evaluate_review(
+        self,
+        step: int,
+        rev_runner: BaseRunner,
+        rev_record: Dict[str, Any],
+    ) -> Tuple[str, List[Dict[str, Any]]]:
+        """(verdict, defects) for a reviewed step; anything short of a valid `pass` fails.
+
+        A missing, unparseable or invalid verdict is a blocking defect, never a pass.
+        [bug--orchestrator-review-fail-open] REQ-1
+        """
+        review = handoff.load_review_verdict(self.repo_root, self.slug, step)
+        if review is not None:
+            if review.get("valid"):
+                return review["verdict"], review.get("defects", [])
+            return "fail", [{
+                "severity": "blocking",
+                "description": f"Review verdict for step {step} is invalid: {'; '.join(review.get('errors') or [])}",
+            }]
+
+        # No review file: the reviewer may have printed the verdict front-matter instead.
+        stdout_text = rev_runner.last_result.stdout if rev_runner.last_result else ""
+        try:
+            fm, _ = frontmatter.parse(stdout_text or "")
+        except ValueError:
+            fm = {}
+        if fm.get("verdict"):
+            raw_d = fm.get("defects", [])
+            try:
+                handoff.write_review_verdict(
+                    self.repo_root,
+                    self.slug,
+                    step=step,
+                    verdict=str(fm["verdict"]),
+                    defects=list(raw_d) if isinstance(raw_d, list) else raw_d,
+                )
+            except (ValueError, TypeError) as exc:
+                return "fail", [{
+                    "severity": "blocking",
+                    "description": f"Reviewer output for step {step} has an invalid verdict: {exc}",
+                }]
+            review = handoff.load_review_verdict(self.repo_root, self.slug, step)
+            if review is not None and review.get("valid"):
+                return review["verdict"], review.get("defects", [])
+
+        return "fail", [{
+            "severity": "blocking",
+            "description": (f"Reviewer produced no machine-readable verdict for step {step} "
+                            f"(exit code {rev_record.get('exit_code')})."),
+        }]
+
+    def _record_step_failure(self, step: int, defects: List[Dict[str, Any]]) -> Optional[Dict[str, Any]]:
+        """Count a failed attempt of `step` and feed its defects to the next one.
+
+        Returns the terminal `failed` result once the retry limit is exhausted, else None.
+        """
+        _st, retry_exhausted = session.update_state(
+            self.repo_root,
+            self.slug,
+            current_step=step,
+            increment_retry=True,
+            max_retries=self.max_retries,
+        )
+        defect_map = {}
+        for idx, d in enumerate(defects, start=1):
+            sev = d.get("severity", "blocking") if isinstance(d, dict) else "blocking"
+            desc = d.get("description", str(d)) if isinstance(d, dict) else str(d)
+            defect_map[f"step_{step}_defect_{idx}_{sev}"] = desc
+        session.patch_blackboard(self.repo_root, self.slug, {"open_defects": defect_map})
+
+        if not retry_exhausted:
+            return None
+        session.update_state(
+            self.repo_root,
+            self.slug,
+            current_step=step,
+            step_status="failed",
+            status="failed",
+        )
+        return {
+            "status": "failed",
+            "reason": f"Retry limit ({self.max_retries}) exhausted on step {step}",
+            "current_step": step,
+            "defects": defects,
+        }
+
+    def preview(self, skip_scout: bool = False, skip_architect: bool = False) -> Dict[str, Any]:
+        """What a run would do, without touching the blackboard, claims or run records.
+
+        [bug--orchestrator-review-fail-open] REQ-4
+        """
+        phases: List[Dict[str, Any]] = []
+
+        def add(phase: str, role: str, step: Optional[int] = None, with_brief: bool = True) -> None:
+            r_cfg = self.role_config.get(role, {})
+            entry: Dict[str, Any] = {
+                "phase": phase,
+                "role": role,
+                "runtime": r_cfg.get("runtime", "claude-code"),
+                "model": r_cfg.get("model"),
+                "timeout": self._role_timeout(role),
+            }
+            if step is not None:
+                entry["step"] = step
+            if with_brief:
+                try:
+                    entry["brief_bytes"] = len(handoff.generate_brief(self.repo_root, self.slug, role=role).encode("utf-8"))
+                except (ValueError, OSError) as exc:
+                    entry["brief_error"] = str(exc)
+            phases.append(entry)
+
+        if not skip_scout:
+            add("scout", "scout")
+        if not skip_architect:
+            if session.issue_plan_state(self.repo_root, self.slug) == session.PLAN_READY:
+                phases.append({"phase": "plan", "source": "approved issue plan"})
+            else:
+                add("architect", "architect")
+        st = session.load_state(self.repo_root, self.slug) or {}
+        total = int(st.get("total_steps") or 0)
+        if total > 0:
+            first = int(st.get("current_step") or 1)
+            for step in range(first, total + 1):
+                add("implementer", "implementer", step, with_brief=step == first)
+                add("reviewer", "reviewer", step, with_brief=step == first)
+        else:
+            phases.append({"phase": "steps", "source": "read from the plan once it exists"})
+        return {"status": "dry-run", "slug": self.slug, "phases": phases}
+
     def run_step_loop(self) -> Dict[str, Any]:
         """Execute Phase 3 & 4: Implementer & Reviewer Step Loop."""
         st = session.load_state(self.repo_root, self.slug)
@@ -402,6 +566,8 @@ class CrossRuntimeOrchestrator:
                 step_status="in-progress",
             )
             impl_brief = handoff.generate_brief(self.repo_root, self.slug, role="implementer")
+            if not self._renew_claim("implementer"):
+                return self._claim_lost("implementer", current_step)
             impl_runner = self._instantiate_runner("implementer")
             impl_record = impl_runner.execute_run(
                 brief=impl_brief,
@@ -440,6 +606,17 @@ class CrossRuntimeOrchestrator:
                     "outcome": impl_outcome,
                 }
 
+            if impl_outcome == "fail":
+                # A failed implementation is a failed attempt; there is nothing to review.
+                # [bug--orchestrator-review-fail-open] REQ-3
+                failure = self._record_step_failure(current_step, [{
+                    "severity": "blocking",
+                    "description": f"Implementer run failed (exit code {impl_record.get('exit_code')}).",
+                }])
+                if failure:
+                    return failure
+                continue
+
             changed_files = impl_record.get("changed_files") or []
             if changed_files:
                 session.patch_blackboard(self.repo_root, self.slug, {"touched_files": changed_files})
@@ -449,6 +626,8 @@ class CrossRuntimeOrchestrator:
 
             # --- Reviewer ---
             rev_brief = handoff.generate_brief(self.repo_root, self.slug, role="reviewer")
+            if not self._renew_claim("reviewer"):
+                return self._claim_lost("reviewer", current_step)
             rev_runner = self._instantiate_runner("reviewer")
             rev_record = rev_runner.execute_run(
                 brief=rev_brief,
@@ -487,39 +666,7 @@ class CrossRuntimeOrchestrator:
                     "outcome": rev_outcome,
                 }
 
-            # Evaluate Review Verdict
-            review_verdict = handoff.load_review_verdict(self.repo_root, self.slug, current_step)
-            verdict = "pass"
-            defects: List[Dict[str, Any]] = []
-
-            if review_verdict:
-                verdict = review_verdict.get("verdict", "pass").lower().strip()
-                defects = review_verdict.get("defects", [])
-            elif not self.dry_run:
-                # Fallback: check stdout of reviewer runner
-                stdout_text = rev_runner.last_result.stdout if rev_runner.last_result else ""
-                try:
-                    fm, _ = frontmatter.parse(stdout_text)
-                    if "verdict" in fm:
-                        v = str(fm.get("verdict", "pass")).lower().strip()
-                        raw_d = fm.get("defects", [])
-                        d_list = list(raw_d) if isinstance(raw_d, list) else []
-                        handoff.write_review_verdict(
-                            self.repo_root,
-                            self.slug,
-                            step=current_step,
-                            verdict=v,
-                            defects=d_list,
-                        )
-                        verdict = v
-                        defects = d_list
-                    elif rev_record.get("exit_code") != 0:
-                        verdict = "fail"
-                        defects = [{"severity": "blocking", "description": "Reviewer exited with error without review verdict"}]
-                except (ValueError, KeyError, TypeError, OSError):
-                    if rev_record.get("exit_code") != 0:
-                        verdict = "fail"
-                        defects = [{"severity": "blocking", "description": "Reviewer exited with error"}]
+            verdict, defects = self._evaluate_review(current_step, rev_runner, rev_record)
 
             if verdict == "pass":
                 session.update_state(
@@ -547,35 +694,9 @@ class CrossRuntimeOrchestrator:
                         step_status="pending",
                     )
             else:
-                # Review failed: increment retries and feed defects to blackboard
-                st, retry_exhausted = session.update_state(
-                    self.repo_root,
-                    self.slug,
-                    current_step=current_step,
-                    increment_retry=True,
-                    max_retries=self.max_retries,
-                )
-                defect_map = {}
-                for idx, d in enumerate(defects, start=1):
-                    sev = d.get("severity", "blocking") if isinstance(d, dict) else "blocking"
-                    desc = d.get("description", str(d)) if isinstance(d, dict) else str(d)
-                    defect_map[f"step_{current_step}_defect_{idx}_{sev}"] = desc
-                session.patch_blackboard(self.repo_root, self.slug, {"open_defects": defect_map})
-
-                if retry_exhausted:
-                    session.update_state(
-                        self.repo_root,
-                        self.slug,
-                        current_step=current_step,
-                        step_status="failed",
-                        status="failed",
-                    )
-                    return {
-                        "status": "failed",
-                        "reason": f"Retry limit ({self.max_retries}) exhausted on step {current_step}",
-                        "current_step": current_step,
-                        "defects": defects,
-                    }
+                failure = self._record_step_failure(current_step, defects)
+                if failure:
+                    return failure
 
         session.update_state(self.repo_root, self.slug, status="completed")
         return {
@@ -590,6 +711,9 @@ class CrossRuntimeOrchestrator:
         skip_architect: bool = False,
     ) -> Dict[str, Any]:
         """Execute complete orchestration lifecycle."""
+        if self.dry_run:
+            return self.preview(skip_scout=skip_scout, skip_architect=skip_architect)
+
         # An issue run straight from the daemon has no blackboard yet; the claim lives in it.
         if session.load_state(self.repo_root, self.slug) is None and session.issue_file(self.repo_root, self.slug):
             session.init_session(self.repo_root, self.slug, execution_mode="role-based")
@@ -598,10 +722,10 @@ class CrossRuntimeOrchestrator:
             self.slug,
             run_id=self.run_id,
             runtime="supervisor",
-            ttl_seconds=self.timeout or 3600,
+            ttl_seconds=self._role_timeout("scout") + CLAIM_TTL_MARGIN_SECONDS,
             force=self.force,
         )
-        if not claimed and not self.dry_run:
+        if not claimed:
             return {
                 "status": "blocked",
                 "reason": f"Issue '{self.slug}' is currently claimed by another process in state.json.",
@@ -611,7 +735,8 @@ class CrossRuntimeOrchestrator:
         old_sigterm = signal.getsignal(signal.SIGTERM) if hasattr(signal, "SIGTERM") else None
 
         def _cleanup_handler(signum, frame):
-            handoff.release_claim(self.repo_root, self.slug, run_id=self.run_id, force=True)
+            # Only this run's own claim: one taken over by another run stays. REQ-6
+            handoff.release_claim(self.repo_root, self.slug, run_id=self.run_id)
             if signum == signal.SIGINT and callable(old_sigint):
                 old_sigint(signum, frame)
             elif old_sigterm and signum == signal.SIGTERM and callable(old_sigterm):
@@ -637,7 +762,7 @@ class CrossRuntimeOrchestrator:
             return step_res
 
         finally:
-            handoff.release_claim(self.repo_root, self.slug, run_id=self.run_id, force=True)
+            handoff.release_claim(self.repo_root, self.slug, run_id=self.run_id)
             signal.signal(signal.SIGINT, old_sigint)
             if hasattr(signal, "SIGTERM") and old_sigterm:
                 signal.signal(signal.SIGTERM, old_sigterm)

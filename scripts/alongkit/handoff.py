@@ -19,12 +19,14 @@ if __name__ == "__main__":
         "Run: along brief --help   (or: python scripts/along_exec.py brief --help)"
     )
 
+import contextlib
 import copy
 from datetime import datetime, timezone, timedelta
 import json
 import os
 import re
-from typing import Any, Dict, List, Optional, Tuple
+import time
+from typing import Any, Dict, Iterator, List, Optional, Tuple
 
 from . import entities, frontmatter, proc, repo, session, textio
 
@@ -36,20 +38,41 @@ DEFAULT_CLAIM_TTL_SECONDS = 1800
 DEFAULT_BRIEF_MAX_BYTES = 16384
 SUPPORTED_BRIEF_ROLES = ("scout", "architect", "implementer", "reviewer")
 
+#: Slugs, run ids and question ids become path components; anything else could leave the
+#: blackboard (`run_id="../../x"`). [bug--orchestrator-review-fail-open] REQ-8
+_SAFE_ID = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]*$")
+
+
+def _require_safe_id(value: Any, kind: str) -> str:
+    """`value` as a plain identifier usable as one path component, or ValueError."""
+    text = str(value or "").strip()
+    if not _SAFE_ID.match(text) or ".." in text:
+        raise ValueError(f"Invalid {kind} '{value}': expected letters, digits, '.', '_' or '-'.")
+    return text
+
+
+def _session_dir(repo_root: str, slug: str) -> str:
+    return session.get_session_dir(repo_root, _require_safe_id(slug, "slug"))
+
 
 def get_runs_dir(repo_root: str, slug: str) -> str:
     """Directory holding run records for a session."""
-    return os.path.join(session.get_session_dir(repo_root, slug), "runs")
+    return os.path.join(_session_dir(repo_root, slug), "runs")
 
 
 def get_questions_dir(repo_root: str, slug: str) -> str:
     """Directory holding question entities for a session."""
-    return os.path.join(session.get_session_dir(repo_root, slug), "questions")
+    return os.path.join(_session_dir(repo_root, slug), "questions")
 
 
 def get_handoff_path(repo_root: str, slug: str) -> str:
     """Path to the ephemeral handoff note markdown file."""
-    return os.path.join(session.get_session_dir(repo_root, slug), "handoff.md")
+    return os.path.join(_session_dir(repo_root, slug), "handoff.md")
+
+
+def get_review_path(repo_root: str, slug: str, step: int) -> str:
+    """Path to reviews/step-N.md for a session step."""
+    return os.path.join(_session_dir(repo_root, slug), "reviews", f"step-{int(step)}.md")
 
 
 # ---------------------------------------------------------------------------
@@ -67,9 +90,7 @@ def create_run_record(
     start: Optional[str] = None,
 ) -> Dict[str, Any]:
     """Create and persist an initial in-progress run record."""
-    clean_id = run_id.strip()
-    if not clean_id:
-        raise ValueError("Run record requires a non-empty run_id.")
+    clean_id = _require_safe_id(run_id, "run_id")
     record: Dict[str, Any] = {
         "run_id": clean_id,
         "role": role.lower().strip(),
@@ -90,9 +111,9 @@ def create_run_record(
 
 def save_run_record(repo_root: str, slug: str, record: Dict[str, Any]) -> str:
     """Persist a run record dict as formatted JSON."""
-    run_id = str(record.get("run_id", "")).strip()
-    if not run_id:
+    if not str(record.get("run_id", "")).strip():
         raise ValueError("Run record must declare a non-empty 'run_id'.")
+    run_id = _require_safe_id(record.get("run_id"), "run_id")
     runs_dir = get_runs_dir(repo_root, slug)
     os.makedirs(runs_dir, exist_ok=True)
     file_path = os.path.join(runs_dir, f"{run_id}.json")
@@ -104,7 +125,7 @@ def save_run_record(repo_root: str, slug: str, record: Dict[str, Any]) -> str:
 def load_run_record(repo_root: str, slug: str, run_id: str) -> Optional[Dict[str, Any]]:
     """Load a run record by run_id, or None if absent or invalid."""
     runs_dir = get_runs_dir(repo_root, slug)
-    clean_id = run_id[:-5] if run_id.endswith(".json") else run_id
+    clean_id = _require_safe_id(run_id[:-5] if run_id.endswith(".json") else run_id, "run_id")
     file_path = os.path.join(runs_dir, f"{clean_id}.json")
     if not os.path.isfile(file_path):
         return None
@@ -210,9 +231,13 @@ def validate_review_verdict(verdict: str, defects: List[Dict[str, Any]]) -> Tupl
 
 
 def parse_review_verdict(content: str, path: Optional[str] = None) -> Tuple[Dict[str, Any], str]:
-    """Parse YAML front-matter from a review markdown string or file content."""
+    """Parse YAML front-matter from a review markdown string or file content.
+
+    A missing `verdict` stays empty, never `pass`: a review that does not say it passed did
+    not pass. [bug--orchestrator-review-fail-open] REQ-2
+    """
     fm, body = frontmatter.parse(content, path=path)
-    verdict = str(fm.get("verdict", "pass")).lower().strip()
+    verdict = str(fm.get("verdict") or "").lower().strip()
     raw_defects = fm.get("defects", [])
     defects = list(raw_defects) if isinstance(raw_defects, list) else []
     metadata = {
@@ -237,9 +262,8 @@ def write_review_verdict(
     if not valid:
         raise ValueError(f"Invalid review verdict data: {'; '.join(errors)}")
 
-    reviews_dir = os.path.join(session.get_session_dir(repo_root, slug), "reviews")
-    os.makedirs(reviews_dir, exist_ok=True)
-    file_path = os.path.join(reviews_dir, f"step-{step}.md")
+    file_path = get_review_path(repo_root, slug, step)
+    os.makedirs(os.path.dirname(file_path), exist_ok=True)
 
     fm_data = {
         "verdict": verdict_clean,
@@ -252,18 +276,27 @@ def write_review_verdict(
 
 
 def load_review_verdict(repo_root: str, slug: str, step: int) -> Optional[Dict[str, Any]]:
-    """Load machine-readable review verdict from reviews/step-N.md."""
-    reviews_dir = os.path.join(session.get_session_dir(repo_root, slug), "reviews")
-    file_path = os.path.join(reviews_dir, f"step-{step}.md")
+    """Load machine-readable review verdict from reviews/step-N.md.
+
+    None when the file is absent or does not parse. Otherwise `valid` / `errors` say whether
+    the verdict passes `validate_review_verdict`; callers must not act on an invalid one.
+    """
+    file_path = get_review_path(repo_root, slug, step)
     if not os.path.isfile(file_path):
         return None
     try:
         content = textio.read_text(file_path, strict=True)
-        meta, body = parse_review_verdict(content, path=file_path)
+        fm, body = frontmatter.parse(content, path=file_path)
+        verdict = str(fm.get("verdict") or "").lower().strip()
+        raw_defects = fm.get("defects", [])
+        # Validated as written: a non-list `defects` is an error, not an empty list.
+        valid, errors = validate_review_verdict(verdict, raw_defects)
         return {
             "step": step,
-            "verdict": meta.get("verdict", "pass"),
-            "defects": meta.get("defects", []),
+            "verdict": verdict,
+            "defects": list(raw_defects) if isinstance(raw_defects, list) else [],
+            "valid": valid,
+            "errors": errors,
             "body": body,
             "file_path": file_path,
         }
@@ -291,7 +324,7 @@ def create_question(
     if not qid:
         existing = [f for f in os.listdir(q_dir) if f.endswith(".md")]
         qid = f"q-{len(existing) + 1}"
-    clean_id = qid[:-3] if qid.endswith(".md") else qid
+    clean_id = _require_safe_id(qid[:-3] if qid.endswith(".md") else qid, "question id")
 
     file_path = os.path.join(q_dir, f"{clean_id}.md")
     now_iso = session._utc_now_iso()
@@ -314,7 +347,7 @@ def create_question(
 
 def load_question(repo_root: str, slug: str, qid: str) -> Optional[Dict[str, Any]]:
     """Load a question entity by ID."""
-    clean_id = qid[:-3] if qid.endswith(".md") else qid
+    clean_id = _require_safe_id(qid[:-3] if qid.endswith(".md") else qid, "question id")
     q_dir = get_questions_dir(repo_root, slug)
     file_path = os.path.join(q_dir, f"{clean_id}.md")
     if not os.path.isfile(file_path):
@@ -340,7 +373,7 @@ def answer_question(
     q = load_question(repo_root, slug, qid)
     if not q:
         raise ValueError(f"Question '{qid}' not found for slug '{slug}'.")
-    clean_id = qid[:-3] if qid.endswith(".md") else qid
+    clean_id = _require_safe_id(qid[:-3] if qid.endswith(".md") else qid, "question id")
     q_dir = get_questions_dir(repo_root, slug)
     file_path = os.path.join(q_dir, f"{clean_id}.md")
 
@@ -428,6 +461,45 @@ def is_claim_active(repo_root: str, slug: str) -> bool:
     return claim is not None and not is_claim_expired(claim)
 
 
+CLAIM_LOCK_FILENAME = "claim.lock"
+CLAIM_LOCK_TIMEOUT_SECONDS = 5.0
+#: A lock file this old was left by a process that died inside the critical section.
+CLAIM_LOCK_STALE_SECONDS = 30.0
+
+
+@contextlib.contextmanager
+def _claim_lock(repo_root: str, slug: str) -> Iterator[None]:
+    """Hold `claim.lock` (created with O_EXCL) around a claim's load-check-save.
+
+    Without it two runners can both read an expired claim and both take it.
+    [bug--orchestrator-review-fail-open] REQ-5
+    """
+    lock_path = os.path.join(_session_dir(repo_root, slug), CLAIM_LOCK_FILENAME)
+    os.makedirs(os.path.dirname(lock_path), exist_ok=True)
+    deadline = time.monotonic() + CLAIM_LOCK_TIMEOUT_SECONDS
+    while True:
+        try:
+            fd = os.open(lock_path, os.O_CREAT | os.O_EXCL | os.O_WRONLY)
+            break
+        except FileExistsError:
+            try:
+                if time.time() - os.path.getmtime(lock_path) > CLAIM_LOCK_STALE_SECONDS:
+                    os.remove(lock_path)
+                    continue
+            except OSError:
+                continue
+            if time.monotonic() >= deadline:
+                raise TimeoutError(f"Claim lock for '{slug}' is held by another process: {lock_path}")
+            time.sleep(0.05)
+    try:
+        os.write(fd, str(os.getpid()).encode("ascii"))
+        os.close(fd)
+        yield
+    finally:
+        with contextlib.suppress(OSError):
+            os.remove(lock_path)
+
+
 def acquire_claim(
     repo_root: str,
     slug: str,
@@ -442,42 +514,44 @@ def acquire_claim(
         True if claim was acquired or renewed.
         False if currently held by another active run and force is False.
     """
-    st = session.load_state(repo_root, slug)
-    if st is None:
-        return False
-    current = st.get("claimed_by")
-    if isinstance(current, dict) and not is_claim_expired(current):
-        if current.get("run_id") == run_id:
-            # Heartbeat / renewal by same run
-            pass
-        elif not force:
+    with _claim_lock(repo_root, slug):
+        st = session.load_state(repo_root, slug)
+        if st is None:
             return False
+        current = st.get("claimed_by")
+        if isinstance(current, dict) and not is_claim_expired(current):
+            if current.get("run_id") == run_id:
+                # Heartbeat / renewal by same run
+                pass
+            elif not force:
+                return False
 
-    now = datetime.now(timezone.utc)
-    expires = now + timedelta(seconds=ttl_seconds)
-    st["claimed_by"] = {
-        "run_id": run_id,
-        "runtime": runtime,
-        "claimed_at": session._utc_now_iso(),
-        "expires_at": expires.strftime("%Y-%m-%dT%H:%M:%SZ"),
-    }
-    session.save_state(repo_root, slug, st)
-    return True
+        now = datetime.now(timezone.utc)
+        expires = now + timedelta(seconds=ttl_seconds)
+        st["claimed_by"] = {
+            "run_id": run_id,
+            "runtime": runtime,
+            "claimed_at": session._utc_now_iso(),
+            "expires_at": expires.strftime("%Y-%m-%dT%H:%M:%SZ"),
+        }
+        session.save_state(repo_root, slug, st)
+        return True
 
 
 def release_claim(repo_root: str, slug: str, run_id: str, force: bool = False) -> bool:
     """Release claim if held by run_id, expired, or force is True."""
-    st = session.load_state(repo_root, slug)
-    if st is None:
-        return True
-    current = st.get("claimed_by")
-    if not isinstance(current, dict):
-        return True
-    if current.get("run_id") == run_id or force or is_claim_expired(current):
-        st["claimed_by"] = None
-        session.save_state(repo_root, slug, st)
-        return True
-    return False
+    with _claim_lock(repo_root, slug):
+        st = session.load_state(repo_root, slug)
+        if st is None:
+            return True
+        current = st.get("claimed_by")
+        if not isinstance(current, dict):
+            return True
+        if current.get("run_id") == run_id or force or is_claim_expired(current):
+            st["claimed_by"] = None
+            session.save_state(repo_root, slug, st)
+            return True
+        return False
 
 
 # ---------------------------------------------------------------------------
@@ -696,6 +770,8 @@ def _extract_open_defects(repo_root: str, slug: str) -> str:
     defect_lines: List[str] = []
     if review and review.get("verdict") == "fail":
         for d in review.get("defects", []):
+            if not isinstance(d, dict):
+                continue
             sev = d.get("severity", "blocking")
             desc = d.get("description", "")
             loc = ""
@@ -781,6 +857,7 @@ def generate_brief(
     role_norm = role.lower().strip()
     if role_norm not in SUPPORTED_BRIEF_ROLES:
         raise ValueError(f"Unsupported role '{role}'. Expected one of: {SUPPORTED_BRIEF_ROLES}")
+    slug = _require_safe_id(slug, "slug")
 
     iss = entities.find_issue_by_slug(repo_root, slug)
     if not iss:
