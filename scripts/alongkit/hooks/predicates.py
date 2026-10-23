@@ -110,6 +110,14 @@ MUTATION_WHITELIST_PATTERNS: Tuple[str, ...] = (
     "llms-full.txt",
 )
 
+#: Where plan approval is recorded: session bindings and blackboard state. Inside the
+#: whitelisted `.along/.session/**`, yet closed to file tools: an agent writing them would
+#: approve its own plan. [bug--plan-approval-self-approval-bypass]
+APPROVAL_RECORD_PATTERNS: Tuple[str, ...] = (
+    ".along/.session/bindings/**",
+    ".along/.session/*/state.json",
+)
+
 #: Edits the execution trace leaves out: the blackboard itself and machine-local diagnostics.
 TRACE_EXCLUDED_PATTERNS: Tuple[str, ...] = (
     ".along/.session/**",
@@ -899,7 +907,17 @@ def check_mutation_authorization(event: HookEvent, repo_root: str, options: Opti
             return None
         rel_target = _repo_relative(_extract_target_file(event), repo_root)
         # Outside the repository root (brain artifacts, temporary directories): not ours.
-        if rel_target is None or _matches_in_context(rel_target, repo_root, list(MUTATION_WHITELIST_PATTERNS)):
+        if rel_target is None:
+            return None
+        # The records this gate trusts are written by the along CLI, never by a file tool,
+        # bound session or not. [bug--plan-approval-self-approval-bypass]
+        if _matches_in_context(rel_target, repo_root, list(APPROVAL_RECORD_PATTERNS)):
+            return (
+                f"PLAN_REQUIRED [gate: require-plan-approval]: '{rel_target}' is an approval record "
+                "(session binding or blackboard state). It is written only by the along CLI "
+                "('along start', 'along plan approve', 'along scratch ...'), never by a file tool."
+            )
+        if _matches_in_context(rel_target, repo_root, list(MUTATION_WHITELIST_PATTERNS)):
             return None
         changed = [rel_target]
     elif event.event_type == HookEventType.STOP:

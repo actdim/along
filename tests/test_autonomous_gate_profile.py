@@ -7,7 +7,10 @@ Covers [feat--autonomous-gate-profile]:
 - Deterministic allow/deny behavior (no unhandled ask decisions under autonomous profile).
 - Escalation list operations (push to default branch, tag/release, package publish, deploy, dangerous deletion).
 - Escalation handler routing, timeout denial, and run record outcome tracking.
-- Plan approval in blackboard (state.json, plan.md) and issue unlocking source edits without interactive session token.
+- Plan approval recorded by `session.approve_plan` unlocking a runner's worker (ALONG_ISSUE_SLUG)
+  without an interactive session token; agent-writable markers (plan.md, issue front-matter,
+  state.json role keys, file-tool writes to approval records) never approve
+  [bug--plan-approval-self-approval-bypass].
 """
 
 from __future__ import annotations
@@ -320,23 +323,31 @@ class TestPlanApprovalUnlockingSourceEdits(unittest.TestCase):
         self.env.stop()
         shutil.rmtree(self.root, ignore_errors=True)
 
+    def _issue(self, slug: str, extra: str = "") -> None:
+        issue_path = os.path.join(self.root, ".along", "ISSUES", f"feat--{slug}.md")
+        textio.write_text(issue_path, f"---\nprotocol: along\nslug: {slug}\ntype: feat\nstatus: in-progress\n{extra}---\n")
+
+    def _write_event(self, target: str, conversation_id: str) -> HookEvent:
+        return HookEvent(
+            event_type=HookEventType.PRE_TOOL_USE,
+            tool_name="write_to_file",
+            tool_args={"TargetFile": target, "CodeContent": "{}\n"},
+            workspace_root=self.root,
+            conversation_id=conversation_id,
+        )
+
     def test_state_json_role_approval_unlocks_implementer_source_edits(self):
         slug = "auto-feature"
-        issues_dir = os.path.join(self.root, ".along", "ISSUES")
-        issue_path = os.path.join(issues_dir, f"feat--{slug}.md")
-        textio.write_text(issue_path, f"---\nprotocol: along\nslug: {slug}\ntype: feat\nstatus: in-progress\n---\n")
+        self._issue(slug)
 
-        # Session blackboard has state.json written by architect with plan_approved: true
+        # The orchestrator approved the plan through session.approve_plan
         session.init_session(self.root, slug)
-        st = session.load_state(self.root, slug)
-        st["plan_approved"] = True
-        st["approved_by"] = "architect"
-        st["phase"] = "execution"
-        session.save_state(self.root, slug, st)
+        session.approve_plan(self.root, slug=slug)
 
-        # Implementer subagent runs with a DIFFERENT session key and NO session binding token
+        # Implementer subagent runs with a DIFFERENT session key and NO session binding token;
+        # the runner hands it the slug through ALONG_ISSUE_SLUG (runner/base.py).
         worker_key = session.session_key("generic", "worker-subagent-999")
-        with mock.patch.dict(os.environ, {"ALONG_PROFILE": "autonomous"}):
+        with mock.patch.dict(os.environ, {"ALONG_PROFILE": "autonomous", "ALONG_ISSUE_SLUG": slug}):
             self.assertTrue(
                 session.is_plan_approved(self.root, slug=slug, key=worker_key),
                 "Plan approval in state.json should unlock for implementer under autonomous profile",
@@ -355,11 +366,9 @@ class TestPlanApprovalUnlockingSourceEdits(unittest.TestCase):
             res = engine.evaluate(event)
             self.assertTrue(res.is_allowed, f"Expected source edit to be allowed, got: {res.reason}")
 
-    def test_plan_md_role_approval_unlocks_implementer_source_edits(self):
+    def test_plan_md_role_approval_does_not_approve(self):
         slug = "plan-md-feature"
-        issues_dir = os.path.join(self.root, ".along", "ISSUES")
-        issue_path = os.path.join(issues_dir, f"feat--{slug}.md")
-        textio.write_text(issue_path, f"---\nprotocol: along\nslug: {slug}\ntype: feat\nstatus: in-progress\n---\n")
+        self._issue(slug)
 
         session.init_session(self.root, slug)
         # Write plan.md with role approval header
@@ -376,28 +385,95 @@ class TestPlanApprovalUnlockingSourceEdits(unittest.TestCase):
         textio.write_text(plan_file, plan_content)
 
         worker_key = session.session_key("generic", "worker-subagent-888")
-        with mock.patch.dict(os.environ, {"ALONG_PROFILE": "autonomous"}):
-            self.assertTrue(
-                session.is_plan_approved(self.root, slug=slug, key=worker_key),
-                "Plan approval in plan.md should unlock for implementer under autonomous profile",
-            )
+        for env in ({"ALONG_ISSUE_SLUG": slug}, {"ALONG_PROFILE": "autonomous", "ALONG_ISSUE_SLUG": slug}):
+            with self.subTest(env=env), mock.patch.dict(os.environ, env):
+                self.assertFalse(
+                    session.is_plan_approved(self.root, slug=slug, key=worker_key),
+                    "Approval text an agent writes into plan.md must not approve the plan",
+                )
 
-    def test_issue_frontmatter_approval_unlocks_implementer_source_edits(self):
+    def test_issue_frontmatter_approval_does_not_approve(self):
         slug = "issue-approved-feature"
-        issues_dir = os.path.join(self.root, ".along", "ISSUES")
-        issue_path = os.path.join(issues_dir, f"feat--{slug}.md")
-        textio.write_text(
-            issue_path,
-            f"---\nprotocol: along\nslug: {slug}\ntype: feat\nstatus: in-progress\nplan_approved: true\napproved_by: reviewer\n---\n",
-        )
+        self._issue(slug, "plan_approved: true\napproved_by: reviewer\nplan_approval:\n  approved: true\n")
         session.init_session(self.root, slug)
 
         worker_key = session.session_key("generic", "worker-subagent-777")
-        with mock.patch.dict(os.environ, {"ALONG_PROFILE": "autonomous"}):
-            self.assertTrue(
-                session.is_plan_approved(self.root, slug=slug, key=worker_key),
-                "Plan approval in issue frontmatter should unlock for implementer under autonomous profile",
-            )
+        for env in ({"ALONG_ISSUE_SLUG": slug}, {"ALONG_PROFILE": "autonomous", "ALONG_ISSUE_SLUG": slug}):
+            with self.subTest(env=env), mock.patch.dict(os.environ, env):
+                self.assertFalse(
+                    session.is_plan_approved(self.root, slug=slug, key=worker_key),
+                    "Approval markers in the issue front-matter must not approve the plan",
+                )
+
+    def test_state_json_role_keys_without_plan_approved_do_not_approve(self):
+        slug = "role-keys-feature"
+        self._issue(slug)
+        session.init_session(self.root, slug)
+        st = session.load_state(self.root, slug)
+        st["approved_by"] = "architect"
+        st["plan_approval"] = {"approved": True}
+        session.save_state(self.root, slug, st)
+
+        worker_key = session.session_key("generic", "worker-subagent-666")
+        for env in ({"ALONG_ISSUE_SLUG": slug}, {"ALONG_PROFILE": "autonomous", "ALONG_ISSUE_SLUG": slug}):
+            with self.subTest(env=env), mock.patch.dict(os.environ, env):
+                self.assertFalse(session.is_plan_approved(self.root, slug=slug, key=worker_key))
+
+    def test_autonomous_approval_requires_session_ownership(self):
+        slug = "owned-feature"
+        self._issue(slug)
+        session.init_session(self.root, slug)
+        session.approve_plan(self.root, slug=slug)
+
+        worker_key = session.session_key("generic", "worker-subagent-555")
+        for env in ({"ALONG_PROFILE": "autonomous"},
+                    {"ALONG_PROFILE": "autonomous", "ALONG_ISSUE_SLUG": "other-feature"}):
+            with self.subTest(env=env), mock.patch.dict(os.environ, env):
+                self.assertFalse(
+                    session.is_plan_approved(self.root, slug=slug, key=worker_key),
+                    "A session that does not own the slug must not inherit its blackboard approval",
+                )
+
+    def test_issue_frontmatter_marker_does_not_unlock_source_edit_in_standard_profile(self):
+        slug = "self-approved-feature"
+        self._issue(slug, "plan_approved: true\n")
+        key = session.session_key("generic", "sess-self-approve")
+        session.init_session(self.root, slug)
+        session.bind_session(self.root, slug, key=key)
+        # The phase alone (no plan_approved) is what an agent could also have written
+        st = session.load_state(self.root, slug)
+        st["phase"] = "execution"
+        session.save_state(self.root, slug, st)
+
+        engine = HookEngine(config=hook_config.HooksConfig(profile="standard"), repo_root=self.root)
+        res = engine.evaluate(self._write_event("src/app.py", "sess-self-approve"))
+        self.assertFalse(res.is_allowed, "An agent-written front-matter marker must not approve the plan")
+        self.assertIn("require-plan-approval", res.reason or "")
+
+    def test_file_tool_writes_to_approval_records_are_denied(self):
+        slug = "records-feature"
+        self._issue(slug)
+        session.init_session(self.root, slug)
+        bound_key = session.session_key("generic", "sess-records")
+        session.bind_session(self.root, slug, key=bound_key)
+
+        engine = HookEngine(config=hook_config.HooksConfig(profile="standard"), repo_root=self.root)
+        targets = (
+            f".along/.session/bindings/{bound_key}.json",
+            f".along/.session/{slug}/state.json",
+        )
+        for conversation_id in ("sess-records", "sess-unbound"):
+            for target in targets:
+                with self.subTest(session=conversation_id, target=target):
+                    res = engine.evaluate(self._write_event(target, conversation_id))
+                    self.assertFalse(res.is_allowed, f"Write to approval record '{target}' must be denied")
+                    self.assertIn("approval record", res.reason or "")
+
+        # Planning artifacts stay writable
+        for target in (f".along/.session/{slug}/plan.md", f".along/ISSUES/feat--{slug}.md"):
+            with self.subTest(target=target):
+                res = engine.evaluate(self._write_event(target, "sess-records"))
+                self.assertTrue(res.is_allowed, f"Expected '{target}' to stay writable, got: {res.reason}")
 
 
 if __name__ == "__main__":
