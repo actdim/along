@@ -21,11 +21,16 @@ import uuid
 from .. import entities, proc, repo, session
 from ..telemetry.models import StatusCode
 from ..telemetry.tracer import Tracer
+from .base import BaseRunner
 from .stream import ChunkedStreamSupervisor
 
 
-class AntigravityRunner:
+class AntigravityRunner(BaseRunner):
     """Antigravity agent runtime process supervisor and telemetry coordinator."""
+
+    runtime: str = "antigravity"
+    runtime_label: str = "Antigravity"
+    default_binary: str = "antigravity"
 
     def __init__(
         self,
@@ -36,14 +41,22 @@ class AntigravityRunner:
         binary_path: Optional[str] = None,
         dry_run: bool = False,
         extra_args: Optional[List[str]] = None,
+        model: Optional[str] = None,
+        timeout: Optional[int] = None,
+        env_overrides: Optional[Dict[str, str]] = None,
     ) -> None:
-        self.repo_root = os.path.abspath(repo_root) if repo_root else (repo.find_repo_root() or os.getcwd())
-        self.issue_slug = issue_slug
-        self.run_id = str(run_id) if run_id is not None else uuid.uuid4().hex
+        super().__init__(
+            repo_root=repo_root,
+            issue_slug=issue_slug,
+            run_id=run_id,
+            model=model,
+            timeout=timeout,
+            binary_path=binary_path,
+            dry_run=dry_run,
+            extra_args=extra_args,
+            env_overrides=env_overrides,
+        )
         self.otel_endpoint = otel_endpoint
-        self.binary_path = binary_path
-        self.dry_run = bool(dry_run)
-        self.extra_args = list(extra_args) if extra_args is not None else []
 
     def resolve_binary(self) -> str:
         """Resolve path or executable name for Antigravity runtime."""
@@ -89,53 +102,9 @@ class AntigravityRunner:
 
         return "antigravity"
 
-    def resolve_active_issue(self) -> str:
-        """Resolve active issue slug from parameters, active session, or in-progress issues."""
-        if self.issue_slug:
-            found = entities.find_issue_by_slug(self.repo_root, self.issue_slug)
-            if found:
-                self.issue_slug = str(found["slug"])
-                return self.issue_slug
-            if not self.dry_run:
-                raise RuntimeError(
-                    f"Cannot run Antigravity: issue '{self.issue_slug}' not found in .along/ISSUES/."
-                )
-            return self.issue_slug
-
-        active_slug = session.get_active_session_slug(self.repo_root)
-        if active_slug:
-            found = entities.find_issue_by_slug(self.repo_root, active_slug)
-            if found:
-                self.issue_slug = str(found["slug"])
-                return self.issue_slug
-            self.issue_slug = active_slug
-            return self.issue_slug
-
-        issues = entities.scan_issues(self.repo_root, include_done=False)
-        in_progress = [iss for iss in issues if iss.get("status") == "in-progress"]
-        if in_progress:
-            self.issue_slug = str(in_progress[0]["slug"])
-            return self.issue_slug
-
-        if not self.dry_run:
-            raise RuntimeError(
-                "Cannot run Antigravity: no active in-progress issue found in .along/ISSUES/. Run 'along start <slug>' first."
-            )
-        return "adhoc"
-
     def build_env(self) -> Dict[str, str]:
         """Build execution environment for Antigravity child process."""
-        if not self.run_id:
-            self.run_id = uuid.uuid4().hex
-
-        active_slug = self.resolve_active_issue()
-
-        env = dict(os.environ)
-        env.update(proc.UTF8_CHILD_ENV)
-        env["ALONG_RUN_ID"] = str(self.run_id)
-        env["ALONG_ISSUE_SLUG"] = str(active_slug)
-        env["ALONG_REPO_ROOT"] = str(self.repo_root)
-        env["ALONG_OBSERVABILITY_LEVEL"] = "complete"
+        env = super().build_env()
         env["ALONG_OBSERVABILITY_SOURCES"] = "antigravity_hook,stdout_stream"
         if self.otel_endpoint:
             env["ALONG_OTEL_ENDPOINT"] = str(self.otel_endpoint)

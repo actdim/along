@@ -3,10 +3,11 @@ protocol: along
 protocol_version: "4.0.1"
 slug: agent-runtime-adapters-claude-codex-opencode
 type: feat
-status: open
+status: done
+completed: 2026-10-23
 priority: medium
 created: 2026-09-23
-updated: 2026-09-27
+updated: 2026-10-23
 agent: antigravity
 tags: [runtime, claude-code, codex, opencode, adapters, local-models, ollama]
 milestone: v5.0.0-agent-run-protocol-and-observability
@@ -52,7 +53,7 @@ Mapping to OpenTelemetry / OpenInference spans is deferred. Antigravity is cover
 `feat--agent-runtime-runner-antigravity` (done, Windows); its Linux status is a spike question.
 
 ## Acceptance Criteria
-- [ ] Claude Code adapter tested in headless execution mode.
-- [ ] Codex adapter tested with structured JSONL event streams.
-- [ ] OpenCode adapter tested with local Ollama/vLLM models in a simulated private environment.
-- [ ] Generic CLI adapter successfully captures process exit codes and buffered stdout/stderr.
+- [x] Claude Code adapter tested in headless execution mode.
+- [x] Codex adapter tested with structured JSONL event streams.
+- [x] OpenCode adapter tested with local Ollama/vLLM models in a simulated private environment.
+- [x] Generic CLI adapter successfully captures process exit codes and buffered stdout/stderr.

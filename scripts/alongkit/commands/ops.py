@@ -208,12 +208,13 @@ def handle_devenv_command(repo_root: str, args: List[str]):
 
 def handle_run_command(repo_root: Optional[str], args: List[str]):
     if not args or args[0] in ("-h", "--help", "help"):
-        print("Usage: along run [antigravity|agy] [options] | along run <command...>")
+        print("Usage: along run [antigravity|agy|claude|codex|opencode|generic] [options] | along run <command...>")
         print("       python scripts/along_exec.py run [antigravity|agy] [options] | run <command...>")
         print("")
         print("Agent Runtime Runner:")
         print("  along run antigravity [--dry-run] [-i|--issue <slug>] [--run-id <id>] [--endpoint <url>] [--binary <path>]")
-        print("  Supervise Antigravity agent process, enforce workspace containment, and capture telemetry.")
+        print("  along run [claude|codex|opencode|generic] [--dry-run] [-i|--issue <slug>] [--model <model>] [--timeout <sec>]")
+        print("  Supervise agent process, enforce workspace containment, and capture telemetry/handoff records.")
         print("")
         print("Lifecycle Command Proxy:")
         print("  Execute a shell command behind the Along runtime lifecycle hook and gate pipeline.")
@@ -221,7 +222,8 @@ def handle_run_command(repo_root: Optional[str], args: List[str]):
         print("  are blocked with exit code 2 and an error message on stderr.")
         sys.exit(0)
 
-    if args[0].lower() in ("antigravity", "agy"):
+    target_subcmd = args[0].lower()
+    if target_subcmd in ("antigravity", "agy"):
         sub_args = args[1:]
         dry_run = False
         issue_slug = None
@@ -280,6 +282,96 @@ def handle_run_command(repo_root: Optional[str], args: List[str]):
             sys.stderr.write(f"[Along Runner Error] {exc}\n")
             sys.exit(1)
         sys.exit(code)
+
+    if target_subcmd in ("claude", "claude-code", "codex", "opencode", "generic"):
+        sub_args = args[1:]
+        dry_run = False
+        issue_slug = None
+        run_id = None
+        model = None
+        timeout = None
+        binary = None
+        brief = "Execute assigned issue tasks."
+        role = "implementer"
+        base_url = None
+        pass_args: List[str] = []
+
+        i = 0
+        while i < len(sub_args):
+            arg = sub_args[i]
+            if arg in ("--dry-run", "-n"):
+                dry_run = True
+                i += 1
+            elif arg in ("--issue", "-i") and i + 1 < len(sub_args):
+                issue_slug = sub_args[i + 1]
+                i += 2
+            elif arg in ("--run-id",) and i + 1 < len(sub_args):
+                run_id = sub_args[i + 1]
+                i += 2
+            elif arg in ("--model", "-m") and i + 1 < len(sub_args):
+                model = sub_args[i + 1]
+                i += 2
+            elif arg in ("--timeout",) and i + 1 < len(sub_args):
+                try:
+                    timeout = int(sub_args[i + 1])
+                except ValueError:
+                    timeout = None
+                i += 2
+            elif arg in ("--binary", "-b") and i + 1 < len(sub_args):
+                binary = sub_args[i + 1]
+                i += 2
+            elif arg in ("--brief", "--prompt", "-p") and i + 1 < len(sub_args):
+                brief = sub_args[i + 1]
+                i += 2
+            elif arg in ("--role", "-r") and i + 1 < len(sub_args):
+                role = sub_args[i + 1]
+                i += 2
+            elif arg in ("--base-url",) and i + 1 < len(sub_args):
+                base_url = sub_args[i + 1]
+                i += 2
+            elif arg in ("-h", "--help", "help"):
+                print(f"Usage: along run {target_subcmd} [options] [-- <extra-args...>]")
+                print("Options:")
+                print("  --dry-run, -n          Preview configured environment and parameters without spawning")
+                print("  -i, --issue <slug>     Bind run to specific active issue (defaults to in-progress issue)")
+                print("  --run-id <id>          Explicit run ID for handoff run record")
+                print("  -m, --model <name>     Model identifier override")
+                print("  --timeout <seconds>    Process timeout in seconds")
+                print("  -b, --binary <path>    Explicit path to CLI binary")
+                print("  -p, --brief <text>     Brief or prompt text for headless execution")
+                print("  -r, --role <name>      Role profile (scout, architect, implementer, reviewer)")
+                if target_subcmd == "opencode":
+                    print("  --base-url <url>       Local Ollama/vLLM base URL endpoint (OPENAI_BASE_URL)")
+                sys.exit(0)
+            elif arg == "--":
+                pass_args.extend(sub_args[i + 1:])
+                break
+            else:
+                pass_args.append(arg)
+                i += 1
+
+        from alongkit.runner import get_runner
+        runner_kwargs: Dict[str, Any] = {
+            "repo_root": repo_root,
+            "issue_slug": issue_slug,
+            "run_id": run_id,
+            "model": model,
+            "timeout": timeout,
+            "binary_path": binary,
+            "dry_run": dry_run,
+            "extra_args": pass_args,
+        }
+        if target_subcmd == "opencode" and base_url:
+            runner_kwargs["base_url"] = base_url
+
+        try:
+            adapter = get_runner(target_subcmd, **runner_kwargs)
+            record = adapter.execute_run(brief=brief, role=role, model=model, timeout=timeout)
+        except RuntimeError as exc:
+            sys.stderr.write(f"[Along Runner Error] {exc}\n")
+            sys.exit(1)
+        print(json.dumps(record, indent=2))
+        sys.exit(record.get("exit_code") or 0)
 
     from alongkit.hooks import HookEvent, HookEventType, evaluate_event, load_config
     config = load_config(repo_root)

@@ -15,7 +15,6 @@
 - [ ] `(feat)` [agent-execution-gate-telegram](ISSUES/feat--agent-execution-gate-telegram.md)
 - [ ] `(feat)` [agent-interactive-stdin-bridge](ISSUES/feat--agent-interactive-stdin-bridge.md)
 - [ ] `(feat)` [agent-run-protocol-and-observability](ISSUES/feat--agent-run-protocol-and-observability.md)
-- [ ] `(feat)` [agent-runtime-adapters-claude-codex-opencode](ISSUES/feat--agent-runtime-adapters-claude-codex-opencode.md)
 - [ ] `(feat)` [along-plan-strategies](ISSUES/feat--along-plan-strategies.md)
 - [ ] `(feat)` [along-report-engine](ISSUES/feat--along-report-engine.md)
 - [ ] `(feat)` [along-storage-providers](ISSUES/feat--along-storage-providers.md)
@@ -56,4 +55,4 @@
 - [x] `(feat)` [cross-runtime-handoff-entities](ISSUES/done/feat--cross-runtime-handoff-entities.md)
 - [x] `(feat)` [autonomous-gate-profile](ISSUES/done/feat--autonomous-gate-profile.md)
 - [x] `(feat)` [anti-silent-fallback-gate](ISSUES/done/feat--anti-silent-fallback-gate.md)
-<!-- 289 older completed issue(s) archived in .along/ISSUES/done/ -->
+<!-- 290 older completed issue(s) archived in .along/ISSUES/done/ -->
