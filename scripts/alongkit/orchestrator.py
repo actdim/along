@@ -1,0 +1,644 @@
+#!/usr/bin/env python3
+"""
+alongkit.orchestrator - Cross-runtime supervisor orchestrator for tiered multi-agent loops.
+
+Coordinates sequential execution across heterogeneous agent CLI runtimes:
+- Role mapping configuration (scout, architect, implementer, reviewer)
+- Phase 1: Scout / Research (generates brief, runs scout, asserts research.md)
+- Phase 2: Architect (generates brief, runs planner, validates plan.md, approves plan in state.json)
+- Phase 3 & 4 Step Loop:
+  * Implementer: generates brief, executes step N, audits changed files and handoff note
+  * Reviewer: generates brief with diff stat and tests, evaluates reviews/step-N.md front-matter
+  * On pass: advances step in state.json
+  * On fail: increments retry counter (max 3), feeds defects into subsequent prompt payload
+  * On needs-input: halts loop with needs-input status
+"""
+
+from __future__ import annotations
+if __name__ == "__main__":
+    import os
+    raise SystemExit(
+        f"{os.path.basename(__file__)} is a library module, not a command.\n"
+        "Run: along orchestrate --help   (or: python scripts/along_exec.py orchestrate --help)"
+    )
+
+import copy
+import json
+import os
+import re
+import signal
+import sys
+import time
+from typing import Any, Callable, Dict, List, Optional, Tuple
+import uuid
+
+from . import entities, frontmatter, handoff, proc, repo, session, textio
+from .runner import BaseRunner, RunResult, get_runner
+
+SUPPORTED_ROLES: Tuple[str, ...] = ("scout", "architect", "implementer", "reviewer")
+DEFAULT_MAX_RETRIES: int = 3
+DEFAULT_TIMEOUT: int = 1800
+
+DEFAULT_ROLES: Dict[str, Dict[str, Any]] = {
+    "scout": {
+        "runtime": "claude-code",
+        "args": ["--dangerously-skip-permissions"],
+    },
+    "architect": {
+        "runtime": "claude-code",
+        "args": ["--dangerously-skip-permissions"],
+    },
+    "implementer": {
+        "runtime": "claude-code",
+        "args": ["--dangerously-skip-permissions"],
+    },
+    "reviewer": {
+        "runtime": "claude-code",
+        "args": ["--dangerously-skip-permissions"],
+    },
+}
+
+
+def load_role_config(
+    repo_root: Optional[str] = None,
+    overrides: Optional[Dict[str, Any]] = None,
+) -> Dict[str, Dict[str, Any]]:
+    """Load role-to-runtime configuration from repo config or defaults with overrides."""
+    root = repo_root or repo.find_repo_root()
+    config = copy.deepcopy(DEFAULT_ROLES)
+
+    if root:
+        state_dir = repo.state_dir(root)
+        config_files = [
+            os.path.join(state_dir, "config.yaml"),
+            os.path.join(state_dir, "config.json"),
+            os.path.join(root, "along.yaml"),
+            os.path.join(root, "along.json"),
+        ]
+        for cpath in config_files:
+            if not os.path.isfile(cpath):
+                continue
+            try:
+                raw = textio.read_text(cpath, strict=False)
+                parsed: Optional[Dict[str, Any]] = None
+                if cpath.endswith((".yaml", ".yml")):
+                    from . import bootstrap
+                    ruamel = bootstrap.require("ruamel.yaml")
+                    yaml = ruamel.YAML(typ="safe")
+                    parsed = yaml.load(raw)
+                else:
+                    parsed = json.loads(raw)
+                if isinstance(parsed, dict):
+                    orch_section = parsed.get("orchestration") or parsed.get("orchestrator")
+                    if isinstance(orch_section, dict):
+                        for role in SUPPORTED_ROLES:
+                            val = orch_section.get(role)
+                            if isinstance(val, str):
+                                config[role] = {"runtime": val.strip(), "args": []}
+                            elif isinstance(val, dict):
+                                r_cfg = dict(val)
+                                if "runtime" in r_cfg:
+                                    r_cfg["runtime"] = str(r_cfg["runtime"]).strip()
+                                if "args" in r_cfg and not isinstance(r_cfg["args"], list):
+                                    r_cfg["args"] = [str(r_cfg["args"])]
+                                config[role].update(r_cfg)
+                        break
+            except (OSError, ValueError, TypeError, KeyError, AttributeError):
+                continue
+
+    if overrides:
+        for role in SUPPORTED_ROLES:
+            val = overrides.get(role)
+            if val:
+                if isinstance(val, str):
+                    config[role]["runtime"] = val.strip()
+                elif isinstance(val, dict):
+                    config[role].update(val)
+        if overrides.get("model"):
+            for role in SUPPORTED_ROLES:
+                config[role]["model"] = str(overrides["model"]).strip()
+        if overrides.get("timeout"):
+            try:
+                timeout_val = int(overrides["timeout"])
+                for role in SUPPORTED_ROLES:
+                    config[role]["timeout"] = timeout_val
+            except (ValueError, TypeError):
+                pass
+
+    return config
+
+
+def extract_steps_from_plan(plan_text: str) -> List[Dict[str, Any]]:
+    """Parse steps from plan.md into structured step records."""
+    steps: List[Dict[str, Any]] = []
+    seen = set()
+    pattern = re.compile(
+        r"^(?:[-*]\s+(?:\[[\sx]\]\s+)?|#{1,4}\s+)?Step\s+(\d+)[:\s\-]+([^\n\r]+)",
+        re.IGNORECASE | re.MULTILINE,
+    )
+    for m in pattern.finditer(plan_text or ""):
+        try:
+            num = int(m.group(1))
+            title = m.group(2).strip()
+            if num not in seen and title:
+                seen.add(num)
+                steps.append({
+                    "step": num,
+                    "title": title,
+                    "status": "pending",
+                    "retries": 0,
+                    "started": None,
+                    "completed": None,
+                })
+        except (ValueError, TypeError):
+            continue
+    steps.sort(key=lambda s: s["step"])
+    return steps
+
+
+def resolve_orchestrator_issue(repo_root: str, slug: Optional[str] = None) -> str:
+    """Resolve active issue slug from parameter, active session binding, or in-progress issues."""
+    if slug:
+        clean_slug = str(slug).strip()
+        iss = entities.find_issue_by_slug(repo_root, clean_slug)
+        if iss:
+            return str(iss["slug"])
+        session_dir = session.get_session_dir(repo_root, clean_slug)
+        if os.path.isdir(session_dir):
+            return clean_slug
+        return clean_slug
+
+    active_slug = session.get_active_session_slug(repo_root)
+    if active_slug:
+        return active_slug
+
+    issues = entities.scan_issues(repo_root, include_done=False)
+    in_progress = [i for i in issues if i.get("status") == "in-progress"]
+    if in_progress:
+        return str(in_progress[0]["slug"])
+
+    raise ValueError("No issue slug specified and no active in-progress issue found.")
+
+
+class CrossRuntimeOrchestrator:
+    """Supervises sequential multi-agent execution across heterogeneous CLI runtimes."""
+
+    def __init__(
+        self,
+        repo_root: Optional[str] = None,
+        slug: Optional[str] = None,
+        role_config: Optional[Dict[str, Dict[str, Any]]] = None,
+        max_retries: int = DEFAULT_MAX_RETRIES,
+        timeout: Optional[int] = None,
+        dry_run: bool = False,
+        force: bool = False,
+        runner_factory: Optional[Callable[..., BaseRunner]] = None,
+    ) -> None:
+        self.repo_root = os.path.abspath(repo_root) if repo_root else (repo.find_repo_root() or os.getcwd())
+        self.slug = resolve_orchestrator_issue(self.repo_root, slug)
+        self.role_config = role_config or load_role_config(self.repo_root)
+        self.max_retries = int(max_retries) if max_retries is not None else DEFAULT_MAX_RETRIES
+        self.timeout = int(timeout) if timeout is not None else None
+        self.dry_run = bool(dry_run)
+        self.force = bool(force)
+        self.runner_factory = runner_factory
+        self.run_id = f"orch-{uuid.uuid4().hex[:12]}"
+        self.active_runner: Optional[BaseRunner] = None
+        self.execution_log: List[Dict[str, Any]] = []
+
+    def _instantiate_runner(self, role: str) -> BaseRunner:
+        """Instantiate configured runner adapter for a given role."""
+        r_cfg = self.role_config.get(role, {})
+        runtime = r_cfg.get("runtime", "claude-code")
+        model = r_cfg.get("model")
+        extra_args = r_cfg.get("args") or []
+        r_timeout = r_cfg.get("timeout") or self.timeout
+
+        factory = self.runner_factory or get_runner
+        runner = factory(
+            runtime=runtime,
+            repo_root=self.repo_root,
+            issue_slug=self.slug,
+            model=model,
+            timeout=r_timeout,
+            extra_args=extra_args,
+            dry_run=self.dry_run,
+        )
+        self.active_runner = runner
+        return runner
+
+    def run_scout_phase(self) -> Dict[str, Any]:
+        """Execute Phase 1: Scout / Research."""
+        st = session.load_state(self.repo_root, self.slug)
+        if not st:
+            st = session.init_session(self.repo_root, self.slug, execution_mode="role-based")
+
+        session.set_session_phase(self.repo_root, phase="inquiry", slug=self.slug)
+        brief = handoff.generate_brief(self.repo_root, self.slug, role="scout")
+        runner = self._instantiate_runner("scout")
+        record = runner.execute_run(brief=brief, role="scout", step=None, dry_run=self.dry_run)
+        self.execution_log.append({"phase": "scout", "record": record})
+
+        outcome = record.get("outcome")
+        if outcome == "needs-input" or handoff.has_open_questions(self.repo_root, self.slug):
+            session.update_state(self.repo_root, self.slug, status="needs-input")
+            return {"phase": "scout", "status": "needs-input", "outcome": outcome}
+
+        if outcome == "timeout":
+            session.update_state(self.repo_root, self.slug, status="failed")
+            return {"phase": "scout", "status": "timeout", "outcome": outcome}
+
+        if outcome == "fail":
+            session.update_state(self.repo_root, self.slug, status="failed")
+            return {"phase": "scout", "status": "failed", "outcome": outcome}
+
+        # Assert research.md exists and is populated
+        session_dir = session.get_session_dir(self.repo_root, self.slug)
+        research_file = os.path.join(session_dir, "research.md")
+        if not self.dry_run:
+            if not os.path.isfile(research_file) or os.path.getsize(research_file) == 0:
+                session.update_state(self.repo_root, self.slug, status="failed")
+                return {
+                    "phase": "scout",
+                    "status": "failed",
+                    "reason": "Scout completed but research.md is missing or empty.",
+                }
+            content = textio.read_text(research_file, strict=False)
+            if not content.strip() or session.is_scaffold_research(content):
+                session.update_state(self.repo_root, self.slug, status="failed")
+                return {
+                    "phase": "scout",
+                    "status": "failed",
+                    "reason": "Scout completed but research.md contains only unpopulated scaffold.",
+                }
+
+        session.set_session_phase(self.repo_root, phase="planning", slug=self.slug)
+        return {"phase": "scout", "status": "done", "outcome": "done"}
+
+    def run_architect_phase(self) -> Dict[str, Any]:
+        """Execute Phase 2: Architect / Living Plan."""
+        session.set_session_phase(self.repo_root, phase="planning", slug=self.slug)
+        brief = handoff.generate_brief(self.repo_root, self.slug, role="architect")
+        runner = self._instantiate_runner("architect")
+        record = runner.execute_run(brief=brief, role="architect", step=None, dry_run=self.dry_run)
+        self.execution_log.append({"phase": "architect", "record": record})
+
+        outcome = record.get("outcome")
+        if outcome == "needs-input" or handoff.has_open_questions(self.repo_root, self.slug):
+            session.update_state(self.repo_root, self.slug, status="needs-input")
+            return {"phase": "architect", "status": "needs-input", "outcome": outcome}
+
+        if outcome == "timeout":
+            session.update_state(self.repo_root, self.slug, status="failed")
+            return {"phase": "architect", "status": "timeout", "outcome": outcome}
+
+        if outcome == "fail":
+            session.update_state(self.repo_root, self.slug, status="failed")
+            return {"phase": "architect", "status": "failed", "outcome": outcome}
+
+        # Validate plan.md and requirement extraction
+        session_dir = session.get_session_dir(self.repo_root, self.slug)
+        plan_file = os.path.join(session_dir, "plan.md")
+        if not self.dry_run:
+            if not os.path.isfile(plan_file) or os.path.getsize(plan_file) == 0:
+                session.update_state(self.repo_root, self.slug, status="failed")
+                return {
+                    "phase": "architect",
+                    "status": "failed",
+                    "reason": "Architect completed but plan.md is missing or empty.",
+                }
+            plan_text = textio.read_text(plan_file, strict=False)
+            extracted = extract_steps_from_plan(plan_text)
+            if extracted:
+                st = session.load_state(self.repo_root, self.slug)
+                if st:
+                    st["steps"] = extracted
+                    st["total_steps"] = len(extracted)
+                    session.save_state(self.repo_root, self.slug, st)
+
+        # Mark plan approved in state.json
+        session.approve_plan(self.repo_root, slug=self.slug)
+        st = session.load_state(self.repo_root, self.slug)
+        if st:
+            st["approved_by"] = "architect"
+            st["plan_approved"] = True
+            st["phase"] = "execution"
+            session.save_state(self.repo_root, self.slug, st)
+
+        return {"phase": "architect", "status": "done", "outcome": "done"}
+
+    def run_step_loop(self) -> Dict[str, Any]:
+        """Execute Phase 3 & 4: Implementer & Reviewer Step Loop."""
+        st = session.load_state(self.repo_root, self.slug)
+        if not st:
+            st = session.init_session(self.repo_root, self.slug, execution_mode="role-based")
+
+        current_step = st.get("current_step", 1)
+        total_steps = st.get("total_steps", 1)
+        if total_steps <= 0:
+            total_steps = 1
+
+        while current_step <= total_steps:
+            st = session.load_state(self.repo_root, self.slug)
+            steps = st.get("steps", [])
+            step_entry = next((s for s in steps if s.get("step") == current_step), None)
+            retries = step_entry.get("retries", 0) if step_entry else 0
+
+            if retries > self.max_retries:
+                session.update_state(
+                    self.repo_root,
+                    self.slug,
+                    current_step=current_step,
+                    step_status="failed",
+                    status="failed",
+                )
+                return {
+                    "status": "failed",
+                    "reason": f"Retry limit ({self.max_retries}) exhausted on step {current_step}",
+                    "current_step": current_step,
+                }
+
+            # --- Implementer ---
+            session.update_state(
+                self.repo_root,
+                self.slug,
+                current_step=current_step,
+                step_status="in-progress",
+            )
+            impl_brief = handoff.generate_brief(self.repo_root, self.slug, role="implementer")
+            impl_runner = self._instantiate_runner("implementer")
+            impl_record = impl_runner.execute_run(
+                brief=impl_brief,
+                role="implementer",
+                step=current_step,
+                dry_run=self.dry_run,
+            )
+            self.execution_log.append({
+                "phase": "implementer",
+                "step": current_step,
+                "record": impl_record,
+            })
+
+            impl_outcome = impl_record.get("outcome")
+            if impl_outcome == "needs-input" or handoff.has_open_questions(self.repo_root, self.slug):
+                session.update_state(self.repo_root, self.slug, current_step=current_step, status="needs-input")
+                return {
+                    "status": "needs-input",
+                    "phase": "implementer",
+                    "step": current_step,
+                    "outcome": impl_outcome,
+                }
+
+            if impl_outcome == "timeout":
+                session.update_state(
+                    self.repo_root,
+                    self.slug,
+                    current_step=current_step,
+                    step_status="failed",
+                    status="failed",
+                )
+                return {
+                    "status": "timeout",
+                    "phase": "implementer",
+                    "step": current_step,
+                    "outcome": impl_outcome,
+                }
+
+            changed_files = impl_record.get("changed_files") or []
+            if changed_files:
+                session.patch_blackboard(self.repo_root, self.slug, {"touched_files": changed_files})
+
+            # Check handoff.md note
+            handoff_note = handoff.read_handoff_note(self.repo_root, self.slug)
+
+            # --- Reviewer ---
+            rev_brief = handoff.generate_brief(self.repo_root, self.slug, role="reviewer")
+            rev_runner = self._instantiate_runner("reviewer")
+            rev_record = rev_runner.execute_run(
+                brief=rev_brief,
+                role="reviewer",
+                step=current_step,
+                dry_run=self.dry_run,
+            )
+            self.execution_log.append({
+                "phase": "reviewer",
+                "step": current_step,
+                "record": rev_record,
+            })
+
+            rev_outcome = rev_record.get("outcome")
+            if rev_outcome == "needs-input" or handoff.has_open_questions(self.repo_root, self.slug):
+                session.update_state(self.repo_root, self.slug, current_step=current_step, status="needs-input")
+                return {
+                    "status": "needs-input",
+                    "phase": "reviewer",
+                    "step": current_step,
+                    "outcome": rev_outcome,
+                }
+
+            if rev_outcome == "timeout":
+                session.update_state(
+                    self.repo_root,
+                    self.slug,
+                    current_step=current_step,
+                    step_status="failed",
+                    status="failed",
+                )
+                return {
+                    "status": "timeout",
+                    "phase": "reviewer",
+                    "step": current_step,
+                    "outcome": rev_outcome,
+                }
+
+            # Evaluate Review Verdict
+            review_verdict = handoff.load_review_verdict(self.repo_root, self.slug, current_step)
+            verdict = "pass"
+            defects: List[Dict[str, Any]] = []
+
+            if review_verdict:
+                verdict = review_verdict.get("verdict", "pass").lower().strip()
+                defects = review_verdict.get("defects", [])
+            elif not self.dry_run:
+                # Fallback: check stdout of reviewer runner
+                stdout_text = rev_runner.last_result.stdout if rev_runner.last_result else ""
+                try:
+                    fm, _ = frontmatter.parse(stdout_text)
+                    if "verdict" in fm:
+                        v = str(fm.get("verdict", "pass")).lower().strip()
+                        raw_d = fm.get("defects", [])
+                        d_list = list(raw_d) if isinstance(raw_d, list) else []
+                        handoff.write_review_verdict(
+                            self.repo_root,
+                            self.slug,
+                            step=current_step,
+                            verdict=v,
+                            defects=d_list,
+                        )
+                        verdict = v
+                        defects = d_list
+                    elif rev_record.get("exit_code") != 0:
+                        verdict = "fail"
+                        defects = [{"severity": "blocking", "description": "Reviewer exited with error without review verdict"}]
+                except (ValueError, KeyError, TypeError, OSError):
+                    if rev_record.get("exit_code") != 0:
+                        verdict = "fail"
+                        defects = [{"severity": "blocking", "description": "Reviewer exited with error"}]
+
+            if verdict == "pass":
+                session.update_state(
+                    self.repo_root,
+                    self.slug,
+                    current_step=current_step,
+                    step_status="passed",
+                )
+                session.patch_blackboard(self.repo_root, self.slug, {"open_defects": None})
+                current_step += 1
+                st = session.load_state(self.repo_root, self.slug)
+                total_steps = st.get("total_steps", 1)
+                if current_step > total_steps:
+                    session.update_state(self.repo_root, self.slug, status="completed")
+                    return {
+                        "status": "completed",
+                        "current_step": total_steps,
+                        "total_steps": total_steps,
+                    }
+                else:
+                    session.update_state(
+                        self.repo_root,
+                        self.slug,
+                        current_step=current_step,
+                        step_status="pending",
+                    )
+            else:
+                # Review failed: increment retries and feed defects to blackboard
+                st, retry_exhausted = session.update_state(
+                    self.repo_root,
+                    self.slug,
+                    current_step=current_step,
+                    increment_retry=True,
+                    max_retries=self.max_retries,
+                )
+                defect_map = {}
+                for idx, d in enumerate(defects, start=1):
+                    sev = d.get("severity", "blocking") if isinstance(d, dict) else "blocking"
+                    desc = d.get("description", str(d)) if isinstance(d, dict) else str(d)
+                    defect_map[f"step_{current_step}_defect_{idx}_{sev}"] = desc
+                session.patch_blackboard(self.repo_root, self.slug, {"open_defects": defect_map})
+
+                if retry_exhausted:
+                    session.update_state(
+                        self.repo_root,
+                        self.slug,
+                        current_step=current_step,
+                        step_status="failed",
+                        status="failed",
+                    )
+                    return {
+                        "status": "failed",
+                        "reason": f"Retry limit ({self.max_retries}) exhausted on step {current_step}",
+                        "current_step": current_step,
+                        "defects": defects,
+                    }
+
+        session.update_state(self.repo_root, self.slug, status="completed")
+        return {
+            "status": "completed",
+            "current_step": current_step - 1,
+            "total_steps": total_steps,
+        }
+
+    def orchestrate(
+        self,
+        skip_scout: bool = False,
+        skip_architect: bool = False,
+    ) -> Dict[str, Any]:
+        """Execute complete orchestration lifecycle."""
+        claimed = handoff.acquire_claim(
+            self.repo_root,
+            self.slug,
+            run_id=self.run_id,
+            runtime="supervisor",
+            ttl_seconds=self.timeout or 3600,
+            force=self.force,
+        )
+        if not claimed and not self.dry_run:
+            return {
+                "status": "blocked",
+                "reason": f"Issue '{self.slug}' is currently claimed by another process in state.json.",
+            }
+
+        old_sigint = signal.getsignal(signal.SIGINT)
+        old_sigterm = signal.getsignal(signal.SIGTERM) if hasattr(signal, "SIGTERM") else None
+
+        def _cleanup_handler(signum, frame):
+            handoff.release_claim(self.repo_root, self.slug, run_id=self.run_id, force=True)
+            if signum == signal.SIGINT and callable(old_sigint):
+                old_sigint(signum, frame)
+            elif old_sigterm and signum == signal.SIGTERM and callable(old_sigterm):
+                old_sigterm(signum, frame)
+            sys.exit(130)
+
+        signal.signal(signal.SIGINT, _cleanup_handler)
+        if hasattr(signal, "SIGTERM"):
+            signal.signal(signal.SIGTERM, _cleanup_handler)
+
+        try:
+            if not skip_scout:
+                scout_res = self.run_scout_phase()
+                if scout_res.get("status") != "done":
+                    return scout_res
+
+            if not skip_architect:
+                arch_res = self.run_architect_phase()
+                if arch_res.get("status") != "done":
+                    return arch_res
+
+            step_res = self.run_step_loop()
+            return step_res
+
+        finally:
+            handoff.release_claim(self.repo_root, self.slug, run_id=self.run_id, force=True)
+            signal.signal(signal.SIGINT, old_sigint)
+            if hasattr(signal, "SIGTERM") and old_sigterm:
+                signal.signal(signal.SIGTERM, old_sigterm)
+
+
+def run_orchestration(
+    repo_root: Optional[str] = None,
+    slug: Optional[str] = None,
+    overrides: Optional[Dict[str, Any]] = None,
+    max_retries: int = DEFAULT_MAX_RETRIES,
+    timeout: Optional[int] = None,
+    dry_run: bool = False,
+    force: bool = False,
+    skip_scout: bool = False,
+    skip_architect: bool = False,
+    runner_factory: Optional[Callable[..., BaseRunner]] = None,
+) -> Dict[str, Any]:
+    """Convenience function to configure and execute orchestration."""
+    role_cfg = load_role_config(repo_root, overrides=overrides)
+    orch = CrossRuntimeOrchestrator(
+        repo_root=repo_root,
+        slug=slug,
+        role_config=role_cfg,
+        max_retries=max_retries,
+        timeout=timeout,
+        dry_run=dry_run,
+        force=force,
+        runner_factory=runner_factory,
+    )
+    return orch.orchestrate(skip_scout=skip_scout, skip_architect=skip_architect)
+
+
+__all__ = [
+    "CrossRuntimeOrchestrator",
+    "DEFAULT_MAX_RETRIES",
+    "DEFAULT_ROLES",
+    "DEFAULT_TIMEOUT",
+    "SUPPORTED_ROLES",
+    "extract_steps_from_plan",
+    "load_role_config",
+    "resolve_orchestrator_issue",
+    "run_orchestration",
+]

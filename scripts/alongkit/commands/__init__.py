@@ -33,6 +33,7 @@ from .ops import (
     handle_rules_command,
     handle_run_command,
 )
+from .orchestrator import handle_orchestrate_command, handle_team_command
 from .scratch import handle_scratch_command
 from .session import handle_session_command
 from .telemetry import handle_telemetry_command
@@ -51,6 +52,7 @@ __all__ = [
     "handle_issue_command",
     "handle_lint_command",
     "handle_milestone_command",
+    "handle_orchestrate_command",
     "handle_patch_command",
     "handle_plan_command",
     "handle_rules_command",
@@ -59,6 +61,7 @@ __all__ = [
     "handle_session_command",
     "handle_start_command",
     "handle_status_command",
+    "handle_team_command",
     "handle_telemetry_command",
     "handle_worktree_command",
 ]

@@ -1606,6 +1606,7 @@ def unrecorded_files(repo_root: str, slug: str) -> List[str]:
         "research.md",
         TRACE_FILENAME,
         "notes.md",
+        "handoff.md",
     }
     for root, dirs, files in os.walk(sdir):
         dirs.sort()
@@ -1620,6 +1621,10 @@ def unrecorded_files(repo_root: str, slug: str) -> List[str]:
             else:
                 parts = rel_path.split("/")
                 if parts[0] == "reviews" and len(parts) == 2 and parts[1].endswith(".md"):
+                    continue
+                if parts[0] == "runs" and len(parts) == 2 and parts[1].endswith(".json"):
+                    continue
+                if parts[0] == "questions" and len(parts) == 2 and parts[1].endswith(".md"):
                     continue
                 unrecorded.append(rel_path)
     return unrecorded

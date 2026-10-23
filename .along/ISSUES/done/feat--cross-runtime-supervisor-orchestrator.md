@@ -3,7 +3,8 @@ protocol: along
 protocol_version: "4.4.11"
 slug: cross-runtime-supervisor-orchestrator
 type: feat
-status: open
+status: done
+completed: 2026-10-23
 priority: high
 created: 2026-10-13
 updated: 2026-10-23
@@ -103,9 +104,9 @@ Re-scoped under `feat--autonomous-multi-runtime-mvp`:
 
 ## Acceptance Criteria
 
-- [ ] CLI command `along team orchestrate <slug>` implemented in `scripts/along_exec.py`.
-- [ ] Role-to-runtime configuration schema supported and validated.
-- [ ] Multi-runtime phase execution tested with Claude Code, OpenCode, and Antigravity adapters.
-- [ ] Phase handoff succeeds using file-based blackboard state without cross-process memory leakage.
-- [ ] Reviewer failure correctly triggers Implementer re-execution within the retry limit.
-- [ ] Clean ASCII formatting with zero forbidden typography characters (`along sanitize` passes).
+- [x] CLI command `along team orchestrate <slug>` implemented in `scripts/along_exec.py`.
+- [x] Role-to-runtime configuration schema supported and validated.
+- [x] Multi-runtime phase execution tested with Claude Code, OpenCode, and Antigravity adapters.
+- [x] Phase handoff succeeds using file-based blackboard state without cross-process memory leakage.
+- [x] Reviewer failure correctly triggers Implementer re-execution within the retry limit.
+- [x] Clean ASCII formatting with zero forbidden typography characters (`along sanitize` passes).

@@ -29,6 +29,7 @@ from alongkit.commands import (
     handle_issue_command,
     handle_lint_command,
     handle_milestone_command,
+    handle_orchestrate_command,
     handle_patch_command,
     handle_plan_command,
     handle_rules_command,
@@ -37,6 +38,7 @@ from alongkit.commands import (
     handle_session_command,
     handle_start_command,
     handle_status_command,
+    handle_team_command,
     handle_telemetry_command,
     handle_worktree_command,
 )
@@ -90,7 +92,7 @@ HELP_FLAGS = ("-h", "--help")
 
 _BOARD_COMMANDS = frozenset({
     "issue", "milestone", "milestones", "start", "begin", "session", "plan", "decision",
-    "scratch", "worktree", "wrap", "commit", "brief",
+    "scratch", "worktree", "wrap", "commit", "brief", "orchestrate", "team",
 })
 
 
@@ -154,6 +156,8 @@ Entity Management Commands:
   lint           Commit-time checks on demand (alias of 'gates check')
   rules          Rule packs management (attach, status, diff, restore)
   brief          Generate deterministic role-based brief (along brief <slug> --role <role>)
+  orchestrate    Execute cross-runtime multi-agent loop (along orchestrate <slug> [options])
+  team           Along team multi-agent orchestration (along team orchestrate <slug> [options])
   env            Isolated Docker environment management (up, down, status, logs, shell, update)
   budget         Measure context footprint and check token budgets (--json, --check)
   context-budget Measure context footprint and check token budgets (--json, --check)
@@ -270,6 +274,8 @@ def main():
         "devenv": handle_devenv_command,
         "run": handle_run_command,
         "brief": handle_brief_command,
+        "orchestrate": handle_orchestrate_command,
+        "team": handle_team_command,
     }
 
     if cmd in native_routers and _wants_help(extra_args):
