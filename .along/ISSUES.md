@@ -1,7 +1,7 @@
 # Active Issues
 
 ## Active
-- [ ] `(bug)` [orchestrator-review-fail-open](ISSUES/bug--orchestrator-review-fail-open.md)
+<!-- No active issues -->
 
 ## Backlog
 - [ ] `(bug)` [autonomous-container-build-and-firewall](ISSUES/bug--autonomous-container-build-and-firewall.md)
@@ -58,4 +58,4 @@
 - [x] `(feat)` [pre-approved-plans](ISSUES/done/feat--pre-approved-plans.md)
 - [x] `(feat)` [isolated-environment-docker](ISSUES/done/feat--isolated-environment-docker.md)
 - [x] `(feat)` [cross-runtime-supervisor-orchestrator](ISSUES/done/feat--cross-runtime-supervisor-orchestrator.md)
-<!-- 297 older completed issue(s) archived in .along/ISSUES/done/ -->
+<!-- 298 older completed issue(s) archived in .along/ISSUES/done/ -->

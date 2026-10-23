@@ -3,7 +3,8 @@ protocol: along
 protocol_version: "4.5.3"
 slug: orchestrator-review-fail-open
 type: bug
-status: in-progress
+status: done
+completed: 2026-10-23
 priority: high
 created: 2026-10-23
 updated: 2026-10-23
