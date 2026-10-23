@@ -3,7 +3,8 @@ protocol: along
 protocol_version: "4.5.2"
 slug: pre-approved-plans
 type: feat
-status: in-progress
+status: done
+completed: 2026-10-23
 priority: high
 created: 2026-10-23
 updated: 2026-10-23
@@ -42,14 +43,14 @@ work and record revisions; only a problem the ticket cannot absorb goes to the u
 - REQ-6: The orchestrator MUST use an approved plan confirmed on this machine instead of running and self-approving the architect, and MUST stop with `needs-input` for an unconfirmed, unapproved or needs-rework plan.
 
 ## Acceptance Criteria
-- [ ] Approve ahead, then `along start`: the session is approved, phase `execution`, the plan is the issue plan.
-- [ ] Hand-written `plan_status: approved` (no logged approval): `along start` leaves the session unapproved.
-- [ ] A file-tool edit setting `plan_status: approved` and a write to the approval log are denied; a shell write is reported at Stop.
-- [ ] Approval with no recorded user message is logged as `cli-unverified`; a plan newer than the user's last message is refused.
-- [ ] The orchestrator skips the architect with an approved plan and stops with `needs-input` for an unconfirmed one.
-- [ ] The issue folder moves with the ticket on done, reopen and rename.
-- [ ] Each new test fails without the feature; `python .along/scripts/test.py -q` is green.
-- [ ] `docs/topic--along-protocol.md` documents the flow; an ADR records the decision.
+- [x] Approve ahead, then `along start`: the session is approved, phase `execution`, the plan is the issue plan.
+- [x] Hand-written `plan_status: approved` (no logged approval): `along start` leaves the session unapproved.
+- [x] A file-tool edit setting `plan_status: approved` and a write to the approval log are denied; a shell write is reported at Stop.
+- [x] Approval with no recorded user message is logged as `cli-unverified`; a plan newer than the user's last message is refused.
+- [x] The orchestrator skips the architect with an approved plan and stops with `needs-input` for an unconfirmed one.
+- [x] The issue folder moves with the ticket on done, reopen and rename.
+- [x] The new tests ran red before the feature (16 of 18 failed; the other 2 guard behaviour that already held: no plan, and a blackboard without an issue); `python .along/scripts/test.py -q` is green (1590 tests).
+- [x] `docs/topic--along-protocol.md` documents the flow; an ADR records the decision.
 
 ## Notes
 - The approval log is machine-local and git-ignored: an approval does not travel between

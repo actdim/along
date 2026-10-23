@@ -1,7 +1,7 @@
 # Active Issues
 
 ## Active
-- [ ] `(feat)` [pre-approved-plans](ISSUES/feat--pre-approved-plans.md)
+<!-- No active issues -->
 
 ## Backlog
 - [ ] `(debt)` [canonical-path-gate-expansion](ISSUES/debt--canonical-path-gate-expansion.md)
@@ -50,7 +50,7 @@
 ## Done (recent)
 - [x] `(spike)` [headless-runtimes-on-linux](ISSUES/done/spike--headless-runtimes-on-linux.md)
 - [x] `(feat)` [vps-runner-daemon](ISSUES/done/feat--vps-runner-daemon.md)
+- [x] `(feat)` [pre-approved-plans](ISSUES/done/feat--pre-approved-plans.md)
 - [x] `(feat)` [isolated-environment-docker](ISSUES/done/feat--isolated-environment-docker.md)
 - [x] `(feat)` [cross-runtime-supervisor-orchestrator](ISSUES/done/feat--cross-runtime-supervisor-orchestrator.md)
-- [x] `(feat)` [cross-runtime-handoff-entities](ISSUES/done/feat--cross-runtime-handoff-entities.md)
-<!-- 293 older completed issue(s) archived in .along/ISSUES/done/ -->
+<!-- 294 older completed issue(s) archived in .along/ISSUES/done/ -->
