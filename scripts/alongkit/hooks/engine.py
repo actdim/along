@@ -10,8 +10,11 @@ from __future__ import annotations
 import sys
 from typing import List, Optional
 
+from .. import profiles
 from .config import HooksConfig, load_config, record_audit_entry
+from .containment import is_autonomous as check_is_autonomous
 from .declarative import get_all_declarative_gates
+from .escalation import classify_escalation, route_escalation
 from .gates import BaseGate, ProjectionProtectionGate
 from .adapters import normalize
 from .models import GateDecision, GateResult, HookEvent, HookEventType
@@ -56,6 +59,8 @@ class HookEngine:
     def evaluate(self, event: HookEvent, repo_root: Optional[str] = None) -> GateResult:
         """Run all registered gates against the event."""
         effective_root = repo_root or self.repo_root or event.workspace_root
+        is_auto = (self.config.profile == profiles.PROFILE_AUTONOMOUS
+                   or check_is_autonomous(event, repo_root=effective_root))
 
         # Fail closed on tool names no adapter maps: infer writes, audit the rest.
         # See [bug--claude-adapter-unmapped-tools].
@@ -82,6 +87,23 @@ class HookEngine:
 
             result = gate.evaluate(event)
             if not result.is_allowed:
+                # Escalation list operations under autonomous profile can route to handler
+                esc = classify_escalation(event, effective_root)
+                if esc:
+                    op_type, detail = esc
+                    if is_auto:
+                        esc_res = route_escalation(
+                            event, op_type, detail, effective_root, original_reason=result.reason
+                        )
+                        gate_mode = self.config.get_gate_mode(gate.name)
+                        record_audit_entry(effective_root, event, esc_res, gate_mode)
+                        if not esc_res.is_allowed and self.config.is_enforcing(gate.name):
+                            record_gate_denial(event, effective_root, esc_res.gate_name or gate.name, esc_res.reason,
+                                               procedural=_is_procedural(gate))
+                            return esc_res
+                        elif esc_res.is_allowed:
+                            continue
+
                 gate_mode = self.config.get_gate_mode(gate.name)
                 record_audit_entry(effective_root, event, result, gate_mode)
 
@@ -89,6 +111,15 @@ class HookEngine:
                     record_gate_denial(event, effective_root, result.gate_name or gate.name, result.reason,
                                        procedural=_is_procedural(gate))
                     if result.decision in (GateDecision.ASK, GateDecision.FORCE_ASK):
+                        if is_auto:
+                            # Autonomous profile: no gate returns interactive ask.
+                            # General ask decisions become deny with a clear actionable reason.
+                            return GateResult(
+                                decision=GateDecision.DENY,
+                                reason=result.reason or "Operation rejected: interactive confirmation is disabled under autonomous profile.",
+                                gate_name=result.gate_name or gate.name,
+                                exit_code=2,
+                            )
                         # Runtimes with a native ask keep it; the rest cannot prompt.
                         if event.runtime not in ASK_CAPABLE_RUNTIMES:
                             return GateResult(
@@ -102,6 +133,17 @@ class HookEngine:
                     # Shadow mode: print warning to stderr and continue
                     sys.stderr.write(f"[ALONG HOOK: SHADOW] Would block execution ({result.decision.value}): {result.reason}\n")
                     sys.stderr.flush()
+
+        # Under autonomous profile, check escalation list for operations not guarded by previous gates
+        if is_auto:
+            esc = classify_escalation(event, effective_root)
+            if esc:
+                op_type, detail = esc
+                esc_res = route_escalation(event, op_type, detail, effective_root)
+                if not esc_res.is_allowed:
+                    record_audit_entry(effective_root, event, esc_res, "enforce")
+                    record_gate_denial(event, effective_root, esc_res.gate_name or "escalation", esc_res.reason)
+                    return esc_res
 
         # Track session activity (edits and test runs) only for what the gates let through:
         # a rejected write or test run is not the session's. [bug--hook-activation-and-gate-deadlock]

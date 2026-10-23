@@ -235,7 +235,8 @@ def build_policy(repo_root: str, options: Optional[Dict[str, Any]] = None,
     )
 
 
-def is_autonomous(event: HookEvent, policy: Optional[ContainmentPolicy] = None) -> bool:
+def is_autonomous(event: HookEvent, policy: Optional[ContainmentPolicy] = None,
+                  repo_root: Optional[str] = None) -> bool:
     """Autonomous runs get DENY instead of ASK (no user to ask)."""
     if policy is not None and policy.on_violation == "deny":
         return True
@@ -243,8 +244,21 @@ def is_autonomous(event: HookEvent, policy: Optional[ContainmentPolicy] = None) 
         return False
     if os.environ.get(AUTONOMOUS_ENV, "").strip().lower() in ("1", "true", "yes"):
         return True
+    if os.environ.get("ALONG_PROFILE", "").strip().lower() == "autonomous":
+        return True
     payload = event.raw_payload or {}
-    return str(payload.get("permission_mode") or "") in AUTONOMOUS_PERMISSION_MODES
+    if str(payload.get("profile") or "").strip().lower() == "autonomous":
+        return True
+    if str(payload.get("permission_mode") or "") in AUTONOMOUS_PERMISSION_MODES:
+        return True
+    from .. import profiles
+    try:
+        root = repo_root or event.workspace_root or repo.find_repo_root()
+        if profiles.resolve_active_profile(root) == profiles.PROFILE_AUTONOMOUS:
+            return True
+    except (OSError, ValueError, KeyError, AttributeError):
+        pass
+    return False
 
 
 def _glob_base(pattern: str) -> Optional[str]:

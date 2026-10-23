@@ -156,6 +156,9 @@ class HooksConfig:
         if active_prof in gate_prof:
             sev = gate_prof[active_prof]
             return SEVERITY_TO_MODE.get(sev, HookMode.ENFORCE)
+        elif active_prof == "autonomous":
+            sev = gate_prof.get("standard", "block")
+            return SEVERITY_TO_MODE.get(sev, HookMode.ENFORCE)
 
         if gate_name in self.gates:
             return self.gates[gate_name]

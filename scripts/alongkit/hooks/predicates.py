@@ -919,7 +919,11 @@ def check_mutation_authorization(event: HookEvent, repo_root: str, options: Opti
     slug, how = session.resolve_active_session(repo_root, key)
     if session.is_plan_approved(repo_root, slug=slug, key=key):
         phase = session.get_session_phase(repo_root, slug=slug, key=key)
-        if phase == "execution" or not slug:
+        if phase in ("execution", "implementation", "review") or not slug:
+            return None
+        from .. import profiles
+        from . import containment
+        if profiles.resolve_active_profile(repo_root) == profiles.PROFILE_AUTONOMOUS or containment.is_autonomous(event):
             return None
 
     target = f"issue '{slug}'" if slug else "this session"
@@ -933,6 +937,10 @@ def check_mutation_authorization(event: HookEvent, repo_root: str, options: Opti
                 "delete the new files).")
     reason = (f"PLAN_REQUIRED [gate: require-plan-approval]: no approved plan for {target} to edit "
               f"'{changed[0]}'. Fix: {approve}.")
+    from .. import profiles
+    from . import containment
+    if profiles.resolve_active_profile(repo_root) == profiles.PROFILE_AUTONOMOUS or containment.is_autonomous(event):
+        return GateResult(decision=GateDecision.DENY, reason=reason, gate_name="require_plan_approval", exit_code=2)
     if event.runtime == "antigravity":
         return GateResult(decision=GateDecision.ASK, reason=reason, gate_name="require_plan_approval")
     return reason

@@ -3,10 +3,11 @@ protocol: along
 protocol_version: "4.4.16"
 slug: autonomous-gate-profile
 type: feat
-status: open
+status: done
+completed: 2026-10-23
 priority: high
 created: 2026-10-17
-updated: 2026-10-17
+updated: 2026-10-23
 agent: claude-code
 tags: [gates, autonomous, profile, mvp]
 milestone: v5.0.0-agent-run-protocol-and-observability
@@ -35,7 +36,7 @@ timeout. Gates were designed for the interactive mode.
 - Interactive profile keeps `ask` for the same short list only.
 
 ## Acceptance Criteria
-- [ ] No gate returns `ask` under the autonomous profile, except the escalation list routed to Telegram.
-- [ ] Escalation timeout denies and records the outcome in the run record.
-- [ ] Plan approval written by a role unlocks source edits for the implementer.
-- [ ] Automated tests passing.
+- [x] No gate returns `ask` under the autonomous profile, except the escalation list routed to Telegram.
+- [x] Escalation timeout denies and records the outcome in the run record.
+- [x] Plan approval written by a role unlocks source edits for the implementer.
+- [x] Automated tests passing.

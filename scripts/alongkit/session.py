@@ -26,7 +26,7 @@ import sys
 from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional, Tuple
 
-from . import repo, textio
+from . import frontmatter, repo, textio
 
 DEFAULT_RETRY_LIMIT: int = 2
 STEP_STATUSES: tuple = ("pending", "in-progress", "passed", "failed")
@@ -867,6 +867,10 @@ def is_plan_approved(repo_root: str, slug: Optional[str] = None, key: Optional[s
     is known, the blackboard counts only for the session bound to that slug: an unbound
     session must not inherit the approval of a blackboard whose session ended
     [bug--commit-blocked-after-wrap].
+
+    Under the autonomous profile, plan approval written by a role in the blackboard
+    (plan.md / state.json) or issue unlocks source edits for the implementer without
+    requiring an interactive session token.
     """
     key = key or current_session_key()
     binding = load_binding(repo_root, key)
@@ -874,15 +878,69 @@ def is_plan_approved(repo_root: str, slug: Optional[str] = None, key: Optional[s
     if slug and bound_slug and slug != bound_slug:
         return False
     effective_slug = slug or bound_slug or get_active_session_slug(repo_root, key)
+
+    from . import profiles
+    try:
+        active_prof = profiles.resolve_active_profile(repo_root, session_key=key)
+    except (OSError, ValueError, KeyError, AttributeError):
+        active_prof = profiles.DEFAULT_PROFILE
+    is_auto = (active_prof == profiles.PROFILE_AUTONOMOUS
+               or os.environ.get("ALONG_AUTONOMOUS", "").strip().lower() in ("1", "true", "yes")
+               or os.environ.get("ALONG_PROFILE", "").strip().lower() == "autonomous")
+
+    if not effective_slug and is_auto:
+        candidates = in_progress_slugs(repo_root)
+        if len(candidates) == 1:
+            effective_slug = candidates[0]
+
+    # Check role approval or state in blackboard / issue
+    if effective_slug:
+        st = load_state(repo_root, effective_slug)
+        if st:
+            if is_auto and (st.get("plan_approved") is True or st.get("phase") in ("execution", "implementation", "review")):
+                return True
+            if st.get("approved_by") in ("architect", "reviewer", "supervisor", "human", "operator", "user"):
+                return True
+            plan_app = st.get("plan_approval")
+            if isinstance(plan_app, dict) and plan_app.get("approved"):
+                return True
+
+        # Check plan.md for role approval or approval frontmatter
+        p_text = read_plan(repo_root, effective_slug)
+        if p_text and not is_scaffold_plan(p_text):
+            if re.search(r"(?:^|\n)(?:status:\s*approved|plan_approved:\s*true|approved:\s*true)\b", p_text, re.IGNORECASE):
+                return True
+            if re.search(r"(?:^|\n)\s*(?:approved_by|approved\s+by):\s*(?:architect|reviewer|supervisor|human|operator)\b", p_text, re.IGNORECASE):
+                return True
+
+        # Check issue frontmatter
+        try:
+            issues_dir = os.path.join(repo.state_dir(repo_root), "ISSUES")
+            if os.path.isdir(issues_dir):
+                for fname in os.listdir(issues_dir):
+                    if fname.endswith(f"--{effective_slug}.md") or fname == f"{effective_slug}.md":
+                        raw = textio.read_text(os.path.join(issues_dir, fname), strict=False)
+                        mapping, _body, _err = frontmatter.try_parse(raw)
+                        if mapping:
+                            if mapping.get("plan_approved") is True or mapping.get("approved_by") in ("architect", "reviewer", "supervisor"):
+                                return True
+                            if isinstance(mapping.get("plan_approval"), dict) and mapping["plan_approval"].get("approved"):
+                                return True
+                        break
+        except (OSError, UnicodeDecodeError, ValueError, KeyError, AttributeError):
+            pass
+
     if binding and binding.get("plan_approved"):
         # Approval belongs to the session and the slug it is bound to, in any context.
         approved_slug = binding.get("approved_slug")
         if approved_slug is None or approved_slug == bound_slug or approved_slug == effective_slug:
             return True
-    if effective_slug and key:
+
+    if effective_slug and key and not is_auto:
         owner = bound_slug or (os.environ.get("ALONG_ISSUE_SLUG") or "").strip()
         if owner != effective_slug:
             return False
+
     if effective_slug:
         st = load_state(repo_root, effective_slug)
         if st:

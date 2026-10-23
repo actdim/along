@@ -29,11 +29,13 @@ from . import repo, textio
 PROFILE_STRICT = "strict"
 PROFILE_STANDARD = "standard"
 PROFILE_LIGHT = "light"
+PROFILE_AUTONOMOUS = "autonomous"
 
 VALID_PROFILES: Tuple[str, ...] = (
     PROFILE_STRICT,
     PROFILE_STANDARD,
     PROFILE_LIGHT,
+    PROFILE_AUTONOMOUS,
 )
 
 DEFAULT_PROFILE = PROFILE_STANDARD
@@ -145,6 +147,8 @@ def resolve_active_profile_with_source(
     env_prof = os.environ.get("ALONG_PROFILE", "").strip().lower()
     if env_prof in VALID_PROFILES:
         return env_prof, SOURCE_ENV
+    if os.environ.get("ALONG_AUTONOMOUS", "").strip().lower() in ("1", "true", "yes"):
+        return PROFILE_AUTONOMOUS, SOURCE_ENV
 
     # 3. Tracked repository configuration
     cfg_prof = load_config_profile(effective_root)

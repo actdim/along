@@ -20,7 +20,6 @@
 - [ ] `(feat)` [along-report-engine](ISSUES/feat--along-report-engine.md)
 - [ ] `(feat)` [along-storage-providers](ISSUES/feat--along-storage-providers.md)
 - [ ] `(feat)` [along-webdev-runner](ISSUES/feat--along-webdev-runner.md)
-- [ ] `(feat)` [autonomous-gate-profile](ISSUES/feat--autonomous-gate-profile.md)
 - [ ] `(feat)` [autonomous-multi-runtime-mvp](ISSUES/feat--autonomous-multi-runtime-mvp.md)
 - [ ] `(feat)` [byoc-kubernetes-operator-and-private-sandboxes](ISSUES/feat--byoc-kubernetes-operator-and-private-sandboxes.md)
 - [ ] `(feat)` [centralized-gpu-inference-pool-and-cloud-topologies](ISSUES/feat--centralized-gpu-inference-pool-and-cloud-topologies.md)
@@ -55,6 +54,6 @@
 - [x] `(spike)` [headless-runtimes-on-linux](ISSUES/done/spike--headless-runtimes-on-linux.md)
 - [x] `(feat)` [isolated-environment-docker](ISSUES/done/feat--isolated-environment-docker.md)
 - [x] `(feat)` [cross-runtime-handoff-entities](ISSUES/done/feat--cross-runtime-handoff-entities.md)
+- [x] `(feat)` [autonomous-gate-profile](ISSUES/done/feat--autonomous-gate-profile.md)
 - [x] `(feat)` [anti-silent-fallback-gate](ISSUES/done/feat--anti-silent-fallback-gate.md)
-- [x] `(debt)` [along-core-extras-split](ISSUES/done/debt--along-core-extras-split.md)
-<!-- 288 older completed issue(s) archived in .along/ISSUES/done/ -->
+<!-- 289 older completed issue(s) archived in .along/ISSUES/done/ -->
