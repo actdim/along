@@ -1,7 +1,7 @@
 # Active Issues
 
 ## Active
-- [ ] `(bug)` [runner-daemon-lifecycle-safety](ISSUES/bug--runner-daemon-lifecycle-safety.md)
+<!-- No active issues -->
 
 ## Backlog
 - [ ] `(bug)` [autonomous-container-build-and-firewall](ISSUES/bug--autonomous-container-build-and-firewall.md)
@@ -52,9 +52,9 @@
 - [ ] `(task)` [reconcile-dashboard-ui-core-conventions](ISSUES/task--reconcile-dashboard-ui-core-conventions.md)
 
 ## Done (recent)
+- [x] `(bug)` [runner-daemon-lifecycle-safety](ISSUES/done/bug--runner-daemon-lifecycle-safety.md)
 - [x] `(spike)` [headless-runtimes-on-linux](ISSUES/done/spike--headless-runtimes-on-linux.md)
 - [x] `(feat)` [vps-runner-daemon](ISSUES/done/feat--vps-runner-daemon.md)
 - [x] `(feat)` [pre-approved-plans](ISSUES/done/feat--pre-approved-plans.md)
 - [x] `(feat)` [isolated-environment-docker](ISSUES/done/feat--isolated-environment-docker.md)
-- [x] `(feat)` [cross-runtime-supervisor-orchestrator](ISSUES/done/feat--cross-runtime-supervisor-orchestrator.md)
-<!-- 298 older completed issue(s) archived in .along/ISSUES/done/ -->
+<!-- 299 older completed issue(s) archived in .along/ISSUES/done/ -->

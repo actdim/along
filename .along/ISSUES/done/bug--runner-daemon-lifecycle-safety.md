@@ -3,10 +3,11 @@ protocol: along
 protocol_version: "4.5.3"
 slug: runner-daemon-lifecycle-safety
 type: bug
-status: in-progress
+status: done
+completed: 2026-10-24
 priority: high
 created: 2026-10-23
-updated: 2026-10-23
+updated: 2026-10-24
 agent: claude-code
 tags: [daemon, autonomous, telegram, reliability]
 blocked_by: []
