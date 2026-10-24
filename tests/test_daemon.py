@@ -7,6 +7,8 @@ import json
 import os
 import shutil
 import sys
+import threading
+import time
 import unittest
 from unittest.mock import MagicMock, patch
 
@@ -18,7 +20,7 @@ if not os.environ.get("ALONG_TEST_RUNNER"):
     )
 
 import hermetic
-from alongkit import daemon, handoff, session, textio
+from alongkit import daemon, handoff, session, textio, worktree
 from alongkit.commands.daemon import build_parser, format_status_text, handle_daemon_command
 
 
@@ -76,8 +78,8 @@ class TestDaemonLifecycle(unittest.TestCase):
         self.assertEqual(st_stopped["status"], "stopped")
         self.assertIsNone(st_stopped["pid"])
 
-        # 2. Running status with mock is_pid_alive
-        daemon.write_pid(self.repo, 54321)
+        # 2. Running status: alive and the recorded identity matches
+        daemon.write_pid(self.repo, 54321, token="start-54321")
         daemon.save_daemon_state(self.repo, {
             "pid": 54321,
             "status": "idle",
@@ -87,7 +89,8 @@ class TestDaemonLifecycle(unittest.TestCase):
             "poll_interval": 3.0,
         })
 
-        with patch("alongkit.daemon.is_pid_alive", return_value=True):
+        with patch("alongkit.daemon.is_pid_alive", return_value=True), \
+             patch("alongkit.daemon.process_identity", return_value="start-54321"):
             st_running = daemon.get_daemon_status(self.repo)
             self.assertTrue(st_running["running"])
             self.assertEqual(st_running["pid"], 54321)
@@ -117,9 +120,10 @@ class TestDaemonLifecycle(unittest.TestCase):
             self.assertIn("Cleaned up stale daemon PID", msg)
             self.assertIsNone(daemon.read_pid(self.repo))
 
-        # When running process
-        daemon.write_pid(self.repo, 99999)
-        with patch("alongkit.daemon.is_pid_alive", side_effect=[True, False]), \
+        # When running process (identity verified)
+        daemon.write_pid(self.repo, 99999, token="start-99999")
+        with patch("alongkit.daemon.is_pid_alive", return_value=True), \
+             patch("alongkit.daemon.process_identity", return_value="start-99999"), \
              patch("alongkit.daemon.terminate_pid", return_value=True):
             ok, msg = daemon.stop_daemon(self.repo)
             self.assertTrue(ok)
@@ -390,6 +394,191 @@ class TestDaemonCli(unittest.TestCase):
         # Status returns 1 when daemon is stopped
         ret = handle_daemon_command(self.repo, ["status", "--json"])
         self.assertEqual(ret, 1)
+
+
+class SequencedTelegramClient(MockTelegramClient):
+    """Hands out one queued item per poll: a list of updates, an exception to raise, or a callable."""
+
+    def __init__(self, batches: list, idle=None) -> None:
+        super().__init__()
+        self.batches = list(batches)
+        self.idle = idle
+        self.offsets: list = []
+
+    def get_updates(self, offset=None, limit=100, timeout=20):
+        self.offsets.append(offset)
+        if self.batches:
+            item = self.batches.pop(0)
+            if isinstance(item, BaseException):
+                raise item
+            if callable(item):
+                item()
+                return []
+            return item
+        if self.idle:
+            self.idle()
+        time.sleep(0.01)
+        return []
+
+
+def _update(update_id: int, text: str, chat: int = 100, date=None) -> dict:
+    msg = {"chat": {"id": chat}, "from": {"id": chat}, "text": text}
+    if date is not None:
+        msg["date"] = date
+    return {"update_id": update_id, "message": msg}
+
+
+class TestDaemonLifecycleSafety(unittest.TestCase):
+    """[bug--runner-daemon-lifecycle-safety]: no lost work, no replays, no foreign kills."""
+
+    SLUG = "task--fixture-sample-task"
+
+    def setUp(self) -> None:
+        self.repo = hermetic.make_repo_fixture(prefix="along-test-daemon-safety-")
+
+    def tearDown(self) -> None:
+        daemon.remove_pid(self.repo)
+        shutil.rmtree(self.repo, ignore_errors=True)
+
+    def _daemon(self, client, orch=None, **kwargs) -> daemon.RunnerDaemon:
+        d = daemon.RunnerDaemon(
+            repo_root=self.repo,
+            allowed_chats=["100"],
+            telegram_token="test-token",
+            telegram_client=client,
+            orchestrator_fn=orch or MagicMock(return_value={"status": "completed"}),
+            log_to_stdout=False,
+            **kwargs,
+        )
+        d._setup_signals = lambda: None  # keep the test process's own handlers
+        return d
+
+    def _texts(self, client) -> list:
+        return [m["text"] for m in client.sent_messages]
+
+    def test_worktree_run_keeps_the_branch_and_names_it(self) -> None:
+        wt = worktree.WorktreeInfo(slug=self.SLUG, path=self.repo, branch=f"along/{self.SLUG}", created_at="now")
+        client = MockTelegramClient()
+        d = self._daemon(client, use_worktree=True)
+        with patch.object(daemon.worktree, "create_worktree", return_value=wt), \
+             patch.object(daemon.worktree, "remove_worktree") as remove, \
+             patch.object(daemon.proc, "git", return_value=MagicMock(ok=True, stdout="")):
+            d.handle_task_command(100, self.SLUG)
+        remove.assert_called_once()
+        self.assertFalse(remove.call_args.kwargs.get("delete_branch", True),
+                         "Teardown must keep the branch that holds the run's commits")
+        self.assertTrue(any(f"along/{self.SLUG}" in t for t in self._texts(client)))
+
+    def test_dirty_worktree_is_kept(self) -> None:
+        wt = worktree.WorktreeInfo(slug=self.SLUG, path=self.repo, branch=f"along/{self.SLUG}", created_at="now")
+        client = MockTelegramClient()
+        d = self._daemon(client, use_worktree=True)
+        with patch.object(daemon.worktree, "create_worktree", return_value=wt), \
+             patch.object(daemon.worktree, "remove_worktree") as remove, \
+             patch.object(daemon.proc, "git", return_value=MagicMock(ok=True, stdout=" M src/app.py\n")):
+            d.handle_task_command(100, self.SLUG)
+        remove.assert_not_called()
+        self.assertTrue(any("kept" in t and self.repo in t for t in self._texts(client)))
+
+    def test_offset_is_persisted_and_used_after_restart(self) -> None:
+        first = SequencedTelegramClient([[_update(5, f"/task {self.SLUG}")]])
+        d = self._daemon(first)
+        first.idle = d.request_stop
+        self.assertEqual(d.run(), 0)
+        self.assertEqual(daemon.load_daemon_state(self.repo).get("telegram_offset"), 5)
+
+        second = SequencedTelegramClient([])
+        d2 = self._daemon(second)
+        second.idle = d2.request_stop
+        d2.run()
+        self.assertEqual(second.offsets[0], 6, "A restarted daemon must not be handed update 5 again")
+
+    def test_stale_command_is_ignored(self) -> None:
+        client = MockTelegramClient()
+        orch = MagicMock(return_value={"status": "completed"})
+        d = self._daemon(client, orch)
+        d.process_update(_update(7, f"/task {self.SLUG}", date=int(time.time()) - 3600))
+        orch.assert_not_called()
+        self.assertTrue(any("Ignored" in t for t in self._texts(client)))
+
+    def test_stop_never_signals_an_unverified_pid(self) -> None:
+        # This test process is alive, so its PID stands in for a reused one.
+        for content in (f"{os.getpid()}\n", f"{os.getpid()}\nnot-the-recorded-start\n"):
+            with self.subTest(content=content):
+                textio.write_text(daemon.get_pid_file(self.repo), content)
+                self.assertEqual(daemon.get_daemon_status(self.repo)["status"], "stale-pid")
+                with patch("alongkit.daemon.terminate_pid") as term:
+                    ok, msg = daemon.stop_daemon(self.repo)
+                term.assert_not_called()
+                self.assertTrue(ok)
+                self.assertIsNone(daemon.read_pid(self.repo))
+
+    def test_pid_file_is_exclusive(self) -> None:
+        self.assertTrue(daemon.acquire_pid_file(self.repo))
+        self.assertFalse(daemon.acquire_pid_file(self.repo), "A live daemon's PID file must not be replaced")
+        self.assertEqual(daemon.read_pid(self.repo), os.getpid())
+        daemon.remove_pid(self.repo)
+        daemon.write_pid(self.repo, 999999, token="gone")
+        with patch("alongkit.daemon.is_pid_alive", return_value=False):
+            self.assertTrue(daemon.acquire_pid_file(self.repo), "A stale PID file is taken over")
+        self.assertEqual(daemon.read_pid(self.repo), os.getpid())
+
+    def test_status_is_answered_while_a_task_runs(self) -> None:
+        status_sent = threading.Event()
+        order = []
+
+        class Client(SequencedTelegramClient):
+            def send_message(self, chat_id, text):
+                super().send_message(chat_id, text)
+                if "[Along Runner Status]" in text:
+                    status_sent.set()
+                return True
+
+        def orch(**kwargs):
+            order.append(("task-finished", status_sent.wait(3)))
+            return {"status": "completed"}
+
+        client = Client([[_update(1, f"/task {self.SLUG}")], [_update(2, "/status")]])
+        d = self._daemon(client, orch)
+        client.idle = lambda: d.request_stop() if d.current_task is None and order else None
+        d.run()
+        self.assertEqual(order, [("task-finished", True)], "/status must be answered during the task")
+
+    def test_poll_errors_back_off_and_a_bad_token_exits_78(self) -> None:
+        sleeps = []
+        client = SequencedTelegramClient([RuntimeError("boom")] * 3)
+        d = self._daemon(client, poll_interval=5)
+        client.idle = d.request_stop
+        d._sleep = sleeps.append
+        with patch("alongkit.daemon.time.sleep", side_effect=sleeps.append):
+            d.run()
+        self.assertEqual(sleeps[:3], [5, 10, 20])
+
+        auth = SequencedTelegramClient([daemon.TelegramAuthError("HTTP 401")])
+        d2 = self._daemon(auth)
+        self.assertEqual(d2.run(), daemon.EXIT_CONFIG)
+
+    def test_background_start_uses_the_engine_script_and_reports_a_failed_spawn(self) -> None:
+        import itertools
+        fake = os.path.join(self.repo, "scripts", "along_daemon.py")
+        textio.write_text(fake, "raise SystemExit(0)\n")
+        child = MagicMock(pid=4242)
+        child.poll.return_value = 2
+        with patch("alongkit.daemon.subprocess.Popen", return_value=child) as popen, \
+             patch("alongkit.daemon.get_daemon_status", return_value={"running": False}), \
+             patch("alongkit.daemon.time.time", side_effect=itertools.count(0, 10)), \
+             patch("alongkit.daemon.time.sleep"):
+            rc = daemon.start_daemon(self.repo)
+        self.assertEqual(rc, 1, "A child that exits during startup is a failed start")
+        cmd = popen.call_args[0][0]
+        self.assertNotEqual(os.path.normcase(cmd[1]), os.path.normcase(fake))
+
+    def test_log_rotates_above_the_size_limit(self) -> None:
+        with patch("alongkit.daemon.LOG_MAX_BYTES", 100):
+            daemon.append_daemon_log(self.repo, "x" * 200)
+            daemon.append_daemon_log(self.repo, "after rotation")
+        self.assertTrue(os.path.isfile(daemon.get_log_file(self.repo) + ".1"))
+        self.assertIn("after rotation", textio.read_text(daemon.get_log_file(self.repo)))
 
 
 if __name__ == "__main__":

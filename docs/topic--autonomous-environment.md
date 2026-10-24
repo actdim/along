@@ -222,6 +222,27 @@ Pull the latest container image and refresh configuration:
 along env update myproj
 ```
 
+### Runner daemon (`along daemon`)
+
+`along daemon start` (background) or `--foreground` (systemd: `docker/along-runner.service`) polls the
+Telegram Bot API and runs `/task <slug>` through the orchestrator. Runtime files live in
+`.along/.daemon/` (git-ignored):
+
+- `daemon.pid`: PID on line 1 and the process start-time token on line 2, created exclusively. `status`
+  and `stop` act only on the process that wrote it; a live PID with another or no token (PID reuse, or a
+  file from an older version) is reported as `stale-pid` and never signalled.
+- `daemon.json`: status, current task and `telegram_offset`, saved before each update runs, so a restart
+  never runs an accepted command again.
+- `daemon.log`: rotated to `daemon.log.1` above 5 MB.
+
+Tasks run on a worker thread: `/status` answers during a run, a second `/task` gets "Runner busy", and on
+SIGTERM the daemon stops polling and waits up to 20 s for the task. Commands older than
+`max_command_age` (default 600 s; `daemon.max_command_age` in `.along/config.json` or
+`ALONG_DAEMON_MAX_COMMAND_AGE`) are ignored with a reply. Poll errors back off exponentially up to 300 s; a
+rejected bot token (HTTP 401/404) exits with code 78, which the unit's `RestartPreventExitStatus=78`
+does not restart. With `--worktree`, a clean worktree is removed but its `along/<slug>` branch is kept and
+named in the reply; a worktree with uncommitted changes is kept whole.
+
 ---
 
 ## 7. Accepted Operational Risks

@@ -12,9 +12,15 @@ EnvironmentFile=-/etc/along/runner.env
 ExecStart=/usr/local/bin/along daemon start --foreground
 Restart=always
 RestartSec=10
+# Exit 78 (EX_CONFIG) means the bot token was rejected; restarting cannot fix it.
+RestartPreventExitStatus=78
 KillSignal=SIGTERM
+# The daemon waits up to 20 s for a running task after SIGTERM.
 TimeoutStopSec=30
 LimitNOFILE=65535
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=full
 StandardOutput=journal
 StandardError=journal
 

@@ -1,13 +1,12 @@
 # Active Issues
 
 ## Active
-<!-- No active issues -->
+- [ ] `(bug)` [runner-daemon-lifecycle-safety](ISSUES/bug--runner-daemon-lifecycle-safety.md)
 
 ## Backlog
 - [ ] `(bug)` [autonomous-container-build-and-firewall](ISSUES/bug--autonomous-container-build-and-firewall.md)
 - [ ] `(bug)` [autonomous-gate-residual-holes](ISSUES/bug--autonomous-gate-residual-holes.md)
 - [ ] `(bug)` [autonomous-mvp-minor-defects](ISSUES/bug--autonomous-mvp-minor-defects.md)
-- [ ] `(bug)` [runner-daemon-lifecycle-safety](ISSUES/bug--runner-daemon-lifecycle-safety.md)
 - [ ] `(bug)` [runtime-adapters-invented-cli-contracts](ISSUES/bug--runtime-adapters-invented-cli-contracts.md)
 - [ ] `(debt)` [canonical-path-gate-expansion](ISSUES/debt--canonical-path-gate-expansion.md)
 - [ ] `(debt)` [dashboard-retire-risk-spike-views](ISSUES/debt--dashboard-retire-risk-spike-views.md)

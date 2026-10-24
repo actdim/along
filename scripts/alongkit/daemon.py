@@ -29,7 +29,9 @@ import re
 import signal
 import subprocess
 import sys
+import threading
 import time
+import urllib.error
 import urllib.parse
 import urllib.request
 from datetime import datetime, timezone
@@ -43,6 +45,14 @@ STATE_FILE_NAME: str = "daemon.json"
 LOG_FILE_NAME: str = "daemon.log"
 DEFAULT_POLL_INTERVAL: float = 5.0
 DEFAULT_TIMEOUT_SEC: float = 10.0
+#: Commands older than this (seconds) were queued while the daemon was down; they are not run.
+DEFAULT_MAX_COMMAND_AGE: float = 600.0
+#: How long shutdown waits for a running task; below systemd's TimeoutStopSec=30.
+DEFAULT_STOP_GRACE_SECONDS: float = 20.0
+MAX_POLL_BACKOFF_SECONDS: float = 300.0
+LOG_MAX_BYTES: int = 5 * 1024 * 1024
+#: sysexits EX_CONFIG: a bad bot token. The systemd unit does not restart on it.
+EXIT_CONFIG: int = 78
 
 
 def _utc_now_iso() -> str:
@@ -109,25 +119,111 @@ def is_pid_alive(pid: int) -> bool:
             return False
 
 
-def read_pid(repo_root: str) -> Optional[int]:
-    """Read running daemon PID from PID file if valid."""
+def process_identity(pid: int) -> Optional[str]:
+    """Opaque start-time token of a live process, or None when it cannot be read.
+
+    A PID alone is reused by the OS; the PID plus its start time names one process. Stop and
+    status act only on a PID whose token matches the one recorded at start.
+    [bug--runner-daemon-lifecycle-safety] REQ-4
+    """
+    if pid <= 0:
+        return None
+    if os.name == "nt":
+        import ctypes
+        from ctypes import wintypes
+        kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
+        kernel32.OpenProcess.restype = wintypes.HANDLE
+        kernel32.OpenProcess.argtypes = (wintypes.DWORD, wintypes.BOOL, wintypes.DWORD)
+        kernel32.GetProcessTimes.argtypes = (wintypes.HANDLE,) + (ctypes.POINTER(wintypes.FILETIME),) * 4
+        kernel32.CloseHandle.argtypes = (wintypes.HANDLE,)
+        handle = kernel32.OpenProcess(0x1000, False, pid)  # PROCESS_QUERY_LIMITED_INFORMATION
+        if not handle:
+            return None
+        try:
+            times = [wintypes.FILETIME() for _ in range(4)]
+            if not kernel32.GetProcessTimes(handle, *[ctypes.byref(t) for t in times]):
+                return None
+            return str((times[0].dwHighDateTime << 32) | times[0].dwLowDateTime)
+        finally:
+            kernel32.CloseHandle(handle)
+    stat_path = f"/proc/{pid}/stat"
+    if os.path.isfile(stat_path):
+        try:
+            raw = textio.read_text(stat_path, strict=False)
+            # Field 22 (starttime); the command name in field 2 may hold spaces and ')'.
+            fields = raw[raw.rindex(")") + 2:].split()
+            return fields[19]
+        except (OSError, ValueError, IndexError):
+            return None
+    try:
+        res = subprocess.run(["ps", "-o", "lstart=", "-p", str(pid)],
+                             capture_output=True, text=True, timeout=5, check=False)
+    except (OSError, subprocess.SubprocessError):
+        return None
+    out = (res.stdout or "").strip()
+    return out if res.returncode == 0 and out else None
+
+
+def is_daemon_process(pid: Optional[int], token: Optional[str]) -> bool:
+    """True when `pid` is alive and is the very process that recorded `token`."""
+    if pid is None or not token or not is_pid_alive(pid):
+        return False
+    return process_identity(pid) == token
+
+
+def read_pid_record(repo_root: str) -> Tuple[Optional[int], Optional[str]]:
+    """(pid, identity token) from the PID file; the token is None in a pre-identity file."""
     pid_path = get_pid_file(repo_root)
     if not os.path.isfile(pid_path):
-        return None
+        return None, None
     try:
-        raw = textio.read_text(pid_path, strict=False).strip()
-        val = int(raw)
-        return val if val > 0 else None
-    except (OSError, ValueError, TypeError):
-        return None
+        lines = textio.read_text(pid_path, strict=False).splitlines()
+        val = int(lines[0].strip())
+    except (OSError, ValueError, TypeError, IndexError):
+        return None, None
+    if val <= 0:
+        return None, None
+    token = lines[1].strip() if len(lines) > 1 and lines[1].strip() else None
+    return val, token
 
 
-def write_pid(repo_root: str, pid: int) -> None:
-    """Write daemon PID to file."""
+def read_pid(repo_root: str) -> Optional[int]:
+    """Read running daemon PID from PID file if valid."""
+    return read_pid_record(repo_root)[0]
+
+
+def write_pid(repo_root: str, pid: int, token: Optional[str] = None) -> None:
+    """Write daemon PID (and its identity token) to file, replacing any previous one."""
     ddir = get_daemon_dir(repo_root)
     os.makedirs(ddir, exist_ok=True)
     pid_path = get_pid_file(repo_root)
-    textio.write_text(pid_path, f"{pid}\n")
+    ident = token if token is not None else process_identity(pid)
+    textio.write_text(pid_path, f"{pid}\n{ident or ''}\n")
+
+
+def acquire_pid_file(repo_root: str) -> bool:
+    """Create the PID file for this process exclusively; False when a live daemon holds it.
+
+    A file whose process is gone, or whose identity does not match (PID reused, or written
+    before identities were recorded), is stale and is replaced. [bug--runner-daemon-lifecycle-safety] REQ-5
+    """
+    os.makedirs(get_daemon_dir(repo_root), exist_ok=True)
+    pid_path = get_pid_file(repo_root)
+    my_pid = os.getpid()
+    content = f"{my_pid}\n{process_identity(my_pid) or ''}\n"
+    for _ in range(2):
+        try:
+            fd = os.open(pid_path, os.O_CREAT | os.O_EXCL | os.O_WRONLY)
+        except FileExistsError:
+            other_pid, other_token = read_pid_record(repo_root)
+            if is_daemon_process(other_pid, other_token):
+                return False
+            remove_pid(repo_root)
+            continue
+        with os.fdopen(fd, "w", encoding="ascii") as fh:
+            fh.write(content)
+        return True
+    return False
 
 
 def remove_pid(repo_root: str) -> None:
@@ -171,6 +267,9 @@ def append_daemon_log(repo_root: str, message: str, level: str = "INFO") -> None
     lpath = get_log_file(repo_root)
     entry = f"[{_utc_now_display()}] [{level.upper()}] {message}\n"
     try:
+        # One rotated generation keeps a long-running daemon from filling the disk.
+        if os.path.isfile(lpath) and os.path.getsize(lpath) > LOG_MAX_BYTES:
+            os.replace(lpath, lpath + ".1")
         with open(lpath, "a", encoding="utf-8", errors="replace") as f:
             f.write(entry)
     except OSError:
@@ -225,12 +324,16 @@ def terminate_pid(pid: int, timeout_sec: float = DEFAULT_TIMEOUT_SEC) -> bool:
 
 
 def get_daemon_status(repo_root: str) -> Dict[str, Any]:
-    """Retrieve detailed daemon running status and metadata."""
-    pid = read_pid(repo_root)
+    """Retrieve detailed daemon running status and metadata.
+
+    `running` only for the process that wrote the PID file (PID and identity token match); a
+    live PID with another or no token is a reused PID, reported as `stale-pid`.
+    """
+    pid, token = read_pid_record(repo_root)
     state = load_daemon_state(repo_root)
 
     if pid is not None:
-        if is_pid_alive(pid):
+        if is_daemon_process(pid, token):
             started_at = state.get("started_at")
             uptime_seconds = None
             if started_at:
@@ -268,6 +371,8 @@ def get_daemon_status(repo_root: str) -> Dict[str, Any]:
                 "poll_interval": state.get("poll_interval", DEFAULT_POLL_INTERVAL),
                 "port": state.get("port"),
                 "stale": True,
+                # Alive but not ours: the PID was reused, or an older version wrote no token.
+                "pid_alive": is_pid_alive(pid),
             }
 
     return {
@@ -295,6 +400,12 @@ def stop_daemon(repo_root: str, timeout_sec: float = DEFAULT_TIMEOUT_SEC) -> Tup
             st = load_daemon_state(repo_root)
             st["status"] = "stopped"
             save_daemon_state(repo_root, st)
+            if status.get("pid_alive"):
+                append_daemon_log(repo_root, f"Stale PID file names live PID {pid} that is not this daemon; "
+                                  "not signalled", level="WARNING")
+                return True, (f"Cleaned up stale daemon PID file ({pid}). PID {pid} is alive but is not a "
+                              "verified along daemon (reused PID, or started by an older version); it was "
+                              "not signalled. Stop it by hand if it is yours.")
             return True, f"Cleaned up stale daemon PID file ({pid}). Daemon was not running."
         return True, "Daemon is not running."
 
@@ -350,6 +461,10 @@ def tail_daemon_logs(
 # Telegram Client & Message Dispatcher
 # ---------------------------------------------------------------------------
 
+class TelegramAuthError(RuntimeError):
+    """The Bot API rejected the token (HTTP 401/404); retrying cannot help."""
+
+
 class TelegramClient:
     """Standard library HTTP client for Telegram Bot API."""
 
@@ -385,6 +500,11 @@ class TelegramClient:
                     if data.get("ok"):
                         res = data.get("result", [])
                         return res if isinstance(res, list) else []
+        except urllib.error.HTTPError as exc:
+            # The URL holds the token: report the status only.
+            if exc.code in (401, 404):
+                raise TelegramAuthError(f"getUpdates rejected the bot token (HTTP {exc.code})") from None
+            raise RuntimeError(f"getUpdates HTTP {exc.code}") from None
         except (urllib.error.URLError, OSError, ValueError, TypeError, TimeoutError) as exc:
             raise RuntimeError(f"getUpdates network error: {exc}") from exc
         return []
@@ -481,6 +601,7 @@ def resolve_daemon_config(repo_root: str) -> Dict[str, Any]:
         "poll_interval": DEFAULT_POLL_INTERVAL,
         "worktree": False,
         "port": None,
+        "max_command_age": DEFAULT_MAX_COMMAND_AGE,
     }
 
     # 1. Read global config
@@ -520,7 +641,9 @@ def resolve_daemon_config(repo_root: str) -> Dict[str, Any]:
                             cfg["worktree"] = bool(d_section["worktree"])
                         if "poll_interval" in d_section:
                             cfg["poll_interval"] = float(d_section["poll_interval"])
-        except (OSError, json.JSONDecodeError):
+                        if "max_command_age" in d_section:
+                            cfg["max_command_age"] = float(d_section["max_command_age"])
+        except (OSError, json.JSONDecodeError, ValueError, TypeError):
             pass
 
     # 3. Environment overrides (authoritative)
@@ -547,6 +670,13 @@ def resolve_daemon_config(repo_root: str) -> Dict[str, Any]:
     if env_wt:
         cfg["worktree"] = env_wt.lower() in ("1", "true", "yes")
 
+    env_age = os.environ.get("ALONG_DAEMON_MAX_COMMAND_AGE")
+    if env_age:
+        try:
+            cfg["max_command_age"] = float(env_age)
+        except (ValueError, TypeError):
+            pass
+
     return cfg
 
 
@@ -569,6 +699,8 @@ class RunnerDaemon:
         telegram_client: Optional[TelegramClient] = None,
         orchestrator_fn: Optional[Callable[..., Dict[str, Any]]] = None,
         log_to_stdout: bool = True,
+        max_command_age: Optional[float] = None,
+        stop_grace_seconds: float = DEFAULT_STOP_GRACE_SECONDS,
     ) -> None:
         self.repo_root = os.path.abspath(repo_root) if repo_root else (repo.find_repo_root() or os.getcwd())
         config = resolve_daemon_config(self.repo_root)
@@ -584,11 +716,24 @@ class RunnerDaemon:
         self.client = telegram_client or (TelegramClient(self.bot_token) if self.bot_token else None)
         self.orchestrator_fn = orchestrator_fn or orchestrator.run_orchestration
 
+        self.max_command_age = float(max_command_age if max_command_age is not None
+                                     else config.get("max_command_age", DEFAULT_MAX_COMMAND_AGE))
+        self.stop_grace_seconds = float(stop_grace_seconds)
+
         self._stop_requested = False
+        self._stop_event = threading.Event()
         self.current_task: Optional[str] = None
         self.current_run_id: Optional[str] = None
-        self.last_update_id: Optional[int] = None
+        # The acknowledged Telegram offset survives restarts: an update accepted before a crash
+        # is never handed out again. [bug--runner-daemon-lifecycle-safety] REQ-2
+        saved_offset = load_daemon_state(self.repo_root).get("telegram_offset")
+        self.last_update_id: Optional[int] = saved_offset if isinstance(saved_offset, int) else None
         self.started_at: Optional[str] = None
+        # Tasks run on a worker thread inside run(), inline when called directly.
+        self._task_lock = threading.Lock()
+        self._async_tasks = False
+        self._worker: Optional[threading.Thread] = None
+        self._task_chat: Optional[Union[int, str]] = None
 
     def log(self, message: str, level: str = "INFO") -> None:
         """Write structured log to file and optional stdout."""
@@ -599,6 +744,16 @@ class RunnerDaemon:
     def request_stop(self) -> None:
         """Request loop termination."""
         self._stop_requested = True
+        self._stop_event.set()
+
+    def _sleep(self, seconds: float) -> None:
+        """Wait between polls; returns early when a stop is requested."""
+        self._stop_event.wait(seconds)
+
+    def _save_offset(self, update_id: int) -> None:
+        st = load_daemon_state(self.repo_root)
+        st["telegram_offset"] = update_id
+        save_daemon_state(self.repo_root, st)
 
     def _setup_signals(self) -> None:
         """Register signal handlers for graceful termination."""
@@ -661,30 +816,32 @@ class RunnerDaemon:
             self._send_telegram(chat_id, f"Error: Invalid slug '{clean_slug}'. Use only alphanumeric characters, hyphens, and underscores.")
             return
 
-        # 1. Single concurrency enforcement: Check if daemon is currently executing a task
-        if self.current_task is not None:
-            self.log(f"Rejected dispatch for '{clean_slug}': daemon is busy with '{self.current_task}'", level="WARNING")
-            self._send_telegram(
-                chat_id,
-                f"Runner busy: currently executing task '{self.current_task}'. Only one task runs at a time per repository.",
-            )
-            return
+        with self._task_lock:
+            # 1. Single concurrency enforcement: Check if daemon is currently executing a task
+            if self.current_task is not None:
+                self.log(f"Rejected dispatch for '{clean_slug}': daemon is busy with '{self.current_task}'", level="WARNING")
+                self._send_telegram(
+                    chat_id,
+                    f"Runner busy: currently executing task '{self.current_task}'. Only one task runs at a time per repository.",
+                )
+                return
 
-        # 2. Check if issue is already claimed by another runner in state.json
-        if handoff.is_claim_active(self.repo_root, clean_slug) and not self.dry_run:
-            claim_info = handoff.get_claim(self.repo_root, clean_slug)
-            owner = claim_info.get("run_id") if claim_info else "another process"
-            self.log(f"Rejected dispatch for '{clean_slug}': already claimed by {owner} in state.json", level="WARNING")
-            self._send_telegram(
-                chat_id,
-                f"Task '{clean_slug}' is currently claimed in state.json by {owner}. Handoff claim active.",
-            )
-            return
+            # 2. Check if issue is already claimed by another runner in state.json
+            if handoff.is_claim_active(self.repo_root, clean_slug) and not self.dry_run:
+                claim_info = handoff.get_claim(self.repo_root, clean_slug)
+                owner = claim_info.get("run_id") if claim_info else "another process"
+                self.log(f"Rejected dispatch for '{clean_slug}': already claimed by {owner} in state.json", level="WARNING")
+                self._send_telegram(
+                    chat_id,
+                    f"Task '{clean_slug}' is currently claimed in state.json by {owner}. Handoff claim active.",
+                )
+                return
 
-        # 3. Dispatch execution
-        self.current_task = clean_slug
-        run_id = f"vps-{int(time.time())}"
-        self.current_run_id = run_id
+            # 3. Dispatch execution
+            self.current_task = clean_slug
+            run_id = f"vps-{int(time.time())}"
+            self.current_run_id = run_id
+            self._task_chat = chat_id
 
         # Update daemon state
         st = load_daemon_state(self.repo_root)
@@ -696,6 +853,39 @@ class RunnerDaemon:
         self.log(f"Dispatched execution for task '{clean_slug}' (run_id: {run_id}, worktree: {self.use_worktree})...")
         self._send_telegram(chat_id, f"Starting execution for issue '{clean_slug}' (run: {run_id})...")
 
+        if self._async_tasks:
+            # Off the poll loop, so /status, busy replies and SIGTERM work during a run.
+            # [bug--runner-daemon-lifecycle-safety] REQ-6
+            self._worker = threading.Thread(
+                target=self._execute_task, args=(chat_id, clean_slug, run_id),
+                name=f"along-task-{clean_slug}", daemon=True,
+            )
+            self._worker.start()
+        else:
+            self._execute_task(chat_id, clean_slug, run_id)
+
+    def _teardown_worktree(self, chat_id: Union[int, str], slug: str, wt_info: Any) -> None:
+        """Remove a clean worktree, keep its branch; keep a dirty worktree whole.
+
+        The branch holds the run's commits and nothing has merged it yet.
+        [bug--runner-daemon-lifecycle-safety] REQ-1
+        """
+        status = proc.git(["status", "--porcelain"], cwd=wt_info.path)
+        if not status.ok or (status.stdout or "").strip():
+            self.log(f"Worktree for '{slug}' has uncommitted changes (or git status failed); kept at {wt_info.path}",
+                     level="WARNING")
+            self._send_telegram(chat_id, f"Worktree for '{slug}' has uncommitted changes and was kept at "
+                                         f"{wt_info.path} (branch {wt_info.branch}).")
+            return
+        self.log(f"Tearing down isolated worktree for '{slug}' (keeping branch {wt_info.branch})...")
+        try:
+            worktree.remove_worktree(self.repo_root, slug, force=True, delete_branch=False)
+        except (OSError, RuntimeError) as wt_err:
+            self.log(f"Failed to remove worktree for '{slug}': {wt_err}", level="WARNING")
+        self._send_telegram(chat_id, f"Work for '{slug}' is on branch {wt_info.branch}.")
+
+    def _execute_task(self, chat_id: Union[int, str], clean_slug: str, run_id: str) -> None:
+        """Run one dispatched task to its end and return the runner to idle."""
         exec_root = self.repo_root
         wt_info = None
 
@@ -729,6 +919,10 @@ class RunnerDaemon:
             elif status_out == "timeout":
                 self.log(f"Task '{clean_slug}' timed out.", level="ERROR")
                 self._send_telegram(chat_id, f"Task '{clean_slug}' timed out.")
+            elif status_out == "dry-run":
+                phases = ", ".join(str(p.get("phase")) for p in res.get("phases", [])) if isinstance(res, dict) else ""
+                self.log(f"Dry run for '{clean_slug}': {phases}")
+                self._send_telegram(chat_id, f"Dry run for '{clean_slug}' (nothing changed): {phases}")
             else:
                 reason = res.get("reason", status_out) if isinstance(res, dict) else status_out
                 self.log(f"Task '{clean_slug}' finished with status '{status_out}': {reason}", level="WARNING")
@@ -739,14 +933,12 @@ class RunnerDaemon:
             self._send_telegram(chat_id, f"Error during execution of task '{clean_slug}': {exc}")
         finally:
             if wt_info is not None:
-                self.log(f"Tearing down isolated worktree for '{clean_slug}'...")
-                try:
-                    worktree.remove_worktree(self.repo_root, clean_slug, force=True)
-                except (OSError, RuntimeError) as wt_err:
-                    self.log(f"Failed to remove worktree for '{clean_slug}': {wt_err}", level="WARNING")
+                self._teardown_worktree(chat_id, clean_slug, wt_info)
 
-            self.current_task = None
-            self.current_run_id = None
+            with self._task_lock:
+                self.current_task = None
+                self.current_run_id = None
+                self._task_chat = None
             st = load_daemon_state(self.repo_root)
             st["status"] = "idle"
             st["current_task"] = None
@@ -780,6 +972,17 @@ class RunnerDaemon:
         if not cmd:
             return
 
+        # Commands queued while the daemon was down are not run late without the sender knowing.
+        # [bug--runner-daemon-lifecycle-safety] REQ-3
+        sent_at = msg.get("date")
+        if (self.max_command_age > 0 and isinstance(sent_at, (int, float))
+                and time.time() - sent_at > self.max_command_age):
+            when = datetime.fromtimestamp(sent_at, timezone.utc).strftime("%Y-%m-%d %H:%M:%S UTC")
+            self.log(f"Ignored stale command '/{cmd}' from chat_id={chat_id} sent at {when}", level="WARNING")
+            self._send_telegram(chat_id, f"Ignored /{cmd}{' ' + arg if arg else ''} sent at {when} (older than "
+                                         f"{int(self.max_command_age)}s); send it again if you still want it.")
+            return
+
         self.log(f"Authorized Telegram command '{cmd}' from user_id={user_id} in chat_id={chat_id}")
 
         if cmd in ("task", "run"):
@@ -803,8 +1006,12 @@ class RunnerDaemon:
         """Main entry point for runner daemon event loop."""
         my_pid = os.getpid()
         self.started_at = _utc_now_iso()
-        write_pid(self.repo_root, my_pid)
+        if not acquire_pid_file(self.repo_root):
+            self.log(f"Another runner daemon (PID {read_pid(self.repo_root)}) is running for this repository; "
+                     "exiting.", level="ERROR")
+            return 1
         self._setup_signals()
+        self._async_tasks = True
 
         initial_state = {
             "pid": my_pid,
@@ -816,6 +1023,7 @@ class RunnerDaemon:
             "poll_interval": self.poll_interval,
             "port": self.port,
             "last_poll_at": None,
+            "telegram_offset": self.last_update_id,
         }
         save_daemon_state(self.repo_root, initial_state)
 
@@ -830,6 +1038,8 @@ class RunnerDaemon:
                 level="WARNING",
             )
 
+        exit_code = 0
+        failures = 0
         try:
             while not self._stop_requested:
                 now_iso = _utc_now_iso()
@@ -845,24 +1055,38 @@ class RunnerDaemon:
                             offset=offset_val,
                             timeout=timeout_val,
                         )
+                        failures = 0
                         for upd in updates:
                             if self._stop_requested:
                                 break
                             upd_id = upd.get("update_id")
-                            if upd_id is not None:
+                            if isinstance(upd_id, int):
+                                # Persisted before the update runs: a crash mid-task never replays it.
                                 self.last_update_id = upd_id
+                                self._save_offset(upd_id)
                             self.process_update(upd)
+                    except TelegramAuthError as auth_exc:
+                        self.log(f"{auth_exc}; check the bot token. Stopping.", level="ERROR")
+                        exit_code = EXIT_CONFIG
+                        break
                     except (urllib.error.URLError, OSError, ValueError, RuntimeError, TimeoutError) as poll_exc:
-                        self.log(f"Telegram polling warning: {poll_exc}", level="WARNING")
-                        time.sleep(self.poll_interval)
+                        # Exponential backoff, capped. [bug--runner-daemon-lifecycle-safety] REQ-7
+                        failures += 1
+                        delay = min(self.poll_interval * (2 ** (failures - 1)), MAX_POLL_BACKOFF_SECONDS)
+                        hint = (" (HTTP 409: another poller or a webhook holds this bot token)"
+                                if "409" in str(poll_exc) else "")
+                        self.log(f"Telegram polling warning: {poll_exc}{hint}; retrying in {delay:.0f}s",
+                                 level="WARNING")
+                        self._sleep(delay)
                 else:
                     # Standby idle heartbeat mode
-                    time.sleep(self.poll_interval)
+                    self._sleep(self.poll_interval)
 
         except KeyboardInterrupt:
             self.log("KeyboardInterrupt received; terminating runner loop...")
         finally:
             self.log("Runner daemon shutting down...")
+            self._finish_worker()
             remove_pid(self.repo_root)
             final_state = load_daemon_state(self.repo_root)
             final_state["status"] = "stopped"
@@ -870,7 +1094,20 @@ class RunnerDaemon:
             save_daemon_state(self.repo_root, final_state)
             self.log("Runner daemon stopped cleanly.")
 
-        return 0
+        return exit_code
+
+    def _finish_worker(self) -> None:
+        """At shutdown, give a running task `stop_grace_seconds` to end, telling its chat."""
+        worker = self._worker
+        if worker is None or not worker.is_alive():
+            return
+        task, chat = self.current_task, self._task_chat
+        self.log(f"Waiting up to {self.stop_grace_seconds:.0f}s for task '{task}' before exiting...", level="WARNING")
+        if chat is not None:
+            self._send_telegram(chat, f"Runner is stopping; task '{task}' may be interrupted.")
+        worker.join(timeout=self.stop_grace_seconds)
+        if worker.is_alive():
+            self.log(f"Task '{task}' still running at shutdown; its claim expires by TTL.", level="WARNING")
 
 
 def start_daemon(
@@ -900,12 +1137,9 @@ def start_daemon(
         )
         return daemon.run()
 
-    # Daemonized background execution
-    daemon_script = os.path.join(repo_root, "scripts", "along_daemon.py")
-    if not os.path.isfile(daemon_script):
-        resolved = repo.resolve_tool_script("along_daemon.py", repo_root)
-        if resolved:
-            daemon_script = resolved
+    # Daemonized background execution: the engine next to this alongkit package, never a
+    # `scripts/along_daemon.py` the target repository happens to carry. REQ-8
+    daemon_script = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "along_daemon.py")
 
     cmd = [
         sys.executable,
@@ -964,27 +1198,39 @@ def start_daemon(
         print(f"-> Runner daemon started in background (PID {spawned_pid}).")
         print("Run 'along daemon status' or 'along daemon logs -f' to monitor.")
         return 0
-    else:
-        print(f"-> Runner daemon process spawned (PID {p.pid}), waiting for initialization...", file=sys.stderr)
-        return 0
+    exit_status = p.poll()
+    if exit_status is not None:
+        print(f"[Error] Runner daemon exited during startup (exit code {exit_status}). "
+              "See 'along daemon logs'.", file=sys.stderr)
+        return 1
+    print(f"-> Runner daemon process spawned (PID {p.pid}), still initializing; "
+          "check 'along daemon status'.", file=sys.stderr)
+    return 0
 
 
 __all__ = [
+    "DEFAULT_MAX_COMMAND_AGE",
     "DEFAULT_POLL_INTERVAL",
     "DEFAULT_TIMEOUT_SEC",
+    "EXIT_CONFIG",
     "RunnerDaemon",
+    "TelegramAuthError",
     "TelegramClient",
+    "acquire_pid_file",
     "append_daemon_log",
     "get_daemon_dir",
     "get_daemon_status",
     "get_log_file",
     "get_pid_file",
     "get_state_file",
+    "is_daemon_process",
     "is_pid_alive",
     "is_sender_authorized",
     "load_daemon_state",
     "parse_telegram_command",
+    "process_identity",
     "read_pid",
+    "read_pid_record",
     "remove_pid",
     "resolve_daemon_config",
     "save_daemon_state",

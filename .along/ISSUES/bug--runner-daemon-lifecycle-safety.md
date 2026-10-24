@@ -3,7 +3,7 @@ protocol: along
 protocol_version: "4.5.3"
 slug: runner-daemon-lifecycle-safety
 type: bug
-status: open
+status: in-progress
 priority: high
 created: 2026-10-23
 updated: 2026-10-23
@@ -11,6 +11,7 @@ agent: claude-code
 tags: [daemon, autonomous, telegram, reliability]
 blocked_by: []
 related: [feat--vps-runner-daemon, bug--orchestrator-review-fail-open]
+plan_status: approved
 ---
 
 # Runner daemon loses work, replays tasks and can kill foreign processes
@@ -49,8 +50,8 @@ Review of commit e4e91ee (`feat--vps-runner-daemon`), `scripts/alongkit/daemon.p
 - REQ-8: Background start MUST run the installed along entry point, and MUST exit non-zero when the spawn fails.
 
 ## Acceptance Criteria
-- [ ] Worktree run: after teardown the `along/<slug>` branch still exists with the run's commits.
-- [ ] Simulated crash after accepting an update: on restart the update is not processed again.
-- [ ] A stale PID file pointing at an unrelated live process: `stop` does not signal it.
-- [ ] `/status` answers while a task is running.
-- [ ] Regression tests cover each criterion and fail on the old code; `python .along/scripts/test.py` is green.
+- [x] Worktree run: after teardown the `along/<slug>` branch still exists with the run's commits.
+- [x] Simulated crash after accepting an update: on restart the update is not processed again.
+- [x] A stale PID file pointing at an unrelated live process: `stop` does not signal it.
+- [x] `/status` answers while a task is running.
+- [x] Regression tests cover each criterion and fail on the old code; `python .along/scripts/test.py` is green.
