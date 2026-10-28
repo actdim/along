@@ -2,6 +2,15 @@
 
 All notable changes to this project, newest first.
 
+## v4.5.4 - 2026-10-28
+
+- chore(kb): refresh dashboard-ui INDEX projection date (refs #runner-daemon-lifecycle-safety)
+- fix: Runner daemon: worktree teardown keeps the along/<slug> branch (dirty worktrees are kept whole); the Telegram offset is persisted before each update runs; commands older than max_command_age are ignored with a reply; PID file holds a start-time identity, is created exclusively, and stop/status never act on an unverified PID; tasks run on a worker thread so /status, busy replies and SIGTERM (20 s grace) work during a run; poll errors back off exponentially, a rejected token exits 78 (RestartPreventExitStatus=78); background start uses the engine script and fails when the child exits; daemon.log rotates at 5 MB. 10 new regression tests, all failing on the old code. (refs #runner-daemon-lifecycle-safety)
+- fix(daemon): keep worktree branches, persist the Telegram offset, verify PID identity, run tasks off the poll loop (refs #runner-daemon-lifecycle-safety)
+- fix: Orchestrator fails closed: a step passes only on a valid review verdict (missing, unparseable or inconsistent verdicts and failed implementer runs are failed attempts with a blocking defect); claims are exclusive under claim.lock, renewed before each run and released only by their owner; dry run is a read-only preview; handoff rejects unsafe slug/run_id/question ids; runner timeout defaults to DEFAULT_TIMEOUT. 13 new regression tests, all failing on the old code. (refs #orchestrator-review-fail-open)
+- fix(orchestrator): fail closed on missing or invalid reviews; exclusive claims; read-only dry run; safe handoff ids (refs #orchestrator-review-fail-open)
+- chore(issues): file six bug issues from the autonomous MVP review (refs #orchestrator-review-fail-open)
+
 ## v4.5.3 - 2026-10-23
 
 - fix: CI code-fence-language gate failed on docs/topic--autonomous-environment.md:37; the isolation diagram fence now declares text. gates check --ci, typography and link checks pass locally. (refs #ci-fence-language-missing)
