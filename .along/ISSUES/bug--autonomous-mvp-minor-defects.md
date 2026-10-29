@@ -11,6 +11,7 @@ agent: claude-code
 tags: [cleanup, packaging, daemon, docker]
 blocked_by: []
 related: [debt--along-core-extras-split, feat--vps-runner-daemon, feat--isolated-environment-docker, feat--cross-runtime-handoff-entities]
+plan_status: approved
 ---
 
 # Minor defects from the autonomous MVP review
