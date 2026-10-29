@@ -4,10 +4,10 @@
 <!-- No active issues -->
 
 ## Backlog
-- [ ] `(bug)` [autonomous-container-build-and-firewall](ISSUES/bug--autonomous-container-build-and-firewall.md)
+- [ ] `(bug)` [autonomous-container-build-and-firewall](ISSUES/bug--autonomous-container-build-and-firewall.md) - plan ready
 - [ ] `(bug)` [autonomous-gate-residual-holes](ISSUES/bug--autonomous-gate-residual-holes.md) - plan ready
-- [ ] `(bug)` [autonomous-mvp-minor-defects](ISSUES/bug--autonomous-mvp-minor-defects.md)
-- [ ] `(bug)` [runtime-adapters-invented-cli-contracts](ISSUES/bug--runtime-adapters-invented-cli-contracts.md)
+- [ ] `(bug)` [autonomous-mvp-minor-defects](ISSUES/bug--autonomous-mvp-minor-defects.md) - plan ready
+- [ ] `(bug)` [runtime-adapters-invented-cli-contracts](ISSUES/bug--runtime-adapters-invented-cli-contracts.md) - plan ready
 - [ ] `(debt)` [canonical-path-gate-expansion](ISSUES/debt--canonical-path-gate-expansion.md)
 - [ ] `(debt)` [dashboard-retire-risk-spike-views](ISSUES/debt--dashboard-retire-risk-spike-views.md)
 - [ ] `(debt)` [gate-config-layers](ISSUES/debt--gate-config-layers.md)
@@ -50,6 +50,7 @@
 - [ ] `(task)` [gate-event-remeasure](ISSUES/task--gate-event-remeasure.md)
 - [ ] `(task)` [integrate-actdim-ui-core-runtime](ISSUES/task--integrate-actdim-ui-core-runtime.md)
 - [ ] `(task)` [reconcile-dashboard-ui-core-conventions](ISSUES/task--reconcile-dashboard-ui-core-conventions.md)
+- [ ] `(task)` [telegram-poll-error-classification](ISSUES/task--telegram-poll-error-classification.md) - plan ready
 
 ## Done (recent)
 - [x] `(bug)` [runner-daemon-lifecycle-safety](ISSUES/done/bug--runner-daemon-lifecycle-safety.md)
