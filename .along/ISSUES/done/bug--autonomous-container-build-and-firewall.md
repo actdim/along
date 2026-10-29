@@ -3,7 +3,8 @@ protocol: along
 protocol_version: "4.5.3"
 slug: autonomous-container-build-and-firewall
 type: bug
-status: in-progress
+status: done
+completed: 2026-10-29
 priority: high
 created: 2026-10-23
 updated: 2026-10-29

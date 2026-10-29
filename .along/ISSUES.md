@@ -1,7 +1,7 @@
 # Active Issues
 
 ## Active
-- [ ] `(bug)` [autonomous-container-build-and-firewall](ISSUES/bug--autonomous-container-build-and-firewall.md) - plan ready
+<!-- No active issues -->
 
 ## Backlog
 - [ ] `(bug)` [autonomous-mvp-minor-defects](ISSUES/bug--autonomous-mvp-minor-defects.md) - plan ready
@@ -53,6 +53,6 @@
 - [x] `(task)` [telegram-poll-error-classification](ISSUES/done/task--telegram-poll-error-classification.md)
 - [x] `(bug)` [runtime-adapters-invented-cli-contracts](ISSUES/done/bug--runtime-adapters-invented-cli-contracts.md)
 - [x] `(bug)` [autonomous-gate-residual-holes](ISSUES/done/bug--autonomous-gate-residual-holes.md)
+- [x] `(bug)` [autonomous-container-build-and-firewall](ISSUES/done/bug--autonomous-container-build-and-firewall.md)
 - [x] `(bug)` [runner-daemon-lifecycle-safety](ISSUES/done/bug--runner-daemon-lifecycle-safety.md)
-- [x] `(spike)` [headless-runtimes-on-linux](ISSUES/done/spike--headless-runtimes-on-linux.md)
-<!-- 302 older completed issue(s) archived in .along/ISSUES/done/ -->
+<!-- 303 older completed issue(s) archived in .along/ISSUES/done/ -->
