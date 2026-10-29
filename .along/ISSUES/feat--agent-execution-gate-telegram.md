@@ -6,7 +6,7 @@ type: feat
 status: open
 priority: high
 created: 2026-09-23
-updated: 2026-09-23
+updated: 2026-10-29
 agent: antigravity
 tags: [telegram, live-card, execution-gate, permission-hook, fail-safe, human-in-the-loop, task-dispatch, multi-room, mini-app, semi-autonomous]
 milestone: v5.0.0-agent-run-protocol-and-observability
@@ -117,6 +117,17 @@ Operators need visibility into pending issues and project status before initiati
 - **Secret Redaction**:
   - All command strings, environment variables, and output snippets displayed in Telegram are sanitized to strip API tokens, private keys, and passwords.
 
+### 7. Bot Ownership & Update Transport (design notes, 2026-10-29)
+- **Bring-your-own bot**: each operator or team creates its own bot via BotFather; the token lives in the environment `secrets.env` (`TELEGRAM_BOT_TOKEN`). Along does not run a shared public bot; `@alongbot` in this spec is a placeholder for the operator's bot name. A shared bot would need a central relay that receives every update and fans it out to instances: Along-operated infrastructure seeing commands, issue names and output, a single point of failure, shared Telegram rate limits, and its own authorization layer.
+- **Outbound vs inbound**:
+  - Outbound (notifications, Live Status Cards, approval requests) is a direct Bot API call (`sendMessage`, `editMessageText`) at the moment of the event; no polling. Any number of processes and instances may send with the same token.
+  - Inbound (commands, `callback_query` button presses, replies) needs a receiver. Telegram allows exactly one consumer per bot: one `getUpdates` loop or one webhook URL. A second `getUpdates` consumer gets HTTP 409 Conflict.
+- **One receiver per bot token**: the token is bound to the daemon (the receiving process), not to a repository. One daemon per instance serves one or many repositories through `room_bindings` (section 3). Until multi-room routing ships, the practical rule is one daemon per instance and one bot per daemon; do not reuse a token on a second instance that also receives.
+- **Runs never poll Telegram**: a run waiting for approval or an answer blocks on a local channel (question file / handoff record). The daemon receives the `callback_query` and writes the decision there.
+- **Long polling by default**: `getUpdates` with a long timeout returns as soon as an update arrives (push-like latency), needs only outbound HTTPS, and works behind NAT and on instances with no inbound ports (`egress_allowlist`). The persisted `telegram_offset` already gives restart safety.
+- **Webhook and tunnels are not used for the control channel**: a webhook needs a public HTTPS endpoint (TLS certificate, open inbound port, `secret_token` check); behind NAT that means a tunnel (cloudflared, ngrok, Tailscale Funnel), which adds a third-party dependency that terminates TLS, a public attack surface and a failure point, for no latency gain with a single daemon. A tunnel only becomes necessary for the Telegram Mini App (section 4, Layer B), which must be served over public HTTPS. Even then, webhook delivery stays an opt-in and long polling the default, so the control channel does not depend on the tunnel being up.
+- **Scaling path (only if needed)**: several instances behind one bot require a broker: one receiver puts commands on a queue (Redis, NATS) and instances consume their own. Other chat platforms with outbound-only transports (Slack Socket Mode, Matrix) are covered by `feat--agent-chat-adapters-discord-slack-mattermost-matrix`.
+
 ## MVP Scope (2026-10-17)
 
 Re-scoped under `feat--autonomous-multi-runtime-mvp`. MVP covers only:
@@ -142,4 +153,6 @@ operator roles, multi-operator race resolution.
 - [ ] Blocking permission hook halts tool execution until authorized inline callback is received.
 - [ ] Multi-operator race conditions resolved atomically with user attribution.
 - [ ] Configurable timeout aborts stalled runs safely.
+- [ ] Inbound updates are received by a single daemon per bot token via long polling; an HTTP 409 Conflict from `getUpdates` is reported as "another consumer uses this bot token" instead of an endless backoff.
+- [ ] Outbound notifications and status cards are sent directly via Bot API calls, independent of the receiving daemon.
 - [ ] Clear operational boundary maintained: semi-autonomous orchestration in Telegram; deep interactive development directed to full IDE / Antigravity workspace.
