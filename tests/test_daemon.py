@@ -545,18 +545,122 @@ class TestDaemonLifecycleSafety(unittest.TestCase):
         self.assertEqual(order, [("task-finished", True)], "/status must be answered during the task")
 
     def test_poll_errors_back_off_and_a_bad_token_exits_78(self) -> None:
+        # 1. Jitter upper bound [d/2, d] -> [5, 10, 20]
+        sleeps_upper = []
+        client1 = SequencedTelegramClient([RuntimeError("boom")] * 3)
+        d1 = self._daemon(client1, poll_interval=5)
+        client1.idle = d1.request_stop
+        d1._sleep = sleeps_upper.append
+        with patch("alongkit.daemon.random.uniform", side_effect=lambda a, b: b):
+            d1.run()
+        self.assertEqual(sleeps_upper[:3], [5, 10, 20])
+
+        # 2. Jitter lower bound [d/2, d] -> [2.5, 5, 10]
+        sleeps_lower = []
+        client2 = SequencedTelegramClient([RuntimeError("boom")] * 3)
+        d2 = self._daemon(client2, poll_interval=5)
+        client2.idle = d2.request_stop
+        d2._sleep = sleeps_lower.append
+        with patch("alongkit.daemon.random.uniform", side_effect=lambda a, b: a):
+            d2.run()
+        self.assertEqual(sleeps_lower[:3], [2.5, 5, 10])
+
+        # 3. Successful poll resets the backoff counter
+        sleeps_reset = []
+        client3 = SequencedTelegramClient([
+            RuntimeError("err1"),
+            RuntimeError("err2"),
+            [_update(1, "/status")],
+            RuntimeError("err3"),
+        ])
+        d3 = self._daemon(client3, poll_interval=5)
+        client3.idle = d3.request_stop
+        d3._sleep = sleeps_reset.append
+        with patch("alongkit.daemon.random.uniform", side_effect=lambda a, b: b):
+            d3.run()
+        self.assertEqual(sleeps_reset[:3], [5, 10, 5])
+
+        # 4. Auth error exits 78
+        auth = SequencedTelegramClient([daemon.TelegramAuthError("HTTP 401")])
+        d4 = self._daemon(auth)
+        self.assertEqual(d4.run(), daemon.EXIT_CONFIG)
+
+    def test_rate_limit_honors_retry_after(self) -> None:
         sleeps = []
-        client = SequencedTelegramClient([RuntimeError("boom")] * 3)
+        client = SequencedTelegramClient([daemon.TelegramRateLimitError("rate limited", retry_after=7)])
         d = self._daemon(client, poll_interval=5)
         client.idle = d.request_stop
         d._sleep = sleeps.append
-        with patch("alongkit.daemon.time.sleep", side_effect=sleeps.append):
-            d.run()
-        self.assertEqual(sleeps[:3], [5, 10, 20])
+        d.run()
+        self.assertEqual(sleeps, [7])
 
-        auth = SequencedTelegramClient([daemon.TelegramAuthError("HTTP 401")])
-        d2 = self._daemon(auth)
-        self.assertEqual(d2.run(), daemon.EXIT_CONFIG)
+    def test_conflict_within_window_retries_and_recovers(self) -> None:
+        orch = MagicMock(return_value={"status": "completed"})
+        client = SequencedTelegramClient([
+            daemon.TelegramConflictError("conflict 1"),
+            daemon.TelegramConflictError("conflict 2"),
+            [_update(10, f"/task {self.SLUG}")],
+        ])
+        d = self._daemon(client, orch=orch, conflict_window=60)
+        client.idle = d.request_stop
+        d._sleep = lambda s: None
+        rc = d.run()
+        self.assertEqual(rc, 0)
+        orch.assert_called_once()
+
+    def test_conflict_past_window_broadcasts_and_exits_78(self) -> None:
+        client = SequencedTelegramClient([
+            daemon.TelegramConflictError("conflict"),
+            daemon.TelegramConflictError("conflict"),
+        ])
+        d = self._daemon(client, conflict_window=60)
+        d._sleep = lambda s: None
+        monotonic_values = [0.0, 61.0]
+        with patch("alongkit.daemon.time.monotonic", side_effect=monotonic_values):
+            rc = d.run()
+        self.assertEqual(rc, daemon.EXIT_CONFIG)
+        texts = self._texts(client)
+        self.assertTrue(any("another consumer uses this bot token" in t for t in texts))
+        self.assertTrue(any("Stop the other consumer or delete the webhook" in t for t in texts))
+
+    def test_telegram_client_error_classification_and_token_redaction(self) -> None:
+        import io
+        import urllib.error
+        secret = "SECRET_BOT_TOKEN_12345"
+        client = daemon.TelegramClient(bot_token=secret)
+
+        # 409 Conflict
+        err_409 = urllib.error.HTTPError(
+            f"https://api.telegram.org/bot{secret}/getUpdates",
+            409, "Conflict", {}, None
+        )
+        with patch("urllib.request.urlopen", side_effect=err_409):
+            with self.assertRaises(daemon.TelegramConflictError) as ctx:
+                client.get_updates()
+            self.assertNotIn(secret, str(ctx.exception))
+            self.assertIn("409", str(ctx.exception))
+
+        # 429 Rate limit with retry_after
+        body_429 = b'{"ok":false,"parameters":{"retry_after":7}}'
+        err_429 = urllib.error.HTTPError(
+            f"https://api.telegram.org/bot{secret}/getUpdates",
+            429, "Too Many Requests", {}, io.BytesIO(body_429)
+        )
+        with patch("urllib.request.urlopen", side_effect=err_429):
+            with self.assertRaises(daemon.TelegramRateLimitError) as ctx:
+                client.get_updates()
+            self.assertEqual(ctx.exception.retry_after, 7)
+            self.assertNotIn(secret, str(ctx.exception))
+
+        # 401 Auth
+        err_401 = urllib.error.HTTPError(
+            f"https://api.telegram.org/bot{secret}/getUpdates",
+            401, "Unauthorized", {}, None
+        )
+        with patch("urllib.request.urlopen", side_effect=err_401):
+            with self.assertRaises(daemon.TelegramAuthError) as ctx:
+                client.get_updates()
+            self.assertNotIn(secret, str(ctx.exception))
 
     def test_background_start_uses_the_engine_script_and_reports_a_failed_spawn(self) -> None:
         import itertools

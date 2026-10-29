@@ -239,10 +239,14 @@ Telegram Bot API and runs `/task <slug>` through the orchestrator. Runtime files
 Tasks run on a worker thread: `/status` answers during a run, a second `/task` gets "Runner busy", and on
 SIGTERM the daemon stops polling and waits up to 20 s for the task. Commands older than
 `max_command_age` (default 600 s; `daemon.max_command_age` in `.along/config.json` or
-`ALONG_DAEMON_MAX_COMMAND_AGE`) are ignored with a reply. Poll errors back off exponentially up to 300 s; a
-rejected bot token (HTTP 401/404) exits with code 78, which the unit's `RestartPreventExitStatus=78`
-does not restart. With `--worktree`, a clean worktree is removed but its `along/<slug>` branch is kept and
-named in the reply; a worktree with uncommitted changes is kept whole.
+`ALONG_DAEMON_MAX_COMMAND_AGE`) are ignored with a reply. Transient poll errors back off
+exponentially with jitter up to 300 s, resetting on success. HTTP 429 honors `retry_after`. HTTP 409
+Conflict is retried within `conflict_window` (default 60 s; `daemon.conflict_window` in `.along/config.json`
+or `ALONG_DAEMON_CONFLICT_WINDOW`); if it outlasts the window, the daemon notifies allowed chats and exits
+with code 78. A rejected bot token (HTTP 401/404) exits with code 78 immediately. The systemd unit's
+`RestartPreventExitStatus=78` prevents automatic restart on permanent configuration or conflict errors.
+With `--worktree`, a clean worktree is removed but its `along/<slug>` branch is kept and named in the
+reply; a worktree with uncommitted changes is kept whole.
 
 Architect self-approval: Multi-agent orchestration requires human operator plan approval by default. When running headless in an autonomous environment without human operators, setting `ALONG_ARCHITECT_SELF_APPROVAL=1` enables the architect phase to self-approve the living plan and transition directly to the implementer phase. If unset or `0`, the orchestrator marks `plan_status: needs-approval`, updates session state to `needs-input`, and halts for external review.
 

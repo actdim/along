@@ -3,7 +3,7 @@ protocol: along
 protocol_version: "4.5.4"
 slug: telegram-poll-error-classification
 type: task
-status: open
+status: in-progress
 priority: medium
 created: 2026-10-29
 updated: 2026-10-29
@@ -39,7 +39,7 @@ transient errors and wrong for the rest:
 - REQ-4: The bot token MUST NOT appear in any log line or message these paths produce.
 
 ## Acceptance Criteria
-- [ ] Three transient errors sleep within `[d/2, d]` of 5, 10, 20 s (jitter bounds) and the counter resets after success.
-- [ ] A 429 with `retry_after: 7` sleeps 7 s.
-- [ ] A 409 that clears inside the window lets polling continue; a 409 that persists past it exits 78 and the allowed chats receive the conflict message.
-- [ ] Regression tests cover each criterion and fail on the old code; `python .along/scripts/test.py` is green.
+- [x] Three transient errors sleep within `[d/2, d]` of 5, 10, 20 s (jitter bounds) and the counter resets after success.
+- [x] A 429 with `retry_after: 7` sleeps 7 s.
+- [x] A 409 that clears inside the window lets polling continue; a 409 that persists past it exits 78 and the allowed chats receive the conflict message.
+- [x] Regression tests cover each criterion and fail on the old code; `python .along/scripts/test.py` is green.

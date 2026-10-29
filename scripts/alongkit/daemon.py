@@ -25,6 +25,7 @@ if __name__ == "__main__":
 
 import json
 import os
+import random
 import re
 import signal
 import subprocess
@@ -50,6 +51,8 @@ DEFAULT_MAX_COMMAND_AGE: float = 600.0
 #: How long shutdown waits for a running task; below systemd's TimeoutStopSec=30.
 DEFAULT_STOP_GRACE_SECONDS: float = 20.0
 MAX_POLL_BACKOFF_SECONDS: float = 300.0
+#: Bounded retry window (seconds) for HTTP 409 Conflict before stopping with EXIT_CONFIG.
+DEFAULT_CONFLICT_WINDOW: float = 60.0
 LOG_MAX_BYTES: int = 5 * 1024 * 1024
 #: sysexits EX_CONFIG: a bad bot token. The systemd unit does not restart on it.
 EXIT_CONFIG: int = 78
@@ -465,6 +468,18 @@ class TelegramAuthError(RuntimeError):
     """The Bot API rejected the token (HTTP 401/404); retrying cannot help."""
 
 
+class TelegramConflictError(RuntimeError):
+    """Another getUpdates consumer or webhook holds the bot token (HTTP 409)."""
+
+
+class TelegramRateLimitError(RuntimeError):
+    """The Bot API rate-limited getUpdates (HTTP 429); carries retry_after."""
+
+    def __init__(self, message: str, retry_after: Optional[float] = None) -> None:
+        super().__init__(message)
+        self.retry_after = retry_after
+
+
 class TelegramClient:
     """Standard library HTTP client for Telegram Bot API."""
 
@@ -504,6 +519,26 @@ class TelegramClient:
             # The URL holds the token: report the status only.
             if exc.code in (401, 404):
                 raise TelegramAuthError(f"getUpdates rejected the bot token (HTTP {exc.code})") from None
+            if exc.code == 409:
+                raise TelegramConflictError(
+                    "getUpdates HTTP 409: another consumer uses this bot token (another daemon or a webhook)"
+                ) from None
+            if exc.code == 429:
+                retry_after: Optional[float] = None
+                try:
+                    raw_body = exc.read().decode("utf-8")
+                    data = json.loads(raw_body)
+                    ra = data.get("parameters", {}).get("retry_after")
+                    if ra is not None:
+                        val = float(ra)
+                        retry_after = int(val) if val.is_integer() else val
+                except (OSError, ValueError, TypeError, AttributeError):
+                    pass
+                ra_str = f", retry_after={retry_after}" if retry_after is not None else ""
+                raise TelegramRateLimitError(
+                    f"getUpdates rate limited (HTTP 429{ra_str})",
+                    retry_after=retry_after,
+                ) from None
             raise RuntimeError(f"getUpdates HTTP {exc.code}") from None
         except (urllib.error.URLError, OSError, ValueError, TypeError, TimeoutError) as exc:
             raise RuntimeError(f"getUpdates network error: {exc}") from exc
@@ -602,6 +637,7 @@ def resolve_daemon_config(repo_root: str) -> Dict[str, Any]:
         "worktree": False,
         "port": None,
         "max_command_age": DEFAULT_MAX_COMMAND_AGE,
+        "conflict_window": DEFAULT_CONFLICT_WINDOW,
     }
 
     # 1. Read global config
@@ -643,6 +679,8 @@ def resolve_daemon_config(repo_root: str) -> Dict[str, Any]:
                             cfg["poll_interval"] = float(d_section["poll_interval"])
                         if "max_command_age" in d_section:
                             cfg["max_command_age"] = float(d_section["max_command_age"])
+                        if "conflict_window" in d_section:
+                            cfg["conflict_window"] = float(d_section["conflict_window"])
         except (OSError, json.JSONDecodeError, ValueError, TypeError):
             pass
 
@@ -677,6 +715,13 @@ def resolve_daemon_config(repo_root: str) -> Dict[str, Any]:
         except (ValueError, TypeError):
             pass
 
+    env_cw = os.environ.get("ALONG_DAEMON_CONFLICT_WINDOW")
+    if env_cw:
+        try:
+            cfg["conflict_window"] = float(env_cw)
+        except (ValueError, TypeError):
+            pass
+
     return cfg
 
 
@@ -701,6 +746,7 @@ class RunnerDaemon:
         log_to_stdout: bool = True,
         max_command_age: Optional[float] = None,
         stop_grace_seconds: float = DEFAULT_STOP_GRACE_SECONDS,
+        conflict_window: Optional[float] = None,
     ) -> None:
         self.repo_root = os.path.abspath(repo_root) if repo_root else (repo.find_repo_root() or os.getcwd())
         config = resolve_daemon_config(self.repo_root)
@@ -718,6 +764,8 @@ class RunnerDaemon:
 
         self.max_command_age = float(max_command_age if max_command_age is not None
                                      else config.get("max_command_age", DEFAULT_MAX_COMMAND_AGE))
+        self.conflict_window = float(conflict_window if conflict_window is not None
+                                     else config.get("conflict_window", DEFAULT_CONFLICT_WINDOW))
         self.stop_grace_seconds = float(stop_grace_seconds)
 
         self._stop_requested = False
@@ -749,6 +797,11 @@ class RunnerDaemon:
     def _sleep(self, seconds: float) -> None:
         """Wait between polls; returns early when a stop is requested."""
         self._stop_event.wait(seconds)
+
+    def _backoff_delay(self, failures: int) -> float:
+        """Compute exponential backoff delay with equal jitter in [d/2, d]."""
+        d = min(self.poll_interval * (2 ** (max(1, failures) - 1)), MAX_POLL_BACKOFF_SECONDS)
+        return (d / 2.0) + random.uniform(0.0, d / 2.0)
 
     def _save_offset(self, update_id: int) -> None:
         st = load_daemon_state(self.repo_root)
@@ -1040,6 +1093,7 @@ class RunnerDaemon:
 
         exit_code = 0
         failures = 0
+        conflict_since: Optional[float] = None
         try:
             while not self._stop_requested:
                 now_iso = _utc_now_iso()
@@ -1056,6 +1110,7 @@ class RunnerDaemon:
                             timeout=timeout_val,
                         )
                         failures = 0
+                        conflict_since = None
                         for upd in updates:
                             if self._stop_requested:
                                 break
@@ -1069,13 +1124,40 @@ class RunnerDaemon:
                         self.log(f"{auth_exc}; check the bot token. Stopping.", level="ERROR")
                         exit_code = EXIT_CONFIG
                         break
-                    except (urllib.error.URLError, OSError, ValueError, RuntimeError, TimeoutError) as poll_exc:
-                        # Exponential backoff, capped. [bug--runner-daemon-lifecycle-safety] REQ-7
+                    except TelegramConflictError as conflict_exc:
+                        now_mono = time.monotonic()
+                        if conflict_since is None:
+                            conflict_since = now_mono
+                        if (now_mono - conflict_since) < self.conflict_window:
+                            failures += 1
+                            delay = self._backoff_delay(failures)
+                            self.log(
+                                f"Telegram polling warning: {conflict_exc}; retrying in {delay:.0f}s",
+                                level="WARNING",
+                            )
+                            self._sleep(delay)
+                        else:
+                            msg = (
+                                "Runner daemon stopped: another consumer uses this bot token "
+                                "(another daemon or a webhook). Stop the other consumer or "
+                                "delete the webhook, then restart."
+                            )
+                            self.log(msg, level="ERROR")
+                            self._broadcast_telegram(msg)
+                            exit_code = EXIT_CONFIG
+                            break
+                    except TelegramRateLimitError as rate_exc:
                         failures += 1
-                        delay = min(self.poll_interval * (2 ** (failures - 1)), MAX_POLL_BACKOFF_SECONDS)
-                        hint = (" (HTTP 409: another poller or a webhook holds this bot token)"
-                                if "409" in str(poll_exc) else "")
-                        self.log(f"Telegram polling warning: {poll_exc}{hint}; retrying in {delay:.0f}s",
+                        delay = float(rate_exc.retry_after) if rate_exc.retry_after is not None else self._backoff_delay(failures)
+                        self.log(
+                            f"Telegram polling warning: {rate_exc}; retrying in {delay:.0f}s",
+                            level="WARNING",
+                        )
+                        self._sleep(delay)
+                    except (urllib.error.URLError, OSError, ValueError, RuntimeError, TimeoutError) as poll_exc:
+                        failures += 1
+                        delay = self._backoff_delay(failures)
+                        self.log(f"Telegram polling warning: {poll_exc}; retrying in {delay:.0f}s",
                                  level="WARNING")
                         self._sleep(delay)
                 else:
@@ -1209,6 +1291,7 @@ def start_daemon(
 
 
 __all__ = [
+    "DEFAULT_CONFLICT_WINDOW",
     "DEFAULT_MAX_COMMAND_AGE",
     "DEFAULT_POLL_INTERVAL",
     "DEFAULT_TIMEOUT_SEC",
@@ -1216,6 +1299,8 @@ __all__ = [
     "RunnerDaemon",
     "TelegramAuthError",
     "TelegramClient",
+    "TelegramConflictError",
+    "TelegramRateLimitError",
     "acquire_pid_file",
     "append_daemon_log",
     "get_daemon_dir",

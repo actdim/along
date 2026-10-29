@@ -95,7 +95,7 @@ Facts the steps rely on (verified 2026-10-29):
 
 ## Steps
 
-- [ ] Step 1: Classify Bot API errors in the client (REQ-2, REQ-3, REQ-4)
+- [x] Step 1: Classify Bot API errors in the client (REQ-2, REQ-3, REQ-4)
   - Add `TelegramConflictError(RuntimeError)` and `TelegramRateLimitError(RuntimeError)` (attribute
     `retry_after: Optional[float]`) next to `TelegramAuthError`.
   - `TelegramClient.get_updates`: HTTP 409 -> `TelegramConflictError("getUpdates HTTP 409: another consumer
@@ -107,7 +107,7 @@ Facts the steps rely on (verified 2026-10-29):
     `{"ok":false,"parameters":{"retry_after":7}}` -> `TelegramRateLimitError` with `retry_after == 7`; no
     message contains the bot token.
 
-- [ ] Step 2: Jittered backoff and 429 handling in the run loop (REQ-1, REQ-2)
+- [x] Step 2: Jittered backoff and 429 handling in the run loop (REQ-1, REQ-2)
   - Helper `RunnerDaemon._backoff_delay(failures) -> float`: `d = min(poll_interval * 2 ** (failures - 1),
     MAX_POLL_BACKOFF_SECONDS)`; return `d / 2 + random.uniform(0, d / 2)` (equal jitter, within `[d/2, d]`).
   - Transient errors (`URLError`, `OSError`, `ValueError`, other `RuntimeError`, `TimeoutError`): sleep
@@ -118,7 +118,7 @@ Facts the steps rely on (verified 2026-10-29):
     again (update the exact-value assertion in `test_poll_errors_back_off_and_a_bad_token_exits_78`, keep
     its 401 -> 78 part); a 429 with `retry_after=7` sleeps 7.
 
-- [ ] Step 3: Bounded 409 conflict window (REQ-3)
+- [x] Step 3: Bounded 409 conflict window (REQ-3)
   - New `DEFAULT_CONFLICT_WINDOW = 60.0`; config `daemon.conflict_window` and env
     `ALONG_DAEMON_CONFLICT_WINDOW` (same pattern as `max_command_age`); `RunnerDaemon(conflict_window=...)`.
   - On `TelegramConflictError`: set `conflict_since = time.monotonic()` if unset; while
@@ -130,7 +130,7 @@ Facts the steps rely on (verified 2026-10-29):
     when stopped; `time.monotonic` patched to advance past the window -> `run()` returns 78 and every
     allowed chat received the conflict message.
 
-- [ ] Step 4: Docs, parent criterion, closeout
+- [x] Step 4: Docs, parent criterion, closeout
   - `docs/topic--autonomous-environment.md`, "Runner daemon" section: transient errors back off with jitter
     up to 300 s; 429 honors `retry_after`; 409 is retried for `conflict_window` (default 60 s), then the
     daemon tells the allowed chats and exits 78; 401/404 exit 78; `RestartPreventExitStatus=78`.

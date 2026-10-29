@@ -153,6 +153,6 @@ operator roles, multi-operator race resolution.
 - [ ] Blocking permission hook halts tool execution until authorized inline callback is received.
 - [ ] Multi-operator race conditions resolved atomically with user attribution.
 - [ ] Configurable timeout aborts stalled runs safely.
-- [ ] Inbound updates are received by a single daemon per bot token via long polling; an HTTP 409 Conflict from `getUpdates` is reported as "another consumer uses this bot token" instead of an endless backoff.
+- [x] Inbound updates are received by a single daemon per bot token via long polling; an HTTP 409 Conflict from `getUpdates` is reported as "another consumer uses this bot token" instead of an endless backoff.
 - [ ] Outbound notifications and status cards are sent directly via Bot API calls, independent of the receiving daemon.
 - [ ] Clear operational boundary maintained: semi-autonomous orchestration in Telegram; deep interactive development directed to full IDE / Antigravity workspace.
