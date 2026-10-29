@@ -185,6 +185,54 @@ class TestDocsOnlyChange(unittest.TestCase):
         self.assertFalse(verify.docs_only_change(".", ["package.json"], lambda _p: dep))
 
 
+class TestTestInertPaths(_Fixture):
+    def test_is_test_inert_path(self):
+        globs = verify.TEST_INERT_GLOBS
+        self.assertTrue(verify.is_test_inert_path(".vscode/settings.json", globs))
+        self.assertTrue(verify.is_test_inert_path(".vscode/tasks.json", globs))
+        self.assertTrue(verify.is_test_inert_path(".idea/workspace.xml", globs))
+        self.assertTrue(verify.is_test_inert_path("my.code-workspace", globs))
+        self.assertTrue(verify.is_test_inert_path("nested/sub/my.code-workspace", globs))
+        self.assertTrue(verify.is_test_inert_path(".editorconfig", globs))
+        self.assertTrue(verify.is_test_inert_path("sub/.editorconfig", globs))
+        self.assertTrue(verify.is_test_inert_path(".claude/settings.local.json", globs))
+        self.assertTrue(verify.is_test_inert_path(".codex/config.json", globs))
+        self.assertTrue(verify.is_test_inert_path(".cursor/rules.json", globs))
+        self.assertTrue(verify.is_test_inert_path("./.vscode/settings.json", globs))
+
+        self.assertFalse(verify.is_test_inert_path("src/app.py", globs))
+        self.assertFalse(verify.is_test_inert_path("package.json", globs))
+        self.assertFalse(verify.is_test_inert_path("README.md", globs))
+        self.assertFalse(verify.is_test_inert_path(".vscode_other/foo", globs))
+
+    def test_test_inert_globs_and_gate_option(self):
+        default_globs = verify.test_inert_globs(self.root)
+        self.assertEqual(default_globs, list(verify.TEST_INERT_GLOBS))
+
+        gates_yaml = (
+            "gates:\n"
+            "  - id: test_before_stop\n"
+            "    ignore_paths:\n"
+            "      - \"build/**\"\n"
+            "      - \"   \"\n"
+            "      - 42\n"
+            "      - \"dist/**\"\n"
+        )
+        os.makedirs(os.path.join(self.root, ".along", "rules"), exist_ok=True)
+        textio.write_text(os.path.join(self.root, ".along", "rules", "gates.yaml"), gates_yaml)
+
+        custom_globs = verify.test_inert_globs(self.root)
+        self.assertEqual(custom_globs, list(verify.TEST_INERT_GLOBS) + ["build/**", "dist/**"])
+        self.assertTrue(verify.is_test_inert_path("build/out.js", custom_globs))
+
+    def test_docs_only_change_with_inert_paths(self):
+        self.assertTrue(verify.docs_only_change(self.root, [".vscode/settings.json", ".claude/settings.local.json"]))
+        self.assertTrue(verify.docs_only_change(self.root, [".vscode/settings.json", "docs/topic.md"]))
+        self.assertFalse(verify.docs_only_change(self.root, [".vscode/settings.json", "package.json"]))
+        self.assertFalse(verify.docs_only_change(self.root, [".vscode/settings.json", "src/app.ts"]))
+
+
+
 class TestCommitUnderPolicy(_Fixture):
     def setUp(self):
         super().setUp()

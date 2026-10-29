@@ -114,11 +114,16 @@ def main():
         for dur, tid in top:
             print(f"  {dur:6.2f}s  {tid}")
 
-    # [feat--test-gate-cost-reduction] REQ-1 & REQ-6: record green run for full suite
-    if result.wasSuccessful() and not is_doc and not args:
+    # [feat--test-gate-cost-reduction] REQ-1 & REQ-6, [feat--test-gate-scope] REQ-6: record run for full suite
+    if not is_doc and not args:
         tree = testruns.tree_hash(repo_root)
         if tree:
-            testruns.record_run(repo_root, True, tree, "test.py")
+            testruns.record_run(repo_root, result.wasSuccessful(), tree, "test.py")
+
+    if not result.wasSuccessful():
+        note = testruns.baseline_note(repo_root)
+        if note:
+            print(note, file=sys.stderr)
 
     sys.exit(0 if result.wasSuccessful() else 1)
 

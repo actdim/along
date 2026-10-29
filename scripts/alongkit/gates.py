@@ -179,6 +179,9 @@ def run_test_gate(repo_root: str, label: str = "Quality Gate") -> str:
         print(f"[Error] {label}: {verify.misconfiguration_message(detail)}", file=sys.stderr)
     else:
         print(f"[Error] {label}: automated tests failed.\n", file=sys.stderr)
+        note = testruns.baseline_note(repo_root)
+        if note:
+            print(note, file=sys.stderr)
     if res.stdout:
         print(res.stdout, file=sys.stderr)
     if res.stderr:
@@ -699,21 +702,10 @@ def get_doc_tests(repo_root: str) -> List[str]:
     or the default Markdown-facing test set if none declared.
     [feat--test-gate-cost-reduction] REQ-2.
     """
-    gates_file = os.path.join(repo.state_dir(repo_root), "rules", "gates.yaml")
-    if os.path.isfile(gates_file):
-        try:
-            ruamel = bootstrap.require("ruamel.yaml")
-            yaml = ruamel.YAML(typ="safe")
-            content = textio.read_text(gates_file, strict=False)
-            data = yaml.load(content)
-            if isinstance(data, dict):
-                for g in data.get("gates", []):
-                    if isinstance(g, dict) and g.get("id") == "test_before_stop":
-                        declared = g.get("doc_tests")
-                        if isinstance(declared, list) and declared:
-                            return [str(t).strip() for t in declared if str(t).strip()]
-        except (OSError, ValueError, KeyError, AttributeError):
-            pass
+    from . import verify
+    declared = verify.test_gate_option(repo_root, "doc_tests", default=None)
+    if isinstance(declared, list) and declared:
+        return [str(t).strip() for t in declared if str(t).strip()]
     return list(DEFAULT_DOC_TESTS)
 
 

@@ -101,7 +101,7 @@ Also, when relevant: `.along/VISION.md`, `.along/GLOSSARY.md`. These reflect the
 ## Stage & Session Completion Checklist
 
 When a stage or session completes, agents MUST execute in this order:
-1. [ ] **Tests** [gate: test_before_stop]: Run via `/along-test` with quiet flags. Zero failures.
+1. [ ] **Tests** [gate: test_before_stop]: Run via `/along-test` with quiet flags. Zero failures caused by this issue. On a failure the test gate prints a `[Baseline]` line. Pre-existing failures (red at HEAD, code the issue did not touch): halt, report the exact failures to the user, file an issue, and only with their agreement bypass: `along commit -n --reason "pre-existing failure in <suite>, tracked in <key>"`, `along wrap <slug> -n --reason "..."`. Never edit tests or fixtures to make them pass unless the issue is about them.
 2. [ ] **File Integrity**: `git status -u` - all new/modified files non-zero size, no empty placeholders.
 3. [ ] **Code Review**: Inspect diff for side effects, verify REQ-N coverage, evaluate blast radius via `along graph-impact` (or static search), verify architectural decision compliance.
 4. [ ] **Entity Reconciliation**: Close issues (`done` + move to `done/`), update milestones, record the `## Outcome` of a spike. [gate: unresolved_gate_denial]: every tool call a gate denied is redone within the gate's rules or disclosed (`along gates denials`, `along gates ack <id> --note "..."`); `along wrap` / `along issue done` refuse until the user has replied to a disclosure (`--force-reason` after their reply).

@@ -48,6 +48,21 @@ def _tree_git(top: str, args: List[str], env: Dict[str, str]) -> Optional[str]:
     return result.stdout.strip() if result.ok else None
 
 
+def _inert_pathspecs(repo_root: str) -> List[str]:
+    from . import verify
+    globs = verify.test_inert_globs(repo_root)
+    specs: List[str] = []
+    for g in globs:
+        if not g:
+            continue
+        norm = repo.normalize_posix(g).lstrip("/")
+        if "/" not in norm:
+            specs.append(f":(glob)**/{norm}")
+        else:
+            specs.append(f":(glob){norm}")
+    return specs
+
+
 def tree_hash(repo_root: str) -> Optional[str]:
     """Git tree id of the working tree without Along state and KB projections, or None
     outside a git repository."""
@@ -63,9 +78,40 @@ def tree_hash(repo_root: str) -> Optional[str]:
                 return None
         if _tree_git(top, ["add", "-A", "--", "."], env) is None:
             return None
-        _tree_git(top, ["rm", "-r", "--cached", "-q", "--ignore-unmatch", "--", *EXCLUDED_PATHSPECS], env)
+        inert_specs = _inert_pathspecs(repo_root)
+        _tree_git(top, ["rm", "-r", "--cached", "-q", "--ignore-unmatch", "--", *EXCLUDED_PATHSPECS, *inert_specs], env)
         # The lifecycle hooks (.along/scripts/test.py, ...) decide what a test run is: they count.
         _tree_git(top, ["add", "-A", "--", ":(glob)**/.along/scripts/**", ":(exclude,glob)**/__pycache__/**"], env)
+        return _tree_git(top, ["write-tree"], env) or None
+    finally:
+        shutil.rmtree(tmp, ignore_errors=True)
+
+
+def head_tree_hash(repo_root: str) -> Optional[str]:
+    """Git tree id of HEAD with the same exclusions as tree_hash, or None outside git / without HEAD."""
+    top = _tree_git(repo_root, ["rev-parse", "--show-toplevel"], dict(os.environ))
+    if not top:
+        return None
+    tmp = tempfile.mkdtemp(prefix="along-head-tree-")
+    try:
+        env = dict(os.environ)
+        env["GIT_INDEX_FILE"] = os.path.join(tmp, "index")
+        if not _tree_git(top, ["rev-parse", "--verify", "-q", "HEAD"], env):
+            return None
+        if _tree_git(top, ["read-tree", "HEAD"], env) is None:
+            return None
+        inert_specs = _inert_pathspecs(repo_root)
+        exclusions = [
+            ":(glob)**/.along/**",
+            ":(exclude,glob)**/.along/scripts/**",
+            ":(glob)**/docs/INDEX.md",
+            ":(glob)**/docs/decisions/INDEX.md",
+            "llms.txt",
+            "llms-full.txt",
+            ":(glob)**/__pycache__/**",
+            *inert_specs,
+        ]
+        _tree_git(top, ["rm", "-r", "--cached", "-q", "--ignore-unmatch", "--", *exclusions], env)
         return _tree_git(top, ["write-tree"], env) or None
     finally:
         shutil.rmtree(tmp, ignore_errors=True)
@@ -104,3 +150,32 @@ def green_run_for(repo_root: str, tree: Optional[str]) -> Optional[Dict[str, Any
     runs = load_runs(repo_root)
     last = next((r for r in reversed(runs) if r.get("tree_hash") == tree), None)
     return last if last and last.get("ok") else None
+
+
+def baseline_note(repo_root: str) -> str:
+    """The HEAD test baseline message for a failing test run or gate."""
+    head_tree = head_tree_hash(repo_root)
+    if head_tree:
+        runs = load_runs(repo_root)
+        last_head_run = next((r for r in reversed(runs) if r.get("tree_hash") == head_tree), None)
+        if last_head_run:
+            ts = last_head_run.get("ts", "")
+            source = last_head_run.get("source", "")
+            meta = f"{ts}, {source}" if (ts and source) else (ts or source or "unknown")
+            if not last_head_run.get("ok"):
+                return (
+                    f"[Baseline] The suite already failed at HEAD ({meta}): failures in code this "
+                    "issue did not touch are pre-existing. Report them to the user and file an issue; do not "
+                    "fix them under this issue; bypass (-n --reason) only after the user's reply."
+                )
+            else:
+                return (
+                    f"[Baseline] The suite passed at HEAD ({meta}): the failures come from the "
+                    "working-tree changes."
+                )
+    return (
+        "[Baseline] No recorded run at HEAD. If the failures are in code this issue did not touch, "
+        "report them before changing anything; never edit tests to make them pass. Tip: run 'along test' "
+        "on a clean tree before editing to get a baseline."
+    )
+

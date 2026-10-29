@@ -217,6 +217,8 @@ gates:
     event: Stop
     # Sessions not bound to an issue ('along start <slug>') are not held unless a repository
     # sets enforce_unbound: true in .along/rules/gates.yaml.
+    # Repositories may configure ignore_paths (list of globs) to treat additional paths as test-inert
+    # (they will not arm test_before_stop, skip tests on commit, and are omitted from the tree hash).
     enforce_unbound: false
     rule:
       type: predicate

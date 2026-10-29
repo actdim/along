@@ -252,6 +252,61 @@ class TestTestRunReuse(GitFixture):
         self.assertFalse(gates.run_repository_tests(self.root, "Wrap Quality Gate"))
         self.assertEqual(self.runs(), 2)
 
+    def test_inert_file_does_not_change_tree_hash(self):
+        from alongkit import testruns
+        base = testruns.tree_hash(self.root)
+        self.assertTrue(base)
+        _co_put(self.root, ".vscode/settings.json", "{\"test\": 1}\n")
+        _co_put(self.root, ".claude/settings.local.json", "{\"test\": 2}\n")
+        _co_put(self.root, "sub/.editorconfig", "root = true\n")
+        self.assertEqual(testruns.tree_hash(self.root), base)
+
+    def test_head_tree_hash_equals_tree_hash_on_clean_repo(self):
+        from alongkit import testruns
+        head = testruns.head_tree_hash(self.root)
+        tree = testruns.tree_hash(self.root)
+        self.assertIsNotNone(head)
+        self.assertEqual(head, tree)
+
+    def test_head_tree_hash_none_without_commits(self):
+        from alongkit import testruns
+        empty_git = tempfile.mkdtemp(prefix="along-empty-git-")
+        try:
+            _co_git(empty_git, "init", "-q")
+            self.assertIsNone(testruns.head_tree_hash(empty_git))
+        finally:
+            shutil.rmtree(empty_git, ignore_errors=True)
+
+    def test_baseline_note_states(self):
+        from alongkit import testruns
+        # 1. No run recorded
+        note = testruns.baseline_note(self.root)
+        self.assertIn("No recorded run at HEAD", note)
+
+        head_tree = testruns.head_tree_hash(self.root)
+
+        # 2. Green run recorded at HEAD
+        testruns.record_run(self.root, True, head_tree, "test.py")
+        note = testruns.baseline_note(self.root)
+        self.assertIn("The suite passed at HEAD", note)
+
+        # 3. Red run recorded at HEAD
+        testruns.record_run(self.root, False, head_tree, "test.py")
+        note = testruns.baseline_note(self.root)
+        self.assertIn("The suite already failed at HEAD", note)
+
+    def test_run_test_gate_prints_baseline_on_failure(self):
+        import io
+        from contextlib import redirect_stderr
+        from alongkit import gates
+        _co_put(self.root, "FAIL", "1\n")
+        buf = io.StringIO()
+        with redirect_stderr(buf):
+            outcome = gates.run_test_gate(self.root, "Quality Gate")
+        self.assertEqual(outcome, gates.TESTS_FAILED)
+        self.assertIn("[Baseline]", buf.getvalue())
+
+
 
 AC_DONE = "\n## Acceptance Criteria\n- [x] works\n- [x] tested\n"
 AC_OPEN = "\n## Acceptance Criteria\n- [x] works\n- [ ] tested\n\n## Notes\n- [ ] not a criterion\n"

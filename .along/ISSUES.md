@@ -1,7 +1,7 @@
 # Active Issues
 
 ## Active
-<!-- No active issues -->
+- [ ] `(feat)` [test-gate-scope](ISSUES/feat--test-gate-scope.md) - plan ready
 
 ## Backlog
 - [ ] `(debt)` [canonical-path-gate-expansion](ISSUES/debt--canonical-path-gate-expansion.md)
@@ -42,7 +42,6 @@
 - [ ] `(feat)` [pi-harness-support](ISSUES/feat--pi-harness-support.md)
 - [ ] `(feat)` [planning-fields-and-ordering-gates](ISSUES/feat--planning-fields-and-ordering-gates.md)
 - [ ] `(feat)` [system-invariants-and-health-probes](ISSUES/feat--system-invariants-and-health-probes.md)
-- [ ] `(feat)` [test-gate-scope](ISSUES/feat--test-gate-scope.md) - plan ready
 - [ ] `(feat)` [zero-step-state-recovery-and-drift-detection](ISSUES/feat--zero-step-state-recovery-and-drift-detection.md)
 - [ ] `(task)` [gate-event-remeasure](ISSUES/task--gate-event-remeasure.md)
 - [ ] `(task)` [integrate-actdim-ui-core-runtime](ISSUES/task--integrate-actdim-ui-core-runtime.md)

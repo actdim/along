@@ -249,6 +249,76 @@ class TestTreeHashReuse(unittest.TestCase):
         self._edit("src/app.py", "v3\n")
         self.assertIn("test-before-stop", self._stop())
 
+    def test_test_inert_edits_do_not_arm_test_before_stop(self):
+        tree = testruns.tree_hash(self.tmp)
+        testruns.record_run(self.tmp, True, tree, "test")
+
+        self._edit(".vscode/settings.json", "{\"foo\": 1}\n")
+        self.assertIsNone(self._stop())
+
+        self._edit(".claude/settings.local.json", "{\"bar\": 2}\n")
+        self.assertIsNone(self._stop())
+
+        # package.json is NOT test-inert
+        self._edit("package.json", "{\"name\": \"pkg\"}\n")
+        msg = self._stop()
+        self.assertIsNotNone(msg)
+        self.assertIn("test-before-stop", msg)
+
+    def test_ignore_paths_in_gates_yaml_does_not_arm_gate(self):
+        tree = testruns.tree_hash(self.tmp)
+        testruns.record_run(self.tmp, True, tree, "test")
+
+        os.makedirs(os.path.join(self.tmp, ".along", "rules"), exist_ok=True)
+        textio.write_text(
+            os.path.join(self.tmp, ".along", "rules", "gates.yaml"),
+            "gates:\n  - id: test_before_stop\n    ignore_paths:\n      - \"custom_inert/**\"\n"
+        )
+        self._edit("custom_inert/foo.txt", "hello\n")
+        self.assertIsNone(self._stop())
+
+    def test_stop_message_names_modified_files(self):
+        tree = testruns.tree_hash(self.tmp)
+        testruns.record_run(self.tmp, True, tree, "test")
+
+        self._edit("src/app.py", "v2\n")
+        msg = self._stop()
+        self.assertIn("Source files were modified in this session (src/app.py)", msg)
+
+        # Edit 5 more files so total is 6 (>5)
+        for i in range(1, 6):
+            self._edit(f"src/mod_{i}.py", "code\n")
+        msg = self._stop()
+        self.assertIn("+1 more", msg)
+
+    def test_test_run_clears_edited_files(self):
+        self._edit("src/app.py", "v2\n")
+        trace = predicates.load_activity_trace(self.tmp, None)
+        self.assertIn("src/app.py", trace.get("edited_files", []))
+
+        predicates.record_tool_activity(HookEvent(
+            event_type=HookEventType.PRE_TOOL_USE,
+            tool_name="run_command",
+            tool_args={"CommandLine": "python .along/scripts/test.py"},
+            workspace_root=self.tmp
+        ), repo_root=self.tmp)
+
+        trace = predicates.load_activity_trace(self.tmp, None)
+        self.assertEqual(trace.get("edited_files"), [])
+
+    def test_run_lifecycle_command_prints_baseline_on_failure(self):
+        stderr = io.StringIO()
+        with contextlib.redirect_stderr(stderr):
+            code = lifecycle.run_lifecycle_command(
+                "test",
+                [sys.executable, "-c", "import sys; sys.exit(1)"],
+                self.tmp,
+                "raw"
+            )
+        self.assertEqual(code, 1)
+        self.assertIn("[Baseline]", stderr.getvalue())
+
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -83,7 +83,7 @@ The catalogue defines 33 gates; the ones below are described here (the team, doc
 5. `projection_protection`: Intercepts file writes to derived projections (`.along/ISSUES.md`, `docs/INDEX.md`, `DECISIONS.md`).
 6. `typography` (`enforcement: [git, ci]`): Enforces ASCII typography at commit time (no em-dashes, curly quotes, guillemets, ellipsis glyphs, or NBSP); no runtime hook.
 7. `require_active_issue`: Stateful predicate requiring an active `in-progress` issue in `.along/ISSUES/` bound to the current session. It never fires on Along state under any `.along/` (except `.along/scripts/`, which is code). Its `exclude_paths` (`docs/**`, `CHANGELOG.md`) match relative to the context owning the file, so a subproject's own state and docs pass like the root's. A session bound to a subproject issue may also edit inside that issue's `write_scope` / `allowed_roots` (`along start --write-scope/--allow-root`, relative to the issue's context).
-8. `test_before_stop`: Intercepts session termination (`Stop`) to ensure `/along-test` or test suites ran cleanly if code was modified. Passes immediately when the working tree matches a recorded green run (`alongkit.testruns`). Documentation edits re-arm it only with the option `count_docs: true`, where doc-only edits can be satisfied by scoped tests declared under `doc_tests: [...]` (`along test --doc`).
+8. `test_before_stop`: Intercepts session termination (`Stop`) to ensure `/along-test` or test suites ran cleanly if code was modified. Passes immediately when the working tree matches a recorded green run (`alongkit.testruns`). Documentation edits re-arm it only with the option `count_docs: true`, where doc-only edits can be satisfied by scoped tests declared under `doc_tests: [...]` (`along test --doc`). Built-in test-inert paths (`.vscode/**`, `.idea/**`, `*.code-workspace`, `.editorconfig`, `.claude/**`, `.codex/**`, `.cursor/**`) and patterns declared under `ignore_paths` do not arm the gate. On rejection, the gate message lists the modified source files.
 9. `wrap_before_stop`: Intercepts session termination (`Stop`) to ensure a session log exists if an issue was marked done.
 10. `projection_sync_before_stop`: At session termination (`Stop`) recompiles a stale `ISSUES.md` itself (content compared with the compiled board); it never blocks.
 11. `subproject_boundary`: Enforces context localization for subprojects with their own `.along/`, preventing subproject entities from leaking to workspace root `.along/`. A folder with only a package manifest is not a subproject.
@@ -127,6 +127,7 @@ gates:
     enforce_unbound: true   # also hold sessions not bound to an issue (default false)
   - id: test_before_stop
     enforce_unbound: true
+    ignore_paths: ["build/**", "dist/**"]  # additional test-inert paths (globs)
 ```
 
 `enforce_unbound` (`require_plan_approval`, `test_before_stop`): by default these gates hold only agent sessions bound to an issue (`along start <slug>`); unbound sessions fail open. Set it to `true` to hold every session.

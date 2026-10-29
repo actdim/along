@@ -233,6 +233,10 @@ def run_lifecycle_command(action: str, cmd: Sequence[str], repo_root: str, mode:
         # stale, never wrongly green [feat--parallel-session-closeout] REQ-8.
         testruns.record_run(repo_root, code == 0, tree, "along test")
         session.trace_test_run(repo_root, code == 0, "along test")
+        if code != 0 and code != NO_TESTS_EXIT_CODE:
+            note = testruns.baseline_note(repo_root)
+            if note:
+                print(note, file=sys.stderr)
     return code
 
 

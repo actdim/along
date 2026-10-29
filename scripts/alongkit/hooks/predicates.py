@@ -17,7 +17,7 @@ import re
 import sys
 from typing import Any, Dict, List, Optional, Tuple
 
-from .. import attribution, entities, frontmatter, kb, proc, repo, sanitizer, session, testruns, textio, typography
+from .. import attribution, entities, frontmatter, kb, proc, repo, sanitizer, session, testruns, textio, typography, verify
 from . import shellparse, shellwrite
 from .models import GateDecision, GateResult, HookEvent, HookEventType
 
@@ -449,7 +449,9 @@ def record_tool_activity(event: HookEvent, repo_root: str) -> None:
                 # The hook projects the same record onto the runner's span (fail-open).
                 event.ledger_event = record
             session.trace_event(repo_root, key, f"edit {repo.normalize_posix(rel)}", collapse=True)
-        if rel and is_source_edit(rel):
+        if rel and verify.is_test_inert_path(rel, verify.test_inert_globs(repo_root)):
+            pass
+        elif rel and is_source_edit(rel):
             trace["last_edit_time"] = now_iso
             edited = trace.get("edited_files", [])
             if rel not in edited:
@@ -473,6 +475,7 @@ def record_tool_activity(event: HookEvent, repo_root: str) -> None:
             else:
                 trace["last_test_time"] = now_iso
                 trace["last_doc_test_time"] = now_iso
+                trace["edited_files"] = []
             save_activity_trace(repo_root, trace, key)
         elif any(p.search(cmd) for p in TEST_COMMAND_PATTERNS):
             trace["last_raw_test_time"] = now_iso
@@ -1478,8 +1481,16 @@ def check_test_before_stop(event: HookEvent, repo_root: str, options: Optional[D
         if raw and raw >= edit_time:
             hint = (" A raw test runner ran after the edit, but this repository has a lifecycle "
                     "test hook, and only it counts.")
+        edited = trace.get("edited_files", [])
+        if edited:
+            if len(edited) <= 5:
+                files_str = f" ({', '.join(edited)})"
+            else:
+                files_str = f" ({', '.join(edited[:5])}, +{len(edited) - 5} more)"
+        else:
+            files_str = ""
         return (
-            "Turn Completion Rejected [gate: test-before-stop]: Source files were modified in this session, "
+            f"Turn Completion Rejected [gate: test-before-stop]: Source files were modified in this session{files_str}, "
             f"but automated tests have not been executed afterward.{hint} "
             "Run tests via 'along test' or 'python .along/scripts/test.py' before completing."
         )

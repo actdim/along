@@ -15,6 +15,7 @@ runner not found) is reported as misconfigured, never as failing tests.
 
 from __future__ import annotations
 
+import fnmatch
 import json
 import os
 import re
@@ -28,7 +29,7 @@ if __name__ == "__main__":
         "Run: along test   (or: along doctor to see the verify policy)"
     )
 
-from . import proc, repo, textio
+from . import bootstrap, proc, repo, textio
 
 TESTS_REQUIRED = "required"
 TESTS_NONE = "none"
@@ -241,16 +242,103 @@ def version_only_manifest_change(diff_text: str) -> bool:
     return bool(changed) and all(_VERSION_LINE.match(line) for line in changed)
 
 
+# ---------------------------------------------------------------------------
+# Test-inert paths
+# ---------------------------------------------------------------------------
+
+TEST_INERT_GLOBS: Tuple[str, ...] = (
+    ".vscode/**",
+    ".idea/**",
+    "*.code-workspace",
+    ".editorconfig",
+    ".claude/**",
+    ".codex/**",
+    ".cursor/**",
+)
+
+
+def test_gate_option(repo_root: str, key: str, default=None):
+    """Read `key` of the `test_before_stop` entry in `.along/rules/gates.yaml`.
+
+    Returns `default` on a missing file, parse error, or when `key` is absent.
+    """
+    gates_file = os.path.join(repo.state_dir(repo_root), "rules", "gates.yaml")
+    if os.path.isfile(gates_file):
+        try:
+            ruamel = bootstrap.require("ruamel.yaml")
+            yaml = ruamel.YAML(typ="safe")
+            content = textio.read_text(gates_file, strict=False)
+            data = yaml.load(content)
+            if isinstance(data, dict):
+                for g in data.get("gates", []):
+                    if isinstance(g, dict) and g.get("id") == "test_before_stop":
+                        val = g.get(key)
+                        if val is not None:
+                            return val
+        except (OSError, ValueError, KeyError, AttributeError):
+            pass
+    return default
+
+
+def test_inert_globs(repo_root: str) -> List[str]:
+    """Test-inert glob patterns: built-ins plus `ignore_paths` from gates.yaml."""
+    globs = list(TEST_INERT_GLOBS)
+    raw = test_gate_option(repo_root, "ignore_paths", default=[])
+    if isinstance(raw, list):
+        for item in raw:
+            if isinstance(item, str):
+                cleaned = item.strip()
+                if cleaned:
+                    globs.append(cleaned)
+    return globs
+
+
+def is_test_inert_path(rel: str, globs: Sequence[str]) -> bool:
+    """True when `rel` matches one of the test-inert path globs.
+
+    A glob without a `/` matches against the file's basename in any directory.
+    A glob ending with `/**` matches the directory itself and anything within it.
+    """
+    if not rel:
+        return False
+    norm = repo.normalize_posix(rel)
+    while norm.startswith("./"):
+        norm = norm[2:]
+    norm = norm.lstrip("/")
+    base = os.path.basename(norm)
+    for pat in globs:
+        if not pat or not isinstance(pat, str):
+            continue
+        pat_norm = repo.normalize_posix(pat)
+        while pat_norm.startswith("./"):
+            pat_norm = pat_norm[2:]
+        pat_norm = pat_norm.lstrip("/")
+        if "/" not in pat_norm:
+            if fnmatch.fnmatch(base, pat_norm):
+                return True
+        else:
+            if fnmatch.fnmatch(norm, pat_norm):
+                return True
+            if pat_norm.endswith("/**"):
+                prefix = pat_norm[:-3]
+                if norm == prefix or norm.startswith(prefix + "/"):
+                    return True
+    return False
+
+
 def docs_only_change(repo_root: str, paths: Sequence[str], diff_for=None) -> bool:
-    """True when every changed path is documentation/state, or a version-only package.json.
+    """True when every changed path is documentation/state, test-inert, or a version-only package.json.
 
     `diff_for(path)` returns the staged diff of one path (for package.json).
     """
     paths = [p for p in paths if p]
     if not paths:
         return False
+    inert = test_inert_globs(repo_root)
     for path in paths:
         if is_doc_only_path(path):
+            continue
+        if is_test_inert_path(path, inert):
             continue
         if os.path.basename(path) == "package.json" and diff_for is not None \
                 and version_only_manifest_change(diff_for(path)):
