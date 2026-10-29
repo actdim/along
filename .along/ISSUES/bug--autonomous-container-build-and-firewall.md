@@ -11,6 +11,7 @@ agent: claude-code
 tags: [docker, firewall, security, autonomous]
 blocked_by: []
 related: [feat--isolated-environment-docker]
+plan_status: approved
 ---
 
 # Autonomous container image does not build and its firewall fails open
