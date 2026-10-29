@@ -50,12 +50,11 @@
 - [ ] `(task)` [gate-event-remeasure](ISSUES/task--gate-event-remeasure.md)
 - [ ] `(task)` [integrate-actdim-ui-core-runtime](ISSUES/task--integrate-actdim-ui-core-runtime.md)
 - [ ] `(task)` [reconcile-dashboard-ui-core-conventions](ISSUES/task--reconcile-dashboard-ui-core-conventions.md)
-- [ ] `(task)` [telegram-poll-error-classification](ISSUES/task--telegram-poll-error-classification.md) - plan ready
 
 ## Done (recent)
+- [x] `(task)` [telegram-poll-error-classification](ISSUES/done/task--telegram-poll-error-classification.md)
 - [x] `(bug)` [autonomous-gate-residual-holes](ISSUES/done/bug--autonomous-gate-residual-holes.md)
 - [x] `(bug)` [runner-daemon-lifecycle-safety](ISSUES/done/bug--runner-daemon-lifecycle-safety.md)
 - [x] `(spike)` [headless-runtimes-on-linux](ISSUES/done/spike--headless-runtimes-on-linux.md)
 - [x] `(feat)` [vps-runner-daemon](ISSUES/done/feat--vps-runner-daemon.md)
-- [x] `(feat)` [pre-approved-plans](ISSUES/done/feat--pre-approved-plans.md)
-<!-- 300 older completed issue(s) archived in .along/ISSUES/done/ -->
+<!-- 301 older completed issue(s) archived in .along/ISSUES/done/ -->

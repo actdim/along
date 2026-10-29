@@ -3,7 +3,8 @@ protocol: along
 protocol_version: "4.5.4"
 slug: telegram-poll-error-classification
 type: task
-status: in-progress
+status: done
+completed: 2026-10-29
 priority: medium
 created: 2026-10-29
 updated: 2026-10-29
