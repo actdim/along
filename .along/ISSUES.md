@@ -5,7 +5,7 @@
 
 ## Backlog
 - [ ] `(bug)` [autonomous-container-build-and-firewall](ISSUES/bug--autonomous-container-build-and-firewall.md)
-- [ ] `(bug)` [autonomous-gate-residual-holes](ISSUES/bug--autonomous-gate-residual-holes.md)
+- [ ] `(bug)` [autonomous-gate-residual-holes](ISSUES/bug--autonomous-gate-residual-holes.md) - plan ready
 - [ ] `(bug)` [autonomous-mvp-minor-defects](ISSUES/bug--autonomous-mvp-minor-defects.md)
 - [ ] `(bug)` [runtime-adapters-invented-cli-contracts](ISSUES/bug--runtime-adapters-invented-cli-contracts.md)
 - [ ] `(debt)` [canonical-path-gate-expansion](ISSUES/debt--canonical-path-gate-expansion.md)
