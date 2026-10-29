@@ -17,10 +17,10 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     git \
     gnupg \
     iptables \
+    ipset \
     iproute2 \
     dnsutils \
     jq \
-    sudo \
     build-essential \
     python3 \
     python3-pip \
@@ -40,17 +40,21 @@ RUN npm install -g @anthropic-ai/claude-code opencode-ai \
     && npm cache clean --force
 
 # Install Along Protocol package
-RUN pip3 install --no-cache-dir --break-system-packages actdim-along
+RUN pip3 install --no-cache-dir --break-system-packages actdim-along 2>/dev/null || true
 
 # Create non-root along user with UID/GID 1000
-RUN groupadd -g 1000 along \
-    && useradd -u 1000 -g along -m -s /bin/bash along \
-    && echo "along ALL=(ALL) NOPASSWD: /usr/local/bin/init-firewall.sh" >> /etc/sudoers.d/along-firewall \
-    && chmod 0440 /etc/sudoers.d/along-firewall
+RUN if id ubuntu >/dev/null 2>&1; then userdel --remove ubuntu; fi \
+    && groupadd -g 1000 along \
+    && useradd -u 1000 -g along -m -s /bin/bash along
 
 # Setup mount directories with proper permissions
 RUN mkdir -p /workspace /home/along/.claude /home/along/.opencode /home/along/.cache /home/along/.along \
     && chown -R along:along /workspace /home/along
+
+# Configure Git credential helper for Along
+COPY docker/git-credential-along /usr/local/bin/git-credential-along
+RUN chmod +x /usr/local/bin/git-credential-along \
+    && git config --system credential.https://github.com.helper /usr/local/bin/git-credential-along
 
 # Copy firewall initialization and entrypoint scripts
 COPY docker/init-firewall.sh /usr/local/bin/init-firewall.sh
@@ -61,7 +65,6 @@ RUN chmod +x /usr/local/bin/init-firewall.sh /usr/local/bin/entrypoint.sh
 VOLUME ["/workspace", "/home/along/.claude", "/home/along/.opencode", "/home/along/.cache"]
 
 WORKDIR /workspace
-USER along
 
 ENTRYPOINT ["/usr/local/bin/entrypoint.sh"]
 CMD ["bash"]

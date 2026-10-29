@@ -45,7 +45,7 @@ Facts the steps rely on (verified 2026-10-29):
 
 ## Steps
 
-- [ ] Step 1: One Dockerfile that builds; root entrypoint that drops privileges (REQ-1, REQ-3)
+- [x] Step 1: One Dockerfile that builds; root entrypoint that drops privileges (REQ-1, REQ-3)
   - `git rm docker/Dockerfile.autonomous`; keep `docker/Dockerfile`.
   - User block: `if id ubuntu >/dev/null 2>&1; then userdel --remove ubuntu; fi`, then
     `groupadd -g 1000 along && useradd -u 1000 -g along -m -s /bin/bash along`.
@@ -58,7 +58,7 @@ Facts the steps rely on (verified 2026-10-29):
     no `groupadd -g 1000 along` before the `userdel`, and `ipset`; keep the runtimes, `actdim-along` and
     `VOLUME` asserts.
 
-- [ ] Step 2: Fail-closed entrypoint (REQ-2, REQ-3)
+- [x] Step 2: Fail-closed entrypoint (REQ-2, REQ-3)
   - `docker/entrypoint.sh`: `FIREWALL_SCRIPT=/usr/local/bin/init-firewall.sh` on its own line (the test harness
     substitutes it).
   - Not root: exit 1 with `[Error] firewall: entrypoint must run as root`, unless `ALONG_FIREWALL=off`.
@@ -81,7 +81,7 @@ Facts the steps rely on (verified 2026-10-29):
       (b) `ALONG_FIREWALL=off`: the command runs; (c) `ALONG_EXTRA_EGRESS="a.example, b.example"`: the stub
       receives an allow-file holding both hosts.
 
-- [ ] Step 3: Firewall rewrite (REQ-2, REQ-4, REQ-5; also IP refresh)
+- [x] Step 3: Firewall rewrite (REQ-2, REQ-4, REQ-5; also IP refresh)
   - `docker/init-firewall.sh`: `set -euo pipefail` and `trap 'lockdown; exit 1' ERR`; `lockdown` sets
     OUTPUT/INPUT/FORWARD policy DROP for v4 and v6 and flushes only the filter ACCEPTs.
   - Missing `iptables`, `ip6tables` or `ipset`, or a failing capability probe
@@ -114,7 +114,7 @@ Facts the steps rely on (verified 2026-10-29):
       lockdown: the log ends with `-P OUTPUT DROP`, exit non-zero; (c) allow-file entry `bad;host` is
       rejected; (d) the fixture resolv.conf nameserver appears as `-d <ns>` on the port 53 rules.
 
-- [ ] Step 4: Safe YAML and name validation (REQ-6)
+- [x] Step 4: Safe YAML and name validation (REQ-6)
   - `environment.py`: `ENV_NAME_RE = ^[a-z0-9][a-z0-9_-]{0,62}$` (compose project and container-name safe;
     rejects `..`, `/` and uppercase) and `validate_env_name(name) -> str` raising `ValueError`; call it in
     `resolve_env_dir`, `env_up`, `env_down`, `env_status` (named), `env_logs`, `env_shell`, `env_update`.
@@ -138,7 +138,7 @@ Facts the steps rely on (verified 2026-10-29):
     `"evil.com\n  privileged: true"` is rejected. Update `test_generate_compose_yaml_deterministic` to parse the
     YAML and assert values (`cap_add == ["NET_ADMIN"]`, volume keys, `runtime == "runsc"` with gVisor).
 
-- [ ] Step 5: Git credentials do not persist (REQ-8)
+- [x] Step 5: Git credentials do not persist (REQ-8)
   - New `docker/git-credential-along` (bash): on `get`, read stdin; for `host=github.com` with `GITHUB_TOKEN`
     set, print `username=x-access-token` and `password=$GITHUB_TOKEN`; ignore `store` / `erase`.
   - Dockerfile: `git config --system credential.https://github.com.helper /usr/local/bin/git-credential-along`.
@@ -147,7 +147,7 @@ Facts the steps rely on (verified 2026-10-29):
     helper line); harness: `printf 'protocol=https\nhost=github.com\n\n' | GITHUB_TOKEN=t bash
     git-credential-along get` prints `password=t`; for `host=evil.com` the output is empty.
 
-- [ ] Step 6: Docker failures exit non-zero (REQ-7)
+- [x] Step 6: Docker failures exit non-zero (REQ-7)
   - `env_down`: check the `docker stop` return code and set `error`.
   - `env_update`: run `pull` and check it (on failure set `error`, skip `up`); `up` is
     `["-f", f, "up", "-d"]` (drop `--build`).
@@ -159,7 +159,7 @@ Facts the steps rely on (verified 2026-10-29):
     returning `returncode=1, stderr="boom"`): `up`, `down`, `update` exit 1 with `boom` on stderr; `update`
     argv has no `--build`; the `down` fallback with a failing `docker stop` exits 1; return code 0 exits 0.
 
-- [ ] Step 7: Hermetic default suite (REQ-9)
+- [x] Step 7: Hermetic default suite (REQ-9)
   - Rewrite `test_cli_up_status_and_down_lifecycle` in process with the Step 6 mocks plus
     `environment.shutil.which` patched to None for status; same outputs and exit codes.
   - `TestEnvCliCommands.setUp`: `self.env["PATH"] = os.path.dirname(sys.executable)` so no subprocess test can
@@ -167,7 +167,7 @@ Facts the steps rely on (verified 2026-10-29):
   - Proof: one test puts a fake `docker` (a `.cmd` or sh shim per OS) first on PATH that writes a marker file,
     runs the env CLI tests' commands, and asserts the marker does not appear.
 
-- [ ] Step 8: Opt-in real Docker verification and a CI job (acceptance criteria 1-3)
+- [x] Step 8: Opt-in real Docker verification and a CI job (acceptance criteria 1-3)
   - New `tests/test_docker_image_integration.py`,
     `skipUnless(os.environ.get("ALONG_DOCKER_TESTS") == "1" and shutil.which("docker"))`.
   - `setUpClass`: `docker build -f docker/Dockerfile -t along-autonomous:test .` (timeout 1800 s; assert rc 0,
@@ -189,7 +189,7 @@ Facts the steps rely on (verified 2026-10-29):
   - Locally (Docker Desktop running): `ALONG_DOCKER_TESTS=1 python .along/scripts/test.py
     tests/test_docker_image_integration.py`; record the output in the session log (acceptance criterion 1).
 
-- [ ] Step 9: Docs, full suite, regression proof, commit, wrap
+- [x] Step 9: Docs, full suite, regression proof, commit, wrap
   - `docs/topic--autonomous-environment.md`: section 4 (one `docker/Dockerfile`; the `ubuntu` user replaced; no
     sudo; root entrypoint plus `setpriv`); section 5 (fail closed and `ALONG_FIREWALL=off`; DNS limited to the
     resolver; nat untouched; IPv6 drop; ipset refresh every `ALONG_FIREWALL_REFRESH` s; `api.telegram.org` for

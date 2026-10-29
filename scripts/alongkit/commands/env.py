@@ -100,19 +100,27 @@ def handle_env_command(repo_root: str, args: List[str]):
         parsed, extra = parser.parse_known_args(sub_args)
         check_unknown_args(extra, "along env up")
 
-        res = environment.env_up(
-            name=parsed.name,
-            repo_url=parsed.repo,
-            branch=parsed.branch,
-            base_dir=parsed.dir,
-        )
-        print(f"-> Created isolated environment: {res['name']}")
-        print(f"   Directory: {res['path']}")
-        print(f"   Container: {res['container_name']}")
-        print(f"   Status:    {res['status']}")
-        if res.get("error"):
-            print(f"   Notice:    {res['error']}")
-        sys.exit(0)
+        try:
+            res = environment.env_up(
+                name=parsed.name,
+                repo_url=parsed.repo,
+                branch=parsed.branch,
+                base_dir=parsed.dir,
+            )
+            if res.get("error"):
+                print(f"[Error] {res['error']}", file=sys.stderr)
+                sys.exit(1)
+            print(f"-> Created isolated environment: {res['name']}")
+            print(f"   Directory: {res['path']}")
+            print(f"   Container: {res['container_name']}")
+            print(f"   Status:    {res['status']}")
+            sys.exit(0)
+        except environment.EnvConfigError as exc:
+            print(f"[Error] {exc}", file=sys.stderr)
+            sys.exit(1)
+        except ValueError as exc:
+            print(f"[Error] {exc}", file=sys.stderr)
+            sys.exit(2)
 
     # 2. DOWN
     if subcmd == "down":
@@ -130,13 +138,20 @@ def handle_env_command(repo_root: str, args: List[str]):
 
         try:
             res = environment.env_down(name=parsed.name, base_dir=parsed.dir)
-            print(f"-> Stopped isolated environment: {res['name']}")
             if res.get("error"):
-                print(f"   Notice: {res['error']}")
+                print(f"[Error] {res['error']}", file=sys.stderr)
+                sys.exit(1)
+            print(f"-> Stopped isolated environment: {res['name']}")
             sys.exit(0)
+        except environment.EnvConfigError as exc:
+            print(f"[Error] {exc}", file=sys.stderr)
+            sys.exit(1)
         except FileNotFoundError as exc:
             print(f"[Error] {exc}", file=sys.stderr)
             sys.exit(1)
+        except ValueError as exc:
+            print(f"[Error] {exc}", file=sys.stderr)
+            sys.exit(2)
 
     # 3. STATUS
     if subcmd == "status":
@@ -154,7 +169,14 @@ def handle_env_command(repo_root: str, args: List[str]):
         if parsed.name and parsed.name.startswith("-"):
             require_entity_name(parsed.name, "along env status [<name>] [--dir <path>] [--json]")
 
-        res = environment.env_status(name=parsed.name, base_dir=parsed.dir)
+        try:
+            res = environment.env_status(name=parsed.name, base_dir=parsed.dir)
+        except environment.EnvConfigError as exc:
+            print(f"[Error] {exc}", file=sys.stderr)
+            sys.exit(1)
+        except ValueError as exc:
+            print(f"[Error] {exc}", file=sys.stderr)
+            sys.exit(2)
 
         if parsed.json:
             print(json.dumps(res, indent=2))
@@ -204,13 +226,20 @@ def handle_env_command(repo_root: str, args: List[str]):
         parsed, extra = parser.parse_known_args(sub_args)
         check_unknown_args(extra, "along env logs")
 
-        code = environment.env_logs(
-            name=parsed.name,
-            follow=parsed.follow,
-            tail=parsed.tail,
-            base_dir=parsed.dir,
-        )
-        sys.exit(code)
+        try:
+            code = environment.env_logs(
+                name=parsed.name,
+                follow=parsed.follow,
+                tail=parsed.tail,
+                base_dir=parsed.dir,
+            )
+            sys.exit(code)
+        except environment.EnvConfigError as exc:
+            print(f"[Error] {exc}", file=sys.stderr)
+            sys.exit(1)
+        except ValueError as exc:
+            print(f"[Error] {exc}", file=sys.stderr)
+            sys.exit(2)
 
     # 5. SHELL
     if subcmd == "shell":
@@ -226,8 +255,15 @@ def handle_env_command(repo_root: str, args: List[str]):
         parsed, extra = parser.parse_known_args(sub_args)
         check_unknown_args(extra, "along env shell")
 
-        code = environment.env_shell(name=parsed.name, base_dir=parsed.dir)
-        sys.exit(code)
+        try:
+            code = environment.env_shell(name=parsed.name, base_dir=parsed.dir)
+            sys.exit(code)
+        except environment.EnvConfigError as exc:
+            print(f"[Error] {exc}", file=sys.stderr)
+            sys.exit(1)
+        except ValueError as exc:
+            print(f"[Error] {exc}", file=sys.stderr)
+            sys.exit(2)
 
     # 6. UPDATE
     if subcmd == "update":
@@ -245,10 +281,17 @@ def handle_env_command(repo_root: str, args: List[str]):
 
         try:
             res = environment.env_update(name=parsed.name, base_dir=parsed.dir)
-            print(f"-> Updated isolated environment: {res['name']}")
             if res.get("error"):
-                print(f"   Notice: {res['error']}")
+                print(f"[Error] {res['error']}", file=sys.stderr)
+                sys.exit(1)
+            print(f"-> Updated isolated environment: {res['name']}")
             sys.exit(0)
+        except environment.EnvConfigError as exc:
+            print(f"[Error] {exc}", file=sys.stderr)
+            sys.exit(1)
         except FileNotFoundError as exc:
             print(f"[Error] {exc}", file=sys.stderr)
             sys.exit(1)
+        except ValueError as exc:
+            print(f"[Error] {exc}", file=sys.stderr)
+            sys.exit(2)

@@ -83,14 +83,16 @@ def main():
         suite = unittest.TestSuite()
         for target in doc_targets:
             if target.endswith(".py") or "*" in target:
-                suite.addTests(loader.discover(start_dir=tests_dir, pattern=target))
+                pattern = os.path.basename(target)
+                suite.addTests(loader.discover(start_dir=tests_dir, pattern=pattern))
             else:
                 suite.addTests(loader.loadTestsFromName(target))
     elif args:
         suite = unittest.TestSuite()
         for target in args:
             if target.endswith(".py") or "*" in target:
-                suite.addTests(loader.discover(start_dir=tests_dir, pattern=target))
+                pattern = os.path.basename(target)
+                suite.addTests(loader.discover(start_dir=tests_dir, pattern=pattern))
             else:
                 suite.addTests(loader.loadTestsFromName(target))
     else:

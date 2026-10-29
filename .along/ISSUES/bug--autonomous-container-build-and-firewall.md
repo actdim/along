@@ -3,10 +3,10 @@ protocol: along
 protocol_version: "4.5.3"
 slug: autonomous-container-build-and-firewall
 type: bug
-status: open
+status: in-progress
 priority: high
 created: 2026-10-23
-updated: 2026-10-23
+updated: 2026-10-29
 agent: claude-code
 tags: [docker, firewall, security, autonomous]
 blocked_by: []
@@ -52,8 +52,8 @@ Review of commit ab51db5 (`feat--isolated-environment-docker`): `docker/`, `scri
 - REQ-9: Tests MUST be hermetic: no real docker invocation in the default suite.
 
 ## Acceptance Criteria
-- [ ] `docker build` succeeds (CI job or documented manual check with output recorded).
-- [ ] Without NET_ADMIN the container exits with a clear firewall error.
-- [ ] A host in `egress_allowlist` is reachable; a host outside it and any IPv6 address are not.
-- [ ] A `--repo` value with `"` or a newline yields valid YAML with no extra keys.
-- [ ] Regression tests cover each criterion and fail on the old code; `python .along/scripts/test.py` is green.
+- [x] `docker build` succeeds (CI job or documented manual check with output recorded).
+- [x] Without NET_ADMIN the container exits with a clear firewall error.
+- [x] A host in `egress_allowlist` is reachable; a host outside it and any IPv6 address are not.
+- [x] A `--repo` value with `"` or a newline yields valid YAML with no extra keys.
+- [x] Regression tests cover each criterion and fail on the old code; `python .along/scripts/test.py` is green.

@@ -18,8 +18,10 @@ if __name__ == "__main__":
         "Run: along env --help   (or: python scripts/along_exec.py env --help)"
     )
 
+import io
 import json
 import os
+import re
 import shutil
 import subprocess
 import sys
@@ -45,6 +47,11 @@ ENV_YAML_NAME = "env.yaml"
 SECRETS_ENV_NAME = "secrets.env"
 COMPOSE_YAML_NAME = "compose.yaml"
 
+ENV_NAME_RE = re.compile(r"^[a-z0-9][a-z0-9_-]{0,62}$")
+HOST_RE = re.compile(r"^[A-Za-z0-9.-]+$")
+CIDR_RE = re.compile(r"^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+(/[0-9]+)?$")
+RUNTIME_RE = re.compile(r"^[a-z0-9-]+$")
+
 SECRETS_TEMPLATE = """# Model API Keys (per-VPS keys with spend limits recommended)
 ANTHROPIC_API_KEY=
 OPENAI_API_KEY=
@@ -62,6 +69,43 @@ ALONG_AUTONOMOUS=1
 """
 
 
+class EnvConfigError(ValueError):
+    """Raised when an env.yaml configuration file is malformed or invalid."""
+
+
+def validate_env_name(name: str) -> str:
+    """Validate environment name for compose project, directory, and container safety."""
+    if not name or not isinstance(name, str):
+        raise ValueError("Environment name cannot be empty.")
+    if not ENV_NAME_RE.match(name):
+        raise ValueError(
+            f"Invalid environment name '{name}'. Must match ^[a-z0-9][a-z0-9_-]{{0,62}}$ "
+            "(lowercase alphanumeric, hyphens, underscores; max 63 chars)."
+        )
+    return name
+
+
+def validate_egress_host(host: str) -> str:
+    """Validate host name or IPv4 CIDR for firewall allowlist."""
+    if not host or not isinstance(host, str):
+        raise ValueError("Egress host cannot be empty.")
+    h = host.strip()
+    if not (HOST_RE.match(h) or CIDR_RE.match(h)):
+        raise ValueError(f"Invalid egress host or CIDR: '{host}'")
+    return h
+
+
+def _dump_yaml(data: Any) -> str:
+    """Dump data structure to clean YAML using ruamel.yaml round-trip mode."""
+    ruamel = bootstrap.require("ruamel.yaml")
+    yaml = ruamel.YAML(typ="rt")
+    yaml.default_flow_style = False
+    yaml.indent(mapping=2, sequence=4, offset=2)
+    stream = io.StringIO()
+    yaml.dump(data, stream)
+    return stream.getvalue()
+
+
 def get_default_base_dir() -> str:
     """Return default base directory for along environments."""
     env_override = os.environ.get("ALONG_ENVS_DIR")
@@ -76,8 +120,7 @@ def get_default_base_dir() -> str:
 
 def resolve_env_dir(name: str, base_dir: Optional[str] = None) -> str:
     """Resolve absolute directory for an environment by name."""
-    if not name or name.strip() == "":
-        raise ValueError("Environment name cannot be empty.")
+    validate_env_name(name)
     if base_dir:
         norm = os.path.normpath(os.path.abspath(base_dir))
         if os.path.basename(norm) == name:
@@ -87,27 +130,79 @@ def resolve_env_dir(name: str, base_dir: Optional[str] = None) -> str:
 
 
 def load_env_config(env_dir: str) -> Dict[str, Any]:
-    """Load env.yaml from target environment directory, filling defaults."""
+    """Load env.yaml from target environment directory, strictly validating schema."""
     env_file = os.path.join(env_dir, ENV_YAML_NAME)
     if not os.path.exists(env_file):
         raise FileNotFoundError(f"Missing {ENV_YAML_NAME} in {env_dir}")
 
+    ruamel = bootstrap.require("ruamel.yaml")
     try:
-        ruamel = bootstrap.require("ruamel.yaml")
         yaml = ruamel.YAML(typ="safe")
         content = textio.read_text(env_file, strict=False)
-        data = yaml.load(content) or {}
-    except (OSError, ValueError):
-        data = {}
+        data = yaml.load(content)
+    except ruamel.error.YAMLError as exc:
+        raise EnvConfigError(f"Malformed {ENV_YAML_NAME} in {env_file}: {exc}") from exc
+    except (OSError, ValueError) as exc:
+        raise EnvConfigError(f"Error reading {ENV_YAML_NAME} in {env_file}: {exc}") from exc
+
+    if not isinstance(data, dict):
+        raise EnvConfigError(f"Invalid {ENV_YAML_NAME} in {env_file}: document must be a mapping")
 
     name = data.get("name") or os.path.basename(os.path.normpath(env_dir))
-    repo_url = data.get("repo") or ""
-    branch = data.get("branch") or "main"
-    runtimes = data.get("runtimes") or list(DEFAULT_RUNTIMES)
-    telegram_chat_id = data.get("telegram_chat_id") or ""
-    egress_allowlist = data.get("egress_allowlist") or []
-    image = data.get("image") or DEFAULT_IMAGE
-    gvisor = bool(data.get("gvisor", False))
+    try:
+        name = validate_env_name(str(name))
+    except ValueError as exc:
+        raise EnvConfigError(f"Invalid 'name' in {env_file}: {exc}") from exc
+
+    repo_url = data.get("repo")
+    if repo_url is None:
+        repo_url = ""
+    elif not isinstance(repo_url, str):
+        raise EnvConfigError(f"Invalid 'repo' in {env_file}: must be a string")
+
+    branch = data.get("branch")
+    if branch is None:
+        branch = "main"
+    elif not isinstance(branch, str):
+        raise EnvConfigError(f"Invalid 'branch' in {env_file}: must be a string")
+
+    runtimes = data.get("runtimes")
+    if runtimes is None:
+        runtimes = list(DEFAULT_RUNTIMES)
+    elif not isinstance(runtimes, list) or not all(isinstance(r, str) for r in runtimes):
+        raise EnvConfigError(f"Invalid 'runtimes' in {env_file}: must be a list of strings")
+
+    telegram_chat_id = data.get("telegram_chat_id")
+    if telegram_chat_id is None:
+        telegram_chat_id = ""
+    elif not isinstance(telegram_chat_id, (str, int)):
+        raise EnvConfigError(f"Invalid 'telegram_chat_id' in {env_file}: must be a string or integer")
+    telegram_chat_id = str(telegram_chat_id)
+
+    raw_egress = data.get("egress_allowlist")
+    if raw_egress is None:
+        egress_allowlist = []
+    elif not isinstance(raw_egress, list) or not all(isinstance(h, str) for h in raw_egress):
+        raise EnvConfigError(f"Invalid 'egress_allowlist' in {env_file}: must be a list of strings")
+    else:
+        egress_allowlist = []
+        for h in raw_egress:
+            try:
+                egress_allowlist.append(validate_egress_host(h))
+            except ValueError as exc:
+                raise EnvConfigError(f"Invalid egress host in {env_file}: {exc}") from exc
+
+    image = data.get("image")
+    if image is None:
+        image = DEFAULT_IMAGE
+    elif not isinstance(image, str):
+        raise EnvConfigError(f"Invalid 'image' in {env_file}: must be a string")
+
+    gvisor = data.get("gvisor")
+    if gvisor is None:
+        gvisor = False
+    elif not isinstance(gvisor, bool):
+        raise EnvConfigError(f"Invalid 'gvisor' in {env_file}: must be a boolean")
 
     return {
         "name": name,
@@ -126,36 +221,42 @@ def save_env_config(env_dir: str, config: Dict[str, Any]) -> str:
     os.makedirs(env_dir, exist_ok=True)
     env_file = os.path.join(env_dir, ENV_YAML_NAME)
 
-    name = config.get("name") or os.path.basename(os.path.normpath(env_dir))
-    repo_url = config.get("repo") or ""
-    branch = config.get("branch") or "main"
-    runtimes = config.get("runtimes") or list(DEFAULT_RUNTIMES)
-    telegram_chat_id = config.get("telegram_chat_id") or ""
-    egress_allowlist = config.get("egress_allowlist") or []
-    image = config.get("image") or DEFAULT_IMAGE
+    name = validate_env_name(config.get("name") or os.path.basename(os.path.normpath(env_dir)))
+    repo_url = str(config.get("repo") or "")
+    branch = str(config.get("branch") or "main")
+
+    runtimes = config.get("runtimes")
+    if runtimes is None:
+        runtimes = list(DEFAULT_RUNTIMES)
+    elif not isinstance(runtimes, list):
+        raise ValueError("runtimes must be a list")
+
+    telegram_chat_id = str(config.get("telegram_chat_id") or "")
+
+    raw_egress = config.get("egress_allowlist")
+    if raw_egress is None:
+        egress_allowlist = []
+    elif not isinstance(raw_egress, list):
+        raise ValueError("egress_allowlist must be a list")
+    else:
+        egress_allowlist = [validate_egress_host(h) for h in raw_egress]
+
+    image = str(config.get("image") or DEFAULT_IMAGE)
     gvisor = bool(config.get("gvisor", False))
 
-    lines = [
-        f"name: {name}",
-        f"repo: \"{repo_url}\"",
-        f"branch: \"{branch}\"",
-        "runtimes:",
-    ]
-    for r in runtimes:
-        lines.append(f"  - {r}")
-    lines.append(f"telegram_chat_id: \"{telegram_chat_id}\"")
-    if egress_allowlist:
-        lines.append("egress_allowlist:")
-        for host in egress_allowlist:
-            lines.append(f"  - {host}")
-    else:
-        lines.append("egress_allowlist: []")
-    lines.append(f"gvisor: {'true' if gvisor else 'false'}")
+    data: Dict[str, Any] = {
+        "name": name,
+        "repo": repo_url,
+        "branch": branch,
+        "runtimes": runtimes,
+        "telegram_chat_id": telegram_chat_id,
+        "egress_allowlist": egress_allowlist,
+        "gvisor": gvisor,
+    }
     if image != DEFAULT_IMAGE:
-        lines.append(f"image: \"{image}\"")
-    lines.append("")
+        data["image"] = image
 
-    content = "\n".join(lines)
+    content = _dump_yaml(data)
     textio.write_text(env_file, content)
     return env_file
 
@@ -176,64 +277,69 @@ def ensure_secrets_file(env_dir: str) -> str:
 
 def generate_compose_yaml(config: Dict[str, Any], env_dir: Optional[str] = None) -> str:
     """Deterministically generate compose.yaml specification from configuration."""
-    name = config.get("name") or "env"
-    image = config.get("image") or DEFAULT_IMAGE
-    repo_url = config.get("repo") or ""
-    branch = config.get("branch") or "main"
+    name = validate_env_name(config.get("name") or "env")
+    image = str(config.get("image") or DEFAULT_IMAGE)
+    repo_url = str(config.get("repo") or "")
+    branch = str(config.get("branch") or "main")
     runtimes = config.get("runtimes") or list(DEFAULT_RUNTIMES)
-    telegram_chat_id = config.get("telegram_chat_id") or ""
-    egress_allowlist = config.get("egress_allowlist") or []
+    telegram_chat_id = str(config.get("telegram_chat_id") or "")
+    raw_egress = config.get("egress_allowlist") or []
+    egress_allowlist = [validate_egress_host(h) for h in raw_egress]
     gvisor = bool(config.get("gvisor", False))
 
     runtimes_csv = ",".join(runtimes)
     egress_csv = ",".join(egress_allowlist)
 
-    lines = [
-        "# Generated by Along (along env) - do not edit by hand",
-        "services:",
-        "  runner:",
-        f"    image: {image}",
-        f"    container_name: along-{name}",
-        "    restart: unless-stopped",
-        "    cap_add:",
-        "      - NET_ADMIN",
+    env_mapping: Dict[str, str] = {
+        "ALONG_ENV_NAME": name,
+        "ALONG_AUTONOMOUS": "1",
+        "ALONG_REPO_URL": repo_url,
+        "ALONG_REPO_BRANCH": branch,
+        "ALONG_RUNTIMES": runtimes_csv,
+    }
+    if egress_csv:
+        env_mapping["ALONG_EXTRA_EGRESS"] = egress_csv
+    if telegram_chat_id:
+        env_mapping["TELEGRAM_CHAT_ID"] = telegram_chat_id
+
+    runner_service: Dict[str, Any] = {
+        "image": image,
+        "container_name": f"along-{name}",
+        "init": True,
+        "restart": "unless-stopped",
+        "security_opt": ["no-new-privileges:true"],
+        "sysctls": {
+            "net.ipv6.conf.all.disable_ipv6": 1,
+        },
+        "cap_add": ["NET_ADMIN"],
+    }
+    if gvisor:
+        runner_service["runtime"] = "runsc"
+
+    runner_service["env_file"] = ["secrets.env"]
+    runner_service["environment"] = env_mapping
+    runner_service["volumes"] = [
+        "repo:/workspace",
+        "claude_auth:/home/along/.claude",
+        "opencode_auth:/home/along/.opencode",
+        "cache:/home/along/.cache",
     ]
 
-    if gvisor:
-        lines.append("    runtime: runsc")
+    compose_dict: Dict[str, Any] = {
+        "services": {
+            "runner": runner_service,
+        },
+        "volumes": {
+            "repo": None,
+            "claude_auth": None,
+            "opencode_auth": None,
+            "cache": None,
+        },
+    }
 
-    lines.extend([
-        "    env_file:",
-        "      - secrets.env",
-        "    environment:",
-        f"      - ALONG_ENV_NAME={name}",
-        "      - ALONG_AUTONOMOUS=1",
-        f"      - ALONG_REPO_URL={repo_url}",
-        f"      - ALONG_REPO_BRANCH={branch}",
-        f"      - ALONG_RUNTIMES={runtimes_csv}",
-    ])
-
-    if egress_csv:
-        lines.append(f"      - ALONG_EXTRA_EGRESS={egress_csv}")
-    if telegram_chat_id:
-        lines.append(f"      - TELEGRAM_CHAT_ID={telegram_chat_id}")
-
-    lines.extend([
-        "    volumes:",
-        "      - repo:/workspace",
-        "      - claude_auth:/home/along/.claude",
-        "      - opencode_auth:/home/along/.opencode",
-        "      - cache:/home/along/.cache",
-        "",
-        "volumes:",
-        "  repo:",
-        "  claude_auth:",
-        "  opencode_auth:",
-        "  cache:",
-        "",
-    ])
-
-    return "\n".join(lines)
+    yaml_str = _dump_yaml(compose_dict)
+    header = "# Generated by Along (along env) - do not edit by hand\n"
+    return header + yaml_str
 
 
 def write_compose_file(env_dir: str, config: Dict[str, Any]) -> str:
@@ -305,6 +411,7 @@ def env_up(
     run_compose: bool = True,
 ) -> Dict[str, Any]:
     """Create and start isolated environment."""
+    validate_env_name(name)
     env_dir = resolve_env_dir(name, base_dir)
     os.makedirs(env_dir, exist_ok=True)
 
@@ -346,7 +453,7 @@ def env_up(
                 if res.returncode == 0:
                     started = True
                 else:
-                    error_msg = res.stderr.strip()
+                    error_msg = res.stderr.strip() or f"docker compose up failed with code {res.returncode}"
             except (OSError, ValueError) as exc:
                 error_msg = str(exc)
         else:
@@ -358,10 +465,9 @@ def env_up(
         "name": name,
         "path": env_dir,
         "container_name": container_name,
-        "status": container_status,
         "started": started,
+        "status": container_status,
         "error": error_msg,
-        "config": config,
     }
 
 
@@ -370,15 +476,15 @@ def env_down(
     base_dir: Optional[str] = None,
     run_compose: bool = True,
 ) -> Dict[str, Any]:
-    """Stop running container while preserving persistent volumes and configuration."""
+    """Stop isolated environment container while preserving persistent files and volumes."""
+    validate_env_name(name)
     env_dir = resolve_env_dir(name, base_dir)
     if not os.path.exists(env_dir):
         raise FileNotFoundError(f"Environment directory not found: {env_dir}")
 
-    compose_file = os.path.join(env_dir, COMPOSE_YAML_NAME)
     container_name = f"along-{name}"
+    compose_file = os.path.join(env_dir, COMPOSE_YAML_NAME)
     compose_cmd = get_docker_compose_cmd()
-
     stopped = False
     error_msg = None
 
@@ -386,20 +492,23 @@ def env_down(
         if compose_cmd and os.path.exists(compose_file):
             cmd = compose_cmd + ["-f", compose_file, "down"]
             try:
-                res = subprocess.run(cmd, cwd=env_dir, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+                res = subprocess.run(cmd, cwd=env_dir, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, check=False)
                 if res.returncode == 0:
                     stopped = True
                 else:
-                    error_msg = res.stderr.strip()
+                    error_msg = res.stderr.strip() or f"docker compose down failed with exit code {res.returncode}"
             except (OSError, ValueError) as exc:
                 error_msg = str(exc)
         else:
             docker_bin = shutil.which("docker")
             if docker_bin:
                 try:
-                    subprocess.run([docker_bin, "stop", container_name],
-                                   stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, check=False)
-                    stopped = True
+                    res = subprocess.run([docker_bin, "stop", container_name],
+                                         stdout=subprocess.DEVNULL, stderr=subprocess.PIPE, text=True, check=False)
+                    if res.returncode == 0:
+                        stopped = True
+                    else:
+                        error_msg = res.stderr.strip() or f"docker stop failed with exit code {res.returncode}"
                 except (OSError, ValueError) as exc:
                     error_msg = str(exc)
             else:
@@ -421,6 +530,7 @@ def env_status(
 ) -> Union[Dict[str, Any], List[Dict[str, Any]]]:
     """Return status dictionary for a specific environment or list all environments."""
     if name:
+        validate_env_name(name)
         env_dir = resolve_env_dir(name, base_dir)
         container_name = f"along-{name}"
         if not os.path.exists(env_dir):
@@ -470,9 +580,12 @@ def env_status(
     for entry in sorted(os.listdir(root)):
         sub = os.path.join(root, entry)
         if os.path.isdir(sub) and os.path.exists(os.path.join(sub, ENV_YAML_NAME)):
-            env_res = env_status(name=entry, base_dir=root)
-            if isinstance(env_res, dict):
-                results.append(env_res)
+            try:
+                env_res = env_status(name=entry, base_dir=root)
+                if isinstance(env_res, dict):
+                    results.append(env_res)
+            except ValueError:
+                continue
 
     return results
 
@@ -484,6 +597,7 @@ def env_logs(
     base_dir: Optional[str] = None,
 ) -> int:
     """Stream container logs using docker compose logs."""
+    validate_env_name(name)
     env_dir = resolve_env_dir(name, base_dir)
     compose_file = os.path.join(env_dir, COMPOSE_YAML_NAME)
     compose_cmd = get_docker_compose_cmd()
@@ -515,6 +629,7 @@ def env_shell(
     base_dir: Optional[str] = None,
 ) -> int:
     """Open interactive shell inside running container."""
+    validate_env_name(name)
     env_dir = resolve_env_dir(name, base_dir)
     compose_file = os.path.join(env_dir, COMPOSE_YAML_NAME)
     compose_cmd = get_docker_compose_cmd()
@@ -522,12 +637,12 @@ def env_shell(
     if not compose_cmd or not os.path.exists(compose_file):
         docker_bin = shutil.which("docker")
         if docker_bin:
-            cmd = [docker_bin, "exec", "-it", f"along-{name}", "/bin/bash"]
+            cmd = [docker_bin, "exec", "-it", "-u", "along", f"along-{name}", "/bin/bash"]
             return proc.run_passthrough(cmd, cwd=env_dir)
         sys.stderr.write("[Error] Docker or docker compose not found in PATH.\n")
         return 1
 
-    cmd = compose_cmd + ["-f", compose_file, "exec", "runner", "/bin/bash"]
+    cmd = compose_cmd + ["-f", compose_file, "exec", "-u", "along", "runner", "/bin/bash"]
     return proc.run_passthrough(cmd, cwd=env_dir)
 
 
@@ -537,6 +652,7 @@ def env_update(
     run_compose: bool = True,
 ) -> Dict[str, Any]:
     """Pull latest container image and refresh running environment."""
+    validate_env_name(name)
     env_dir = resolve_env_dir(name, base_dir)
     if not os.path.exists(env_dir):
         raise FileNotFoundError(f"Environment directory not found: {env_dir}")
@@ -552,14 +668,17 @@ def env_update(
     if run_compose:
         if compose_cmd and os.path.exists(compose_file):
             pull_cmd = compose_cmd + ["-f", compose_file, "pull"]
-            up_cmd = compose_cmd + ["-f", compose_file, "up", "-d", "--build"]
+            up_cmd = compose_cmd + ["-f", compose_file, "up", "-d"]
             try:
-                subprocess.run(pull_cmd, cwd=env_dir, stdout=subprocess.DEVNULL, stderr=subprocess.PIPE, check=False)
-                res = subprocess.run(up_cmd, cwd=env_dir, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, check=False)
-                if res.returncode == 0:
-                    updated = True
+                res_pull = subprocess.run(pull_cmd, cwd=env_dir, stdout=subprocess.DEVNULL, stderr=subprocess.PIPE, text=True, check=False)
+                if res_pull.returncode != 0:
+                    error_msg = res_pull.stderr.strip() or f"docker compose pull failed with exit code {res_pull.returncode}"
                 else:
-                    error_msg = res.stderr.strip()
+                    res = subprocess.run(up_cmd, cwd=env_dir, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, check=False)
+                    if res.returncode == 0:
+                        updated = True
+                    else:
+                        error_msg = res.stderr.strip() or f"docker compose up failed with exit code {res.returncode}"
             except (OSError, ValueError) as exc:
                 error_msg = str(exc)
         else:

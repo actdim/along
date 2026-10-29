@@ -6,7 +6,7 @@ type: topic
 category: architecture
 status: active
 created: 2026-10-23
-updated: 2026-10-23
+updated: 2026-10-29
 tags: [architecture, docker, isolation, autonomous, environment, security, vps]
 ---
 
@@ -42,8 +42,8 @@ Host / VPS (/srv/along/envs/<name>/)
         │
         ▼
 Container Boundary (along-<name>)
-├── Non-Root User: along (UID 1000, GID 1000)
-├── Egress Allowlist Firewall (iptables: model APIs, GitHub, PyPI, npm)
+├── Non-Root User: along (UID 1000, GID 1000 via setpriv)
+├── Egress Allowlist Firewall (iptables + ipset: model APIs, GitHub, PyPI, npm)
 └── Isolated Named Volumes:
     ├── repo          -> /workspace (Only writable project tree)
     ├── claude_auth   -> /home/along/.claude
@@ -64,9 +64,10 @@ The `env.yaml` schema includes an optional `gvisor: true` switch. When enabled o
 ## 3. Directory Layout & Configuration Files
 
 By default on Linux systems, environments are provisioned under `/srv/along/envs/<name>/` (configurable via `--dir` or the `ALONG_ENVS_DIR` environment variable).
+Environment names are validated against `^[a-z0-9][a-z0-9_-]{0,62}$` to prevent directory traversal (`../`) and ensure container name safety.
 
 ### 3.1 env.yaml
-Declarative environment descriptor designed to stay strictly under 20 lines:
+Declarative environment descriptor serialized using ruamel round-trip mode and designed to stay strictly under 20 lines:
 
 ```yaml
 name: myproj
@@ -111,17 +112,22 @@ services:
   runner:
     image: actdim/along-autonomous:latest
     container_name: along-myproj
+    init: true
     restart: unless-stopped
+    security_opt:
+      - no-new-privileges:true
+    sysctls:
+      net.ipv6.conf.all.disable_ipv6: 1
     cap_add:
       - NET_ADMIN
     env_file:
       - secrets.env
     environment:
-      - ALONG_ENV_NAME=myproj
-      - ALONG_AUTONOMOUS=1
-      - ALONG_REPO_URL=https://github.com/actdim/along.git
-      - ALONG_REPO_BRANCH=main
-      - ALONG_RUNTIMES=claude-code,opencode
+      ALONG_ENV_NAME: myproj
+      ALONG_AUTONOMOUS: "1"
+      ALONG_REPO_URL: "https://github.com/actdim/along.git"
+      ALONG_REPO_BRANCH: "main"
+      ALONG_RUNTIMES: "claude-code,opencode"
     volumes:
       - repo:/workspace
       - claude_auth:/home/along/.claude
@@ -139,21 +145,23 @@ volumes:
 
 ## 4. Docker Assets & Container Hardening
 
-The autonomous runtime container is built from `docker/Dockerfile.autonomous`:
+The autonomous runtime container is built from a single unified `docker/Dockerfile`:
 - Base System: Ubuntu 24.04 LTS (Noble Numbat).
-- Runtimes: Node.js 20 LTS, Python 3.12, Along Protocol toolchain.
+- Non-Root User: Replaces default `ubuntu` UID/GID 1000 user (`userdel --remove ubuntu`) and provisions user `along` (UID 1000, GID 1000).
+- Privilege Separation: `sudo` is completely removed from the image and no sudoers files exist. The container entrypoint starts as root to initialize networking, then drops privileges permanently to UID 1000 via `setpriv --reuid=1000 --regid=1000 --init-groups --no-new-privs`.
+- Runtimes: Node.js 20 LTS, Python 3.12, Along Protocol toolchain, `ipset`.
 - Agent Tooling: Claude Code (`@anthropic-ai/claude-code`) and OpenCode (`opencode-ai`).
-- User Hardening: Runs as unprivileged user `along` (UID 1000). Only `/usr/local/bin/init-firewall.sh` is permitted via sudoers.
 
 ---
 
 ## 5. Egress Firewall & Network Allowlist
 
-Container network egress is restricted at container launch by `docker/init-firewall.sh` using Linux `iptables`:
-- Default Policy: DROP all inbound, forward, and outbound packets.
-- Loopback Interface (`lo`): ACCEPT.
-- Connection Tracking: ACCEPT ESTABLISHED and RELATED packets.
-- DNS Resolution: Port 53 UDP and TCP allowed.
+Container network egress is strictly regulated at container startup by `docker/init-firewall.sh`:
+- Fail-Closed Architecture: The container entrypoint enforces root firewall application before any agent processes start. If the firewall fails or NET_ADMIN capability is missing, the container exits immediately with an error, preventing open fallback. The firewall can only be bypassed with explicit `ALONG_FIREWALL=off`.
+- Preserved Docker DNS: The `nat` table is never modified, preserving Docker's embedded DNS (127.0.0.11) DNAT rules in `DOCKER_OUTPUT` and `DOCKER_POSTROUTING`.
+- Nameserver Scoping: Outbound DNS traffic on port 53 (UDP/TCP) is permitted exclusively to nameservers configured in `/etc/resolv.conf` (or `ALONG_RESOLV_CONF`). Generic outbound queries to arbitrary destinations (e.g. 1.1.1.1, 8.8.8.8) are blocked to prevent DNS tunnelling.
+- IPv6 Traffic Blocking: IPv6 INPUT, FORWARD, and OUTPUT chains are set to default DROP policy with fast ICMP rejection.
+- Dynamic IP Refresh: An in-container background daemon periodically resolves allowlisted hosts and swaps the active `along-allow` ipset table every `ALONG_FIREWALL_REFRESH` seconds (default: 300 s).
 - Mandatory Endpoints:
   - `api.anthropic.com` (Anthropic Claude API)
   - `api.openai.com` (OpenAI API)
@@ -161,9 +169,9 @@ Container network egress is restricted at container launch by `docker/init-firew
   - `github.com` (Git repository clone and push via HTTPS and SSH)
   - `pypi.org` and `files.pythonhosted.org` (Python package installation)
   - `registry.npmjs.org` (Node.js package installation)
-  - `api.telegram.org` (Telegram supervisor notifications)
+  - `api.telegram.org` (Telegram alerts and long-polling supervisor gateway)
 
-Custom host additions can be specified in `env.yaml` under `egress_allowlist` and are injected into the container via `ALONG_EXTRA_EGRESS`.
+Custom host additions can be specified in `env.yaml` under `egress_allowlist` and are injected into the firewall via root-owned file `/run/along/egress.list`.
 
 ---
 
@@ -177,16 +185,19 @@ Create and start an isolated Docker environment:
 along env up myproj --repo https://github.com/actdim/along.git --branch main
 ```
 Flags:
-- `<name>`: Environment name (required).
+- `<name>`: Environment name (required, must match `^[a-z0-9][a-z0-9_-]{0,62}$`).
 - `--repo <url>`: Target Git repository clone URL.
 - `--branch <branch>`: Target branch (default: `main`).
 - `--dir <path>`: Base environments directory or custom environment path.
+
+When docker or compose fails, `along env up` exits with non-zero exit code 1.
 
 ### along env down
 Stop running container while keeping persistent volumes intact:
 ```bash
 along env down myproj
 ```
+When docker stop or compose down fails, `along env down` exits with non-zero exit code 1.
 
 ### along env status
 Display environment details or list all configured environments:
@@ -212,16 +223,17 @@ along env logs myproj --tail 50
 ```
 
 ### along env shell
-Launch an interactive bash session inside the isolated container:
+Launch an interactive bash session inside the isolated container as non-root user `along`:
 ```bash
 along env shell myproj
 ```
 
 ### along env update
-Pull the latest container image and refresh configuration:
+Pull latest container image and restart the runner container (without unnecessary `--build` rebuilds):
 ```bash
 along env update myproj
 ```
+When docker pull or compose up fails, `along env update` reports the error and exits with non-zero exit code 1.
 
 ### Runner daemon (`along daemon`)
 
@@ -255,5 +267,6 @@ Architect self-approval: Multi-agent orchestration requires human operator plan 
 ## 7. Accepted Operational Risks
 
 1. Model API Key Exposure: Agents executing inside the container have access to model keys injected via `secrets.env`. Operators should use per-VPS keys with strict budget limits.
-2. Fine-Grained Git Permissions: Use repository-scoped GitHub personal access tokens with minimal necessary permissions.
-3. Telegram Bot Token: In the MVP, supervisor notifications share the environment credentials. Future milestones separate orchestrator and worker containers.
+2. Fine-Grained Git Permissions: Git credentials are handled via the ephemeral credential helper (`/usr/local/bin/git-credential-along`), ensuring tokens are supplied in-memory and never written to `/workspace/.git/config`.
+3. DNS Tunnelling Through Docker Resolver: While outbound port 53 is restricted to the Docker embedded resolver (127.0.0.11), queries forwarded upstream could theoretically be abused for low-bandwidth DNS data exfiltration. Operators requiring air-gapped isolation should use explicit private upstream resolvers.
+4. Telegram Bot Token: In the MVP, supervisor notifications share the environment credentials. Future milestones separate orchestrator and worker containers.
