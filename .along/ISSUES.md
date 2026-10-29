@@ -5,7 +5,6 @@
 
 ## Backlog
 - [ ] `(bug)` [autonomous-container-build-and-firewall](ISSUES/bug--autonomous-container-build-and-firewall.md) - plan ready
-- [ ] `(bug)` [autonomous-gate-residual-holes](ISSUES/bug--autonomous-gate-residual-holes.md) - plan ready
 - [ ] `(bug)` [autonomous-mvp-minor-defects](ISSUES/bug--autonomous-mvp-minor-defects.md) - plan ready
 - [ ] `(bug)` [runtime-adapters-invented-cli-contracts](ISSUES/bug--runtime-adapters-invented-cli-contracts.md) - plan ready
 - [ ] `(debt)` [canonical-path-gate-expansion](ISSUES/debt--canonical-path-gate-expansion.md)
@@ -46,6 +45,7 @@
 - [ ] `(feat)` [pi-harness-support](ISSUES/feat--pi-harness-support.md)
 - [ ] `(feat)` [planning-fields-and-ordering-gates](ISSUES/feat--planning-fields-and-ordering-gates.md)
 - [ ] `(feat)` [system-invariants-and-health-probes](ISSUES/feat--system-invariants-and-health-probes.md)
+- [ ] `(feat)` [test-gate-scope](ISSUES/feat--test-gate-scope.md) - plan ready
 - [ ] `(feat)` [zero-step-state-recovery-and-drift-detection](ISSUES/feat--zero-step-state-recovery-and-drift-detection.md)
 - [ ] `(task)` [gate-event-remeasure](ISSUES/task--gate-event-remeasure.md)
 - [ ] `(task)` [integrate-actdim-ui-core-runtime](ISSUES/task--integrate-actdim-ui-core-runtime.md)
@@ -53,9 +53,9 @@
 - [ ] `(task)` [telegram-poll-error-classification](ISSUES/task--telegram-poll-error-classification.md) - plan ready
 
 ## Done (recent)
+- [x] `(bug)` [autonomous-gate-residual-holes](ISSUES/done/bug--autonomous-gate-residual-holes.md)
 - [x] `(bug)` [runner-daemon-lifecycle-safety](ISSUES/done/bug--runner-daemon-lifecycle-safety.md)
 - [x] `(spike)` [headless-runtimes-on-linux](ISSUES/done/spike--headless-runtimes-on-linux.md)
 - [x] `(feat)` [vps-runner-daemon](ISSUES/done/feat--vps-runner-daemon.md)
 - [x] `(feat)` [pre-approved-plans](ISSUES/done/feat--pre-approved-plans.md)
-- [x] `(feat)` [isolated-environment-docker](ISSUES/done/feat--isolated-environment-docker.md)
-<!-- 299 older completed issue(s) archived in .along/ISSUES/done/ -->
+<!-- 300 older completed issue(s) archived in .along/ISSUES/done/ -->

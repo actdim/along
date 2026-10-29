@@ -39,7 +39,7 @@ Facts the steps rely on (verified 2026-10-29):
 
 ## Steps
 
-- [ ] Step 1: Trusted source for the autonomous profile (REQ-1)
+- [x] Step 1: Trusted source for the autonomous profile (REQ-1)
   - `profiles.resolve_active_profile_with_source`: a session or config source that names `autonomous`
     is skipped (resolution falls through to the next source); `autonomous` is returned only from env.
     Keep `strict` / `standard` / `light` from every source as today.
@@ -61,7 +61,7 @@ Facts the steps rely on (verified 2026-10-29):
     autonomous` exits 2. Update `test_unapproved_plan_denied_in_autonomous_profile_even_on_antigravity` and
     the plan-approval tests to set autonomy through env only.
 
-- [ ] Step 2: Shell writes to approval records (REQ-2, layer 1: before the command runs)
+- [x] Step 2: Shell writes to approval records (REQ-2, layer 1: before the command runs)
   - Extend `APPROVAL_RECORD_PATTERNS` (`hooks/predicates.py`) with the ledger
     `.along/.session/*/events.jsonl` and the activity traces `.along/diagnostics/activity/**`
     (file tools never need to write them; hooks and the CLI write them from Python).
@@ -85,7 +85,7 @@ Facts the steps rely on (verified 2026-10-29):
     denied through `HookEngine(config=HooksConfig(profile="standard"))`; `cat` / `Get-Content` of the
     same paths and `echo x > src/a.txt` are allowed by this check.
 
-- [ ] Step 3: Stop-time revocation of forged approvals (REQ-2, layer 2: whatever text matching misses)
+- [x] Step 3: Stop-time revocation of forged approvals (REQ-2, layer 2: whatever text matching misses)
   - On UserPromptSubmit (`record_tool_activity`), store `approval_baseline` in the activity trace next to
     `turn_baseline`: for the session key, `{"slug", "binding_approved": bool, "state_approved": bool,
     "ledger_approves": <count of "approve" events in the slug's events.jsonl>}`.
@@ -102,7 +102,7 @@ Facts the steps rely on (verified 2026-10-29):
     False afterwards. With `along plan approve` (or `session.record_plan_approval`) in the same turn: Stop
     passes and the approval stays.
 
-- [ ] Step 4: Escalation never loosens a gate and runs only on PreToolUse (REQ-3, REQ-4)
+- [x] Step 4: Escalation never loosens a gate and runs only on PreToolUse (REQ-3, REQ-4)
   - `HookEngine.evaluate` (`hooks/engine.py`): remove escalation routing from inside the gate loop; a
     gate's deny is final (audit, `record_gate_denial`, return) whatever `classify_escalation` says.
   - The post-loop escalation check runs only when `event.event_type == HookEventType.PRE_TOOL_USE` and
@@ -113,7 +113,7 @@ Facts the steps rely on (verified 2026-10-29):
     allow stays a deny; a PostToolUse event for `git push origin main` under env autonomy yields no
     escalation record and no denial; the existing escalation tests keep passing.
 
-- [ ] Step 5: Release detection (REQ-6)
+- [x] Step 5: Release detection (REQ-6)
   - `escalation._is_tag_or_release`: for `python` / `python.exe` / `py` invocations, skip the script path
     and read the subcommand after the first argument that ends in `along_exec.py` or `along_version_bump.py`
     (or a bare `along`); treat `version-bump`, `bump`, `release` as release operations.
@@ -128,7 +128,7 @@ Facts the steps rely on (verified 2026-10-29):
     `git push origin +main`, `git push origin HEAD:main`; assert `git tag -l`, `git tag --list 'v*'`,
     `git tag --contains HEAD` are not escalations.
 
-- [ ] Step 6: Architect self-approval needs operator opt-in (REQ-7)
+- [x] Step 6: Architect self-approval needs operator opt-in (REQ-7)
   - `CrossRuntimeOrchestrator.run_architect_phase` (`scripts/alongkit/orchestrator.py`): after the plan is
     validated, approve it (`session.approve_plan` + `approved_by: architect`) only when
     `os.environ.get("ALONG_ARCHITECT_SELF_APPROVAL", "").lower() in ("1", "true", "yes")`. Otherwise call
@@ -144,7 +144,7 @@ Facts the steps rely on (verified 2026-10-29):
     `plan_approved` stays False and the ticket says `plan_status: needs-approval`; with it set, today's
     behavior (approved, phase execution). Update `test_phased_lifecycle_success` to set the variable.
 
-- [ ] Step 7: Docs, full suite, closeout
+- [x] Step 7: Docs, full suite, closeout
   - `docs/topic--along-protocol.md`: the autonomous profile comes from the operator environment only;
     approval records are closed to file tools and explicit shell writes, forged approvals are revoked at
     Stop; escalation never overrides another gate.

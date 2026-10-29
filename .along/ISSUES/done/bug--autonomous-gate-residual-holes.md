@@ -3,7 +3,8 @@ protocol: along
 protocol_version: "4.5.3"
 slug: autonomous-gate-residual-holes
 type: bug
-status: open
+status: done
+completed: 2026-10-29
 priority: high
 created: 2026-10-23
 updated: 2026-10-29
@@ -48,14 +49,14 @@ Leftovers from the review of commit a8ea884 (`feat--autonomous-gate-profile`) th
 - REQ-7: Architect self-approval MUST be allowed only when the operator opts in (process environment `ALONG_ARCHITECT_SELF_APPROVAL=1`); otherwise the orchestrator records the architect's plan as `plan_status: needs-approval` and halts with needs-input, unless an approved issue plan exists.
 
 ## Acceptance Criteria
-- [ ] `profile: autonomous` in `.along/config.json`, the session binding, `state.json` or the hook payload does not make the active profile autonomous; `along start --profile autonomous` exits 2.
-- [ ] `echo {} > .along/.session/<slug>/state.json` (and the `bindings/`, ledger and approval-log equivalents, in bash and PowerShell forms) is denied before it runs; `cat` / `Get-Content` of the same files is allowed.
-- [ ] A plan approved during a turn by an indirect write (no `approve` ledger event) is revoked at Stop and the Stop is denied with a message.
-- [ ] A containment deny stays a deny when an escalation handler returns allow.
-- [ ] No escalation is evaluated or recorded on PostToolUse.
-- [ ] Release detection covers the listed forms and does not flag `git tag -l` / `git tag --list`.
-- [ ] Without `ALONG_ARCHITECT_SELF_APPROVAL=1`, an orchestrated issue without an approved plan stops after the architect with needs-input and `plan_status: needs-approval`.
-- [ ] Regression tests cover each criterion and fail on the old code; `python .along/scripts/test.py` is green.
+- [x] `profile: autonomous` in `.along/config.json`, the session binding, `state.json` or the hook payload does not make the active profile autonomous; `along start --profile autonomous` exits 2.
+- [x] `echo {} > .along/.session/<slug>/state.json` (and the `bindings/`, ledger and approval-log equivalents, in bash and PowerShell forms) is denied before it runs; `cat` / `Get-Content` of the same files is allowed.
+- [x] A plan approved during a turn by an indirect write (no `approve` ledger event) is revoked at Stop and the Stop is denied with a message.
+- [x] A containment deny stays a deny when an escalation handler returns allow.
+- [x] No escalation is evaluated or recorded on PostToolUse.
+- [x] Release detection covers the listed forms and does not flag `git tag -l` / `git tag --list`.
+- [x] Without `ALONG_ARCHITECT_SELF_APPROVAL=1`, an orchestrated issue without an approved plan stops after the architect with needs-input and `plan_status: needs-approval`.
+- [x] Regression tests cover each criterion and fail on the old code; `python .along/scripts/test.py` is green.
 
 ## Notes
 - REQ-5 (wiring escalation to a real Telegram handler) moved to `feat--agent-execution-gate-telegram`:
