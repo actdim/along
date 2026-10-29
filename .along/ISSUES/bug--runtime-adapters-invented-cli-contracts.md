@@ -11,6 +11,7 @@ agent: claude-code
 tags: [runner, claude-code, codex, opencode, autonomous]
 blocked_by: []
 related: [feat--agent-runtime-adapters-claude-codex-opencode, spike--headless-runtimes-on-linux]
+plan_status: approved
 ---
 
 # Runtime adapters use nonexistent CLI flags and output schemas
