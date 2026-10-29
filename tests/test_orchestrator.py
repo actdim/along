@@ -8,6 +8,7 @@ import os
 import shutil
 import sys
 import unittest
+from unittest import mock
 
 if not os.environ.get("ALONG_TEST_RUNNER"):
     raise SystemExit(
@@ -17,7 +18,7 @@ if not os.environ.get("ALONG_TEST_RUNNER"):
     )
 
 import hermetic
-from alongkit import handoff, orchestrator, session, textio
+from alongkit import entities, handoff, orchestrator, session, textio
 from alongkit.commands.orchestrator import handle_orchestrate_command, handle_team_command
 from alongkit.runner import BaseRunner, RunResult
 
@@ -248,7 +249,8 @@ class TestPhasedExecutionFlow(unittest.TestCase):
         # 2. Architect Phase
         arch_runner = MockRunner(repo_root=self.repo, issue_slug=self.slug, on_execute=on_architect)
         orch._instantiate_runner = lambda role: arch_runner
-        res_arch = orch.run_architect_phase()
+        with mock.patch.dict(os.environ, {"ALONG_ARCHITECT_SELF_APPROVAL": "1"}):
+            res_arch = orch.run_architect_phase()
         self.assertEqual(res_arch["status"], "done")
 
         st = session.load_state(self.repo, self.slug)
@@ -571,6 +573,52 @@ class TestReviewFailClosed(unittest.TestCase):
         orch = self._orch(runner_factory=factory)
         orch._instantiate_runner("implementer")
         self.assertEqual(captured, [orchestrator.DEFAULT_TIMEOUT])
+
+
+class TestArchitectSelfApprovalGate(unittest.TestCase):
+    def setUp(self) -> None:
+        self.repo = hermetic.make_repo_fixture(prefix="along-test-arch-gate-")
+        self.slug = "fixture-sample-task"
+        session.init_session(self.repo, self.slug, title="Fixture Sample Task")
+
+    def tearDown(self) -> None:
+        shutil.rmtree(self.repo, ignore_errors=True)
+
+    def test_architect_without_opt_in_halts_needs_approval(self) -> None:
+        def on_architect(runner, role, step, brief):
+            plan_path = session.plan_path(self.repo, self.slug)
+            textio.write_text(plan_path, "# Plan\n\n- [ ] Step 1: Implement\n")
+            return {"outcome": "done"}
+
+        orch = orchestrator.CrossRuntimeOrchestrator(repo_root=self.repo, slug=self.slug)
+        orch._instantiate_runner = lambda role: MockRunner(repo_root=self.repo, issue_slug=self.slug, on_execute=on_architect)
+
+        with mock.patch.dict(os.environ, {}, clear=True):
+            res = orch.run_architect_phase()
+
+        self.assertEqual(res["status"], "needs-input")
+        self.assertIn("along plan approve", res.get("reason", ""))
+        st = session.load_state(self.repo, self.slug)
+        self.assertFalse(st.get("plan_approved", False))
+        issue = entities.find_issue_by_slug(self.repo, self.slug)
+        self.assertEqual(issue["frontmatter"].get("plan_status"), "needs-approval")
+
+    def test_architect_with_opt_in_approves_and_advances(self) -> None:
+        def on_architect(runner, role, step, brief):
+            plan_path = session.plan_path(self.repo, self.slug)
+            textio.write_text(plan_path, "# Plan\n\n- [ ] Step 1: Implement\n")
+            return {"outcome": "done"}
+
+        orch = orchestrator.CrossRuntimeOrchestrator(repo_root=self.repo, slug=self.slug)
+        orch._instantiate_runner = lambda role: MockRunner(repo_root=self.repo, issue_slug=self.slug, on_execute=on_architect)
+
+        with mock.patch.dict(os.environ, {"ALONG_ARCHITECT_SELF_APPROVAL": "1"}):
+            res = orch.run_architect_phase()
+
+        self.assertEqual(res["status"], "done")
+        st = session.load_state(self.repo, self.slug)
+        self.assertTrue(st.get("plan_approved", False))
+        self.assertEqual(st.get("phase"), "execution")
 
 
 class TestCliOrchestratorCommands(unittest.TestCase):

@@ -85,9 +85,9 @@ def _is_git_push_default_branch(words: List[str], cwd: str, repo_root: str) -> O
             for arg in args:
                 if arg.startswith("-"):
                     continue
-                # Could be remote or refspec
+                clean = arg.lstrip("+")
                 for b in DEFAULT_BRANCHES:
-                    if arg == b or arg.endswith(f":{b}") or arg.endswith(f"/{b}"):
+                    if clean == b or clean.endswith(f":{b}") or clean.endswith(f"/{b}"):
                         return f"git push to default branch '{b}'"
             # If no refspec specified, check current branch in cwd/repo_root
             check_dir = cwd if os.path.isdir(cwd) else repo_root
@@ -99,7 +99,7 @@ def _is_git_push_default_branch(words: List[str], cwd: str, repo_root: str) -> O
 
 
 def _is_tag_or_release(words: List[str]) -> Optional[str]:
-    """Detect git tag or release commands."""
+    """Detect git tag or release commands [REQ-6]."""
     if not words:
         return None
     cmd = os.path.basename(words[0]).lower()
@@ -107,12 +107,54 @@ def _is_tag_or_release(words: List[str]) -> Optional[str]:
     if cmd in ("git", "git.exe"):
         sub = deletion._strip_git_globals(words)
         if sub and sub[0] == "tag":
-            # Creating or deleting a tag
-            return "git tag operation"
-    if cmd == "along" or (cmd in ("python", "python.exe", "py") and args and "along" in args[0].lower()):
-        sub_words = args if cmd != "along" else words[1:]
+            tag_args = sub[1:]
+            if not tag_args:
+                return None
+            if any(a in ("-d", "--delete") for a in tag_args):
+                return "git tag operation"
+            if any(a in ("-a", "-s", "-u", "-f", "-m", "--message") for a in tag_args):
+                return "git tag operation"
+            # Inspection / listing flags: not an escalation
+            list_flags = {"-l", "--list", "-v", "--verify", "--contains", "--no-contains", "--points-at", "--sort"}
+            if any(a in list_flags or a.startswith("-n") for a in tag_args):
+                return None
+            # Positional tag argument without listing flags is tag creation
+            if any(not a.startswith("-") for a in tag_args):
+                return "git tag operation"
+            return None
+        if sub and sub[0] == "push":
+            push_args = sub[1:]
+            for a in push_args:
+                if a in ("--tags", "--follow-tags"):
+                    return "git push tag release operation"
+                clean_ref = a.lstrip("+")
+                if clean_ref.startswith("refs/tags/") or re.match(r"^v\d+(?:\.\d+)*", clean_ref):
+                    return "git push tag release operation"
+
+    if cmd in ("gh", "gh.exe") and len(args) >= 2 and args[0] == "release":
+        if args[1] in ("create", "edit", "upload", "delete"):
+            return f"gh release {args[1]} operation"
+
+    if cmd == "along":
+        sub_words = [w for w in args if not w.startswith("-")]
         if sub_words and sub_words[0] in ("bump", "version-bump", "release"):
             return f"along {sub_words[0]} release operation"
+    elif cmd in ("python", "python.exe", "py") and args:
+        script_idx = -1
+        script_name = ""
+        for i, a in enumerate(args):
+            base = os.path.basename(a).lower()
+            if base in ("along_exec.py", "along_version_bump.py", "along"):
+                script_idx = i
+                script_name = base
+                break
+        if script_idx != -1:
+            if script_name == "along_version_bump.py":
+                return "along version-bump release operation"
+            sub_words = [w for w in args[script_idx + 1:] if not w.startswith("-")]
+            if sub_words and sub_words[0] in ("bump", "version-bump", "release"):
+                return f"along {sub_words[0]} release operation"
+
     if cmd in ("npm", "pnpm", "yarn") and args and args[0] == "version":
         return f"{cmd} version release operation"
     if cmd == "cargo" and args and args[0] == "release":
@@ -304,7 +346,7 @@ def route_escalation(
                 gate_name="escalation",
                 exit_code=2,
             )
-        except (OSError, ValueError, RuntimeError, TypeError, TimeoutError) as exc:
+        except (OSError, ValueError, RuntimeError, TypeError) as exc:
             record_escalation_outcome(repo_root, op_type, "error", f"{detail} error: {exc}", slug=slug)
             return GateResult(
                 decision=GateDecision.DENY,

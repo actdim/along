@@ -350,6 +350,17 @@ class CrossRuntimeOrchestrator:
                     st["total_steps"] = len(extracted)
                     session.save_state(self.repo_root, self.slug, st)
 
+        # Architect self-approval requires operator opt-in [bug--autonomous-gate-residual-holes] REQ-7
+        self_approve = os.environ.get("ALONG_ARCHITECT_SELF_APPROVAL", "").strip().lower() in ("1", "true", "yes")
+        if not self_approve:
+            session.set_plan_status(self.repo_root, self.slug, "needs-approval")
+            session.update_state(self.repo_root, self.slug, status="needs-input")
+            return {
+                "phase": "architect",
+                "status": "needs-input",
+                "reason": f"the architect's plan waits for the user's approval (along plan approve {self.slug})",
+            }
+
         # Mark plan approved in state.json
         session.approve_plan(self.repo_root, slug=self.slug)
         st = session.load_state(self.repo_root, self.slug)

@@ -907,20 +907,6 @@ def is_plan_approved(repo_root: str, slug: Optional[str] = None, key: Optional[s
         return False
     effective_slug = slug or bound_slug or get_active_session_slug(repo_root, key)
 
-    from . import profiles
-    try:
-        active_prof = profiles.resolve_active_profile(repo_root, session_key=key)
-    except (OSError, ValueError, KeyError, AttributeError):
-        active_prof = profiles.DEFAULT_PROFILE
-    is_auto = (active_prof == profiles.PROFILE_AUTONOMOUS
-               or os.environ.get("ALONG_AUTONOMOUS", "").strip().lower() in ("1", "true", "yes")
-               or os.environ.get("ALONG_PROFILE", "").strip().lower() == "autonomous")
-
-    if not effective_slug and is_auto:
-        candidates = in_progress_slugs(repo_root)
-        if len(candidates) == 1:
-            effective_slug = candidates[0]
-
     if binding and binding.get("plan_approved"):
         # Approval belongs to the session and the slug it is bound to, in any context.
         approved_slug = binding.get("approved_slug")

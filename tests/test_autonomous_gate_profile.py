@@ -77,21 +77,41 @@ class TestAutonomousProfileBasicsAndResolution(unittest.TestCase):
         cfg_path = os.path.join(self.root, ".along", "config.json")
         textio.write_text(cfg_path, json.dumps({"profile": "autonomous"}))
         prof, source = profiles.resolve_active_profile_with_source(self.root, session_key=KEY)
-        self.assertEqual(prof, "autonomous")
-        self.assertEqual(source, profiles.SOURCE_CONFIG)
+        self.assertEqual(prof, profiles.DEFAULT_PROFILE)
+        self.assertEqual(source, profiles.SOURCE_DEFAULT)
 
     def test_resolution_via_config_json_hooks_section(self):
         cfg_path = os.path.join(self.root, ".along", "config.json")
         textio.write_text(cfg_path, json.dumps({"hooks": {"profile": "autonomous"}}))
         prof, source = profiles.resolve_active_profile_with_source(self.root, session_key=KEY)
-        self.assertEqual(prof, "autonomous")
-        self.assertEqual(source, profiles.SOURCE_CONFIG)
+        self.assertEqual(prof, profiles.DEFAULT_PROFILE)
+        self.assertEqual(source, profiles.SOURCE_DEFAULT)
 
     def test_resolution_via_session_binding(self):
         session.bind_session(self.root, "my-slug", key=KEY, profile="autonomous")
         prof, source = profiles.resolve_active_profile_with_source(self.root, session_key=KEY)
-        self.assertEqual(prof, "autonomous")
-        self.assertEqual(source, profiles.SOURCE_SESSION)
+        self.assertEqual(prof, profiles.DEFAULT_PROFILE)
+        self.assertEqual(source, profiles.SOURCE_DEFAULT)
+
+    def test_payload_profile_autonomous_ignored(self):
+        from alongkit.hooks import containment
+        event = HookEvent(
+            event_type=HookEventType.PRE_TOOL_USE,
+            tool_name="view_file",
+            tool_args={"file_path": "README.md"},
+            workspace_root=self.root,
+            raw_payload={"profile": "autonomous"},
+        )
+        self.assertFalse(containment.is_autonomous(event, repo_root=self.root))
+
+    def test_along_start_profile_autonomous_exits_2(self):
+        from alongkit.commands import lifecycle
+        issues_dir = os.path.join(self.root, ".along", "ISSUES")
+        textio.write_text(os.path.join(issues_dir, "task--test-start.md"),
+                          "---\nprotocol: along\nslug: test-start\ntype: task\nstatus: open\n---\n")
+        with self.assertRaises(SystemExit) as ctx:
+            lifecycle.handle_start_command(self.root, ["test-start", "--profile", "autonomous"])
+        self.assertEqual(ctx.exception.code, 2)
 
 
 class TestDeterministicAllowDenyBehavior(unittest.TestCase):
@@ -160,16 +180,44 @@ class TestDeterministicAllowDenyBehavior(unittest.TestCase):
         self.assertEqual(res_std.decision, GateDecision.ASK)
 
         # Autonomous profile on antigravity returns DENY
-        cfg_auto = hook_config.HooksConfig(profile="autonomous")
-        engine_auto = HookEngine(config=cfg_auto, repo_root=self.root)
-        res_auto = engine_auto.evaluate(event)
-        self.assertEqual(res_auto.decision, GateDecision.DENY)
-        self.assertIn("PLAN_REQUIRED", res_auto.reason or "")
+        with mock.patch.dict(os.environ, {"ALONG_PROFILE": "autonomous"}):
+            cfg_auto = hook_config.HooksConfig(profile="autonomous")
+            engine_auto = HookEngine(config=cfg_auto, repo_root=self.root)
+            res_auto = engine_auto.evaluate(event)
+            self.assertEqual(res_auto.decision, GateDecision.DENY)
+            self.assertIn("PLAN_REQUIRED", res_auto.reason or "")
+
+    def test_permission_mode_turns_ask_to_deny_but_does_not_skip_phase_check(self):
+        issues_dir = os.path.join(self.root, ".along", "ISSUES")
+        issue_path = os.path.join(issues_dir, "feat--pm-test.md")
+        textio.write_text(issue_path, "---\nprotocol: along\nslug: pm-test\ntype: feat\nstatus: in-progress\n---\n")
+        session.init_session(self.root, "pm-test")
+        session.set_session_phase(self.root, "planning", slug="pm-test", plan_approved=True)
+        key = session.session_key("antigravity", "sess-pm-eval")
+        session.bind_session(self.root, "pm-test", key=key, approved=True)
+
+        event = HookEvent(
+            event_type=HookEventType.PRE_TOOL_USE,
+            tool_name="write_to_file",
+            tool_args={"TargetFile": "src/module.py", "CodeContent": "x = 1\n"},
+            workspace_root=self.root,
+            runtime="antigravity",
+            conversation_id="sess-pm-eval",
+            raw_payload={"permission_mode": "bypassPermissions"},
+        )
+        engine = HookEngine(config=hook_config.HooksConfig(profile="standard"), repo_root=self.root)
+        res = engine.evaluate(event)
+        self.assertEqual(res.decision, GateDecision.DENY)
+        self.assertIn("PLAN_REQUIRED", res.reason or "")
 
 
 class TestEscalationListOperations(unittest.TestCase):
     def setUp(self):
-        self.env = mock.patch.dict(os.environ, dict(CLEAN_ENV, ALONG_SESSION_ID="sess-auto-esc"), clear=True)
+        self.env = mock.patch.dict(
+            os.environ,
+            dict(CLEAN_ENV, ALONG_SESSION_ID="sess-auto-esc", ALONG_PROFILE="autonomous"),
+            clear=True,
+        )
         self.env.start()
         self.root = make_repo_fixture(prefix="along-auto-esc-", with_docs=False)
         self.key = session.session_key("generic", "sess-auto-esc")
@@ -203,6 +251,17 @@ class TestEscalationListOperations(unittest.TestCase):
         self.assertIsNotNone(res2)
         self.assertEqual(res2[0], escalation.OP_PUSH_DEFAULT)
 
+        for cmd in ("git push origin +main", "git push origin HEAD:main", "git push origin +refs/heads/main", "git push origin master"):
+            ev = HookEvent(
+                event_type=HookEventType.PRE_TOOL_USE,
+                tool_name="run_command",
+                tool_args={"CommandLine": cmd},
+                workspace_root=self.root,
+            )
+            res = escalation.classify_escalation(ev, self.root)
+            self.assertIsNotNone(res, f"Expected push escalation for '{cmd}'")
+            self.assertEqual(res[0], escalation.OP_PUSH_DEFAULT)
+
         # Feature branch push is not an escalation operation
         event_feat = HookEvent(
             event_type=HookEventType.PRE_TOOL_USE,
@@ -214,7 +273,18 @@ class TestEscalationListOperations(unittest.TestCase):
         self.assertIsNone(res3)
 
     def test_classify_tag_or_release(self):
-        for cmd in ("git tag v2.0.0", "along bump --patch", "along release v1.0.0", "npm version minor"):
+        for cmd in (
+            "git tag v2.0.0",
+            "git tag -a v1.0 -m release",
+            "along bump --patch",
+            "along release v1.0.0",
+            "npm version minor",
+            "python scripts/along_exec.py version-bump",
+            "gh release create v1",
+            "git push --tags",
+            "git push origin refs/tags/v1.0",
+            "git push origin v1.0",
+        ):
             event = HookEvent(
                 event_type=HookEventType.PRE_TOOL_USE,
                 tool_name="run_command",
@@ -224,6 +294,16 @@ class TestEscalationListOperations(unittest.TestCase):
             res = escalation.classify_escalation(event, self.root)
             self.assertIsNotNone(res, f"Expected escalation for '{cmd}'")
             self.assertEqual(res[0], escalation.OP_TAG_RELEASE)
+
+        for cmd in ("git tag -l", "git tag --list 'v*'", "git tag --contains HEAD", "git tag"):
+            event = HookEvent(
+                event_type=HookEventType.PRE_TOOL_USE,
+                tool_name="run_command",
+                tool_args={"CommandLine": cmd},
+                workspace_root=self.root,
+            )
+            res = escalation.classify_escalation(event, self.root)
+            self.assertIsNone(res, f"Tag listing command '{cmd}' must not be an escalation")
 
     def test_classify_package_publish(self):
         for cmd in ("npm publish --access public", "twine upload dist/*", "cargo publish"):
@@ -311,6 +391,44 @@ class TestEscalationListOperations(unittest.TestCase):
 
         rec = handoff.load_run_record(self.root, "esc-handler", "run-102")
         self.assertEqual(rec.get("outcome"), "timeout")
+
+    def test_containment_deny_stays_deny_even_when_escalation_handler_allows(self):
+        def mock_handler_approve(ev, op, detail, root):
+            return GateResult(decision=GateDecision.ALLOW, gate_name="telegram_approval")
+
+        escalation.set_escalation_handler(mock_handler_approve)
+        event = HookEvent(
+            event_type=HookEventType.PRE_TOOL_USE,
+            tool_name="run_command",
+            tool_args={"CommandLine": "git push origin main", "Cwd": os.path.expanduser("~/.ssh")},
+            workspace_root=self.root,
+            conversation_id="sess-auto-esc",
+        )
+        cfg = hook_config.HooksConfig(profile="autonomous")
+        engine = HookEngine(config=cfg, repo_root=self.root)
+        res = engine.evaluate(event)
+        self.assertFalse(res.is_allowed, "Containment denial must not be overridden by escalation handler")
+        self.assertIn("containment", (res.reason or "").lower())
+
+    def test_post_tool_use_never_evaluates_or_records_escalation(self):
+        session.init_session(self.root, "esc-post")
+        session.bind_session(self.root, "esc-post", key=self.key, approved=True)
+        handoff.create_run_record(self.root, "esc-post", "run-post", "implementer", "generic")
+
+        event = HookEvent(
+            event_type=HookEventType.POST_TOOL_USE,
+            tool_name="run_command",
+            tool_args={"CommandLine": "git push origin main"},
+            workspace_root=self.root,
+            conversation_id="sess-auto-esc",
+        )
+        cfg = hook_config.HooksConfig(profile="autonomous")
+        engine = HookEngine(config=cfg, repo_root=self.root)
+        res = engine.evaluate(event)
+        self.assertTrue(res.is_allowed)
+
+        rec = handoff.load_run_record(self.root, "esc-post", "run-post")
+        self.assertEqual(len(rec.get("escalations", [])), 0)
 
 
 class TestPlanApprovalUnlockingSourceEdits(unittest.TestCase):
@@ -474,6 +592,214 @@ class TestPlanApprovalUnlockingSourceEdits(unittest.TestCase):
             with self.subTest(target=target):
                 res = engine.evaluate(self._write_event(target, "sess-records"))
                 self.assertTrue(res.is_allowed, f"Expected '{target}' to stay writable, got: {res.reason}")
+
+
+class TestApprovalRecordShellGuardAndRevocation(unittest.TestCase):
+    def setUp(self):
+        self.env = mock.patch.dict(os.environ, dict(CLEAN_ENV, ALONG_SESSION_ID="sess-shell-guard"), clear=True)
+        self.env.start()
+        self.root = make_repo_fixture(prefix="along-shell-guard-", with_docs=False)
+        self.key = session.session_key("generic", "sess-shell-guard")
+
+    def tearDown(self):
+        self.env.stop()
+        shutil.rmtree(self.root, ignore_errors=True)
+
+    def _shell_event(self, cmd: str, conv_id: str = "sess-shell-guard") -> HookEvent:
+        return HookEvent(
+            event_type=HookEventType.PRE_TOOL_USE,
+            tool_name="run_command",
+            tool_args={"CommandLine": cmd},
+            workspace_root=self.root,
+            conversation_id=conv_id,
+        )
+
+    def test_shell_writes_to_approval_records_denied(self):
+        slug = "shell-guard-test"
+        issues_dir = os.path.join(self.root, ".along", "ISSUES")
+        textio.write_text(os.path.join(issues_dir, f"feat--{slug}.md"),
+                          f"---\nprotocol: along\nslug: {slug}\ntype: feat\npriority: medium\nstatus: in-progress\n---\n")
+        session.init_session(self.root, slug)
+        session.bind_session(self.root, slug, key=self.key, approved=False)
+        engine = HookEngine(config=hook_config.HooksConfig(profile="standard"), repo_root=self.root)
+
+        targets = (
+            f".along/.session/{slug}/state.json",
+            f".along/.session/bindings/{self.key}.json",
+            f".along/.session/{slug}/events.jsonl",
+            ".along/.session/plan-approvals.jsonl",
+            f".along/diagnostics/activity/{self.key}.json",
+        )
+
+        for target in targets:
+            # 1. Redirections
+            redirs = [
+                f"echo {{}} > {target}",
+                f"echo {{}} >> {target}",
+                f"echo {{}} 1> {target}",
+                f"echo {{}} &> {target}",
+            ]
+            for cmd in redirs:
+                with self.subTest(cmd=cmd):
+                    res = engine.evaluate(self._shell_event(cmd))
+                    self.assertFalse(res.is_allowed, f"Expected denial for: {cmd}")
+                    self.assertIn("approval record", res.reason or "")
+
+            # 2. File utilities: cp, mv, install, rm, truncate, sed -i, dd of=, tee
+            commands = [
+                f"cp foo.json {target}",
+                f"mv foo.json {target}",
+                f"install foo.json {target}",
+                f"rm {target}",
+                f"truncate -s 0 {target}",
+                f"sed -i 's/a/b/' {target}",
+                f"dd if=/dev/zero of={target}",
+                f"echo {{}} | tee {target}",
+            ]
+            for cmd in commands:
+                with self.subTest(cmd=cmd):
+                    res = engine.evaluate(self._shell_event(cmd))
+                    self.assertFalse(res.is_allowed, f"Expected denial for: {cmd}")
+                    self.assertIn("approval record", res.reason or "")
+
+            # 3. PowerShell cmdlets
+            pwsh_cmds = [
+                f"Set-Content -Path {target} -Value '{{}}'",
+                f"Add-Content -Path {target} -Value '{{}}'",
+                f"'{{}}' | Out-File {target}",
+                f"Copy-Item src/file.json {target}",
+                f"Move-Item src/file.json {target}",
+                f"Remove-Item {target}",
+                f"New-Item -Path {target} -ItemType File",
+                f"Clear-Content {target}",
+            ]
+            for cmd in pwsh_cmds:
+                with self.subTest(cmd=cmd):
+                    res = engine.evaluate(self._shell_event(cmd))
+                    self.assertFalse(res.is_allowed, f"Expected denial for: {cmd}")
+                    self.assertIn("approval record", res.reason or "")
+
+            # 4. .NET reflection
+            dotnet_cmds = [
+                f"[System.IO.File]::WriteAllText('{target}', '{{}}')",
+                f"[IO.File]::WriteAllText('{target}', '{{}}')",
+            ]
+            for cmd in dotnet_cmds:
+                with self.subTest(cmd=cmd):
+                    res = engine.evaluate(self._shell_event(cmd))
+                    self.assertFalse(res.is_allowed, f"Expected denial for: {cmd}")
+                    self.assertIn("approval record", res.reason or "")
+
+            # 5. Inline interpreters
+            interp_cmds = [
+                f"python -c \"open('{target}', 'w').write('{{}}')\"",
+                f"py -c \"open('{target}', 'w').write('{{}}')\"",
+                f"node -e \"fs.writeFileSync('{target}', '{{}}')\"",
+                f"pwsh -c \"Set-Content {target} '{{}}'\"",
+                f"powershell -Command \"Set-Content {target} '{{}}'\"",
+            ]
+            for cmd in interp_cmds:
+                with self.subTest(cmd=cmd):
+                    res = engine.evaluate(self._shell_event(cmd))
+                    self.assertFalse(res.is_allowed, f"Expected denial for: {cmd}")
+                    self.assertIn("approval record", res.reason or "")
+
+    def test_windows_backslash_spelling_denied(self):
+        slug = "bs-test"
+        session.init_session(self.root, slug)
+        engine = HookEngine(config=hook_config.HooksConfig(profile="standard"), repo_root=self.root)
+        cmd = f"echo {{}} > .along\\.session\\{slug}\\state.json"
+        res = engine.evaluate(self._shell_event(cmd))
+        self.assertFalse(res.is_allowed)
+        self.assertIn("approval record", res.reason or "")
+
+    def test_shell_reads_allowed(self):
+        slug = "read-test"
+        session.init_session(self.root, slug)
+        target = f".along/.session/{slug}/state.json"
+        engine = HookEngine(config=hook_config.HooksConfig(profile="standard"), repo_root=self.root)
+
+        read_cmds = [
+            f"cat {target}",
+            f"Get-Content {target}",
+            f"type .along\\.session\\{slug}\\state.json",
+            f"jq . {target}",
+            f"grep 'plan' {target}",
+            "echo x > src/a.txt",
+        ]
+        for cmd in read_cmds:
+            with self.subTest(cmd=cmd):
+                res = engine.evaluate(self._shell_event(cmd))
+                self.assertTrue(res.is_allowed, f"Expected '{cmd}' to be allowed, got: {res.reason}")
+
+    def test_stop_time_revocation_of_forged_approval(self):
+        slug = "forge-test"
+        issues_dir = os.path.join(self.root, ".along", "ISSUES")
+        textio.write_text(os.path.join(issues_dir, f"feat--{slug}.md"),
+                          f"---\nprotocol: along\nslug: {slug}\ntype: feat\npriority: medium\nstatus: in-progress\n---\n")
+        session.init_session(self.root, slug)
+        session.bind_session(self.root, slug, key=self.key, approved=False)
+        engine = HookEngine(config=hook_config.HooksConfig(profile="standard"), repo_root=self.root)
+
+        # Baseline on prompt submit
+        submit_event = HookEvent(
+            event_type=HookEventType.USER_PROMPT_SUBMIT,
+            workspace_root=self.root,
+            conversation_id="sess-shell-guard",
+        )
+        engine.evaluate(submit_event)
+
+        # Agent forged approval indirectly
+        st = session.load_state(self.root, slug)
+        st["plan_approved"] = True
+        session.save_state(self.root, slug, st)
+
+        # Stop event
+        stop_event = HookEvent(
+            event_type=HookEventType.STOP,
+            workspace_root=self.root,
+            conversation_id="sess-shell-guard",
+        )
+        res_stop = engine.evaluate(stop_event)
+        self.assertFalse(res_stop.is_allowed)
+        self.assertIn("PLAN_REQUIRED", res_stop.reason or "")
+        self.assertIn("the approval was revoked", res_stop.reason or "")
+
+        # Verify revoked
+        self.assertFalse(session.is_plan_approved(self.root, slug=slug, key=self.key))
+        st_after = session.load_state(self.root, slug)
+        self.assertFalse(st_after.get("plan_approved", False))
+        self.assertEqual(st_after.get("phase"), "planning")
+
+    def test_stop_time_legitimate_approval_passes(self):
+        slug = "legit-test"
+        issues_dir = os.path.join(self.root, ".along", "ISSUES")
+        textio.write_text(os.path.join(issues_dir, f"feat--{slug}.md"),
+                          f"---\nprotocol: along\nslug: {slug}\ntype: feat\npriority: medium\nstatus: in-progress\n---\n")
+        session.init_session(self.root, slug)
+        session.bind_session(self.root, slug, key=self.key, approved=False)
+        engine = HookEngine(config=hook_config.HooksConfig(profile="standard"), repo_root=self.root)
+
+        # Baseline on prompt submit
+        submit_event = HookEvent(
+            event_type=HookEventType.USER_PROMPT_SUBMIT,
+            workspace_root=self.root,
+            conversation_id="sess-shell-guard",
+        )
+        engine.evaluate(submit_event)
+
+        # Legitimate approval records an event in ledger
+        session.record_accepted_plan(self.root, self.key, "# Plan")
+
+        # Stop event
+        stop_event = HookEvent(
+            event_type=HookEventType.STOP,
+            workspace_root=self.root,
+            conversation_id="sess-shell-guard",
+        )
+        res_stop = engine.evaluate(stop_event)
+        self.assertTrue(res_stop.is_allowed, f"Expected stop to be allowed, got: {res_stop.reason}")
+        self.assertTrue(session.is_plan_approved(self.root, slug=slug, key=self.key))
 
 
 if __name__ == "__main__":

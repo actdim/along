@@ -97,8 +97,9 @@ GITHUB_TOKEN=ghp_...
 TELEGRAM_BOT_TOKEN=123456:ABC-DEF...
 TELEGRAM_CHAT_ID=-100123456789
 
-# Autonomous Execution Mode
+# Autonomous Execution Mode & Self-Approval
 ALONG_AUTONOMOUS=1
+ALONG_ARCHITECT_SELF_APPROVAL=0  # Set to 1 to allow orchestrator architect self-approval without operator plan approval
 ```
 
 ### 3.3 compose.yaml
@@ -242,6 +243,8 @@ SIGTERM the daemon stops polling and waits up to 20 s for the task. Commands old
 rejected bot token (HTTP 401/404) exits with code 78, which the unit's `RestartPreventExitStatus=78`
 does not restart. With `--worktree`, a clean worktree is removed but its `along/<slug>` branch is kept and
 named in the reply; a worktree with uncommitted changes is kept whole.
+
+Architect self-approval: Multi-agent orchestration requires human operator plan approval by default. When running headless in an autonomous environment without human operators, setting `ALONG_ARCHITECT_SELF_APPROVAL=1` enables the architect phase to self-approve the living plan and transition directly to the implementer phase. If unset or `0`, the orchestrator marks `plan_status: needs-approval`, updates session state to `needs-input`, and halts for external review.
 
 ---
 

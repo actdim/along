@@ -53,6 +53,9 @@ def handle_start_command(repo_root: str, args: List[str]):
         except ValueError as exc:
             print(f"[Error] {exc}", file=sys.stderr)
             sys.exit(2)
+        if profile_val == profiles.PROFILE_AUTONOMOUS:
+            print("[Error] The autonomous profile is set by the operator environment (ALONG_PROFILE / ALONG_AUTONOMOUS).", file=sys.stderr)
+            sys.exit(2)
     else:
         profile_val = None
 

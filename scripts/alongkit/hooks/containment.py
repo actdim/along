@@ -247,8 +247,6 @@ def is_autonomous(event: HookEvent, policy: Optional[ContainmentPolicy] = None,
     if os.environ.get("ALONG_PROFILE", "").strip().lower() == "autonomous":
         return True
     payload = event.raw_payload or {}
-    if str(payload.get("profile") or "").strip().lower() == "autonomous":
-        return True
     if str(payload.get("permission_mode") or "") in AUTONOMOUS_PERMISSION_MODES:
         return True
     from .. import profiles

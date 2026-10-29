@@ -87,23 +87,6 @@ class HookEngine:
 
             result = gate.evaluate(event)
             if not result.is_allowed:
-                # Escalation list operations under autonomous profile can route to handler
-                esc = classify_escalation(event, effective_root)
-                if esc:
-                    op_type, detail = esc
-                    if is_auto:
-                        esc_res = route_escalation(
-                            event, op_type, detail, effective_root, original_reason=result.reason
-                        )
-                        gate_mode = self.config.get_gate_mode(gate.name)
-                        record_audit_entry(effective_root, event, esc_res, gate_mode)
-                        if not esc_res.is_allowed and self.config.is_enforcing(gate.name):
-                            record_gate_denial(event, effective_root, esc_res.gate_name or gate.name, esc_res.reason,
-                                               procedural=_is_procedural(gate))
-                            return esc_res
-                        elif esc_res.is_allowed:
-                            continue
-
                 gate_mode = self.config.get_gate_mode(gate.name)
                 record_audit_entry(effective_root, event, result, gate_mode)
 
@@ -134,8 +117,8 @@ class HookEngine:
                     sys.stderr.write(f"[ALONG HOOK: SHADOW] Would block execution ({result.decision.value}): {result.reason}\n")
                     sys.stderr.flush()
 
-        # Under autonomous profile, check escalation list for operations not guarded by previous gates
-        if is_auto:
+        # Under autonomous profile, check escalation list for operations not guarded by previous gates (PreToolUse only)
+        if event.event_type == HookEventType.PRE_TOOL_USE and profiles.autonomous_from_env():
             esc = classify_escalation(event, effective_root)
             if esc:
                 op_type, detail = esc

@@ -124,6 +124,20 @@ def load_config_profile(repo_root: Optional[str] = None) -> Optional[str]:
     return None
 
 
+def autonomous_from_env() -> bool:
+    """True only when the operator environment enables the autonomous profile.
+
+    Repository config, session binding / state.json and hook payloads cannot enable
+    the autonomous profile [bug--autonomous-gate-residual-holes] REQ-1.
+    """
+    env_prof = os.environ.get("ALONG_PROFILE", "").strip().lower()
+    if env_prof == PROFILE_AUTONOMOUS:
+        return True
+    if not env_prof and os.environ.get("ALONG_AUTONOMOUS", "").strip().lower() in ("1", "true", "yes"):
+        return True
+    return False
+
+
 def resolve_active_profile_with_source(
     repo_root: Optional[str] = None,
     session_key: Optional[str] = None,
@@ -135,24 +149,24 @@ def resolve_active_profile_with_source(
     """
     effective_root = repo_root or repo.find_repo_root()
 
-    # 1. Active session binding / state
+    # 1. Active session binding / state (autonomous cannot be set from session)
     if effective_root:
         from . import session
         key = session_key or session.current_session_key()
         session_prof = session.get_session_profile(effective_root, key=key)
-        if session_prof and session_prof in VALID_PROFILES:
+        if session_prof and session_prof in VALID_PROFILES and session_prof != PROFILE_AUTONOMOUS:
             return session_prof, SOURCE_SESSION
 
-    # 2. Environment variable
+    # 2. Environment variable (trusted operator environment for autonomous)
     env_prof = os.environ.get("ALONG_PROFILE", "").strip().lower()
     if env_prof in VALID_PROFILES:
         return env_prof, SOURCE_ENV
     if os.environ.get("ALONG_AUTONOMOUS", "").strip().lower() in ("1", "true", "yes"):
         return PROFILE_AUTONOMOUS, SOURCE_ENV
 
-    # 3. Tracked repository configuration
+    # 3. Tracked repository configuration (autonomous cannot be set from config)
     cfg_prof = load_config_profile(effective_root)
-    if cfg_prof in VALID_PROFILES:
+    if cfg_prof and cfg_prof in VALID_PROFILES and cfg_prof != PROFILE_AUTONOMOUS:
         return cfg_prof, SOURCE_CONFIG
 
     # 4. Fallback default

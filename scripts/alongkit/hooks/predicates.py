@@ -31,6 +31,9 @@ GOVERNED_TYPOGRAPHY_SUFFIXES: Tuple[str, ...] = (
 WRITE_TOOLS: Tuple[str, ...] = (
     "write_to_file", "write_file", "replace_file_content", "edit_file", "patch_file", "create_file",
 )
+SHELL_TOOLS: Tuple[str, ...] = (
+    "run_command", "execute_command", "bash", "shell",
+)
 
 
 PROTECTED_PROJECTIONS: Tuple[str, ...] = (
@@ -116,8 +119,10 @@ MUTATION_WHITELIST_PATTERNS: Tuple[str, ...] = (
 APPROVAL_RECORD_PATTERNS: Tuple[str, ...] = (
     ".along/.session/bindings/**",
     ".along/.session/*/state.json",
+    ".along/.session/*/events.jsonl",
     # The issue-plan approval log [feat--pre-approved-plans].
     ".along/.session/plan-approvals.jsonl",
+    ".along/diagnostics/activity/**",
 )
 
 #: Issue tickets, whose `plan_status: approved` only `along plan approve` may set.
@@ -395,6 +400,23 @@ def record_tool_activity(event: HookEvent, repo_root: str) -> None:
         trace_key = event_session_key(event)
         trace = load_activity_trace(repo_root, trace_key)
         trace["turn_baseline"] = turnstate.snapshot(repo_root)
+
+        # Baseline of plan approval state for this session [bug--autonomous-gate-residual-holes] REQ-2
+        slug, _ = session.resolve_active_session(repo_root, trace_key)
+        if slug:
+            binding = session.load_binding(repo_root, trace_key)
+            binding_app = bool(binding and binding.get("plan_approved"))
+            st = session.load_state(repo_root, slug)
+            state_app = bool(st and st.get("plan_approved"))
+            ledger_events = session.load_events(repo_root, slug)
+            ledger_app_count = sum(1 for e in ledger_events if e.get("kind") == "approve")
+            trace["approval_baseline"] = {
+                "slug": slug,
+                "binding_approved": binding_app,
+                "state_approved": state_app,
+                "ledger_approves": ledger_app_count,
+            }
+
         save_activity_trace(repo_root, trace, trace_key)
         return
 
@@ -905,6 +927,133 @@ def check_ai_coauthor(event: HookEvent, repo_root: str, **kwargs: Any) -> Option
     )
 
 
+_APPROVAL_RECORD_SHELL_RE = re.compile(
+    r"""(?:\.along[\\/]\.session[\\/](?:bindings[\\/][^\s"']*|[^\\/\s"']+[\\/](?:state\.json|events\.jsonl)|plan-approvals\.jsonl)|\.along[\\/]diagnostics[\\/]activity[\\/][^\s"']*)""",
+    re.IGNORECASE,
+)
+
+_PWSH_RECORD_WRITERS = re.compile(
+    r"\b(?:Set-Content|Add-Content|Out-File|Copy-Item|Move-Item|Remove-Item|New-Item|Clear-Content)\b",
+    re.IGNORECASE,
+)
+
+_DOTNET_IO_WRITE = re.compile(r"\[(?:System\.)?IO\.File\]::Write", re.IGNORECASE)
+
+_INLINE_INTERPRETER_RE = re.compile(
+    r"""(?:\b(?:python\d*|py)(?:\.exe)?\s+(?:-[a-zA-Z]*c\b)|\bnode(?:\.exe)?\s+(?:-[a-zA-Z]*e\b)|\bperl(?:\.exe)?\s+(?:-[a-zA-Z]*e\b)|\bruby(?:\.exe)?\s+(?:-[a-zA-Z]*e\b)|\b(?:pwsh|powershell)(?:\.exe)?\s+.*-(?:c|command)\b)""",
+    re.IGNORECASE,
+)
+
+
+def _extract_approval_record_token(seg: str) -> str:
+    tokens = shellwrite._lex(seg)
+    for tok_text, is_op in tokens:
+        if not is_op:
+            clean = shellwrite._unquote(tok_text)
+            if _APPROVAL_RECORD_SHELL_RE.search(clean):
+                return clean
+    m = _APPROVAL_RECORD_SHELL_RE.search(seg)
+    return m.group(0) if m else ".along/.session/state.json"
+
+
+def check_approval_record_shell_write(event: HookEvent, repo_root: str) -> Optional[str]:
+    """Deny shell commands that write to approval records before they run [REQ-2]."""
+    cmd = _extract_command(event)
+    if not cmd:
+        return None
+
+    segments = shellparse.split_segments(cmd)
+    if segments is None:
+        segments = [cmd]
+
+    for seg in segments:
+        m_rec = _APPROVAL_RECORD_SHELL_RE.search(seg)
+        if not m_rec:
+            continue
+        record_path = _extract_approval_record_token(seg)
+
+        # 1. Inline interpreters whose code names the record
+        if _INLINE_INTERPRETER_RE.search(seg):
+            return (
+                f"PLAN_REQUIRED [gate: require-plan-approval]: '{record_path}' is an approval record; "
+                "only the along CLI writes it."
+            )
+
+        # 2. PowerShell .NET IO reflection
+        if _DOTNET_IO_WRITE.search(seg):
+            return (
+                f"PLAN_REQUIRED [gate: require-plan-approval]: '{record_path}' is an approval record; "
+                "only the along CLI writes it."
+            )
+
+        # 3. PowerShell cmdlets that write/create/delete files
+        if _PWSH_RECORD_WRITERS.search(seg):
+            return (
+                f"PLAN_REQUIRED [gate: require-plan-approval]: '{record_path}' is an approval record; "
+                "only the along CLI writes it."
+            )
+
+        # 4. dd with of=<record>
+        if re.search(r"\bdd\b.*?\bof=[^\s]*\.along", seg, re.IGNORECASE):
+            return (
+                f"PLAN_REQUIRED [gate: require-plan-approval]: '{record_path}' is an approval record; "
+                "only the along CLI writes it."
+            )
+
+        # 5. sed -i / --in-place
+        if re.search(r"\bsed\b.*?(?:-i\b|--in-place\b)", seg, re.IGNORECASE):
+            return (
+                f"PLAN_REQUIRED [gate: require-plan-approval]: '{record_path}' is an approval record; "
+                "only the along CLI writes it."
+            )
+
+        tokens = shellwrite._lex(seg)
+
+        # 6. Redirections (> / >> / 1> / &> / *>) to the approval record
+        for idx, (tok_text, is_op) in enumerate(tokens):
+            if is_op and (tok_text.endswith(">") or tok_text.endswith(">>")):
+                if idx + 1 < len(tokens):
+                    target = shellwrite._unquote(tokens[idx + 1][0])
+                    m_target = _APPROVAL_RECORD_SHELL_RE.search(target)
+                    if m_target:
+                        return (
+                            f"PLAN_REQUIRED [gate: require-plan-approval]: '{target}' is an approval record; "
+                            "only the along CLI writes it."
+                        )
+
+        # 7. tee targeting the approval record
+        for idx, (tok_text, is_op) in enumerate(tokens):
+            if not is_op and tok_text.lower() == "tee":
+                for a_tok, a_op in tokens[idx + 1:]:
+                    if a_op:
+                        break
+                    clean = shellwrite._unquote(a_tok)
+                    if clean.startswith("-"):
+                        continue
+                    m_tee = _APPROVAL_RECORD_SHELL_RE.search(clean)
+                    if m_tee:
+                        return (
+                            f"PLAN_REQUIRED [gate: require-plan-approval]: '{clean}' is an approval record; "
+                            "only the along CLI writes it."
+                        )
+
+        # 8. Explicit file writing / deleting commands: cp, mv, install, rm, truncate, del, erase
+        for idx, (tok_text, is_op) in enumerate(tokens):
+            if not is_op:
+                bare = shellwrite._unquote(tok_text).lower().rsplit("/", 1)[-1].rsplit("\\", 1)[-1]
+                if bare in ("cp", "mv", "install", "rm", "truncate", "del", "erase"):
+                    return (
+                        f"PLAN_REQUIRED [gate: require-plan-approval]: '{record_path}' is an approval record; "
+                        "only the along CLI writes it."
+                    )
+                if bare == "jq" and any(t[0] in ("-i", "--in-place") for t in tokens):
+                    return (
+                        f"PLAN_REQUIRED [gate: require-plan-approval]: '{record_path}' is an approval record; "
+                        "only the along CLI writes it."
+                    )
+    return None
+
+
 def is_unbound(repo_root: str, key: Optional[str]) -> bool:
     """True when the agent session is not bound to an issue (no binding, no runner slug)."""
     _slug, how = session.resolve_active_session(repo_root, key)
@@ -933,6 +1082,11 @@ def check_mutation_authorization(event: HookEvent, repo_root: str, options: Opti
         return None
     tool = event.tool_name
     if event.event_type == HookEventType.PRE_TOOL_USE:
+        if tool in SHELL_TOOLS:
+            denial = check_approval_record_shell_write(event, repo_root)
+            if denial:
+                return denial
+            return None
         if tool not in WRITE_TOOLS:
             return None
         rel_target = _repo_relative(_extract_target_file(event), repo_root)
@@ -957,7 +1111,43 @@ def check_mutation_authorization(event: HookEvent, repo_root: str, options: Opti
             return None
         changed = [rel_target]
     elif event.event_type == HookEventType.STOP:
-        baseline = load_activity_trace(repo_root, event_session_key(event)).get("turn_baseline")
+        trace_key = event_session_key(event)
+        trace = load_activity_trace(repo_root, trace_key)
+        approval_bl = trace.get("approval_baseline")
+        if isinstance(approval_bl, dict) and approval_bl.get("slug"):
+            bl_slug = approval_bl["slug"]
+            binding = session.load_binding(repo_root, trace_key)
+            cur_binding_app = bool(binding and binding.get("plan_approved"))
+            st = session.load_state(repo_root, bl_slug)
+            cur_state_app = bool(st and st.get("plan_approved"))
+            cur_ledger_events = session.load_events(repo_root, bl_slug)
+            cur_ledger_approves = sum(1 for e in cur_ledger_events if e.get("kind") == "approve")
+
+            binding_forged = (not approval_bl.get("binding_approved", False)) and cur_binding_app
+            state_forged = (not approval_bl.get("state_approved", False)) and cur_state_app
+            ledger_grew = cur_ledger_approves > approval_bl.get("ledger_approves", 0)
+
+            if (binding_forged or state_forged) and not ledger_grew:
+                # Revoke forged approval [bug--autonomous-gate-residual-holes] REQ-2
+                session.update_state(repo_root, bl_slug, phase="planning", plan_approved=False)
+                if binding:
+                    binding["plan_approved"] = False
+                    binding["approved_slug"] = None
+                    session.save_binding(repo_root, trace_key, binding)
+                session.append_event(
+                    repo_root,
+                    bl_slug,
+                    trace_key,
+                    "deny",
+                    extra={"gate": "require_plan_approval", "reason": "forged plan approval revoked"},
+                )
+                return (
+                    f"PLAN_REQUIRED [gate: require-plan-approval]: the plan for '{bl_slug}' was marked "
+                    "approved this turn without 'along plan approve' or the user's plan-mode approval; "
+                    "the approval was revoked. Ask the user to approve the plan."
+                )
+
+        baseline = trace.get("turn_baseline")
         if not isinstance(baseline, dict):
             return None
         from . import turnstate
@@ -982,8 +1172,7 @@ def check_mutation_authorization(event: HookEvent, repo_root: str, options: Opti
         if phase in ("execution", "implementation", "review") or not slug:
             return None
         from .. import profiles
-        from . import containment
-        if profiles.resolve_active_profile(repo_root) == profiles.PROFILE_AUTONOMOUS or containment.is_autonomous(event):
+        if profiles.autonomous_from_env():
             return None
 
     target = f"issue '{slug}'" if slug else "this session"

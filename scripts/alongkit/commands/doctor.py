@@ -472,6 +472,16 @@ def handle_doctor_command(repo_root: str, args: List[str]):
     # Gate strictness profiles
     from alongkit import profiles
     active_prof, prof_source = profiles.resolve_active_profile_with_source(repo_root)
+    cfg_prof = profiles.load_config_profile(repo_root)
+    if cfg_prof == profiles.PROFILE_AUTONOMOUS:
+        print("[WARN] Repository configuration (.along/config.json or config.yaml) specifies 'profile: autonomous', "
+              "which is ignored. The autonomous profile is set only by operator environment (ALONG_PROFILE / ALONG_AUTONOMOUS).")
+        warnings += 1
+    sess_prof = session.get_session_profile(repo_root)
+    if sess_prof == profiles.PROFILE_AUTONOMOUS:
+        print("[WARN] Active session specifies 'profile: autonomous', which is ignored. "
+              "The autonomous profile is set only by operator environment (ALONG_PROFILE / ALONG_AUTONOMOUS).")
+        warnings += 1
     h_config = hook_config.load_config(repo_root)
     gate_table = hook_config.load_gate_profiles_table(repo_root)
     counts = {"block": 0, "warn": 0, "off": 0}
