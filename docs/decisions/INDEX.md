@@ -61,11 +61,11 @@ Decisions are authored and maintained in `.along/DECISIONS/` and published here 
 - **[docker-isolation-now-gvisor-later](./ADR-2026-10-17--docker-isolation-now-gvisor-later.md)** - Autonomous mode isolation: one Docker container per environment now, gVisor runtime later
 - **[gates-judge-results-not-commands](./ADR-2026-10-17--gates-judge-results-not-commands.md)** - Gates judge results, not commands
 - **[entity-model-slimmed](./ADR-2026-10-19--entity-model-slimmed.md)** - Entity model slimmed: spike is an issue type, risks and checklists retired
-- **[along-core-and-modular-extras](./ADR-2026-10-23--along-core-and-modular-extras.md)** - Along Core and Modular Extras Architecture
 - **[gate-denials-are-ledger-events](./ADR-2026-10-23--gate-denials-are-ledger-events.md)** - Gate Denials Are Ledger Events; Closing Requires Resolution or User-Verified Disclosure
 - **[issue-plans-approved-ahead](./ADR-2026-10-23--issue-plans-approved-ahead.md)** - Issue plans live with the ticket; only the CLI approves them
+- **[along-core-and-dash-extra](./ADR-2026-10-29--along-core-and-dash-extra.md)** - Along Core and Dash Extra Architecture
 
-## Superseded & Retired Decisions (6)
+## Superseded & Retired Decisions (7)
 
 - **[single-file-append-only-decisions](./ADR-2026-08-15--single-file-append-only-decisions.md)** - Single-file append-only DECISIONS.md over multi-file MADR/Nygard *(superseded by bounded-context-budget-and-active-projections)*
 - **[code-graph-mcp-and-hybrid-kb-search](./ADR-2026-08-26--code-graph-mcp-and-hybrid-kb-search.md)** - Code Graph & Hybrid Knowledge Base Search MCP Integration *(superseded by decouple-code-review-graph-from-mcp-to-direct-cli)*
@@ -73,3 +73,4 @@ Decisions are authored and maintained in `.along/DECISIONS/` and published here 
 - **[protocol-v150-automated-entities-and-intent-heuristics](./ADR-2026-08-27--protocol-v150-automated-entities-and-intent-heuristics.md)** - Protocol v1.5.0: Automated Entity Ecosystem & Zero-Friction Intent Recognition *(superseded by entity-relationships-unidirectional-graph-and-canonical-slugs)*
 - **[universal-version-bumping-and-scripts-ecosystem](./ADR-2026-08-27--universal-version-bumping-and-scripts-ecosystem.md)** - Universal Project Version Bumping & Repository Scripts Ecosystem (.along/scripts/) *(superseded by version-ssot-consolidation-and-dynamic-packaging)*
 - **[windows-git-concurrency-and-index-lock-mitigation](./ADR-2026-09-06--windows-git-concurrency-and-index-lock-mitigation.md)** - Windows Git Concurrency Hardening: Disabling Optional Locks and Preload Races *(superseded by revert-git-stat-cache-workarounds)*
+- **[along-core-and-modular-extras](./ADR-2026-10-23--along-core-and-modular-extras.md)** - Along Core and Modular Extras Architecture *(superseded by along-core-and-dash-extra)*

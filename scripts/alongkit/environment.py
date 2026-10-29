@@ -19,29 +19,16 @@ if __name__ == "__main__":
     )
 
 import io
-import json
 import os
 import re
 import shutil
-import subprocess
 import sys
-from typing import Any, Dict, List, Optional, Tuple, Union
+from typing import Any, Dict, List, Optional, Union
 
-from . import bootstrap, proc, repo, textio
+from . import bootstrap, proc, textio
 
 DEFAULT_IMAGE = "actdim/along-autonomous:latest"
 DEFAULT_RUNTIMES = ["claude-code", "opencode"]
-DEFAULT_EGRESS_ALLOWLIST = [
-    "api.anthropic.com",
-    "api.openai.com",
-    "generativelanguage.googleapis.com",
-    "github.com",
-    "pypi.org",
-    "files.pythonhosted.org",
-    "registry.npmjs.org",
-    "api.telegram.org",
-]
-DEFAULT_VOLUMES = ["repo", "claude_auth", "opencode_auth", "cache"]
 
 ENV_YAML_NAME = "env.yaml"
 SECRETS_ENV_NAME = "secrets.env"
@@ -275,7 +262,7 @@ def ensure_secrets_file(env_dir: str) -> str:
     return secrets_file
 
 
-def generate_compose_yaml(config: Dict[str, Any], env_dir: Optional[str] = None) -> str:
+def generate_compose_yaml(config: Dict[str, Any]) -> str:
     """Deterministically generate compose.yaml specification from configuration."""
     name = validate_env_name(config.get("name") or "env")
     image = str(config.get("image") or DEFAULT_IMAGE)
@@ -346,7 +333,7 @@ def write_compose_file(env_dir: str, config: Dict[str, Any]) -> str:
     """Write compose.yaml in target environment directory."""
     os.makedirs(env_dir, exist_ok=True)
     compose_file = os.path.join(env_dir, COMPOSE_YAML_NAME)
-    content = generate_compose_yaml(config, env_dir=env_dir)
+    content = generate_compose_yaml(config)
     textio.write_text(compose_file, content)
     return compose_file
 
@@ -360,15 +347,9 @@ def get_docker_compose_cmd() -> Optional[List[str]]:
     """Determine available docker compose invocation command."""
     docker_bin = shutil.which("docker")
     if docker_bin:
-        try:
-            res = subprocess.run([docker_bin, "compose", "version"],
-                                 stdout=subprocess.DEVNULL,
-                                 stderr=subprocess.DEVNULL,
-                                 check=False)
-            if res.returncode == 0:
-                return [docker_bin, "compose"]
-        except (OSError, ValueError):
-            pass
+        res = proc.run_capture([docker_bin, "compose", "version"])
+        if res.returncode == 0:
+            return [docker_bin, "compose"]
 
     compose_bin = shutil.which("docker-compose")
     if compose_bin:
@@ -383,24 +364,17 @@ def get_container_status(container_name: str) -> str:
     if not docker_bin:
         return "configured (docker not found)"
 
-    try:
-        res = subprocess.run(
-            [docker_bin, "ps", "-a", "--filter", f"name=^/{container_name}$", "--format", "{{.Status}}"],
-            stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE,
-            text=True,
-            check=False,
-        )
-        out = res.stdout.strip().lower()
-        if not out:
-            return "not_created"
-        if "up" in out:
-            return "running"
-        if "exited" in out or "dead" in out:
-            return "stopped"
-        return out
-    except (OSError, ValueError):
+    res = proc.run_capture(
+        [docker_bin, "ps", "-a", "--filter", f"name=^/{container_name}$", "--format", "{{.State}}"]
+    )
+    if res.returncode != 0:
         return "unknown"
+    out = res.stdout.strip().lower()
+    if not out:
+        return "not_created"
+    if out in ("exited", "dead"):
+        return "stopped"
+    return out
 
 
 def env_up(
@@ -448,14 +422,11 @@ def env_up(
     if run_compose:
         if compose_cmd:
             cmd = compose_cmd + ["-f", compose_file, "up", "-d"]
-            try:
-                res = subprocess.run(cmd, cwd=env_dir, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
-                if res.returncode == 0:
-                    started = True
-                else:
-                    error_msg = res.stderr.strip() or f"docker compose up failed with code {res.returncode}"
-            except (OSError, ValueError) as exc:
-                error_msg = str(exc)
+            res = proc.run_capture(cmd, cwd=env_dir)
+            if res.returncode == 0:
+                started = True
+            else:
+                error_msg = res.stderr.strip() or f"docker compose up failed with code {res.returncode}"
         else:
             error_msg = "Docker or docker compose not found in PATH."
 
@@ -491,26 +462,19 @@ def env_down(
     if run_compose:
         if compose_cmd and os.path.exists(compose_file):
             cmd = compose_cmd + ["-f", compose_file, "down"]
-            try:
-                res = subprocess.run(cmd, cwd=env_dir, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, check=False)
-                if res.returncode == 0:
-                    stopped = True
-                else:
-                    error_msg = res.stderr.strip() or f"docker compose down failed with exit code {res.returncode}"
-            except (OSError, ValueError) as exc:
-                error_msg = str(exc)
+            res = proc.run_capture(cmd, cwd=env_dir)
+            if res.returncode == 0:
+                stopped = True
+            else:
+                error_msg = res.stderr.strip() or f"docker compose down failed with exit code {res.returncode}"
         else:
             docker_bin = shutil.which("docker")
             if docker_bin:
-                try:
-                    res = subprocess.run([docker_bin, "stop", container_name],
-                                         stdout=subprocess.DEVNULL, stderr=subprocess.PIPE, text=True, check=False)
-                    if res.returncode == 0:
-                        stopped = True
-                    else:
-                        error_msg = res.stderr.strip() or f"docker stop failed with exit code {res.returncode}"
-                except (OSError, ValueError) as exc:
-                    error_msg = str(exc)
+                res = proc.run_capture([docker_bin, "stop", container_name])
+                if res.returncode == 0:
+                    stopped = True
+                else:
+                    error_msg = res.stderr.strip() or f"docker stop failed with exit code {res.returncode}"
             else:
                 error_msg = "Docker or docker compose not found in PATH."
 
@@ -669,18 +633,15 @@ def env_update(
         if compose_cmd and os.path.exists(compose_file):
             pull_cmd = compose_cmd + ["-f", compose_file, "pull"]
             up_cmd = compose_cmd + ["-f", compose_file, "up", "-d"]
-            try:
-                res_pull = subprocess.run(pull_cmd, cwd=env_dir, stdout=subprocess.DEVNULL, stderr=subprocess.PIPE, text=True, check=False)
-                if res_pull.returncode != 0:
-                    error_msg = res_pull.stderr.strip() or f"docker compose pull failed with exit code {res_pull.returncode}"
+            res_pull = proc.run_capture(pull_cmd, cwd=env_dir)
+            if res_pull.returncode != 0:
+                error_msg = res_pull.stderr.strip() or f"docker compose pull failed with exit code {res_pull.returncode}"
+            else:
+                res = proc.run_capture(up_cmd, cwd=env_dir)
+                if res.returncode == 0:
+                    updated = True
                 else:
-                    res = subprocess.run(up_cmd, cwd=env_dir, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, check=False)
-                    if res.returncode == 0:
-                        updated = True
-                    else:
-                        error_msg = res.stderr.strip() or f"docker compose up failed with exit code {res.returncode}"
-            except (OSError, ValueError) as exc:
-                error_msg = str(exc)
+                    error_msg = res.stderr.strip() or f"docker compose up failed with exit code {res.returncode}"
         else:
             error_msg = "Docker or docker compose not found in PATH."
 

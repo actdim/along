@@ -32,6 +32,7 @@ DEFAULT_RETRY_LIMIT: int = 2
 STEP_STATUSES: tuple = ("pending", "in-progress", "passed", "failed")
 SESSION_STATUSES: tuple = ("in-progress", "completed", "failed")
 SESSION_PHASES: tuple = ("inquiry", "planning", "execution")
+EDIT_PHASES: tuple = ("execution",)
 DEFAULT_PHASE: str = "inquiry"
 STATE_FILENAME: str = "state.json"
 BLACKBOARD_FILENAME: str = "blackboard.json"

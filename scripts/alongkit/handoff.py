@@ -308,6 +308,44 @@ def load_review_verdict(repo_root: str, slug: str, step: int) -> Optional[Dict[s
 # 3. Questions Entity (.along/.session/<slug>/questions/<id>.md)
 # ---------------------------------------------------------------------------
 
+def _read_last_id(q_dir: str) -> int:
+    last_id_file = os.path.join(q_dir, ".last-id")
+    if os.path.isfile(last_id_file):
+        try:
+            content = textio.read_text(last_id_file, strict=False).strip()
+            if content.isdigit():
+                return int(content)
+        except (OSError, ValueError):
+            pass
+    return 0
+
+
+def _write_last_id(q_dir: str, val: int) -> None:
+    last_id_file = os.path.join(q_dir, ".last-id")
+    current = _read_last_id(q_dir)
+    if val > current:
+        textio.write_text(last_id_file, f"{val}\n", newline="\n")
+
+
+def _next_question_id(q_dir: str) -> str:
+    """Compute and persist the next unique question ID for a session."""
+    last_val = _read_last_id(q_dir)
+    max_file_n = 0
+    if os.path.isdir(q_dir):
+        try:
+            for fname in os.listdir(q_dir):
+                if fname.startswith("q-") and fname.endswith(".md"):
+                    suffix = fname[2:-3]
+                    if suffix.isdigit():
+                        max_file_n = max(max_file_n, int(suffix))
+        except OSError:
+            pass
+
+    next_n = max(last_val, max_file_n) + 1
+    _write_last_id(q_dir, next_n)
+    return f"q-{next_n}"
+
+
 def create_question(
     repo_root: str,
     slug: str,
@@ -322,9 +360,10 @@ def create_question(
     os.makedirs(q_dir, exist_ok=True)
 
     if not qid:
-        existing = [f for f in os.listdir(q_dir) if f.endswith(".md")]
-        qid = f"q-{len(existing) + 1}"
+        qid = _next_question_id(q_dir)
     clean_id = _require_safe_id(qid[:-3] if qid.endswith(".md") else qid, "question id")
+    if clean_id.startswith("q-") and clean_id[2:].isdigit():
+        _write_last_id(q_dir, int(clean_id[2:]))
 
     file_path = os.path.join(q_dir, f"{clean_id}.md")
     now_iso = session._utc_now_iso()

@@ -3,10 +3,10 @@ protocol: along
 protocol_version: "4.5.3"
 slug: autonomous-mvp-minor-defects
 type: bug
-status: open
+status: in-progress
 priority: low
 created: 2026-10-23
-updated: 2026-10-23
+updated: 2026-10-29
 agent: claude-code
 tags: [cleanup, packaging, daemon, docker]
 blocked_by: []
@@ -41,7 +41,7 @@ Low-risk leftovers from the review of commits 49894bf..e4e91ee.
 - REQ-5: Usage errors in `along brief` MUST exit 2; gate phases MUST be declared in `SESSION_PHASES`.
 
 ## Acceptance Criteria
-- [ ] `pip install actdim-along[telemetry]` installs nothing the code does not use.
-- [ ] One Telegram helper; daemon and feedback tests pass through it.
-- [ ] `along daemon --help` lists no placeholder flags.
-- [ ] Regression tests where behavior changes; `python .along/scripts/test.py` is green.
+- [x] `pip install actdim-along[telemetry]` installs nothing the code does not use.
+- [x] One Telegram helper; daemon and feedback tests pass through it.
+- [x] `along daemon --help` lists no placeholder flags.
+- [x] Regression tests where behavior changes; `python .along/scripts/test.py` is green.

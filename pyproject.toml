@@ -40,15 +40,9 @@ dash = [
     "rich>=13.0.0",
 ]
 
-# Telemetry integration: OpenTelemetry spans and OTLP trace export.
-telemetry = [
-    "opentelemetry-api>=1.20.0",
-    "opentelemetry-sdk>=1.20.0",
-]
-
-# All optional extensions: dashboard and telemetry.
+# All optional extensions: dashboard (kept as a stable alias).
 all = [
-    "actdim-along[dash,telemetry]",
+    "actdim-along[dash]",
 ]
 
 [dependency-groups]

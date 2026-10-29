@@ -747,6 +747,20 @@ Predicts git merge conflict risks and AST symbol collisions between `HEAD` and a
   along conflict-check feature-branch --json
   ```
 
+### `along brief`
+Compile compact, role-specific handoff context for an issue (`scripts/alongkit/commands/brief.py`).
+- Assembles deterministic context prompt for `architect`, `implementer`, or `reviewer`.
+- Validates issue existence, required issue slug, and role parameter.
+- Usage errors (missing issue slug, missing role, or invalid role) exit with code 2.
+- **Options**:
+  - `<slug>`: Target issue slug (required).
+  - `--role <architect|implementer|reviewer>`: Target role for prompt brief compilation (required).
+- **Usage**:
+  ```bash
+  along brief my-feature --role implementer
+  along brief my-feature --role reviewer
+  ```
+
 ---
 
 ## 5. Exit Codes and CI/CD Automation
@@ -757,7 +771,8 @@ All Along CLI commands adhere to standard POSIX process exit code conventions:
 | :--- | :--- | :--- |
 | `0` | Success | Operation completed cleanly; all gates passed. |
 | `1` | General Failure / Gate Denial | Syntax error, broken link (`kb-sync --strict`), forbidden typography (`sanitize`), failed test. |
-| `2` | Agent Denied Action | Specific runtime hook denial for OpenAI Codex stderr routing. |
+| `2` | Usage / CLI Argument Error / Agent Denial | Missing or invalid CLI arguments (e.g. invalid role in `along brief`), entity names starting with `-`, or OpenAI Codex hook denial. |
+
 
 For automated CI/CD validation pipelines, run the following sequence to enforce total repository integrity:
 

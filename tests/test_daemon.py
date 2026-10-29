@@ -3,6 +3,7 @@
 
 from __future__ import annotations
 
+import argparse
 import json
 import os
 import shutil
@@ -394,6 +395,30 @@ class TestDaemonCli(unittest.TestCase):
         # Status returns 1 when daemon is stopped
         ret = handle_daemon_command(self.repo, ["status", "--json"])
         self.assertEqual(ret, 1)
+
+    def test_daemon_command_has_no_port_placeholder(self) -> None:
+        import io
+        from contextlib import redirect_stderr, redirect_stdout
+
+        buf = io.StringIO()
+        with redirect_stdout(buf):
+            self.assertEqual(handle_daemon_command(self.repo, ["--help"]), 0)
+        self.assertNotIn("--port", buf.getvalue())
+
+        parser = build_parser()
+        subparsers_actions = [
+            action for action in parser._actions
+            if isinstance(action, argparse._SubParsersAction)
+        ]
+        start_parser = subparsers_actions[0].choices["start"]
+        start_help = start_parser.format_help()
+        self.assertNotIn("--port", start_help)
+
+        with patch("alongkit.daemon.start_daemon") as mock_start, redirect_stderr(io.StringIO()):
+            with self.assertRaises(SystemExit) as ctx:
+                handle_daemon_command(self.repo, ["start", "--port", "1"])
+            self.assertEqual(ctx.exception.code, 2)
+            mock_start.assert_not_called()
 
 
 class SequencedTelegramClient(MockTelegramClient):

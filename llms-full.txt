@@ -35,14 +35,11 @@ The installer bootstraps the repository into `~/.cache/actdim-along/repo` (via s
 Along is distributed on PyPI as `actdim-along`. Install Along Core with minimal dependencies or include modular extras:
 
 ```bash
-# Core only: minimal runtime dependency (ruamel.yaml>=0.18)
+# Core only: minimal runtime dependency (ruamel.yaml>=0.18; telemetry is built-in stdlib)
 pip install actdim-along
 
 # Web Dashboard: FastAPI, Uvicorn, Pydantic, and Rich
 pip install actdim-along[dash]
-
-# Telemetry: OpenTelemetry and OpenInference tracing and OTLP export
-pip install actdim-along[telemetry]
 
 # Full suite: install all optional extras
 pip install actdim-along[all]
@@ -147,11 +144,10 @@ flowchart TD
 ### Along Core vs. Modular Extras Architecture
 
 Along enforces a strict minimal-core architecture:
-- **Along Core (`actdim-along`)**: In-repo memory (`.along/`), entity lifecycle (`ISSUES/`, `DECISIONS/`, `MILESTONES/`), projections (`ISSUES.md`, `CONSTRAINTS.md`, `docs/INDEX.md`), bounded snippet retrieval (`along kb-search`), standard lifecycle contracts (`build`, `test`, `dev`, `commit`, `wrap`), and mechanical safety gates. Core runtime dependencies remain strictly minimal (`ruamel.yaml>=0.18`).
+- **Along Core (`actdim-along`)**: In-repo memory (`.along/`), entity lifecycle (`ISSUES/`, `DECISIONS/`, `MILESTONES/`), projections (`ISSUES.md`, `CONSTRAINTS.md`, `docs/INDEX.md`), bounded snippet retrieval (`along kb-search`), standard lifecycle contracts (`build`, `test`, `dev`, `commit`, `wrap`), mechanical safety gates, and stdlib telemetry (tracer, redactor, spool, OTLP/HTTP JSON exporter). Core runtime dependencies remain strictly minimal (`ruamel.yaml>=0.18`).
 - **Modular Extras**:
   - `actdim-along[dash]`: Web dashboard UI, Cytoscape DAG visualization, and OpenAPI analytics server.
-  - `actdim-along[telemetry]`: OpenTelemetry / OpenInference tracing and OTLP trace export.
-  - `actdim-along[all]`: All optional extras combined.
+  - `actdim-along[all]`: Stable alias for optional extras (`[dash]`).
   - Optional protocol modules (`along-team`, git worktree sandboxing, `code-review-graph` AST tools, `along-dep-scan`) operate on-demand with zero extra package dependencies.
 - **Protocol Versioning**: Protocol specification version (`ALONG-PROTOCOL vX.Y.Z`) changes strictly on format or schema updates. Tooling enhancements release as minors; breaking format changes are batched into rare majors with migration automation (`along migrate`).
 
@@ -329,7 +325,7 @@ This repository is **ActDim Along** (`actdim-along`) - the provider-agnostic age
 
 The Along Agent Run Protocol (ARP), also referred to as the Agent Execution Protocol (AEP), defines a standardized observability, telemetry, and execution tracking engine for autonomous agent workflows. Modern AI agent operations execute non-deterministic cycles of LLM inference, multi-step chain reasoning, external tool usage, and subprocess execution. Without rigorous runtime tracing, debugging multi-agent swarms, identifying token bottlenecks, and investigating protocol violations becomes intractable.
 
-The ARP engine bridges semantic OpenInference standards and OpenTelemetry (OTel) GenAI semantic conventions into Along. It provides real-time, vendor-neutral telemetry with local disk buffering and offline survivability.
+The ARP engine bridges semantic OpenInference standards and OpenTelemetry (OTel) GenAI semantic conventions into Along. It provides real-time, vendor-neutral telemetry with local disk buffering and offline survivability, implemented entirely within Along Core using only the Python standard library (no third-party OpenTelemetry SDK dependencies required).
 
 ```text
 +-----------------------------------------------------------------------------------+
@@ -1523,6 +1519,16 @@ Telegram Bot API and runs `/task <slug>` through the orchestrator. Runtime files
   never runs an accepted command again.
 - `daemon.log`: rotated to `daemon.log.1` above 5 MB.
 
+#### Telegram Configuration & Precedence
+
+Telegram settings are resolved uniformly via `alongkit.telegram` across daemon and feedback tools. Configuration merges through strict precedence (lower to higher priority, higher overwrites):
+1. **Global Configuration**: `~/.along/config.json` (`transports.telegram` or `daemon` section).
+2. **Local Repository Configuration**: `.along/config.json` (`transports.telegram` or `daemon` section).
+3. **Environment Variables**:
+   - Bot Token: `ALONG_TELEGRAM_BOT_TOKEN` or `TELEGRAM_BOT_TOKEN`.
+   - Primary Chat ID: `ALONG_TELEGRAM_CHAT_ID` or `TELEGRAM_CHAT_ID`.
+   - Allowed Chats: `ALONG_TELEGRAM_ALLOWED_CHATS` or `TELEGRAM_ALLOWED_CHATS` (comma-separated chat IDs).
+
 Tasks run on a worker thread: `/status` answers during a run, a second `/task` gets "Runner busy", and on
 SIGTERM the daemon stops polling and waits up to 20 s for the task. Commands older than
 `max_command_age` (default 600 s; `daemon.max_command_age` in `.along/config.json` or
@@ -2287,6 +2293,20 @@ Predicts git merge conflict risks and AST symbol collisions between `HEAD` and a
   along conflict-check feature-branch --json
   ```
 
+### `along brief`
+Compile compact, role-specific handoff context for an issue (`scripts/alongkit/commands/brief.py`).
+- Assembles deterministic context prompt for `architect`, `implementer`, or `reviewer`.
+- Validates issue existence, required issue slug, and role parameter.
+- Usage errors (missing issue slug, missing role, or invalid role) exit with code 2.
+- **Options**:
+  - `<slug>`: Target issue slug (required).
+  - `--role <architect|implementer|reviewer>`: Target role for prompt brief compilation (required).
+- **Usage**:
+  ```bash
+  along brief my-feature --role implementer
+  along brief my-feature --role reviewer
+  ```
+
 ---
 
 ## 5. Exit Codes and CI/CD Automation
@@ -2297,7 +2317,8 @@ All Along CLI commands adhere to standard POSIX process exit code conventions:
 | :--- | :--- | :--- |
 | `0` | Success | Operation completed cleanly; all gates passed. |
 | `1` | General Failure / Gate Denial | Syntax error, broken link (`kb-sync --strict`), forbidden typography (`sanitize`), failed test. |
-| `2` | Agent Denied Action | Specific runtime hook denial for OpenAI Codex stderr routing. |
+| `2` | Usage / CLI Argument Error / Agent Denial | Missing or invalid CLI arguments (e.g. invalid role in `along brief`), entity names starting with `-`, or OpenAI Codex hook denial. |
+
 
 For automated CI/CD validation pipelines, run the following sequence to enforce total repository integrity:
 

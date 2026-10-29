@@ -1169,7 +1169,7 @@ def check_mutation_authorization(event: HookEvent, repo_root: str, options: Opti
     slug, how = session.resolve_active_session(repo_root, key)
     if session.is_plan_approved(repo_root, slug=slug, key=key):
         phase = session.get_session_phase(repo_root, slug=slug, key=key)
-        if phase in ("execution", "implementation", "review") or not slug:
+        if phase in session.EDIT_PHASES or not slug:
             return None
         from .. import profiles
         if profiles.autonomous_from_env():

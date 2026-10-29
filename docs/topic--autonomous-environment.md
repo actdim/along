@@ -248,6 +248,16 @@ Telegram Bot API and runs `/task <slug>` through the orchestrator. Runtime files
   never runs an accepted command again.
 - `daemon.log`: rotated to `daemon.log.1` above 5 MB.
 
+#### Telegram Configuration & Precedence
+
+Telegram settings are resolved uniformly via `alongkit.telegram` across daemon and feedback tools. Configuration merges through strict precedence (lower to higher priority, higher overwrites):
+1. **Global Configuration**: `~/.along/config.json` (`transports.telegram` or `daemon` section).
+2. **Local Repository Configuration**: `.along/config.json` (`transports.telegram` or `daemon` section).
+3. **Environment Variables**:
+   - Bot Token: `ALONG_TELEGRAM_BOT_TOKEN` or `TELEGRAM_BOT_TOKEN`.
+   - Primary Chat ID: `ALONG_TELEGRAM_CHAT_ID` or `TELEGRAM_CHAT_ID`.
+   - Allowed Chats: `ALONG_TELEGRAM_ALLOWED_CHATS` or `TELEGRAM_ALLOWED_CHATS` (comma-separated chat IDs).
+
 Tasks run on a worker thread: `/status` answers during a run, a second `/task` gets "Runner busy", and on
 SIGTERM the daemon stops polling and waits up to 20 s for the task. Commands older than
 `max_command_age` (default 600 s; `daemon.max_command_age` in `.along/config.json` or

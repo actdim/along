@@ -51,6 +51,8 @@ along feedback config show
 along feedback config init
 ```
 
+Telegram transport settings are resolved via `alongkit.telegram` from global `~/.along/config.json`, local `.along/config.json`, or environment variables (`ALONG_TELEGRAM_BOT_TOKEN` / `TELEGRAM_BOT_TOKEN`, `ALONG_TELEGRAM_CHAT_ID` / `TELEGRAM_CHAT_ID`). Environment variables override configuration files.
+
 ### 6. Clear Diagnostics Store
 Clear resolved or all incident logs:
 ```bash

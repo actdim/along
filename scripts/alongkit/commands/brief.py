@@ -16,9 +16,9 @@ if __name__ == "__main__":
 import argparse
 import json
 import sys
-from typing import List, Optional
+from typing import List
 
-from .. import handoff, repo
+from .. import handoff
 
 
 def handle_brief_command(repo_root: str, args: List[str]) -> int:
@@ -55,12 +55,12 @@ def handle_brief_command(repo_root: str, args: List[str]) -> int:
     if not parsed.slug:
         print("[Error] along brief requires an issue slug.", file=sys.stderr)
         parser.print_usage(file=sys.stderr)
-        return 1
+        return 2
 
     if not parsed.role:
         print("[Error] along brief requires --role (scout, architect, implementer, reviewer).", file=sys.stderr)
         parser.print_usage(file=sys.stderr)
-        return 1
+        return 2
 
     role_clean = parsed.role.lower().strip()
     if role_clean not in handoff.SUPPORTED_BRIEF_ROLES:
@@ -68,7 +68,7 @@ def handle_brief_command(repo_root: str, args: List[str]) -> int:
             f"[Error] Unsupported role '{parsed.role}'. Expected one of: {', '.join(handoff.SUPPORTED_BRIEF_ROLES)}.",
             file=sys.stderr,
         )
-        return 1
+        return 2
 
     try:
         payload = handoff.generate_brief(

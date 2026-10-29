@@ -1,5 +1,11 @@
 # Living Plan: autonomous-mvp-minor-defects
 
+## Revision 2 (2026-10-29T23:22:00Z, plan revise: post-prerequisite re-check)
+- Prerequisites verified done: autonomous-container-build-and-firewall, autonomous-gate-residual-holes, telegram-poll-error-classification.
+- TimeoutError duplicate already removed from hooks/escalation.py by residual-holes.
+- DEFAULT_EGRESS_ALLOWLIST in environment.py is retained as parity source-of-truth for test_docker_scripts.py.
+- New TelegramConflictError and TelegramRateLimitError in daemon.py move to alongkit/telegram.py alongside TelegramClient and re-exported.
+
 ## Revision 1 (2026-10-29T12:14:24Z, plan approve --plan-file)
 
 # Living Plan: bug--autonomous-mvp-minor-defects
@@ -63,7 +69,7 @@ Facts the steps rely on (verified 2026-10-29):
 
 ## Steps
 
-- [ ] Step 1: Re-verify every item after the prerequisite tickets landed (all REQs)
+- [x] Step 1: Re-verify every item after the prerequisite tickets landed (all REQs)
   - Confirm the three prerequisite tickets are done (`along issue show <key>`); if one is not, stop and tell
     the user.
   - Re-grep every fact above. Expected: the `TimeoutError` duplicate is gone (residual-holes Step 4; then drop
@@ -72,7 +78,7 @@ Facts the steps rely on (verified 2026-10-29):
     ticket; keep only leftovers); the new poll error classes in `daemon.py` must move with `TelegramClient`.
   - Record the deltas: `along plan revise autonomous-mvp-minor-defects --plan-file <path> --reason "post-prerequisite re-check"`.
 
-- [ ] Step 2: Telemetry is stdlib Core; drop the `[telemetry]` extra (REQ-1)
+- [x] Step 2: Telemetry is stdlib Core; drop the `[telemetry]` extra (REQ-1)
   - `pyproject.toml`: delete the `telemetry` extra and its comment; `all = ["actdim-along[dash]"]` with the
     comment "kept as a stable alias" (pip / uv only warn on an unknown extra, so old commands keep working).
   - Wording in README (install block, extras list), `.along/VISION.md` (sections 2 and 3) and
@@ -90,7 +96,7 @@ Facts the steps rely on (verified 2026-10-29):
     `alongkit/telemetry/` is in `sys.stdlib_module_names`, `__future__` or relative; README and VISION do not
     contain `actdim-along[telemetry]`. Fails on old code.
 
-- [ ] Step 3: One Telegram helper `scripts/alongkit/telegram.py` (REQ-2)
+- [x] Step 3: One Telegram helper `scripts/alongkit/telegram.py` (REQ-2)
   - Contents (stdlib plus `repo`): `API_BASE`; `MAX_MESSAGE_CHARS = 4000`;
     `TOKEN_ENV_VARS = ("TELEGRAM_BOT_TOKEN", "ALONG_TELEGRAM_BOT_TOKEN")` and `CHAT_ENV_VARS` in the same order;
     dataclass `TelegramSettings(bot_token, chat_ids, enabled)` with property `primary_chat_id` (the first id
@@ -121,7 +127,7 @@ Facts the steps rely on (verified 2026-10-29):
     token; `api.telegram.org` and `sendMessage` appear under `scripts/` only in `alongkit/telegram.py` (fails on
     old code). Update `tests/test_feedback.py::test_04` so the mock `read()` returns `b'{"ok": true}'`.
 
-- [ ] Step 4: Remove the `along daemon --port` placeholder (REQ-3)
+- [x] Step 4: Remove the `along daemon --port` placeholder (REQ-3)
   - Delete it from `build_parser`, the help line and the `start_daemon` call; the `port` parameter and
     forwarding in `start_daemon`; the `RunnerDaemon` parameter, `self.port` and the state key; the three
     `get_daemon_status` keys; `"port"` in `resolve_daemon_config`. Old `daemon.json` files holding `port` stay
@@ -130,7 +136,7 @@ Facts the steps rely on (verified 2026-10-29):
     `build_parser()` help for `start` contain no `--port`; `handle_daemon_command(root, ["start", "--port", "1"])`
     raises `SystemExit(2)` (patch `daemon.start_daemon` so nothing starts).
 
-- [ ] Step 5: Dead code and docker calls in env (REQ-3)
+- [x] Step 5: Dead code and docker calls in env (REQ-3)
   - Remove whatever Step 1 found still present: the two constants, unused imports, the unused `env_dir`
     parameter (and its call site), `commands/env.py::build_parser` and imports only it used.
   - Move every remaining docker call to `proc.run_capture`; `env_up/down/update` keep their result dicts with
@@ -143,7 +149,7 @@ Facts the steps rely on (verified 2026-10-29):
     `"exited"` -> `stopped`, `""` -> `not_created` (old code returns `unknown`: fails); an AST check that
     `environment.py` makes no `subprocess.run` call (fails on old code).
 
-- [ ] Step 6: Question ids stay unique after deletions (REQ-4)
+- [x] Step 6: Question ids stay unique after deletions (REQ-4)
   - `handoff._next_question_id(q_dir)`: `n = max(highest numeric suffix of q-<n>.md, int in
     questions/.last-id) + 1`; write `.last-id` atomically through `textio`; return `q-<n>` (not a `.md` file, so
     `list_questions` ignores it; confirm). Used when `qid` is not given; the first id stays `q-1`.
@@ -151,7 +157,7 @@ Facts the steps rely on (verified 2026-10-29):
     -> `q-4` and `q-3` unchanged; delete `q-4` (the max), create -> `q-5`; after an explicit `qid="q-7"` the
     next auto id is `q-8`.
 
-- [ ] Step 7: Escalation duplicate, session phases, `along brief` exit codes (REQ-3, REQ-5)
+- [x] Step 7: Escalation duplicate, session phases, `along brief` exit codes (REQ-3, REQ-5)
   - `hooks/escalation.py`: drop the second `TimeoutError` if still there.
   - Phases: add `session.EDIT_PHASES: tuple = ("execution",)` next to `SESSION_PHASES` and make the predicate
     check `phase in session.EDIT_PHASES` (nothing produces `implementation` / `review`); grep `scripts/`,
@@ -163,7 +169,7 @@ Facts the steps rely on (verified 2026-10-29):
     unused imports. Tests (`tests/test_handoff_entities.py`): `[slug]`, `["--role", "implementer"]`,
     `[slug, "--role", "bogus"]` each return 2 (fail on old code).
 
-- [ ] Step 8: Docs, full suite, old-code check, commit, wrap
+- [x] Step 8: Docs, full suite, old-code check, commit, wrap
   - `docs/topic--autonomous-environment.md` (daemon section: Telegram config precedence, env names, `--port`
     removed); `skills/along-feedback/SKILL.md` (`TELEGRAM_*` accepted); `docs/topic--cli-reference.md` if it
     lists `along brief` exit codes; then `along kb-sync` and `along sanitize`.

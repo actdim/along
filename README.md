@@ -27,14 +27,11 @@ The installer bootstraps the repository into `~/.cache/actdim-along/repo` (via s
 Along is distributed on PyPI as `actdim-along`. Install Along Core with minimal dependencies or include modular extras:
 
 ```bash
-# Core only: minimal runtime dependency (ruamel.yaml>=0.18)
+# Core only: minimal runtime dependency (ruamel.yaml>=0.18; telemetry is built-in stdlib)
 pip install actdim-along
 
 # Web Dashboard: FastAPI, Uvicorn, Pydantic, and Rich
 pip install actdim-along[dash]
-
-# Telemetry: OpenTelemetry and OpenInference tracing and OTLP export
-pip install actdim-along[telemetry]
 
 # Full suite: install all optional extras
 pip install actdim-along[all]
@@ -139,11 +136,10 @@ flowchart TD
 ### Along Core vs. Modular Extras Architecture
 
 Along enforces a strict minimal-core architecture:
-- **Along Core (`actdim-along`)**: In-repo memory (`.along/`), entity lifecycle (`ISSUES/`, `DECISIONS/`, `MILESTONES/`), projections (`ISSUES.md`, `CONSTRAINTS.md`, `docs/INDEX.md`), bounded snippet retrieval (`along kb-search`), standard lifecycle contracts (`build`, `test`, `dev`, `commit`, `wrap`), and mechanical safety gates. Core runtime dependencies remain strictly minimal (`ruamel.yaml>=0.18`).
+- **Along Core (`actdim-along`)**: In-repo memory (`.along/`), entity lifecycle (`ISSUES/`, `DECISIONS/`, `MILESTONES/`), projections (`ISSUES.md`, `CONSTRAINTS.md`, `docs/INDEX.md`), bounded snippet retrieval (`along kb-search`), standard lifecycle contracts (`build`, `test`, `dev`, `commit`, `wrap`), mechanical safety gates, and stdlib telemetry (tracer, redactor, spool, OTLP/HTTP JSON exporter). Core runtime dependencies remain strictly minimal (`ruamel.yaml>=0.18`).
 - **Modular Extras**:
   - `actdim-along[dash]`: Web dashboard UI, Cytoscape DAG visualization, and OpenAPI analytics server.
-  - `actdim-along[telemetry]`: OpenTelemetry / OpenInference tracing and OTLP trace export.
-  - `actdim-along[all]`: All optional extras combined.
+  - `actdim-along[all]`: Stable alias for optional extras (`[dash]`).
   - Optional protocol modules (`along-team`, git worktree sandboxing, `code-review-graph` AST tools, `along-dep-scan`) operate on-demand with zero extra package dependencies.
 - **Protocol Versioning**: Protocol specification version (`ALONG-PROTOCOL vX.Y.Z`) changes strictly on format or schema updates. Tooling enhancements release as minors; breaking format changes are batched into rare majors with migration automation (`along migrate`).
 

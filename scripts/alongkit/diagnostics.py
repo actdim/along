@@ -14,6 +14,7 @@ if __name__ == "__main__":
         "Run: along feedback   (or: python scripts/along_feedback.py)"
     )
 
+import copy
 import json
 import os
 import platform
@@ -24,7 +25,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
-from . import version
+from . import telegram, version
 
 CURRENT_VERSION = version.CURRENT_VERSION
 
@@ -65,7 +66,7 @@ DEFAULT_CONFIG: Dict[str, Any] = {
 class ConfigManager:
     @staticmethod
     def load_config(repo_root: Optional[str] = None) -> Dict[str, Any]:
-        config = dict(DEFAULT_CONFIG)
+        config = copy.deepcopy(DEFAULT_CONFIG)
 
         # 1. Global config
         if os.path.isfile(GLOBAL_CONFIG_FILE):
@@ -89,13 +90,13 @@ class ConfigManager:
                 except (OSError, json.JSONDecodeError, ValueError) as exc:
                     print(f"[Warning] Failed to read local config '{local_cfg}': {exc}", file=sys.stderr)
 
-        # 3. Environment variable overrides
-        if os.environ.get("ALONG_TELEGRAM_BOT_TOKEN"):
-            config["transports"]["telegram"]["bot_token"] = os.environ["ALONG_TELEGRAM_BOT_TOKEN"]
-            config["transports"]["telegram"]["enabled"] = True
-        if os.environ.get("ALONG_TELEGRAM_CHAT_ID"):
-            config["transports"]["telegram"]["chat_id"] = os.environ["ALONG_TELEGRAM_CHAT_ID"]
-            config["transports"]["telegram"]["enabled"] = True
+        # 3. Telegram settings resolution via unified helper
+        t_settings = telegram.resolve_settings(repo_root, global_config=GLOBAL_CONFIG_FILE)
+        config["transports"]["telegram"]["bot_token"] = t_settings.bot_token
+        config["transports"]["telegram"]["chat_id"] = t_settings.primary_chat_id
+        config["transports"]["telegram"]["enabled"] = t_settings.enabled
+
+        # 4. Other environment variable overrides
         if os.environ.get("ALONG_FEEDBACK_WEBHOOK_URL"):
             config["transports"]["webhook"]["url"] = os.environ["ALONG_FEEDBACK_WEBHOOK_URL"]
             config["transports"]["webhook"]["enabled"] = True

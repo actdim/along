@@ -787,6 +787,48 @@ class TestPackagingContract(unittest.TestCase):
             f"These scripts in scripts/ are missing bootstrap.ensure_deps(): {missing}",
         )
 
+    def test_extras_install_only_imported_packages(self):
+        """[telemetry] extra must not exist in pyproject.toml and alongkit/telemetry must only import stdlib/relative."""
+        text = self._pyproject()
+        self.assertNotIn("opentelemetry", text.lower())
+        self.assertNotIn("telemetry =", text)
+
+        telemetry_dir = os.path.join(REPO_ROOT, "scripts", "alongkit", "telemetry")
+        stdlib_names = getattr(sys, "stdlib_module_names", frozenset())
+        for fname in sorted(os.listdir(telemetry_dir)):
+            if not fname.endswith(".py"):
+                continue
+            path = os.path.join(telemetry_dir, fname)
+            with open(path, "r", encoding="utf-8") as f:
+                tree = ast.parse(f.read(), filename=path)
+            for node in ast.walk(tree):
+                if isinstance(node, ast.Import):
+                    for alias in node.names:
+                        top = alias.name.split(".")[0]
+                        self.assertTrue(
+                            top in stdlib_names or top == "__future__",
+                            f"{fname} imports non-stdlib module '{top}'",
+                        )
+                elif isinstance(node, ast.ImportFrom):
+                    if node.level and node.level > 0:
+                        continue
+                    if node.module:
+                        top = node.module.split(".")[0]
+                        self.assertTrue(
+                            top in stdlib_names or top == "__future__",
+                            f"{fname} imports non-stdlib module '{top}'",
+                        )
+
+        for rel in ("README.md", os.path.join(".along", "VISION.md")):
+            fpath = os.path.join(REPO_ROOT, rel)
+            with open(fpath, "r", encoding="utf-8") as f:
+                content = f.read()
+            self.assertNotIn(
+                "actdim-along[telemetry]",
+                content,
+                f"{rel} still references actdim-along[telemetry]",
+            )
+
 
 class TestInstallersCarryThePackage(unittest.TestCase):
     """A global install is a file copy. If it misses `alongkit/`, every engine dies

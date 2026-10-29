@@ -21,47 +21,6 @@ from alongkit import environment
 from .common import check_unknown_args, require_entity_name
 
 
-def build_parser() -> argparse.ArgumentParser:
-    """Build root parser for along env subcommands."""
-    parser = argparse.ArgumentParser(
-        prog="along env",
-        description="Isolated Docker environment manager for autonomous agent runs.",
-        allow_abbrev=False,
-    )
-    sub = parser.add_subparsers(dest="subcmd")
-
-    p_up = sub.add_parser("up", help="Create and start an isolated Docker environment", allow_abbrev=False)
-    p_up.add_argument("name", help="Environment name")
-    p_up.add_argument("--repo", default=None, help="Git repository URL")
-    p_up.add_argument("--branch", default=None, help="Git branch name")
-    p_up.add_argument("--dir", default=None, help="Base environments directory or target env path")
-
-    p_down = sub.add_parser("down", help="Stop isolated Docker environment", allow_abbrev=False)
-    p_down.add_argument("name", help="Environment name")
-    p_down.add_argument("--dir", default=None, help="Base environments directory or target env path")
-
-    p_status = sub.add_parser("status", help="Show environment status", allow_abbrev=False)
-    p_status.add_argument("name", nargs="?", default=None, help="Environment name (optional)")
-    p_status.add_argument("--dir", default=None, help="Base environments directory or target env path")
-    p_status.add_argument("--json", action="store_true", help="Format output as JSON")
-
-    p_logs = sub.add_parser("logs", help="View container logs", allow_abbrev=False)
-    p_logs.add_argument("name", help="Environment name")
-    p_logs.add_argument("-f", "--follow", action="store_true", help="Follow log output")
-    p_logs.add_argument("--tail", type=int, default=None, help="Number of lines to show from the end of the logs")
-    p_logs.add_argument("--dir", default=None, help="Base environments directory or target env path")
-
-    p_shell = sub.add_parser("shell", help="Open an interactive shell in the container", allow_abbrev=False)
-    p_shell.add_argument("name", help="Environment name")
-    p_shell.add_argument("--dir", default=None, help="Base environments directory or target env path")
-
-    p_update = sub.add_parser("update", help="Update image and refresh environment", allow_abbrev=False)
-    p_update.add_argument("name", help="Environment name")
-    p_update.add_argument("--dir", default=None, help="Base environments directory or target env path")
-
-    return parser
-
-
 def handle_env_command(repo_root: str, args: List[str]):
     """Unified entry point for along env subcommands."""
     if not args or args[0] in ("-h", "--help", "help"):

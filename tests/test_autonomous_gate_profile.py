@@ -210,6 +210,38 @@ class TestDeterministicAllowDenyBehavior(unittest.TestCase):
         self.assertEqual(res.decision, GateDecision.DENY)
         self.assertIn("PLAN_REQUIRED", res.reason or "")
 
+    def test_review_phase_blocks_source_write_in_standard_profile(self):
+        """Plan approval in non-edit phase (e.g. review) does not unlock source writes."""
+        self.assertTrue(set(session.EDIT_PHASES).issubset(set(session.SESSION_PHASES)))
+
+        issues_dir = os.path.join(self.root, ".along", "ISSUES")
+        issue_path = os.path.join(issues_dir, "feat--phase-test.md")
+        textio.write_text(issue_path, "---\nprotocol: along\nslug: phase-test\ntype: feat\nstatus: in-progress\n---\n")
+        session.init_session(self.root, "phase-test")
+        session.approve_plan(self.root, "phase-test")
+
+        # Mutate phase to 'review' via save_state
+        state = session.load_state(self.root, "phase-test")
+        state["phase"] = "review"
+        session.save_state(self.root, "phase-test", state)
+
+        key = session.session_key("generic", "sess-phase-eval")
+        session.bind_session(self.root, "phase-test", key=key, approved=True)
+
+        event = HookEvent(
+            event_type=HookEventType.PRE_TOOL_USE,
+            tool_name="write_to_file",
+            tool_args={"TargetFile": "src/module.py", "CodeContent": "x = 1\n"},
+            workspace_root=self.root,
+            runtime="generic",
+            conversation_id="sess-phase-eval",
+            raw_payload={},
+        )
+        engine = HookEngine(config=hook_config.HooksConfig(profile="standard"), repo_root=self.root)
+        res = engine.evaluate(event)
+        self.assertEqual(res.decision, GateDecision.DENY)
+        self.assertIn("require-plan-approval", (res.reason or "").lower())
+
 
 class TestEscalationListOperations(unittest.TestCase):
     def setUp(self):

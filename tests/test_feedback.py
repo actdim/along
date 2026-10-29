@@ -126,6 +126,7 @@ class TestAlongFeedbackEngine(unittest.TestCase):
         with patch("urllib.request.urlopen") as mock_urlopen:
             mock_response = MagicMock()
             mock_response.status = 200
+            mock_response.read.return_value = b'{"ok": true}'
             mock_urlopen.return_value.__enter__.return_value = mock_response
 
             ok, msg = along_feedback.TelegramTransport.send("Mock report", incidents, config)
@@ -152,6 +153,7 @@ class TestAlongFeedbackEngine(unittest.TestCase):
         with patch("urllib.request.urlopen") as mock_urlopen:
             mock_response = MagicMock()
             mock_response.status = 200
+            mock_response.read.return_value = b'{"ok": true}'
             mock_urlopen.return_value.__enter__.return_value = mock_response
 
             ok, msg = along_feedback.WebhookTransport.send("Mock report", incidents, config)

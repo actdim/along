@@ -31,7 +31,7 @@ from typing import Dict, Any, List, Optional, Tuple
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
-from alongkit import bootstrap
+from alongkit import bootstrap, telegram
 bootstrap.ensure_deps()
 
 
@@ -75,8 +75,6 @@ class TelegramTransport:
         if not bot_token or not chat_id:
             return False, "Telegram credentials missing. Set bot_token and chat_id in ~/.along/config.json or environment variables (ALONG_TELEGRAM_BOT_TOKEN, ALONG_TELEGRAM_CHAT_ID)."
 
-        api_url = f"https://api.telegram.org/bot{bot_token}/sendMessage"
-
         summary = (
             f"[Along Diagnostics Report]\n"
             f"Along Version: v{CURRENT_VERSION}\n"
@@ -93,20 +91,10 @@ class TelegramTransport:
         if len(summary) > 4000:
             summary = summary[:3900] + "\n...[truncated]"
 
-        payload = {
-            "chat_id": chat_id,
-            "text": summary
-        }
-        data = json.dumps(payload).encode("utf-8")
-        req = urllib.request.Request(api_url, data=data, headers={"Content-Type": "application/json"})
-
-        try:
-            with urllib.request.urlopen(req, timeout=10) as resp:
-                if resp.status == 200:
-                    return True, "Successfully dispatched diagnostic summary to Telegram channel."
-                return False, f"Telegram API returned status {resp.status}."
-        except (urllib.error.URLError, OSError, TimeoutError) as e:
-            return False, f"Failed to send Telegram message: {str(e)}"
+        ok, detail = telegram.send_message(bot_token, chat_id, summary)
+        if ok:
+            return True, "Successfully dispatched diagnostic summary to Telegram channel."
+        return False, f"Failed to send Telegram message: {detail}"
 
 
 class WebhookTransport:

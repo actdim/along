@@ -26,7 +26,7 @@ sources:
 
 The Along Agent Run Protocol (ARP), also referred to as the Agent Execution Protocol (AEP), defines a standardized observability, telemetry, and execution tracking engine for autonomous agent workflows. Modern AI agent operations execute non-deterministic cycles of LLM inference, multi-step chain reasoning, external tool usage, and subprocess execution. Without rigorous runtime tracing, debugging multi-agent swarms, identifying token bottlenecks, and investigating protocol violations becomes intractable.
 
-The ARP engine bridges semantic OpenInference standards and OpenTelemetry (OTel) GenAI semantic conventions into Along. It provides real-time, vendor-neutral telemetry with local disk buffering and offline survivability.
+The ARP engine bridges semantic OpenInference standards and OpenTelemetry (OTel) GenAI semantic conventions into Along. It provides real-time, vendor-neutral telemetry with local disk buffering and offline survivability, implemented entirely within Along Core using only the Python standard library (no third-party OpenTelemetry SDK dependencies required).
 
 ```text
 +-----------------------------------------------------------------------------------+

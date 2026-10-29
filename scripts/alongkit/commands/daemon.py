@@ -32,7 +32,6 @@ def build_parser() -> argparse.ArgumentParser:
     # along daemon start
     p_start = sub.add_parser("start", help="Start background runner daemon")
     p_start.add_argument("--poll-interval", type=float, default=None, help="Polling interval in seconds (default: 5.0)")
-    p_start.add_argument("--port", type=int, default=None, help="Local network port (reserved for ingress/metrics)")
     p_start.add_argument("--worktree", action="store_true", help="Execute runs in isolated git worktrees")
     p_start.add_argument("--dry-run", action="store_true", help="Simulate execution without modifying state")
     p_start.add_argument("--foreground", "-F", action="store_true", help="Run daemon in foreground (blocking)")
@@ -96,7 +95,7 @@ def handle_daemon_command(repo_root: str, args: List[str]) -> int:
     if not args or args[0] in ("-h", "--help", "help"):
         print("Usage: along daemon [start|stop|status|logs] [options]")
         print("Subcommands:")
-        print("  start   [--poll-interval <sec>] [--port <port>] [--worktree] [--dry-run] [--foreground]")
+        print("  start   [--poll-interval <sec>] [--worktree] [--dry-run] [--foreground]")
         print("  stop")
         print("  status  [--json]")
         print("  logs    [-f] [--tail <n>]")
@@ -112,7 +111,6 @@ def handle_daemon_command(repo_root: str, args: List[str]) -> int:
         return daemon.start_daemon(
             repo_root=repo_root,
             poll_interval=parsed.poll_interval,
-            port=parsed.port,
             use_worktree=parsed.worktree,
             dry_run=parsed.dry_run,
             foreground=parsed.foreground,

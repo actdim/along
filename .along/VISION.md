@@ -45,14 +45,13 @@ To maintain reliability, rapid verification, and zero bloat, Along cleanly separ
 
 ### 2. Modular Extras and Extensions
 - **Web Dashboard and Analytics (`actdim-along[dash]`)**: Executive web dashboard, Cytoscape DAG visualization, and OpenAPI service (FastAPI, Uvicorn, Pydantic, Rich).
-- **Telemetry and Tracing (`actdim-along[telemetry]`)**: OpenTelemetry / OpenInference tracing and remote OTLP export tooling.
-- **Full Suite (`actdim-along[all]`)**: Installs all optional extras (`actdim-along[dash,telemetry]`).
+- **Full Suite (`actdim-along[all]`)**: Installs all optional extras (`actdim-along[dash]`).
+- **Telemetry in Core**: Tracer, redactor, WAL spool, and OTLP/HTTP JSON exporter are built directly into Along Core using only the Python standard library.
 - **Modular Protocol Capabilities**: Advanced extensions like `along-team` multi-agent loops, git worktree sandboxing, `along-graph-sync` AST code review graphs, and `along-dep-scan` operate with zero extra runtime package dependencies.
 
 ### 3. Installation Matrix
 - Core only: `pip install actdim-along`
 - Core + Dashboard: `pip install actdim-along[dash]`
-- Core + Telemetry: `pip install actdim-along[telemetry]`
 - All extensions: `pip install actdim-along[all]`
 
 ### 4. Protocol Versioning Policy

@@ -3,9 +3,9 @@
 
 ## Active Decisions (49, newest 30 shown)
 
+- [Along Core and Dash Extra Architecture](DECISIONS/ADR-2026-10-29--along-core-and-dash-extra.md)
 - [Issue plans live with the ticket; only the CLI approves them](DECISIONS/ADR-2026-10-23--issue-plans-approved-ahead.md)
 - [Gate Denials Are Ledger Events; Closing Requires Resolution or User-Verified Disclosure](DECISIONS/ADR-2026-10-23--gate-denials-are-ledger-events.md)
-- [Along Core and Modular Extras Architecture](DECISIONS/ADR-2026-10-23--along-core-and-modular-extras.md)
 - [Entity model slimmed: spike is an issue type, risks and checklists retired](DECISIONS/ADR-2026-10-19--entity-model-slimmed.md)
 - [Gates judge results, not commands](DECISIONS/ADR-2026-10-17--gates-judge-results-not-commands.md)
 - [Autonomous mode isolation: one Docker container per environment now, gVisor runtime later](DECISIONS/ADR-2026-10-17--docker-isolation-now-gvisor-later.md)
@@ -36,7 +36,7 @@
 
 Older decisions (19): docs/decisions/INDEX.md
 
-## Superseded & Retired Decisions (6)
+## Superseded & Retired Decisions (7)
 
 - single-file-append-only-decisions -> bounded-context-budget-and-active-projections
 - code-graph-mcp-and-hybrid-kb-search -> decouple-code-review-graph-from-mcp-to-direct-cli
@@ -44,3 +44,4 @@ Older decisions (19): docs/decisions/INDEX.md
 - protocol-v150-automated-entities-and-intent-heuristics -> entity-relationships-unidirectional-graph-and-canonical-slugs
 - universal-version-bumping-and-scripts-ecosystem -> version-ssot-consolidation-and-dynamic-packaging
 - windows-git-concurrency-and-index-lock-mitigation -> revert-git-stat-cache-workarounds
+- along-core-and-modular-extras -> along-core-and-dash-extra

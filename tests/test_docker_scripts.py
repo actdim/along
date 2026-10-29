@@ -136,7 +136,17 @@ class TestDockerScriptsStructural(unittest.TestCase):
             if clean:
                 shell_hosts.append(clean)
 
-        self.assertEqual(shell_hosts, environment.DEFAULT_EGRESS_ALLOWLIST)
+        expected_hosts = [
+            "api.anthropic.com",
+            "api.openai.com",
+            "generativelanguage.googleapis.com",
+            "github.com",
+            "pypi.org",
+            "files.pythonhosted.org",
+            "registry.npmjs.org",
+            "api.telegram.org",
+        ]
+        self.assertEqual(shell_hosts, expected_hosts)
         self.assertIn("api.telegram.org", shell_hosts)
 
     def test_git_credential_along_structural(self):

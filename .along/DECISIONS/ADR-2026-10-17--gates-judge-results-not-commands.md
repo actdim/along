@@ -12,7 +12,7 @@ tags: [adr, architecture, decision, gates, hooks]
 
 - Date: 2026-10-17
 - Status: accepted
-- Context: In three repositories 86% of gate events were `require_plan_approval` and 77% of all events were inquiry blocks on read-only shell commands. A 1700-line tool-nature classifier asked users to classify `git`, `python` and `findstr`, still missed scripts that delete files, and agents looped on identical blocks (up to 94 in one conversation). Whether a command writes is not decidable from its text; isolation is the container's job (docker-isolation-now-gvisor-later). Refines point 2 of gate-friction-fixes (read-only command lists, circuit_breaker as an invariant gate). [debt--gate-simplification]
+- Context: In three repositories 86% of gate events were `require_plan_approval` and 77% of all events were inquiry blocks on read-only shell commands. A 1700-line tool-nature classifier asked users to classify `git`, `python` and `findstr`, still missed scripts that delete files, and agents looped on identical blocks (up to 94 in one conversation). Whether a command writes is not decidable from its text; isolation is the container's job (docker-isolation-now-gvisor-later). Complements and refines point 2 of gate-friction-fixes (read-only command lists, circuit_breaker as an invariant gate). [debt--gate-simplification]
 - Decision:
   1. Gates decide only from exact facts: the target path of a file-writing tool, a short list of explicit destructive forms, and `git status`.
   2. Shell commands are never classified before they run. `require_plan_approval` snapshots the working tree at the user's message and, at Stop, holds the turn once when it changed files outside Along state and planning artifacts without an approved plan (ask the user: approve or revert).

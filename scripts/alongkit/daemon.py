@@ -39,6 +39,14 @@ from datetime import datetime, timezone
 from typing import Any, Callable, Dict, List, Optional, Sequence, Tuple, Union
 
 from . import entities, handoff, orchestrator, proc, repo, textio, worktree
+from .telegram import (
+    API_BASE,
+    TelegramAuthError,
+    TelegramClient,
+    TelegramConflictError,
+    TelegramRateLimitError,
+    resolve_settings as resolve_telegram_settings,
+)
 
 DAEMON_DIR_NAME: str = ".daemon"
 PID_FILE_NAME: str = "daemon.pid"
@@ -357,7 +365,6 @@ def get_daemon_status(repo_root: str) -> Dict[str, Any]:
                 "current_run_id": state.get("current_run_id"),
                 "worktree": state.get("worktree", False),
                 "poll_interval": state.get("poll_interval", DEFAULT_POLL_INTERVAL),
-                "port": state.get("port"),
                 "last_poll_at": state.get("last_poll_at"),
             }
         else:
@@ -372,7 +379,6 @@ def get_daemon_status(repo_root: str) -> Dict[str, Any]:
                 "current_run_id": None,
                 "worktree": state.get("worktree", False),
                 "poll_interval": state.get("poll_interval", DEFAULT_POLL_INTERVAL),
-                "port": state.get("port"),
                 "stale": True,
                 # Alive but not ours: the PID was reused, or an older version wrote no token.
                 "pid_alive": is_pid_alive(pid),
@@ -388,7 +394,6 @@ def get_daemon_status(repo_root: str) -> Dict[str, Any]:
         "current_run_id": None,
         "worktree": state.get("worktree", False),
         "poll_interval": state.get("poll_interval", DEFAULT_POLL_INTERVAL),
-        "port": state.get("port"),
     }
 
 
@@ -460,116 +465,6 @@ def tail_daemon_logs(
         pass
 
 
-# ---------------------------------------------------------------------------
-# Telegram Client & Message Dispatcher
-# ---------------------------------------------------------------------------
-
-class TelegramAuthError(RuntimeError):
-    """The Bot API rejected the token (HTTP 401/404); retrying cannot help."""
-
-
-class TelegramConflictError(RuntimeError):
-    """Another getUpdates consumer or webhook holds the bot token (HTTP 409)."""
-
-
-class TelegramRateLimitError(RuntimeError):
-    """The Bot API rate-limited getUpdates (HTTP 429); carries retry_after."""
-
-    def __init__(self, message: str, retry_after: Optional[float] = None) -> None:
-        super().__init__(message)
-        self.retry_after = retry_after
-
-
-class TelegramClient:
-    """Standard library HTTP client for Telegram Bot API."""
-
-    def __init__(self, bot_token: str, base_url: str = "https://api.telegram.org") -> None:
-        self.bot_token = bot_token.strip()
-        self.base_url = f"{base_url.rstrip('/')}/bot{self.bot_token}"
-
-    def get_updates(
-        self,
-        offset: Optional[int] = None,
-        limit: int = 100,
-        timeout: int = 20,
-    ) -> List[Dict[str, Any]]:
-        """Fetch incoming updates using long polling."""
-        params: Dict[str, Any] = {
-            "timeout": timeout,
-            "limit": limit,
-            "allowed_updates": ["message"],
-        }
-        if offset is not None:
-            params["offset"] = offset
-
-        query = urllib.parse.urlencode(params)
-        url = f"{self.base_url}/getUpdates?{query}"
-        req = urllib.request.Request(
-            url,
-            headers={"User-Agent": "Along-Runner-Daemon/1.0"},
-        )
-        try:
-            with urllib.request.urlopen(req, timeout=timeout + 15) as resp:
-                if resp.status == 200:
-                    data = json.loads(resp.read().decode("utf-8"))
-                    if data.get("ok"):
-                        res = data.get("result", [])
-                        return res if isinstance(res, list) else []
-        except urllib.error.HTTPError as exc:
-            # The URL holds the token: report the status only.
-            if exc.code in (401, 404):
-                raise TelegramAuthError(f"getUpdates rejected the bot token (HTTP {exc.code})") from None
-            if exc.code == 409:
-                raise TelegramConflictError(
-                    "getUpdates HTTP 409: another consumer uses this bot token (another daemon or a webhook)"
-                ) from None
-            if exc.code == 429:
-                retry_after: Optional[float] = None
-                try:
-                    raw_body = exc.read().decode("utf-8")
-                    data = json.loads(raw_body)
-                    ra = data.get("parameters", {}).get("retry_after")
-                    if ra is not None:
-                        val = float(ra)
-                        retry_after = int(val) if val.is_integer() else val
-                except (OSError, ValueError, TypeError, AttributeError):
-                    pass
-                ra_str = f", retry_after={retry_after}" if retry_after is not None else ""
-                raise TelegramRateLimitError(
-                    f"getUpdates rate limited (HTTP 429{ra_str})",
-                    retry_after=retry_after,
-                ) from None
-            raise RuntimeError(f"getUpdates HTTP {exc.code}") from None
-        except (urllib.error.URLError, OSError, ValueError, TypeError, TimeoutError) as exc:
-            raise RuntimeError(f"getUpdates network error: {exc}") from exc
-        return []
-
-    def send_message(self, chat_id: Union[int, str], text: str) -> bool:
-        """Send a plain text message to the specified Telegram chat."""
-        url = f"{self.base_url}/sendMessage"
-        payload = {
-            "chat_id": chat_id,
-            "text": text[:4000],
-        }
-        data = json.dumps(payload).encode("utf-8")
-        req = urllib.request.Request(
-            url,
-            data=data,
-            headers={
-                "Content-Type": "application/json",
-                "User-Agent": "Along-Runner-Daemon/1.0",
-            },
-        )
-        try:
-            with urllib.request.urlopen(req, timeout=10) as resp:
-                if resp.status == 200:
-                    data = json.loads(resp.read().decode("utf-8"))
-                    return bool(data.get("ok"))
-        except (urllib.error.URLError, OSError, ValueError, TypeError, TimeoutError):
-            return False
-        return False
-
-
 def parse_telegram_command(text: str) -> Tuple[Optional[str], Optional[str]]:
     """Parse incoming Telegram text message for commands and arguments.
 
@@ -630,47 +525,23 @@ def is_sender_authorized(
 
 def resolve_daemon_config(repo_root: str) -> Dict[str, Any]:
     """Resolve Telegram token, chat IDs, and operational settings from env and configs."""
+    t_settings = resolve_telegram_settings(repo_root)
     cfg: Dict[str, Any] = {
-        "bot_token": "",
-        "chat_ids": [],
+        "bot_token": t_settings.bot_token,
+        "chat_ids": list(t_settings.chat_ids),
         "poll_interval": DEFAULT_POLL_INTERVAL,
         "worktree": False,
-        "port": None,
         "max_command_age": DEFAULT_MAX_COMMAND_AGE,
         "conflict_window": DEFAULT_CONFLICT_WINDOW,
     }
 
-    # 1. Read global config
-    global_cfg_path = os.path.expanduser("~/.along/config.json")
-    if os.path.isfile(global_cfg_path):
-        try:
-            with open(global_cfg_path, "r", encoding="utf-8") as f:
-                loaded = json.load(f)
-                if isinstance(loaded, dict):
-                    t_section = loaded.get("transports", {}).get("telegram", {})
-                    if isinstance(t_section, dict):
-                        if t_section.get("bot_token"):
-                            cfg["bot_token"] = str(t_section["bot_token"]).strip()
-                        if t_section.get("chat_id"):
-                            cfg["chat_ids"].append(str(t_section["chat_id"]).strip())
-        except (OSError, json.JSONDecodeError):
-            pass
-
-    # 2. Read local repo config
+    # 1. Read local repo config for daemon operational parameters
     local_cfg_path = os.path.join(repo.state_dir(repo_root), "config.json")
     if os.path.isfile(local_cfg_path):
         try:
             with open(local_cfg_path, "r", encoding="utf-8") as f:
                 loaded = json.load(f)
                 if isinstance(loaded, dict):
-                    t_section = loaded.get("transports", {}).get("telegram", {})
-                    if isinstance(t_section, dict):
-                        if t_section.get("bot_token"):
-                            cfg["bot_token"] = str(t_section["bot_token"]).strip()
-                        if t_section.get("chat_id"):
-                            cid = str(t_section["chat_id"]).strip()
-                            if cid and cid not in cfg["chat_ids"]:
-                                cfg["chat_ids"].append(cid)
                     d_section = loaded.get("daemon", {})
                     if isinstance(d_section, dict):
                         if "worktree" in d_section:
@@ -684,19 +555,7 @@ def resolve_daemon_config(repo_root: str) -> Dict[str, Any]:
         except (OSError, json.JSONDecodeError, ValueError, TypeError):
             pass
 
-    # 3. Environment overrides (authoritative)
-    env_token = os.environ.get("TELEGRAM_BOT_TOKEN") or os.environ.get("ALONG_TELEGRAM_BOT_TOKEN")
-    if env_token:
-        cfg["bot_token"] = env_token.strip()
-
-    env_chat = os.environ.get("TELEGRAM_CHAT_ID") or os.environ.get("ALONG_TELEGRAM_CHAT_ID")
-    if env_chat:
-        # Support comma-separated chat IDs
-        for part in env_chat.split(","):
-            clean_part = part.strip()
-            if clean_part and clean_part not in cfg["chat_ids"]:
-                cfg["chat_ids"].append(clean_part)
-
+    # 2. Environment operational settings (authoritative)
     env_interval = os.environ.get("ALONG_DAEMON_POLL_INTERVAL")
     if env_interval:
         try:
@@ -736,7 +595,6 @@ class RunnerDaemon:
         self,
         repo_root: Optional[str] = None,
         poll_interval: Optional[float] = None,
-        port: Optional[int] = None,
         use_worktree: bool = False,
         dry_run: bool = False,
         telegram_token: Optional[str] = None,
@@ -754,7 +612,6 @@ class RunnerDaemon:
         self.bot_token = telegram_token or config.get("bot_token", "")
         self.allowed_chats = list(allowed_chats) if allowed_chats is not None else config.get("chat_ids", [])
         self.poll_interval = float(poll_interval) if poll_interval is not None else float(config.get("poll_interval", DEFAULT_POLL_INTERVAL))
-        self.port = port
         self.use_worktree = bool(use_worktree or config.get("worktree", False))
         self.dry_run = bool(dry_run)
         self.log_to_stdout = bool(log_to_stdout)
@@ -1074,7 +931,6 @@ class RunnerDaemon:
             "current_run_id": None,
             "worktree": self.use_worktree,
             "poll_interval": self.poll_interval,
-            "port": self.port,
             "last_poll_at": None,
             "telegram_offset": self.last_update_id,
         }
@@ -1195,7 +1051,6 @@ class RunnerDaemon:
 def start_daemon(
     repo_root: str,
     poll_interval: Optional[float] = None,
-    port: Optional[int] = None,
     use_worktree: bool = False,
     dry_run: bool = False,
     foreground: bool = False,
@@ -1212,7 +1067,6 @@ def start_daemon(
         daemon = RunnerDaemon(
             repo_root=repo_root,
             poll_interval=poll_interval,
-            port=port,
             use_worktree=use_worktree,
             dry_run=dry_run,
             log_to_stdout=True,
@@ -1231,8 +1085,6 @@ def start_daemon(
     ]
     if poll_interval is not None:
         cmd.extend(["--poll-interval", str(poll_interval)])
-    if port is not None:
-        cmd.extend(["--port", str(port)])
     if use_worktree:
         cmd.append("--worktree")
     if dry_run:

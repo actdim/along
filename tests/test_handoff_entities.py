@@ -12,6 +12,7 @@ import os
 import shutil
 import sys
 import unittest
+from unittest.mock import patch
 
 if not os.environ.get("ALONG_TEST_RUNNER"):
     raise SystemExit(
@@ -230,6 +231,41 @@ class TestQuestionLifecycle(unittest.TestCase):
         self.assertFalse(handoff.has_open_questions(self.repo, self.slug))
         answered_list = handoff.list_questions(self.repo, self.slug, status="answered")
         self.assertEqual(len(answered_list), 1)
+
+    def test_question_ids_stay_unique_after_deletions(self):
+        """Auto question IDs must remain monotonically unique even after deletions."""
+        q1 = handoff.create_question(self.repo, self.slug, question="Question 1")
+        q2 = handoff.create_question(self.repo, self.slug, question="Question 2")
+        q3 = handoff.create_question(self.repo, self.slug, question="Question 3")
+        self.assertEqual(q1["id"], "q-1")
+        self.assertEqual(q2["id"], "q-2")
+        self.assertEqual(q3["id"], "q-3")
+
+        # Delete q-2.md
+        q_dir = handoff.get_questions_dir(self.repo, self.slug)
+        os.remove(os.path.join(q_dir, "q-2.md"))
+
+        # Next auto ID must be q-4 and not collide with q-3
+        q4 = handoff.create_question(self.repo, self.slug, question="Question 4")
+        self.assertEqual(q4["id"], "q-4")
+        loaded_q3 = handoff.load_question(self.repo, self.slug, "q-3")
+        self.assertIsNotNone(loaded_q3)
+        self.assertEqual(loaded_q3["question"], "Question 3")
+
+        # Delete q-4.md (the max)
+        os.remove(os.path.join(q_dir, "q-4.md"))
+
+        # Next auto ID must be q-5
+        q5 = handoff.create_question(self.repo, self.slug, question="Question 5")
+        self.assertEqual(q5["id"], "q-5")
+
+        # Explicit qid="q-7" advances sequence
+        q7 = handoff.create_question(self.repo, self.slug, question="Question 7", qid="q-7")
+        self.assertEqual(q7["id"], "q-7")
+
+        # Next auto ID must be q-8
+        q8 = handoff.create_question(self.repo, self.slug, question="Question 8")
+        self.assertEqual(q8["id"], "q-8")
 
 
 class TestClaimManagement(unittest.TestCase):
@@ -467,6 +503,13 @@ Multi-vendor runtimes require compact, deterministic context payloads to execute
         self.assertEqual(data["slug"], self.slug)
         self.assertEqual(data["role"], "reviewer")
         self.assertIn("Handoff Brief: Reviewer", data["payload"])
+
+    def test_handle_brief_command_cli_usage_errors_exit_2(self):
+        """Usage errors in along brief must return exit code 2."""
+        with patch("sys.stderr", new=io.StringIO()):
+            self.assertEqual(handle_brief_command(self.repo, [self.slug]), 2)
+            self.assertEqual(handle_brief_command(self.repo, ["--role", "implementer"]), 2)
+            self.assertEqual(handle_brief_command(self.repo, [self.slug, "--role", "bogus"]), 2)
 
     def test_brief_skips_malformed_defects(self):
         # A defect list an agent wrote by hand may hold plain strings. REQ-9

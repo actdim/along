@@ -244,7 +244,7 @@ class TestEnvDockerFailureHandling(unittest.TestCase):
 
     def test_up_failure_exits_1(self):
         with patch.object(environment, "get_docker_compose_cmd", return_value=["docker", "compose"]), \
-             patch.object(environment.subprocess, "run", return_value=subprocess.CompletedProcess(args=[], returncode=1, stdout="", stderr="boom")):
+             patch.object(environment.proc, "run_capture", return_value=proc.Result([], 1, "", "boom")):
             with patch("sys.stderr", new=io.StringIO()) as fake_err:
                 with self.assertRaises(SystemExit) as cm:
                     handle_env_command(REPO_ROOT, ["up", "fail-env", "--dir", self.tmp_dir])
@@ -254,7 +254,7 @@ class TestEnvDockerFailureHandling(unittest.TestCase):
     def test_down_failure_exits_1(self):
         environment.env_up("fail-env", base_dir=self.tmp_dir, run_compose=False)
         with patch.object(environment, "get_docker_compose_cmd", return_value=["docker", "compose"]), \
-             patch.object(environment.subprocess, "run", return_value=subprocess.CompletedProcess(args=[], returncode=1, stdout="", stderr="boom")):
+             patch.object(environment.proc, "run_capture", return_value=proc.Result([], 1, "", "boom")):
             with patch("sys.stderr", new=io.StringIO()) as fake_err:
                 with self.assertRaises(SystemExit) as cm:
                     handle_env_command(REPO_ROOT, ["down", "fail-env", "--dir", self.tmp_dir])
@@ -267,10 +267,10 @@ class TestEnvDockerFailureHandling(unittest.TestCase):
 
         def fake_run(cmd, **kwargs):
             recorded_calls.append(cmd)
-            return subprocess.CompletedProcess(args=cmd, returncode=1, stdout="", stderr="boom")
+            return proc.Result(cmd, 1, "", "boom")
 
         with patch.object(environment, "get_docker_compose_cmd", return_value=["docker", "compose"]), \
-             patch.object(environment.subprocess, "run", side_effect=fake_run):
+             patch.object(environment.proc, "run_capture", side_effect=fake_run):
             with patch("sys.stderr", new=io.StringIO()) as fake_err:
                 with self.assertRaises(SystemExit) as cm:
                     handle_env_command(REPO_ROOT, ["update", "fail-env", "--dir", self.tmp_dir])
@@ -284,7 +284,7 @@ class TestEnvDockerFailureHandling(unittest.TestCase):
         environment.env_up("fail-env", base_dir=self.tmp_dir, run_compose=False)
         with patch.object(environment, "get_docker_compose_cmd", return_value=None), \
              patch.object(environment.shutil, "which", return_value="/bin/docker"), \
-             patch.object(environment.subprocess, "run", return_value=subprocess.CompletedProcess(args=[], returncode=1, stdout="", stderr="stop-failed")):
+             patch.object(environment.proc, "run_capture", return_value=proc.Result([], 1, "", "stop-failed")):
             with patch("sys.stderr", new=io.StringIO()) as fake_err:
                 with self.assertRaises(SystemExit) as cm:
                     handle_env_command(REPO_ROOT, ["down", "fail-env", "--dir", self.tmp_dir])
@@ -293,7 +293,7 @@ class TestEnvDockerFailureHandling(unittest.TestCase):
 
     def test_success_exits_0(self):
         with patch.object(environment, "get_docker_compose_cmd", return_value=["docker", "compose"]), \
-             patch.object(environment.subprocess, "run", return_value=subprocess.CompletedProcess(args=[], returncode=0, stdout="ok", stderr="")):
+             patch.object(environment.proc, "run_capture", return_value=proc.Result([], 0, "ok", "")):
             with self.assertRaises(SystemExit) as cm:
                 handle_env_command(REPO_ROOT, ["up", "ok-env", "--dir", self.tmp_dir])
             self.assertEqual(cm.exception.code, 0)
@@ -372,6 +372,54 @@ class TestEnvLifecycle(unittest.TestCase):
         with open(os.path.join(env_dir, "compose.yaml"), "r", encoding="utf-8") as f:
             self.assertIn("runtime: runsc", f.read())
 
+    def test_get_container_status_states(self):
+        """get_container_status parses {{.State}} and maps stopped and passed-through states."""
+        from alongkit.proc import Result
+
+        with patch("alongkit.environment.shutil.which", return_value="/usr/bin/docker"):
+            # Paused
+            with patch("alongkit.environment.proc.run_capture", return_value=Result([], 0, "paused\n", "")):
+                self.assertEqual(environment.get_container_status("along-test"), "paused")
+
+            # Running
+            with patch("alongkit.environment.proc.run_capture", return_value=Result([], 0, "running\n", "")):
+                self.assertEqual(environment.get_container_status("along-test"), "running")
+
+            # Exited -> stopped
+            with patch("alongkit.environment.proc.run_capture", return_value=Result([], 0, "exited\n", "")):
+                self.assertEqual(environment.get_container_status("along-test"), "stopped")
+
+            # Dead -> stopped
+            with patch("alongkit.environment.proc.run_capture", return_value=Result([], 0, "dead\n", "")):
+                self.assertEqual(environment.get_container_status("along-test"), "stopped")
+
+            # Empty -> not_created
+            with patch("alongkit.environment.proc.run_capture", return_value=Result([], 0, "\n", "")):
+                self.assertEqual(environment.get_container_status("along-test"), "not_created")
+
+            # Non-zero returncode -> unknown
+            with patch("alongkit.environment.proc.run_capture", return_value=Result([], 1, "", "docker error")):
+                self.assertEqual(environment.get_container_status("along-test"), "unknown")
+
+    def test_environment_makes_no_raw_subprocess_calls(self):
+        """environment.py must execute subprocesses only through alongkit.proc.run_capture."""
+        import ast
+
+        env_py_path = os.path.join(REPO_ROOT, "scripts", "alongkit", "environment.py")
+        with open(env_py_path, "r", encoding="utf-8") as f:
+            tree = ast.parse(f.read(), filename=env_py_path)
+
+        for node in ast.walk(tree):
+            if isinstance(node, ast.Import):
+                for alias in node.names:
+                    self.assertNotEqual(alias.name, "subprocess", "environment.py imports subprocess")
+            elif isinstance(node, ast.ImportFrom):
+                self.assertNotEqual(node.module, "subprocess", "environment.py imports from subprocess")
+            elif isinstance(node, ast.Call):
+                if isinstance(node.func, ast.Attribute) and node.func.attr == "run":
+                    if isinstance(node.func.value, ast.Name) and node.func.value.id == "subprocess":
+                        self.fail("environment.py contains a direct call to subprocess.run")
+
 
 class TestEnvCliCommands(unittest.TestCase):
     """Test CLI commands and argument parsing for along env."""
@@ -439,7 +487,7 @@ class TestEnvCliCommands(unittest.TestCase):
         """End-to-end CLI lifecycle for up, status (--json), and down executed hermetically in-process."""
         # 1. UP with compose returning 0
         with patch.object(environment, "get_docker_compose_cmd", return_value=["docker", "compose"]), \
-             patch.object(environment.subprocess, "run", return_value=subprocess.CompletedProcess(args=[], returncode=0, stdout="", stderr="")), \
+             patch.object(environment.proc, "run_capture", return_value=proc.Result([], 0, "", "")), \
              patch.object(environment, "get_container_status", return_value="running"):
             with patch("sys.stdout", new=io.StringIO()) as fake_out:
                 with self.assertRaises(SystemExit) as cm:
@@ -469,7 +517,7 @@ class TestEnvCliCommands(unittest.TestCase):
 
         # 4. DOWN with compose returning 0
         with patch.object(environment, "get_docker_compose_cmd", return_value=["docker", "compose"]), \
-             patch.object(environment.subprocess, "run", return_value=subprocess.CompletedProcess(args=[], returncode=0, stdout="", stderr="")):
+             patch.object(environment.proc, "run_capture", return_value=proc.Result([], 0, "", "")):
             with patch("sys.stdout", new=io.StringIO()) as fake_out:
                 with self.assertRaises(SystemExit) as cm:
                     handle_env_command(REPO_ROOT, ["down", "cli-proj", "--dir", self.tmp_dir])
