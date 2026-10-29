@@ -1,7 +1,7 @@
 # Active Issues
 
 ## Active
-- [ ] `(feat)` [test-gate-scope](ISSUES/feat--test-gate-scope.md) - plan ready
+<!-- No active issues -->
 
 ## Backlog
 - [ ] `(debt)` [canonical-path-gate-expansion](ISSUES/debt--canonical-path-gate-expansion.md)
@@ -48,9 +48,9 @@
 - [ ] `(task)` [reconcile-dashboard-ui-core-conventions](ISSUES/task--reconcile-dashboard-ui-core-conventions.md)
 
 ## Done (recent)
+- [x] `(feat)` [test-gate-scope](ISSUES/done/feat--test-gate-scope.md)
 - [x] `(task)` [telegram-poll-error-classification](ISSUES/done/task--telegram-poll-error-classification.md)
 - [x] `(bug)` [runtime-adapters-invented-cli-contracts](ISSUES/done/bug--runtime-adapters-invented-cli-contracts.md)
 - [x] `(bug)` [autonomous-mvp-minor-defects](ISSUES/done/bug--autonomous-mvp-minor-defects.md)
 - [x] `(bug)` [autonomous-gate-residual-holes](ISSUES/done/bug--autonomous-gate-residual-holes.md)
-- [x] `(bug)` [autonomous-container-build-and-firewall](ISSUES/done/bug--autonomous-container-build-and-firewall.md)
-<!-- 304 older completed issue(s) archived in .along/ISSUES/done/ -->
+<!-- 305 older completed issue(s) archived in .along/ISSUES/done/ -->

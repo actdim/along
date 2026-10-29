@@ -3,10 +3,11 @@ protocol: along
 protocol_version: "4.5.4"
 slug: test-gate-scope
 type: feat
-status: in-progress
+status: done
+completed: 2026-10-30
 priority: high
 created: 2026-10-29
-updated: 2026-10-29
+updated: 2026-10-30
 agent: claude-code
 tags: [gates, protocol, judgment-rules, scope-creep]
 blocked_by: []
