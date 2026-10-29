@@ -139,8 +139,8 @@ class TestRoleConfiguration(unittest.TestCase):
         json_path = os.path.join(along_dir, "config.json")
         json_content = json.dumps({
             "orchestration": {
-                "scout": {"runtime": "antigravity"},
-                "architect": {"runtime": "antigravity"},
+                "scout": {"runtime": "opencode"},
+                "architect": {"runtime": "opencode"},
                 "implementer": {"runtime": "generic"},
                 "reviewer": {"runtime": "generic"},
             }
@@ -148,10 +148,63 @@ class TestRoleConfiguration(unittest.TestCase):
         textio.write_text(json_path, json_content, newline="\n")
 
         cfg = orchestrator.load_role_config(self.repo)
-        self.assertEqual(cfg["scout"]["runtime"], "antigravity")
-        self.assertEqual(cfg["architect"]["runtime"], "antigravity")
+        self.assertEqual(cfg["scout"]["runtime"], "opencode")
+        self.assertEqual(cfg["architect"]["runtime"], "opencode")
         self.assertEqual(cfg["implementer"]["runtime"], "generic")
         self.assertEqual(cfg["reviewer"]["runtime"], "generic")
+
+    def test_antigravity_rejected_as_orchestrator_runtime(self) -> None:
+        session.init_session(self.repo, "orch-task", title="Orch Task")
+        role_cfg = {
+            "scout": {"runtime": "antigravity"},
+            "architect": {"runtime": "claude-code"},
+            "implementer": {"runtime": "generic"},
+            "reviewer": {"runtime": "generic"},
+        }
+        with self.assertRaises(ValueError) as ctx:
+            orchestrator.CrossRuntimeOrchestrator(
+                repo_root=self.repo,
+                slug="orch-task",
+                role_config=role_cfg,
+            )
+        self.assertIn("antigravity", str(ctx.exception))
+
+    def test_runtime_override_gets_own_default_args(self) -> None:
+        session.init_session(self.repo, "orch-task", title="Orch Task")
+        orch = orchestrator.CrossRuntimeOrchestrator(
+            repo_root=self.repo,
+            slug="orch-task",
+            role_config={"implementer": {"runtime": "codex"}},
+        )
+        runner = orch._instantiate_runner("implementer")
+        cmd = runner.build_command("Test brief")
+        self.assertIn("--sandbox", cmd)
+        self.assertIn("workspace-write", cmd)
+        self.assertNotIn("--dangerously-skip-permissions", cmd)
+
+    def test_claude_permission_flag_not_duplicated(self) -> None:
+        session.init_session(self.repo, "orch-task", title="Orch Task")
+        orch = orchestrator.CrossRuntimeOrchestrator(
+            repo_root=self.repo,
+            slug="orch-task",
+            role_config={"implementer": {"runtime": "claude-code", "args": ["--dangerously-skip-permissions"]}},
+        )
+        runner = orch._instantiate_runner("implementer")
+        cmd = runner.build_command("Test brief")
+        self.assertEqual(cmd.count("--dangerously-skip-permissions"), 1)
+
+    def test_codex_implementer_sandbox_allows_writes(self) -> None:
+        session.init_session(self.repo, "orch-task", title="Orch Task")
+        orch = orchestrator.CrossRuntimeOrchestrator(
+            repo_root=self.repo,
+            slug="orch-task",
+            role_config={"implementer": {"runtime": "codex"}},
+        )
+        runner = orch._instantiate_runner("implementer")
+        cmd = runner.build_command("Test brief")
+        self.assertIn("--sandbox", cmd)
+        idx = cmd.index("--sandbox")
+        self.assertEqual(cmd[idx + 1], "workspace-write")
 
     def test_cli_overrides_precedence(self) -> None:
         along_dir = os.path.join(self.repo, ".along")

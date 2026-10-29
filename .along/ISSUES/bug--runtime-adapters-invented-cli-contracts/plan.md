@@ -59,7 +59,7 @@ Facts the steps rely on (verified 2026-10-29):
 
 ## Steps
 
-- [ ] Step 1: Record real CLI contracts as fixtures (REQ-1, REQ-3)
+- [x] Step 1: Record real CLI contracts as fixtures (REQ-1, REQ-3)
   - Create `tests/fixtures/runtimes/<tool>/<version>/` for `claude/2.1.228`, `codex/0.158.0`,
     `opencode/1.18.32`, each with `version.txt` and `help.txt` (`claude --help`, `codex exec --help`,
     `opencode run --help`), captured by stdout redirection.
@@ -76,14 +76,14 @@ Facts the steps rely on (verified 2026-10-29):
     short message, recorded with `along plan revise`.
   - Scrub absolute user paths, tokens and emails from samples before committing; keep the JSON valid.
 
-- [ ] Step 2: Contract test harness (REQ-1)
+- [x] Step 2: Contract test harness (REQ-1)
   - Each runner class gets `cli_version: str` (e.g. `CodexRunner.cli_version = "0.158.0"`) and `fixture_dir()`.
   - New `tests/test_runtime_contracts.py`: for each adapter and each role in `orchestrator.SUPPORTED_ROLES`,
     build the command (with `model` set) and assert every token starting with `-` appears in that version's
     `help.txt`; assert `version.txt` contains `cli_version`. Fails on old code (`--non-interactive`, `--yes`,
     missing attribute).
 
-- [ ] Step 3: Real command lines; brief on stdin (REQ-1, REQ-2, REQ-7)
+- [x] Step 3: Real command lines; brief on stdin (REQ-1, REQ-2, REQ-7)
   - `BaseRunner.brief_via_stdin: bool = True`; `build_command(prompt)` no longer puts the prompt in argv:
     - claude: `[bin, "-p", "--output-format", "json", "--no-session-persistence", (--model M)] + role args + extras`
     - codex: `[bin, "exec", "--json", "--color", "never", "-C", repo_root, (-m M)] + role args + extras + ["-"]`
@@ -100,7 +100,7 @@ Facts the steps rely on (verified 2026-10-29):
     `CodexRunner(binary_path=fake.cmd)` with a 20480-byte brief: exit 0, 20480 bytes on stdin, argv under
     1 KB) plus a POSIX twin with a `#!/bin/sh` shim. All fail on old code.
 
-- [ ] Step 4: Runtime-specific role args without duplicates (REQ-2, REQ-9)
+- [x] Step 4: Runtime-specific role args without duplicates (REQ-2, REQ-9)
   - Classmethod `role_args(role) -> List[str]`; all roles write files, so: claude
     `["--dangerously-skip-permissions"]`; codex `["--sandbox", "workspace-write"]` (docstring: the codex
     sandbox blocks network by default); opencode `["--auto"]`; generic `[]`.
@@ -115,7 +115,7 @@ Facts the steps rely on (verified 2026-10-29):
     (legacy `args: ["--dangerously-skip-permissions"]` -> count 1); `test_codex_implementer_sandbox_allows_writes`.
     All fail on old code.
 
-- [ ] Step 5: Parsers read the real schemas (REQ-3)
+- [x] Step 5: Parsers read the real schemas (REQ-3)
   - Follow the fixtures wherever they differ from the expected shapes.
   - `claude.parse_output`: `json.loads` of stdout, falling back to the last line that parses; no greedy regex;
     usage `{input_tokens, output_tokens, cost_usd: total_cost_usd}`; outcome `fail` when `is_error` or exit
@@ -129,7 +129,7 @@ Facts the steps rely on (verified 2026-10-29):
     claude `usage["cost_usd"] == total_cost_usd`; claude `is_error: true` with exit 0 -> `fail`; codex
     `changed_files` contains `hello.txt`; opencode text contains `OK` and usage is not None. Fail on old code.
 
-- [ ] Step 6: Process-tree kill on timeout (REQ-4)
+- [x] Step 6: Process-tree kill on timeout (REQ-4)
   - `scripts/alongkit/proc.py`: `spawn_group_kwargs()` (`{"start_new_session": True}` on POSIX,
     `{"creationflags": subprocess.CREATE_NEW_PROCESS_GROUP}` on Windows) and
     `kill_process_tree(popen, grace=5.0)` (POSIX `os.killpg(pid, SIGTERM)`, wait, `SIGKILL`, ignore
@@ -142,14 +142,14 @@ Facts the steps rely on (verified 2026-10-29):
     while inheriting stdout; with `timeout=2`, `execute_run` returns within 15 s and
     `daemon.is_pid_alive(grandchild_pid)` is False (tearDown kills leftovers). Fails on old code.
 
-- [ ] Step 7: Porcelain parsing (REQ-5)
+- [x] Step 7: Porcelain parsing (REQ-5)
   - `_snapshot_git_status`: `git status --porcelain=v1 -z --untracked-files=all`, split on `\0` without strip;
     status `[:2]`, path `[3:]`; for `R` / `C` the next record is the source path, keep the destination.
   - Tests: `proc.git` patched to return `" M foo.py\0?? bar.txt\0R  new.py\0old.py\0"` -> keys
     `{"foo.py", "bar.txt", "new.py"}`; a real hermetic repo with committed then modified `foo.py` -> key
     `foo.py`, not `oo.py`. Fail on old code.
 
-- [ ] Step 8: Allowlisted environment (REQ-6)
+- [x] Step 8: Allowlisted environment (REQ-6)
   - `BaseRunner.ENV_ALLOW`: `PATH, PATHEXT, HOME, USERPROFILE, HOMEDRIVE, HOMEPATH, APPDATA, LOCALAPPDATA,
     PROGRAMDATA, SYSTEMROOT, SYSTEMDRIVE, WINDIR, COMSPEC, TEMP, TMP, TMPDIR, LANG, LANGUAGE, TZ, TERM,
     XDG_CONFIG_HOME, XDG_DATA_HOME, XDG_CACHE_HOME, XDG_STATE_HOME, HTTP_PROXY, HTTPS_PROXY, NO_PROXY,
@@ -164,7 +164,7 @@ Facts the steps rely on (verified 2026-10-29):
     `OPENAI_API_KEY` and `PATH`; `ClaudeCodeRunner.build_env()` lacks `OPENAI_API_KEY`; generic lacks all three;
     a fake-CLI run dumping `os.environ` confirms it. Fails on old code.
 
-- [ ] Step 9: Antigravity out of the orchestrator (REQ-8)
+- [x] Step 9: Antigravity out of the orchestrator (REQ-8)
   - Remove `antigravity` and `agy` from `RUNNER_MAP` (the class stays exported for `along run antigravity`).
   - `orchestrator.ORCHESTRATOR_RUNTIMES = ("claude", "claude-code", "codex", "opencode", "generic")`;
     `CrossRuntimeOrchestrator.__init__` validates every role runtime (`ValueError` naming the role and allowed
@@ -172,7 +172,7 @@ Facts the steps rely on (verified 2026-10-29):
   - Change `test_load_from_json_config` to `opencode`; add `test_antigravity_rejected_as_orchestrator_runtime`
     and `get_runner("antigravity")` raises `ValueError`. Fail on old code.
 
-- [ ] Step 10: Docs, full suite, regression proof, commit, wrap
+- [x] Step 10: Docs, full suite, regression proof, commit, wrap
   - `docs/topic--agent-run-protocol.md` (runner section): per-runtime argv, verified versions, fixture
     location, stdin brief, env allowlist and `env_passthrough`, process-tree kill, Antigravity only via
     `along run`. `docs/topic--cli-reference.md`: `along run` / `along orchestrate`. Check `write_policy` first;

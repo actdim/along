@@ -19,7 +19,7 @@ if not os.environ.get("ALONG_TEST_RUNNER"):
     )
 
 import hermetic
-from alongkit import handoff, session
+from alongkit import handoff, proc, session
 from alongkit.runner import (
     BaseRunner,
     ClaudeCodeRunner,
@@ -51,12 +51,12 @@ class TestCommandLineAndFlagMapping(unittest.TestCase):
         expected = [
             "custom-claude",
             "-p",
-            "Implement authentication module",
-            "--dangerously-skip-permissions",
             "--output-format",
             "json",
+            "--no-session-persistence",
             "--model",
             "claude-3-7-sonnet",
+            "--dangerously-skip-permissions",
             "--max-thinking-tokens",
             "2048",
         ]
@@ -73,13 +73,18 @@ class TestCommandLineAndFlagMapping(unittest.TestCase):
         expected = [
             "custom-codex",
             "exec",
-            "Refactor cache layout",
-            "--non-interactive",
             "--json",
-            "--model",
+            "--color",
+            "never",
+            "-C",
+            self.repo,
+            "-m",
             "o3-mini",
+            "--sandbox",
+            "workspace-write",
             "--max-turns",
             "10",
+            "-",
         ]
         self.assertEqual(cmd, expected)
 
@@ -94,12 +99,13 @@ class TestCommandLineAndFlagMapping(unittest.TestCase):
         expected = [
             "custom-opencode",
             "run",
-            "Review security policy",
-            "--yes",
             "--format",
             "json",
-            "--model",
+            "--dir",
+            self.repo,
+            "-m",
             "ollama/qwen2.5-coder:32b",
+            "--auto",
             "--port",
             "8080",
         ]
@@ -112,7 +118,7 @@ class TestCommandLineAndFlagMapping(unittest.TestCase):
             extra_args=["--verbose", "--mode=batch"],
         )
         cmd = runner.build_command("Run tests")
-        expected = ["worker-bin", "--verbose", "--mode=batch", "Run tests"]
+        expected = ["worker-bin", "--verbose", "--mode=batch"]
         self.assertEqual(cmd, expected)
 
     def test_generic_command_line_template(self) -> None:
@@ -123,6 +129,91 @@ class TestCommandLineAndFlagMapping(unittest.TestCase):
         cmd = runner.build_command("Run audit")
         expected = ["python", "-m", "worker", "--brief=Run audit", "--timeout=30"]
         self.assertEqual(cmd, expected)
+
+    def test_brief_is_sent_on_stdin(self) -> None:
+        session.init_session(self.repo, "test-slug", title="Test")
+        script = os.path.join(self.repo, "echo_stdin.py")
+        py_code = "import sys\ndata = sys.stdin.read()\nsys.stdout.write(f'read:{len(data)}')\n"
+        with open(script, "w", encoding="utf-8") as f:
+            f.write(py_code)
+
+        runner = GenericCliRunner(
+            repo_root=self.repo,
+            issue_slug="test-slug",
+            binary_path=sys.executable,
+            extra_args=[script],
+        )
+        brief = "Hello stdin test brief"
+        record = runner.execute_run(brief=brief)
+        self.assertEqual(record["outcome"], "done")
+        self.assertIn(f"read:{len(brief)}", runner.last_result.stdout)
+
+    def test_stdin_closed_when_unused(self) -> None:
+        session.init_session(self.repo, "test-slug", title="Test")
+        script = os.path.join(self.repo, "read_stdin.py")
+        py_code = "import sys\ndata = sys.stdin.read()\nsys.stdout.write(repr(data))\n"
+        with open(script, "w", encoding="utf-8") as f:
+            f.write(py_code)
+
+        runner = GenericCliRunner(
+            repo_root=self.repo,
+            issue_slug="test-slug",
+            command_template=[sys.executable, script, "--prompt={prompt}"],
+        )
+        record = runner.execute_run(brief="Arg prompt")
+        self.assertEqual(record["outcome"], "done")
+        self.assertIn("''", runner.last_result.stdout)
+
+    @unittest.skipUnless(os.name == "nt", "Windows-specific .cmd shim test")
+    def test_20kb_brief_through_cmd_shim(self) -> None:
+        session.init_session(self.repo, "test-slug", title="Test")
+        receiver_py = os.path.join(self.repo, "receiver.py")
+        with open(receiver_py, "w", encoding="utf-8") as f:
+            f.write("import sys\ndata = sys.stdin.read()\nsys.exit(0 if len(data) == 20480 else 1)\n")
+
+        fake_cmd = os.path.join(self.repo, "fake.cmd")
+        with open(fake_cmd, "w", encoding="utf-8") as f:
+            f.write(f'@echo off\r\n"{sys.executable}" "{receiver_py}" %*\r\n')
+
+        runner = CodexRunner(
+            repo_root=self.repo,
+            issue_slug="test-slug",
+            binary_path=fake_cmd,
+        )
+        brief = "X" * 20480
+        cmd = runner.build_command(brief)
+        argv_str = " ".join(cmd)
+        self.assertLess(len(argv_str), 1024)
+
+        record = runner.execute_run(brief=brief)
+        self.assertEqual(record["exit_code"], 0)
+        self.assertEqual(record["outcome"], "done")
+
+    @unittest.skipUnless(os.name != "nt", "POSIX-specific .sh shim test")
+    def test_20kb_brief_through_sh_shim(self) -> None:
+        session.init_session(self.repo, "test-slug", title="Test")
+        receiver_py = os.path.join(self.repo, "receiver.py")
+        with open(receiver_py, "w", encoding="utf-8") as f:
+            f.write("import sys\ndata = sys.stdin.read()\nsys.exit(0 if len(data) == 20480 else 1)\n")
+
+        fake_sh = os.path.join(self.repo, "fake.sh")
+        with open(fake_sh, "w", encoding="utf-8") as f:
+            f.write(f'#!/bin/sh\nexec "{sys.executable}" "{receiver_py}" "$@"\n')
+        os.chmod(fake_sh, 0o755)
+
+        runner = CodexRunner(
+            repo_root=self.repo,
+            issue_slug="test-slug",
+            binary_path=fake_sh,
+        )
+        brief = "X" * 20480
+        cmd = runner.build_command(brief)
+        argv_str = " ".join(cmd)
+        self.assertLess(len(argv_str), 1024)
+
+        record = runner.execute_run(brief=brief)
+        self.assertEqual(record["exit_code"], 0)
+        self.assertEqual(record["outcome"], "done")
 
     def test_runner_factory_get_runner(self) -> None:
         claude = get_runner("claude", repo_root=self.repo)
@@ -142,6 +233,12 @@ class TestCommandLineAndFlagMapping(unittest.TestCase):
 
         with self.assertRaises(ValueError):
             get_runner("unsupported-runtime")
+
+        with self.assertRaises(ValueError):
+            get_runner("antigravity")
+
+        with self.assertRaises(ValueError):
+            get_runner("agy")
 
 
 class TestOpenCodeEnvironmentAndLocalEndpoint(unittest.TestCase):
@@ -191,79 +288,67 @@ class TestOutputParsing(unittest.TestCase):
 
     def test_claude_json_output_parsing(self) -> None:
         runner = ClaudeCodeRunner(repo_root=self.repo)
-        stdout_payload = json.dumps({
-            "result": "Refactored service layers successfully.",
-            "status": "success",
-            "cost": 0.035,
-            "tokens": {"input": 1200, "output": 450},
-            "tool_calls": [
-                {"name": "Write", "parameters": {"file_path": "scripts/auth.py"}},
-                {"name": "Edit", "parameters": {"path": "tests/test_auth.py"}},
-            ],
-            "handoff_note": "Added JWT support.",
-        })
+        sample_path = os.path.join(runner.fixture_dir(), "sample-ok.json")
+        with open(sample_path, "r", encoding="utf-8") as f:
+            stdout_payload = f.read()
         parsed = runner.parse_output(stdout_payload, "", exit_code=0)
         self.assertEqual(parsed["outcome"], "done")
         self.assertEqual(parsed["usage"]["input_tokens"], 1200)
-        self.assertEqual(parsed["usage"]["output_tokens"], 450)
-        self.assertEqual(parsed["usage"]["cost"], 0.035)
-        self.assertEqual(parsed["changed_files"], ["scripts/auth.py", "tests/test_auth.py"])
-        self.assertEqual(parsed["handoff_note"], "Added JWT support.")
+        self.assertEqual(parsed["usage"]["output_tokens"], 5)
+        self.assertEqual(parsed["usage"]["cost_usd"], 0.0035)
+        self.assertEqual(parsed["text"], "OK")
 
-    def test_claude_needs_input_parsing(self) -> None:
+    def test_claude_is_error_parsing(self) -> None:
         runner = ClaudeCodeRunner(repo_root=self.repo)
         stdout_payload = json.dumps({
-            "result": "Which database adapter do you prefer: sqlite or postgres?",
-            "status": "needs-input",
+            "is_error": True,
+            "result": "Failed to authenticate",
+            "total_cost_usd": 0,
         })
         parsed = runner.parse_output(stdout_payload, "", exit_code=0)
-        self.assertEqual(parsed["outcome"], "needs-input")
+        self.assertEqual(parsed["outcome"], "fail")
+        self.assertEqual(parsed["text"], "Failed to authenticate")
 
     def test_codex_jsonl_events_parsing(self) -> None:
         runner = CodexRunner(repo_root=self.repo)
-        lines = [
-            json.dumps({"type": "turn.start"}),
-            json.dumps({
-                "type": "item.created",
-                "item": {
-                    "type": "tool_call",
-                    "call": {"file": "src/cache.py"},
-                },
-            }),
-            json.dumps({
-                "type": "item.created",
-                "item": {
-                    "type": "message",
-                    "content": "Applied eviction fix in cache.",
-                },
-            }),
-            json.dumps({
-                "type": "turn.end",
-                "usage": {"input_tokens": 850, "output_tokens": 120},
-            }),
-        ]
-        stdout_payload = "\n".join(lines) + "\n"
+        sample_path = os.path.join(runner.fixture_dir(), "sample-ok.jsonl")
+        with open(sample_path, "r", encoding="utf-8") as f:
+            stdout_payload = f.read()
         parsed = runner.parse_output(stdout_payload, "", exit_code=0)
         self.assertEqual(parsed["outcome"], "done")
-        self.assertEqual(parsed["usage"]["input_tokens"], 850)
-        self.assertEqual(parsed["usage"]["output_tokens"], 120)
-        self.assertEqual(parsed["changed_files"], ["src/cache.py"])
-        self.assertIn("Applied eviction fix in cache.", parsed["text"])
+        self.assertEqual(parsed["usage"]["input_tokens"], 17920)
+        self.assertEqual(parsed["usage"]["output_tokens"], 5)
+        self.assertIn("OK", parsed["text"])
+
+    def test_codex_file_change_parsing(self) -> None:
+        runner = CodexRunner(repo_root=self.repo)
+        sample_path = os.path.join(runner.fixture_dir(), "sample-write.jsonl")
+        with open(sample_path, "r", encoding="utf-8") as f:
+            stdout_payload = f.read()
+        parsed = runner.parse_output(stdout_payload, "", exit_code=0)
+        self.assertEqual(parsed["outcome"], "done")
+        self.assertIn("hello.txt", parsed["changed_files"])
+        self.assertIn("Created hello.txt", parsed["text"])
 
     def test_opencode_json_output_parsing(self) -> None:
         runner = OpenCodeRunner(repo_root=self.repo)
-        stdout_payload = json.dumps({
-            "output": "Completed tasks via local model.",
-            "usage": {"input_tokens": 600, "output_tokens": 90},
-            "tool_calls": [
-                {"name": "file_edit", "parameters": {"file": "config.yaml"}},
-            ],
-        })
+        sample_path = os.path.join(runner.fixture_dir(), "sample-ok.jsonl")
+        with open(sample_path, "r", encoding="utf-8") as f:
+            stdout_payload = f.read()
         parsed = runner.parse_output(stdout_payload, "", exit_code=0)
         self.assertEqual(parsed["outcome"], "done")
-        self.assertEqual(parsed["usage"]["input_tokens"], 600)
-        self.assertEqual(parsed["usage"]["output_tokens"], 90)
-        self.assertEqual(parsed["changed_files"], ["config.yaml"])
+        self.assertIn("OK", parsed["text"])
+        self.assertIsNotNone(parsed["usage"])
+        self.assertEqual(parsed["usage"]["input_tokens"], 9507)
+
+    def test_opencode_tool_use_changed_files_parsing(self) -> None:
+        runner = OpenCodeRunner(repo_root=self.repo)
+        sample_path = os.path.join(runner.fixture_dir(), "sample-write.jsonl")
+        with open(sample_path, "r", encoding="utf-8") as f:
+            stdout_payload = f.read()
+        parsed = runner.parse_output(stdout_payload, "", exit_code=0)
+        self.assertEqual(parsed["outcome"], "done")
+        self.assertIn("hello.txt", parsed["changed_files"])
 
     def test_generic_line_buffered_capture(self) -> None:
         runner = GenericCliRunner(repo_root=self.repo)
@@ -323,6 +408,40 @@ class TestProcessExecutionAndExitCodes(unittest.TestCase):
         self.assertEqual(record["outcome"], "timeout")
         self.assertEqual(record["exit_code"], 124)
 
+    def test_timeout_kills_grandchild(self) -> None:
+        import time
+        from alongkit.daemon import is_pid_alive
+        pid_file = os.path.join(self.repo, "grandchild.pid")
+        py_grandchild = (
+            f"import os, time, sys; "
+            f"open({repr(pid_file)}, 'w').write(str(os.getpid())); "
+            f"sys.stdout.flush(); "
+            f"time.sleep(30)"
+        )
+        py_child = (
+            f"import subprocess, sys, time; "
+            f"p = subprocess.Popen([{repr(sys.executable)}, '-c', {repr(py_grandchild)}]); "
+            f"p.wait()"
+        )
+        runner = GenericCliRunner(
+            repo_root=self.repo,
+            issue_slug=self.slug,
+            binary_path=sys.executable,
+            command_template=[sys.executable, "-c", py_child],
+        )
+        start = time.monotonic()
+        record = runner.execute_run(brief="timeout task", timeout=2)
+        elapsed = time.monotonic() - start
+        self.assertLess(elapsed, 15.0)
+        self.assertEqual(record["outcome"], "timeout")
+        self.assertEqual(record["exit_code"], 124)
+
+        self.assertTrue(os.path.isfile(pid_file))
+        with open(pid_file, "r", encoding="utf-8") as f:
+            grandchild_pid = int(f.read().strip())
+
+        self.assertFalse(is_pid_alive(grandchild_pid))
+
     def test_missing_binary_fails_gracefully_without_exception(self) -> None:
         runner = GenericCliRunner(
             repo_root=self.repo,
@@ -332,6 +451,98 @@ class TestProcessExecutionAndExitCodes(unittest.TestCase):
         record = runner.execute_run(brief="task")
         self.assertEqual(record["outcome"], "fail")
         self.assertEqual(record["exit_code"], 127)
+
+
+class TestPorcelainParsing(unittest.TestCase):
+    """Verify porcelain status parsing without path corruption."""
+
+    def setUp(self) -> None:
+        self.repo = hermetic.make_repo_fixture(prefix="along-test-porcelain-")
+        self.slug = "porcelain-task"
+        session.init_session(self.repo, self.slug, title="Porcelain Task")
+
+    def tearDown(self) -> None:
+        shutil.rmtree(self.repo, ignore_errors=True)
+
+    def test_porcelain_parsing_with_leading_space(self) -> None:
+        runner = GenericCliRunner(repo_root=self.repo)
+        fake_result = proc.Result(
+            cmd=["git", "status"],
+            returncode=0,
+            stdout=" M foo.py\0?? bar.txt\0R  new.py\0old.py\0",
+            stderr="",
+        )
+        orig_git = proc.git
+        try:
+            proc.git = lambda *args, **kwargs: fake_result
+            snapshot = runner._snapshot_git_status()
+            self.assertEqual(set(snapshot.keys()), {"foo.py", "bar.txt", "new.py"})
+            self.assertEqual(snapshot["foo.py"], " M")
+            self.assertEqual(snapshot["bar.txt"], "??")
+            self.assertEqual(snapshot["new.py"], "R ")
+        finally:
+            proc.git = orig_git
+
+    def test_hermetic_git_status_snapshot(self) -> None:
+        runner = GenericCliRunner(repo_root=self.repo)
+        proc.git(["init"], cwd=self.repo)
+        proc.git(["config", "user.name", "Test Agent"], cwd=self.repo)
+        proc.git(["config", "user.email", "agent@actdim.org"], cwd=self.repo)
+        foo_path = os.path.join(self.repo, "foo.py")
+        with open(foo_path, "w", encoding="utf-8") as f:
+            f.write("# initial\n")
+        proc.git(["add", "foo.py"], cwd=self.repo)
+        proc.git(["commit", "-m", "init"], cwd=self.repo)
+
+        with open(foo_path, "a", encoding="utf-8") as f:
+            f.write("# modified\n")
+
+        snapshot = runner._snapshot_git_status()
+        self.assertIn("foo.py", snapshot)
+        self.assertNotIn("oo.py", snapshot)
+
+
+class TestAllowlistedEnvironment(unittest.TestCase):
+    """Verify that runtimes receive allowlisted environment only."""
+
+    def setUp(self) -> None:
+        self.repo = hermetic.make_repo_fixture(prefix="along-test-env-")
+        self.slug = "env-task"
+        session.init_session(self.repo, self.slug, title="Env Task")
+
+    def tearDown(self) -> None:
+        shutil.rmtree(self.repo, ignore_errors=True)
+
+    def test_runtime_env_is_allowlisted(self) -> None:
+        orig = dict(os.environ)
+        try:
+            os.environ["ALONG_TELEGRAM_BOT_TOKEN"] = "secret-bot-token"
+            os.environ["ANTHROPIC_API_KEY"] = "secret-anthropic-key"
+            os.environ["OPENAI_API_KEY"] = "secret-openai-key"
+
+            codex = CodexRunner(repo_root=self.repo, issue_slug=self.slug)
+            c_env = codex.build_env()
+            self.assertNotIn("ALONG_TELEGRAM_BOT_TOKEN", c_env)
+            self.assertNotIn("ANTHROPIC_API_KEY", c_env)
+            self.assertIn("OPENAI_API_KEY", c_env)
+            self.assertIn("PATH", c_env)
+
+            claude = ClaudeCodeRunner(repo_root=self.repo, issue_slug=self.slug)
+            cl_env = claude.build_env()
+            self.assertNotIn("ALONG_TELEGRAM_BOT_TOKEN", cl_env)
+            self.assertNotIn("OPENAI_API_KEY", cl_env)
+            self.assertIn("ANTHROPIC_API_KEY", cl_env)
+            self.assertIn("PATH", cl_env)
+
+            generic = GenericCliRunner(repo_root=self.repo, issue_slug=self.slug)
+            g_env = generic.build_env()
+            self.assertNotIn("ALONG_TELEGRAM_BOT_TOKEN", g_env)
+            self.assertNotIn("ANTHROPIC_API_KEY", g_env)
+            self.assertNotIn("OPENAI_API_KEY", g_env)
+            self.assertIn("PATH", g_env)
+        finally:
+            os.environ.clear()
+            os.environ.update(orig)
 
 
 class TestRunRecordSynthesis(unittest.TestCase):
@@ -353,15 +564,16 @@ class TestRunRecordSynthesis(unittest.TestCase):
             run_id=run_id,
             binary_path=sys.executable,
         )
-        # Patch build_command to run a lightweight python echo emitting valid Claude Code JSON
         json_output = json.dumps({
+            "type": "result",
+            "subtype": "success",
+            "is_error": False,
             "result": "Created new test records.",
-            "status": "success",
+            "total_cost_usd": 0.015,
             "usage": {"input_tokens": 400, "output_tokens": 150},
-            "tool_calls": [{"name": "Write", "parameters": {"file": "new_file.txt"}}],
         })
         py_code = f"import sys; print({repr(json_output)}); sys.exit(0)"
-        runner.build_command = lambda prompt: [sys.executable, "-c", py_code]
+        runner.build_command = lambda prompt=None: [sys.executable, "-c", py_code]
 
         record = runner.execute_run(brief="Execute synthesis test", role="implementer", model="claude-3-7-sonnet")
         self.assertEqual(record["run_id"], run_id)
@@ -383,7 +595,6 @@ class TestRunRecordSynthesis(unittest.TestCase):
         self.assertEqual(disk_data["outcome"], "done")
         self.assertEqual(disk_data["exit_code"], 0)
         self.assertEqual(disk_data["runtime"], "claude")
-        self.assertEqual(disk_data["changed_files"], ["new_file.txt"])
         self.assertEqual(disk_data["usage"]["input_tokens"], 400)
         self.assertEqual(disk_data["usage"]["output_tokens"], 150)
         self.assertIsNotNone(disk_data["start"])
@@ -411,6 +622,10 @@ class TestRunRecordSynthesis(unittest.TestCase):
         self.assertEqual(disk_data["run_id"], run_id)
         self.assertEqual(disk_data["role"], "architect")
         self.assertEqual(disk_data["runtime"], "opencode")
+        self.assertIsNotNone(runner.last_result)
+        dry_payload = json.loads(runner.last_result.stdout)
+        self.assertIn("stdin_bytes", dry_payload)
+        self.assertEqual(dry_payload["stdin_bytes"], len("Dry run test".encode("utf-8")))
 
 
 if __name__ == "__main__":

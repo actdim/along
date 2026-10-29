@@ -11,9 +11,9 @@ if __name__ == "__main__":
     )
 
 import json
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Set, Tuple
 
-from .base import BaseRunner
+from .base import BaseRunner, merge_args
 
 
 class CodexRunner(BaseRunner):
@@ -22,29 +22,53 @@ class CodexRunner(BaseRunner):
     runtime: str = "codex"
     runtime_label: str = "OpenAI Codex"
     default_binary: str = "codex"
+    cli_version: str = "0.158.0"
+    brief_via_stdin: bool = True
 
-    def build_command(self, prompt: str) -> List[str]:
+    RUNTIME_ENV_ALLOW: Set[str] = {
+        "OPENAI_API_KEY",
+        "OPENAI_BASE_URL",
+        "CODEX_HOME",
+    }
+    RUNTIME_ENV_ALLOW_PREFIXES: Tuple[str, ...] = ()
+    VALUE_FLAGS: Set[str] = {
+        "-c", "--config", "-m", "--model", "-p", "--profile",
+        "-s", "--sandbox", "-C", "--cd", "--add-dir",
+        "--thread-source", "--output-schema", "--color",
+        "-o", "--output-last-message", "-i", "--image",
+        "--local-provider",
+    }
+
+    @classmethod
+    def role_args(cls, role: str) -> List[str]:
+        """Return runtime-specific default arguments for OpenAI Codex.
+
+        The Codex sandbox blocks network by default; workspace-write allows local
+        workspace filesystem writes required by all multi-agent roles.
+        """
+        return ["--sandbox", "workspace-write"]
+
+    def build_command(self, prompt: Optional[str] = None) -> List[str]:
         """Construct command line arguments for Codex headless execution."""
         binary = self.resolve_binary()
         cmd = [
             binary,
             "exec",
-            prompt,
-            "--non-interactive",
             "--json",
+            "--color",
+            "never",
+            "-C",
+            self.repo_root,
         ]
         if self.model:
-            cmd.extend(["--model", self.model])
+            cmd.extend(["-m", self.model])
+        role = self.role or "implementer"
+        r_args = self.role_args(role)
+        cmd = merge_args(cmd, r_args, self.VALUE_FLAGS)
         if self.extra_args:
-            cmd.extend(self.extra_args)
+            cmd = merge_args(cmd, self.extra_args, self.VALUE_FLAGS)
+        cmd.append("-")
         return cmd
-
-    def build_env(self) -> Dict[str, str]:
-        """Construct child environment with optional model override."""
-        env = super().build_env()
-        if self.model:
-            env["OPENAI_MODEL"] = self.model
-        return env
 
     def parse_output(self, stdout: str, stderr: str, exit_code: int) -> Dict[str, Any]:
         """Parse streaming JSONL event records emitted by Codex CLI."""
@@ -53,7 +77,7 @@ class CodexRunner(BaseRunner):
         total_input_tokens = 0
         total_output_tokens = 0
         messages: List[str] = []
-        has_question = False
+        failed = False
         handoff_note: Optional[str] = None
 
         for raw_line in stdout.splitlines():
@@ -71,6 +95,9 @@ class CodexRunner(BaseRunner):
             events.append(data)
             ev_type = str(data.get("type") or "").lower()
 
+            if ev_type in ("turn.failed", "error"):
+                failed = True
+
             # Handle usage and token counts
             raw_usage = data.get("usage")
             if isinstance(raw_usage, dict):
@@ -82,30 +109,20 @@ class CodexRunner(BaseRunner):
                 except (ValueError, TypeError):
                     pass
 
-            # Handle tool calls and patch events
+            # Handle item.completed
             item = data.get("item")
-            target = item if isinstance(item, dict) else data
-            item_type = str(target.get("type") or "").lower()
-
-            if "tool" in item_type or "patch" in item_type or "call" in item_type:
-                call_info = target.get("call") or target.get("parameters") or target.get("arguments") or {}
-                if isinstance(call_info, str):
-                    try:
-                        call_info = json.loads(call_info)
-                    except (json.JSONDecodeError, ValueError):
-                        call_info = {}
-                if isinstance(call_info, dict):
-                    for key in ("file", "path", "file_path", "filename"):
-                        if key in call_info and call_info[key]:
-                            changed_files.append(str(call_info[key]))
-
-            if "question" in ev_type or "ask" in ev_type or "question" in item_type:
-                has_question = True
-
-            if "content" in target and isinstance(target["content"], str):
-                messages.append(target["content"])
-            elif "message" in target and isinstance(target["message"], str):
-                messages.append(target["message"])
+            if isinstance(item, dict):
+                item_type = str(item.get("type") or "").lower()
+                if item_type == "agent_message":
+                    txt = item.get("text") or item.get("content")
+                    if txt and isinstance(txt, str):
+                        messages.append(txt)
+                elif item_type == "file_change":
+                    changes = item.get("changes") or []
+                    if isinstance(changes, list):
+                        for ch in changes:
+                            if isinstance(ch, dict) and ch.get("path"):
+                                changed_files.append(str(ch["path"]))
 
             if "handoff_note" in data:
                 handoff_note = str(data["handoff_note"])
@@ -117,8 +134,8 @@ class CodexRunner(BaseRunner):
                 "output_tokens": total_output_tokens,
             }
 
-        if exit_code == 0:
-            outcome = "needs-input" if has_question else "done"
+        if exit_code == 0 and not failed:
+            outcome = "done"
         else:
             outcome = "fail"
 

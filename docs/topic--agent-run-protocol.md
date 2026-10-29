@@ -302,3 +302,40 @@ When spawning the Antigravity runtime, the supervisor injects the following cont
 - `PYTHONIOENCODING`: Forced to `utf-8`.
 - `PYTHONUTF8`: Forced to `1`.
 
+Note: Google Antigravity is a desktop IDE environment and is available only through `along run antigravity` / `along run agy`. It is not offered as a headless orchestrator runtime.
+
+### 6.2 Headless Agent CLI Runtime Adapters
+
+Headless CLI runners (`alongkit.runner`) provide non-interactive process supervision for autonomous agent workflows across Claude Code, OpenAI Codex, OpenCode, and generic CLI workers.
+
+#### Verified CLI Contracts and Fixtures
+Each adapter's command-line interface is bound to a verified CLI release with `--help` and sample output fixtures stored in `tests/fixtures/runtimes/<tool>/<version>/`:
+- **Claude Code (`ClaudeCodeRunner`, runtime: `claude`, `claude-code`)**: Verified against version `2.1.228`.
+  - Command: `claude -p --output-format json --no-session-persistence [--model <model>] [--dangerously-skip-permissions]`
+  - Output: Single JSON object (`type`, `subtype`, `is_error`, `result`, `total_cost_usd`, `usage`).
+- **OpenAI Codex (`CodexRunner`, runtime: `codex`)**: Verified against version `0.158.0`.
+  - Command: `codex exec --json --color never -C <repo_root> [-m <model>] [--sandbox workspace-write] -`
+  - Output: Streaming JSONL events (`thread.started`, `turn.started`, `item.completed`, `turn.completed`).
+- **OpenCode (`OpenCodeRunner`, runtime: `opencode`)**: Verified against version `1.18.32`.
+  - Command: `opencode run --format json --dir <repo_root> [-m <model>] [--auto]`
+  - Output: Streaming JSONL events (`step_start`, `text`, `tool_use`, `step_finish`).
+- **Generic CLI (`GenericCliRunner`, runtime: `generic`)**: Executes custom binaries or commands, buffering line output.
+
+#### Brief Delivery via Stdin
+To protect against OS command-line argument limits (such as the 8191-character limit on Windows `cmd.exe` shims) and argument re-parsing issues, prompt briefs are passed exclusively via standard input (`stdin`). Standard input is closed (`DEVNULL`) when unused.
+
+#### Allowlisted Process Environment
+To prevent leakage of host secrets (such as Telegram bot tokens, global keys, or credentials belonging to other providers), child processes receive an allowlisted environment only:
+- Core environment: `PATH`, `PATHEXT`, `HOME`, `USERPROFILE`, `LOCALAPPDATA`, `APPDATA`, `TEMP`, `TMP`, locale (`LANG`, `LC_*`).
+- Runtime-specific keys:
+  - Claude: `ANTHROPIC_API_KEY`, `ANTHROPIC_AUTH_TOKEN`, `ANTHROPIC_BASE_URL`, `CLAUDE_CONFIG_DIR`, `CLAUDE_CODE_*`.
+  - Codex: `OPENAI_API_KEY`, `OPENAI_BASE_URL`, `CODEX_HOME`.
+  - OpenCode: `OPENAI_API_KEY`, `OPENAI_BASE_URL`, `OPENCODE_*`.
+- Explicit passthrough: Configured via `env_passthrough: [VAR_NAME, ...]`.
+
+#### Process-Tree Termination
+Subprocess execution uses new process groups (`CREATE_NEW_PROCESS_GROUP` on Windows, `start_new_session=True` on POSIX). On execution timeout:
+- Windows: Terminates entire process trees via `taskkill /PID <pid> /T /F`, preventing orphaned tool processes or lingering npm `.cmd` shims.
+- POSIX: Signals process groups via `os.killpg(pgid, signal.SIGTERM)` followed by `SIGKILL` after a grace deadline.
+
+

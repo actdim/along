@@ -26,8 +26,6 @@ RUNNER_MAP: Dict[str, Type[BaseRunner]] = {
     "codex": CodexRunner,
     "opencode": OpenCodeRunner,
     "generic": GenericCliRunner,
-    "antigravity": AntigravityRunner,
-    "agy": AntigravityRunner,
 }
 
 

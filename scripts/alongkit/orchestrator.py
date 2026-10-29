@@ -36,6 +36,7 @@ from . import entities, frontmatter, handoff, proc, repo, session, textio
 from .runner import BaseRunner, RunResult, get_runner
 
 SUPPORTED_ROLES: Tuple[str, ...] = ("scout", "architect", "implementer", "reviewer")
+ORCHESTRATOR_RUNTIMES: Tuple[str, ...] = ("claude", "claude-code", "codex", "opencode", "generic")
 DEFAULT_MAX_RETRIES: int = 3
 DEFAULT_TIMEOUT: int = 1800
 #: The claim outlives one run by this much, so a renewal before the next run never finds it expired.
@@ -44,19 +45,15 @@ CLAIM_TTL_MARGIN_SECONDS: int = 300
 DEFAULT_ROLES: Dict[str, Dict[str, Any]] = {
     "scout": {
         "runtime": "claude-code",
-        "args": ["--dangerously-skip-permissions"],
     },
     "architect": {
         "runtime": "claude-code",
-        "args": ["--dangerously-skip-permissions"],
     },
     "implementer": {
         "runtime": "claude-code",
-        "args": ["--dangerously-skip-permissions"],
     },
     "reviewer": {
         "runtime": "claude-code",
-        "args": ["--dangerously-skip-permissions"],
     },
 }
 
@@ -199,6 +196,13 @@ class CrossRuntimeOrchestrator:
         self.repo_root = os.path.abspath(repo_root) if repo_root else (repo.find_repo_root() or os.getcwd())
         self.slug = resolve_orchestrator_issue(self.repo_root, slug)
         self.role_config = role_config or load_role_config(self.repo_root)
+        for r_name in SUPPORTED_ROLES:
+            cfg = self.role_config.get(r_name, {})
+            rt = cfg.get("runtime")
+            if rt and rt not in ORCHESTRATOR_RUNTIMES:
+                raise ValueError(
+                    f"Role '{r_name}' specifies unsupported runtime '{rt}'. Expected one of: {list(ORCHESTRATOR_RUNTIMES)}"
+                )
         self.max_retries = int(max_retries) if max_retries is not None else DEFAULT_MAX_RETRIES
         self.timeout = int(timeout) if timeout is not None else None
         self.dry_run = bool(dry_run)
@@ -254,6 +258,8 @@ class CrossRuntimeOrchestrator:
             timeout=r_timeout,
             extra_args=extra_args,
             dry_run=self.dry_run,
+            role=role,
+            env_passthrough=r_cfg.get("env_passthrough"),
         )
         self.active_runner = runner
         return runner

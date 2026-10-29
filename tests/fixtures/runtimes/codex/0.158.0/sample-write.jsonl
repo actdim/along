@@ -1,0 +1,7 @@
+{"type":"thread.started","thread_id":"01a18983-642b-7522-8df3-efb173e8056c"}
+{"type":"turn.started"}
+{"type":"item.started","item":{"id":"item_0","type":"command_execution","command":"powershell.exe -Command \"Set-Content -LiteralPath 'hello.txt' -Value 'hi'\"","aggregated_output":"","exit_code":null,"status":"in_progress"}}
+{"type":"item.completed","item":{"id":"item_0","type":"command_execution","command":"powershell.exe -Command \"Set-Content -LiteralPath 'hello.txt' -Value 'hi'\"","aggregated_output":"hi\r\n","exit_code":0,"status":"completed"}}
+{"type":"item.completed","item":{"id":"item_1","type":"file_change","changes":[{"path":"hello.txt","kind":"created"}]}}
+{"type":"item.completed","item":{"id":"item_2","type":"agent_message","text":"Created hello.txt containing hi."}}
+{"type":"turn.completed","usage":{"input_tokens":35188,"cached_input_tokens":17408,"cache_write_input_tokens":0,"output_tokens":151,"reasoning_output_tokens":0}}

@@ -16,10 +16,38 @@ import shutil
 import subprocess
 import sys
 import time
-from typing import Any, Dict, List, Optional, Set
+from typing import Any, Dict, List, Optional, Set, Tuple
 import uuid
 
 from .. import entities, handoff, proc, repo, session
+
+
+def merge_args(base: List[str], extra: List[str], value_flags: Optional[Set[str]] = None) -> List[str]:
+    """Merge extra CLI arguments into base, skipping flags already present in base.
+
+    If an extra argument is in base, it is dropped. If it is in value_flags and has a
+    separate value argument following it, the value argument is dropped too.
+    """
+    vflags = value_flags or set()
+    base_flags: Set[str] = set()
+    for token in base:
+        if token.startswith("-"):
+            base_flags.add(token.split("=")[0])
+
+    merged = list(base)
+    i = 0
+    while i < len(extra):
+        token = extra[i]
+        flag_name = token.split("=")[0] if token.startswith("-") else ""
+        if flag_name and flag_name in base_flags:
+            if token == flag_name and flag_name in vflags and i + 1 < len(extra):
+                i += 2
+            else:
+                i += 1
+            continue
+        merged.append(token)
+        i += 1
+    return merged
 
 
 class RunResult:
@@ -71,6 +99,21 @@ class BaseRunner:
     runtime: str = "generic"
     runtime_label: str = "Generic CLI"
     default_binary: str = "bash"
+    cli_version: str = ""
+    brief_via_stdin: bool = True
+
+    ENV_ALLOW: Set[str] = {
+        "PATH", "PATHEXT", "HOME", "USERPROFILE", "HOMEDRIVE", "HOMEPATH",
+        "APPDATA", "LOCALAPPDATA", "PROGRAMDATA", "SYSTEMROOT", "SYSTEMDRIVE",
+        "WINDIR", "COMSPEC", "TEMP", "TMP", "TMPDIR", "LANG", "LANGUAGE",
+        "TZ", "TERM", "XDG_CONFIG_HOME", "XDG_DATA_HOME", "XDG_CACHE_HOME",
+        "XDG_STATE_HOME", "HTTP_PROXY", "HTTPS_PROXY", "NO_PROXY",
+        "SSL_CERT_FILE", "NODE_EXTRA_CA_CERTS",
+    }
+    ENV_ALLOW_PREFIXES: Tuple[str, ...] = ("LC_",)
+    RUNTIME_ENV_ALLOW: Set[str] = set()
+    RUNTIME_ENV_ALLOW_PREFIXES: Tuple[str, ...] = ()
+    VALUE_FLAGS: Set[str] = set()
 
     def __init__(
         self,
@@ -83,6 +126,8 @@ class BaseRunner:
         dry_run: bool = False,
         extra_args: Optional[List[str]] = None,
         env_overrides: Optional[Dict[str, str]] = None,
+        role: Optional[str] = None,
+        env_passthrough: Optional[List[str]] = None,
     ) -> None:
         self.repo_root = os.path.abspath(repo_root) if repo_root else (repo.find_repo_root() or os.getcwd())
         self.issue_slug = issue_slug
@@ -93,7 +138,22 @@ class BaseRunner:
         self.dry_run = bool(dry_run)
         self.extra_args = list(extra_args) if extra_args is not None else []
         self.env_overrides = dict(env_overrides) if env_overrides is not None else {}
+        self.role = role
+        self.env_passthrough = list(env_passthrough) if env_passthrough is not None else []
         self.last_result: Optional[RunResult] = None
+
+    @classmethod
+    def fixture_dir(cls, fixtures_root: Optional[str] = None) -> str:
+        """Return absolute path to recorded fixtures directory for this runtime and version."""
+        if not fixtures_root:
+            repo_root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
+            fixtures_root = os.path.join(repo_root, "tests", "fixtures", "runtimes")
+        return os.path.join(fixtures_root, cls.runtime, cls.cli_version)
+
+    @classmethod
+    def role_args(cls, role: str) -> List[str]:
+        """Return default arguments for a specific multi-agent role."""
+        return []
 
     def resolve_binary(self) -> str:
         """Resolve path or executable name for runtime CLI binary."""
@@ -141,21 +201,33 @@ class BaseRunner:
             )
         return "adhoc"
 
-    def build_command(self, prompt: str) -> List[str]:
+    def build_command(self, prompt: Optional[str] = None) -> List[str]:
         """Construct the subprocess argument list for a headless run."""
         binary = self.resolve_binary()
         cmd = [binary]
         if self.model:
             cmd.extend(["--model", self.model])
+        role = self.role or "implementer"
+        r_args = self.role_args(role)
+        cmd = merge_args(cmd, r_args, self.VALUE_FLAGS)
         if self.extra_args:
-            cmd.extend(self.extra_args)
-        cmd.append(prompt)
+            cmd = merge_args(cmd, self.extra_args, self.VALUE_FLAGS)
+        if not self.brief_via_stdin and prompt:
+            cmd.append(prompt)
         return cmd
 
     def build_env(self) -> Dict[str, str]:
-        """Construct execution environment for child runtime process."""
+        """Construct execution environment for child runtime process with strict allowlist."""
         active_slug = self.resolve_active_issue()
-        env = dict(os.environ)
+        all_allowed_keys = {k.upper() for k in (self.ENV_ALLOW | self.RUNTIME_ENV_ALLOW | set(self.env_passthrough))}
+        all_allowed_prefixes = tuple(p.upper() for p in (self.ENV_ALLOW_PREFIXES + self.RUNTIME_ENV_ALLOW_PREFIXES))
+
+        env: Dict[str, str] = {}
+        for k, v in os.environ.items():
+            ukey = k.upper()
+            if ukey in all_allowed_keys or any(ukey.startswith(pfx) for pfx in all_allowed_prefixes):
+                env[k] = v
+
         env.update(proc.UTF8_CHILD_ENV)
         env["ALONG_RUN_ID"] = str(self.run_id)
         env["ALONG_ISSUE_SLUG"] = str(active_slug)
@@ -178,20 +250,26 @@ class BaseRunner:
         }
 
     def _snapshot_git_status(self) -> Dict[str, str]:
-        """Capture snapshot of working tree files via git status --porcelain."""
+        """Capture snapshot of working tree files via git status --porcelain=v1 -z --untracked-files=all."""
         try:
-            res = proc.git(["status", "--porcelain"], cwd=self.repo_root)
+            res = proc.git(["status", "--porcelain=v1", "-z", "--untracked-files=all"], cwd=self.repo_root)
             if not res.ok:
                 return {}
             status_map: Dict[str, str] = {}
-            for line in res.stdout.splitlines():
-                line = line.strip()
-                if len(line) >= 3:
-                    status = line[:2].strip()
-                    path = line[3:].strip()
-                    if " -> " in path:
-                        path = path.split(" -> ")[1].strip()
+            entries = res.stdout.split("\0")
+            i = 0
+            while i < len(entries):
+                entry = entries[i]
+                if not entry:
+                    i += 1
+                    continue
+                if len(entry) >= 3:
+                    status = entry[:2]
+                    path = entry[3:]
                     status_map[path] = status
+                    if "R" in status or "C" in status:
+                        i += 1
+                i += 1
             return status_map
         except (OSError, RuntimeError):
             return {}
@@ -222,6 +300,7 @@ class BaseRunner:
         effective_model = model if model is not None else self.model
         effective_timeout = timeout if timeout is not None else self.timeout
         is_dry_run = self.dry_run if dry_run is None else bool(dry_run)
+        self.role = role
 
         # 1. Initialize in-progress run record
         record = handoff.create_run_record(
@@ -246,6 +325,7 @@ class BaseRunner:
                 "runtime": self.runtime,
                 "model": effective_model,
                 "timeout": effective_timeout,
+                "stdin_bytes": len(brief.encode("utf-8")) if self.brief_via_stdin else 0,
             }
             stdout = json.dumps(dry_payload, indent=2)
             stderr = ""
@@ -278,16 +358,20 @@ class BaseRunner:
         start_time = time.monotonic()
 
         # 4. Spawn child process
+        kwargs = proc.spawn_group_kwargs()
+        stdin_mode = subprocess.PIPE if self.brief_via_stdin else subprocess.DEVNULL
         try:
             proc_obj = subprocess.Popen(
                 cmd,
                 cwd=self.repo_root,
                 env=env,
+                stdin=stdin_mode,
                 stdout=subprocess.PIPE,
                 stderr=subprocess.PIPE,
                 text=True,
                 encoding="utf-8",
                 errors="replace",
+                **kwargs,
             )
         except (FileNotFoundError, OSError) as exc:
             duration = time.monotonic() - start_time
@@ -318,15 +402,23 @@ class BaseRunner:
         # 5. Supervise process completion with timeout
         timed_out = False
         try:
-            stdout, stderr = proc_obj.communicate(timeout=effective_timeout)
+            input_text = brief if self.brief_via_stdin else None
+            stdout, stderr = proc_obj.communicate(input=input_text, timeout=effective_timeout)
             exit_code = proc_obj.returncode
         except subprocess.TimeoutExpired:
             timed_out = True
+            proc.kill_process_tree(proc_obj, grace=5.0)
             try:
-                proc_obj.kill()
-            except OSError:
-                pass
-            stdout, stderr = proc_obj.communicate()
+                stdout, stderr = proc_obj.communicate(timeout=10)
+            except (subprocess.TimeoutExpired, OSError):
+                try:
+                    if proc_obj.stdout:
+                        proc_obj.stdout.close()
+                    if proc_obj.stderr:
+                        proc_obj.stderr.close()
+                except OSError:
+                    pass
+                stdout, stderr = "", ""
             exit_code = 124
 
         duration = time.monotonic() - start_time

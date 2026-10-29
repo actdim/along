@@ -3,10 +3,10 @@ protocol: along
 protocol_version: "4.5.3"
 slug: runtime-adapters-invented-cli-contracts
 type: bug
-status: open
+status: in-progress
 priority: high
 created: 2026-10-23
-updated: 2026-10-23
+updated: 2026-10-29
 agent: claude-code
 tags: [runner, claude-code, codex, opencode, autonomous]
 blocked_by: []
@@ -53,9 +53,9 @@ no recorded CLI versions or runs; the adapters and their tests inherited its gue
 - REQ-9: Role default args MUST be runtime-specific and not duplicated.
 
 ## Acceptance Criteria
-- [ ] Fixtures hold real `--help` and sample output for claude, codex and opencode with their versions.
-- [ ] A test with a child that spawns a grandchild proves the timeout kills both.
-- [ ] `" M foo.py"` yields `foo.py`.
-- [ ] An adapter run does not see `ALONG_TELEGRAM_BOT_TOKEN` or another runtime's API key.
-- [ ] A 20 KB brief runs on Windows through a `.cmd` shim.
-- [ ] Regression tests cover each criterion and fail on the old code; `python .along/scripts/test.py` is green.
+- [x] Fixtures hold real `--help` and sample output for claude, codex and opencode with their versions.
+- [x] A test with a child that spawns a grandchild proves the timeout kills both.
+- [x] `" M foo.py"` yields `foo.py`.
+- [x] An adapter run does not see `ALONG_TELEGRAM_BOT_TOKEN` or another runtime's API key.
+- [x] A 20 KB brief runs on Windows through a `.cmd` shim.
+- [x] Regression tests cover each criterion and fail on the old code; `python .along/scripts/test.py` is green.

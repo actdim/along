@@ -209,7 +209,7 @@ def handle_devenv_command(repo_root: str, args: List[str]):
 def handle_run_command(repo_root: Optional[str], args: List[str]):
     if not args or args[0] in ("-h", "--help", "help"):
         print("Usage: along run [antigravity|agy|claude|codex|opencode|generic] [options] | along run <command...>")
-        print("       python scripts/along_exec.py run [antigravity|agy] [options] | run <command...>")
+        print("       python scripts/along_exec.py run [antigravity|agy|claude|codex|opencode|generic] [options] | run <command...>")
         print("")
         print("Agent Runtime Runner:")
         print("  along run antigravity [--dry-run] [-i|--issue <slug>] [--run-id <id>] [--endpoint <url>] [--binary <path>]")

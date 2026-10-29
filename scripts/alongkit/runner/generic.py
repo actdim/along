@@ -51,26 +51,25 @@ class GenericCliRunner(BaseRunner):
         self.stdout_lines: List[str] = []
         self.stderr_lines: List[str] = []
 
-    def build_command(self, prompt: str) -> List[str]:
+    def build_command(self, prompt: Optional[str] = None) -> List[str]:
         """Construct command line arguments from custom template or generic binary invocation."""
         if self.command_template:
             cmd: List[str] = []
             has_placeholder = False
             for part in self.command_template:
                 if "{prompt}" in part:
-                    cmd.append(part.replace("{prompt}", prompt))
+                    cmd.append(part.replace("{prompt}", prompt or ""))
                     has_placeholder = True
                 else:
                     cmd.append(part)
-            if not has_placeholder:
-                cmd.append(prompt)
+            if has_placeholder:
+                self.brief_via_stdin = False
             return cmd
 
         binary = self.resolve_binary()
         cmd = [binary]
         if self.extra_args:
             cmd.extend(self.extra_args)
-        cmd.append(prompt)
         return cmd
 
     def parse_output(self, stdout: str, stderr: str, exit_code: int) -> Dict[str, Any]:

@@ -685,6 +685,27 @@ along run pytest -q
 along run npm test
 ```
 
+### `along orchestrate`
+Cross-runtime multi-agent supervisor orchestrator for tiered model workflows. Executes sequential multi-agent loops across heterogeneous CLI runtimes (claude, claude-code, codex, opencode, generic).
+
+- **Usage**:
+  ```bash
+  along orchestrate <slug> [options]
+  ```
+- **Options**:
+  - `--dry-run`: Preview prompt payloads and simulated runs without launching processes.
+  - `--max-retries <N>`: Maximum retry attempts per step (default: 3).
+  - `--timeout <sec>`: Process timeout per role execution in seconds.
+  - `--scout <runtime>`: Runtime adapter for scout role (choices: claude, claude-code, codex, opencode, generic).
+  - `--architect <runtime>`: Runtime adapter for architect role.
+  - `--implementer <runtime>`: Runtime adapter for implementer role.
+  - `--reviewer <runtime>`: Runtime adapter for reviewer role.
+  - `--model <model>`: Default model override across roles.
+  - `--skip-scout`: Skip scout research phase.
+  - `--skip-architect`: Skip architect living plan phase.
+  - `--force`: Force claim acquisition or execution restart.
+  - `--json`: Output execution results as JSON.
+
 ### `along resolve`
 Semantic and test-gated conflict auto-resolution engine for documentation and source code (`feat--docs-semantic-conflict-resolution`, `feat--test-gated-code-merge-pipeline`).
 - **Documentation mode (`--docs`, default)**:

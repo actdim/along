@@ -317,3 +317,55 @@ def _as_text(value) -> str:
     if isinstance(value, bytes):
         return value.decode("utf-8", errors="replace")
     return str(value)
+
+
+def spawn_group_kwargs() -> Dict[str, Any]:
+    """Return subprocess.Popen keyword arguments to start the child in a new process group."""
+    if os.name == "nt":
+        return {"creationflags": subprocess.CREATE_NEW_PROCESS_GROUP}
+    return {"start_new_session": True}
+
+
+def kill_process_tree(popen: Any, grace: float = 5.0) -> None:
+    """Kill a process tree started with spawn_group_kwargs.
+
+    On POSIX, signals the process group (SIGTERM, wait up to grace, SIGKILL).
+    On Windows, uses taskkill /PID <pid> /T /F, falling back to popen.kill().
+    """
+    pid = getattr(popen, "pid", None)
+    if not pid:
+        try:
+            popen.kill()
+        except (OSError, AttributeError):
+            pass
+        return
+
+    if os.name == "nt":
+        try:
+            subprocess.run(
+                ["taskkill", "/PID", str(pid), "/T", "/F"],
+                capture_output=True,
+                timeout=30,
+            )
+        except (subprocess.SubprocessError, OSError):
+            try:
+                popen.kill()
+            except (OSError, AttributeError):
+                pass
+    else:
+        import signal
+        try:
+            pgid = os.getpgid(pid)
+            os.killpg(pgid, signal.SIGTERM)
+            deadline = time.monotonic() + grace
+            while time.monotonic() < deadline:
+                if popen.poll() is not None:
+                    return
+                time.sleep(0.05)
+            os.killpg(pgid, signal.SIGKILL)
+        except (ProcessLookupError, OSError):
+            try:
+                popen.kill()
+            except (OSError, AttributeError):
+                pass
+
