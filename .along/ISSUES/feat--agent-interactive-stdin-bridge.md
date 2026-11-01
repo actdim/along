@@ -1,85 +1,68 @@
 ---
 protocol: along
-protocol_version: "4.1.0"
+protocol_version: "4.5.3"
 slug: agent-interactive-stdin-bridge
 type: feat
 status: open
 priority: high
 created: 2026-09-27
-updated: 2026-09-27
+updated: 2026-10-30
 agent: antigravity
-tags: [telegram, bridge, stdin, interactive, human-in-the-loop, clarification, ask-question]
+tags: [cli, questions, handoff, interactive, human-in-the-loop, orchestrator, clarification]
 milestone: v5.0.0-agent-run-protocol-and-observability
-blocked_by: [feat--agent-execution-gate-telegram]
-related: [feat--agent-runtime-runner-antigravity, feat--agent-runtime-adapters-claude-codex-opencode, feat--cross-runtime-handoff-entities]
+blocked_by: []
+related: [feat--cross-runtime-handoff-entities, feat--cross-runtime-supervisor-orchestrator, feat--agent-execution-gate-telegram]
 parent: feat--autonomous-multi-runtime-mvp
 ---
 
-# Telegram Interactive Clarification & Stdin Bridge
+# Interactive Question Resolution: CLI Console Prompt & Remote Bridge
 
 ## Goal
-Implement a bidirectional interactive bridge connecting running agent input requests (stdin prompts, `ask_question` tool calls, and clarification questions) to the remote Telegram operator interface, enabling operators to provide crucial answers and decisions to unblock agents during remote execution.
+
+Provide a seamless human-in-the-loop clarification bridge for autonomous agent CLI runs. When an agent runtime needs operator feedback or encounters ambiguous requirements, it writes a structured question entity and halts with status `needs-input`. The supervisor (either interactive `along orchestrate` in terminal or background daemon connected to Telegram) captures the question, collects the operator answer, persists it into session memory, and immediately resumes the execution loop.
 
 ## Problem Statement
-Current execution gate mechanisms (`[feat--agent-execution-gate-telegram]`) focus strictly on binary permission approvals (`[Approve]`, `[Reject]`) for dangerous tool actions. However, autonomous agents frequently require operator feedback during execution:
-1. Interactive choice prompts (e.g. `ask_question` tool selecting architecture, trade-offs, or file targets).
-2. Clarification questions when requirements are underspecified.
-3. Interactive terminal prompts reading from process stdin.
 
-Without an interactive clarification bridge, remote agent runs on a VPS either stall indefinitely waiting for stdin input, or fail prematurely when timeouts expire.
+While file-based question entities (`.along/.session/<slug>/questions/<id>.md`) exist in `alongkit.handoff`, the interactive developer workflow across the CLI is currently broken:
 
-## Technical Specifications
+1. **Premature Orchestrator Halt**: When an agent runtime returns outcome `needs-input` or leaves an open question, `along orchestrate` immediately exits with `[Orchestrator] Halted: waiting for operator input (status: needs-input)`. The operator running the command in terminal has no way to answer inline and resume execution.
+2. **Missing Question CLI Commands**: `along_exec.py` does not provide CLI commands for listing or answering questions (`along question list`, `along question answer`). Operators are forced to manually inspect and edit Markdown files on disk.
+3. **No Question Contract in Agent Brief**: `handoff.generate_brief` provides issue context to the model but lacks an explicit contract instructing the agent on how to formulate a question entity when blocked (file format, directory, recommended fields, and exit code).
+4. **Architect Gate Friction**: In local CLI runs, `along orchestrate` halts after Phase 2 (Architect) awaiting manual `along plan approve` unless the environment variable `ALONG_ARCHITECT_SELF_APPROVAL=1` is set. A direct CLI flag is required for continuous local runs.
 
-### 1. Interactive Question & Prompt Interception
-- Intercept interactive prompts across supported agent runtimes:
-  - **Tool Invocations**: Intercept calls to `ask_question` or equivalent interactive subagent tools.
-  - **Process Stdin**: Detect when child agent processes enter blocking read states on stdin.
-- Transition run state to `WAITING_FOR_INPUT` and emit an AEP clarification event:
-  - `prompt_id`: Unique identifier for the question turn.
-  - `question`: Explanatory text directed to the operator.
-  - `options`: Optional list of selectable responses (with recommended flags).
-  - `allow_custom`: Boolean indicating if free-form text answers are accepted.
+## Requirements
 
-### 2. Telegram Presentation & Response Routing
-- **Multi-Choice Prompts**:
-  - Render selectable options as Telegram inline keyboard buttons for one-tap answers.
-  - Example: `[ (1) PostgreSQL ]` `[ (2) SQLite ]`
-- **Free-Form Text Responses**:
-  - Operator replies directly to the question message or uses `/answer <text>`.
-- **In-Place Card Update**:
-  - Upon receiving an answer, update the Live Status Card in-place:
-    `[x] Clarification answered by @operator: "PostgreSQL"`
-  - Prevent duplicate submissions from multiple operators via atomic callback resolution.
+### 1. Interactive CLI Console Prompting (REQ-1)
+- When `along orchestrate` runs in an interactive terminal (TTY) and encounters `status == "needs-input"`:
+  - If open questions exist in `.along/.session/<slug>/questions/`, display each open question, its options, and the recommended answer.
+  - Prompt the operator for input directly in the terminal console.
+  - Record the operator answer via `handoff.answer_question()` with attribution `answered_by: "operator-cli"`.
+  - Immediately continue the orchestration loop with the next phase/step without exiting the process.
+- If run non-interactively (e.g. CI or pipe) or with `--no-interactive`: halt with exit code 0 or JSON output as before.
 
-### 3. Stdin Injection & Tool Callback Resolution
-- When the daemon receives the operator response:
-  - **For Stdin Prompts**: Writes the sanitized text string followed by newline directly to the child process stdin stream.
-  - **For Tool Hooks**: Resolves the pending hook callback promise with the selected option or text payload.
-- Record operator decision and attribution in OpenTelemetry span attributes:
-  - `along.operator.answer_by = "@username"`
-  - `along.operator.response_time_ms = <int>`
+### 2. Question Management CLI Subcommands (REQ-2)
+- Register `along question` router in `scripts/along_exec.py` and `alongkit/commands/question.py`:
+  - `along question list [<slug>] [--status open|answered] [--json]`
+  - `along question show <slug> <qid> [--json]`
+  - `along question answer <slug> <qid> --answer "<text>" [--by "<name>"]`
+  - `along question create <slug> --question "<text>" [--options "a,b,c"] [--recommended "a"]`
 
-### 4. Fail-Safe Timeout & Default Fallbacks
-- Configurable operator response timeout (default: 300 seconds).
-- If the operator fails to respond before timeout:
-  - If a recommended option was marked by the agent, automatically select the recommended default and log a warning.
-  - Otherwise, terminate the run safely with status `TIMED_OUT_WAITING_FOR_INPUT` without leaving orphaned background processes.
+### 3. Agent Question Contract in Brief (REQ-3)
+- In `alongkit.handoff.generate_brief()`, include an explicit contract for all roles:
+  - Explain that when blocked by ambiguity, the agent must write `.along/.session/<slug>/questions/q-<N>.md` with front-matter (`question`, `options`, `recommended`) and body rationale.
+  - The agent must exit with outcome `needs-input` (or write status into handoff note) so the supervisor can collect user input.
 
-## Revised Approach (2026-10-17)
+### 4. Orchestrator Plan Auto-Approval Flag (REQ-4)
+- Add `--auto-approve-plan` flag to `along orchestrate`:
+  - When specified, automatically grants plan approval after Phase 2 (Architect) and advances directly to Phase 3 (Implementer) without halting or requiring `ALONG_ARCHITECT_SELF_APPROVAL=1`.
 
-Intercepting blocking stdin reads of third-party CLI processes is fragile and runtime-specific.
-Under `feat--autonomous-multi-runtime-mvp` runtimes run non-interactively, so they cannot block on
-stdin. The replacement is the file-based question protocol in `feat--cross-runtime-handoff-entities`:
-the agent writes `.along/.session/<slug>/questions/<id>.md` and exits with outcome `needs-input`;
-the Telegram gateway renders it (option buttons or reply text) and writes the answer back; the
-orchestrator starts the next run, whose brief contains the answer. The timeout and recommended-default
-rules from this issue still apply. Direct stdin injection stays out of scope unless the spike
-`spike--headless-runtimes-on-linux` shows a runtime that cannot work without it. Once the question
-protocol ships, close this issue as superseded by `feat--cross-runtime-handoff-entities`.
+### 5. Remote Gateway Projection (REQ-5)
+- When running under `along daemon`, open questions are dispatched to Telegram as interactive cards with inline buttons. Operator answers update the question file and signal the daemon to resume execution.
 
 ## Acceptance Criteria
-- [ ] Multi-choice questions (`ask_question`) rendered as inline Telegram callback buttons.
-- [ ] Free-form text questions accept operator replies and pipe input directly into process stdin.
-- [ ] In-place Live Status Card updates reflect submitted answers without message flood.
-- [ ] Atomic resolution prevents race conditions when multiple operators view the card.
-- [ ] Configurable timeout handles unanswered questions safely with fallback or clean exit.
+
+- [ ] In interactive TTY, `along orchestrate <slug>` prompts for answer on open questions and resumes loop without exiting.
+- [ ] `along question list`, `along question show`, and `along question answer` work cleanly from CLI.
+- [ ] Role briefs generated by `along brief` provide explicit instructions on writing question files.
+- [ ] `along orchestrate --auto-approve-plan` transitions from architect to implementer without manual plan approval halt.
+- [ ] Existing non-interactive and dry-run tests for `orchestrator` and `handoff` remain green.
