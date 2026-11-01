@@ -188,6 +188,12 @@ class TestDockerScriptsHarness(unittest.TestCase):
 
     def _run_in_bash(self, script_path: str, *args: str, env: Optional[dict] = None, input: Optional[str] = None):
         """Execute script in bash with mock bin directory placed first on PATH."""
+        try:
+            if os.path.isfile(script_path):
+                st = os.stat(script_path)
+                os.chmod(script_path, st.st_mode | stat.S_IEXEC | stat.S_IXGRP | stat.S_IXOTH)
+        except OSError:
+            pass
         posix_bin = _to_posix(self.bin_dir)
         posix_script = _to_posix(script_path)
         quoted_args = " ".join(f'"{_to_posix(a)}"' for a in args)
@@ -238,6 +244,7 @@ exit 3
                     f.write(f"FIREWALL_SCRIPT=\"{_to_posix(stub_firewall)}\"\n")
                 else:
                     f.write(line)
+        os.chmod(entry_copy, 0o755)
 
         marker = os.path.join(self.tmp_dir, "marker.txt")
 
@@ -269,6 +276,7 @@ exit 3
         fw_script = os.path.join(REPO_ROOT, "docker", "init-firewall.sh")
         fw_copy = os.path.join(self.tmp_dir, "init-firewall.sh")
         shutil.copy2(fw_script, fw_copy)
+        os.chmod(fw_copy, 0o755)
 
         log_file = os.path.join(self.tmp_dir, "calls.log")
         posix_log = _to_posix(log_file)
