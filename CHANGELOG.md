@@ -2,6 +2,30 @@
 
 All notable changes to this project, newest first.
 
+## v4.6.0 - 2026-11-01
+
+- docs(entities): register autonomous execution, team worktree, and diagnostics roadmap issues
+- docs(dashboard-ui): sync topic index date header
+- feat: Support test-inert paths and ignore_paths in test_before_stop, name modified files in Stop rejection message, record HEAD baseline for failing test runs, and define scope containment rule in protocol (refs #test-gate-scope)
+- feat(gates): test-inert path classification, ignore_paths, and pre-existing failure baseline (refs #test-gate-scope)
+- fix: Remove unused telemetry extra, unify Telegram settings and client, remove daemon port placeholder, eliminate env dead code and subprocess calls, ensure unique question IDs, and harden brief exit codes (refs #autonomous-mvp-minor-defects)
+- fix(autonomous): packaging cleanup, unified telegram helper, and env/brief hardening (refs #autonomous-mvp-minor-defects)
+- fix: Fix autonomous container build, fail-closed firewall, safe YAML generation, and add hermetic and real Docker integration tests (refs #autonomous-container-build-and-firewall)
+- fix(env): autonomous container build and fail-closed firewall (refs #autonomous-container-build-and-firewall)
+- fix: Grounded claude, codex, and opencode runners in real CLI help and schema fixtures, enforced process-tree kill on timeout, allowlisted child environments, and fixed porcelain parsing. (refs #runtime-adapters-invented-cli-contracts)
+- fix(runner): ground runtime adapters in verified CLI contracts and harden supervisor (refs #runtime-adapters-invented-cli-contracts)
+- chore: Classified Telegram Bot API poll errors (409 conflict window, 429 retry_after, jittered backoff, token redaction) (refs #telegram-poll-error-classification)
+- fix(daemon): classify telegram poll errors, jitter backoff and bound 409 conflict window (refs #telegram-poll-error-classification)
+- chore(along): update dashboard-ui docs index projection
+- fix: Close autonomous gate residual holes and escalation override bypasses (refs #autonomous-gate-residual-holes)
+- fix(hooks): close autonomous gate residual holes and escalation overrides (refs #autonomous-gate-residual-holes)
+- docs(issues): approve ahead the plan for autonomous MVP minor defects (refs #autonomous-mvp-minor-defects)
+- docs(issues): approve ahead the plan for the autonomous container build and firewall (refs #autonomous-container-build-and-firewall)
+- docs(issues): approve ahead the plan for runtime adapter CLI contracts (refs #runtime-adapters-invented-cli-contracts)
+- docs(issues): approve ahead the plan for Telegram poll error classification (refs #telegram-poll-error-classification)
+- docs(issues): approve ahead the plan for autonomous gate residual holes; move REQ-5 to the Telegram gateway feature (refs #autonomous-gate-residual-holes)
+- docs: record Telegram bot ownership and update transport design (refs #agent-execution-gate-telegram)
+
 ## v4.5.4 - 2026-10-28
 
 - chore(kb): refresh dashboard-ui INDEX projection date (refs #runner-daemon-lifecycle-safety)
