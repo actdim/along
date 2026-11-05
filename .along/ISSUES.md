@@ -24,7 +24,6 @@
 - [ ] `(feat)` [byoc-kubernetes-operator-and-private-sandboxes](ISSUES/feat--byoc-kubernetes-operator-and-private-sandboxes.md)
 - [ ] `(feat)` [centralized-gpu-inference-pool-and-cloud-topologies](ISSUES/feat--centralized-gpu-inference-pool-and-cloud-topologies.md)
 - [ ] `(feat)` [clean-turn-context-isolation-in-along-team](ISSUES/feat--clean-turn-context-isolation-in-along-team.md)
-- [ ] `(feat)` [cli-global-chdir](ISSUES/feat--cli-global-chdir.md) - plan: needs approval
 - [ ] `(feat)` [cowork-plugin-skill-packaging](ISSUES/feat--cowork-plugin-skill-packaging.md)
 - [ ] `(feat)` [cpp-ecosystem-support](ISSUES/feat--cpp-ecosystem-support.md)
 - [ ] `(feat)` [cross-repo-entity-references](ISSUES/feat--cross-repo-entity-references.md) - plan: needs approval
@@ -64,9 +63,9 @@
 - [ ] `(task)` [reconcile-dashboard-ui-core-conventions](ISSUES/task--reconcile-dashboard-ui-core-conventions.md)
 
 ## Done (recent)
+- [x] `(feat)` [cli-global-chdir](ISSUES/done/feat--cli-global-chdir.md)
 - [x] `(bug)` [worktree-env-readiness-submodules](ISSUES/done/bug--worktree-env-readiness-submodules.md)
 - [x] `(bug)` [entity-deletion-protection-path-scope](ISSUES/done/bug--entity-deletion-protection-path-scope.md)
 - [x] `(bug)` [protocol-leaks-into-docs](ISSUES/done/bug--protocol-leaks-into-docs.md)
 - [x] `(feat)` [test-gate-scope](ISSUES/done/feat--test-gate-scope.md)
-- [x] `(task)` [telegram-poll-error-classification](ISSUES/done/task--telegram-poll-error-classification.md)
-<!-- 308 older completed issue(s) archived in .along/ISSUES/done/ -->
+<!-- 309 older completed issue(s) archived in .along/ISSUES/done/ -->
