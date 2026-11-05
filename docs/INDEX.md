@@ -4,7 +4,7 @@ slug: INDEX
 title: ActDim Along - Knowledge Base Topic Index
 type: index
 created: 2026-09-10
-updated: 2026-10-30
+updated: 2026-11-05
 tags: [index, kb, topics, map]
 ---
 
@@ -19,8 +19,6 @@ flowchart TD
     INDEX["Knowledge Base (INDEX)"]
     T_AGENT_RUN_PROTOCOL["Agent Run Protocol (ARP/AEP) & OpenTelemetry Engine"]
     INDEX --> T_AGENT_RUN_PROTOCOL
-    T_ALONG_PROTOCOL["Along Protocol Reference"]
-    INDEX --> T_ALONG_PROTOCOL
     T_ARCHITECTURE["System Architecture & Flow"]
     INDEX --> T_ARCHITECTURE
     T_AUTONOMOUS_ENVIRONMENT["Autonomous Environment Architecture & Docker Isolation"]
@@ -73,13 +71,11 @@ flowchart TD
     T_PARALLEL_SESSIONS -.->|references| T_CLI_REFERENCE
     T_RUNTIME_HOOKS_AND_GATES -.->|references| T_DECLARATIVE_GATES_AND_TRACEABILITY
     T_RUNTIME_HOOKS_AND_GATES -.->|references| T_SESSION_LIFECYCLE
-    T_RUNTIME_HOOKS_AND_GATES -.->|references| T_ALONG_PROTOCOL
     T_SESSION_LIFECYCLE -.->|references| T_CLI_REFERENCE
     T_SESSION_LIFECYCLE -.->|references| T_RUNTIME_HOOKS_AND_GATES
     T_SESSION_LIFECYCLE -.->|references| T_PARALLEL_SESSIONS
     T_SETUP_AND_WORKFLOW -.->|references| T_RUNTIME_HOOKS_AND_GATES
     T_SETUP_AND_WORKFLOW -.->|references| T_CLI_REFERENCE
-    T_SETUP_AND_WORKFLOW -.->|references| T_ALONG_PROTOCOL
     T_SYSTEM_COMPARISONS -.->|references| T_LLM_WIKI_ARCHITECTURE
     T_SYSTEM_COMPARISONS -.->|references| T_RUNTIME_HOOKS_AND_GATES
     T_SYSTEM_COMPARISONS -.->|references| T_AGENT_RUN_PROTOCOL
@@ -94,7 +90,6 @@ flowchart TD
 ## Articles
 
 - **[Agent Run Protocol (ARP/AEP) & OpenTelemetry Engine](./topic--agent-run-protocol.md)** (architecture) `telemetry`, `opentelemetry`, `openinference`, `tracing`, `arp`, `aep`, `redactor`, `offloader`, `spool`
-- **[Along Protocol Reference](./topic--along-protocol.md)** (reference) `protocol`, `agents-md`, `checklist`, `routing`, `concurrency`, `along-team`, `conventions`
 - **[System Architecture & Flow](./topic--architecture.md)** (architecture) `architecture`, `boundaries`, `multi-agent`, `blackboard`, `concurrency`, `ast`, `flow`
 - **[Autonomous Environment Architecture & Docker Isolation](./topic--autonomous-environment.md)** (topic) `architecture`, `docker`, `isolation`, `autonomous`, `environment`, `security`, `vps`
 - **[Along CLI Command Reference](./topic--cli-reference.md)** (reference) `cli`, `commands`, `router`, `lifecycle`, `tools`, `reference`

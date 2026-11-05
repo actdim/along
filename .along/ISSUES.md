@@ -1,9 +1,10 @@
 # Active Issues
 
 ## Active
-<!-- No active issues -->
+- [ ] `(bug)` [worktree-env-readiness-submodules](ISSUES/bug--worktree-env-readiness-submodules.md) - plan: needs approval
 
 ## Backlog
+- [ ] `(bug)` [entity-deletion-protection-path-scope](ISSUES/bug--entity-deletion-protection-path-scope.md) - plan: needs approval
 - [ ] `(debt)` [autonomous-non-elevation-invariants](ISSUES/debt--autonomous-non-elevation-invariants.md)
 - [ ] `(debt)` [canonical-path-gate-expansion](ISSUES/debt--canonical-path-gate-expansion.md)
 - [ ] `(debt)` [dashboard-retire-risk-spike-views](ISSUES/debt--dashboard-retire-risk-spike-views.md)
@@ -24,8 +25,10 @@
 - [ ] `(feat)` [byoc-kubernetes-operator-and-private-sandboxes](ISSUES/feat--byoc-kubernetes-operator-and-private-sandboxes.md)
 - [ ] `(feat)` [centralized-gpu-inference-pool-and-cloud-topologies](ISSUES/feat--centralized-gpu-inference-pool-and-cloud-topologies.md)
 - [ ] `(feat)` [clean-turn-context-isolation-in-along-team](ISSUES/feat--clean-turn-context-isolation-in-along-team.md)
+- [ ] `(feat)` [cli-global-chdir](ISSUES/feat--cli-global-chdir.md) - plan: needs approval
 - [ ] `(feat)` [cowork-plugin-skill-packaging](ISSUES/feat--cowork-plugin-skill-packaging.md)
 - [ ] `(feat)` [cpp-ecosystem-support](ISSUES/feat--cpp-ecosystem-support.md)
+- [ ] `(feat)` [cross-repo-entity-references](ISSUES/feat--cross-repo-entity-references.md) - plan: needs approval
 - [ ] `(feat)` [cursor-agent-and-rules-integration](ISSUES/feat--cursor-agent-and-rules-integration.md)
 - [ ] `(feat)` [dart-flutter-ecosystem-support](ISSUES/feat--dart-flutter-ecosystem-support.md)
 - [ ] `(feat)` [deepseek-harness-bridge](ISSUES/feat--deepseek-harness-bridge.md)
@@ -35,15 +38,19 @@
 - [ ] `(feat)` [enterprise-governance-and-cloud-infrastructure](ISSUES/feat--enterprise-governance-and-cloud-infrastructure.md)
 - [ ] `(feat)` [enterprise-governance-and-compliance-pack](ISSUES/feat--enterprise-governance-and-compliance-pack.md)
 - [ ] `(feat)` [external-issue-trackers-sync-and-import](ISSUES/feat--external-issue-trackers-sync-and-import.md)
+- [ ] `(feat)` [gate-denials-subagent-attribution](ISSUES/feat--gate-denials-subagent-attribution.md) - plan: needs approval
 - [ ] `(feat)` [golang-ecosystem-support](ISSUES/feat--golang-ecosystem-support.md)
 - [ ] `(feat)` [jvm-ecosystem-support](ISSUES/feat--jvm-ecosystem-support.md)
 - [ ] `(feat)` [kb-search-hybrid-retrieval](ISSUES/feat--kb-search-hybrid-retrieval.md)
+- [ ] `(feat)` [lint-worktree-and-doctor-subprojects](ISSUES/feat--lint-worktree-and-doctor-subprojects.md) - plan: needs approval
 - [ ] `(feat)` [multi-runtime-and-omnichannel-expansion](ISSUES/feat--multi-runtime-and-omnichannel-expansion.md)
 - [ ] `(feat)` [native-ast-blast-radius-analyzer](ISSUES/feat--native-ast-blast-radius-analyzer.md)
 - [ ] `(feat)` [openclaw-and-hermes-agent-integration](ISSUES/feat--openclaw-and-hermes-agent-integration.md)
 - [ ] `(feat)` [operational-assets-and-playbooks](ISSUES/feat--operational-assets-and-playbooks.md)
+- [ ] `(feat)` [partial-session-wrap](ISSUES/feat--partial-session-wrap.md) - plan: needs approval
 - [ ] `(feat)` [per-model-rework-metrics](ISSUES/feat--per-model-rework-metrics.md)
 - [ ] `(feat)` [pi-harness-support](ISSUES/feat--pi-harness-support.md)
+- [ ] `(feat)` [plan-approve-batch](ISSUES/feat--plan-approve-batch.md) - plan: needs approval
 - [ ] `(feat)` [planning-fields-and-ordering-gates](ISSUES/feat--planning-fields-and-ordering-gates.md)
 - [ ] `(feat)` [session-commit-binding](ISSUES/feat--session-commit-binding.md)
 - [ ] `(feat)` [subagent-execution-discipline](ISSUES/feat--subagent-execution-discipline.md)
@@ -58,9 +65,9 @@
 - [ ] `(task)` [reconcile-dashboard-ui-core-conventions](ISSUES/task--reconcile-dashboard-ui-core-conventions.md)
 
 ## Done (recent)
+- [x] `(bug)` [protocol-leaks-into-docs](ISSUES/done/bug--protocol-leaks-into-docs.md)
 - [x] `(feat)` [test-gate-scope](ISSUES/done/feat--test-gate-scope.md)
 - [x] `(task)` [telegram-poll-error-classification](ISSUES/done/task--telegram-poll-error-classification.md)
 - [x] `(bug)` [runtime-adapters-invented-cli-contracts](ISSUES/done/bug--runtime-adapters-invented-cli-contracts.md)
 - [x] `(bug)` [autonomous-mvp-minor-defects](ISSUES/done/bug--autonomous-mvp-minor-defects.md)
-- [x] `(bug)` [autonomous-gate-residual-holes](ISSUES/done/bug--autonomous-gate-residual-holes.md)
-<!-- 305 older completed issue(s) archived in .along/ISSUES/done/ -->
+<!-- 306 older completed issue(s) archived in .along/ISSUES/done/ -->
