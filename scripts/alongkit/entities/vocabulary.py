@@ -145,6 +145,43 @@ def is_issue_ticket_path(path: str) -> bool:
     return False
 
 
+def is_canonical_entity_path(path: str) -> bool:
+    """True when path is a protected Along entity file (issue ticket, canonical plan, ADR, milestone, session log)."""
+    norm = path.replace("\\", "/").rstrip("/")
+    parts = norm.split("/")
+    rest = None
+    for idx in range(len(parts) - 1, -1, -1):
+        if parts[idx] in (".along", ".agents"):
+            rest = parts[idx + 1:]
+            break
+    if rest is None:
+        if parts and parts[0] in ("ISSUES", "DECISIONS", "MILESTONES", "SESSIONS"):
+            rest = parts
+        elif len(parts) > 1 and parts[1] in ("ISSUES", "DECISIONS", "MILESTONES", "SESSIONS") and parts[0] in (".", ""):
+            rest = parts[1:]
+    if not rest:
+        return False
+
+    cat = rest[0]
+    if cat == "ISSUES":
+        if len(rest) == 2 and rest[1].endswith(".md"):
+            return True
+        if len(rest) == 3 and rest[1] == "done" and rest[2].endswith(".md"):
+            return True
+        if len(rest) == 3 and rest[2] == "plan.md":
+            return True
+        if len(rest) == 4 and rest[1] == "done" and rest[3] == "plan.md":
+            return True
+        return False
+    if cat == "DECISIONS":
+        return len(rest) == 2 and rest[1].endswith(".md")
+    if cat == "MILESTONES":
+        return len(rest) == 2 and rest[1].endswith(".md")
+    if cat == "SESSIONS":
+        return (len(rest) == 2 and rest[1].endswith(".md")) or (len(rest) == 3 and rest[2].endswith(".md"))
+    return False
+
+
 def session_filename(day: str, slug: str) -> str:
     """File name of a session log: date first, so a directory listing sorts by time."""
     return f"{day}--{slug}.md"

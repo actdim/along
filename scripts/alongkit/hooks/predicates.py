@@ -777,6 +777,26 @@ def _extract_all_target_paths(event: HookEvent) -> List[str]:
     return paths
 
 
+def _is_protected_deletion_target(path: str) -> bool:
+    """True when path is a canonical Along entity or entity container whose deletion is forbidden."""
+    norm = path.replace("\\", "/").rstrip("/")
+    if entities.is_canonical_entity_path(norm):
+        return True
+    parts = norm.split("/")
+    for idx in range(len(parts) - 1, -1, -1):
+        if parts[idx] in (".along", ".agents"):
+            rest = parts[idx + 1:]
+            if not rest:
+                return True
+            if len(rest) == 1 and rest[0] in ("ISSUES", "DECISIONS", "MILESTONES", "SESSIONS"):
+                return True
+            if len(rest) == 2 and rest[0] == "ISSUES" and rest[1] == "done":
+                return True
+            if len(rest) == 2 and rest[0] in ("ISSUES", "DECISIONS", "MILESTONES", "SESSIONS") and ("*" in rest[1] or "?" in rest[1]):
+                return True
+    return False
+
+
 def check_entity_deletion_protection(event: HookEvent, repo_root: str, **kwargs: Any) -> Optional[str]:
     """Intercept file deletion tools and shell commands deleting issue/ADR/milestone files."""
     tool = (event.tool_name or "").lower()
@@ -784,9 +804,9 @@ def check_entity_deletion_protection(event: HookEvent, repo_root: str, **kwargs:
     # 1. File deletion tools
     if tool in _DELETE_TOOL_NAMES:
         for p in _extract_all_target_paths(event):
-            if _ENTITY_DIR_PATTERN.search(p):
+            if _is_protected_deletion_target(p):
                 return (
-                    "Entity file deletion rejected by [gate: entity-reference-integrity]: "
+                    "Entity file deletion rejected by [gate: entity-deletion-protection]: "
                     "Deleting an issue, ADR or milestone file is forbidden. "
                     "Use 'along issue supersede' / 'along issue rename' (split: supersede into several keys)."
                 )
@@ -800,11 +820,15 @@ def check_entity_deletion_protection(event: HookEvent, repo_root: str, **kwargs:
                 segments = [cmd]
             for seg in segments:
                 if _ENTITY_DIR_PATTERN.search(seg) and _SHELL_DELETION_CMD_RE.search(seg):
-                    return (
-                        "Entity file deletion rejected by [gate: entity-reference-integrity]: "
-                        "Deleting an issue, ADR or milestone file is forbidden. "
-                        "Use 'along issue supersede' / 'along issue rename' (split: supersede into several keys)."
-                    )
+                    words = shellparse.words(seg)
+                    for word in words:
+                        clean_word = word.strip("\"'")
+                        if _is_protected_deletion_target(clean_word):
+                            return (
+                                "Entity file deletion rejected by [gate: entity-deletion-protection]: "
+                                "Deleting an issue, ADR or milestone file is forbidden. "
+                                "Use 'along issue supersede' / 'along issue rename' (split: supersede into several keys)."
+                            )
 
     return None
 

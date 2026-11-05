@@ -244,7 +244,7 @@ class TestStatefulPredicates(unittest.TestCase):
         )
         err = check_entity_deletion_protection(event_delete_tool, repo_root=self.tmp)
         self.assertIsNotNone(err)
-        self.assertIn("entity-reference-integrity", err or "")
+        self.assertIn("entity-deletion-protection", err or "")
         self.assertIn("along issue supersede", err or "")
         self.assertIn("along issue rename", err or "")
         self.assertIn("split: supersede into several keys", err or "")
@@ -319,6 +319,37 @@ class TestStatefulPredicates(unittest.TestCase):
         )
         err = check_entity_deletion_protection(event_del_source, repo_root=self.tmp)
         self.assertIsNone(err)
+
+        # 9. Deleting non-entity attachment or draft plan in issue subfolder is allowed
+        draft_plan = os.path.join(self.issues_dir, "feat--sample", "plans", "14c--old-name.md")
+        event_del_draft = HookEvent(
+            event_type=HookEventType.PRE_TOOL_USE,
+            tool_name="delete_file",
+            tool_args={"TargetFile": draft_plan},
+            workspace_root=self.tmp,
+        )
+        self.assertIsNone(check_entity_deletion_protection(event_del_draft, repo_root=self.tmp))
+
+        # 10. Shell deletion of draft plan in subfolder is allowed
+        event_rm_draft = HookEvent(
+            event_type=HookEventType.PRE_TOOL_USE,
+            tool_name="run_command",
+            tool_args={"CommandLine": f"rm {draft_plan}"},
+            workspace_root=self.tmp,
+        )
+        self.assertIsNone(check_entity_deletion_protection(event_rm_draft, repo_root=self.tmp))
+
+        # 11. Deleting canonical plan.md is denied
+        canonical_plan = os.path.join(self.issues_dir, "feat--sample", "plan.md")
+        event_del_plan = HookEvent(
+            event_type=HookEventType.PRE_TOOL_USE,
+            tool_name="delete_file",
+            tool_args={"TargetFile": canonical_plan},
+            workspace_root=self.tmp,
+        )
+        err_plan = check_entity_deletion_protection(event_del_plan, repo_root=self.tmp)
+        self.assertIsNotNone(err_plan)
+        self.assertIn("entity-deletion-protection", err_plan or "")
 
     def test_duplicate_gate_id_rejected(self):
         """Duplicate gate IDs must raise DuplicateGateError at load time."""

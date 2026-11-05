@@ -370,13 +370,11 @@ ENTITY_SUBDIRS: Tuple[str, ...] = ("ISSUES", "MILESTONES", "DECISIONS", "SESSION
 
 
 def touches_entities(paths: Iterable[str]) -> bool:
-    """True when any path is an entity file under some `.along/<entity dir>/`."""
+    """True when any path is a canonical entity file under some `.along/<entity dir>/`."""
+    from .entities.vocabulary import is_canonical_entity_path
     for path in paths:
-        parts = path.replace("\\", "/").split("/")
-        if ".along" in parts:
-            idx = parts.index(".along")
-            if len(parts) > idx + 2 and parts[idx + 1] in ENTITY_SUBDIRS:
-                return True
+        if is_canonical_entity_path(path):
+            return True
     return False
 
 
