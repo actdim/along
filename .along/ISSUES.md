@@ -1,7 +1,7 @@
 # Active Issues
 
 ## Active
-- [ ] `(bug)` [worktree-env-readiness-submodules](ISSUES/bug--worktree-env-readiness-submodules.md) - plan: needs approval
+<!-- No active issues -->
 
 ## Backlog
 - [ ] `(bug)` [entity-deletion-protection-path-scope](ISSUES/bug--entity-deletion-protection-path-scope.md) - plan: needs approval
@@ -65,9 +65,9 @@
 - [ ] `(task)` [reconcile-dashboard-ui-core-conventions](ISSUES/task--reconcile-dashboard-ui-core-conventions.md)
 
 ## Done (recent)
+- [x] `(bug)` [worktree-env-readiness-submodules](ISSUES/done/bug--worktree-env-readiness-submodules.md)
 - [x] `(bug)` [protocol-leaks-into-docs](ISSUES/done/bug--protocol-leaks-into-docs.md)
 - [x] `(feat)` [test-gate-scope](ISSUES/done/feat--test-gate-scope.md)
 - [x] `(task)` [telegram-poll-error-classification](ISSUES/done/task--telegram-poll-error-classification.md)
 - [x] `(bug)` [runtime-adapters-invented-cli-contracts](ISSUES/done/bug--runtime-adapters-invented-cli-contracts.md)
-- [x] `(bug)` [autonomous-mvp-minor-defects](ISSUES/done/bug--autonomous-mvp-minor-defects.md)
-<!-- 306 older completed issue(s) archived in .along/ISSUES/done/ -->
+<!-- 307 older completed issue(s) archived in .along/ISSUES/done/ -->
