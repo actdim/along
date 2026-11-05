@@ -251,6 +251,30 @@ def collect_all_entries(repo_root, verbose=False):
                 except (OSError, ValueError, AttributeError, TypeError, frontmatter.FrontmatterError) as exc:
                     _record_skip(rel_p, exc)
 
+    # 6. Protocol Reference (.along/PROTOCOL.md) [bug--protocol-leaks-into-docs]
+    proto_file = os.path.join(along_dir, "PROTOCOL.md")
+    if os.path.isfile(proto_file):
+        rel_proto = os.path.relpath(proto_file, repo_root).replace("\\", "/")
+        try:
+            with open(proto_file, "r", encoding="utf-8", errors="replace") as p:
+                raw = p.read()
+            fm, body = parse_frontmatter(raw)
+            entries.append({
+                "category": "protocol",
+                "category_label": "Protocol",
+                "title": fm.get("title", "Along Protocol Reference"),
+                "slug": fm.get("slug", "along-protocol"),
+                "type": fm.get("type", "reference"),
+                "tags": fm.get("tags", []) if isinstance(fm.get("tags", []), list) else ([fm.get("tags")] if fm.get("tags") else []),
+                "status": "active",
+                "file_path": rel_proto,
+                "abs_path": proto_file,
+                "raw": raw,
+                "body": body,
+            })
+        except (OSError, ValueError, AttributeError, TypeError, frontmatter.FrontmatterError) as exc:
+            _record_skip(rel_proto, exc)
+
     if skipped:
         print(f"[Warning] {len(skipped)} malformed or unreadable file(s) skipped during KB search.", file=sys.stderr)
 
@@ -800,8 +824,8 @@ def search_knowledge_base(
         if e.get("status") in ["open", "in-progress", "active", "accepted"]:
             score += 2.0
 
-        # Curated documentation boost (docs/topic--*.md)
-        if e.get("category") == "kb":
+        # Curated documentation boost (docs/topic--*.md and .along/PROTOCOL.md)
+        if e.get("category") in ("kb", "protocol"):
             score += 20.0
 
         # Ranking penalty for archived entities when included
@@ -843,7 +867,7 @@ def main():
     parser.add_argument("query", nargs="?", default="", help="Search query terms or \"quoted phrases\"")
     parser.add_argument("--repo", default=".", help="Target repository root")
     parser.add_argument("--limit", type=int, default=8, help="Maximum results to return")
-    parser.add_argument("--category", choices=["all", "kb", "issue", "decision", "milestone", "session"], default="all", help="Filter by knowledge category")
+    parser.add_argument("--category", choices=["all", "kb", "issue", "decision", "milestone", "session", "protocol"], default="all", help="Filter by knowledge category")
     parser.add_argument("--tag", default=None, help="Filter by specific tag")
     parser.add_argument("--any", action="store_true", help="Match ANY query term (OR semantics, default is AND)")
     parser.add_argument("--prefix", action="store_true", help="Match word prefixes in addition to whole words")

@@ -124,7 +124,7 @@ The ticket says what and why; the plan says how. An issue's plan lives in the fo
 - **`needs-rework`**: the plan cannot be followed within the ticket (`along plan rework <slug> --reason "..."`); the user decides how to proceed.
 - absent: no plan yet.
 
-The board (`.along/ISSUES.md`) shows `plan ready`, `plan: needs approval` or `plan: needs rework` after the entry. See `docs/topic--along-protocol.md` "Issue Plans & Approving Ahead" for the flow.
+The board (`.along/ISSUES.md`) shows `plan ready`, `plan: needs approval` or `plan: needs rework` after the entry. See `.along/PROTOCOL.md` "Issue Plans & Approving Ahead" for the flow.
 
 #### Quality Gates & Anti-Stub Validation (`validate_issue_completion`):
 To prevent empty scaffolding or hallucinated completions from degrading project memory:

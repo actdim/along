@@ -144,7 +144,7 @@ fails if the engine calls `shutil.move`, `os.remove` or their neighbours directl
   - a risk becomes a `debt--<slug>` issue tagged `risk` (severity -> priority, mitigation -> `## Mitigation`); a resolved or mitigated risk is closed as `done` in `ISSUES/done/`;
   - a spike becomes a `spike--<slug>` issue (hypothesis and outcome -> sections, `resulting_adr` -> `related`); a concluded spike is closed as `done`;
   - front-matter references are rewritten (`risk--x` or a bare risk slug -> `debt--x`);
-  - the scaffolded `pre-commit.md` and `stage-completion.md` are discarded after a backup (the completion checklist lives in `AGENTS.md` / `docs/topic--along-protocol.md` and is printed by `along wrap`); any other checklist moves to `docs/topic--<slug>.md`.
+  - the scaffolded `pre-commit.md` and `stage-completion.md` are discarded after a backup (the completion checklist lives in `AGENTS.md` / `.along/PROTOCOL.md` and is printed by `along wrap`); any other checklist moves to `docs/topic--<slug>.md`.
 - The emptied folders are removed. A collision is kept and reported, every removal is backed up to `.along/.migration-backup/`.
 - Runs on every migration, including an up-to-date repository (as a heal pass), so `along update` applies it; a second run finds nothing, `--dry-run` only lists the operations.
 

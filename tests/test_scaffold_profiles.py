@@ -6,7 +6,7 @@ Covers [feat--gate-strictness-profiles] REQ-3, REQ-6 and [debt--agents-md-core-s
 REQ-1, REQ-2, REQ-4, REQ-5:
 - Profile-scoped sections (`<!-- profile: light -->` / `<!-- profile: !light -->` ...
   `<!-- /profile -->`) are resolved for the active profile and the markers stripped.
-- The AGENTS.md core and the on-demand reference (`docs/topic--along-protocol.md`) both
+- The AGENTS.md core and the on-demand reference (`.along/PROTOCOL.md`) both
   render per profile: light eases plan approval and along-team escalation and compacts
   the completion checklist; strict and standard keep the full ceremony.
 - No rule of the pre-slimming block is lost: every gate tag stays in the core and every
@@ -109,7 +109,7 @@ class TestScaffoldProtocolBlockProfiles(unittest.TestCase):
     def test_standard_profile_core(self):
         block = scaffold.render_protocol_block(self.raw_protocol, profile="standard")
         self.assertIn("<!-- BEGIN ALONG-PROTOCOL root (managed by along-init - do not edit by hand) -->", block)
-        self.assertIn("docs/topic--along-protocol.md", block)
+        self.assertIn(".along/PROTOCOL.md", block)
         self.assertIn("Source edits unlock after the user approves the plan", block)
         self.assertIn("route to `along-team`; plans MUST declare", block)
         self.assertNotIn("Align the plan with the user", block)

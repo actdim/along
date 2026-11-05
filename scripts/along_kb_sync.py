@@ -1017,6 +1017,9 @@ def _kb_ingest_articles(
     for f in file_list:
         if not f.endswith(".md") or f == "INDEX.md":
             continue
+        # Exclude internal agent protocol topics from public KB [bug--protocol-leaks-into-docs]
+        if f == "topic--along-protocol.md" or f.startswith("topic--along-protocol"):
+            continue
         file_path = os.path.join(docs_dir, f)
         if not os.path.isfile(file_path):
             continue
@@ -1025,6 +1028,9 @@ def _kb_ingest_articles(
             with open(file_path, "r", encoding="utf-8", errors="replace") as fp:
                 raw_content = fp.read()
             fm, body = parse_frontmatter(raw_content)
+
+            if fm.get("slug") == "along-protocol":
+                continue
 
             if not has_real_body(body):
                 print(f"   [WARN] Skipping stub (empty body): {f}")

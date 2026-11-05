@@ -6,7 +6,7 @@ gate artifacts leave through the migration.
 Covers [bug--wrap-misses-engine-writes]:
 - REQ-1/REQ-2: `closeout.managed_only_agents_changes` selects an `AGENTS.md` whose only
   change lies inside the managed blocks, and `_auto_commit_wrapped_work` commits it with
-  `docs/topic--along-protocol.md`; a hand edit outside the blocks keeps `AGENTS.md` out.
+  `.along/PROTOCOL.md`; a hand edit outside the blocks keeps `AGENTS.md` out.
 - REQ-3/REQ-4: migration Step 15 discards `circuit_breaker.json`, `syntax_churn.json` and
   `.along/tool_rules.yaml` with a backup, reports a `tools:` section in gates.yaml, keeps
   the live activity traces, is idempotent and also runs for an up-to-date repository.
@@ -68,7 +68,7 @@ class _GitRepo(unittest.TestCase):
         _we_git(self.root, "init", "-q")
         _we_write(self.root, ".along/ISSUES.md", "# Active Issues\n")
         _we_write(self.root, "AGENTS.md", AGENTS_V1)
-        _we_write(self.root, "docs/topic--along-protocol.md", REFERENCE)
+        _we_write(self.root, ".along/PROTOCOL.md", REFERENCE)
         _we_write(self.root, "apps/web/AGENTS.md", AGENTS_V1)
         _we_git(self.root, "add", "-A")
         _we_git(self.root, "commit", "-q", "-m", "init")
@@ -107,19 +107,19 @@ class TestAutoCommitIncludesEngineWrites(_GitRepo):
         return buf.getvalue()
 
     def test_managed_agents_and_reference_are_committed(self):
-        self.assertIn("docs/topic--along-protocol.md", closeout.PROJECTION_FILES)
+        self.assertIn(".along/PROTOCOL.md", closeout.PROJECTION_FILES)
         _we_write(self.root, "AGENTS.md", AGENTS_V1.replace("Old core.", "New core."))
-        _we_write(self.root, "docs/topic--along-protocol.md", REFERENCE.replace("Ref v1", "Ref v2"))
+        _we_write(self.root, ".along/PROTOCOL.md", REFERENCE.replace("Ref v1", "Ref v2"))
         out = self._plan()
         self.assertIn("     AGENTS.md", out)
-        self.assertIn("docs/topic--along-protocol.md", out)
+        self.assertIn(".along/PROTOCOL.md", out)
 
     def test_hand_edited_agents_stays_out(self):
         _we_write(self.root, "AGENTS.md", AGENTS_V1.replace("`make`", "`make all`"))
-        _we_write(self.root, "docs/topic--along-protocol.md", REFERENCE.replace("Ref v1", "Ref v2"))
+        _we_write(self.root, ".along/PROTOCOL.md", REFERENCE.replace("Ref v1", "Ref v2"))
         out = self._plan()
         self.assertNotIn("     AGENTS.md", out)
-        self.assertIn("docs/topic--along-protocol.md", out)
+        self.assertIn(".along/PROTOCOL.md", out)
 
 
 class TestRetiredGateArtifacts(unittest.TestCase):

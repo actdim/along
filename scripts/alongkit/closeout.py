@@ -401,11 +401,11 @@ def _item(ctx: str, slug: str, bindings: List[Dict[str, Any]], prefix: str,
 RUN_FILENAME: str = ".closeout.json"
 RUN_SCHEMA: int = 1
 #: Projections a wrap regenerates; they go into the last commit of a closeout.
-#: `docs/topic--along-protocol.md` is engine-managed (`along init` / `along update`) and has
+#: `.along/PROTOCOL.md` is engine-managed (`along init` / `along update`) and has
 #: no edit events, so it rides with the projections [bug--wrap-misses-engine-writes].
 PROJECTION_FILES: Tuple[str, ...] = (".along/ISSUES.md", ".along/HISTORY.md", "docs/INDEX.md",
                                      "docs/decisions/INDEX.md", "llms.txt", "llms-full.txt",
-                                     "docs/topic--along-protocol.md")
+                                     ".along/PROTOCOL.md")
 
 _RULES_BLOCK_RE = re.compile(r"<!-- BEGIN ALONG-RULES -->.*?<!-- END ALONG-RULES -->", re.DOTALL)
 

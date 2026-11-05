@@ -57,9 +57,9 @@ _PROFILE_OPEN_RE = re.compile(r"^<!--\s*profile:\s*(!?)\s*([a-z][a-z,\s]*?)\s*--
 _PROFILE_CLOSE_RE = re.compile(r"^<!--\s*/profile\s*-->$")
 
 #: The on-demand protocol reference: shipped next to `protocol.md`, written by
-#: `along init` / `along update` to the repository's Knowledge Base at FULL roots.
+#: `along init` / `along update` to `.along/PROTOCOL.md` at FULL roots.
 REFERENCE_SOURCE_NAME = "protocol-reference.md"
-REFERENCE_DOC_RELPATH = ("docs", "topic--along-protocol.md")
+REFERENCE_DOC_RELPATH = (".along", "PROTOCOL.md")
 REFERENCE_MARKER = "<!-- ALONG-PROTOCOL-REFERENCE (managed by along-init"
 
 CLAUDE_IMPORT_LINE = "See @AGENTS.md for project instructions and guidance."
@@ -122,7 +122,7 @@ def adapt_protocol_for_profile(protocol_text: str, profile: str) -> str:
 
 
 def render_protocol_reference(reference_text: str, profile: Optional[str] = None) -> str:
-    """The managed `docs/topic--along-protocol.md` article rendered for `profile`."""
+    """The managed `.along/PROTOCOL.md` article rendered for `profile`."""
     text = reference_text.replace("\r\n", "\n").strip() + "\n"
     return render_profile_sections(text, profile)
 

@@ -273,10 +273,11 @@ def find_existing_agent_contexts(repo_root):
     return contexts
 
 def refresh_protocol_reference(ctx_dir, reference_text, profile):
-    """Refresh the managed `docs/topic--along-protocol.md`; False only on a write error.
+    """Refresh the managed `.along/PROTOCOL.md`; False only on a write error.
 
     A hand-written file at that path (no managed marker) is left alone with a warning.
-    [debt--agents-md-core-slimming]
+    Also cleans up legacy docs/topic--along-protocol.md if it carries the Along managed marker.
+    [debt--agents-md-core-slimming, bug--protocol-leaks-into-docs]
     """
     path = os.path.join(ctx_dir, *scaffold.REFERENCE_DOC_RELPATH)
     existing = None
@@ -287,17 +288,31 @@ def refresh_protocol_reference(ctx_dir, reference_text, profile):
     action = scaffold.reference_action(existing, rendered)
     if action == "foreign":
         print(f"   [WARN] {path} has no Along managed marker; protocol reference not written.", file=sys.stderr)
-        return True
-    if action == "untouched":
-        return True
-    try:
-        os.makedirs(os.path.dirname(path), exist_ok=True)
-        with open(path, "w", encoding="utf-8", newline="\n") as f:
-            f.write(rendered)
-    except OSError as exc:
-        print(f"   [WARN] Could not write {path}: {exc}", file=sys.stderr)
-        return False
-    print(f"   [OK] {'Created' if action == 'create' else 'Refreshed'} protocol reference docs/topic--along-protocol.md.")
+    elif action != "untouched":
+        try:
+            os.makedirs(os.path.dirname(path), exist_ok=True)
+            with open(path, "w", encoding="utf-8", newline="\n") as f:
+                f.write(rendered)
+            rel_disp = repo.safe_relpath(path, ctx_dir)
+            print(f"   [OK] {'Created' if action == 'create' else 'Refreshed'} protocol reference {rel_disp}.")
+        except OSError as exc:
+            print(f"   [WARN] Could not write {path}: {exc}", file=sys.stderr)
+            return False
+
+    # Prune legacy docs/topic--along-protocol.md if present and managed [bug--protocol-leaks-into-docs]
+    legacy_path = os.path.join(ctx_dir, "docs", "topic--along-protocol.md")
+    if os.path.isfile(legacy_path):
+        try:
+            with open(legacy_path, "r", encoding="utf-8", errors="ignore") as f:
+                legacy_text = f.read()
+            if scaffold.is_managed_reference(legacy_text):
+                os.remove(legacy_path)
+                print(f"   [OK] Pruned legacy protocol reference docs/topic--along-protocol.md (migrated to .along/PROTOCOL.md).")
+            else:
+                print(f"   [WARN] docs/topic--along-protocol.md has no Along managed marker; left untouched.", file=sys.stderr)
+        except OSError as exc:
+            print(f"   [WARN] Could not remove legacy {legacy_path}: {exc}", file=sys.stderr)
+
     return True
 
 

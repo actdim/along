@@ -1,6 +1,6 @@
 ---
 name: along-init
-description: Scaffold or refresh the provider-agnostic agent-context structure in a repository - root AGENTS.md (with a managed block carrying the ALONG-PROTOCOL), a CLAUDE.md that imports it, .gitattributes for merge union, and the .along/ directory (ISSUES + ISSUES/, DECISIONS, VISION, GLOSSARY, HISTORY, SESSIONS, docs/). Use when the user wants to set up agent context/instructions for a project, initialize the agent structure, or invokes /along-init. Idempotent - re-running refreshes only the managed protocol block and the managed docs/topic--along-protocol.md reference, and never overwrites existing dynamic state files.
+description: Scaffold or refresh the provider-agnostic agent-context structure in a repository - root AGENTS.md (with a managed block carrying the ALONG-PROTOCOL), a CLAUDE.md that imports it, .gitattributes for merge union, and the .along/ directory (ISSUES + ISSUES/, DECISIONS, VISION, GLOSSARY, HISTORY, SESSIONS, docs/). Use when the user wants to set up agent context/instructions for a project, initialize the agent structure, or invokes /along-init. Idempotent - re-running refreshes only the managed protocol block and the managed .along/PROTOCOL.md reference, and never overwrites existing dynamic state files.
 ---
 
 # Along Init (`/along-init`)
@@ -30,7 +30,7 @@ What the engine does, so you can verify the report:
    - **Hand-written file without markers**: the block goes on top; the original text stays below unchanged, under `## Project specifics` unless that heading already exists.
    - **Missing file**: created with the block and an empty `## Project specifics`.
    - **Profile**: the block is rendered for the active gate strictness profile (`--profile`, else repository config); `<!-- profile: ... -->` sections in the source are resolved and stripped.
-   - **Protocol reference** (FULL roots only): `protocol-reference.md` is rendered to `docs/topic--along-protocol.md` (`type: reference`, `write_policy: manual`), the on-demand procedure the core block points to. A managed copy is refreshed on every run; a hand-written file at that path (no managed marker) is left alone with a warning.
+   - **Protocol reference** (FULL roots only): `protocol-reference.md` is rendered to `.along/PROTOCOL.md` (`type: reference`, `write_policy: manual`), the on-demand procedure the core block points to. A managed copy is refreshed on every run; a hand-written file at that path (no managed marker) is left alone with a warning.
 2. **`CLAUDE.md`** imports `AGENTS.md` (`See @AGENTS.md for project instructions and guidance.`); the line is prepended only when missing.
 3. **`.gitattributes`**: `*.md text eol=lf`, `.along/HISTORY.md merge=union`, `.along/DECISIONS.md merge=union` appended when missing.
 4. **`.along/` skeleton, create-only**: `ISSUES.md`, `ISSUES/done/`, `DECISIONS/`, `GLOSSARY.md`, `HISTORY.md`, `SESSIONS/<YYYY>/`, `docs/INDEX.md`. Existing state is never overwritten. A nested context (REF block under a FULL ancestor) gets no `GLOSSARY.md` and no VISION skeleton: they are created on first use. The migration (item 7) adds `MILESTONES/` and `.code-review-graph-ignore`, and converts legacy `RISKS/`, `SPIKES/`, `CHECKLISTS/` records (risks -> `debt` issues tagged `risk`, spikes -> `spike--<slug>` issues).

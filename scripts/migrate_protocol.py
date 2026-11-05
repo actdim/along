@@ -861,7 +861,8 @@ def run_migrations(repo_root, dry_run=True, force=False, backup=True, verbose=Fa
         heal_diagnostics = bool(gitgates.tracked_diagnostics(repo_root))
         heal_retired = bool(retired_gate_artifacts(repo_root))
         heal_entities = bool(legacy_entity_dirs(repo_root))
-        if heal_vision or heal_diagnostics or heal_retired or heal_entities:
+        heal_legacy_protocol = bool(legacy_protocol_reference_exists(repo_root))
+        if heal_vision or heal_diagnostics or heal_retired or heal_entities or heal_legacy_protocol:
             mig = migration.Migration(repo_root, dry_run=dry_run, state_dir=along_dir, backup=backup)
             if heal_vision:
                 step_reconcile_root_vision_and_notes(mig, repo_root)
@@ -871,6 +872,8 @@ def run_migrations(repo_root, dry_run=True, force=False, backup=True, verbose=Fa
                 step_remove_retired_gate_artifacts(mig, repo_root)
             if heal_entities:
                 step_slim_entity_model(mig, repo_root)
+            if heal_legacy_protocol:
+                step_relocate_protocol_reference(mig, repo_root)
             for line in mig.summary():
                 print(line)
             return 1 if mig.errors else 0
@@ -998,6 +1001,9 @@ def run_migrations(repo_root, dry_run=True, force=False, backup=True, verbose=Fa
 
     # Step 16: risks and spikes become issues, scaffolded checklists go
     step_slim_entity_model(mig, repo_root)
+
+    # Step 17: relocate protocol reference from docs/ to .along/PROTOCOL.md
+    step_relocate_protocol_reference(mig, repo_root)
 
     # The state marker is written last, so a run that died halfway is not recorded as
     # a completed migration.
@@ -1350,6 +1356,47 @@ def step_slim_entity_model(mig, repo_root):
             continue
         mig.rmdir_if_empty(d)
     return converted
+
+
+def legacy_protocol_reference_exists(repo_root: str) -> bool:
+    """True when docs/topic--along-protocol.md exists."""
+    legacy_path = os.path.join(repo_root, "docs", "topic--along-protocol.md")
+    return os.path.isfile(legacy_path)
+
+
+def step_relocate_protocol_reference(mig, repo_root):
+    """Step 17 [v4.6.1]: relocate protocol reference from docs/ to .along/PROTOCOL.md.
+
+    docs/topic--along-protocol.md leaked into public docs/INDEX.md and static site generators.
+    If it exists with Along's managed marker, it is removed and regenerated at .along/PROTOCOL.md.
+    A hand-edited file without the marker is left alone with a warning.
+    See [bug--protocol-leaks-into-docs].
+    """
+    print("-> Step 17 [v4.6.1]: Relocating protocol reference to .along/PROTOCOL.md...")
+    legacy_path = os.path.join(repo_root, "docs", "topic--along-protocol.md")
+    target_path = os.path.join(repo_root, *scaffold.REFERENCE_DOC_RELPATH)
+    if os.path.isfile(legacy_path):
+        try:
+            legacy_text = textio.read_text(legacy_path)
+            if scaffold.is_managed_reference(legacy_text):
+                mig.discard(legacy_path, "relocated to .along/PROTOCOL.md to prevent public docs leak (bug--protocol-leaks-into-docs)")
+                print("   [OK] Pruned legacy docs/topic--along-protocol.md.")
+            else:
+                print("   [WARN] docs/topic--along-protocol.md has no Along managed marker; left untouched.", file=sys.stderr)
+        except (OSError, UnicodeDecodeError) as exc:
+            print(f"   [WARN] Could not inspect legacy {legacy_path}: {exc}", file=sys.stderr)
+    else:
+        print("   [OK] No legacy docs/topic--along-protocol.md found.")
+
+    if not os.path.isfile(target_path):
+        from alongkit import profiles
+        from along_init import load_protocol_reference_text
+        ref_text = load_protocol_reference_text(repo_root)
+        if ref_text:
+            profile = profiles.resolve_active_profile(repo_root)
+            rendered = scaffold.render_protocol_reference(ref_text, profile)
+            mig.write(target_path, rendered)
+            print(f"   [OK] Created {repo.safe_relpath(target_path, repo_root)}.")
 
 
 def step_migrate_v2_2_5_link_rewriting_and_integrity(mig, repo_root, detected_version="1.0.0"):

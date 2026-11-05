@@ -270,7 +270,7 @@ class TestAlongSkillsAndScripts(unittest.TestCase):
                       f"/along-init rather than editing AGENTS.md by hand:\n{diff}")
 
     def test_03b2_protocol_reference_matches_its_source(self):
-        """docs/topic--along-protocol.md is the rendered skills/along-init/protocol-reference.md.
+        """.along/PROTOCOL.md is the rendered skills/along-init/protocol-reference.md.
 
         Same projection rule as the AGENTS.md block: regenerate with `along update`
         (or `along init`), never edit the article by hand. [debt--agents-md-core-slimming]
@@ -279,12 +279,12 @@ class TestAlongSkillsAndScripts(unittest.TestCase):
         with open(os.path.join(REPO_ROOT, "skills", "along-init", "protocol-reference.md"),
                   "r", encoding="utf-8") as f:
             expected = scaffold.render_protocol_reference(f.read(), "standard")
-        with open(os.path.join(REPO_ROOT, "docs", "topic--along-protocol.md"),
+        with open(os.path.join(REPO_ROOT, ".along", "PROTOCOL.md"),
                   "r", encoding="utf-8") as f:
             actual = f.read().replace("\r\n", "\n")
         self.assertTrue(scaffold.is_managed_reference(actual))
         self.assertEqual(actual, expected,
-                         "docs/topic--along-protocol.md drifted from its source; run `along update`.")
+                         ".along/PROTOCOL.md drifted from its source; run `along update`.")
 
     def test_03c_protocol_pins_no_stale_version_examples(self):
         """
@@ -2449,7 +2449,7 @@ class TestAlongSkillsAndScripts(unittest.TestCase):
         # Full wording lives in the on-demand reference since [debt--agents-md-core-slimming];
         # the source and its docs/ projection must both carry it.
         reference_src = os.path.join(REPO_ROOT, "skills", "along-init", "protocol-reference.md")
-        reference_doc = os.path.join(REPO_ROOT, "docs", "topic--along-protocol.md")
+        reference_doc = os.path.join(REPO_ROOT, ".along", "PROTOCOL.md")
         commit_skill = os.path.join(REPO_ROOT, "skills", "along-commit", "SKILL.md")
         team_skill = os.path.join(REPO_ROOT, "skills", "along-team", "SKILL.md")
 

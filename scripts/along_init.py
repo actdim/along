@@ -126,7 +126,7 @@ def scaffold_agents_md(mig, root, protocol_text, report, profile=None):
 
 
 def scaffold_protocol_reference(mig, root, reference_text, report, profile=None):
-    """Write the managed `docs/topic--along-protocol.md` at a FULL root [debt--agents-md-core-slimming]."""
+    """Write the managed `.along/PROTOCOL.md` at a FULL root [debt--agents-md-core-slimming]."""
     if not reference_text or report.get("protocol_variant") == "REF":
         return
     if profile is None:

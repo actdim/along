@@ -341,7 +341,7 @@ Audits repository token footprint and context budgets against protocol limits.
 - **Options**:
   - `--check`: Exits with status code 1 if any measured file exceeds configured budget thresholds (e.g. `AGENTS.md` exceeding 7 KB).
   - `--json`: Outputs structured JSON report for CI/CD gates.
-- **AGENTS.md limits**: `agents_md_bytes` (7168) measures `AGENTS.md` without its "Project specifics" section (the managed core; procedure lives in `docs/topic--along-protocol.md`); `project_specifics_bytes` (4096) is a soft limit on that section that only warns, with the hint to move details into `docs/topic--*.md`. Both are overridable in the `budget` block of `.along/config.json`.
+- **AGENTS.md limits**: `agents_md_bytes` (7168) measures `AGENTS.md` without its "Project specifics" section (the managed core; procedure lives in `.along/PROTOCOL.md`); `project_specifics_bytes` (4096) is a soft limit on that section that only warns, with the hint to move details into `docs/topic--*.md`. Both are overridable in the `budget` block of `.along/config.json`.
 - **Usage**:
   ```bash
   along budget
@@ -368,7 +368,7 @@ Protocol tools provide specialized repository maintenance, release management, a
 Transactional end-of-stage wrap engine.
 - Validates quality gates, inspects git diffs, updates active issue status, moves files to `done/`, writes session logs, recompiles projections, appends to `HISTORY.md`, and atomically commits wrapped work.
 - **Check-then-write**: every check (team steps, plan, completion of `- [ ]` checklist items in issue Acceptance Criteria and living plan, tests, zero-byte audit, entity graph) runs before the first write; a failed wrap leaves the tree unchanged. KB sync runs after the transaction commits and only warns on failure.
-- **Atomic auto-commit**: Automatically commits attributed files, issue status change, session log, and updated projections in a single atomic commit linked to the issue slug. `docs/topic--along-protocol.md` and any `AGENTS.md` changed only inside its managed blocks (engine refreshes) are included too. Pass `--no-commit` to keep changes staged/unstaged on disk.
+- **Atomic auto-commit**: Automatically commits attributed files, issue status change, session log, and updated projections in a single atomic commit linked to the issue slug. `.along/PROTOCOL.md` and any `AGENTS.md` changed only inside its managed blocks (engine refreshes) are included too. Pass `--no-commit` to keep changes staged/unstaged on disk.
 - **Options**:
   - `-s, --status <status>`: Closing status (`done`, `superseded`, `cancelled`, `duplicate`). Default: `done`.
   - `-m, --summary "<text>"`: One-line summary for `.along/HISTORY.md` index (falls back to issue title if omitted).

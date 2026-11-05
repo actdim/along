@@ -15,7 +15,7 @@ class TestDocumentationRules(unittest.TestCase):
     # one-line pointer.
     REFERENCE_PATHS = (
         os.path.join(REPO_ROOT, "skills", "along-init", "protocol-reference.md"),
-        os.path.join(REPO_ROOT, "docs", "topic--along-protocol.md"),
+        os.path.join(REPO_ROOT, ".along", "PROTOCOL.md"),
     )
     CORE_PATHS = (
         os.path.join(REPO_ROOT, "AGENTS.md"),
@@ -74,6 +74,22 @@ class TestDocumentationRules(unittest.TestCase):
         index_path = os.path.join(REPO_ROOT, "docs", "INDEX.md")
         content = textio.read_text(index_path)
         self.assertIn("topic--troubleshooting.md", content)
+
+    def test_along_protocol_not_leaked_into_index_or_docs(self):
+        """Internal agent protocol must not be scaffolded in docs/ or indexed in docs/INDEX.md."""
+        legacy_path = os.path.join(REPO_ROOT, "docs", "topic--along-protocol.md")
+        self.assertFalse(os.path.isfile(legacy_path), "docs/topic--along-protocol.md must not exist")
+
+        index_path = os.path.join(REPO_ROOT, "docs", "INDEX.md")
+        content = textio.read_text(index_path)
+        self.assertNotIn("Along Protocol Reference", content)
+        self.assertNotIn("T_ALONG_PROTOCOL", content)
+        self.assertNotIn("topic--along-protocol.md", content)
+
+        llms_path = os.path.join(REPO_ROOT, "llms.txt")
+        if os.path.isfile(llms_path):
+            llms_content = textio.read_text(llms_path)
+            self.assertNotIn("topic--along-protocol.md", llms_content)
 
 
 if __name__ == "__main__":

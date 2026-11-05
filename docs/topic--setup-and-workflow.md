@@ -191,7 +191,7 @@ along init
 
 ### What `along init` Configures:
 1. `AGENTS.md`: Generates the root protocol context with the managed `ALONG-PROTOCOL v4.6.0` block (a short REF block in a nested folder of the same git repository; a hand-written file keeps its text under `## Project specifics`). The block is a small core (state locations, issue anchoring, gates) rendered for the active gate strictness profile.
-   - `docs/topic--along-protocol.md`: the managed on-demand protocol reference (completion checklist, documentation routing tree, merge rules, along-team routing, full rule wording) the core points to; refreshed on every `along init` / `along update`, written only at a FULL root.
+   - `.along/PROTOCOL.md`: the managed on-demand protocol reference (completion checklist, documentation routing tree, merge rules, along-team routing, full rule wording) the core points to; refreshed on every `along init` / `along update`, written only at a FULL root.
 2. `CLAUDE.md`: Scaffolds the standard `@AGENTS.md` import line.
 3. `.gitattributes`: Configures `merge=union` for `.along/HISTORY.md` and `.along/DECISIONS.md` to prevent merge collisions across branches.
 4. `.along/`: Creates the persistent repository memory skeleton (`ISSUES/`, `DECISIONS/`, `MILESTONES/`, `SESSIONS/`, `docs/`; `GLOSSARY.md` and the `VISION.md` skeleton at the repository root - a nested context under a FULL ancestor creates them on first use).
@@ -492,7 +492,7 @@ For complete options, flags, and teardown mechanics, see [Along CLI Command Refe
 
 Agents write most of the tests in this repository, so the rule that keeps the suite
 trustworthy is stated here as well as in the protocol (a one-liner in the `AGENTS.md` core, the full rule
-in [Along Protocol Reference](./topic--along-protocol.md)).
+in Along Protocol Reference (`.along/PROTOCOL.md`)).
 
 **A test must never point an engine at the repository that contains it.** The engines
 write: `migrate_protocol.py` normalizes front-matter, sanitizes typography, and rewrites
