@@ -2,6 +2,12 @@
 
 All notable changes to this project, newest first.
 
+## v4.6.1 - 2026-11-05
+
+- fix: Relocate agent protocol to .along/PROTOCOL.md and exclude from public docs (refs #protocol-leaks-into-docs)
+- fix: Relocate agent protocol reference from docs/ to .along/PROTOCOL.md (refs #protocol-leaks-into-docs)
+- fix(ci): fix executable permissions in docker test harness and update node to 24 (refs #autonomous-container-build-and-firewall)
+
 ## v4.6.0 - 2026-11-01
 
 - docs(entities): register autonomous execution, team worktree, and diagnostics roadmap issues
