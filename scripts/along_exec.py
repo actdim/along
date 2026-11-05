@@ -6,7 +6,7 @@ import os
 import shlex
 import shutil
 import sys
-from typing import List, Optional
+from typing import List, Optional, Tuple
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
@@ -102,8 +102,11 @@ def print_help():
     print("""Along Command Router (along_exec.py)
 
 Usage:
-  python scripts/along_exec.py <command> [subcommand] [args...]
-  along <command> [subcommand] [args...]
+  python scripts/along_exec.py [-C <dir>] <command> [subcommand] [args...]
+  along [-C <dir>] <command> [subcommand] [args...]
+
+Global Options:
+  -C <dir>, --chdir <dir>   Run as if Along was started in <dir> instead of the current working directory
 
 Lifecycle Commands (project hooks):
   build          Execute project build (.along/scripts/build.py or auto-detected)
@@ -243,13 +246,65 @@ def _print_router_help(cmd: str, handler, repo_root: str, args: List[str]) -> No
     sys.exit(0)
 
 
+def _handle_chdir_options(args: List[str]) -> Tuple[Optional[str], List[str]]:
+    """Scan and extract leading -C <dir> and --chdir <dir> options, returning (target_dir, remaining_args)."""
+    target: Optional[str] = None
+    remaining: List[str] = []
+    idx = 0
+    while idx < len(args):
+        arg = args[idx]
+        if arg in ("-C", "--chdir"):
+            if idx + 1 >= len(args):
+                print(f"[Error] Option '{arg}' requires a directory argument.", file=sys.stderr)
+                sys.exit(2)
+            dir_val = args[idx + 1]
+            if target is None:
+                target = os.path.normpath(dir_val)
+            else:
+                target = os.path.normpath(os.path.join(target, dir_val))
+            idx += 2
+            continue
+        elif arg.startswith("-C") and len(arg) > 2:
+            dir_val = arg[2:]
+            if target is None:
+                target = os.path.normpath(dir_val)
+            else:
+                target = os.path.normpath(os.path.join(target, dir_val))
+            idx += 1
+            continue
+        elif arg.startswith("--chdir="):
+            dir_val = arg.split("=", 1)[1]
+            if target is None:
+                target = os.path.normpath(dir_val)
+            else:
+                target = os.path.normpath(os.path.join(target, dir_val))
+            idx += 1
+            continue
+        else:
+            remaining.extend(args[idx:])
+            break
+    return target, remaining
+
+
 def main():
-    if len(sys.argv) < 2 or sys.argv[1] in ("-h", "--help", "help"):
+    target_dir, remaining = _handle_chdir_options(sys.argv[1:])
+    if target_dir is not None:
+        if not os.path.isdir(target_dir):
+            print(f"[Error] Target directory does not exist: {target_dir}", file=sys.stderr)
+            sys.exit(2)
+        try:
+            os.chdir(target_dir)
+        except OSError as exc:
+            print(f"[Error] Cannot change directory to '{target_dir}': {exc}", file=sys.stderr)
+            sys.exit(2)
+        sys.argv = [sys.argv[0]] + remaining
+
+    if not remaining or remaining[0] in ("-h", "--help", "help"):
         print_help()
         sys.exit(0)
 
-    cmd = sys.argv[1].lower().strip()
-    extra_args = sys.argv[2:]
+    cmd = remaining[0].lower().strip()
+    extra_args = remaining[1:]
     repo_root = find_repo_root()
 
     native_routers = {
