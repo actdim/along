@@ -62,16 +62,80 @@ def get_worktree_path(repo_root: str, slug: str) -> str:
     return os.path.join(repo.state_dir(repo_root), "worktrees", clean_slug)
 
 
-def is_worktree(path: str) -> bool:
-    """Check if the given path is a Git worktree (carries a .git file rather than directory)."""
-    git_file = os.path.join(path, ".git")
-    if not os.path.isfile(git_file):
-        return False
+def inspect_git_dir(path: str) -> Dict[str, Any]:
+    """Inspect Git metadata at `path` to determine repository topology."""
+    git_entry = os.path.join(path, ".git")
+    if os.path.isdir(git_entry):
+        return {"kind": "repo", "git_dir": git_entry, "primary_repo": path}
+    if not os.path.isfile(git_entry):
+        return {"kind": "none", "git_dir": None, "primary_repo": None}
+
     try:
-        content = textio.read_text(git_file).strip()
-        return content.startswith("gitdir:")
+        content = textio.read_text(git_entry).strip()
     except (OSError, UnicodeDecodeError):
-        return False
+        return {"kind": "unknown", "git_entry": git_entry, "primary_repo": None}
+
+    if not content.startswith("gitdir:"):
+        return {"kind": "unknown", "git_entry": git_entry, "primary_repo": None}
+
+    raw_target = content[len("gitdir:"):].strip()
+    gitdir = raw_target if os.path.isabs(raw_target) else os.path.normpath(os.path.join(path, raw_target))
+    norm_gitdir = gitdir.replace("\\", "/")
+    parts = [p for p in norm_gitdir.split("/") if p]
+
+    commondir_file = os.path.join(gitdir, "commondir")
+    has_commondir = os.path.isfile(commondir_file)
+    has_worktrees_segment = "worktrees" in parts
+
+    if has_commondir or has_worktrees_segment:
+        primary_repo = None
+        if has_commondir:
+            try:
+                c_content = textio.read_text(commondir_file).strip()
+                c_dir = c_content if os.path.isabs(c_content) else os.path.normpath(os.path.join(gitdir, c_content))
+                if os.path.basename(c_dir) == ".git":
+                    primary_repo = os.path.dirname(c_dir)
+                else:
+                    primary_repo = c_dir
+            except (OSError, UnicodeDecodeError):
+                pass
+        if not primary_repo and has_worktrees_segment:
+            idx = len(parts) - 1 - parts[::-1].index("worktrees")
+            common_git = os.sep.join(parts[:idx])
+            primary_repo = os.path.dirname(common_git)
+
+        return {
+            "kind": "worktree",
+            "git_entry": git_entry,
+            "gitdir": gitdir,
+            "has_commondir": has_commondir,
+            "primary_repo": primary_repo,
+        }
+
+    if "modules" in parts:
+        return {
+            "kind": "submodule",
+            "git_entry": git_entry,
+            "gitdir": gitdir,
+            "primary_repo": None,
+        }
+
+    return {
+        "kind": "secondary",
+        "git_entry": git_entry,
+        "gitdir": gitdir,
+        "primary_repo": None,
+    }
+
+
+def is_worktree(path: str) -> bool:
+    """Check if the given path is a Git worktree (not a submodule or normal repo)."""
+    return inspect_git_dir(path).get("kind") == "worktree"
+
+
+def is_submodule(path: str) -> bool:
+    """Check if the given path is a Git submodule."""
+    return inspect_git_dir(path).get("kind") == "submodule"
 
 
 def link_directory(target_path: str, link_path: str) -> bool:

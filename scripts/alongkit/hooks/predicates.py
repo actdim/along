@@ -17,7 +17,7 @@ import re
 import sys
 from typing import Any, Dict, List, Optional, Tuple
 
-from .. import attribution, entities, frontmatter, kb, proc, repo, sanitizer, session, testruns, textio, typography, verify
+from .. import attribution, entities, frontmatter, kb, proc, repo, sanitizer, session, testruns, textio, typography, verify, worktree
 from . import shellparse, shellwrite
 from .models import GateDecision, GateResult, HookEvent, HookEventType
 
@@ -1915,41 +1915,199 @@ def _is_reparse_or_link(path: str) -> bool:
     return bool(attributes & 0x400)
 
 
+def _find_enclosing_git_root(path: str) -> Optional[str]:
+    """Find the nearest directory enclosing `path` that contains a .git file or directory."""
+    cur = os.path.abspath(path)
+    if os.path.isfile(cur) or not os.path.exists(cur):
+        cur = os.path.dirname(cur)
+    while True:
+        if os.path.exists(os.path.join(cur, ".git")):
+            return cur
+        parent = os.path.dirname(cur)
+        if parent == cur:
+            return None
+        cur = parent
+
+
+def _is_recovery_command(cmd: str) -> bool:
+    """Check if command is an Along governance, recovery, or diagnostic command."""
+    if not cmd or not cmd.strip():
+        return False
+    segments = shellparse.split_segments(cmd)
+    if not segments:
+        return False
+    for seg in segments:
+        words = shellparse.words(seg)
+        if not words:
+            continue
+        idx = 0
+        w0 = os.path.basename(words[0]).lower()
+        if w0 in ("python", "python3", "python.exe", "py", "py.exe"):
+            idx += 1
+            if idx < len(words) and words[idx].endswith(".py"):
+                script = os.path.basename(words[idx]).lower()
+                if script in ("along_exec.py", "test.py", "build.py", "dev.py"):
+                    idx += 1
+        elif w0 in ("along", "along.exe", "along.bat", "along.ps1", "along.cmd"):
+            idx += 1
+
+        subwords = [w.lower() for w in words[idx:]]
+        if not subwords:
+            continue
+
+        if subwords[0] in ("doctor", "status", "help", "--help", "-h", "--version", "-v"):
+            return True
+        if subwords[0] == "gates" and len(subwords) > 1 and subwords[1] in ("ack", "stats", "denials", "check"):
+            return True
+        if subwords[0] == "plan" and len(subwords) > 1 and subwords[1] in ("status", "approve"):
+            return True
+        if subwords[0] == "worktree" and len(subwords) > 1 and subwords[1] in ("status", "list", "is_supported", "is-supported", "gc"):
+            return True
+
+    return False
+
+
+def _effective_command_dir(cmd: str, initial_cwd: str) -> Tuple[str, bool]:
+    """Parse shell command for leading directory changes and check if pure navigation."""
+    if not cmd or not cmd.strip():
+        return initial_cwd, True
+
+    segments = shellparse.split_segments(cmd)
+    if segments is None:
+        return initial_cwd, False
+
+    cur_dir = os.path.abspath(initial_cwd)
+    all_nav = True
+
+    for seg in segments:
+        words = shellparse.words(seg)
+        if not words:
+            continue
+        w0 = words[0].lower()
+        if w0 in ("cd", "chdir", "pushd", "set-location", "sl"):
+            target_arg = None
+            for arg in words[1:]:
+                if arg.startswith("/") or arg.startswith("-"):
+                    continue
+                target_arg = arg
+                break
+            if target_arg:
+                cur_dir = os.path.normpath(os.path.join(cur_dir, target_arg))
+        elif w0 in ("popd", "pwd", "dir", "ls", "get-location", "gl", "echo"):
+            pass
+        else:
+            all_nav = False
+
+    return cur_dir, all_nav
+
+
+def _has_workspace_node_modules(worktree_dir: str, primary_repo: Optional[str] = None) -> bool:
+    """Check if node_modules exists in worktree or in an ancestor workspace root."""
+    wt_abs = os.path.abspath(worktree_dir)
+    wt_nm = os.path.join(wt_abs, "node_modules")
+    if os.path.exists(wt_nm) or _is_reparse_or_link(wt_nm):
+        return True
+
+    cur = os.path.abspath(primary_repo) if primary_repo else os.path.dirname(wt_abs)
+    cur_parent = os.path.dirname(cur)
+    while True:
+        nm = os.path.join(cur_parent, "node_modules")
+        if os.path.isdir(nm) or _is_reparse_or_link(nm):
+            is_ws = (
+                os.path.isfile(os.path.join(cur_parent, "pnpm-workspace.yaml"))
+                or os.path.isfile(os.path.join(cur_parent, "lerna.json"))
+            )
+            if is_ws:
+                return True
+            pkg_json = os.path.join(cur_parent, "package.json")
+            if os.path.isfile(pkg_json):
+                try:
+                    data = json.loads(textio.read_text(pkg_json))
+                    if "workspaces" in data:
+                        return True
+                except (OSError, json.JSONDecodeError):
+                    pass
+
+        parent = os.path.dirname(cur_parent)
+        if parent == cur_parent:
+            break
+        cur_parent = parent
+
+    return False
+
+
 def check_worktree_env_readiness(event: HookEvent, repo_root: str, **kwargs: Any) -> Optional[str]:
     """Verify that if operating inside a Git worktree, environment dependencies are linked."""
     target = _extract_target_file(event)
     cwd = os.getcwd()
     check_dir = None
 
-    if target and os.path.isabs(target):
-        parent_dir = os.path.dirname(target)
-        if os.path.isfile(os.path.join(parent_dir, ".git")):
-            check_dir = parent_dir
-    if not check_dir and os.path.isfile(os.path.join(cwd, ".git")):
-        check_dir = cwd
+    if target:
+        target_abs = target if os.path.isabs(target) else os.path.normpath(os.path.join(cwd, target))
+        enclosing = _find_enclosing_git_root(target_abs)
+        if not enclosing or not worktree.is_worktree(enclosing):
+            return None
+        check_dir = enclosing
+    else:
+        cmd = _extract_command(event)
+        if cmd:
+            if _is_recovery_command(cmd):
+                return None
+            eff_dir, is_nav = _effective_command_dir(cmd, cwd)
+            if is_nav:
+                return None
+            enclosing = _find_enclosing_git_root(eff_dir)
+            if not enclosing or not worktree.is_worktree(enclosing):
+                return None
+            check_dir = enclosing
+
+    if not check_dir:
+        enclosing = _find_enclosing_git_root(cwd)
+        if enclosing and worktree.is_worktree(enclosing):
+            check_dir = enclosing
 
     if not check_dir:
         return None
 
-    git_file = os.path.join(check_dir, ".git")
-    try:
-        content = textio.read_text(git_file).strip()
-        if not content.startswith("gitdir:"):
-            return None
-    except (OSError, UnicodeDecodeError):
-        return None
+    meta = worktree.inspect_git_dir(check_dir)
+    primary_repo = meta.get("primary_repo") or repo_root
+    gitdir = meta.get("gitdir") or "unknown"
 
-    if repo_root and os.path.abspath(repo_root) != os.path.abspath(check_dir):
+    if primary_repo and os.path.abspath(primary_repo) != os.path.abspath(check_dir):
         for dep in ("node_modules", ".venv"):
-            root_dep = os.path.join(repo_root, dep)
-            if os.path.isdir(root_dep):
-                worktree_dep = os.path.join(check_dir, dep)
-                if not os.path.exists(worktree_dep) and not _is_reparse_or_link(worktree_dep):
-                    return (
-                        f"Worktree Environment Readiness Violation [gate: worktree-env-readiness]: "
-                        f"Primary repository contains '{dep}', but it is not linked in worktree '{check_dir}'. "
-                        f"Run 'along worktree create' or link dependencies before modifying files."
-                    )
+            root_dep = os.path.join(primary_repo, dep)
+            if not os.path.isdir(root_dep):
+                continue
+
+            satisfied = False
+            if dep == "node_modules":
+                wt_dep = os.path.join(check_dir, dep)
+                if os.path.exists(wt_dep) or _is_reparse_or_link(wt_dep):
+                    satisfied = True
+                elif _has_workspace_node_modules(check_dir, primary_repo):
+                    satisfied = True
+            elif dep == ".venv":
+                wt_venv = os.path.join(check_dir, ".venv")
+                env_venv = os.environ.get("VIRTUAL_ENV")
+                satisfied = (
+                    os.path.exists(wt_venv)
+                    or _is_reparse_or_link(wt_venv)
+                    or (bool(env_venv) and os.path.isdir(env_venv))
+                )
+
+            if not satisfied:
+                wt_dep_path = os.path.join(check_dir, dep)
+                linking_hint = (
+                    f"Link dependencies before modifying files (e.g. 'cmd.exe /c mklink /J "
+                    f"\"{wt_dep_path}\" \"{root_dep}\"' on Windows, "
+                    f"or 'ln -s \"{root_dep}\" \"{wt_dep_path}\"' on POSIX)."
+                )
+                return (
+                    f"Worktree Environment Readiness Violation [gate: worktree-env-readiness]: "
+                    f"Detected Git worktree at '{check_dir}' (gitdir: '{gitdir}', primary repo: '{primary_repo}'). "
+                    f"Primary repository contains '{dep}', but it is not linked or present in the worktree. "
+                    f"{linking_hint}"
+                )
 
     manifest_file = os.path.join(check_dir, ".along-worktree.json")
     if os.path.isfile(manifest_file):
@@ -1960,7 +2118,8 @@ def check_worktree_env_readiness(event: HookEvent, repo_root: str, **kwargs: Any
                 if not (os.path.exists(full_path) or _is_reparse_or_link(full_path)):
                     return (
                         f"Worktree Environment Readiness Violation [gate: worktree-env-readiness]: "
-                        f"Required linked directory '{rel_dir}' is missing or broken in '{check_dir}'."
+                        f"Detected Git worktree at '{check_dir}' (gitdir: '{gitdir}'). "
+                        f"Required linked directory '{rel_dir}' declared in .along-worktree.json is missing or broken."
                     )
         except (OSError, json.JSONDecodeError):
             pass

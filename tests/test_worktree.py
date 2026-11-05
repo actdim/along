@@ -390,6 +390,143 @@ class TestWorktreeIsolation(unittest.TestCase):
         wt_path = os.path.join(self.root, ".along", "worktrees", "degrade-test")
         self.assertFalse(os.path.exists(wt_path), "Worktree directory must not be created when degraded")
 
+    def test_14_submodule_not_classified_as_worktree(self):
+        # 1. Set up a submodule directory with gitdir pointing to modules/
+        sub_dir = os.path.join(self.root, "packages", "app-submodule")
+        os.makedirs(sub_dir, exist_ok=True)
+        sub_git_dir = os.path.join(self.root, ".git", "modules", "packages", "app-submodule")
+        os.makedirs(sub_git_dir, exist_ok=True)
+        textio.write_text(os.path.join(sub_git_dir, "config"), "[core]\n\trepositoryformatversion = 0\n")
+
+        rel_gitdir = os.path.relpath(sub_git_dir, sub_dir)
+        textio.write_text(os.path.join(sub_dir, ".git"), f"gitdir: {rel_gitdir}\n")
+
+        # 2. Check metadata detection
+        self.assertFalse(worktree.is_worktree(sub_dir), "Submodule must not be detected as worktree")
+        self.assertTrue(worktree.is_submodule(sub_dir), "Submodule must be detected as submodule")
+
+        # 3. Worktree readiness gate must NEVER fire for a submodule
+        event = models.HookEvent(
+            event_type=models.HookEventType.PRE_TOOL_USE,
+            tool_name="write_to_file",
+            tool_args={"TargetFile": os.path.join(sub_dir, "index.ts"), "CodeContent": "export const x = 1;\n"},
+        )
+        violation = predicates.check_worktree_env_readiness(event, repo_root=self.root)
+        self.assertIsNone(violation, f"Expected no violation for submodule, got: {violation}")
+
+    def test_15_target_path_evaluation_outside_worktree(self):
+        # Create unlinked worktree
+        os.makedirs(os.path.join(self.root, "node_modules"), exist_ok=True)
+        info = worktree.create_worktree(self.root, "feat-outer-eval")
+        worktree.unlink_directory(os.path.join(info.path, "node_modules"))
+
+        # Target file is in primary repo outside the worktree
+        primary_file = os.path.join(self.root, ".along", "ISSUES", "task--sample.md")
+        textio.write_text(primary_file, "# Sample\n")
+
+        old_cwd = os.getcwd()
+        try:
+            # Change cwd to the unlinked worktree
+            os.chdir(info.path)
+
+            event = models.HookEvent(
+                event_type=models.HookEventType.PRE_TOOL_USE,
+                tool_name="write_to_file",
+                tool_args={"TargetFile": primary_file, "CodeContent": "# Modified\n"},
+            )
+            # Evaluating target file in primary repo must succeed even if session cwd is in unlinked worktree
+            violation = predicates.check_worktree_env_readiness(event, repo_root=self.root)
+            self.assertIsNone(violation, f"Target file in primary repo must not be blocked: {violation}")
+        finally:
+            os.chdir(old_cwd)
+
+    def test_16_recovery_commands_and_cd_allowed(self):
+        os.makedirs(os.path.join(self.root, "node_modules"), exist_ok=True)
+        info = worktree.create_worktree(self.root, "feat-recovery-cmds")
+        worktree.unlink_directory(os.path.join(info.path, "node_modules"))
+
+        old_cwd = os.getcwd()
+        try:
+            os.chdir(info.path)
+
+            recovery_commands = [
+                "along gates ack d-123 --note 'disclosed'",
+                "along doctor",
+                "along plan status",
+                "along status",
+                "along gates stats",
+                "along worktree status",
+                "cd ..",
+                "pwd",
+                "dir",
+            ]
+            for cmd in recovery_commands:
+                event = models.HookEvent(
+                    event_type=models.HookEventType.PRE_TOOL_USE,
+                    tool_name="run_command",
+                    tool_args={"CommandLine": cmd},
+                )
+                violation = predicates.check_worktree_env_readiness(event, repo_root=self.root)
+                self.assertIsNone(violation, f"Recovery command '{cmd}' was unexpectedly denied: {violation}")
+
+            # Non-recovery command requiring dependencies MUST still be blocked
+            event_bad = models.HookEvent(
+                event_type=models.HookEventType.PRE_TOOL_USE,
+                tool_name="run_command",
+                tool_args={"CommandLine": "npm test"},
+            )
+            violation_bad = predicates.check_worktree_env_readiness(event_bad, repo_root=self.root)
+            self.assertIsNotNone(violation_bad, "npm test in unlinked worktree must be blocked")
+        finally:
+            os.chdir(old_cwd)
+
+    def test_17_workspace_root_node_modules_satisfies_nested_worktree(self):
+        ws_root = hermetic.make_repo_fixture(prefix="along-ws-test-")
+        try:
+            # 1. Initialize Git in primary subproject
+            proc.git(["init"], cwd=ws_root)
+            pkg_dir = os.path.join(ws_root, "packages", "core")
+            os.makedirs(pkg_dir, exist_ok=True)
+            proc.git(["init"], cwd=pkg_dir)
+            initial_file = os.path.join(pkg_dir, "README.md")
+            textio.write_text(initial_file, "# Core\n")
+            proc.git(["add", "README.md"], cwd=pkg_dir)
+            proc.git(["commit", "-m", "init core"], cwd=pkg_dir)
+
+            # 2. Workspace root has pnpm-workspace.yaml and node_modules
+            textio.write_text(os.path.join(ws_root, "pnpm-workspace.yaml"), "packages:\n  - 'packages/*'\n")
+            os.makedirs(os.path.join(ws_root, "node_modules"), exist_ok=True)
+
+            # 3. Create worktree of subproject without its own node_modules
+            info = worktree.create_worktree(pkg_dir, "wt-core")
+
+            event = models.HookEvent(
+                event_type=models.HookEventType.PRE_TOOL_USE,
+                tool_name="write_to_file",
+                tool_args={"TargetFile": os.path.join(info.path, "index.ts"), "CodeContent": "pass\n"},
+            )
+            violation = predicates.check_worktree_env_readiness(event, repo_root=pkg_dir)
+            self.assertIsNone(violation, f"Ancestor workspace node_modules must satisfy readiness: {violation}")
+        finally:
+            shutil.rmtree(ws_root, ignore_errors=True)
+
+    def test_18_violation_message_diagnostics(self):
+        os.makedirs(os.path.join(self.root, "node_modules"), exist_ok=True)
+        info = worktree.create_worktree(self.root, "feat-diag-msg")
+        worktree.unlink_directory(os.path.join(info.path, "node_modules"))
+
+        event = models.HookEvent(
+            event_type=models.HookEventType.PRE_TOOL_USE,
+            tool_name="write_to_file",
+            tool_args={"TargetFile": os.path.join(info.path, "file.py"), "CodeContent": "pass\n"},
+        )
+        violation = predicates.check_worktree_env_readiness(event, repo_root=self.root)
+        self.assertIsNotNone(violation)
+        self.assertIn("Detected Git worktree at", violation)
+        self.assertIn("gitdir:", violation)
+        self.assertIn("primary repo:", violation)
+        self.assertIn("mklink /J", violation)
+
 
 
 if __name__ == "__main__":
