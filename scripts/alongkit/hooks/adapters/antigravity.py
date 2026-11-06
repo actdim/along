@@ -66,6 +66,24 @@ class AntigravityAdapter(BaseAdapter):
         if isinstance(ws_paths, list) and ws_paths:
             workspace_root = str(ws_paths[0])
 
+        subagent_id: Optional[str] = None
+        subagent_role: Optional[str] = None
+        raw_subagent = payload.get("subagent") or payload.get("agent")
+        if isinstance(raw_subagent, dict):
+            subagent_id = str(raw_subagent.get("id") or raw_subagent.get("conversationId") or "") or None
+            subagent_role = str(raw_subagent.get("role") or raw_subagent.get("name") or "") or None
+        elif isinstance(raw_subagent, str) and raw_subagent.strip() and raw_subagent.lower() not in ("main", "supervisor"):
+            subagent_role = raw_subagent.strip()
+
+        if not subagent_id:
+            raw_id = payload.get("subagentId") or payload.get("subagent_id") or payload.get("agentId") or payload.get("agent_id")
+            if raw_id:
+                subagent_id = str(raw_id)
+        if not subagent_role:
+            raw_role = payload.get("subagentRole") or payload.get("agentRole") or payload.get("subagent_role") or payload.get("agent_role") or payload.get("role")
+            if raw_role:
+                subagent_role = str(raw_role)
+
         return HookEvent(
             event_type=event_type,
             tool_name=tool_name,
@@ -76,6 +94,8 @@ class AntigravityAdapter(BaseAdapter):
             conversation_id=payload.get("conversationId"),
             model_name=payload.get("modelName"),
             raw_payload=payload,
+            subagent_id=subagent_id,
+            subagent_role=subagent_role,
         )
 
     def format_response(self, result: GateResult) -> Tuple[int, str]:

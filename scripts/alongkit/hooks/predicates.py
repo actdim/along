@@ -290,7 +290,8 @@ def record_gate_denial(event: HookEvent, repo_root: Optional[str], gate: str, re
     key = event_session_key(event)
     first = (reason or "").strip().splitlines()[0] if (reason or "").strip() else ""
     first = first if len(first) <= 160 else first[:157] + "..."
-    session.trace_event(repo_root, key, f"denied [{gate}] {event.tool_name}: {first}", collapse=True)
+    subagent_tag = f" by subagent '{event.subagent_role or event.subagent_id}'" if (event.subagent_role or event.subagent_id) else ""
+    session.trace_event(repo_root, key, f"denied [{gate}]{subagent_tag} {event.tool_name}: {first}", collapse=True)
     # A later bypass flag for this gate must follow a failure the user saw.
     from .. import bypass
     bypass.record_hook_denial(repo_root, gate, key)
@@ -314,15 +315,32 @@ def _record_denial_event(event: HookEvent, repo_root: str, key: Optional[str], g
     redactor = _get_audit_redactor()
     seed = f"{now}|{gate}|{event.tool_name}|{digest}|{len(open_denials)}"
     did = "d-" + hashlib.sha256(seed.encode("utf-8")).hexdigest()[:6]
-    record = session.record_event(repo_root, key, "deny", extra={
+    agent_tag = event.subagent_role or event.subagent_id
+    extra = {
         "id": did, "gate": gate, "tool": event.tool_name,
         "target": redactor.sanitize_text(target) if target else None,
         "reason": redactor.sanitize_text(reason) if reason else None,
         "procedural": True if procedural else None,
-    })
+    }
+    if agent_tag:
+        extra["agent"] = redactor.sanitize_text(agent_tag)
+        extra["subagent"] = redactor.sanitize_text(agent_tag)
+    if event.subagent_id:
+        extra["subagent_id"] = redactor.sanitize_text(event.subagent_id)
+    if event.subagent_role:
+        extra["subagent_role"] = redactor.sanitize_text(event.subagent_role)
+    record = session.record_event(repo_root, key, "deny", extra=extra)
     if not record or procedural:
         return
-    open_denials.append({"id": did, "gate": gate, "digest": digest, "ts": now})
+    denial_entry = {"id": did, "gate": gate, "digest": digest, "ts": now}
+    if agent_tag:
+        denial_entry["agent"] = agent_tag
+        denial_entry["subagent"] = agent_tag
+    if event.subagent_id:
+        denial_entry["subagent_id"] = event.subagent_id
+    if event.subagent_role:
+        denial_entry["subagent_role"] = event.subagent_role
+    open_denials.append(denial_entry)
     trace["open_denials"] = open_denials[-OPEN_DENIALS_MAX:]
     save_activity_trace(repo_root, trace, key)
 

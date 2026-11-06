@@ -12,7 +12,7 @@ from __future__ import annotations
 
 import json
 import os
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Any, Dict, List, Optional, Tuple
 
 if __name__ == "__main__":
@@ -30,6 +30,7 @@ class GateStats:
     blocked: int = 0
     warned: int = 0
     bypassed: int = 0
+    subagents: Dict[str, int] = field(default_factory=dict)
 
     @property
     def bypass_ratio(self) -> float:
@@ -87,12 +88,15 @@ def collect(repo_root: str, since: Optional[str] = None) -> List[GateStats]:
         gate = str(entry.get("gate") or "unknown")
         decision = str(entry.get("decision") or "")
         item = stats.setdefault(gate, GateStats(gate))
+        subagent = entry.get("subagent") or entry.get("subagent_role")
         if decision == "bypass":
             item.bypassed += 1
         elif entry.get("mode") == "shadow":
             item.warned += 1
         elif decision in ("deny", "ask", "force_ask"):
             item.blocked += 1
+            if subagent:
+                item.subagents[subagent] = item.subagents.get(subagent, 0) + 1
     return sorted(stats.values(), key=lambda s: (-s.blocked, -s.bypassed, s.gate))
 
 
@@ -128,10 +132,17 @@ def format_loops(rows: List[GateLoop], limit: int = 10) -> str:
 def format_table(rows: List[GateStats]) -> str:
     if not rows:
         return "No gate decisions recorded yet (.along/diagnostics/hooks_audit.jsonl)."
+    has_subagents = any(r.subagents for r in rows)
     width = max(len(r.gate) for r in rows)
-    out = [f"{'gate'.ljust(width)}  blocked  warned  bypassed  bypass%"]
-    for r in rows:
-        out.append(f"{r.gate.ljust(width)}  {r.blocked:7d}  {r.warned:6d}  {r.bypassed:8d}  {r.bypass_ratio * 100:6.0f}%")
+    if has_subagents:
+        out = [f"{'gate'.ljust(width)}  blocked  warned  bypassed  bypass%  subagents"]
+        for r in rows:
+            sub_str = ", ".join(f"{k}:{v}" for k, v in sorted(r.subagents.items())) if r.subagents else "-"
+            out.append(f"{r.gate.ljust(width)}  {r.blocked:7d}  {r.warned:6d}  {r.bypassed:8d}  {r.bypass_ratio * 100:6.0f}%  {sub_str}")
+    else:
+        out = [f"{'gate'.ljust(width)}  blocked  warned  bypassed  bypass%"]
+        for r in rows:
+            out.append(f"{r.gate.ljust(width)}  {r.blocked:7d}  {r.warned:6d}  {r.bypassed:8d}  {r.bypass_ratio * 100:6.0f}%")
     return "\n".join(out)
 
 

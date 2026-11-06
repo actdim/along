@@ -216,7 +216,9 @@ def _handle_denials(repo_root: str, subcmd: str, args: List[str]) -> int:
             elif state == session.DENIAL_ACKED:
                 state = {True: "acked", False: "acked, awaiting the user's reply",
                          None: "acked (unverified)"}[d["verified"]]
-            print(f"{d['id']}  {str(d['ts'])[:19]}  [{d['gate']}]  {state}")
+            agent = d.get("subagent_role") or d.get("agent") or d.get("subagent")
+            agent_str = f"  (subagent: {agent})" if agent else ""
+            print(f"{d['id']}  {str(d['ts'])[:19]}  [{d['gate']}]{agent_str}  {state}")
             print(f"    {d.get('target') or d.get('tool') or ''}")
             if d.get("note"):
                 print(f"    note: {d['note']}")

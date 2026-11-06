@@ -49,6 +49,8 @@ class HookEvent:
     #: Session ledger record written for this event, projected onto telemetry afterwards
     #: (ADR-2026-10-05--session-event-ledger-feeds-telemetry).
     ledger_event: Optional[Dict[str, Any]] = None
+    subagent_id: Optional[str] = None
+    subagent_role: Optional[str] = None
 
 
 @dataclass

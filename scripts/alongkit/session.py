@@ -1127,7 +1127,10 @@ EVENT_SCHEMA: int = 1
 EVENT_KINDS: Tuple[str, ...] = ("edit", "test", "tool", "plan", "approve", "deny", "resolve", "ack")
 #: Fields an `extra` dict may add to a ledger record (gate denials and their outcome).
 #: [feat--anti-silent-fallback-gate]
-EVENT_EXTRA_FIELDS: Tuple[str, ...] = ("id", "gate", "tool", "target", "reason", "procedural", "via", "note")
+EVENT_EXTRA_FIELDS: Tuple[str, ...] = (
+    "id", "gate", "tool", "target", "reason", "procedural", "via", "note",
+    "agent", "subagent", "subagent_id", "subagent_role",
+)
 PATH_KINDS: Tuple[str, ...] = ("source", "docs", "state")
 #: Events kept per issue; when exceeded, the oldest edit events go first.
 EVENTS_MAX: int = 2000
@@ -1304,6 +1307,10 @@ def denial_status(ctx: str, slug: str) -> List[Dict[str, Any]]:
                 order.append(did)
             denials[did] = {"id": did, "gate": event.get("gate"), "tool": event.get("tool"),
                             "target": event.get("target"), "reason": event.get("reason"),
+                            "agent": event.get("agent") or event.get("subagent"),
+                            "subagent": event.get("subagent") or event.get("agent"),
+                            "subagent_id": event.get("subagent_id"),
+                            "subagent_role": event.get("subagent_role"),
                             "ts": event.get("ts"), "session": event.get("session"),
                             "procedural": bool(event.get("procedural")), "idx": idx,
                             "state": DENIAL_OPEN, "via": None, "note": None, "verified": None,
@@ -1351,7 +1358,9 @@ def format_denials(items: List[Dict[str, Any]], limit: int = 5) -> str:
     for d in items[:limit]:
         target = str(d.get("target") or d.get("tool") or "")
         target = target if len(target) <= 60 else target[:57] + "..."
-        parts.append(f"{d['id']} [{d.get('gate')}] {target}".rstrip())
+        agent = d.get("subagent_role") or d.get("agent") or d.get("subagent")
+        by_agent = f" by subagent '{agent}'" if agent else ""
+        parts.append(f"{d['id']} [{d.get('gate')}]{by_agent} {target}".rstrip())
     if len(items) > limit:
         parts.append(f"+{len(items) - limit} more")
     return "; ".join(parts)

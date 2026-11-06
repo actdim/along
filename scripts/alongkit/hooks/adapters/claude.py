@@ -137,6 +137,24 @@ class ClaudeCodeAdapter(BaseAdapter):
         self._event_type = effective_event_type
         self._stop_hook_active = bool(payload.get("stop_hook_active"))
 
+        subagent_id: Optional[str] = None
+        subagent_role: Optional[str] = None
+        raw_subagent = payload.get("subagent") or payload.get("agent")
+        if isinstance(raw_subagent, dict):
+            subagent_id = str(raw_subagent.get("id") or raw_subagent.get("session_id") or "") or None
+            subagent_role = str(raw_subagent.get("role") or raw_subagent.get("name") or "") or None
+        elif isinstance(raw_subagent, str) and raw_subagent.strip() and raw_subagent.lower() not in ("main", "supervisor"):
+            subagent_role = raw_subagent.strip()
+
+        if not subagent_id:
+            raw_id = payload.get("subagent_id") or payload.get("agent_id")
+            if raw_id:
+                subagent_id = str(raw_id)
+        if not subagent_role:
+            raw_role = payload.get("subagent_role") or payload.get("agent_role") or payload.get("role")
+            if raw_role:
+                subagent_role = str(raw_role)
+
         return HookEvent(
             event_type=effective_event_type,
             tool_name=tool_name,
@@ -145,6 +163,8 @@ class ClaudeCodeAdapter(BaseAdapter):
             runtime=self.runtime_name,
             conversation_id=conversation_id,
             raw_payload=payload,
+            subagent_id=subagent_id,
+            subagent_role=subagent_role,
         )
 
     def format_response(self, result: GateResult) -> Tuple[int, str]:

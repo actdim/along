@@ -286,6 +286,13 @@ def record_audit_entry(
             # Appended last: earlier keys keep their order for existing readers.
             "target": redactor.sanitize_text(target) if target else None,
         }
+        subagent = event.subagent_role or event.subagent_id
+        if subagent:
+            entry["subagent"] = redactor.sanitize_text(subagent)
+        if event.subagent_id:
+            entry["subagent_id"] = redactor.sanitize_text(event.subagent_id)
+        if event.subagent_role:
+            entry["subagent_role"] = redactor.sanitize_text(event.subagent_role)
         with open(audit_file, "a", encoding="utf-8") as handle:
             handle.write(json.dumps(entry) + "\n")
     except OSError:
