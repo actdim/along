@@ -67,6 +67,11 @@ class TestCliChdir(unittest.TestCase):
         self.assertEqual(res.returncode, 0, f"stderr: {res.stderr}")
         self.assertIn("packages/subproject", res.stdout.replace("\\", "/"))
 
+    def test_alongkit_cli_entry_point_chdir(self):
+        from alongkit import cli
+        code = cli.main(["-C", "packages/nonexistent-xyz", "status"])
+        self.assertEqual(code, 2)
+
 
 if __name__ == "__main__":
     unittest.main()
