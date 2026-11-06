@@ -1344,6 +1344,8 @@ def execute_wrap(
                 entities.move_issue_folder(src_file, dest_file, tx)
             print(f"-> Moved issue to done: {repo.safe_relpath(dest_file, repo_root)}")
         else:
+            updates = {"status": status, "updated": today}
+            new_content = frontmatter.update(content, updates)
             tx.protect(src_file)
             textio.write_text(src_file, new_content, newline="\n")
             print(f"-> Updated issue in done: {repo.safe_relpath(src_file, repo_root)}")
