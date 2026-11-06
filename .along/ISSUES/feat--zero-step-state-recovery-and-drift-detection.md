@@ -6,10 +6,10 @@ type: feat
 status: open
 priority: medium
 created: 2026-09-27
-updated: 2026-09-27
+updated: 2026-11-06
 agent: antigravity
 tags: [state-recovery, drift-detection, git-status, along-team, skill-state]
-milestone: v4.7.0-clean-turn-agent-loops-and-state-recovery
+milestone: v4.8.0-empirical-benchmarking-and-publications
 blocked_by: [feat--clean-turn-context-isolation-in-along-team]
 related: [feat--structured-blackboard-state-machine]
 ---

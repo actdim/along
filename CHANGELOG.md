@@ -2,6 +2,32 @@
 
 All notable changes to this project, newest first.
 
+## v4.7.0 - 2026-11-06
+
+- fix(lifecycle): prevent UnboundLocalError when updating already-done issue in wrap (refs #verify-worktree-env-readiness-hardening)
+- chore: Harden worktree readiness against POSIX paths, child workspaces, and Python flags (refs #verify-worktree-env-readiness-hardening)
+- fix(worktree): harden path normalization and command classification (refs #verify-worktree-env-readiness-hardening)
+- chore: Harden worktree environment readiness and path preservation in inspect_git_dir (refs #verify-worktree-env-readiness-hardening)
+- fix(lifecycle): make --phase imply --keep-open and support flexible phase formats (refs #partial-session-wrap) (refs #verify-worktree-env-readiness-hardening)
+- fix(cli): support global -C and --chdir options in alongkit.cli entrypoint (refs #cli-global-chdir)
+- test(worktree): configure git author in nested fixture for CI runners (refs #gate-denials-subagent-attribution)
+- feat(gates): support subagent attribution for gate denials and unresolved reporting (refs #gate-denials-subagent-attribution)
+- feat: Support subagent attribution for gate denials and unresolved denial reporting (refs #gate-denials-subagent-attribution)
+- feat(gates): support unstaged linting and subproject protocol version skew doctor audit (refs #lint-worktree-and-doctor-subprojects)
+- feat: Support unstaged linting and subproject protocol version skew doctor audit (refs #lint-worktree-and-doctor-subprojects)
+- feat(entities): implement cross-repo and submodule entity references with path qualifiers (refs #cross-repo-entity-references)
+- feat: Support cross-repo and submodule entity references with path qualifiers (refs #cross-repo-entity-references)
+- feat(lifecycle): add --keep-open and --phase options for partial session wrap (refs #partial-session-wrap)
+- feat: Support partial session wrap with --keep-open and --phase options (refs #partial-session-wrap)
+- feat(lifecycle): implement batch plan approval and status: draft rejection (refs #plan-approve-batch)
+- feat: Add batch plan approval command and status: draft rejection header (refs #plan-approve-batch)
+- feat(cli): support global -C and --chdir options in Along CLI router (refs #cli-global-chdir)
+- feat: Add global -C / --chdir option to Along CLI router (refs #cli-global-chdir)
+- fix(gates): narrow entity-deletion-protection to canonical entity paths and plan.md (refs #entity-deletion-protection-path-scope)
+- fix: Scope entity deletion protection to canonical entity files and allow draft/attachment deletions (refs #entity-deletion-protection-path-scope)
+- fix(hooks): prevent worktree-env-readiness false positives on submodules and allow recovery commands (refs #worktree-env-readiness-submodules)
+- fix: Fix worktree-env-readiness false positives on Git submodules, target path evaluation, and recovery deadlocks (refs #worktree-env-readiness-submodules)
+
 ## v4.6.1 - 2026-11-05
 
 - fix: Relocate agent protocol to .along/PROTOCOL.md and exclude from public docs (refs #protocol-leaks-into-docs)
