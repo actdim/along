@@ -58,9 +58,9 @@
 - [ ] `(task)` [reconcile-dashboard-ui-core-conventions](ISSUES/task--reconcile-dashboard-ui-core-conventions.md)
 
 ## Done (recent)
+- [x] `(task)` [verify-worktree-env-readiness-hardening](ISSUES/done/task--verify-worktree-env-readiness-hardening.md)
 - [x] `(feat)` [plan-approve-batch](ISSUES/done/feat--plan-approve-batch.md)
 - [x] `(feat)` [partial-session-wrap](ISSUES/done/feat--partial-session-wrap.md)
 - [x] `(feat)` [lint-worktree-and-doctor-subprojects](ISSUES/done/feat--lint-worktree-and-doctor-subprojects.md)
 - [x] `(feat)` [gate-denials-subagent-attribution](ISSUES/done/feat--gate-denials-subagent-attribution.md)
-- [x] `(feat)` [cross-repo-entity-references](ISSUES/done/feat--cross-repo-entity-references.md)
-<!-- 314 older completed issue(s) archived in .along/ISSUES/done/ -->
+<!-- 315 older completed issue(s) archived in .along/ISSUES/done/ -->
