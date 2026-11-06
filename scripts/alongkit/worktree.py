@@ -79,7 +79,8 @@ def inspect_git_dir(path: str) -> Dict[str, Any]:
         return {"kind": "unknown", "git_entry": git_entry, "primary_repo": None}
 
     raw_target = content[len("gitdir:"):].strip()
-    gitdir = raw_target if os.path.isabs(raw_target) else os.path.normpath(os.path.join(path, raw_target))
+    is_abs = os.path.isabs(raw_target) or raw_target.startswith(("/", "\\"))
+    gitdir = raw_target if is_abs else os.path.normpath(os.path.join(path, raw_target))
     norm_gitdir = gitdir.replace("\\", "/")
     parts = [p for p in norm_gitdir.split("/") if p]
 
@@ -92,7 +93,8 @@ def inspect_git_dir(path: str) -> Dict[str, Any]:
         if has_commondir:
             try:
                 c_content = textio.read_text(commondir_file).strip()
-                c_dir = c_content if os.path.isabs(c_content) else os.path.normpath(os.path.join(gitdir, c_content))
+                c_is_abs = os.path.isabs(c_content) or c_content.startswith(("/", "\\"))
+                c_dir = c_content if c_is_abs else os.path.normpath(os.path.join(gitdir, c_content))
                 if os.path.basename(c_dir) == ".git":
                     primary_repo = os.path.dirname(c_dir)
                 else:

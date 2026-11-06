@@ -253,7 +253,7 @@ def _find_git_dir(start_dir: str) -> Optional[str]:
                     line = f.read().strip()
                 if line.startswith("gitdir:"):
                     gdir = line.split(":", 1)[1].strip()
-                    if not os.path.isabs(gdir):
+                    if not (os.path.isabs(gdir) or gdir.startswith(("/", "\\"))):
                         gdir = os.path.normpath(os.path.join(cur, gdir))
                     return gdir
             except (OSError, UnicodeDecodeError):
