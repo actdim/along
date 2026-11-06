@@ -63,4 +63,4 @@
 - [x] `(feat)` [partial-session-wrap](ISSUES/done/feat--partial-session-wrap.md)
 - [x] `(feat)` [lint-worktree-and-doctor-subprojects](ISSUES/done/feat--lint-worktree-and-doctor-subprojects.md)
 - [x] `(feat)` [gate-denials-subagent-attribution](ISSUES/done/feat--gate-denials-subagent-attribution.md)
-<!-- 315 older completed issue(s) archived in .along/ISSUES/done/ -->
+<!-- 316 older completed issue(s) archived in .along/ISSUES/done/ -->
