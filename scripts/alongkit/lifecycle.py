@@ -1021,12 +1021,21 @@ def append_history_entry(
 
 def tick_issue_phase(content: str, phase_name: str) -> Tuple[str, bool]:
     """Tick - [ ] <phase_name> to - [x] <phase_name> in the issue body markdown."""
-    pattern = re.compile(
-        r"^(?P<prefix>\s*-\s*\[)\s*(\]\s*(?:\*\*)?" + re.escape(phase_name) + r"(?:\*\*)?)",
+    trimmed = phase_name.strip()
+    direct_pattern = re.compile(
+        r"^(?P<prefix>\s*-\s*\[)\s*(\]\s*(?:\*\*)?" + re.escape(trimmed) + r"(?:\*\*)?)",
         re.IGNORECASE | re.MULTILINE
     )
-    if pattern.search(content):
-        return pattern.sub(r"\g<prefix>x\2", content, count=1), True
+    if direct_pattern.search(content):
+        return direct_pattern.sub(r"\g<prefix>x\2", content, count=1), True
+
+    prefix_pattern = re.compile(
+        r"^(?P<prefix>\s*-\s*\[)\s*(\]\s*(?:\*\*)?(?:Phase\s+\d+[:\s]+)?" + re.escape(trimmed) + r"(?:\*\*)?)",
+        re.IGNORECASE | re.MULTILINE
+    )
+    if prefix_pattern.search(content):
+        return prefix_pattern.sub(r"\g<prefix>x\2", content, count=1), True
+
     return content, False
 
 
@@ -1078,7 +1087,8 @@ def execute_wrap(
         print(f"[Error] Issue '{slug}' not found in .along/ISSUES/.", file=sys.stderr)
         return 1
 
-    if keep_open:
+    if keep_open or phase:
+        keep_open = True
         status = "in-progress"
     elif status not in entities.CLOSED_ISSUE_STATUSES:
         print(

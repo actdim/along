@@ -106,6 +106,23 @@ class TestSessionWrapPartial(unittest.TestCase):
         with open(os.path.join(self.along_dir, "HISTORY.md"), "r", encoding="utf-8") as f:
             self.assertIn("Completed Phase 1 setup", f.read())
 
+    def test_phase_without_keep_open_flag_implies_partial_wrap(self):
+        res = self._run(
+            "session", "wrap", self.slug,
+            "--phase", "Phase 1: Setup data",
+            "--summary", "Completed Phase 1",
+            "--no-decisions",
+            "-n",
+            "--reason", "Testing phase implies keep-open",
+            "--no-commit",
+        )
+        self.assertEqual(res.returncode, 0, f"stderr: {res.stderr}\nstdout: {res.stdout}")
+        self.assertTrue(os.path.isfile(self.issue_file))
+        with open(self.issue_file, "r", encoding="utf-8") as f:
+            issue_body = f.read()
+            self.assertIn("status: in-progress", issue_body)
+            self.assertIn("- [x] Phase 1: Setup data", issue_body)
+
 
 if __name__ == "__main__":
     unittest.main()
