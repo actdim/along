@@ -370,21 +370,125 @@ def ancestor_entity_keys(repo_root: str) -> set:
 
 
 def _ref_key(ref: Any) -> Tuple[str, str]:
-    """(qualifier, key) of a reference: root:task--x -> ('root', 'task--x')."""
+    """(qualifier, key) of a reference:
+    root:task--x -> ('root', 'task--x')
+    src/packages/ui-core:feat--button -> ('src/packages/ui-core', 'feat--button')
+    """
     clean = str(ref).strip().strip("[]")
     if ":" in clean:
-        qualifier, clean = clean.split(":", 1)
-        return qualifier.strip().lower(), clean.strip()
+        parts = clean.split(":", 1)
+        qualifier, key = parts[0].strip(), parts[1].strip()
+        if len(qualifier) == 1 and qualifier.isalpha() and (key.startswith("/") or key.startswith("\\")):
+            return "", clean
+        norm_qualifier = qualifier.replace("\\", "/").rstrip("/")
+        if norm_qualifier.lower() == ROOT_QUALIFIER:
+            return ROOT_QUALIFIER, key
+        return norm_qualifier, key
     return "", clean
 
 
-def _resolve_ref(ref: Any, known: set, root_keys: Optional[set] = None) -> bool:
+def _subproject_entity_keys(repo_root: str, qualifier: str,
+                            sub_cache: Optional[Dict[str, Optional[set]]] = None) -> Optional[set]:
+    """Retrieve entity keys for a subproject qualifier relative to repo_root.
+    Returns None if subproject path does not exist or has no .along/ state directory."""
+    from .. import repo
+
+    norm_q = qualifier.replace("\\", "/").strip().rstrip("/")
+    if sub_cache is not None and norm_q in sub_cache:
+        return sub_cache[norm_q]
+
+    target_dir = os.path.normpath(os.path.join(repo_root, norm_q))
+    if not os.path.isdir(target_dir):
+        if sub_cache is not None:
+            sub_cache[norm_q] = None
+        return None
+    sdir = repo.state_dir(target_dir)
+    if not os.path.isdir(sdir):
+        if sub_cache is not None:
+            sub_cache[norm_q] = None
+        return None
+    keys: set = set()
+    _context_entity_keys(sdir, keys)
+    if sub_cache is not None:
+        sub_cache[norm_q] = keys
+    return keys
+
+
+def _resolve_cross_context_ref(repo_root: str, qualifier: str, key: str,
+                               sub_cache: Optional[Dict[str, Optional[set]]] = None) -> bool:
+    """Return True if key exists in subproject qualifier under repo_root."""
+    keys = _subproject_entity_keys(repo_root, qualifier, sub_cache)
+    if keys is None:
+        return False
+    clean = key.strip()
+    if clean in keys:
+        return True
+    _, slug = parse_key(clean)
+    return slug in keys
+
+
+def resolve_entity_reference(
+    repo_root: str,
+    ref: Any,
+    known: set,
+    root_keys: Optional[set] = None,
+    sub_cache: Optional[Dict[str, Optional[set]]] = None,
+) -> Tuple[bool, Optional[str], bool]:
+    """Resolve an entity reference across local, root, or subproject contexts.
+
+    Returns (ok, message, is_warning):
+    - (True, None, False) if the reference is valid.
+    - (False, warning_msg, True) if referencing an uninitialized/missing subproject (non-blocking).
+    - (False, error_msg, False) if the reference is dangling / entity missing (blocking).
+    """
+    if not ref:
+        return False, "empty reference", False
+    qualifier, clean = _ref_key(ref)
+    if not qualifier:
+        if clean in known:
+            return True, None, False
+        _, slug = parse_key(clean)
+        if slug in known:
+            return True, None, False
+        return False, f"dangling reference: '{ref}'", False
+    if qualifier == ROOT_QUALIFIER:
+        target_keys = root_keys if root_keys is not None else known
+        if clean in target_keys:
+            return True, None, False
+        _, slug = parse_key(clean)
+        if slug in target_keys:
+            return True, None, False
+        return False, f"dangling root reference: '{ref}'", False
+
+    keys = _subproject_entity_keys(repo_root, qualifier, sub_cache)
+    if keys is None:
+        return (
+            False,
+            f"uninitialized or missing subproject '{qualifier}' in reference '{ref}'",
+            True,
+        )
+    if clean in keys:
+        return True, None, False
+    _, slug = parse_key(clean)
+    if slug in keys:
+        return True, None, False
+    return False, f"dangling reference: '{clean}' not found in subproject '{qualifier}'", False
+
+
+def _resolve_ref(ref: Any, known: set, root_keys: Optional[set] = None,
+                 repo_root: Optional[str] = None,
+                 sub_cache: Optional[Dict[str, Optional[set]]] = None) -> bool:
     """True when ref names a key in known (a root: ref in root_keys, when given)."""
     if not ref:
         return False
     qualifier, clean = _ref_key(ref)
     if qualifier == ROOT_QUALIFIER and root_keys is not None:
         known = root_keys
+    elif qualifier and qualifier != ROOT_QUALIFIER:
+        if repo_root is not None:
+            ok, _, is_warn = resolve_entity_reference(repo_root, ref, known, root_keys, sub_cache)
+            return ok or is_warn
+        return False
     if clean in known:
         return True
     _, slug = parse_key(clean)
@@ -426,7 +530,11 @@ def reference_context(repo_root: str, ref: Any) -> Optional[str]:
     """Owner directory of the context a reference resolves in, nearest first, or None."""
     from .. import repo
 
-    _qualifier, clean = _ref_key(ref)
+    qualifier, clean = _ref_key(ref)
+    if qualifier and qualifier != ROOT_QUALIFIER:
+        target_dir = os.path.normpath(os.path.join(repo_root, qualifier))
+        if os.path.isdir(target_dir):
+            return target_dir
     for owner, sdir in repo.context_chain(repo_root):
         keys: set = set()
         _context_entity_keys(sdir, keys)

@@ -22,6 +22,7 @@ from .query import (
     _resolve_ref,
     ancestor_contexts,
     descendant_entity_keys,
+    resolve_entity_reference,
     scan_issues,
     scan_milestones,
     sibling_entity_keys,
@@ -114,6 +115,18 @@ def validate_entities(repo_root: str, ancestors: bool = True,
     if root_keys is None:
         root_keys = known_entity_keys
 
+    sub_cache: Dict[str, Optional[set]] = {}
+
+    def _check_ref(target_ref: Any, field_name: str, rel_path: str, known_set: set) -> None:
+        ok, msg, is_warn = resolve_entity_reference(
+            repo_root, target_ref, known_set, root_keys=root_keys, sub_cache=sub_cache
+        )
+        if not ok:
+            if is_warn:
+                warnings.append((rel_path, msg or f"uninitialized subproject in reference '{target_ref}'"))
+            else:
+                errors.append((rel_path, f"dangling {field_name} reference: '{target_ref}'"))
+
     # 1. Validate Issues
     for iss in all_issues:
         scanned += 1
@@ -173,40 +186,44 @@ def validate_entities(repo_root: str, ancestors: bool = True,
                 if not _resolve_ref(parent, ancestor_keys):
                     errors.append((rel, f"invalid self-parent reference: '{parent}' "
                                         "(no enclosing context has an issue with this key)"))
-            elif not _resolve_ref(parent, known_entity_keys, root_keys):
-                errors.append((rel, f"dangling parent reference: '{parent}'"))
+            else:
+                _check_ref(parent, "parent", rel, known_entity_keys)
 
         blocked_by = fm.get("blocked_by")
         if isinstance(blocked_by, list):
             for b in blocked_by:
-                if b and not _resolve_ref(b, known_entity_keys, root_keys):
-                    errors.append((rel, f"dangling blocked_by reference: '{b}'"))
+                if b:
+                    _check_ref(b, "blocked_by", rel, known_entity_keys)
 
         related = fm.get("related")
         if isinstance(related, list):
             for r in related:
-                if r and not _resolve_ref(r, known_entity_keys, root_keys):
-                    errors.append((rel, f"dangling related reference: '{r}'"))
+                if r:
+                    _check_ref(r, "related", rel, known_entity_keys)
+
+        children = fm.get("children")
+        if isinstance(children, list):
+            for c in children:
+                if c:
+                    _check_ref(c, "children", rel, known_entity_keys)
 
         superseded_by = fm.get("superseded_by")
         if isinstance(superseded_by, list):
             for s in superseded_by:
-                if s and str(s).strip() and not _resolve_ref(s, known_entity_keys, root_keys):
-                    errors.append((rel, f"dangling superseded_by reference: '{s}'"))
+                if s and str(s).strip():
+                    _check_ref(s, "superseded_by", rel, known_entity_keys)
         elif superseded_by and str(superseded_by).strip():
-            if not _resolve_ref(superseded_by, known_entity_keys, root_keys):
-                errors.append((rel, f"dangling superseded_by reference: '{superseded_by}'"))
+            _check_ref(superseded_by, "superseded_by", rel, known_entity_keys)
 
         duplicate_of = fm.get("duplicate_of")
         if duplicate_of and str(duplicate_of).strip():
-            if not _resolve_ref(duplicate_of, known_entity_keys, root_keys):
-                errors.append((rel, f"dangling duplicate_of reference: '{duplicate_of}'"))
+            _check_ref(duplicate_of, "duplicate_of", rel, known_entity_keys)
 
         requires = fm.get("requires")
         if isinstance(requires, dict):
             for d in requires.get("decisions", []) or []:
-                if d and not _resolve_ref(str(d), known_entity_keys, root_keys):
-                    errors.append((rel, f"dangling requires.decisions reference: '{d}'"))
+                if d:
+                    _check_ref(str(d), "requires.decisions", rel, known_entity_keys)
             for doc in requires.get("docs", []) or []:
                 doc_name = str(doc).strip()
                 doc_file = doc_name if doc_name.endswith(".md") else f"{doc_name}.md"
@@ -245,8 +262,8 @@ def validate_entities(repo_root: str, ancestors: bool = True,
         target_issues = fm.get("target_issues")
         if isinstance(target_issues, list):
             for t in target_issues:
-                if t and not _resolve_ref(t, known_issue_keys):
-                    errors.append((rel, f"dangling target_issues reference: '{t}'"))
+                if t:
+                    _check_ref(t, "target_issues", rel, known_issue_keys)
 
         if mslug:
             ver = semver.parse(mslug)
@@ -316,8 +333,8 @@ def validate_entities(repo_root: str, ancestors: bool = True,
                     items = fm.get(key)
                     if isinstance(items, list):
                         for item in items:
-                            if item and not _resolve_ref(item, known_issue_keys):
-                                errors.append((rel, f"dangling {key} reference: '{item}'"))
+                            if item:
+                                _check_ref(item, key, rel, known_issue_keys)
 
     # 5. Validate Decisions (.along/DECISIONS/*.md)
     dec_dir = os.path.join(sdir, "DECISIONS")
@@ -355,11 +372,10 @@ def validate_entities(repo_root: str, ancestors: bool = True,
             sup_by = fm.get("superseded_by")
             if isinstance(sup_by, list):
                 for s in sup_by:
-                    if s and str(s).strip() and not _resolve_ref(s, known_entity_keys):
-                        errors.append((rel, f"dangling superseded_by reference: '{s}'"))
+                    if s and str(s).strip():
+                        _check_ref(s, "superseded_by", rel, known_entity_keys)
             elif sup_by and str(sup_by).strip():
-                if not _resolve_ref(sup_by, known_entity_keys):
-                    errors.append((rel, f"dangling superseded_by reference: '{sup_by}'"))
+                _check_ref(sup_by, "superseded_by", rel, known_entity_keys)
 
         conflicts = check_decision_conflicts(repo_root)
         for c in conflicts:
