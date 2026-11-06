@@ -100,9 +100,16 @@ def inspect_git_dir(path: str) -> Dict[str, Any]:
             except (OSError, UnicodeDecodeError):
                 pass
         if not primary_repo and has_worktrees_segment:
-            idx = len(parts) - 1 - parts[::-1].index("worktrees")
-            common_git = os.sep.join(parts[:idx])
-            primary_repo = os.path.dirname(common_git)
+            wt_marker = "/worktrees/"
+            idx = norm_gitdir.rfind(wt_marker)
+            if idx != -1:
+                common_git = gitdir[:idx]
+                primary_repo = os.path.dirname(common_git)
+            else:
+                idx = len(parts) - 1 - parts[::-1].index("worktrees")
+                prefix = "/" if norm_gitdir.startswith("/") else ""
+                common_git = prefix + "/".join(parts[:idx])
+                primary_repo = os.path.dirname(common_git)
 
         return {
             "kind": "worktree",

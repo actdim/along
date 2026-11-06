@@ -16,6 +16,7 @@ from alongkit import bootstrap
 bootstrap.ensure_deps()
 
 from alongkit import entities, frontmatter, gates, lifecycle, proc, repo
+from alongkit.cli import _handle_chdir_options
 from alongkit.commands import (
     handle_brief_command,
     handle_budget_command,
@@ -43,6 +44,7 @@ from alongkit.commands import (
     handle_telemetry_command,
     handle_worktree_command,
 )
+from alongkit.cli import _handle_chdir_options
 from alongkit.commands.lifecycle import _cli_approval_or_exit
 from alongkit.commands.session import _render_session_log
 from alongkit.commands.telemetry import _get_active_telemetry_endpoint
@@ -244,46 +246,6 @@ def _print_router_help(cmd: str, handler, repo_root: str, args: List[str]) -> No
     else:
         print("\n".join(lines))
     sys.exit(0)
-
-
-def _handle_chdir_options(args: List[str]) -> Tuple[Optional[str], List[str]]:
-    """Scan and extract leading -C <dir> and --chdir <dir> options, returning (target_dir, remaining_args)."""
-    target: Optional[str] = None
-    remaining: List[str] = []
-    idx = 0
-    while idx < len(args):
-        arg = args[idx]
-        if arg in ("-C", "--chdir"):
-            if idx + 1 >= len(args):
-                print(f"[Error] Option '{arg}' requires a directory argument.", file=sys.stderr)
-                sys.exit(2)
-            dir_val = args[idx + 1]
-            if target is None:
-                target = os.path.normpath(dir_val)
-            else:
-                target = os.path.normpath(os.path.join(target, dir_val))
-            idx += 2
-            continue
-        elif arg.startswith("-C") and len(arg) > 2:
-            dir_val = arg[2:]
-            if target is None:
-                target = os.path.normpath(dir_val)
-            else:
-                target = os.path.normpath(os.path.join(target, dir_val))
-            idx += 1
-            continue
-        elif arg.startswith("--chdir="):
-            dir_val = arg.split("=", 1)[1]
-            if target is None:
-                target = os.path.normpath(dir_val)
-            else:
-                target = os.path.normpath(os.path.join(target, dir_val))
-            idx += 1
-            continue
-        else:
-            remaining.extend(args[idx:])
-            break
-    return target, remaining
 
 
 def main():

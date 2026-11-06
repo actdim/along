@@ -530,6 +530,60 @@ class TestWorktreeIsolation(unittest.TestCase):
         self.assertIn("primary repo:", violation)
         self.assertIn("mklink /J", violation)
 
+    def test_19_posix_path_preservation_in_inspect_git_dir(self):
+        # Verify POSIX gitdir string preserves leading slash in primary_repo
+        fake_wt = os.path.join(self.root, "fake-wt")
+        os.makedirs(fake_wt, exist_ok=True)
+        textio.write_text(os.path.join(fake_wt, ".git"), "gitdir: /var/repos/main/.git/worktrees/fake-wt\n")
+
+        meta = worktree.inspect_git_dir(fake_wt)
+        self.assertEqual(meta.get("kind"), "worktree")
+        self.assertEqual(meta.get("primary_repo"), "/var/repos/main")
+
+    def test_20_recovery_command_with_python_flags(self):
+        # Recovery command with Python interpreter flags (-u, -B)
+        cmd1 = "python -u -B scripts/along_exec.py gates ack d-123 --note 'ok'"
+        self.assertTrue(predicates._is_recovery_command(cmd1))
+
+        # Governance command
+        cmd2 = "along sanitize"
+        self.assertTrue(predicates._is_recovery_command(cmd2))
+
+        # Regular command
+        cmd3 = "python -u test_script.py"
+        self.assertFalse(predicates._is_recovery_command(cmd3))
+
+    def test_21_immediate_child_workspace_detection(self):
+        ws_root = hermetic.make_repo_fixture(prefix="along-ws-child-")
+        try:
+            # Workspace root with pnpm-workspace.yaml and node_modules
+            textio.write_text(os.path.join(ws_root, "pnpm-workspace.yaml"), "packages:\n  - '*'\n")
+            os.makedirs(os.path.join(ws_root, "node_modules"), exist_ok=True)
+
+            # Subproject directly inside ws_root (immediate child, e.g. ws_root/app)
+            pkg_dir = os.path.join(ws_root, "app")
+            os.makedirs(pkg_dir, exist_ok=True)
+            proc.git(["init"], cwd=pkg_dir)
+            proc.git(["config", "user.name", "Test Committer"], cwd=pkg_dir)
+            proc.git(["config", "user.email", "test@example.com"], cwd=pkg_dir)
+            proc.git(["config", "commit.gpgSign", "false"], cwd=pkg_dir)
+            textio.write_text(os.path.join(pkg_dir, "README.md"), "# App\n")
+            proc.git(["add", "README.md"], cwd=pkg_dir)
+            proc.git(["commit", "-m", "init app"], cwd=pkg_dir)
+
+            # Worktree of immediate child subproject
+            info = worktree.create_worktree(pkg_dir, "wt-app")
+
+            event = models.HookEvent(
+                event_type=models.HookEventType.PRE_TOOL_USE,
+                tool_name="write_to_file",
+                tool_args={"TargetFile": os.path.join(info.path, "main.ts"), "CodeContent": "console.log(1);\n"},
+            )
+            violation = predicates.check_worktree_env_readiness(event, repo_root=pkg_dir)
+            self.assertIsNone(violation, f"Immediate child workspace node_modules must satisfy readiness: {violation}")
+        finally:
+            shutil.rmtree(ws_root, ignore_errors=True)
+
 
 
 if __name__ == "__main__":

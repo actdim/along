@@ -1986,9 +1986,11 @@ def _is_recovery_command(cmd: str) -> bool:
         w0 = os.path.basename(words[0]).lower()
         if w0 in ("python", "python3", "python.exe", "py", "py.exe"):
             idx += 1
+            while idx < len(words) and words[idx].startswith("-") and not words[idx].endswith(".py"):
+                idx += 1
             if idx < len(words) and words[idx].endswith(".py"):
                 script = os.path.basename(words[idx]).lower()
-                if script in ("along_exec.py", "test.py", "build.py", "dev.py"):
+                if script in ("along_exec.py", "along.py", "test.py", "build.py", "dev.py"):
                     idx += 1
         elif w0 in ("along", "along.exe", "along.bat", "along.ps1", "along.cmd"):
             idx += 1
@@ -2004,6 +2006,8 @@ def _is_recovery_command(cmd: str) -> bool:
         if subwords[0] == "plan" and len(subwords) > 1 and subwords[1] in ("status", "approve"):
             return True
         if subwords[0] == "worktree" and len(subwords) > 1 and subwords[1] in ("status", "list", "is_supported", "is-supported", "gc"):
+            return True
+        if subwords[0] in ("sanitize", "session", "issue", "wrap"):
             return True
 
     return False
@@ -2043,6 +2047,23 @@ def _effective_command_dir(cmd: str, initial_cwd: str) -> Tuple[str, bool]:
     return cur_dir, all_nav
 
 
+def _is_workspace_root(directory: str) -> bool:
+    """Check if `directory` is a monorepo workspace root."""
+    if os.path.isfile(os.path.join(directory, "pnpm-workspace.yaml")):
+        return True
+    if os.path.isfile(os.path.join(directory, "lerna.json")):
+        return True
+    pkg_json = os.path.join(directory, "package.json")
+    if os.path.isfile(pkg_json):
+        try:
+            data = json.loads(textio.read_text(pkg_json))
+            if "workspaces" in data:
+                return True
+        except (OSError, json.JSONDecodeError):
+            pass
+    return False
+
+
 def _has_workspace_node_modules(worktree_dir: str, primary_repo: Optional[str] = None) -> bool:
     """Check if node_modules exists in worktree or in an ancestor workspace root."""
     wt_abs = os.path.abspath(worktree_dir)
@@ -2050,30 +2071,20 @@ def _has_workspace_node_modules(worktree_dir: str, primary_repo: Optional[str] =
     if os.path.exists(wt_nm) or _is_reparse_or_link(wt_nm):
         return True
 
-    cur = os.path.abspath(primary_repo) if primary_repo else os.path.dirname(wt_abs)
-    cur_parent = os.path.dirname(cur)
-    while True:
-        nm = os.path.join(cur_parent, "node_modules")
-        if os.path.isdir(nm) or _is_reparse_or_link(nm):
-            is_ws = (
-                os.path.isfile(os.path.join(cur_parent, "pnpm-workspace.yaml"))
-                or os.path.isfile(os.path.join(cur_parent, "lerna.json"))
-            )
-            if is_ws:
-                return True
-            pkg_json = os.path.join(cur_parent, "package.json")
-            if os.path.isfile(pkg_json):
-                try:
-                    data = json.loads(textio.read_text(pkg_json))
-                    if "workspaces" in data:
-                        return True
-                except (OSError, json.JSONDecodeError):
-                    pass
+    if not primary_repo:
+        return False
 
-        parent = os.path.dirname(cur_parent)
-        if parent == cur_parent:
+    # Check ancestors of primary_repo for an enclosing workspace root
+    cur = os.path.dirname(os.path.abspath(primary_repo))
+    while True:
+        if _is_workspace_root(cur):
+            nm = os.path.join(cur, "node_modules")
+            if os.path.isdir(nm) or _is_reparse_or_link(nm):
+                return True
+        parent = os.path.dirname(cur)
+        if parent == cur:
             break
-        cur_parent = parent
+        cur = parent
 
     return False
 
