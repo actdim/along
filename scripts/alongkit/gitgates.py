@@ -762,6 +762,92 @@ def check_pre_commit(repo_root: str) -> List[Violation]:
     return violations
 
 
+def _disk_reader(repo_root: str):
+    def read(path: str) -> Optional[str]:
+        full = os.path.normpath(os.path.join(repo_root, path)) if not os.path.isabs(path) else os.path.normpath(path)
+        if not os.path.isfile(full):
+            return None
+        try:
+            with open(full, "r", encoding="utf-8", errors="replace") as f:
+                return f.read()
+        except OSError:
+            return None
+    return read
+
+
+def check_files(repo_root: str, paths: Sequence[str]) -> List[Violation]:
+    """Run content-level quality gates directly on specified files on disk.
+
+    Checks typography, code fence languages, portable links, secrets,
+    stubs, doc routing compliance, rule pack integrity, and safe filenames.
+    Does not require staging or git index state.
+    """
+    from . import repo, sanitizer, typography
+
+    norm_paths: List[str] = []
+    for p in paths:
+        if not p:
+            continue
+        full = os.path.normpath(os.path.join(repo_root, p)) if not os.path.isabs(p) else os.path.normpath(p)
+        if os.path.isdir(full):
+            for root, dirs, files in os.walk(full):
+                dirs[:] = [d for d in dirs if d not in repo.IGNORED_DIRS and d not in repo.PROVIDER_DIRS and not d.startswith(".")]
+                for fname in files:
+                    fpath = os.path.join(root, fname)
+                    rel = repo.canonical_relpath(fpath, repo_root)
+                    norm_paths.append(rel)
+        elif os.path.isfile(full):
+            rel = repo.canonical_relpath(full, repo_root)
+            norm_paths.append(rel)
+
+    norm_paths = sorted(set(norm_paths))
+    if not norm_paths:
+        return []
+
+    definitions = _definitions("git")
+    violations: List[Violation] = []
+    reader = _disk_reader(repo_root)
+
+    # 1. repochecks (portable links, code fence languages, secrets, windows filenames, etc.)
+    violations += check_repo_state(repo_root, norm_paths, "git", reader)
+    violations += check_rule_packs(norm_paths, "git", reader)
+    violations += check_doc_routing(norm_paths, "git", reader)
+
+    # 2. Disk content checks: typography, conflict markers, anti-stub
+    stub_re = _rule_pattern(definitions, "anti_stub_injection")
+    ignore = sanitizer.load_ignore_patterns(repo_root) if repo_root else []
+
+    for rel_path in norm_paths:
+        content = reader(rel_path)
+        if content is None:
+            continue
+
+        # Conflict markers
+        if "commit_no_conflict_markers" in definitions:
+            for lineno, line in enumerate(content.splitlines(), 1):
+                if line.startswith("<<<<<<< ") or line.startswith(">>>>>>> ") or line == "=======":
+                    violations.append(Violation("commit_no_conflict_markers", f"{rel_path}:{lineno}",
+                                                f"unresolved conflict marker '{line[:7]}'"))
+
+        # Anti-stub injection
+        if stub_re is not None:
+            for lineno, line in enumerate(content.splitlines(), 1):
+                if stub_re.search(line):
+                    violations.append(Violation("anti_stub_injection", f"{rel_path}:{lineno}",
+                                                "truncation placeholder / code skeleton stub"))
+
+        # Typography
+        if "typography" in definitions and _typography_governed(rel_path, ignore):
+            for lineno, line in enumerate(content.splitlines(), 1):
+                hits = typography.findings(line)
+                if hits:
+                    names = sorted({typography.name_of(ch) for _, _, ch in hits})
+                    violations.append(Violation("typography", f"{rel_path}:{lineno}",
+                                                "forbidden non-ASCII typography: " + ", ".join(names)))
+
+    return violations
+
+
 def check_commit_msg(repo_root: str, message_file: str) -> List[Violation]:
     from . import textio
     if not os.path.isfile(message_file):
@@ -925,7 +1011,7 @@ def hooks_status(repo_root: str) -> Dict[str, bool]:
 
 __all__: Sequence[str] = (
     "Violation", "added_lines", "check_diff", "check_message", "check_projections",
-    "check_pre_commit", "check_commit_msg", "check_ci", "default_ci_range",
+    "check_pre_commit", "check_files", "check_commit_msg", "check_ci", "default_ci_range",
     "enforcement_matrix", "format_report", "hook_script", "install_hooks", "hooks_status",
     "hooks_dir", "along_roots", "stale_projections", "check_entity_references",
     "entity_problems", "touches_entities",

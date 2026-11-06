@@ -23,6 +23,7 @@ Usage:
       --history-sync    Run Git history reconciliation after updating protocol.
       --graph-sync      Run AST code graph sync (code-review-graph) after updating protocol.
       --all-sync        Run all post-update sync operations (kb-sync, dep-scan, history-sync, graph-sync).
+      --recursive, -r   Recursively align all nested subprojects and submodules.
       --no-hooks        Skip automatic installation of runtime lifecycle hooks.
 """
 
@@ -515,7 +516,7 @@ def execute_post_update_syncs(contexts: list, repo_root: str, do_kb: bool, do_de
 def run_update(repo_root, check_only=False, dry_run=False, force=False, local_only=False,
                sync_global=False,
                do_kb_sync=False, do_dep_scan=False, do_history_sync=False, do_graph_sync=False,
-               verbose=False, no_hooks=False):
+               verbose=False, no_hooks=False, recursive=False):
     repo_root = os.path.abspath(repo_root)
     print("==================================================")
     print("-> ALONG One-Liner Updater (/along-update)")
@@ -737,6 +738,17 @@ def run_update(repo_root, check_only=False, dry_run=False, force=False, local_on
     except (OSError, ValueError, KeyError):
         pass
 
+    if not dry_run and recursive:
+        from alongkit import version, migration, textio
+        for ctx in contexts:
+            sdir = repo.state_dir(ctx)
+            if os.path.isdir(sdir):
+                pv_path = os.path.join(sdir, migration.STATE_FILENAME)
+                try:
+                    textio.write_text(pv_path, f"{version.CURRENT_PROTOCOL_VERSION}\n", newline="\n")
+                except OSError:
+                    pass
+
     if not all_contexts_ok or not sync_ok:
         print("\n[Error] Update completed with errors.\n", file=sys.stderr)
         return False
@@ -756,6 +768,7 @@ if __name__ == "__main__":
     local_only_flag = "--local-only" in sys.argv
     global_flag = "--global" in sys.argv or "--sync-global" in sys.argv
     verbose_flag = any(a in sys.argv for a in ("-v", "--verbose", "--debug"))
+    recursive_flag = "--recursive" in sys.argv or "-r" in sys.argv
     
     all_sync_flag = "--all-sync" in sys.argv
     kb_sync_flag = "--kb-sync" in sys.argv or all_sync_flag
@@ -780,7 +793,8 @@ if __name__ == "__main__":
         do_history_sync=history_sync_flag,
         do_graph_sync=graph_sync_flag,
         verbose=verbose_flag,
-        no_hooks=no_hooks_flag
+        no_hooks=no_hooks_flag,
+        recursive=recursive_flag,
     )
     if check_only_flag:
         sys.exit(0)

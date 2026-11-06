@@ -82,16 +82,17 @@ def handle_git_command(repo_root: str, args: List[str]):
 def handle_lint_command(repo_root: str, args: List[str]):
     """`along lint`: the commit-time checks on demand (`along gates check`). [debt--gate-simplification]"""
     if args and args[0] in ("-h", "--help", "help"):
-        print("Usage: along lint [--ci] [--range COMMIT_RANGE] [--no-links] [--json]")
+        print("Usage: along lint [--worktree] [--ci] [--range COMMIT_RANGE] [--no-links] [--json] [paths...]")
         print("  Commit-time checks (typography, code fences, links, filenames, secrets, stubs,")
         print("  rule packs, entities) on staged changes; same as 'along gates check'.")
+        print("  Pass file paths or --worktree to check unstaged/uncommitted files directly.")
         sys.exit(0)
     handle_gates_command(repo_root, ["check", *args])
 
 
 def handle_gates_command(repo_root: str, args: List[str]):
     if not args or args[0] in ("-h", "--help", "help"):
-        print("Usage: along gates check [--hook {pre-commit,commit-msg}] [--ci] [--range COMMIT_RANGE] [--no-links] [--json] [hook_args...]")
+        print("Usage: along gates check [--worktree] [--hook {pre-commit,commit-msg}] [--ci] [--range COMMIT_RANGE] [--no-links] [--json] [paths...]")
         print("  Run the commit-time gate subset outside agent runtimes (git hooks, CI).")
         print("       along gates stats [--since YYYY-MM-DD]")
         print("  Per-gate counts of blocks, shadow warnings and recorded bypasses, and repeated")
@@ -123,7 +124,9 @@ def handle_gates_command(repo_root: str, args: List[str]):
         description="Run the commit-time gate subset outside agent runtimes (git hooks, CI).")
     parser.add_argument("--hook", choices=list(gitgates.HOOK_NAMES),
                         help="Run as the named git hook (installed by `along hooks install --git`)")
-    parser.add_argument("hook_args", nargs="*", help="Arguments git passes to the hook")
+    parser.add_argument("hook_args", nargs="*", help="Arguments git passes to the hook, or paths to check")
+    parser.add_argument("--worktree", action="store_true",
+                        help="Check all uncommitted (modified and untracked) files in the working tree")
     parser.add_argument("--ci", action="store_true", help="Check a commit range, projections and links")
     parser.add_argument("--range", dest="commit_range", default=None,
                         help="Commit range for --ci (default: from GITHUB_BASE_REF / ALONG_CI_BEFORE, else HEAD^..HEAD)")
@@ -147,6 +150,13 @@ def handle_gates_command(repo_root: str, args: List[str]):
         context = f"ci {opts.commit_range or gitgates.default_ci_range() or 'HEAD^..HEAD'}"
         violations = gitgates.check_ci(repo_root, opts.commit_range, links=not opts.no_links,
                                        kb_script=kb_script)
+    elif opts.worktree:
+        context = "working-tree files"
+        paths = repo.working_tree_changes(repo_root) or []
+        violations = gitgates.check_files(repo_root, paths)
+    elif opts.hook_args:
+        context = f"{len(opts.hook_args)} specified path(s)"
+        violations = gitgates.check_files(repo_root, opts.hook_args)
     else:
         context = "staged changes"
         violations = gitgates.check_pre_commit(repo_root)

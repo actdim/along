@@ -124,6 +124,28 @@ def _doctor_zombie_docs_checks(repo_root: str, warnings: int) -> Tuple[int, List
     return warnings, zombies
 
 
+def audit_subproject_protocol_versions(repo_root: str) -> List[dict]:
+    """Audit .protocol-version across all subproject contexts under repo_root."""
+    from .. import migration, version
+    root_sdir = repo.state_dir(repo_root)
+    root_ver = migration.read_state(root_sdir) or version.CURRENT_PROTOCOL_VERSION
+    results: List[dict] = []
+    contexts = repo.find_agent_contexts(repo_root)
+    for ctx in contexts:
+        rel = repo.canonical_relpath(ctx, repo_root)
+        is_root = repo._same_path(ctx, repo_root)
+        ctx_sdir = repo.state_dir(ctx)
+        ver = migration.read_state(ctx_sdir) or (root_ver if is_root else "unknown")
+        results.append({
+            "path": "." if is_root else rel,
+            "version": ver,
+            "root_version": root_ver,
+            "is_root": str(is_root),
+            "mismatch": str(not is_root and ver != root_ver),
+        })
+    return results
+
+
 def _doctor_stub_issues_checks(repo_root: str, warnings: int) -> Tuple[int, List[dict]]:
     """Scan .along/ISSUES/ for stubs, boilerplate placeholders, or uncompleted criteria."""
     findings = entities.audit_stub_issues(repo_root)
@@ -381,6 +403,27 @@ def handle_doctor_command(repo_root: str, args: List[str]):
               f"versions): {shown}{more}. Consolidate them into the root by hand, or mark an intentional "
               "one with '\"subproject\": {\"intentional\": true}' in its .along/config.json.")
         warnings += 1
+
+    # Audit protocol version across root and nested subprojects
+    sub_contexts = audit_subproject_protocol_versions(repo_root)
+    if len(sub_contexts) > 1:
+        root_info = next((c for c in sub_contexts if c["is_root"] == "True"), None)
+        root_v = root_info["version"] if root_info else "unknown"
+        mismatches = [c for c in sub_contexts if c["mismatch"] == "True"]
+        print("\n--- Subproject Protocol Versions ---")
+        print(f"[OK] . (root): v{root_v}")
+        for c in sub_contexts:
+            if c["is_root"] == "True":
+                continue
+            if c["mismatch"] == "True":
+                print(f"[WARN] {c['path']}: v{c['version']} (mismatch with root v{root_v}; run 'along update --recursive')")
+                warnings += 1
+            else:
+                print(f"[OK] {c['path']}: v{c['version']}")
+        if mismatches:
+            print(f"[WARN] Detected {len(mismatches)} subproject(s) with mismatched protocol version.")
+        else:
+            print(f"[OK] All {len(sub_contexts) - 1} subproject context(s) align with root protocol v{root_v}.")
 
     # Check VISION
     from alongkit import scaffold
