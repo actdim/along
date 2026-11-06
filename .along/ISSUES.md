@@ -45,7 +45,6 @@
 - [ ] `(feat)` [native-ast-blast-radius-analyzer](ISSUES/feat--native-ast-blast-radius-analyzer.md)
 - [ ] `(feat)` [openclaw-and-hermes-agent-integration](ISSUES/feat--openclaw-and-hermes-agent-integration.md)
 - [ ] `(feat)` [operational-assets-and-playbooks](ISSUES/feat--operational-assets-and-playbooks.md)
-- [ ] `(feat)` [partial-session-wrap](ISSUES/feat--partial-session-wrap.md) - plan: needs approval
 - [ ] `(feat)` [per-model-rework-metrics](ISSUES/feat--per-model-rework-metrics.md)
 - [ ] `(feat)` [pi-harness-support](ISSUES/feat--pi-harness-support.md)
 - [ ] `(feat)` [planning-fields-and-ordering-gates](ISSUES/feat--planning-fields-and-ordering-gates.md)
@@ -63,8 +62,8 @@
 
 ## Done (recent)
 - [x] `(feat)` [plan-approve-batch](ISSUES/done/feat--plan-approve-batch.md)
+- [x] `(feat)` [partial-session-wrap](ISSUES/done/feat--partial-session-wrap.md)
 - [x] `(feat)` [cli-global-chdir](ISSUES/done/feat--cli-global-chdir.md)
 - [x] `(bug)` [worktree-env-readiness-submodules](ISSUES/done/bug--worktree-env-readiness-submodules.md)
 - [x] `(bug)` [entity-deletion-protection-path-scope](ISSUES/done/bug--entity-deletion-protection-path-scope.md)
-- [x] `(bug)` [protocol-leaks-into-docs](ISSUES/done/bug--protocol-leaks-into-docs.md)
-<!-- 310 older completed issue(s) archived in .along/ISSUES/done/ -->
+<!-- 311 older completed issue(s) archived in .along/ISSUES/done/ -->

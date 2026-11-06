@@ -247,3 +247,4 @@ _Index of sessions (newest last). One line per session:_
 2026-11-06 - entity-deletion-protection-path-scope - antigravity - Scope entity deletion protection to canonical entity files and allow draft/attachment deletions - [Session Log](./SESSIONS/2026/2026-11-06--entity-deletion-protection-path-scope.md)
 2026-11-06 - cli-global-chdir - antigravity - Add global -C / --chdir option to Along CLI router - [Session Log](./SESSIONS/2026/2026-11-06--cli-global-chdir.md)
 2026-11-06 - plan-approve-batch - antigravity - Add batch plan approval command and status: draft rejection header - [Session Log](./SESSIONS/2026/2026-11-06--plan-approve-batch.md)
+2026-11-06 - partial-session-wrap - antigravity - Support partial session wrap with --keep-open and --phase options - [Session Log](./SESSIONS/2026/2026-11-06--partial-session-wrap.md)
