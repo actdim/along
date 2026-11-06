@@ -35,7 +35,6 @@
 - [ ] `(feat)` [enterprise-governance-and-cloud-infrastructure](ISSUES/feat--enterprise-governance-and-cloud-infrastructure.md)
 - [ ] `(feat)` [enterprise-governance-and-compliance-pack](ISSUES/feat--enterprise-governance-and-compliance-pack.md)
 - [ ] `(feat)` [external-issue-trackers-sync-and-import](ISSUES/feat--external-issue-trackers-sync-and-import.md)
-- [ ] `(feat)` [gate-denials-subagent-attribution](ISSUES/feat--gate-denials-subagent-attribution.md) - plan: needs approval
 - [ ] `(feat)` [golang-ecosystem-support](ISSUES/feat--golang-ecosystem-support.md)
 - [ ] `(feat)` [jvm-ecosystem-support](ISSUES/feat--jvm-ecosystem-support.md)
 - [ ] `(feat)` [kb-search-hybrid-retrieval](ISSUES/feat--kb-search-hybrid-retrieval.md)
@@ -62,6 +61,6 @@
 - [x] `(feat)` [plan-approve-batch](ISSUES/done/feat--plan-approve-batch.md)
 - [x] `(feat)` [partial-session-wrap](ISSUES/done/feat--partial-session-wrap.md)
 - [x] `(feat)` [lint-worktree-and-doctor-subprojects](ISSUES/done/feat--lint-worktree-and-doctor-subprojects.md)
+- [x] `(feat)` [gate-denials-subagent-attribution](ISSUES/done/feat--gate-denials-subagent-attribution.md)
 - [x] `(feat)` [cross-repo-entity-references](ISSUES/done/feat--cross-repo-entity-references.md)
-- [x] `(feat)` [cli-global-chdir](ISSUES/done/feat--cli-global-chdir.md)
-<!-- 313 older completed issue(s) archived in .along/ISSUES/done/ -->
+<!-- 314 older completed issue(s) archived in .along/ISSUES/done/ -->

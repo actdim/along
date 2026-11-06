@@ -250,3 +250,4 @@ _Index of sessions (newest last). One line per session:_
 2026-11-06 - partial-session-wrap - antigravity - Support partial session wrap with --keep-open and --phase options - [Session Log](./SESSIONS/2026/2026-11-06--partial-session-wrap.md)
 2026-11-06 - cross-repo-entity-references - antigravity - Support cross-repo and submodule entity references with path qualifiers - [Session Log](./SESSIONS/2026/2026-11-06--cross-repo-entity-references.md)
 2026-11-06 - lint-worktree-and-doctor-subprojects - antigravity - Support unstaged linting and subproject protocol version skew doctor audit - [Session Log](./SESSIONS/2026/2026-11-06--lint-worktree-and-doctor-subprojects.md)
+2026-11-06 - gate-denials-subagent-attribution - antigravity - Support subagent attribution for gate denials and unresolved denial reporting - [Session Log](./SESSIONS/2026/2026-11-06--gate-denials-subagent-attribution.md)
