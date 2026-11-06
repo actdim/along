@@ -315,6 +315,8 @@ def handle_session_command(repo_root: str, args: List[str]):
         parser.add_argument("--force-reason", default=None)
         parser.add_argument("--reason", default=None)
         parser.add_argument("--no-commit", action="store_true", help="Skip automatic git commit on wrap")
+        parser.add_argument("--keep-open", action="store_true", help="Keep issue in-progress after session wrap")
+        parser.add_argument("--phase", default=None, help="Tick the specified phase checkbox in the issue body")
         parsed, extra = parser.parse_known_args(sub_args)
         check_unknown_args(extra, "along session wrap")
 
@@ -338,6 +340,8 @@ def handle_session_command(repo_root: str, args: List[str]):
             guard_bypass=True,
             bypass_reason=parsed.reason,
             no_commit=parsed.no_commit,
+            keep_open=parsed.keep_open,
+            phase=parsed.phase,
         )
         sys.exit(code)
 

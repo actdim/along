@@ -97,6 +97,16 @@ def main(argv=None) -> int:
         action="store_true",
         help="Skip automatic git commit of attributed and wrap metadata files",
     )
+    parser.add_argument(
+        "--keep-open",
+        action="store_true",
+        help="Wrap session and write session log while keeping issue in-progress",
+    )
+    parser.add_argument(
+        "--phase",
+        default=None,
+        help="Tick the specified phase checkbox in the issue body",
+    )
 
     args = parser.parse_args(argv if argv is not None else sys.argv[1:])
     repo_root = repo.find_repo_root()
@@ -115,6 +125,8 @@ def main(argv=None) -> int:
         guard_bypass=True,
         bypass_reason=args.reason,
         no_commit=args.no_commit,
+        keep_open=args.keep_open,
+        phase=args.phase,
     )
     if code == 0:
         # Not verifiable mechanically, so the engine only reminds (skills/along-wrap Phase A).

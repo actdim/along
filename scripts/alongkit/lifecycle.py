@@ -1019,6 +1019,17 @@ def append_history_entry(
     return 0
 
 
+def tick_issue_phase(content: str, phase_name: str) -> Tuple[str, bool]:
+    """Tick - [ ] <phase_name> to - [x] <phase_name> in the issue body markdown."""
+    pattern = re.compile(
+        r"^(?P<prefix>\s*-\s*\[)\s*(\]\s*(?:\*\*)?" + re.escape(phase_name) + r"(?:\*\*)?)",
+        re.IGNORECASE | re.MULTILINE
+    )
+    if pattern.search(content):
+        return pattern.sub(r"\g<prefix>x\2", content, count=1), True
+    return content, False
+
+
 def execute_wrap(
     repo_root: str,
     slug: str,
@@ -1032,6 +1043,8 @@ def execute_wrap(
     guard_bypass: bool = False,
     bypass_reason: Optional[str] = None,
     no_commit: bool = False,
+    keep_open: bool = False,
+    phase: Optional[str] = None,
 ) -> int:
     """Execute automated session and issue wrap-up.
 
@@ -1065,7 +1078,9 @@ def execute_wrap(
         print(f"[Error] Issue '{slug}' not found in .along/ISSUES/.", file=sys.stderr)
         return 1
 
-    if status not in entities.CLOSED_ISSUE_STATUSES:
+    if keep_open:
+        status = "in-progress"
+    elif status not in entities.CLOSED_ISSUE_STATUSES:
         print(
             f"[Error] Invalid closing status '{status}'. "
             f"Allowed statuses: {', '.join(entities.CLOSED_ISSUE_STATUSES)}",
@@ -1237,7 +1252,11 @@ def execute_wrap(
     # 3. Dry-run mode
     if dry_run:
         print(f"-> [Dry-Run] Wrap plan for issue '{slug}':")
-        if not is_already_done:
+        if keep_open:
+            print(f"   - Keep open in .along/ISSUES/ (status=in-progress, updated={entities.today_iso()})")
+            if phase:
+                print(f"   - Tick phase checkbox: '{phase}'")
+        elif not is_already_done:
             print(f"   - Relocate {repo.safe_relpath(src_file, repo_root)} -> {repo.safe_relpath(dest_file, repo_root)}")
             print(f"   - Update front-matter: status={status}, completed={entities.today_iso()}, updated={entities.today_iso()}")
         else:
@@ -1266,14 +1285,26 @@ def execute_wrap(
             print(f"[Error] {os.path.basename(src_file)} has no parseable YAML front-matter.", file=sys.stderr)
             return 1
 
-        updates = {"status": status, "updated": today, "completed": today}
-        new_content = frontmatter.update(
-            content,
-            updates,
-            place_after={"completed": "status"},
-        )
-
-        if not is_already_done:
+        if keep_open:
+            updates = {"status": "in-progress", "updated": today}
+            new_content = frontmatter.update(content, updates)
+            if phase:
+                new_content, ticked = tick_issue_phase(new_content, phase)
+                if ticked:
+                    print(f"-> Marked phase '{phase}' completed in {repo.safe_relpath(src_file, repo_root)}")
+                else:
+                    print(f"[Warning] Phase checkbox '- [ ] {phase}' not found in issue body.", file=sys.stderr)
+            tx.protect(src_file)
+            textio.write_text(src_file, new_content, newline="\n")
+            dest_file = src_file
+            print(f"-> Updated issue in-progress: {repo.safe_relpath(src_file, repo_root)}")
+        elif not is_already_done:
+            updates = {"status": status, "updated": today, "completed": today}
+            new_content = frontmatter.update(
+                content,
+                updates,
+                place_after={"completed": "status"},
+            )
             block = frontmatter.split(new_content)
             if block:
                 sibling_link_re = re.compile(
@@ -1325,7 +1356,7 @@ def execute_wrap(
         log_path: Optional[str] = None
         if decisions is not None or has_blackboard or forced:
             log_path = write_session_record(
-                repo_root, tx, clean_slug, today=today, issue=issue, completed=(status == "done"),
+                repo_root, tx, clean_slug, today=today, issue=issue, completed=(not keep_open and status == "done"),
                 summary=summary, agent=agent, decisions=decisions,
                 reason="; ".join(forced) if forced else None,
             )
@@ -1368,7 +1399,7 @@ def execute_wrap(
         # This session keeps a completion token for the commit that follows
         # [bug--commit-blocked-after-wrap].
         attributed_map = session.attributed_files(repo_root, clean_slug)
-        if purge_archived(repo_root, clean_slug, complete=True):
+        if purge_archived(repo_root, clean_slug, complete=not keep_open):
             print(f"-> Purged session blackboard: .along/.session/{clean_slug}")
         print(f"-> [OK] Successfully wrapped up '{clean_slug}'.")
         if no_commit:
