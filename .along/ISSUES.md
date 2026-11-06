@@ -26,7 +26,6 @@
 - [ ] `(feat)` [clean-turn-context-isolation-in-along-team](ISSUES/feat--clean-turn-context-isolation-in-along-team.md)
 - [ ] `(feat)` [cowork-plugin-skill-packaging](ISSUES/feat--cowork-plugin-skill-packaging.md)
 - [ ] `(feat)` [cpp-ecosystem-support](ISSUES/feat--cpp-ecosystem-support.md)
-- [ ] `(feat)` [cross-repo-entity-references](ISSUES/feat--cross-repo-entity-references.md) - plan: needs approval
 - [ ] `(feat)` [cursor-agent-and-rules-integration](ISSUES/feat--cursor-agent-and-rules-integration.md)
 - [ ] `(feat)` [dart-flutter-ecosystem-support](ISSUES/feat--dart-flutter-ecosystem-support.md)
 - [ ] `(feat)` [deepseek-harness-bridge](ISSUES/feat--deepseek-harness-bridge.md)
@@ -63,7 +62,7 @@
 ## Done (recent)
 - [x] `(feat)` [plan-approve-batch](ISSUES/done/feat--plan-approve-batch.md)
 - [x] `(feat)` [partial-session-wrap](ISSUES/done/feat--partial-session-wrap.md)
+- [x] `(feat)` [cross-repo-entity-references](ISSUES/done/feat--cross-repo-entity-references.md)
 - [x] `(feat)` [cli-global-chdir](ISSUES/done/feat--cli-global-chdir.md)
 - [x] `(bug)` [worktree-env-readiness-submodules](ISSUES/done/bug--worktree-env-readiness-submodules.md)
-- [x] `(bug)` [entity-deletion-protection-path-scope](ISSUES/done/bug--entity-deletion-protection-path-scope.md)
-<!-- 311 older completed issue(s) archived in .along/ISSUES/done/ -->
+<!-- 312 older completed issue(s) archived in .along/ISSUES/done/ -->
