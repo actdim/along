@@ -246,3 +246,4 @@ _Index of sessions (newest last). One line per session:_
 2026-11-06 - worktree-env-readiness-submodules - antigravity - Fix worktree-env-readiness false positives on Git submodules, target path evaluation, and recovery deadlocks - [Session Log](./SESSIONS/2026/2026-11-06--worktree-env-readiness-submodules.md)
 2026-11-06 - entity-deletion-protection-path-scope - antigravity - Scope entity deletion protection to canonical entity files and allow draft/attachment deletions - [Session Log](./SESSIONS/2026/2026-11-06--entity-deletion-protection-path-scope.md)
 2026-11-06 - cli-global-chdir - antigravity - Add global -C / --chdir option to Along CLI router - [Session Log](./SESSIONS/2026/2026-11-06--cli-global-chdir.md)
+2026-11-06 - plan-approve-batch - antigravity - Add batch plan approval command and status: draft rejection header - [Session Log](./SESSIONS/2026/2026-11-06--plan-approve-batch.md)

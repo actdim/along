@@ -48,7 +48,6 @@
 - [ ] `(feat)` [partial-session-wrap](ISSUES/feat--partial-session-wrap.md) - plan: needs approval
 - [ ] `(feat)` [per-model-rework-metrics](ISSUES/feat--per-model-rework-metrics.md)
 - [ ] `(feat)` [pi-harness-support](ISSUES/feat--pi-harness-support.md)
-- [ ] `(feat)` [plan-approve-batch](ISSUES/feat--plan-approve-batch.md) - plan: needs approval
 - [ ] `(feat)` [planning-fields-and-ordering-gates](ISSUES/feat--planning-fields-and-ordering-gates.md)
 - [ ] `(feat)` [session-commit-binding](ISSUES/feat--session-commit-binding.md)
 - [ ] `(feat)` [subagent-execution-discipline](ISSUES/feat--subagent-execution-discipline.md)
@@ -63,9 +62,9 @@
 - [ ] `(task)` [reconcile-dashboard-ui-core-conventions](ISSUES/task--reconcile-dashboard-ui-core-conventions.md)
 
 ## Done (recent)
+- [x] `(feat)` [plan-approve-batch](ISSUES/done/feat--plan-approve-batch.md)
 - [x] `(feat)` [cli-global-chdir](ISSUES/done/feat--cli-global-chdir.md)
 - [x] `(bug)` [worktree-env-readiness-submodules](ISSUES/done/bug--worktree-env-readiness-submodules.md)
 - [x] `(bug)` [entity-deletion-protection-path-scope](ISSUES/done/bug--entity-deletion-protection-path-scope.md)
 - [x] `(bug)` [protocol-leaks-into-docs](ISSUES/done/bug--protocol-leaks-into-docs.md)
-- [x] `(feat)` [test-gate-scope](ISSUES/done/feat--test-gate-scope.md)
-<!-- 309 older completed issue(s) archived in .along/ISSUES/done/ -->
+<!-- 310 older completed issue(s) archived in .along/ISSUES/done/ -->
