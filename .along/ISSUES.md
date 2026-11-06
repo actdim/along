@@ -39,7 +39,6 @@
 - [ ] `(feat)` [golang-ecosystem-support](ISSUES/feat--golang-ecosystem-support.md)
 - [ ] `(feat)` [jvm-ecosystem-support](ISSUES/feat--jvm-ecosystem-support.md)
 - [ ] `(feat)` [kb-search-hybrid-retrieval](ISSUES/feat--kb-search-hybrid-retrieval.md)
-- [ ] `(feat)` [lint-worktree-and-doctor-subprojects](ISSUES/feat--lint-worktree-and-doctor-subprojects.md) - plan: needs approval
 - [ ] `(feat)` [multi-runtime-and-omnichannel-expansion](ISSUES/feat--multi-runtime-and-omnichannel-expansion.md)
 - [ ] `(feat)` [native-ast-blast-radius-analyzer](ISSUES/feat--native-ast-blast-radius-analyzer.md)
 - [ ] `(feat)` [openclaw-and-hermes-agent-integration](ISSUES/feat--openclaw-and-hermes-agent-integration.md)
@@ -62,7 +61,7 @@
 ## Done (recent)
 - [x] `(feat)` [plan-approve-batch](ISSUES/done/feat--plan-approve-batch.md)
 - [x] `(feat)` [partial-session-wrap](ISSUES/done/feat--partial-session-wrap.md)
+- [x] `(feat)` [lint-worktree-and-doctor-subprojects](ISSUES/done/feat--lint-worktree-and-doctor-subprojects.md)
 - [x] `(feat)` [cross-repo-entity-references](ISSUES/done/feat--cross-repo-entity-references.md)
 - [x] `(feat)` [cli-global-chdir](ISSUES/done/feat--cli-global-chdir.md)
-- [x] `(bug)` [worktree-env-readiness-submodules](ISSUES/done/bug--worktree-env-readiness-submodules.md)
-<!-- 312 older completed issue(s) archived in .along/ISSUES/done/ -->
+<!-- 313 older completed issue(s) archived in .along/ISSUES/done/ -->
