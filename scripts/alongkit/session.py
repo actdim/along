@@ -494,6 +494,25 @@ def _iso_to_epoch(value: str) -> Optional[float]:
         return None
 
 
+def is_plan_draft(text: Optional[str]) -> bool:
+    """True when plan text declares status: draft or draft: true in its frontmatter."""
+    if not text:
+        return False
+    from . import frontmatter
+    try:
+        fm, _, _ = frontmatter.try_parse(text)
+        if not fm:
+            return False
+        status = str(fm.get("status") or "").strip().lower()
+        if status == "draft":
+            return True
+        if fm.get("draft") is True:
+            return True
+    except (ValueError, TypeError):
+        pass
+    return False
+
+
 def check_cli_approval(repo_root: str, key: Optional[str], plan_path: Optional[str]) -> Tuple[Optional[str], str]:
     """(refusal, approved_via) for a plan approval given through the CLI.
 
@@ -502,6 +521,13 @@ def check_cli_approval(repo_root: str, key: Optional[str], plan_path: Optional[s
     Without a recorded user message (runtime without a UserPromptSubmit hook) the approval
     is allowed and marked unverified. [bug--plan-approval-self-and-lost] REQ-2
     """
+    if plan_path and os.path.isfile(plan_path):
+        try:
+            content = textio.read_text(plan_path, strict=False)
+            if is_plan_draft(content):
+                return ("plan is marked with status: draft; finalize plan before approving", APPROVED_VIA_CLI)
+        except OSError:
+            pass
     last = last_user_prompt_at(repo_root, key)
     if not last:
         return None, APPROVED_VIA_CLI_UNVERIFIED

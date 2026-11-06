@@ -13,11 +13,12 @@ if __name__ == "__main__":
     )
 
 import os
+import re
 import sys
 from datetime import datetime
 from typing import Any, Dict, List, Optional
 
-from .. import entities, lifecycle, repo, session, textio
+from .. import entities, frontmatter, lifecycle, repo, session, textio
 from .common import flag_value, require_entity_name
 
 
@@ -243,6 +244,95 @@ def handle_start_command(repo_root: str, args: List[str]):
     sys.exit(0)
 
 
+def _handle_batch_plan_approve(repo_root: str, from_dir: str, dry_run: bool, key: Optional[str]) -> None:
+    if not os.path.isdir(from_dir):
+        print(f"[Error] Plan directory does not exist: '{from_dir}'", file=sys.stderr)
+        sys.exit(2)
+
+    plan_files = sorted([
+        os.path.join(from_dir, f) for f in os.listdir(from_dir)
+        if f.endswith(".md") and not f.startswith(".") and os.path.isfile(os.path.join(from_dir, f))
+    ])
+    if not plan_files:
+        print(f"[Error] No markdown plan files found in '{from_dir}'.", file=sys.stderr)
+        sys.exit(2)
+
+    candidates = []
+    has_errors = False
+
+    for p in plan_files:
+        fname = os.path.basename(p)
+        try:
+            content = textio.read_text(p, strict=False)
+        except OSError as exc:
+            candidates.append({"file": fname, "path": p, "error": f"Cannot read file: {exc}"})
+            has_errors = True
+            continue
+
+        is_draft = session.is_plan_draft(content)
+        fm, _, _ = frontmatter.try_parse(content) if frontmatter else ({}, "", "")
+
+        target_key = fm.get("issue") or fm.get("slug")
+        if not target_key:
+            m = re.match(r"^(?:\d+[-_]+)?(?P<type>feat|bug|debt|task|docs|spike)--(?P<slug>[a-z0-9_-]+)(?:\.plan)?\.md$", fname, re.IGNORECASE)
+            if m:
+                target_key = m.group("slug")
+            else:
+                m2 = re.match(r"^(?:\d+[-_]+)?(?P<slug>[a-z0-9_-]+)(?:\.plan)?\.md$", fname, re.IGNORECASE)
+                if m2:
+                    target_key = m2.group("slug")
+
+        if not target_key:
+            candidates.append({"file": fname, "path": p, "error": "Could not determine target issue (specify issue: in frontmatter or use NN--<key>.md)"})
+            has_errors = True
+            continue
+
+        clean_type, clean_slug = entities.parse_key(str(target_key).lower())
+        issue = entities.find_issue_by_slug(repo_root, clean_slug)
+        if not issue:
+            candidates.append({"file": fname, "path": p, "slug": clean_slug, "error": f"Issue '{clean_slug}' not found in .along/ISSUES/"})
+            has_errors = True
+            continue
+
+        if is_draft:
+            candidates.append({"file": fname, "path": p, "slug": clean_slug, "error": "Plan is marked with status: draft"})
+            has_errors = True
+            continue
+
+        candidates.append({"file": fname, "path": p, "slug": clean_slug, "content": content, "error": None})
+
+    if dry_run:
+        print(f"Batch Plan Approval Preview (from '{from_dir}'):")
+        for c in candidates:
+            if c.get("error"):
+                print(f"  - {c['file']} -> {c.get('slug', '?')} [REFUSED: {c['error']}]")
+            else:
+                print(f"  - {c['file']} -> {c['slug']} [READY]")
+        sys.exit(0)
+
+    if has_errors:
+        print(f"[Error] Batch plan approval aborted: {sum(1 for c in candidates if c.get('error'))} file(s) cannot be approved:", file=sys.stderr)
+        for c in candidates:
+            if c.get("error"):
+                print(f"  - {c['file']}: {c['error']}", file=sys.stderr)
+        print("Resolve draft status or missing issues, or use --dry-run to inspect.", file=sys.stderr)
+        sys.exit(2)
+
+    approved_count = 0
+    for c in candidates:
+        slug = c["slug"]
+        text = c["content"]
+        session.write_issue_plan(repo_root, slug, text, f"plan approve --from {from_dir}")
+        session.approve_issue_plan(repo_root, slug, session.APPROVED_VIA_CLI, key=key)
+        plan_rel = repo.normalize_posix(repo.safe_relpath(session.plan_path(repo_root, slug), repo_root))
+        print(f"-> Approved plan for '{slug}' (kept in {plan_rel})")
+        approved_count += 1
+
+    entities.sync_issues_board(repo_root, recent_done_limit=entities.RECENT_DONE_LIMIT)
+    print(f"-> Successfully batch-approved plans for {approved_count} issue(s).")
+    sys.exit(0)
+
+
 def handle_plan_command(repo_root: str, args: List[str]):
     if not args or args[0] in ("-h", "--help", "help"):
         print("Usage: along plan approve [<slug>] [--plan-file <path>]")
@@ -250,6 +340,8 @@ def handle_plan_command(repo_root: str, args: List[str]):
         print("                                     --plan-file writes the approved plan into the issue's plan")
         print("                                     (.along/ISSUES/<key>/plan.md). Before 'along start' it approves the")
         print("                                     plan ahead: the next 'along start <slug>' runs it without asking again")
+        print("       along plan approve --from <dir> [--dry-run]")
+        print("                                     Batch-approve candidate plan files in <dir> into corresponding issues")
         print("       along plan revise <slug> --plan-file <path> --reason \"...\"")
         print("                                     Append a correction made during the work as the plan's next revision")
         print("       along plan rework <slug> --reason \"...\"")
@@ -260,6 +352,12 @@ def handle_plan_command(repo_root: str, args: List[str]):
         sys.exit(0)
     sub = args[0].lower()
     key = session.current_session_key()
+    if sub == "approve" and "--from" in args:
+        from_dir = flag_value(args, "--from")
+        if not from_dir:
+            print("[Error] --from requires a directory path.", file=sys.stderr)
+            sys.exit(2)
+        _handle_batch_plan_approve(repo_root, from_dir, dry_run="--dry-run" in args, key=key)
     if sub == "approve" and "--closeout" in args:
         if not key:
             print("[Error] No agent session id in the environment: a closeout approval belongs to a session.",
