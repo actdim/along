@@ -10,8 +10,9 @@ gate, and the resolved dependencies set up here. Pass `-q` / `--quiet` for dot o
 (`npm run test:quiet`). See [bug--test-quiet-script-guard-conflict].
 """
 
-import sys
 import os
+import subprocess
+import sys
 import time
 import unittest
 
@@ -108,6 +109,30 @@ def _filter_suite_by_pattern(suite: unittest.TestSuite, pattern: str) -> unittes
     return filtered
 
 
+def _filter_suite_exclude_integration(suite: unittest.TestSuite) -> unittest.TestSuite:
+    """Filter test suite to exclude integration modules and individual integration tests."""
+    from _integration import INTEGRATION_MODULES, INTEGRATION_TESTS
+
+    filtered = unittest.TestSuite()
+    for test in suite:
+        if isinstance(test, unittest.TestSuite):
+            sub = _filter_suite_exclude_integration(test)
+            if sub.countTestCases() > 0:
+                filtered.addTest(sub)
+        else:
+            if type(test).__name__ == "_FailedTest":
+                filtered.addTest(test)
+                continue
+            mod = getattr(test, "__module__", "")
+            if mod.startswith("tests."):
+                mod = mod[len("tests."):]
+            test_id = test.id() if callable(getattr(test, "id", None)) else str(test)
+            if mod in INTEGRATION_MODULES or test_id in INTEGRATION_TESTS:
+                continue
+            filtered.addTest(test)
+    return filtered
+
+
 def main():
     repo_root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
     if repo_root not in sys.path:
@@ -132,8 +157,10 @@ def main():
 
     is_doc = any(arg in ("--doc", "--doc-tests") for arg in sys.argv[1:])
 
-    # Parse CLI arguments for options (-q, --slowest, -k) and test targets
+    # Parse CLI arguments for options (-q, --slowest, -k, --unit, --fast, -n) and test targets
     k_pattern = None
+    is_unit = False
+    xdist_workers = None
     positional_args = []
     i = 1
     while i < len(sys.argv):
@@ -142,6 +169,26 @@ def main():
             i += 1
             continue
         elif arg.startswith("--slowest="):
+            i += 1
+            continue
+        elif arg in ("--unit", "--fast"):
+            is_unit = True
+            i += 1
+            continue
+        elif arg == "-n":
+            if i + 1 < len(sys.argv):
+                xdist_workers = sys.argv[i + 1]
+                i += 2
+                continue
+            else:
+                print("[Error] Option '-n' requires an argument (<count> or 'auto').", file=sys.stderr)
+                sys.exit(2)
+        elif arg.startswith("-n="):
+            xdist_workers = arg.split("=", 1)[1]
+            i += 1
+            continue
+        elif arg.startswith("-n") and len(arg) > 2 and not arg.startswith("-no"):
+            xdist_workers = arg[2:]
             i += 1
             continue
         elif arg == "-k":
@@ -166,6 +213,57 @@ def main():
         else:
             i += 1
 
+    if xdist_workers:
+        try:
+            import xdist  # noqa: F401
+            has_xdist = True
+        except ImportError:
+            has_xdist = False
+
+        if not has_xdist:
+            print("[Notice] pytest-xdist is not installed; falling back to sequential test runner.", file=sys.stderr)
+        else:
+            from test_zz_hermetic_suite import porcelain_snapshot, classify_snapshot_changes
+            baseline = porcelain_snapshot(repo_root)
+
+            pytest_cmd = [
+                sys.executable, "-m", "pytest",
+                f"-n={xdist_workers}",
+                "--dist=loadfile",
+                "-p", "no:cacheprovider",
+            ]
+            if quiet:
+                pytest_cmd.append("-q")
+            if is_unit:
+                pytest_cmd.extend(["-m", "not integration"])
+            if k_pattern:
+                pytest_cmd.extend(["-k", k_pattern])
+            if positional_args:
+                pytest_cmd.extend(positional_args)
+
+            env = dict(os.environ, ALONG_TEST_RUNNER="pytest")
+            res = subprocess.run(pytest_cmd, cwd=repo_root, env=env)
+            if res.returncode != 0:
+                sys.exit(res.returncode)
+
+            # In full runs, execute the hermetic test serially against the pre-run baseline
+            if not is_unit and not positional_args and not k_pattern and not is_doc:
+                after = porcelain_snapshot(repo_root)
+                if after is not None and baseline is not None:
+                    report = classify_snapshot_changes(baseline, after, repo_root)
+                    if report:
+                        print(
+                            "[Error] Hermeticity violation after parallel run:\n" + "\n".join(report),
+                            file=sys.stderr,
+                        )
+                        sys.exit(1)
+
+                tree = testruns.tree_hash(repo_root)
+                if tree:
+                    testruns.record_run(repo_root, True, tree, "test.py")
+
+            sys.exit(0)
+
     loader = unittest.TestLoader()
     normalized_args = [_normalize_test_target(a) for a in positional_args]
 
@@ -189,6 +287,9 @@ def main():
                 suite.addTests(loader.loadTestsFromName(target))
     else:
         suite = loader.discover(start_dir=tests_dir, pattern="test_*.py")
+
+    if is_unit:
+        suite = _filter_suite_exclude_integration(suite)
 
     if k_pattern:
         suite = _filter_suite_by_pattern(suite, k_pattern)
@@ -221,7 +322,7 @@ def main():
             print(f"  {dur:6.2f}s  {tid}")
 
     # [feat--test-gate-cost-reduction] REQ-1 & REQ-6, [feat--test-gate-scope] REQ-6: record run for full suite
-    if not is_doc and not normalized_args and not k_pattern:
+    if not is_doc and not normalized_args and not k_pattern and not is_unit:
         tree = testruns.tree_hash(repo_root)
         if tree:
             testruns.record_run(repo_root, result.wasSuccessful(), tree, "test.py")

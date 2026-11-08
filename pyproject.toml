@@ -51,6 +51,7 @@ all = [
 dev = [
     "actdim-along[dash]",
     "pytest>=7.0.0",
+    "pytest-xdist>=3.5.0",
 ]
 docs = [
     "mkdocs-material>=9.5",
@@ -130,4 +131,7 @@ include = [
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 pythonpath = ["scripts"]
+markers = [
+    "integration: mark test as integration test (heavy filesystem, git or external process)",
+]
 
