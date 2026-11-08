@@ -24,9 +24,11 @@ See `[bug--tests-mutate-working-tree]`.
 from __future__ import annotations
 
 import ast
+import hashlib
 import os
 import re
 import sys
+from typing import Any, Callable, Dict, List, Optional, Tuple
 import unittest
 
 REPO_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -39,8 +41,23 @@ from alongkit import proc
 TESTS_DIR = os.path.dirname(os.path.abspath(__file__))
 
 
-def porcelain_snapshot(repo_root: str) -> dict | None:
-    """`git status --porcelain -u` as {path: status}, or None when git cannot answer.
+def _file_digest(repo_root: str, relpath: str) -> Optional[str]:
+    """Return SHA-256 hex digest of the working tree file, or None if absent/inaccessible."""
+    full_path = os.path.join(repo_root, relpath)
+    if not os.path.isfile(full_path):
+        return None
+    try:
+        hasher = hashlib.sha256()
+        with open(full_path, "rb") as f:
+            while chunk := f.read(65536):
+                hasher.update(chunk)
+        return hasher.hexdigest()
+    except OSError:
+        return None
+
+
+def porcelain_snapshot(repo_root: str) -> Optional[Dict[str, Tuple[str, Optional[str]]]]:
+    """`git status --porcelain -u` as {path: (status, digest)}, or None when git cannot answer.
 
     Called twice: git refreshes its stat cache while producing the first answer, and a
     "racily clean" entry (same mtime as the index) is only re-examined then. Reading the
@@ -51,11 +68,70 @@ def porcelain_snapshot(repo_root: str) -> dict | None:
         result = proc.run_capture(["git", "status", "--porcelain", "-u"], cwd=repo_root)
         if not result.ok:
             return None
-    entries = {}
+    entries: Dict[str, Tuple[str, Optional[str]]] = {}
     for line in (result.stdout or "").splitlines():
         if len(line) > 3:
-            entries[line[3:].strip()] = line[:2]
+            path = line[3:].strip()
+            if path.startswith('"') and path.endswith('"'):
+                path = path[1:-1]
+            status = line[:2]
+            digest = _file_digest(repo_root, path)
+            entries[path] = (status, digest)
     return entries
+
+
+def classify_snapshot_changes(
+    baseline: Dict[str, Tuple[str, Optional[str]]],
+    after: Dict[str, Tuple[str, Optional[str]]],
+    repo_root: str,
+    digest_getter: Optional[Callable[[str], Optional[str]]] = None,
+) -> List[str]:
+    """Classify differences between baseline and after status snapshots by content digest.
+
+    Decision table per path:
+      - absent in baseline, present in after: fail as 'appeared'
+      - present in baseline, absent in after:
+          equal content digest -> stat-cache flip (ignore)
+          different/missing digest -> fail as 'reverted or deleted'
+      - present in both:
+          status differs, equal digest -> stat-cache flip (ignore)
+          status differs, different digest -> fail as 'status changed'
+          same status, different digest -> fail as 'content changed'
+          same status, equal digest -> pass
+    """
+    if digest_getter is None:
+        digest_getter = lambda p: _file_digest(repo_root, p)
+
+    report: List[str] = []
+    all_paths = sorted(set(baseline.keys()) | set(after.keys()))
+
+    for path in all_paths:
+        in_baseline = path in baseline
+        in_after = path in after
+
+        if not in_baseline and in_after:
+            a_status, _ = after[path]
+            report.append(f"  appeared: {path} [{a_status}]")
+        elif in_baseline and not in_after:
+            b_status, b_digest = baseline[path]
+            current_digest = digest_getter(path)
+            if current_digest == b_digest and current_digest is not None:
+                # Stat-cache flip: file content is unchanged on disk
+                continue
+            report.append(f"  reverted or deleted: {path} [{b_status}]")
+        elif in_baseline and in_after:
+            b_status, b_digest = baseline[path]
+            a_status, a_digest = after[path]
+            if b_status != a_status:
+                if b_digest == a_digest and b_digest is not None:
+                    # Stat-cache flip: file content is unchanged
+                    continue
+                report.append(f"  status changed: {path} [{b_status} -> {a_status}]")
+            else:
+                if b_digest != a_digest:
+                    report.append(f"  content changed: {path} [{a_status}]")
+
+    return report
 
 
 #: Snapshot of the working tree taken before the suite runs. See the module docstring.
@@ -71,22 +147,14 @@ class TestSuiteLeavesTheRepositoryAlone(unittest.TestCase):
         after = porcelain_snapshot(REPO_ROOT)
         self.assertIsNotNone(after, "git stopped answering mid-suite")
 
-        appeared = {p: s for p, s in after.items() if p not in BASELINE}
-        changed = {p: f"{BASELINE[p]} -> {s}" for p, s in after.items()
-                   if p in BASELINE and BASELINE[p] != s}
-        vanished = {p: s for p, s in BASELINE.items() if p not in after}
-
-        report = []
-        for label, group in (("appeared", appeared), ("status changed", changed),
-                             ("vanished", vanished)):
-            for path, status in sorted(group.items()):
-                report.append(f"  {label}: {path} [{status}]")
+        report = classify_snapshot_changes(BASELINE, after, REPO_ROOT)
 
         self.assertEqual(
             report, [],
             "the test suite modified the working tree. A suite that writes into the "
             "repository it tests cannot be a gate: it produces false diffs, can corrupt "
             "work in progress, and makes CI unable to tell a real change from test noise. "
+            "Note: editing repository files while the test suite is running will trip this gate. "
             "Point the engine at a tests/hermetic.py fixture instead.\n"
             + "\n".join(report))
 
