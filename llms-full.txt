@@ -4144,6 +4144,13 @@ along dev-env
 # Working inside this repository: uv resolves the environment from pyproject.toml
 uv run python .along/scripts/test.py -q
 
+# Running tests with pattern filter or pytest-style node selectors:
+python .along/scripts/test.py -k <pattern>
+python .along/scripts/test.py tests/test_x.py::TestClass::test_method
+
+# Running tests directly via pytest:
+uv run pytest -q tests/test_x.py
+
 # No uv, no install: add the dependency to the active interpreter
 python -m pip install "ruamel.yaml>=0.18"
 ```

@@ -3,7 +3,8 @@ protocol: along
 protocol_version: "4.7.0"
 slug: pytest-support-and-test-runner-filtering
 type: task
-status: in-progress
+status: done
+completed: 2026-11-08
 priority: medium
 created: 2026-11-06
 updated: 2026-11-08

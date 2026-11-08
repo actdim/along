@@ -1,9 +1,11 @@
 # Active Issues
 
 ## Active
-<!-- No active issues -->
+- [ ] `(task)` [integrate-actdim-ui-core-runtime](ISSUES/task--integrate-actdim-ui-core-runtime.md) - plan ready
 
 ## Backlog
+- [ ] `(bug)` [start-dirty-check-misattribution](ISSUES/bug--start-dirty-check-misattribution.md)
+- [ ] `(bug)` [subproject-boundary-issue-folder-files](ISSUES/bug--subproject-boundary-issue-folder-files.md)
 - [ ] `(debt)` [autonomous-non-elevation-invariants](ISSUES/debt--autonomous-non-elevation-invariants.md)
 - [ ] `(debt)` [canonical-path-gate-expansion](ISSUES/debt--canonical-path-gate-expansion.md)
 - [ ] `(debt)` [dashboard-retire-risk-spike-views](ISSUES/debt--dashboard-retire-risk-spike-views.md)
@@ -31,19 +33,23 @@
 - [ ] `(feat)` [deepseek-harness-bridge](ISSUES/feat--deepseek-harness-bridge.md)
 - [ ] `(feat)` [deepseek-runtime-adapter](ISSUES/feat--deepseek-runtime-adapter.md)
 - [ ] `(feat)` [doctor-granular-diagnostics](ISSUES/feat--doctor-granular-diagnostics.md)
+- [ ] `(feat)` [early-raw-runner-warning](ISSUES/feat--early-raw-runner-warning.md)
 - [ ] `(feat)` [empirical-benchmark-harness-and-metrics](ISSUES/feat--empirical-benchmark-harness-and-metrics.md)
 - [ ] `(feat)` [enterprise-governance-and-cloud-infrastructure](ISSUES/feat--enterprise-governance-and-cloud-infrastructure.md)
 - [ ] `(feat)` [enterprise-governance-and-compliance-pack](ISSUES/feat--enterprise-governance-and-compliance-pack.md)
 - [ ] `(feat)` [external-issue-trackers-sync-and-import](ISSUES/feat--external-issue-trackers-sync-and-import.md)
 - [ ] `(feat)` [golang-ecosystem-support](ISSUES/feat--golang-ecosystem-support.md)
+- [ ] `(feat)` [issue-drafts-lifecycle](ISSUES/feat--issue-drafts-lifecycle.md)
 - [ ] `(feat)` [jvm-ecosystem-support](ISSUES/feat--jvm-ecosystem-support.md)
 - [ ] `(feat)` [kb-search-hybrid-retrieval](ISSUES/feat--kb-search-hybrid-retrieval.md)
+- [ ] `(feat)` [lint-arbitrary-paths](ISSUES/feat--lint-arbitrary-paths.md)
 - [ ] `(feat)` [multi-runtime-and-omnichannel-expansion](ISSUES/feat--multi-runtime-and-omnichannel-expansion.md)
 - [ ] `(feat)` [native-ast-blast-radius-analyzer](ISSUES/feat--native-ast-blast-radius-analyzer.md)
 - [ ] `(feat)` [openclaw-and-hermes-agent-integration](ISSUES/feat--openclaw-and-hermes-agent-integration.md)
 - [ ] `(feat)` [operational-assets-and-playbooks](ISSUES/feat--operational-assets-and-playbooks.md)
 - [ ] `(feat)` [per-model-rework-metrics](ISSUES/feat--per-model-rework-metrics.md)
 - [ ] `(feat)` [pi-harness-support](ISSUES/feat--pi-harness-support.md)
+- [ ] `(feat)` [plan-grants-write-scope](ISSUES/feat--plan-grants-write-scope.md)
 - [ ] `(feat)` [planning-fields-and-ordering-gates](ISSUES/feat--planning-fields-and-ordering-gates.md)
 - [ ] `(feat)` [session-commit-binding](ISSUES/feat--session-commit-binding.md)
 - [ ] `(feat)` [subagent-execution-discipline](ISSUES/feat--subagent-execution-discipline.md)
@@ -52,15 +58,21 @@
 - [ ] `(feat)` [team-typed-handoff-mailbox](ISSUES/feat--team-typed-handoff-mailbox.md)
 - [ ] `(feat)` [team-worktree-concurrency-rules](ISSUES/feat--team-worktree-concurrency-rules.md)
 - [ ] `(feat)` [team-worktree-lifecycle](ISSUES/feat--team-worktree-lifecycle.md)
+- [ ] `(feat)` [workspace-activity-tracking](ISSUES/feat--workspace-activity-tracking.md)
+- [ ] `(feat)` [worktree-lifecycle-hardening](ISSUES/feat--worktree-lifecycle-hardening.md)
 - [ ] `(feat)` [zero-step-state-recovery-and-drift-detection](ISSUES/feat--zero-step-state-recovery-and-drift-detection.md)
+- [ ] `(task)` [domain-exceptions-and-error-flow](ISSUES/task--domain-exceptions-and-error-flow.md) - plan ready
 - [ ] `(task)` [gate-event-remeasure](ISSUES/task--gate-event-remeasure.md)
-- [ ] `(task)` [integrate-actdim-ui-core-runtime](ISSUES/task--integrate-actdim-ui-core-runtime.md)
+- [ ] `(task)` [hermetic-suite-flaky-git-cache](ISSUES/task--hermetic-suite-flaky-git-cache.md)
+- [ ] `(task)` [optimize-test-suite-execution-time](ISSUES/task--optimize-test-suite-execution-time.md) - plan ready
 - [ ] `(task)` [reconcile-dashboard-ui-core-conventions](ISSUES/task--reconcile-dashboard-ui-core-conventions.md)
+- [ ] `(task)` [refactor-cli-chdir-common](ISSUES/task--refactor-cli-chdir-common.md)
+- [ ] `(task)` [simplify-cli-safety-gate-and-predicates](ISSUES/task--simplify-cli-safety-gate-and-predicates.md)
 
 ## Done (recent)
+- [x] `(task)` [pytest-support-and-test-runner-filtering](ISSUES/done/task--pytest-support-and-test-runner-filtering.md)
 - [x] `(task)` [verify-worktree-env-readiness-hardening](ISSUES/done/task--verify-worktree-env-readiness-hardening.md)
 - [x] `(feat)` [plan-approve-batch](ISSUES/done/feat--plan-approve-batch.md)
 - [x] `(feat)` [partial-session-wrap](ISSUES/done/feat--partial-session-wrap.md)
 - [x] `(feat)` [lint-worktree-and-doctor-subprojects](ISSUES/done/feat--lint-worktree-and-doctor-subprojects.md)
-- [x] `(feat)` [gate-denials-subagent-attribution](ISSUES/done/feat--gate-denials-subagent-attribution.md)
-<!-- 316 older completed issue(s) archived in .along/ISSUES/done/ -->
+<!-- 317 older completed issue(s) archived in .along/ISSUES/done/ -->
