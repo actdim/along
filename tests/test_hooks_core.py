@@ -301,6 +301,33 @@ class TestEngineGovernanceAndAudit(unittest.TestCase):
             audit_file = os.path.join(along_dir, "diagnostics", "hooks_audit.jsonl")
             self.assertTrue(os.path.isfile(audit_file))
 
+    def test_pip_install_checks_virtual_env(self):
+        from alongkit.hooks.predicates import check_cli_safety
+        with tempfile.TemporaryDirectory() as tmp:
+            old_venv = os.environ.pop("VIRTUAL_ENV", None)
+            try:
+                event = HookEvent(
+                    event_type=HookEventType.PRE_TOOL_USE,
+                    tool_name="run_command",
+                    tool_args={"CommandLine": "pip install requests"},
+                    workspace_root=tmp,
+                )
+                err = check_cli_safety(event, tmp)
+                self.assertIsNotNone(err)
+                self.assertIn("pip install", err)
+
+                os.environ["VIRTUAL_ENV"] = os.path.join(tmp, ".venv")
+                err_venv = check_cli_safety(event, tmp)
+                self.assertIsNone(err_venv)
+
+                os.environ.pop("VIRTUAL_ENV", None)
+                os.makedirs(os.path.join(tmp, ".venv"), exist_ok=True)
+                err_dir = check_cli_safety(event, tmp)
+                self.assertIsNone(err_dir)
+            finally:
+                if old_venv is not None:
+                    os.environ["VIRTUAL_ENV"] = old_venv
+
 
 class TestAlongHookCliE2E(unittest.TestCase):
     def test_cli_invocation_returns_valid_antigravity_json(self):

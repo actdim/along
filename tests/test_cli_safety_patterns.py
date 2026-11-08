@@ -40,6 +40,8 @@ BLOCKED = (
     "printf 'a\\n' >> src/app.py",
     "sed -i 's/a/b/' file.txt",
     "perl -pi -e 's/a/b/' file.txt",
+    "npm i -g typescript",
+    "pacman -S ripgrep",
 )
 
 ALLOWED = (
@@ -53,6 +55,12 @@ ALLOWED = (
     "echo hi > $null",
     "\"exit=$LASTEXITCODE\"",
     "git commit -m 'one line message (refs #a-b)'",
+    'git commit -m "fix <<EOF handling in parser"',
+    "grep -rn '<<EOF' scripts",
+    "echo $((x << y))",
+    "uv pip install requests",
+    "pip install -r requirements.txt",
+    "python -m pip install -e .",
 )
 
 

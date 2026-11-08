@@ -44,10 +44,94 @@ PROTECTED_PROJECTIONS: Tuple[str, ...] = (
 #: Managed rule packs copied by `along rules attach`; `.along/rules/gates.yaml` is not one.
 RULE_PACK_PATH_RE = re.compile(r"(?:^|/)\.along/rules/(?:[^/]+/)*[^/]+\.md$", re.IGNORECASE)
 
-DANGEROUS_CLI_PATTERNS: List[Tuple[re.Pattern, str]] = [
-    # Any heredoc delimiter (<<EOF, <<'PY', <<-"END"), but not the bash here-string <<<
-    # or a shift operator: a heredoc body starts on the next line. [bug--cli-safety-heredoc-gaps]
-    (re.compile(r"(?<!<)<<(?!<)[-~]?[ \t]*(['\"]?)[A-Za-z_][A-Za-z0-9_]*\1[^\n]*(?:\n|$)"), "Heredoc syntax (<<EOF)"),
+def _is_pip_install_words(w: List[str]) -> Tuple[bool, bool]:
+    """Returns (is_pip_install, is_exempt) for a command segment's words."""
+    if not w:
+        return False, False
+
+    words = list(w)
+    cmd = words[0].lower().rsplit("/", 1)[-1].rsplit("\\", 1)[-1]
+    if cmd.endswith(".exe"):
+        cmd = cmd[:-4]
+
+    if cmd in ("sudo", "doas") and len(words) > 1:
+        words = words[1:]
+        cmd = words[0].lower().rsplit("/", 1)[-1].rsplit("\\", 1)[-1]
+        if cmd.endswith(".exe"):
+            cmd = cmd[:-4]
+
+    if cmd == "uv":
+        return False, False
+
+    args = words[1:]
+    is_pip = False
+    if cmd == "pip" or (cmd.startswith("pip") and cmd[3:].replace(".", "").isdigit()):
+        is_pip = True
+    elif cmd.startswith("python"):
+        if len(args) >= 2 and args[0] == "-m" and args[1].lower() in ("pip", "pip3"):
+            is_pip = True
+            args = args[2:]
+
+    if not is_pip or not args or args[0].lower() != "install":
+        return False, False
+
+    exempt_flags = {"-e", "--editable", "--user", "--target", "--prefix"}
+    for a in args[1:]:
+        a_lower = a.lower()
+        if a_lower in exempt_flags:
+            return True, True
+        for flag in ("--target=", "--prefix="):
+            if a_lower.startswith(flag):
+                return True, True
+
+    return True, False
+
+
+class PipGlobalInstallMatcher:
+    """Detects un-isolated global pip installs when no virtual environment is active."""
+
+    pattern = "Global package manager mutation (pip install)"
+
+    def search_context(self, command: str, repo_root: Optional[str] = None) -> bool:
+        return self._evaluate(command, repo_root=repo_root)
+
+    def search(self, command: str) -> bool:
+        return self._evaluate(command, repo_root=None)
+
+    def _evaluate(self, command: str, repo_root: Optional[str] = None) -> bool:
+        if not command or "pip" not in command.lower():
+            return False
+
+        venv_active = bool(
+            os.environ.get("VIRTUAL_ENV")
+            or (os.path.isdir(os.path.join(repo_root, ".venv")) if repo_root else os.path.isdir(".venv"))
+        )
+
+        segments = shellparse.split_segments(command)
+        if segments is None:
+            if re.search(r"\buv\s+pip\b", command, re.IGNORECASE):
+                return False
+            m = re.search(r"(?:^|[|;&({\n])\s*(?:(?:python\d*(?:\.exe)?\s+-m\s+)?pip\d*)\s+install\b", command, re.IGNORECASE)
+            if not m:
+                return False
+            if re.search(r"\b(?:-e|--editable|--user|--target|--prefix)\b", command, re.IGNORECASE):
+                return False
+            return not venv_active
+
+        for seg in segments:
+            w = shellparse.words(seg)
+            if not w:
+                continue
+            is_pip, is_exempt = _is_pip_install_words(w)
+            if is_pip and not is_exempt:
+                if not venv_active:
+                    return True
+        return False
+
+
+DANGEROUS_CLI_PATTERNS: List[Tuple[Any, str]] = [
+    # Heredoc syntax (<<EOF), quote-aware, body-required
+    (shellwrite.HeredocWriter(), "Heredoc syntax (<<EOF)"),
     # PowerShell here-strings (@'...'@, @"..."@) sent to a file
     (re.compile(r"@['\"][ \t]*\r?\n.*?\r?\n['\"]@[^\n]*(?:\|\s*(?:Set-Content|Add-Content|Out-File|tee)\b|>)",
                 re.DOTALL | re.IGNORECASE), "PowerShell here-string written to a file"),
@@ -65,9 +149,9 @@ DANGEROUS_CLI_PATTERNS: List[Tuple[re.Pattern, str]] = [
      "In-place shell edit (sed -i / perl -i)"),
     (re.compile(r"python\d*(?:\.exe)?\s+-c\s+.*open\(.*['\"][wa]['\"].*\)", re.DOTALL | re.IGNORECASE), "Inline Python file writer"),
     (re.compile(r"python\d*(?:\.exe)?\s+-c\s+['\"].*(?:import\s+(?:alongkit|along_exec)|from\s+(?:alongkit|along_exec)|sys\.path\.insert).*", re.DOTALL | re.IGNORECASE), "Ad-hoc internal module probe via python -c [gate: cli_safety] (use Along CLI, code search tools, or a scratch/ script)"),
-    (re.compile(r"npm\s+install\s+(-g|--global)", re.IGNORECASE), "Global package manager mutation (npm -g)"),
-    (re.compile(r"pip\s+install\s+(?!-e\s)(?!.*--target)(?!.*--user)[a-zA-Z0-9_\-]+", re.IGNORECASE), "Global package manager mutation (pip install)"),
-    (re.compile(r"(choco|winget|apt-get|brew)\s+install", re.IGNORECASE), "Global system package installation"),
+    (re.compile(r"(?:^|[|;&({\n])\s*(?:sudo\s+)?npm\s+(?:install|i|add)\b[^|;&\n]*\s(?:-g|--global)\b", re.IGNORECASE), "Global package manager mutation (npm -g)"),
+    (PipGlobalInstallMatcher(), "Global package manager mutation (pip install)"),
+    (re.compile(r"(?:^|[|;&({\n])\s*(?:sudo\s+)?(?:(?:choco|winget|scoop|apt|apt-get|brew|yum|dnf)\s+install\b|pacman\s+-[a-zA-Z]*S\b)", re.IGNORECASE), "Global system package installation"),
 ]
 
 #: Test runs through the Along lifecycle hook. Where `.along/scripts/test.py` exists only
@@ -885,7 +969,12 @@ def check_cli_safety(event: HookEvent, repo_root: str, **kwargs: Any) -> Optiona
         return None
 
     for pattern, label in DANGEROUS_CLI_PATTERNS:
-        if pattern.search(cmd):
+        matched = False
+        if hasattr(pattern, "search_context"):
+            matched = pattern.search_context(cmd, repo_root=repo_root)
+        else:
+            matched = bool(pattern.search(cmd))
+        if matched:
             return (
                 f"CLI Safety Gate Violation: {label} detected in command: {cmd.strip()[:100]}. "
                 "Use native file editing tools and Along lifecycle scripts instead."

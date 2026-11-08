@@ -178,3 +178,125 @@ class InlineEchoWriter:
 
     def search(self, command: str) -> bool:
         return writes_file_with_echo(command)
+
+
+def has_heredoc(command: str) -> bool:
+    """True when an unquoted <<WORD (outside arithmetic expansions) has a following heredoc body."""
+    if not command or "\n" not in command:
+        return False
+
+    i, n = 0, len(command)
+    stack: List[str] = []
+
+    while i < n:
+        ch = command[i]
+        top = stack[-1] if stack else None
+
+        if top == "SQ":
+            if ch == "'":
+                stack.pop()
+            i += 1
+            continue
+
+        if top == "DQ":
+            if ch == "\\" and i + 1 < n:
+                i += 2
+                continue
+            if ch == '"':
+                stack.pop()
+                i += 1
+                continue
+            if command.startswith("$((", i):
+                stack.append("ARITH")
+                i += 3
+                continue
+            if command.startswith("$(", i):
+                stack.append("CS_PAREN")
+                i += 2
+                continue
+            if ch == "`":
+                stack.append("CS_BACKTICK")
+                i += 1
+                continue
+            i += 1
+            continue
+
+        if top == "ARITH":
+            if command.startswith("))", i):
+                stack.pop()
+                i += 2
+                continue
+            i += 1
+            continue
+
+        if ch == "\\" and i + 1 < n:
+            i += 2
+            continue
+        if ch == "'":
+            stack.append("SQ")
+            i += 1
+            continue
+        if ch == '"':
+            stack.append("DQ")
+            i += 1
+            continue
+        if command.startswith("$((", i) or command.startswith("((", i):
+            stack.append("ARITH")
+            i += 3 if command.startswith("$((", i) else 2
+            continue
+        if command.startswith("$(", i):
+            stack.append("CS_PAREN")
+            i += 2
+            continue
+        if top == "CS_PAREN" and ch == ")":
+            stack.pop()
+            i += 1
+            continue
+        if ch == "`":
+            if top == "CS_BACKTICK":
+                stack.pop()
+            else:
+                stack.append("CS_BACKTICK")
+            i += 1
+            continue
+
+        if command.startswith("<<<", i):
+            i += 3
+            continue
+
+        if command.startswith("<<", i):
+            if i > 0 and command[i - 1] == "<":
+                i += 2
+                continue
+            j = i + 2
+            if j < n and command[j] in ("-", "~"):
+                j += 1
+            while j < n and command[j] in (" ", "\t"):
+                j += 1
+            delim_quote = ""
+            if j < n and command[j] in ("'", '"'):
+                delim_quote = command[j]
+                j += 1
+            start_w = j
+            while j < n and (command[j].isalnum() or command[j] == "_"):
+                j += 1
+            if j > start_w:
+                if delim_quote and j < n and command[j] == delim_quote:
+                    j += 1
+                rest = command[j:]
+                if "\n" in rest:
+                    return True
+            i += 2
+            continue
+
+        i += 1
+    return False
+
+
+class HeredocWriter:
+    """Duck-typed stand-in for a compiled pattern in `DANGEROUS_CLI_PATTERNS` (`.search`)."""
+
+    pattern = "Heredoc syntax (<<EOF)"
+
+    def search(self, command: str) -> bool:
+        return has_heredoc(command)
