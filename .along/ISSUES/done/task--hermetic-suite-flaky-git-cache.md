@@ -4,7 +4,8 @@ protocol_version: "4.7.0"
 slug: hermetic-suite-flaky-git-cache
 title: "Harden test_zz_hermetic_suite against flaky Windows Git stat-cache"
 type: task
-status: in-progress
+status: done
+completed: 2026-11-08
 priority: medium
 created: 2026-11-06
 updated: 2026-11-08

@@ -63,7 +63,6 @@
 - [ ] `(feat)` [zero-step-state-recovery-and-drift-detection](ISSUES/feat--zero-step-state-recovery-and-drift-detection.md)
 - [ ] `(task)` [domain-exceptions-and-error-flow](ISSUES/task--domain-exceptions-and-error-flow.md) - plan ready
 - [ ] `(task)` [gate-event-remeasure](ISSUES/task--gate-event-remeasure.md)
-- [ ] `(task)` [hermetic-suite-flaky-git-cache](ISSUES/task--hermetic-suite-flaky-git-cache.md)
 - [ ] `(task)` [optimize-test-suite-execution-time](ISSUES/task--optimize-test-suite-execution-time.md) - plan ready
 - [ ] `(task)` [reconcile-dashboard-ui-core-conventions](ISSUES/task--reconcile-dashboard-ui-core-conventions.md)
 
@@ -71,6 +70,6 @@
 - [x] `(task)` [simplify-cli-safety-gate-and-predicates](ISSUES/done/task--simplify-cli-safety-gate-and-predicates.md)
 - [x] `(task)` [refactor-cli-chdir-common](ISSUES/done/task--refactor-cli-chdir-common.md)
 - [x] `(task)` [pytest-support-and-test-runner-filtering](ISSUES/done/task--pytest-support-and-test-runner-filtering.md)
+- [x] `(task)` [hermetic-suite-flaky-git-cache](ISSUES/done/task--hermetic-suite-flaky-git-cache.md)
 - [x] `(task)` [verify-worktree-env-readiness-hardening](ISSUES/done/task--verify-worktree-env-readiness-hardening.md)
-- [x] `(feat)` [plan-approve-batch](ISSUES/done/feat--plan-approve-batch.md)
-<!-- 319 older completed issue(s) archived in .along/ISSUES/done/ -->
+<!-- 320 older completed issue(s) archived in .along/ISSUES/done/ -->
