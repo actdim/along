@@ -66,13 +66,12 @@
 - [ ] `(task)` [hermetic-suite-flaky-git-cache](ISSUES/task--hermetic-suite-flaky-git-cache.md)
 - [ ] `(task)` [optimize-test-suite-execution-time](ISSUES/task--optimize-test-suite-execution-time.md) - plan ready
 - [ ] `(task)` [reconcile-dashboard-ui-core-conventions](ISSUES/task--reconcile-dashboard-ui-core-conventions.md)
-- [ ] `(task)` [refactor-cli-chdir-common](ISSUES/task--refactor-cli-chdir-common.md)
 - [ ] `(task)` [simplify-cli-safety-gate-and-predicates](ISSUES/task--simplify-cli-safety-gate-and-predicates.md)
 
 ## Done (recent)
+- [x] `(task)` [refactor-cli-chdir-common](ISSUES/done/task--refactor-cli-chdir-common.md)
 - [x] `(task)` [pytest-support-and-test-runner-filtering](ISSUES/done/task--pytest-support-and-test-runner-filtering.md)
 - [x] `(task)` [verify-worktree-env-readiness-hardening](ISSUES/done/task--verify-worktree-env-readiness-hardening.md)
 - [x] `(feat)` [plan-approve-batch](ISSUES/done/feat--plan-approve-batch.md)
 - [x] `(feat)` [partial-session-wrap](ISSUES/done/feat--partial-session-wrap.md)
-- [x] `(feat)` [lint-worktree-and-doctor-subprojects](ISSUES/done/feat--lint-worktree-and-doctor-subprojects.md)
-<!-- 317 older completed issue(s) archived in .along/ISSUES/done/ -->
+<!-- 318 older completed issue(s) archived in .along/ISSUES/done/ -->

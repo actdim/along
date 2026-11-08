@@ -3,7 +3,8 @@ protocol: along
 protocol_version: "4.6.1"
 slug: refactor-cli-chdir-common
 type: task
-status: in-progress
+status: done
+completed: 2026-11-08
 priority: medium
 created: 2026-11-06
 updated: 2026-11-08
