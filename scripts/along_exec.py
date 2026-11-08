@@ -16,7 +16,7 @@ from alongkit import bootstrap
 bootstrap.ensure_deps()
 
 from alongkit import entities, frontmatter, gates, lifecycle, proc, repo
-from alongkit.cli import _handle_chdir_options
+from alongkit.cliargs import _handle_chdir_options
 from alongkit.commands import (
     handle_brief_command,
     handle_budget_command,
@@ -44,7 +44,6 @@ from alongkit.commands import (
     handle_telemetry_command,
     handle_worktree_command,
 )
-from alongkit.cli import _handle_chdir_options
 from alongkit.commands.lifecycle import _cli_approval_or_exit
 from alongkit.commands.session import _render_session_log
 from alongkit.commands.telemetry import _get_active_telemetry_endpoint

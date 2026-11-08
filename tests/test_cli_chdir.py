@@ -72,6 +72,25 @@ class TestCliChdir(unittest.TestCase):
         code = cli.main(["-C", "packages/nonexistent-xyz", "status"])
         self.assertEqual(code, 2)
 
+    def test_alongkit_cli_does_not_load_commands(self):
+        cmd = [
+            sys.executable,
+            "-c",
+            "import sys; import alongkit.cli; "
+            "assert 'alongkit.commands' not in sys.modules, 'alongkit.commands loaded prematurely'"
+        ]
+        res = subprocess.run(cmd, cwd=self.tmp, capture_output=True, text=True)
+        self.assertEqual(res.returncode, 0, f"stdout: {res.stdout}\nstderr: {res.stderr}")
+
+    def test_handle_chdir_options_cliargs_and_backward_compat(self):
+        from alongkit.cliargs import _handle_chdir_options as handle_from_cliargs
+        from alongkit.cli import _handle_chdir_options as handle_from_cli
+
+        self.assertIs(handle_from_cliargs, handle_from_cli)
+        target, rem = handle_from_cliargs(["-C", "sub/dir", "status"])
+        self.assertEqual(target, os.path.normpath("sub/dir"))
+        self.assertEqual(rem, ["status"])
+
 
 if __name__ == "__main__":
     unittest.main()
