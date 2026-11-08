@@ -3,7 +3,8 @@ protocol: along
 protocol_version: "4.7.0"
 slug: simplify-cli-safety-gate-and-predicates
 type: task
-status: in-progress
+status: done
+completed: 2026-11-08
 priority: medium
 created: 2026-11-07
 updated: 2026-11-08
