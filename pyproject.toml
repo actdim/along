@@ -50,6 +50,7 @@ all = [
 # stack available: tests/test_skills_and_scripts.py exercises the collector and graph.
 dev = [
     "actdim-along[dash]",
+    "pytest>=7.0.0",
 ]
 docs = [
     "mkdocs-material>=9.5",
@@ -125,3 +126,8 @@ include = [
     "install.bat",
     "tests",
 ]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["scripts"]
+
