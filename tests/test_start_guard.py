@@ -48,9 +48,11 @@ class TestStartGuard(unittest.TestCase):
 
         # Starting on clean tree should succeed
         with mock.patch("sys.stdout", new_callable=io.StringIO):
-            with self.assertRaises(SystemExit) as cm:
-                handle_start_command(self.root, ["task-clean"])
-            self.assertEqual(cm.exception.code, 0)
+            try:
+                code = handle_start_command(self.root, ["task-clean"])
+            except SystemExit as cm:
+                code = cm.code
+            self.assertEqual(code or 0, 0)
 
         st = session.load_state(self.root, "task-clean")
         self.assertIsNotNone(st)
@@ -73,18 +75,21 @@ class TestStartGuard(unittest.TestCase):
         textio.write_text(new_issue, "---\nslug: task-next\ntype: feat\nstatus: open\n---\n# Next\n")
 
         with mock.patch("sys.stderr", new_callable=io.StringIO) as mock_err:
-            with self.assertRaises(SystemExit) as cm:
+            with self.assertRaises((SystemExit, Exception)) as cm:
                 handle_start_command(self.root, ["task-next"])
-            self.assertEqual(cm.exception.code, 1)
-            err = mock_err.getvalue()
+            code = getattr(cm.exception, "code", getattr(cm.exception, "exit_code", None))
+            self.assertEqual(code, 1)
+            err = mock_err.getvalue() + str(cm.exception)
             self.assertIn("uncommitted changes from completed (wrapped) issue", err)
             self.assertIn("task--fixture-sample-task", err)
 
         # --allow-dirty bypasses the check
         with mock.patch("sys.stdout", new_callable=io.StringIO):
-            with self.assertRaises(SystemExit) as cm:
-                handle_start_command(self.root, ["task-next", "--allow-dirty"])
-            self.assertEqual(cm.exception.code, 0)
+            try:
+                code = handle_start_command(self.root, ["task-next", "--allow-dirty"])
+            except SystemExit as cm:
+                code = cm.code
+            self.assertEqual(code or 0, 0)
 
         st = session.load_state(self.root, "task-next")
         self.assertIsNotNone(st)
@@ -105,19 +110,22 @@ class TestStartGuard(unittest.TestCase):
         textio.write_text(task2, "---\nslug: task-two\ntype: feat\nstatus: open\n---\n# Task 2\n")
 
         with mock.patch("sys.stderr", new_callable=io.StringIO) as mock_err:
-            with self.assertRaises(SystemExit) as cm:
+            with self.assertRaises((SystemExit, Exception)) as cm:
                 handle_start_command(self.root, ["task-two"])
-            self.assertEqual(cm.exception.code, 1)
-            err = mock_err.getvalue()
+            code = getattr(cm.exception, "code", getattr(cm.exception, "exit_code", None))
+            self.assertEqual(code, 1)
+            err = mock_err.getvalue() + str(cm.exception)
             self.assertIn("Active in-progress issue(s) exist with uncommitted working tree changes", err)
             self.assertIn("task-one", err)
             self.assertIn("--worktree", err)
 
         # Resuming Task 1 itself is allowed
         with mock.patch("sys.stdout", new_callable=io.StringIO):
-            with self.assertRaises(SystemExit) as cm:
-                handle_start_command(self.root, ["task-one"])
-            self.assertEqual(cm.exception.code, 0)
+            try:
+                code = handle_start_command(self.root, ["task-one"])
+            except SystemExit as cm:
+                code = cm.code
+            self.assertEqual(code or 0, 0)
 
 
 if __name__ == "__main__":

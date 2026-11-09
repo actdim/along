@@ -20,6 +20,7 @@ import sys
 from typing import List
 
 from alongkit import entities, repo, textio
+from alongkit.exceptions import CommandError
 from .common import check_unknown_args, require_entity_name
 
 
@@ -57,7 +58,7 @@ def handle_milestone_command(repo_root: str, args: List[str]):
         print("  list [--status <status>] [--json]")
         print("  show <slug> [--json]")
         print("  create <slug> --title \"Title\" [--due YYYY-MM-DD]")
-        sys.exit(0)
+        return 0
 
     subcmd = args[0].lower()
 
@@ -71,13 +72,12 @@ def handle_milestone_command(repo_root: str, args: List[str]):
         try:
             results = entities.sync_milestones(repo_root, target_slug=target)
         except ValueError as e:
-            print(f"[Error] {e}", file=sys.stderr)
-            sys.exit(1)
+            raise CommandError(str(e))
 
         print(f"-> Synchronized {len(results)} milestone(s):")
         for r in results:
             print(f"   - {r['slug']}: {r['status']} ({r['progress_pct']}%, {r['done_issues']}/{r['total_issues']} issues completed)")
-        sys.exit(0)
+        return 0
 
     elif subcmd == "list":
         parser = argparse.ArgumentParser(prog="along milestone list", allow_abbrev=False)
@@ -110,12 +110,11 @@ def handle_milestone_command(repo_root: str, args: List[str]):
                 pct = fm.get("progress_pct", 0)
                 targets = fm.get("target_issues", [])
                 print(f"   - [{m['status']}] {m['slug']} ({pct}%, {len(targets)} target issues)")
-        sys.exit(0)
+        return 0
 
     elif subcmd == "show":
         if len(args) < 2:
-            print("[Error] Usage: along milestone show <slug> [--json]", file=sys.stderr)
-            sys.exit(1)
+            raise CommandError("Usage: along milestone show <slug> [--json]")
         query = args[1]
         parser = argparse.ArgumentParser(prog="along milestone show", allow_abbrev=False)
         parser.add_argument("slug")
@@ -125,8 +124,7 @@ def handle_milestone_command(repo_root: str, args: List[str]):
 
         m = entities.resolve_milestone_by_query(repo_root, parsed.slug)
         if not m:
-            print(f"[Error] Milestone '{parsed.slug}' not found in .along/MILESTONES/.", file=sys.stderr)
-            sys.exit(1)
+            raise CommandError(f"Milestone '{parsed.slug}' not found in .along/MILESTONES/.")
 
         fm = m["frontmatter"]
         target_keys = fm.get("target_issues", [])
@@ -166,12 +164,11 @@ def handle_milestone_command(repo_root: str, args: List[str]):
             for iss in assigned:
                 box = "x" if iss["done"] else " "
                 print(f"   - [{box}] ({iss['type']}) {iss['slug']} [{iss['status']}]")
-        sys.exit(0)
+        return 0
 
     elif subcmd == "create":
         if len(args) < 2:
-            print("[Error] Usage: along milestone create <slug> --title \"Title\" [--due YYYY-MM-DD]", file=sys.stderr)
-            sys.exit(1)
+            raise CommandError("Usage: along milestone create <slug> --title \"Title\" [--due YYYY-MM-DD]")
         raw_slug = args[1].lower().strip()
         mslug = require_entity_name(raw_slug, "along milestone create <slug> --title \"Title\" [--due YYYY-MM-DD]")
 
@@ -187,16 +184,14 @@ def handle_milestone_command(repo_root: str, args: List[str]):
 
         collision_err = entities.check_milestone_version_collision(repo_root, mslug)
         if collision_err:
-            print(f"[Error] {collision_err}", file=sys.stderr)
-            sys.exit(1)
+            raise CommandError(str(collision_err))
 
         m_dir = os.path.join(repo_root, ".along", "MILESTONES")
         os.makedirs(m_dir, exist_ok=True)
         clean_slug = mslug[:-3] if mslug.endswith(".md") else mslug
         target_file = os.path.join(m_dir, f"{clean_slug}.md")
         if os.path.exists(target_file):
-            print(f"[Error] Milestone file already exists: {target_file}", file=sys.stderr)
-            sys.exit(1)
+            raise CommandError(f"Milestone file already exists: {target_file}")
 
         from alongkit.version import CURRENT_PROTOCOL_VERSION
         from datetime import timezone
@@ -221,8 +216,7 @@ def handle_milestone_command(repo_root: str, args: List[str]):
         )
         textio.write_text(target_file, content, newline="\n")
         print(f"-> Created milestone: .along/MILESTONES/{clean_slug}.md")
-        sys.exit(0)
+        return 0
 
     else:
-        print(f"[Error] Unknown milestone subcommand '{subcmd}'. Run 'along milestone --help'.", file=sys.stderr)
-        sys.exit(1)
+        raise CommandError(f"Unknown milestone subcommand '{subcmd}'. Run 'along milestone --help'.")

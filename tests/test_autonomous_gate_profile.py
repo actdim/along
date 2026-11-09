@@ -109,9 +109,10 @@ class TestAutonomousProfileBasicsAndResolution(unittest.TestCase):
         issues_dir = os.path.join(self.root, ".along", "ISSUES")
         textio.write_text(os.path.join(issues_dir, "task--test-start.md"),
                           "---\nprotocol: along\nslug: test-start\ntype: task\nstatus: open\n---\n")
-        with self.assertRaises(SystemExit) as ctx:
+        with self.assertRaises((SystemExit, Exception)) as ctx:
             lifecycle.handle_start_command(self.root, ["test-start", "--profile", "autonomous"])
-        self.assertEqual(ctx.exception.code, 2)
+        code = getattr(ctx.exception, "code", getattr(ctx.exception, "exit_code", None))
+        self.assertEqual(code, 2)
 
 
 class TestDeterministicAllowDenyBehavior(unittest.TestCase):

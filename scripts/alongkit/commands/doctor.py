@@ -170,7 +170,7 @@ def handle_doctor_command(repo_root: str, args: List[str]):
         print("  entities [--fix]     Validate entity schemas and references; --fix drops dangling milestone fields")
         print("  docs                 Validate documentation quality and detect abandoned zombie stubs")
         print("  issues               Validate issue quality and detect empty scaffold stubs or incomplete criteria")
-        sys.exit(0)
+        return 0
     check_entities = "--entities" in args or (bool(args) and args[0].lower() == "entities")
     if check_entities:
         print("=== Along Entity Graph Validation (Doctor) ===")
@@ -199,21 +199,21 @@ def handle_doctor_command(repo_root: str, args: List[str]):
                 print(f"  - {path}: {msg}")
 
         print(f"\nEntity Doctor Summary: {len(errs)} errors, {len(warns)} warnings.")
-        sys.exit(1 if len(errs) > 0 else 0)
+        return 1 if len(errs) > 0 else 0
 
     check_docs = "--docs" in args or (bool(args) and args[0].lower() == "docs")
     if check_docs:
         print("=== Along Knowledge Base Quality Validation (Doctor) ===")
         warns, zombies = _doctor_zombie_docs_checks(repo_root, 0)
         print(f"\nDocs Doctor Summary: 0 errors, {len(zombies)} warning(s).")
-        sys.exit(0)
+        return 0
 
     check_issues = "--issues" in args or (bool(args) and args[0].lower() == "issues")
     if check_issues:
         print("=== Along Issue Quality & Stub Validation (Doctor) ===")
         warns, findings = _doctor_stub_issues_checks(repo_root, 0)
         print(f"\nIssues Doctor Summary: 0 errors, {len(findings)} warning(s).")
-        sys.exit(0)
+        return 0
 
     print("=== Along Protocol Diagnostics (Doctor) ===")
     errors = 0
@@ -569,4 +569,4 @@ def handle_doctor_command(repo_root: str, args: List[str]):
     errors, warnings = _doctor_runtime_checks(repo_root, errors, warnings)
 
     print(f"\nDoctor Summary: {errors} errors, {warnings} warnings.")
-    sys.exit(1 if errors > 0 else 0)
+    return 1 if errors > 0 else 0

@@ -29,8 +29,9 @@ always copied next to the engines.
 
 from __future__ import annotations
 
-from . import (bootstrap, budget, diagnostics, entities, gates, handoff, lifecycle, markdown, migration, patcher, proc, profiles, repo, resolve, sanitizer,
+from . import (bootstrap, budget, diagnostics, entities, exceptions, gates, handoff, lifecycle, markdown, migration, patcher, proc, profiles, repo, resolve, sanitizer,
                session, telemetry, textio, transaction, typography, version, worktree)
+from .exceptions import AlongError, CommandError, ValidationError
 from .proc import Result, run_capture, run_passthrough, run_python
 from .repo import (canonical_path, canonical_relpath, find_agent_contexts, find_manifest_projects, find_repo_root,
                    find_state_dir, resolve_llm_targets, resolve_tool_script,
@@ -43,6 +44,7 @@ __all__ = [
     "budget",
     "diagnostics",
     "entities",
+    "exceptions",
     "gates",
     "handoff",
     "lifecycle",
@@ -61,6 +63,9 @@ __all__ = [
     "typography",
     "version",
     "worktree",
+    "AlongError",
+    "CommandError",
+    "ValidationError",
     "CURRENT_PROTOCOL_VERSION",
     "Result",
     "canonical_path",

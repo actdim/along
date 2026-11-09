@@ -75,8 +75,10 @@ class TestDoctorProfileOutput(unittest.TestCase):
         from along_exec import handle_doctor_command
         buf = io.StringIO()
         with mock.patch("sys.stdout", buf):
-            with self.assertRaises(SystemExit) as cm:
+            try:
                 handle_doctor_command(self.root, args or [])
+            except SystemExit:
+                pass
         return buf.getvalue()
 
     def test_doctor_prints_default_profile_and_matrix(self):

@@ -19,6 +19,7 @@ import sys
 from typing import List, Optional, Tuple
 
 from .. import gitgates, merge, repo
+from alongkit.exceptions import CommandError, ValidationError
 from .common import flag_value
 
 
@@ -28,13 +29,12 @@ def handle_git_command(repo_root: str, args: List[str]):
         print("  setup  [--uninstall] [--dry-run]  Register merge drivers and .gitattributes bindings")
         print("  status [--json]                   Report driver registration and pending resync")
         print("  sync                              Recompile projections after a driver-handled merge")
-        sys.exit(0)
+        return 0
 
     subcmd = args[0].lower()
     flags = set(args[1:])
     if not merge.git_dir(repo_root):
-        print(f"[Error] Not a git repository: {repo_root}", file=sys.stderr)
-        sys.exit(1)
+        raise CommandError(f"Not a git repository: {repo_root}")
 
     if subcmd == "setup":
         report = merge.setup(repo_root, uninstall="--uninstall" in flags, dry_run="--dry-run" in flags)
@@ -49,13 +49,13 @@ def handle_git_command(repo_root: str, args: List[str]):
             if report["gitattributes_changed"]:
                 print(f"   {verb} .gitattributes (managed merge driver block)")
             print(f"-> Merge driver {action} " + ("planned (dry run, nothing written)." if report["dry_run"] else "complete."))
-        sys.exit(0)
+        return 0
 
     if subcmd == "status":
         info = merge.status(repo_root)
         if "--json" in flags:
             print(json.dumps(info, indent=2))
-            sys.exit(0)
+            return 0
         for key, state in info["config"].items():
             print(f"[{'OK' if state == 'ok' else 'WARN'}] {key}: {state}")
         print(f"[{'OK' if info['gitattributes'] else 'WARN'}] .gitattributes bindings: "
@@ -65,7 +65,7 @@ def handle_git_command(repo_root: str, args: List[str]):
                   + ", ".join(info["pending_resync"]))
         if not merge.is_configured(info):
             print("-> Run `along git setup` to register the merge drivers.")
-        sys.exit(0)
+        return 0
 
     if subcmd == "sync":
         kb_script = repo.resolve_tool_script("along_kb_sync.py", repo_root)
@@ -73,10 +73,9 @@ def handle_git_command(repo_root: str, args: List[str]):
         for path in done:
             print(f"   -> Recompiled {path}")
         print("-> Projections synchronized.")
-        sys.exit(0)
+        return 0
 
-    print(f"[Error] Unknown git subcommand: {subcmd}. Use setup, status, or sync.", file=sys.stderr)
-    sys.exit(1)
+    raise CommandError(f"Unknown git subcommand: {subcmd}. Use setup, status, or sync.")
 
 
 def handle_lint_command(repo_root: str, args: List[str]):
@@ -86,8 +85,8 @@ def handle_lint_command(repo_root: str, args: List[str]):
         print("  Commit-time checks (typography, code fences, links, filenames, secrets, stubs,")
         print("  rule packs, entities) on staged changes; same as 'along gates check'.")
         print("  Pass file paths or --worktree to check unstaged/uncommitted files directly.")
-        sys.exit(0)
-    handle_gates_command(repo_root, ["check", *args])
+        return 0
+    return handle_gates_command(repo_root, ["check", *args])
 
 
 def handle_gates_command(repo_root: str, args: List[str]):
@@ -102,7 +101,7 @@ def handle_gates_command(repo_root: str, args: List[str]):
         print("       along gates ack (ID... | --all) --note \"...\" [--slug SLUG]")
         print("  Record that the user was told what a denied tool call left undone; closeout")
         print("  accepts the acknowledgement once the user has replied after it.")
-        sys.exit(0)
+        return 0
 
     subcmd = args[0].lower()
     if subcmd == "stats":
@@ -111,12 +110,11 @@ def handle_gates_command(repo_root: str, args: List[str]):
         print(gatestats.format_table(gatestats.collect(repo_root, since)))
         print()
         print(gatestats.format_loops(gatestats.loops(repo_root, since)))
-        sys.exit(0)
+        return 0
     if subcmd in ("denials", "ack"):
-        sys.exit(_handle_denials(repo_root, subcmd, args[1:]))
+        return _handle_denials(repo_root, subcmd, args[1:])
     if subcmd != "check":
-        print(f"[Error] Unknown gates subcommand: {subcmd}. Use check, stats, denials or ack.", file=sys.stderr)
-        sys.exit(2)
+        raise ValidationError(f"Unknown gates subcommand: {subcmd}. Use check, stats, denials or ack.")
 
     check_args = args[1:]
     parser = argparse.ArgumentParser(
@@ -135,15 +133,13 @@ def handle_gates_command(repo_root: str, args: List[str]):
     opts = parser.parse_args(check_args)
 
     if not repo_root:
-        print("[Error] Cannot locate repository root.", file=sys.stderr)
-        sys.exit(2)
+        raise ValidationError("Cannot locate repository root.")
 
     if opts.hook == "pre-commit":
         context, violations = "pre-commit", gitgates.check_pre_commit(repo_root)
     elif opts.hook == "commit-msg":
         if not opts.hook_args:
-            print("[Error] commit-msg hook needs the message file argument.", file=sys.stderr)
-            sys.exit(2)
+            raise ValidationError("commit-msg hook needs the message file argument.")
         context, violations = "commit-msg", gitgates.check_commit_msg(repo_root, opts.hook_args[0])
     elif opts.ci:
         kb_script = None if opts.no_links else repo.resolve_tool_script("along_kb_sync.py", repo_root)
@@ -166,7 +162,7 @@ def handle_gates_command(repo_root: str, args: List[str]):
     else:
         stream = sys.stderr if violations else sys.stdout
         print(gitgates.format_report(violations, context), file=stream)
-    sys.exit(1 if violations else 0)
+    return 1 if violations else 0
 
 
 def _denials_target(repo_root: str, slug: Optional[str]) -> Tuple[Optional[str], Optional[str]]:

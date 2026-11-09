@@ -79,10 +79,16 @@ class RecordFixture(unittest.TestCase):
         with mock.patch.dict(os.environ, {"ALONG_SESSION_ID": "sess-a", "ALONG_SESSION_RUNTIME": "claude"}), \
                 contextlib.redirect_stdout(out), contextlib.redirect_stderr(err):
             try:
-                handler(self.root, args)
-                code = 0
+                ret = handler(self.root, args)
+                code = ret if isinstance(ret, int) else 0
             except SystemExit as exc:
                 code = int(exc.code or 0)
+            except Exception as exc:
+                if hasattr(exc, "exit_code"):
+                    code = int(getattr(exc, "exit_code", 1))
+                    err.write(str(exc))
+                else:
+                    raise
         return code, out.getvalue(), err.getvalue()
 
     def exit_plan_mode(self, plan, tool_response=None):

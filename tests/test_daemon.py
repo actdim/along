@@ -22,6 +22,7 @@ if not os.environ.get("ALONG_TEST_RUNNER"):
 
 import hermetic
 from alongkit import daemon, handoff, session, textio, worktree
+from alongkit.exceptions import ValidationError
 from alongkit.commands.daemon import build_parser, format_status_text, handle_daemon_command
 
 
@@ -415,9 +416,10 @@ class TestDaemonCli(unittest.TestCase):
         self.assertNotIn("--port", start_help)
 
         with patch("alongkit.daemon.start_daemon") as mock_start, redirect_stderr(io.StringIO()):
-            with self.assertRaises(SystemExit) as ctx:
+            with self.assertRaises((SystemExit, ValidationError)) as ctx:
                 handle_daemon_command(self.repo, ["start", "--port", "1"])
-            self.assertEqual(ctx.exception.code, 2)
+            exit_code = ctx.exception.exit_code if hasattr(ctx.exception, "exit_code") else ctx.exception.code
+            self.assertEqual(exit_code, 2)
             mock_start.assert_not_called()
 
 

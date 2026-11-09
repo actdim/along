@@ -19,6 +19,7 @@ import sys
 from typing import List
 
 from alongkit import lifecycle, repo, session, textio
+from alongkit.exceptions import CommandError, ValidationError
 from .common import check_unknown_args, require_entity_name
 
 
@@ -27,8 +28,7 @@ def cli_approval_or_exit(repo_root: str, slug: str) -> str:
     key = session.current_session_key()
     refusal, via = session.check_cli_approval(repo_root, key, session.plan_path(repo_root, slug))
     if refusal:
-        print(f"[Error] Plan approval refused: {refusal}.", file=sys.stderr)
-        sys.exit(2)
+        raise ValidationError(f"Plan approval refused: {refusal}.")
     session.append_trace(repo_root, slug, f"plan approved (along scratch; approved_via: {via})")
     return via
 
@@ -101,12 +101,11 @@ def handle_scratch_command(repo_root: str, args: List[str]):
         print("  fallback <slug> --reason <text>     Run single-agent; the reason goes to execution_trace.md")
         print("  purge  <slug> [--force --reason <text>]   Refuses while role-based steps are open")
         print("  init creates a role-based (along-team) blackboard; add '--mode direct' to opt out.")
-        sys.exit(0)
+        return 0
 
     subcmd = args[0].lower()
     if len(args) < 2:
-        print("[Error] Usage: along scratch [init|state|patch|update|approve|phase|purge] <slug> [options]", file=sys.stderr)
-        sys.exit(1)
+        raise CommandError("Usage: along scratch [init|state|patch|update|approve|phase|purge] <slug> [options]")
     slug = require_entity_name(args[1].lower(), f"along scratch {subcmd} <slug> [options]")
     sub_args = args[1:]
 
@@ -125,8 +124,7 @@ def handle_scratch_command(repo_root: str, args: List[str]):
             try:
                 total_steps = int(parsed.steps)
             except ValueError:
-                print("[Error] --steps expects an integer", file=sys.stderr)
-                sys.exit(1)
+                raise CommandError("--steps expects an integer")
 
         mode = "direct" if parsed.mode == "direct" else "role-based"
         st = session.init_session(
@@ -139,7 +137,7 @@ def handle_scratch_command(repo_root: str, args: List[str]):
         sdir = session.get_session_dir(repo_root, slug)
         print(f"-> Initialized session blackboard: {sdir}")
         print(session.format_state_summary(st))
-        sys.exit(0)
+        return 0
 
     elif subcmd == "state":
         parser = argparse.ArgumentParser(prog="along scratch state", allow_abbrev=False)
@@ -150,13 +148,12 @@ def handle_scratch_command(repo_root: str, args: List[str]):
 
         st = session.load_state(repo_root, slug)
         if not st:
-            print(f"[Error] No session blackboard found for '{slug}'. Run 'along scratch init {slug}' first.", file=sys.stderr)
-            sys.exit(1)
+            raise CommandError(f"No session blackboard found for '{slug}'. Run 'along scratch init {slug}' first.")
         if parsed.json:
             print(json.dumps(st, indent=2))
         else:
             print(session.format_state_summary(st))
-        sys.exit(0)
+        return 0
 
     elif subcmd == "patch":
         parser = argparse.ArgumentParser(prog="along scratch patch", allow_abbrev=False)
@@ -171,31 +168,27 @@ def handle_scratch_command(repo_root: str, args: List[str]):
         if parsed.file:
             file_path = os.path.abspath(parsed.file) if os.path.isabs(parsed.file) else os.path.join(repo_root, parsed.file)
             if not os.path.isfile(file_path):
-                print(f"[Error] Patch file not found: {parsed.file}", file=sys.stderr)
-                sys.exit(1)
+                raise CommandError(f"Patch file not found: {parsed.file}")
             raw_delta = textio.read_text(file_path, strict=False)
         elif parsed.delta:
             raw_delta = parsed.delta
         else:
-            print("[Error] Usage: along scratch patch <slug> <json-delta> [--file <path>] [--show]", file=sys.stderr)
-            sys.exit(1)
+            raise CommandError("Usage: along scratch patch <slug> <json-delta> [--file <path>] [--show]")
 
         try:
             delta_obj = json.loads(raw_delta)
         except json.JSONDecodeError as err:
-            print(f"[Error] Invalid JSON patch: {err}", file=sys.stderr)
-            sys.exit(1)
+            raise CommandError(f"Invalid JSON patch: {err}")
 
         try:
             updated = session.patch_blackboard(repo_root, slug, delta_obj)
         except ValueError as err:
-            print(f"[Error] Schema validation failed: {err}", file=sys.stderr)
-            sys.exit(1)
+            raise CommandError(f"Schema validation failed: {err}")
 
         print(f"-> Patched blackboard for session: {slug}")
         if parsed.show:
             print(json.dumps(updated, indent=2))
-        sys.exit(0)
+        return 0
 
     elif subcmd in ("approve", "plan-approve"):
         parser = argparse.ArgumentParser(prog=f"along scratch {subcmd}", allow_abbrev=False)
@@ -204,20 +197,19 @@ def handle_scratch_command(repo_root: str, args: List[str]):
         check_unknown_args(extra, f"along scratch {subcmd}")
 
         if not session.plan_recorded(repo_root, slug):
-            print(f"[Error] No plan recorded for '{slug}': plan.md is still the scaffold. "
-                  f"Use 'along plan approve {slug} --plan-file <path>' or write the plan into plan.md.",
-                  file=sys.stderr)
-            sys.exit(2)
+            raise ValidationError(
+                f"No plan recorded for '{slug}': plan.md is still the scaffold. "
+                f"Use 'along plan approve {slug} --plan-file <path>' or write the plan into plan.md."
+            )
         cli_approval_or_exit(repo_root, slug)
         st = session.approve_plan(repo_root, slug)
         print(f"-> Granted plan approval for session: {slug} (phase: execution, plan_approved: true)")
         print(session.format_state_summary(st))
-        sys.exit(0)
+        return 0
 
     elif subcmd == "phase":
         if len(args) < 3:
-            print("[Error] Usage: along scratch phase <slug> <inquiry|planning|execution> [--approve]", file=sys.stderr)
-            sys.exit(1)
+            raise CommandError("Usage: along scratch phase <slug> <inquiry|planning|execution> [--approve]")
         parser = argparse.ArgumentParser(prog="along scratch phase", allow_abbrev=False)
         parser.add_argument("slug")
         parser.add_argument("phase")
@@ -231,11 +223,10 @@ def handle_scratch_command(repo_root: str, args: List[str]):
         try:
             st = session.set_session_phase(repo_root, phase_val, slug=slug, plan_approved=True if parsed.approve else None)
         except ValueError as exc:
-            print(f"[Error] {exc}", file=sys.stderr)
-            sys.exit(1)
+            raise CommandError(str(exc))
         print(f"-> Set session phase for {slug} to '{phase_val}' (plan_approved: {st.get('plan_approved', False)})")
         print(session.format_state_summary(st))
-        sys.exit(0)
+        return 0
 
     elif subcmd == "update":
         parser = argparse.ArgumentParser(prog="along scratch update", allow_abbrev=False)
@@ -255,16 +246,14 @@ def handle_scratch_command(repo_root: str, args: List[str]):
             try:
                 current_step = int(parsed.step)
             except ValueError:
-                print("[Error] --step expects an integer", file=sys.stderr)
-                sys.exit(1)
+                raise CommandError("--step expects an integer")
 
         plan_rev = None
         if parsed.plan_rev is not None:
             try:
                 plan_rev = int(parsed.plan_rev)
             except ValueError:
-                print("[Error] --plan-rev expects an integer", file=sys.stderr)
-                sys.exit(1)
+                raise CommandError("--plan-rev expects an integer")
 
         if parsed.approve:
             cli_approval_or_exit(repo_root, slug)
@@ -281,11 +270,12 @@ def handle_scratch_command(repo_root: str, args: List[str]):
         if retry_exhausted:
             step_num = st.get("current_step", 1)
             limit = st.get("retry_limit", session.DEFAULT_RETRY_LIMIT)
-            print(f"[ALERT] Step {step_num} has exceeded the retry budget ({limit} retries)!", file=sys.stderr)
-            print("Execution halted. Please inspect failures or escalate to human review.", file=sys.stderr)
-            sys.exit(2)
+            raise ValidationError(
+                f"Step {step_num} has exceeded the retry budget ({limit} retries)!\n"
+                "Execution halted. Please inspect failures or escalate to human review."
+            )
         print(session.format_state_summary(st))
-        sys.exit(0)
+        return 0
 
     elif subcmd == "fallback":
         parser = argparse.ArgumentParser(prog="along scratch fallback", allow_abbrev=False)
@@ -295,14 +285,13 @@ def handle_scratch_command(repo_root: str, args: List[str]):
         check_unknown_args(extra, "along scratch fallback")
 
         if not parsed.reason:
-            print("[Error] Usage: along scratch fallback <slug> --reason \"why one agent does all roles\"", file=sys.stderr)
-            sys.exit(2)
+            raise ValidationError("Usage: along scratch fallback <slug> --reason \"why one agent does all roles\"")
         from alongkit import bypass
         if not bypass.guard(repo_root, bypass.TEAM_STEPS, parsed.reason, slug=slug):
-            sys.exit(2)
+            return 2
         session.record_fallback(repo_root, slug, parsed.reason)
         print(f"-> '{slug}' now runs single-agent (direct); reason recorded in {session.TRACE_FILENAME}.")
-        sys.exit(0)
+        return 0
 
     elif subcmd == "purge":
         parser = argparse.ArgumentParser(prog="along scratch purge", allow_abbrev=False)
@@ -321,32 +310,30 @@ def handle_scratch_command(repo_root: str, args: List[str]):
                 print(f"  - {p}", file=sys.stderr)
             print("  Finish the steps (with reviews/step-N.md), or 'along scratch purge <slug> --force --reason \"...\"'.",
                   file=sys.stderr)
-            sys.exit(2)
+            return 2
         reason = parsed.reason
         if problems:
             if not reason:
-                print("[Error] --force needs --reason \"...\"; it is kept in the session log.", file=sys.stderr)
-                sys.exit(2)
+                raise ValidationError("--force needs --reason \"...\"; it is kept in the session log.")
             if not bypass.guard(repo_root, bypass.TEAM_STEPS, reason, slug=slug):
-                sys.exit(2)
+                return 2
             reason = f"open problems ({'; '.join(problems)}): {reason}"
             print(f"-> Forced purge of '{slug}' with {reason}")
         if not session.load_state(repo_root, slug):
             print(f"-> Session blackboard not found (already clean): {session.get_session_dir(repo_root, slug)}")
-            sys.exit(0)
+            return 0
         unrecorded = session.unrecorded_files(repo_root, slug)
         if unrecorded:
             print(f"[Error] Refusing to purge blackboard '{slug}': unknown non-scaffold file(s):", file=sys.stderr)
             for f in unrecorded:
                 print(f"  - {f}", file=sys.stderr)
-            sys.exit(2)
+            return 2
         log_path = lifecycle.archive_and_purge(repo_root, slug, reason=reason, source="scratch purge")
         if log_path:
             print(f"-> Archived blackboard into {repo.safe_relpath(log_path, repo_root)}")
         if not os.path.isdir(session.get_session_dir(repo_root, slug)):
             print(f"-> Purged session blackboard: {session.get_session_dir(repo_root, slug)}")
-        sys.exit(0)
+        return 0
 
     else:
-        print(f"[Error] Unknown scratch subcommand: {subcmd}. Use init, state, patch, update, or purge.", file=sys.stderr)
-        sys.exit(1)
+        raise CommandError(f"Unknown scratch subcommand: {subcmd}. Use init, state, patch, update, or purge.")

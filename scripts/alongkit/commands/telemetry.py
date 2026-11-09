@@ -17,6 +17,8 @@ import os
 import sys
 from typing import Any, Dict, List, Optional, Tuple
 
+from alongkit.exceptions import CommandError
+
 from .. import repo
 
 
@@ -109,7 +111,7 @@ def _telemetry_status(repo_root: str, args: List[str]):
             print("  WAL Files:")
             for name, sz in wal_files:
                 print(f"    - {name} ({sz} bytes)")
-    sys.exit(0)
+    return 0
 
 
 def _telemetry_flush(repo_root: str, args: List[str]):
@@ -136,7 +138,7 @@ def _telemetry_flush(repo_root: str, args: List[str]):
 
     if not wal_paths:
         print("No pending telemetry spans in spool.")
-        sys.exit(0)
+        return 0
 
     from alongkit.telemetry.otlp import OTLPExporter
 
@@ -167,7 +169,7 @@ def _telemetry_flush(repo_root: str, args: List[str]):
 
     if not all_spans:
         print("No pending telemetry spans in spool.")
-        sys.exit(0)
+        return 0
 
     exporter = OTLPExporter(endpoint=endpoint, timeout=5.0)
     success = exporter.export(all_spans, spool_on_failure=False)
@@ -178,13 +180,11 @@ def _telemetry_flush(repo_root: str, args: List[str]):
             except OSError:
                 pass
         print(f"Successfully flushed {len(all_spans)} telemetry span(s) to {endpoint}.")
-        sys.exit(0)
+        return 0
     else:
-        print(
-            f"[Error] Failed to flush {len(all_spans)} telemetry span(s) to {endpoint}: network or endpoint failure.",
-            file=sys.stderr,
+        raise CommandError(
+            f"Failed to flush {len(all_spans)} telemetry span(s) to {endpoint}: network or endpoint failure."
         )
-        sys.exit(1)
 
 
 def handle_telemetry_command(repo_root: Optional[str], args: List[str]):
@@ -197,12 +197,11 @@ def handle_telemetry_command(repo_root: Optional[str], args: List[str]):
         print("Commands:")
         print("  status [--json] [--endpoint <url>]  Report pending WAL spool files and endpoint connectivity")
         print("  flush  [--endpoint <url>]           Export pending spans from WAL spool to OTLP endpoint")
-        sys.exit(0)
+        return 0
 
     if sub == "status":
-        _telemetry_status(effective_root, args[1:])
+        return _telemetry_status(effective_root, args[1:])
     elif sub == "flush":
-        _telemetry_flush(effective_root, args[1:])
+        return _telemetry_flush(effective_root, args[1:])
     else:
-        print(f"[Error] Unknown telemetry subcommand: '{sub}'. Run 'along telemetry --help'.", file=sys.stderr)
-        sys.exit(1)
+        raise CommandError(f"Unknown telemetry subcommand: '{sub}'. Run 'along telemetry --help'.")

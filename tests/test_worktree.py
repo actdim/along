@@ -334,10 +334,13 @@ class TestWorktreeIsolation(unittest.TestCase):
         out = io.StringIO()
         with redirect_stdout(out), redirect_stderr(err):
             with mock.patch("sys.platform", "linux"):
-                with self.assertRaises(SystemExit) as ctx:
+                from alongkit.exceptions import CommandError
+                with self.assertRaises((SystemExit, CommandError)) as ctx:
                     along_exec.handle_worktree_command(self.root, ["create", "cli-cross-test"])
-                self.assertEqual(ctx.exception.code, 1)
-        self.assertIn("Cross-OS", err.getvalue())
+                code = ctx.exception.exit_code if hasattr(ctx.exception, "exit_code") else ctx.exception.code
+                self.assertEqual(code, 1)
+        err_text = err.getvalue() or getattr(ctx.exception, "message", "")
+        self.assertIn("Cross-OS", err_text)
         self.assertFalse(os.path.exists(os.path.join(self.root, ".git", "worktrees")))
 
         # 2. with --force-cross-os -> exit code 0, success
@@ -345,9 +348,11 @@ class TestWorktreeIsolation(unittest.TestCase):
         out = io.StringIO()
         with redirect_stdout(out), redirect_stderr(err):
             with mock.patch("sys.platform", "linux"):
-                with self.assertRaises(SystemExit) as ctx:
-                    along_exec.handle_worktree_command(self.root, ["create", "cli-cross-test", "--force-cross-os"])
-                self.assertEqual(ctx.exception.code, 0)
+                try:
+                    res_code = along_exec.handle_worktree_command(self.root, ["create", "cli-cross-test", "--force-cross-os"])
+                except SystemExit as ctx:
+                    res_code = ctx.code
+                self.assertEqual(res_code or 0, 0)
         self.assertIn("Created isolated worktree", out.getvalue())
 
     def test_13_along_start_worktree_degrades_gracefully(self):
@@ -375,9 +380,11 @@ class TestWorktreeIsolation(unittest.TestCase):
         out = io.StringIO()
         with redirect_stdout(out), redirect_stderr(err):
             with mock.patch("sys.platform", "linux"):
-                with self.assertRaises(SystemExit) as ctx:
-                    along_exec.handle_start_command(self.root, ["degrade-test", "--approved", "--worktree"])
-                self.assertEqual(ctx.exception.code, 0)
+                try:
+                    code = along_exec.handle_start_command(self.root, ["degrade-test", "--approved", "--worktree"])
+                except SystemExit as ctx:
+                    code = ctx.code
+                self.assertEqual(code or 0, 0)
 
         err_output = err.getvalue()
         out_output = out.getvalue()

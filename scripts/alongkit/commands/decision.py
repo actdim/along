@@ -19,6 +19,7 @@ import sys
 from typing import List
 
 from alongkit import entities, repo, textio
+from alongkit.exceptions import CommandError, ValidationError
 from .common import check_unknown_args, require_entity_name
 
 
@@ -49,7 +50,7 @@ def handle_decision_command(repo_root: str, args: List[str]):
         print("Usage: along decision [create|sync] [args...]")
         print("  create <slug> --title \"Title\" --context \"Context\" --decision \"Decision\" --consequences \"Tradeoffs\"")
         print("  sync   Recompile .along/DECISIONS.md and .along/CONSTRAINTS.md projections from ADRs")
-        sys.exit(0)
+        return 0
 
     subcmd = args[0].lower()
     today = datetime.now().strftime("%Y-%m-%d")
@@ -63,10 +64,8 @@ def handle_decision_command(repo_root: str, args: List[str]):
         if parsed.check:
             conflicts = entities.check_decision_conflicts(repo_root)
             if conflicts:
-                print("[Error] Decision conflict(s) detected [gate: decision-conflict]:", file=sys.stderr)
-                for c in conflicts:
-                    print(f"  - {c['message']}", file=sys.stderr)
-                sys.exit(1)
+                msg = "Decision conflict(s) detected [gate: decision-conflict]:\n" + "\n".join(f"  - {c['message']}" for c in conflicts)
+                raise CommandError(msg)
             sdir = repo.state_dir(repo_root)
             con_path = os.path.join(sdir, "CONSTRAINTS.md")
             if os.path.isfile(con_path):
@@ -75,10 +74,9 @@ def handle_decision_command(repo_root: str, args: List[str]):
                 superseded_slugs = [d["slug"] for d in decisions if (d.get("status") or "").lower() not in entities.ACTIVE_DECISION_STATUSES]
                 found_superseded = [s for s in superseded_slugs if s in con_text]
                 if found_superseded:
-                    print(f"[Error] CONSTRAINTS.md contains superseded decision(s): {', '.join(found_superseded)}", file=sys.stderr)
-                    sys.exit(1)
+                    raise CommandError(f"CONSTRAINTS.md contains superseded decision(s): {', '.join(found_superseded)}")
             print("-> [OK] No decision conflicts detected across active ADRs.")
-            sys.exit(0)
+            return 0
 
         entities.compile_decisions_board(repo_root)
         entities.sync_constraints(repo_root)
@@ -93,12 +91,11 @@ def handle_decision_command(repo_root: str, args: List[str]):
                 print(f"[Warning] Failed to sync decisions to docs: {exc}", file=sys.stderr)
         print("-> Recompiled .along/DECISIONS.md projection board.")
         print("-> Recompiled .along/CONSTRAINTS.md projection.")
-        sys.exit(0)
+        return 0
 
     elif subcmd in ("create", "add"):
         if len(args) < 2:
-            print("[Error] Usage: along decision create <slug> --title \"Title\" --context \"Why\" --decision \"What\" --consequences \"Consequences\"", file=sys.stderr)
-            sys.exit(1)
+            raise CommandError("Usage: along decision create <slug> --title \"Title\" --context \"Why\" --decision \"What\" --consequences \"Consequences\"")
         raw_slug = args[1].lstrip("#")
         slug = require_entity_name(raw_slug.lower(), "along decision create <slug> --title \"Title\"")
 
@@ -145,8 +142,7 @@ def handle_decision_command(repo_root: str, args: List[str]):
                 print(f"[Warning] Failed to sync decisions to docs: {exc}", file=sys.stderr)
         print("-> Recompiled .along/DECISIONS.md projection board.")
         print("-> Recompiled .along/CONSTRAINTS.md projection.")
-        sys.exit(0)
+        return 0
 
     else:
-        print(f"[Error] Unknown decision subcommand: '{subcmd}'. Run 'along decision --help'.", file=sys.stderr)
-        sys.exit(1)
+        raise CommandError(f"Unknown decision subcommand: '{subcmd}'. Run 'along decision --help'.")

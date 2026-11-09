@@ -31,6 +31,7 @@ if SCRIPTS_DIR not in sys.path:
     sys.path.insert(0, SCRIPTS_DIR)
 
 from alongkit import environment, proc
+from alongkit.exceptions import CommandError
 from alongkit.commands.env import handle_env_command
 
 ALONG_EXEC = os.path.join(SCRIPTS_DIR, "along_exec.py")
@@ -246,20 +247,24 @@ class TestEnvDockerFailureHandling(unittest.TestCase):
         with patch.object(environment, "get_docker_compose_cmd", return_value=["docker", "compose"]), \
              patch.object(environment.proc, "run_capture", return_value=proc.Result([], 1, "", "boom")):
             with patch("sys.stderr", new=io.StringIO()) as fake_err:
-                with self.assertRaises(SystemExit) as cm:
+                with self.assertRaises((SystemExit, CommandError)) as cm:
                     handle_env_command(REPO_ROOT, ["up", "fail-env", "--dir", self.tmp_dir])
-                self.assertEqual(cm.exception.code, 1)
-                self.assertIn("boom", fake_err.getvalue())
+                code = cm.exception.exit_code if hasattr(cm.exception, "exit_code") else cm.exception.code
+                self.assertEqual(code, 1)
+                err_text = fake_err.getvalue() or getattr(cm.exception, "message", "")
+                self.assertIn("boom", err_text)
 
     def test_down_failure_exits_1(self):
         environment.env_up("fail-env", base_dir=self.tmp_dir, run_compose=False)
         with patch.object(environment, "get_docker_compose_cmd", return_value=["docker", "compose"]), \
              patch.object(environment.proc, "run_capture", return_value=proc.Result([], 1, "", "boom")):
             with patch("sys.stderr", new=io.StringIO()) as fake_err:
-                with self.assertRaises(SystemExit) as cm:
+                with self.assertRaises((SystemExit, CommandError)) as cm:
                     handle_env_command(REPO_ROOT, ["down", "fail-env", "--dir", self.tmp_dir])
-                self.assertEqual(cm.exception.code, 1)
-                self.assertIn("boom", fake_err.getvalue())
+                code = cm.exception.exit_code if hasattr(cm.exception, "exit_code") else cm.exception.code
+                self.assertEqual(code, 1)
+                err_text = fake_err.getvalue() or getattr(cm.exception, "message", "")
+                self.assertIn("boom", err_text)
 
     def test_update_failure_exits_1_and_no_build_flag(self):
         environment.env_up("fail-env", base_dir=self.tmp_dir, run_compose=False)
@@ -272,10 +277,12 @@ class TestEnvDockerFailureHandling(unittest.TestCase):
         with patch.object(environment, "get_docker_compose_cmd", return_value=["docker", "compose"]), \
              patch.object(environment.proc, "run_capture", side_effect=fake_run):
             with patch("sys.stderr", new=io.StringIO()) as fake_err:
-                with self.assertRaises(SystemExit) as cm:
+                with self.assertRaises((SystemExit, CommandError)) as cm:
                     handle_env_command(REPO_ROOT, ["update", "fail-env", "--dir", self.tmp_dir])
-                self.assertEqual(cm.exception.code, 1)
-                self.assertIn("boom", fake_err.getvalue())
+                code = cm.exception.exit_code if hasattr(cm.exception, "exit_code") else cm.exception.code
+                self.assertEqual(code, 1)
+                err_text = fake_err.getvalue() or getattr(cm.exception, "message", "")
+                self.assertIn("boom", err_text)
 
         for call in recorded_calls:
             self.assertNotIn("--build", call, "update command must not contain --build flag")
@@ -286,17 +293,21 @@ class TestEnvDockerFailureHandling(unittest.TestCase):
              patch.object(environment.shutil, "which", return_value="/bin/docker"), \
              patch.object(environment.proc, "run_capture", return_value=proc.Result([], 1, "", "stop-failed")):
             with patch("sys.stderr", new=io.StringIO()) as fake_err:
-                with self.assertRaises(SystemExit) as cm:
+                with self.assertRaises((SystemExit, CommandError)) as cm:
                     handle_env_command(REPO_ROOT, ["down", "fail-env", "--dir", self.tmp_dir])
-                self.assertEqual(cm.exception.code, 1)
-                self.assertIn("stop-failed", fake_err.getvalue())
+                code = cm.exception.exit_code if hasattr(cm.exception, "exit_code") else cm.exception.code
+                self.assertEqual(code, 1)
+                err_text = fake_err.getvalue() or getattr(cm.exception, "message", "")
+                self.assertIn("stop-failed", err_text)
 
     def test_success_exits_0(self):
         with patch.object(environment, "get_docker_compose_cmd", return_value=["docker", "compose"]), \
              patch.object(environment.proc, "run_capture", return_value=proc.Result([], 0, "ok", "")):
-            with self.assertRaises(SystemExit) as cm:
-                handle_env_command(REPO_ROOT, ["up", "ok-env", "--dir", self.tmp_dir])
-            self.assertEqual(cm.exception.code, 0)
+            try:
+                code = handle_env_command(REPO_ROOT, ["up", "ok-env", "--dir", self.tmp_dir])
+            except SystemExit as cm:
+                code = cm.code
+            self.assertEqual(code or 0, 0)
 
 
 class TestEnvLifecycle(unittest.TestCase):
@@ -490,17 +501,15 @@ class TestEnvCliCommands(unittest.TestCase):
              patch.object(environment.proc, "run_capture", return_value=proc.Result([], 0, "", "")), \
              patch.object(environment, "get_container_status", return_value="running"):
             with patch("sys.stdout", new=io.StringIO()) as fake_out:
-                with self.assertRaises(SystemExit) as cm:
-                    handle_env_command(REPO_ROOT, ["up", "cli-proj", "--repo", "https://github.com/actdim/along.git", "--dir", self.tmp_dir])
-                self.assertEqual(cm.exception.code, 0)
+                code = handle_env_command(REPO_ROOT, ["up", "cli-proj", "--repo", "https://github.com/actdim/along.git", "--dir", self.tmp_dir])
+                self.assertEqual(code or 0, 0)
                 self.assertIn("Created isolated environment: cli-proj", fake_out.getvalue())
 
         # 2. STATUS (single env, JSON)
         with patch.object(environment, "get_container_status", return_value="running"):
             with patch("sys.stdout", new=io.StringIO()) as fake_out:
-                with self.assertRaises(SystemExit) as cm:
-                    handle_env_command(REPO_ROOT, ["status", "cli-proj", "--dir", self.tmp_dir, "--json"])
-                self.assertEqual(cm.exception.code, 0)
+                code = handle_env_command(REPO_ROOT, ["status", "cli-proj", "--dir", self.tmp_dir, "--json"])
+                self.assertEqual(code or 0, 0)
                 data = json.loads(fake_out.getvalue())
                 self.assertEqual(data["name"], "cli-proj")
                 self.assertEqual(data["repo"], "https://github.com/actdim/along.git")
@@ -510,18 +519,16 @@ class TestEnvCliCommands(unittest.TestCase):
         # 3. STATUS (table listing)
         with patch.object(environment, "get_container_status", return_value="running"):
             with patch("sys.stdout", new=io.StringIO()) as fake_out:
-                with self.assertRaises(SystemExit) as cm:
-                    handle_env_command(REPO_ROOT, ["status", "--dir", self.tmp_dir])
-                self.assertEqual(cm.exception.code, 0)
+                code = handle_env_command(REPO_ROOT, ["status", "--dir", self.tmp_dir])
+                self.assertEqual(code or 0, 0)
                 self.assertIn("cli-proj", fake_out.getvalue())
 
         # 4. DOWN with compose returning 0
         with patch.object(environment, "get_docker_compose_cmd", return_value=["docker", "compose"]), \
              patch.object(environment.proc, "run_capture", return_value=proc.Result([], 0, "", "")):
             with patch("sys.stdout", new=io.StringIO()) as fake_out:
-                with self.assertRaises(SystemExit) as cm:
-                    handle_env_command(REPO_ROOT, ["down", "cli-proj", "--dir", self.tmp_dir])
-                self.assertEqual(cm.exception.code, 0)
+                code = handle_env_command(REPO_ROOT, ["down", "cli-proj", "--dir", self.tmp_dir])
+                self.assertEqual(code or 0, 0)
                 self.assertIn("Stopped isolated environment: cli-proj", fake_out.getvalue())
 
     def test_hermetic_suite_does_not_invoke_docker(self):

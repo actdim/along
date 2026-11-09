@@ -16,6 +16,7 @@ from alongkit import bootstrap
 bootstrap.ensure_deps()
 
 from alongkit import entities, frontmatter, gates, lifecycle, proc, repo
+from alongkit.exceptions import AlongError, CommandError, ValidationError
 from alongkit.cliargs import _handle_chdir_options
 from alongkit.commands import (
     handle_brief_command,
@@ -212,10 +213,10 @@ def _wants_help(args: List[str]) -> bool:
 def _require_installation(cmd: str, repo_root: str) -> None:
     """Exit 2 when a board command runs where Along is not installed."""
     if cmd in _BOARD_COMMANDS and not repo.is_installed(repo_root):
-        print(f"[Error] Along is not installed in {repo_root} (no .along/ with Along state). "
-              "Run 'along init' there, or run the command inside an installed context.",
-              file=sys.stderr)
-        sys.exit(2)
+        raise ValidationError(
+            f"Along is not installed in {repo_root} (no .along/ with Along state). "
+            "Run 'along init' there, or run the command inside an installed context."
+        )
 
 
 def _print_router_help(cmd: str, handler, repo_root: str, args: List[str]) -> None:
@@ -307,8 +308,8 @@ def main():
 
     # 1. Native Entity & System Management Subcommands
     if cmd in native_routers:
-        native_routers[cmd](repo_root, extra_args)
-        sys.exit(0)
+        ret = native_routers[cmd](repo_root, extra_args)
+        sys.exit(ret if isinstance(ret, int) else 0)
 
     if cmd == "kb":
         sub = extra_args[0].lower() if extra_args else "sync"
@@ -413,6 +414,13 @@ def cli_entry():
         raise
     except KeyboardInterrupt:
         sys.exit(130)
+    except CommandError as exc:
+        if os.environ.get("ALONG_DEBUG"):
+            raise
+        print(f"[Error] {exc.message}", file=sys.stderr)
+        if exc.usage:
+            print(f"Usage: {exc.usage}", file=sys.stderr)
+        sys.exit(exc.exit_code)
     except Exception as exc:
         if os.environ.get("ALONG_DEBUG"):
             raise

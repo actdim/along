@@ -124,9 +124,11 @@ class TestAlongStartProfile(unittest.TestCase):
         issue_path = os.path.join(self.root, ".along", "ISSUES", "feat--test-cli-prof.md")
         textio.write_text(issue_path, "---\nslug: test-cli-prof\ntype: feat\nstatus: open\n---\n# Test\n")
 
-        with self.assertRaises(SystemExit) as cm:
-            handle_start_command(self.root, ["test-cli-prof", "--profile", "strict"])
-        self.assertEqual(cm.exception.code, 0)
+        try:
+            code = handle_start_command(self.root, ["test-cli-prof", "--profile", "strict"])
+        except SystemExit as cm:
+            code = cm.code
+        self.assertEqual(code or 0, 0)
 
         key = session.current_session_key()
         binding = session.load_binding(self.root, key)

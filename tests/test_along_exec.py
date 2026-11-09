@@ -134,9 +134,11 @@ class TestAlongTelemetryCli(unittest.TestCase):
 
         with patch("alongkit.telemetry.otlp.OTLPExporter.export", return_value=True) as mock_export:
             with patch("sys.stdout", new_callable=io.StringIO) as mock_stdout:
-                with self.assertRaises(SystemExit) as cm:
-                    along_exec.handle_telemetry_command(self.repo, ["flush"])
-                self.assertEqual(cm.exception.code, 0)
+                try:
+                    code = along_exec.handle_telemetry_command(self.repo, ["flush"])
+                except SystemExit as cm:
+                    code = cm.code
+                self.assertEqual(code or 0, 0)
                 output = mock_stdout.getvalue()
                 self.assertIn("Successfully flushed 2 telemetry span(s)", output)
 
@@ -156,11 +158,13 @@ class TestAlongTelemetryCli(unittest.TestCase):
 
         with patch("alongkit.telemetry.otlp.OTLPExporter.export", return_value=False) as mock_export:
             with patch("sys.stderr", new_callable=io.StringIO) as mock_stderr:
-                with self.assertRaises(SystemExit) as cm:
+                from alongkit.exceptions import CommandError
+                with self.assertRaises((SystemExit, CommandError)) as cm:
                     along_exec.handle_telemetry_command(self.repo, ["flush"])
-                self.assertEqual(cm.exception.code, 1)
-                err_output = mock_stderr.getvalue()
-                self.assertIn("Failed to flush 1 telemetry span(s)", err_output)
+                exit_code = cm.exception.exit_code if hasattr(cm.exception, "exit_code") else cm.exception.code
+                self.assertEqual(exit_code, 1)
+                err_msg = cm.exception.message if hasattr(cm.exception, "message") else mock_stderr.getvalue()
+                self.assertIn("Failed to flush 1 telemetry span(s)", err_msg)
 
             mock_export.assert_called_once()
 

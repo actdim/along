@@ -15,21 +15,20 @@ if __name__ == "__main__":
 import sys
 from typing import List, Optional
 
+from alongkit.exceptions import ValidationError
+
 
 def require_entity_name(name: str, usage: str) -> str:
     """Exit 2 when an entity name looks like a flag."""
     if not name or name.startswith("-"):
-        print(f"[Error] Invalid name '{name}': entity names cannot start with '-'.", file=sys.stderr)
-        print(f"Usage: {usage}", file=sys.stderr)
-        sys.exit(2)
+        raise ValidationError(f"Invalid name '{name}': entity names cannot start with '-'.", usage=usage)
     return name
 
 
 def check_unknown_args(extra: List[str], prog: str) -> None:
     """Exit 2 with an error message when unknown flags or arguments are encountered."""
     if extra:
-        print(f"{prog}: error: unrecognized arguments: {' '.join(extra)}", file=sys.stderr)
-        sys.exit(2)
+        raise ValidationError(f"{prog}: error: unrecognized arguments: {' '.join(extra)}")
 
 
 def flag_value(args: List[str], flag: str) -> Optional[str]:

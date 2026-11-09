@@ -20,6 +20,7 @@ import sys
 from typing import List, Optional
 
 from .. import proc, repo
+from alongkit.exceptions import CommandError, ValidationError
 
 
 def handle_rules_command(repo_root: str, args: List[str]):
@@ -31,14 +32,13 @@ def handle_rules_command(repo_root: str, args: List[str]):
         print("  status [--json] Audit installed rule packs against Along global templates")
         print("  diff [rule]     Display unified diff of local rule modifications against template")
         print("  restore [rule]  Restore pristine Along template for rule (backs up modified copy)")
-        sys.exit(0)
+        return 0
 
     subcmd = args[0].lower()
     try:
         from alongkit import rules
     except ImportError:
-        print("[Error] alongkit.rules not found.", file=sys.stderr)
-        sys.exit(1)
+        raise CommandError("alongkit.rules not found.")
 
     if subcmd == "attach":
         on_conflict = "preserve"
@@ -56,7 +56,7 @@ def handle_rules_command(repo_root: str, args: List[str]):
                 on_conflict = args[idx + 1].lower()
 
         rules.attach_rules(repo_root, on_conflict=on_conflict)
-        sys.exit(0)
+        return 0
     elif subcmd == "status":
         as_json = "--json" in args
         results = rules.audit_rules(repo_root)
@@ -70,7 +70,7 @@ def handle_rules_command(repo_root: str, args: List[str]):
                 for r in results:
                     status_tag = f"[{r['status'].upper()}]"
                     print(f"  {status_tag:<14} {r['rule']:<28} - {r['detail']}")
-        sys.exit(0)
+        return 0
     elif subcmd == "diff":
         target_rule = args[1] if len(args) > 1 and not args[1].startswith("-") else None
         if not target_rule:
@@ -78,20 +78,20 @@ def handle_rules_command(repo_root: str, args: List[str]):
             modified = [a["rule"] for a in audits if "modified" in a["status"]]
             if not modified:
                 print("No modified rule packs found.")
-                sys.exit(0)
+                return 0
             for r in modified:
                 d = rules.diff_rule(repo_root, r)
                 if d:
                     print(f"\n--- Diff: {r} ---")
                     print(d)
-            sys.exit(0)
+            return 0
         else:
             d = rules.diff_rule(repo_root, target_rule)
             if d:
                 print(d)
             else:
                 print(f"No differences found for '{target_rule}'.")
-            sys.exit(0)
+            return 0
     elif subcmd == "restore":
         target_rule = args[1] if len(args) > 1 and not args[1].startswith("-") else None
         restored = rules.restore_rule(repo_root, target_rule)
@@ -99,10 +99,9 @@ def handle_rules_command(repo_root: str, args: List[str]):
             print("No rules restored (already pristine or template not found).")
         else:
             print(f"Successfully restored {len(restored)} rule pack(s): {', '.join(restored)}")
-        sys.exit(0)
+        return 0
     else:
-        print(f"[Error] Unknown rules subcommand: {subcmd}. Available: attach, status, diff, restore.", file=sys.stderr)
-        sys.exit(1)
+        raise CommandError(f"Unknown rules subcommand: {subcmd}. Available: attach, status, diff, restore.")
 
 
 def handle_budget_command(repo_root: str, args: List[str]):
@@ -110,12 +109,11 @@ def handle_budget_command(repo_root: str, args: List[str]):
         print("Usage:")
         print("  along budget [--json] [--check]")
         print("  along budget check-prompt <file|payload> [--json] [--check] [--allow-oversized]")
-        sys.exit(0)
+        return 0
     try:
         from alongkit import budget
     except ImportError:
-        print("[Error] alongkit.budget not found.", file=sys.stderr)
-        sys.exit(1)
+        raise CommandError("alongkit.budget not found.")
 
     sub = args[0].lower() if args else ""
     if sub == "check-prompt":
@@ -134,9 +132,7 @@ def handle_budget_command(repo_root: str, args: List[str]):
             if not sys.stdin.isatty():
                 target = sys.stdin.read()
             else:
-                print("[Error] Missing payload or file for check-prompt.", file=sys.stderr)
-                print("Usage: along budget check-prompt <file|payload> [--json] [--check] [--allow-oversized]", file=sys.stderr)
-                sys.exit(1)
+                raise CommandError("Missing payload or file for check-prompt.\nUsage: along budget check-prompt <file|payload> [--json] [--check] [--allow-oversized]")
 
         report = budget.check_prompt(target, allow_oversized=allow_oversized)
         if as_json:
@@ -145,8 +141,8 @@ def handle_budget_command(repo_root: str, args: List[str]):
             print(budget.format_prompt_budget_text(report))
 
         if check_mode and not report.get("passed", True):
-            sys.exit(1)
-        sys.exit(0)
+            return 1
+        return 0
 
     as_json = "--json" in args
     check_mode = "--check" in args
@@ -159,20 +155,19 @@ def handle_budget_command(repo_root: str, args: List[str]):
         print(budget.format_budget_text(report))
 
     if check_mode and not report.get("all_passed", True):
-        sys.exit(1)
-    sys.exit(0)
+        return 1
+    return 0
 
 
 def handle_patch_command(repo_root: str, args: List[str]):
     if not args or args[0] in ("-h", "--help", "help"):
         print("Usage: along patch replace-func <target_file> <function_name> <replacement_code_file>")
-        sys.exit(0)
+        return 0
 
     subcmd = args[0].lower()
     if subcmd == "replace-func":
         if len(args) < 4:
-            print("[Error] Usage: along patch replace-func <target_file> <function_name> <replacement_code_file>", file=sys.stderr)
-            sys.exit(1)
+            raise CommandError("Usage: along patch replace-func <target_file> <function_name> <replacement_code_file>")
         target_file = args[1]
         func_name = args[2]
         repl_file = args[3]
@@ -186,13 +181,11 @@ def handle_patch_command(repo_root: str, args: List[str]):
         try:
             patcher.replace_function_in_file(target_file, func_name, repl_file)
             print(f"-> [AST Patch] Successfully replaced '{func_name}' in {repo.safe_relpath(target_file, repo_root)}.")
-            sys.exit(0)
+            return 0
         except patcher.PatcherError as exc:
-            print(f"[Error] AST Patch failed: {exc}", file=sys.stderr)
-            sys.exit(1)
+            raise CommandError(f"AST Patch failed: {exc}")
     else:
-        print(f"[Error] Unknown patch subcommand: '{subcmd}'. Available: replace-func", file=sys.stderr)
-        sys.exit(1)
+        raise CommandError(f"Unknown patch subcommand: '{subcmd}'. Available: replace-func")
 
 
 def handle_devenv_command(repo_root: str, args: List[str]):
@@ -200,10 +193,9 @@ def handle_devenv_command(repo_root: str, args: List[str]):
     reinstall = "--reinstall" in args
     success, msg = devenv.setup_dev_environment(repo_root, reinstall=reinstall)
     if not success:
-        print(f"[Error] Dev environment setup failed: {msg}", file=sys.stderr)
-        sys.exit(1)
+        raise CommandError(f"Dev environment setup failed: {msg}")
     print(f"-> {msg}")
-    sys.exit(0)
+    return 0
 
 
 def handle_run_command(repo_root: Optional[str], args: List[str]):
@@ -220,7 +212,7 @@ def handle_run_command(repo_root: Optional[str], args: List[str]):
         print("  Execute a shell command behind the Along runtime lifecycle hook and gate pipeline.")
         print("  Commands violating active protocol gates (typography, CLI safety, commit guard)")
         print("  are blocked with exit code 2 and an error message on stderr.")
-        sys.exit(0)
+        return 0
 
     target_subcmd = args[0].lower()
     if target_subcmd in ("antigravity", "agy"):
@@ -258,7 +250,7 @@ def handle_run_command(repo_root: Optional[str], args: List[str]):
                 print("  --run-id <id>          Explicit run ID for telemetry grouping")
                 print("  -e, --endpoint <url>   OTLP telemetry collector endpoint")
                 print("  -b, --binary <path>    Explicit path to Antigravity binary executable")
-                sys.exit(0)
+                return 0
             elif arg == "--":
                 pass_args.extend(sub_args[i + 1:])
                 break
@@ -280,8 +272,8 @@ def handle_run_command(repo_root: Optional[str], args: List[str]):
             code = runner.run()
         except RuntimeError as exc:
             sys.stderr.write(f"[Along Runner Error] {exc}\n")
-            sys.exit(1)
-        sys.exit(code)
+            return 1
+        return code
 
     if target_subcmd in ("claude", "claude-code", "codex", "opencode", "generic"):
         sub_args = args[1:]
@@ -342,7 +334,7 @@ def handle_run_command(repo_root: Optional[str], args: List[str]):
                 print("  -r, --role <name>      Role profile (scout, architect, implementer, reviewer)")
                 if target_subcmd == "opencode":
                     print("  --base-url <url>       Local Ollama/vLLM base URL endpoint (OPENAI_BASE_URL)")
-                sys.exit(0)
+                return 0
             elif arg == "--":
                 pass_args.extend(sub_args[i + 1:])
                 break
@@ -369,9 +361,9 @@ def handle_run_command(repo_root: Optional[str], args: List[str]):
             record = adapter.execute_run(brief=brief, role=role, model=model, timeout=timeout)
         except RuntimeError as exc:
             sys.stderr.write(f"[Along Runner Error] {exc}\n")
-            sys.exit(1)
+            return 1
         print(json.dumps(record, indent=2))
-        sys.exit(record.get("exit_code") or 0)
+        return record.get("exit_code") or 0
 
     from alongkit.hooks import HookEvent, HookEventType, evaluate_event, load_config
     config = load_config(repo_root)
@@ -389,7 +381,7 @@ def handle_run_command(repo_root: Optional[str], args: List[str]):
     result = evaluate_event(event, repo_root=repo_root, config=config)
     if result.is_denied:
         sys.stderr.write(f"[Along Gate Error] {result.reason}\n")
-        sys.exit(2)
+        return 2
 
     exec_args = list(args)
     if len(exec_args) == 1 and not shutil.which(exec_args[0]):
@@ -401,4 +393,4 @@ def handle_run_command(repo_root: Optional[str], args: List[str]):
             pass
 
     code = proc.run_passthrough(exec_args, cwd=repo_root)
-    sys.exit(code)
+    return code

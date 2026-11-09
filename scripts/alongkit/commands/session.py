@@ -20,6 +20,7 @@ import sys
 from typing import Any, Dict, List, Optional, Tuple
 
 from alongkit import entities, frontmatter, lifecycle, proc, repo, session, textio
+from alongkit.exceptions import CommandError, ValidationError
 from alongkit.version import CURRENT_PROTOCOL_VERSION
 from .common import check_unknown_args, require_entity_name
 
@@ -178,7 +179,7 @@ def handle_session_command(repo_root: str, args: List[str]):
         print("       along_exec.py session close <slug>... | --ready [--dry-run] [--push]")
         print("                                               Close out finished work: tests once, wrap, commit by attribution,")
         print("                                               push once (needs 'along plan approve --closeout' after the user's yes)")
-        sys.exit(0)
+        return 0
 
     subcmd = args[0].lower()
     sub_args = args[1:]
@@ -194,7 +195,7 @@ def handle_session_command(repo_root: str, args: List[str]):
         for b in rows:
             print(f"{b.get('key')}: {b.get('slug') or '-'} (approved: "
                   f"{str(bool(b.get('plan_approved'))).lower()}, updated: {b.get('updated')})")
-        sys.exit(0)
+        return 0
 
     if subcmd == "gc":
         parser = argparse.ArgumentParser(prog="along session gc", allow_abbrev=False)
@@ -209,7 +210,7 @@ def handle_session_command(repo_root: str, args: List[str]):
         verb = "Would archive and remove" if parsed.dry_run else "Archived and removed"
         print(f"-> {verb} {len(boards)} blackboard(s) of closed issues"
               f"{': ' + ', '.join(boards) if boards else ''}.")
-        sys.exit(0)
+        return 0
 
     if subcmd == "list":
         parser = argparse.ArgumentParser(prog="along session list", allow_abbrev=False)
@@ -223,7 +224,7 @@ def handle_session_command(repo_root: str, args: List[str]):
             print(json.dumps(status, indent=2))
         else:
             print(closeout.format_closeout_status(status))
-        sys.exit(0)
+        return 0
 
     if subcmd == "close":
         parser = argparse.ArgumentParser(prog="along session close", allow_abbrev=False)
@@ -237,10 +238,9 @@ def handle_session_command(repo_root: str, args: List[str]):
         from alongkit import closeout
         names = [a for a in parsed.slugs if not a.startswith("-")]
         if not names and not parsed.ready and not closeout.load_run(repo_root):
-            print("[Error] Usage: along session close <slug>... | --ready [--dry-run] [--push]", file=sys.stderr)
-            sys.exit(2)
-        sys.exit(closeout.run_closeout(repo_root, keys=names, ready=parsed.ready,
-                                       dry_run=parsed.dry_run, push=parsed.push))
+            raise ValidationError("Usage: along session close <slug>... | --ready [--dry-run] [--push]")
+        return closeout.run_closeout(repo_root, keys=names, ready=parsed.ready,
+                                     dry_run=parsed.dry_run, push=parsed.push)
 
     today = datetime.now().strftime("%Y-%m-%d")
     year = datetime.now().strftime("%Y")
@@ -248,8 +248,7 @@ def handle_session_command(repo_root: str, args: List[str]):
 
     if subcmd == "create":
         if not sub_args:
-            print("[Error] Usage: along_exec.py session create <slug> --summary \"Summary\"", file=sys.stderr)
-            sys.exit(1)
+            raise CommandError("Usage: along_exec.py session create <slug> --summary \"Summary\"")
         require_entity_name(sub_args[0].lower(), "along session create <slug> --summary \"Summary\"")
 
         parser = argparse.ArgumentParser(prog="along session create", allow_abbrev=False)
@@ -276,8 +275,7 @@ def handle_session_command(repo_root: str, args: List[str]):
             clean_m = parsed.milestone[:-3] if parsed.milestone.endswith(".md") else parsed.milestone
             m_path = os.path.join(repo_root, ".along", "MILESTONES", f"{clean_m}.md")
             if not os.path.exists(m_path):
-                print(f"[Error] Milestone '{parsed.milestone}' does not exist in .along/MILESTONES/.", file=sys.stderr)
-                sys.exit(1)
+                raise CommandError(f"Milestone '{parsed.milestone}' does not exist in .along/MILESTONES/.")
             milestone = clean_m
         else:
             milestone = entities.resolve_in_progress_milestone(repo_root)
@@ -295,12 +293,11 @@ def handle_session_command(repo_root: str, args: List[str]):
         if os.path.exists(os.path.join(repo_root, ".along", "HISTORY.md")):
             lifecycle.append_history_entry(repo_root, slug, summary=summary, agent=agent, today=today,
                                            session_log_path=target_file)
-        sys.exit(0)
+        return 0
 
     elif subcmd == "wrap":
         if not sub_args:
-            print("[Error] Usage: along session wrap <slug> [--status done|superseded|cancelled|duplicate] [--summary \"Summary\"] [--dry-run] [-n]", file=sys.stderr)
-            sys.exit(1)
+            raise CommandError("Usage: along session wrap <slug> [--status done|superseded|cancelled|duplicate] [--summary \"Summary\"] [--dry-run] [-n]")
         require_entity_name(sub_args[0], "along session wrap <slug> [--status ...] [--summary \"Summary\"]")
 
         parser = argparse.ArgumentParser(prog="along session wrap", allow_abbrev=False)
@@ -322,9 +319,7 @@ def handle_session_command(repo_root: str, args: List[str]):
 
         # Same contract as `along wrap` [feat--wrap-session-log-from-blackboard].
         if (parsed.decisions is None) == (not parsed.no_decisions):
-            print("[Error] Answer whether architectural decisions were made: "
-                  "--decisions ADR-a,ADR-b or --no-decisions (exactly one).", file=sys.stderr)
-            sys.exit(2)
+            raise ValidationError("Answer whether architectural decisions were made: --decisions ADR-a,ADR-b or --no-decisions (exactly one).")
         decisions = [] if parsed.decisions is None else [d.strip() for d in parsed.decisions.split(",") if d.strip()]
 
         code = lifecycle.execute_wrap(
@@ -343,8 +338,7 @@ def handle_session_command(repo_root: str, args: List[str]):
             keep_open=parsed.keep_open,
             phase=parsed.phase,
         )
-        sys.exit(code)
+        return code
 
     else:
-        print(f"[Error] Unknown session subcommand '{subcmd}'. Run 'along session --help'.", file=sys.stderr)
-        sys.exit(1)
+        raise CommandError(f"Unknown session subcommand '{subcmd}'. Run 'along session --help'.")

@@ -18,6 +18,7 @@ import sys
 from typing import List
 
 from alongkit import worktree
+from alongkit.exceptions import CommandError
 from .common import check_unknown_args, require_entity_name
 
 
@@ -69,15 +70,14 @@ def handle_worktree_command(repo_root: str, args: List[str]):
         print("  status [--json]")
         print("  is_supported [--force-cross-os]")
         print("  gc")
-        sys.exit(0)
+        return 0
 
     subcmd = args[0].lower().strip()
     sub_args = args[1:]
 
     if subcmd == "create":
         if not sub_args:
-            print("[Error] Usage: along worktree create <slug> [--branch <name>] [--base-ref <ref>] [--force-cross-os]", file=sys.stderr)
-            sys.exit(1)
+            raise CommandError("Usage: along worktree create <slug> [--branch <name>] [--base-ref <ref>] [--force-cross-os]")
         require_entity_name(sub_args[0], "along worktree create <slug> [--branch <name>] [--base-ref <ref>] [--force-cross-os]")
 
         parser = argparse.ArgumentParser(prog="along worktree create", allow_abbrev=False)
@@ -101,15 +101,13 @@ def handle_worktree_command(repo_root: str, args: List[str]):
                 print(f"   Linked dependencies: {', '.join(info.linked_dirs)}")
             if info.copied_files:
                 print(f"   Propagated configs: {', '.join(info.copied_files)}")
-            sys.exit(0)
+            return 0
         except RuntimeError as exc:
-            print(f"[Error] Worktree creation failed: {exc}", file=sys.stderr)
-            sys.exit(1)
+            raise CommandError(f"Worktree creation failed: {exc}")
 
     elif subcmd == "remove":
         if not sub_args:
-            print("[Error] Usage: along worktree remove <slug> [--force] [--keep-branch]", file=sys.stderr)
-            sys.exit(1)
+            raise CommandError("Usage: along worktree remove <slug> [--force] [--keep-branch]")
         require_entity_name(sub_args[0], "along worktree remove <slug> [--force] [--keep-branch]")
 
         parser = argparse.ArgumentParser(prog="along worktree remove", allow_abbrev=False)
@@ -126,16 +124,15 @@ def handle_worktree_command(repo_root: str, args: List[str]):
         )
         if removed:
             print(f"-> Successfully removed worktree for '{parsed.slug}'.")
-            sys.exit(0)
+            return 0
         else:
             print(f"[Warning] Worktree for '{parsed.slug}' was unlinked from Git but directory removal is deferred due to active file locks.", file=sys.stderr)
             print("Run 'along worktree gc' once open handles are closed.", file=sys.stderr)
-            sys.exit(0)
+            return 0
 
     elif subcmd == "merge":
         if not sub_args:
-            print("[Error] Usage: along worktree merge <slug> [--squash]", file=sys.stderr)
-            sys.exit(1)
+            raise CommandError("Usage: along worktree merge <slug> [--squash]")
         require_entity_name(sub_args[0], "along worktree merge <slug> [--squash]")
 
         parser = argparse.ArgumentParser(prog="along worktree merge", allow_abbrev=False)
@@ -150,10 +147,9 @@ def handle_worktree_command(repo_root: str, args: List[str]):
             print(f"-> Successfully merged worktree branch 'along/{parsed.slug}' into current branch.")
             if res.stdout.strip():
                 print(res.stdout.strip())
-            sys.exit(0)
+            return 0
         else:
-            print(f"[Error] Worktree merge failed: {res.stderr or res.stdout}", file=sys.stderr)
-            sys.exit(1)
+            raise CommandError(f"Worktree merge failed: {res.stderr or res.stdout}")
 
     elif subcmd in ("list", "status"):
         parser = argparse.ArgumentParser(prog=f"along worktree {subcmd}", allow_abbrev=False)
@@ -175,7 +171,7 @@ def handle_worktree_command(repo_root: str, args: List[str]):
                     print(f"    Path: {it['path']}")
                     if it.get("linked_dirs"):
                         print(f"    Linked: {', '.join(it['linked_dirs'])}")
-        sys.exit(0)
+        return 0
 
     elif subcmd in ("is_supported", "is-supported", "check"):
         parser = argparse.ArgumentParser(prog=f"along worktree {subcmd}", allow_abbrev=False)
@@ -186,10 +182,9 @@ def handle_worktree_command(repo_root: str, args: List[str]):
         supported, reason = worktree.is_worktree_supported(repo_root, force_cross_os=parsed.force_cross_os)
         if supported:
             print(f"-> Worktree isolation supported: {reason}")
-            sys.exit(0)
+            return 0
         else:
-            print(f"[Error] Worktree isolation unsupported: {reason}", file=sys.stderr)
-            sys.exit(1)
+            raise CommandError(f"Worktree isolation unsupported: {reason}")
 
     elif subcmd == "gc":
         parser = argparse.ArgumentParser(prog="along worktree gc", allow_abbrev=False)
@@ -198,8 +193,7 @@ def handle_worktree_command(repo_root: str, args: List[str]):
 
         cleaned = worktree.gc_worktrees(repo_root)
         print(f"-> Pruned worktrees and cleaned {cleaned} deferred items.")
-        sys.exit(0)
+        return 0
 
     else:
-        print(f"[Error] Unknown worktree subcommand: {subcmd}. Available: create, remove, merge, list, status, gc, is_supported.", file=sys.stderr)
-        sys.exit(1)
+        raise CommandError(f"Unknown worktree subcommand: {subcmd}. Available: create, remove, merge, list, status, gc, is_supported.")

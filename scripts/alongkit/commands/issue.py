@@ -21,6 +21,7 @@ import sys
 from typing import Any, Dict, List
 
 from alongkit import entities, frontmatter, gates, lifecycle, repo, session, textio, transaction
+from alongkit.exceptions import CommandError, ValidationError
 from alongkit.version import CURRENT_PROTOCOL_VERSION
 from .common import check_unknown_args, require_entity_name
 
@@ -38,12 +39,10 @@ def _report_rewritten(repo_root: str, paths: List[str]):
 
 def _issue_create(repo_root: str, args: List[str], issues_dir: str, today: str):
     if len(args) < 3:
-        print("[Error] Usage: along_exec.py issue create <type> <slug> --title \"Title\" [--priority high|medium|low] [--tags \"tag1,tag2\"] [--agent <name>] [--milestone <name>]", file=sys.stderr)
-        sys.exit(1)
+        raise CommandError("Usage: along_exec.py issue create <type> <slug> --title \"Title\" [--priority high|medium|low] [--tags \"tag1,tag2\"] [--agent <name>] [--milestone <name>]", exit_code=1)
     itype = args[1].lower()
     if itype not in entities.ISSUE_TYPES:
-        print(f"[Error] Invalid issue type '{itype}'. Allowed types: {', '.join(entities.ISSUE_TYPES)}", file=sys.stderr)
-        sys.exit(1)
+        raise CommandError(f"Invalid issue type '{itype}'. Allowed types: {', '.join(entities.ISSUE_TYPES)}", exit_code=1)
 
     require_entity_name(args[2].lower(), "along issue create <type> <slug> --title \"Title\"")
 
@@ -61,20 +60,17 @@ def _issue_create(repo_root: str, args: List[str], issues_dir: str, today: str):
 
     islug = parsed.slug.lower()
     if not entities.is_valid_slug(islug):
-        print(f"[Error] Invalid issue slug '{islug}'. Slug must be 2-5 lowercase kebab-case words (e.g. my-feature-name).", file=sys.stderr)
-        sys.exit(1)
+        raise CommandError(f"Invalid issue slug '{islug}'. Slug must be 2-5 lowercase kebab-case words (e.g. my-feature-name).", exit_code=1)
 
     existing_issue = entities.find_issue_by_slug(repo_root, islug)
     if existing_issue:
         rel_existing = repo.safe_relpath(existing_issue["file_path"], repo_root)
-        print(f"[Error] An issue with slug '{islug}' already exists: {rel_existing}", file=sys.stderr)
-        sys.exit(1)
+        raise CommandError(f"An issue with slug '{islug}' already exists: {rel_existing}", exit_code=1)
 
     title = parsed.title or islug.replace("-", " ").capitalize()
     priority = parsed.priority.lower()
     if priority not in entities.PRIORITIES:
-        print(f"[Error] Invalid priority '{priority}'. Allowed priorities: {', '.join(entities.PRIORITIES)}", file=sys.stderr)
-        sys.exit(1)
+        raise CommandError(f"Invalid priority '{priority}'. Allowed priorities: {', '.join(entities.PRIORITIES)}", exit_code=1)
 
     tags = [t.strip() for t in parsed.tags.split(",") if t.strip()] if parsed.tags else []
     agent = entities.detect_agent(parsed.agent)
@@ -89,8 +85,7 @@ def _issue_create(repo_root: str, args: List[str], issues_dir: str, today: str):
             clean_m = parsed.milestone[:-3] if parsed.milestone.endswith(".md") else parsed.milestone
             m_path = os.path.join(repo_root, ".along", "MILESTONES", f"{clean_m}.md")
             if not os.path.exists(m_path):
-                print(f"[Error] Milestone '{parsed.milestone}' does not exist in .along/MILESTONES/.", file=sys.stderr)
-                sys.exit(1)
+                raise CommandError(f"Milestone '{parsed.milestone}' does not exist in .along/MILESTONES/.", exit_code=1)
             milestone = clean_m
     else:
         milestone = entities.resolve_in_progress_milestone(repo_root)
@@ -143,13 +138,12 @@ related: []
     if os.path.exists(issues_board):
         entities.sync_issues_board(repo_root, recent_done_limit=RECENT_DONE_LIMIT)
         print("-> Updated .along/ISSUES.md")
-    sys.exit(0)
+    return 0
 
 
 def _issue_done(repo_root: str, args: List[str], issues_dir: str, done_dir: str, today: str):
     if len(args) < 2:
-        print("[Error] Usage: along_exec.py issue done <slug> [--status done|superseded|cancelled|duplicate] [--superseded-by <key>] [--duplicate-of <key>] [--force-reason \"...\"]", file=sys.stderr)
-        sys.exit(1)
+        raise CommandError("Usage: along_exec.py issue done <slug> [--status done|superseded|cancelled|duplicate] [--superseded-by <key>] [--duplicate-of <key>] [--force-reason \"...\"]", exit_code=1)
     require_entity_name(args[1].lower(), "along issue done|cancel <slug> [--status ...]")
 
     parser = argparse.ArgumentParser(prog="along issue done", allow_abbrev=False)
@@ -167,8 +161,7 @@ def _issue_done(repo_root: str, args: List[str], issues_dir: str, done_dir: str,
     duplicate_of = parsed.duplicate_of.strip() if parsed.duplicate_of else None
 
     if target_status not in entities.CLOSED_ISSUE_STATUSES:
-        print(f"[Error] Invalid closing status '{target_status}'. Allowed statuses: {', '.join(entities.CLOSED_ISSUE_STATUSES)}", file=sys.stderr)
-        sys.exit(1)
+        raise CommandError(f"Invalid closing status '{target_status}'. Allowed statuses: {', '.join(entities.CLOSED_ISSUE_STATUSES)}", exit_code=1)
 
     found_file = None
     for f in os.listdir(issues_dir):
@@ -177,20 +170,18 @@ def _issue_done(repo_root: str, args: List[str], issues_dir: str, done_dir: str,
             break
 
     if not found_file:
-        print(f"[Error] Issue '{islug}' not found in {issues_dir}", file=sys.stderr)
-        sys.exit(1)
+        raise CommandError(f"Issue '{islug}' not found in {issues_dir}", exit_code=1)
 
     filename = os.path.basename(found_file)
     dest_file = os.path.join(done_dir, filename)
     content = textio.read_text(found_file)
 
     if not frontmatter.has_frontmatter(content):
-        print(
-            f"[Error] {filename} has no parseable YAML front-matter. "
+        raise CommandError(
+            f"{filename} has no parseable YAML front-matter. "
             "Refusing to close it silently: fix the entity header, then retry.",
-            file=sys.stderr,
+            exit_code=1,
         )
-        sys.exit(1)
 
     if content.startswith("\ufeff"):
         content = content.lstrip("\ufeff")
@@ -204,14 +195,13 @@ def _issue_done(repo_root: str, args: List[str], issues_dir: str, done_dir: str,
     if target_status in entities.DELIVERED_ISSUE_STATUSES:
         comp_ok, comp_reasons = entities.validate_issue_completion(content, target_status)
         if not comp_ok:
-            print(
-                f"[Error] Cannot close issue '{islug}' as {target_status}:\n"
+            raise ValidationError(
+                f"Cannot close issue '{islug}' as {target_status}:\n"
                 + "\n".join(f"  - {r}" for r in comp_reasons)
                 + f"\n  Update '{repo.safe_relpath(found_file, repo_root)}' before marking it done, "
                 + "or cancel with '--status cancelled'.",
-                file=sys.stderr,
+                exit_code=2,
             )
-            sys.exit(2)
 
     updates = {"status": target_status, "updated": today, "completed": today}
     if superseded_by:
@@ -250,10 +240,8 @@ def _issue_done(repo_root: str, args: List[str], issues_dir: str, done_dir: str,
     if has_blackboard:
         unrecorded = session.unrecorded_files(repo_root, bare_slug)
         if unrecorded:
-            print(f"[Error] issue done failed: blackboard '{bare_slug}' contains unknown non-scaffold file(s):", file=sys.stderr)
-            for f in unrecorded:
-                print(f"  - {f}", file=sys.stderr)
-            sys.exit(2)
+            details = "\n".join(f"  - {f}" for f in unrecorded)
+            raise ValidationError(f"issue done failed: blackboard '{bare_slug}' contains unknown non-scaffold file(s):\n{details}", exit_code=2)
     # [feat--anti-silent-fallback-gate]: a denied tool call is redone or disclosed to the user;
     # --force-reason passes under the bypass rules (reason, the user's reply after the failure).
     if has_blackboard and target_status in entities.DELIVERED_ISSUE_STATUSES:
@@ -262,12 +250,14 @@ def _issue_done(repo_root: str, args: List[str], issues_dir: str, done_dir: str,
             from alongkit import bypass
             if not parsed.force_reason:
                 bypass.record_failure(repo_root, bypass.WRAP_CHECKS)
-                print(f"[Error] Cannot close issue '{islug}' as {target_status}: gate denials are not settled:\n"
-                      + "\n".join(f"  - {r}" for r in denial_reasons)
-                      + "\n  See 'along gates denials', or pass --force-reason \"...\".", file=sys.stderr)
-                sys.exit(2)
+                raise ValidationError(
+                    f"Cannot close issue '{islug}' as {target_status}: gate denials are not settled:\n"
+                    + "\n".join(f"  - {r}" for r in denial_reasons)
+                    + "\n  See 'along gates denials', or pass --force-reason \"...\".",
+                    exit_code=2,
+                )
             if bypass.guard(repo_root, bypass.WRAP_CHECKS, parsed.force_reason, slug=bare_slug) is None:
-                sys.exit(2)
+                raise ValidationError("Bypass authorization refused.", exit_code=2)
     tx = transaction.FileTransaction(repo_root, label=f"issue-done-{bare_slug}")
     try:
         tx.protect(found_file)
@@ -291,18 +281,16 @@ def _issue_done(repo_root: str, args: List[str], issues_dir: str, done_dir: str,
             print("-> Updated .along/ISSUES.md")
         tx.commit()
     except (OSError, ValueError, frontmatter.FrontmatterError) as exc:
-        print(f"[Error] issue done failed: {exc}", file=sys.stderr)
         tx.rollback()
-        sys.exit(1)
+        raise CommandError(f"issue done failed: {exc}", exit_code=1)
     if has_blackboard and lifecycle.purge_archived(repo_root, bare_slug, complete=True):
         print(f"-> Purged session blackboard: .along/.session/{bare_slug}")
-    sys.exit(0)
+    return 0
 
 
 def _issue_reopen(repo_root: str, args: List[str], issues_dir: str, done_dir: str, today: str):
     if len(args) < 2 or args[1].startswith("-"):
-        print("[Error] Usage: along issue reopen <slug>", file=sys.stderr)
-        sys.exit(1)
+        raise CommandError("Usage: along issue reopen <slug>", exit_code=1)
     parser = argparse.ArgumentParser(prog="along issue reopen", allow_abbrev=False)
     parser.add_argument("slug")
     parsed, extra = parser.parse_known_args(args[1:])
@@ -310,18 +298,15 @@ def _issue_reopen(repo_root: str, args: List[str], issues_dir: str, done_dir: st
 
     _itype, islug = entities.parse_key(parsed.slug.lower())
     if any(f.endswith(f"--{islug}.md") for f in os.listdir(issues_dir) if os.path.isfile(os.path.join(issues_dir, f))):
-        print(f"[Error] Issue '{islug}' is already open in {issues_dir}.", file=sys.stderr)
-        sys.exit(1)
+        raise CommandError(f"Issue '{islug}' is already open in {issues_dir}.", exit_code=1)
     found = next((os.path.join(done_dir, f) for f in sorted(os.listdir(done_dir))
                   if f.endswith(f"--{islug}.md")), None) if os.path.isdir(done_dir) else None
     if not found:
-        print(f"[Error] Issue '{islug}' not found in {done_dir}", file=sys.stderr)
-        sys.exit(1)
+        raise CommandError(f"Issue '{islug}' not found in {done_dir}", exit_code=1)
     dest = os.path.join(issues_dir, os.path.basename(found))
     content = textio.read_text(found)
     if not frontmatter.has_frontmatter(content):
-        print(f"[Error] {os.path.basename(found)} has no parseable YAML front-matter.", file=sys.stderr)
-        sys.exit(1)
+        raise CommandError(f"{os.path.basename(found)} has no parseable YAML front-matter.", exit_code=1)
     content = frontmatter.update(content, {"status": "open", "updated": today},
                                  remove=("completed", "superseded_by", "duplicate_of"))
     block = frontmatter.split(content)
@@ -346,11 +331,10 @@ def _issue_reopen(repo_root: str, args: List[str], issues_dir: str, done_dir: st
             entities.sync_issues_board(repo_root, recent_done_limit=RECENT_DONE_LIMIT)
         tx.commit()
     except (OSError, ValueError, frontmatter.FrontmatterError) as exc:
-        print(f"[Error] issue reopen failed: {exc}", file=sys.stderr)
         tx.rollback()
-        sys.exit(1)
+        raise CommandError(f"issue reopen failed: {exc}", exit_code=1)
     print(f"-> Reopened {repo.safe_relpath(dest, repo_root)} (status: open). Resume with 'along start {islug}'.")
-    sys.exit(0)
+    return 0
 
 
 def _issue_sync(repo_root: str, args: List[str]):
@@ -363,14 +347,13 @@ def _issue_sync(repo_root: str, args: List[str]):
     for key, parent, owner in entities.cross_context_parents(repo_root):
         print(f"   {key}: parent {parent} (found in {repo.safe_relpath(owner, repo_root) or owner})")
     if not gates.entity_integrity_gate(repo_root, "Issue Sync"):
-        sys.exit(1)
-    sys.exit(0)
+        raise CommandError("Issue sync failed integrity gate check.", exit_code=1)
+    return 0
 
 
 def _issue_rename(repo_root: str, args: List[str]):
     if len(args) < 3:
-        print("[Error] Usage: along issue rename <old-key> <new-key>", file=sys.stderr)
-        sys.exit(1)
+        raise CommandError("Usage: along issue rename <old-key> <new-key>", exit_code=1)
     for name in args[1:3]:
         require_entity_name(name, "along issue rename <old-key> <new-key>")
     parser = argparse.ArgumentParser(prog="along issue rename", allow_abbrev=False)
@@ -382,18 +365,16 @@ def _issue_rename(repo_root: str, args: List[str]):
     try:
         result = entities.rename_issue(repo_root, parsed.old_key.lower(), parsed.new_key.lower())
     except ValueError as exc:
-        print(f"[Error] {exc}", file=sys.stderr)
-        sys.exit(1)
+        raise CommandError(str(exc), exit_code=1)
     print(f"-> Renamed {result['old_key']} -> {result['new_key']}: "
           f"{repo.normalize_posix(repo.safe_relpath(result['file_path'], repo_root))}")
     _report_rewritten(repo_root, result["rewritten"])
-    sys.exit(0)
+    return 0
 
 
 def _issue_supersede(repo_root: str, args: List[str]):
     if len(args) < 2 or args[1].startswith("-"):
-        print("[Error] Usage: along issue supersede <old-key> --by <new-key>[,<new-key>...]", file=sys.stderr)
-        sys.exit(1)
+        raise CommandError("Usage: along issue supersede <old-key> --by <new-key>[,<new-key>...]", exit_code=1)
     require_entity_name(args[1].lower(), "along issue supersede <old-key> --by <new-key>[,<new-key>...]")
 
     parser = argparse.ArgumentParser(prog="along issue supersede", allow_abbrev=False)
@@ -403,26 +384,23 @@ def _issue_supersede(repo_root: str, args: List[str]):
     check_unknown_args(extra, "along issue supersede")
 
     if not parsed.by:
-        print("[Error] Usage: along issue supersede <old-key> --by <new-key>[,<new-key>...]", file=sys.stderr)
-        sys.exit(1)
+        raise CommandError("Usage: along issue supersede <old-key> --by <new-key>[,<new-key>...]", exit_code=1)
 
     try:
         by_keys = [k.strip() for k in parsed.by.lower().split(",") if k.strip()]
         result = entities.supersede_issue(repo_root, parsed.old_key.lower(), by_keys if len(by_keys) > 1 else parsed.by.lower())
     except ValueError as exc:
-        print(f"[Error] {exc}", file=sys.stderr)
-        sys.exit(1)
+        raise CommandError(str(exc), exit_code=1)
     by_display = ", ".join(result["new_key"]) if isinstance(result["new_key"], list) else result["new_key"]
     print(f"-> Superseded {result['old_key']} by {by_display}: "
           f"{repo.normalize_posix(repo.safe_relpath(result['file_path'], repo_root))}")
     _report_rewritten(repo_root, result["rewritten"])
-    sys.exit(0)
+    return 0
 
 
 def _issue_delete(repo_root: str, args: List[str]):
     if len(args) < 2:
-        print("[Error] Usage: along issue delete <slug>", file=sys.stderr)
-        sys.exit(1)
+        raise CommandError("Usage: along issue delete <slug>", exit_code=1)
     slug = require_entity_name(args[1].lower(), "along issue delete <slug>")
     parser = argparse.ArgumentParser(prog="along issue delete", allow_abbrev=False)
     parser.add_argument("slug")
@@ -432,11 +410,10 @@ def _issue_delete(repo_root: str, args: List[str]):
     try:
         result = entities.delete_issue(repo_root, parsed.slug.lower())
     except ValueError as exc:
-        print(f"[Error] {exc}", file=sys.stderr)
-        sys.exit(1)
+        raise CommandError(str(exc), exit_code=1)
     print(f"-> Deleted {result['key']}: {repo.normalize_posix(repo.safe_relpath(result['file_path'], repo_root))}")
     _report_rewritten(repo_root, result["rewritten"])
-    sys.exit(0)
+    return 0
 
 
 def _issue_list(repo_root: str, issues_dir: str, args: List[str]):
@@ -454,7 +431,7 @@ def _issue_list(repo_root: str, issues_dir: str, args: List[str]):
             prio = iss.get("priority", "medium")
             title = (iss.get("frontmatter") or {}).get("title") or iss["slug"].replace("-", " ").capitalize()
             print(f"- {key} [{status}|{prio}] {title}")
-        sys.exit(0)
+        return 0
     print(f"-> Active issues in {issues_dir}:")
     count = 0
     for f in os.listdir(issues_dir):
@@ -462,12 +439,12 @@ def _issue_list(repo_root: str, issues_dir: str, args: List[str]):
             print(f"   - {f}")
             count += 1
     print(f"Total active issues: {count}")
-    sys.exit(0)
+    return 0
 
 
 def _issue_update(repo_root: str, args: List[str], today: str):
     if len(args) < 2:
-        print("[Error] Usage: along issue update <slug> [--milestone <name>] [--priority <high|medium|low>] [--status <status>] [--tags <t1,t2>] [--title <title>]", file=sys.stderr)
+        raise CommandError("Usage: along issue update <slug> [--milestone <name>] [--priority <high|medium|low>] [--status <status>] [--tags <t1,t2>] [--title <title>]", exit_code=1)
     require_entity_name(args[1].lower(), "along issue update <slug> [--milestone <name>] [--priority <high|medium|low>] [--status <status>] [--tags <t1,t2>] [--title <title>]")
 
     parser = argparse.ArgumentParser(prog="along issue update", allow_abbrev=False)
@@ -483,8 +460,7 @@ def _issue_update(repo_root: str, args: List[str], today: str):
     raw_slug = parsed.slug.lower()
     issue = entities.find_issue_by_slug(repo_root, raw_slug)
     if not issue:
-        print(f"[Error] Issue '{raw_slug}' not found in .along/ISSUES/.", file=sys.stderr)
-        sys.exit(1)
+        raise CommandError(f"Issue '{raw_slug}' not found in .along/ISSUES/.", exit_code=1)
 
     updates: Dict[str, Any] = {"updated": today}
     milestone_updated = False
@@ -497,8 +473,7 @@ def _issue_update(repo_root: str, args: List[str], today: str):
         else:
             m_resolved = entities.resolve_milestone_by_query(repo_root, val)
             if not m_resolved:
-                print(f"[Error] Milestone '{val}' not found or ambiguous in .along/MILESTONES/.", file=sys.stderr)
-                sys.exit(1)
+                raise CommandError(f"Milestone '{val}' not found or ambiguous in .along/MILESTONES/.", exit_code=1)
             updates["milestone"] = m_resolved["slug"]
             target_milestone_slug = m_resolved["slug"]
         milestone_updated = True
@@ -506,15 +481,13 @@ def _issue_update(repo_root: str, args: List[str], today: str):
     if parsed.priority is not None:
         pval = parsed.priority.lower()
         if pval not in entities.PRIORITIES:
-            print(f"[Error] Invalid priority '{pval}'. Allowed: {', '.join(entities.PRIORITIES)}", file=sys.stderr)
-            sys.exit(1)
+            raise CommandError(f"Invalid priority '{pval}'. Allowed: {', '.join(entities.PRIORITIES)}", exit_code=1)
         updates["priority"] = pval
 
     if parsed.status is not None:
         sval = parsed.status.lower()
         if sval not in entities.ISSUE_STATUSES:
-            print(f"[Error] Invalid status '{sval}'. Allowed: {', '.join(entities.ISSUE_STATUSES)}", file=sys.stderr)
-            sys.exit(1)
+            raise CommandError(f"Invalid status '{sval}'. Allowed: {', '.join(entities.ISSUE_STATUSES)}", exit_code=1)
         updates["status"] = sval
 
     if parsed.tags is not None:
@@ -545,13 +518,12 @@ def _issue_update(repo_root: str, args: List[str], today: str):
         print("-> Synchronized affected milestone(s).")
 
     entities.sync_issues_board(repo_root, recent_done_limit=RECENT_DONE_LIMIT)
-    sys.exit(0)
+    return 0
 
 
 def _issue_show(repo_root: str, args: List[str]):
     if len(args) < 2:
-        print("[Error] Usage: along issue show <slug> [--json]", file=sys.stderr)
-        sys.exit(1)
+        raise CommandError("Usage: along issue show <slug> [--json]", exit_code=1)
     parser = argparse.ArgumentParser(prog="along issue show", allow_abbrev=False)
     parser.add_argument("slug")
     parser.add_argument("--json", action="store_true")
@@ -561,8 +533,7 @@ def _issue_show(repo_root: str, args: List[str]):
     raw_slug = parsed.slug.lower()
     summary = entities.get_issue_summary(repo_root, raw_slug)
     if not summary:
-        print(f"[Error] Issue '{raw_slug}' not found in .along/ISSUES/.", file=sys.stderr)
-        sys.exit(1)
+        raise CommandError(f"Issue '{raw_slug}' not found in .along/ISSUES/.", exit_code=1)
 
     if parsed.json:
         print(json.dumps(summary, indent=2))
@@ -593,7 +564,7 @@ def _issue_show(repo_root: str, args: List[str]):
             print("\n".join(preview))
             if len(lines) > 25:
                 print(f"... ({len(lines) - 25} more lines)")
-    sys.exit(0)
+    return 0
 
 
 def _issue_lint(repo_root: str, args: List[str]):
@@ -607,11 +578,11 @@ def _issue_lint(repo_root: str, args: List[str]):
     print(f"=== Along Issue Structural Section Lint ({report['scanned']} issues scanned) ===")
     if report["clean"]:
         print("[OK] All active issues satisfy structural section contracts (Problem, Requirements/Architecture, Acceptance Criteria).")
-        sys.exit(0)
+        return 0
     print(f"[WARN] Found {len(report['findings'])} issue(s) with missing mandatory sections:")
     for item in report["findings"]:
         print(f"  - {item['path']}: missing {', '.join(item['missing'])}")
-    sys.exit(1 if strict else 0)
+    return 1 if strict else 0
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -701,7 +672,7 @@ def handle_issue_command(repo_root: str, args: List[str]):
         print("  lint   [--strict]         Audit active issues against mandatory section contracts")
         print("  rename <old-key> <new-key>")
         print("  supersede <old-key> --by <new-key>")
-        sys.exit(0)
+        return 0
 
     subcmd = args[0].lower()
     issues_dir = os.path.join(repo_root, ".along", "ISSUES")
@@ -732,6 +703,5 @@ def handle_issue_command(repo_root: str, args: List[str]):
 
     handler = dispatch.get(subcmd)
     if not handler:
-        print(f"[Error] Unknown issue subcommand '{subcmd}'. Run 'along issue --help'.", file=sys.stderr)
-        sys.exit(1)
-    handler()
+        raise CommandError(f"Unknown issue subcommand '{subcmd}'. Run 'along issue --help'.", exit_code=1)
+    return handler() or 0

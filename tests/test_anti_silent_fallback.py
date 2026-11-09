@@ -33,6 +33,7 @@ from alongkit import bootstrap
 bootstrap.ensure_deps()
 
 from alongkit import closeout, lifecycle, session
+from alongkit.exceptions import CommandError
 from alongkit.commands import gates as gates_cmd
 from alongkit.commands import issue as issue_cmd
 from alongkit.hooks import HookEngine, HookEvent, HookEventType, HooksConfig
@@ -139,6 +140,9 @@ class _BoundSession(unittest.TestCase):
                 code = fn(*args)
             except SystemExit as exc:
                 code = exc.code
+            except CommandError as exc:
+                code = exc.exit_code
+                err.write(str(exc))
         self.output = out.getvalue() + err.getvalue()
         return int(code or 0)
 

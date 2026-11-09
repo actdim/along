@@ -1,6 +1,7 @@
 # Active Issues
 
 ## Active
+- [ ] `(task)` [domain-exceptions-and-error-flow](ISSUES/task--domain-exceptions-and-error-flow.md) - plan ready
 - [ ] `(task)` [integrate-actdim-ui-core-runtime](ISSUES/task--integrate-actdim-ui-core-runtime.md) - plan ready
 
 ## Backlog
@@ -10,6 +11,7 @@
 - [ ] `(debt)` [canonical-path-gate-expansion](ISSUES/debt--canonical-path-gate-expansion.md)
 - [ ] `(debt)` [dashboard-retire-risk-spike-views](ISSUES/debt--dashboard-retire-risk-spike-views.md)
 - [ ] `(debt)` [gate-config-layers](ISSUES/debt--gate-config-layers.md)
+- [ ] `(debt)` [triage-silent-exception-handlers](ISSUES/debt--triage-silent-exception-handlers.md)
 - [ ] `(docs)` [arxiv-academic-paper-preprint](ISSUES/docs--arxiv-academic-paper-preprint.md)
 - [ ] `(docs)` [engineering-deepdive-medium-devto](ISSUES/docs--engineering-deepdive-medium-devto.md)
 - [ ] `(docs)` [operations-and-autonomous-systems-paradigm](ISSUES/docs--operations-and-autonomous-systems-paradigm.md)
@@ -61,7 +63,6 @@
 - [ ] `(feat)` [workspace-activity-tracking](ISSUES/feat--workspace-activity-tracking.md)
 - [ ] `(feat)` [worktree-lifecycle-hardening](ISSUES/feat--worktree-lifecycle-hardening.md)
 - [ ] `(feat)` [zero-step-state-recovery-and-drift-detection](ISSUES/feat--zero-step-state-recovery-and-drift-detection.md)
-- [ ] `(task)` [domain-exceptions-and-error-flow](ISSUES/task--domain-exceptions-and-error-flow.md) - plan ready
 - [ ] `(task)` [gate-event-remeasure](ISSUES/task--gate-event-remeasure.md)
 - [ ] `(task)` [reconcile-dashboard-ui-core-conventions](ISSUES/task--reconcile-dashboard-ui-core-conventions.md)
 

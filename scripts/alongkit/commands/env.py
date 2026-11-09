@@ -18,6 +18,7 @@ import sys
 from typing import List
 
 from alongkit import environment
+from alongkit.exceptions import CommandError, ValidationError
 from .common import check_unknown_args, require_entity_name
 
 
@@ -33,21 +34,20 @@ def handle_env_command(repo_root: str, args: List[str]):
         print("  logs     <name> [-f] [--tail <n>] [--dir <path>]")
         print("  shell    <name> [--dir <path>]")
         print("  update   <name> [--dir <path>]")
-        sys.exit(0)
+        return 0
 
     subcmd = args[0].lower().strip()
     sub_args = args[1:]
 
     valid_subcmds = {"up", "down", "status", "logs", "shell", "update"}
     if subcmd not in valid_subcmds:
-        print(f"[Error] Unknown subcommand '{subcmd}'. Run 'along env --help' for usage.", file=sys.stderr)
-        sys.exit(2)
+        raise ValidationError(f"Unknown subcommand '{subcmd}'. Run 'along env --help' for usage.")
 
     # 1. UP
     if subcmd == "up":
         if not sub_args or sub_args[0] in ("-h", "--help"):
             print("Usage: along env up <name> [--repo <url>] [--branch <branch>] [--dir <path>]")
-            sys.exit(0)
+            return 0
 
         require_entity_name(sub_args[0], "along env up <name> [--repo <url>] [--branch <branch>] [--dir <path>]")
 
@@ -67,25 +67,22 @@ def handle_env_command(repo_root: str, args: List[str]):
                 base_dir=parsed.dir,
             )
             if res.get("error"):
-                print(f"[Error] {res['error']}", file=sys.stderr)
-                sys.exit(1)
+                raise CommandError(str(res["error"]))
             print(f"-> Created isolated environment: {res['name']}")
             print(f"   Directory: {res['path']}")
             print(f"   Container: {res['container_name']}")
             print(f"   Status:    {res['status']}")
-            sys.exit(0)
+            return 0
         except environment.EnvConfigError as exc:
-            print(f"[Error] {exc}", file=sys.stderr)
-            sys.exit(1)
+            raise CommandError(str(exc))
         except ValueError as exc:
-            print(f"[Error] {exc}", file=sys.stderr)
-            sys.exit(2)
+            raise ValidationError(str(exc))
 
     # 2. DOWN
     if subcmd == "down":
         if not sub_args or sub_args[0] in ("-h", "--help"):
             print("Usage: along env down <name> [--dir <path>]")
-            sys.exit(0)
+            return 0
 
         require_entity_name(sub_args[0], "along env down <name> [--dir <path>]")
 
@@ -98,25 +95,21 @@ def handle_env_command(repo_root: str, args: List[str]):
         try:
             res = environment.env_down(name=parsed.name, base_dir=parsed.dir)
             if res.get("error"):
-                print(f"[Error] {res['error']}", file=sys.stderr)
-                sys.exit(1)
+                raise CommandError(str(res["error"]))
             print(f"-> Stopped isolated environment: {res['name']}")
-            sys.exit(0)
+            return 0
         except environment.EnvConfigError as exc:
-            print(f"[Error] {exc}", file=sys.stderr)
-            sys.exit(1)
+            raise CommandError(str(exc))
         except FileNotFoundError as exc:
-            print(f"[Error] {exc}", file=sys.stderr)
-            sys.exit(1)
+            raise CommandError(str(exc))
         except ValueError as exc:
-            print(f"[Error] {exc}", file=sys.stderr)
-            sys.exit(2)
+            raise ValidationError(str(exc))
 
     # 3. STATUS
     if subcmd == "status":
         if any(a in ("-h", "--help") for a in sub_args):
             print("Usage: along env status [<name>] [--dir <path>] [--json]")
-            sys.exit(0)
+            return 0
 
         parser = argparse.ArgumentParser(prog="along env status", allow_abbrev=False)
         parser.add_argument("name", nargs="?", default=None)
@@ -131,19 +124,17 @@ def handle_env_command(repo_root: str, args: List[str]):
         try:
             res = environment.env_status(name=parsed.name, base_dir=parsed.dir)
         except environment.EnvConfigError as exc:
-            print(f"[Error] {exc}", file=sys.stderr)
-            sys.exit(1)
+            raise CommandError(str(exc))
         except ValueError as exc:
-            print(f"[Error] {exc}", file=sys.stderr)
-            sys.exit(2)
+            raise ValidationError(str(exc))
 
         if parsed.json:
             print(json.dumps(res, indent=2))
-            sys.exit(0)
+            return 0
 
         if parsed.name:
             if not isinstance(res, dict):
-                sys.exit(1)
+                return 1
             print(f"=== Along Environment: {res['name']} ===")
             print(f"  Path:        {res.get('path', '')}")
             print(f"  Container:   {res.get('container_name', '')}")
@@ -158,7 +149,7 @@ def handle_env_command(repo_root: str, args: List[str]):
         else:
             if not isinstance(res, list) or not res:
                 print("No isolated environments configured.")
-                sys.exit(0)
+                return 0
             print("=== Along Isolated Environments ===")
             print(f"{'NAME':<16} {'STATUS':<12} {'RUNTIMES':<24} {'BRANCH':<12} REPOSITORY")
             print("-" * 78)
@@ -167,13 +158,13 @@ def handle_env_command(repo_root: str, args: List[str]):
                 repo_str = item.get("repo", "") or "-"
                 branch_str = item.get("branch", "") or "-"
                 print(f"{item['name']:<16} {item.get('status', 'unknown'):<12} {runtimes:<24} {branch_str:<12} {repo_str}")
-        sys.exit(0)
+        return 0
 
     # 4. LOGS
     if subcmd == "logs":
         if not sub_args or sub_args[0] in ("-h", "--help"):
             print("Usage: along env logs <name> [-f] [--tail <n>] [--dir <path>]")
-            sys.exit(0)
+            return 0
 
         require_entity_name(sub_args[0], "along env logs <name> [-f] [--tail <n>] [--dir <path>]")
 
@@ -192,19 +183,17 @@ def handle_env_command(repo_root: str, args: List[str]):
                 tail=parsed.tail,
                 base_dir=parsed.dir,
             )
-            sys.exit(code)
+            return code
         except environment.EnvConfigError as exc:
-            print(f"[Error] {exc}", file=sys.stderr)
-            sys.exit(1)
+            raise CommandError(str(exc))
         except ValueError as exc:
-            print(f"[Error] {exc}", file=sys.stderr)
-            sys.exit(2)
+            raise ValidationError(str(exc))
 
     # 5. SHELL
     if subcmd == "shell":
         if not sub_args or sub_args[0] in ("-h", "--help"):
             print("Usage: along env shell <name> [--dir <path>]")
-            sys.exit(0)
+            return 0
 
         require_entity_name(sub_args[0], "along env shell <name> [--dir <path>]")
 
@@ -216,19 +205,17 @@ def handle_env_command(repo_root: str, args: List[str]):
 
         try:
             code = environment.env_shell(name=parsed.name, base_dir=parsed.dir)
-            sys.exit(code)
+            return code
         except environment.EnvConfigError as exc:
-            print(f"[Error] {exc}", file=sys.stderr)
-            sys.exit(1)
+            raise CommandError(str(exc))
         except ValueError as exc:
-            print(f"[Error] {exc}", file=sys.stderr)
-            sys.exit(2)
+            raise ValidationError(str(exc))
 
     # 6. UPDATE
     if subcmd == "update":
         if not sub_args or sub_args[0] in ("-h", "--help"):
             print("Usage: along env update <name> [--dir <path>]")
-            sys.exit(0)
+            return 0
 
         require_entity_name(sub_args[0], "along env update <name> [--dir <path>]")
 
@@ -241,16 +228,12 @@ def handle_env_command(repo_root: str, args: List[str]):
         try:
             res = environment.env_update(name=parsed.name, base_dir=parsed.dir)
             if res.get("error"):
-                print(f"[Error] {res['error']}", file=sys.stderr)
-                sys.exit(1)
+                raise CommandError(str(res["error"]))
             print(f"-> Updated isolated environment: {res['name']}")
-            sys.exit(0)
+            return 0
         except environment.EnvConfigError as exc:
-            print(f"[Error] {exc}", file=sys.stderr)
-            sys.exit(1)
+            raise CommandError(str(exc))
         except FileNotFoundError as exc:
-            print(f"[Error] {exc}", file=sys.stderr)
-            sys.exit(1)
+            raise CommandError(str(exc))
         except ValueError as exc:
-            print(f"[Error] {exc}", file=sys.stderr)
-            sys.exit(2)
+            raise ValidationError(str(exc))
