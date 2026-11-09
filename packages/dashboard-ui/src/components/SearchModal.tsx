@@ -8,6 +8,7 @@ import {
 import { useComponent, toReact } from '@actdim/dynstruct/componentModel/react/hooks';
 import { useDialog, type DialogStruct } from '@actdim/dynstruct-mui/Dialog';
 import { bindProp } from '@actdim/dynstruct/componentModel/core';
+import { tw } from '@actdim/ui-core/theme';
 import { SearchResultItem, FullDashboardData } from '../types';
 import { DashboardAppMsgStruct, DashboardMsgChannels } from '../bus';
 
@@ -222,24 +223,24 @@ export const useSearchModal = (
         sx: {
           zIndex: 1400,
           '& .MuiDialog-paper': {
-            backgroundColor: '#0f172a',
-            color: '#f8fafc',
+            backgroundColor: 'var(--color-surface-panel)',
+            color: 'var(--color-fg-default)',
             backgroundImage: 'none',
             borderRadius: '16px',
-            border: '1px solid #1e293b',
+            border: '1px solid var(--color-line-default)',
             overflow: 'hidden',
             margin: '16px',
           },
           '& .MuiBackdrop-root': {
-            backgroundColor: 'rgba(2, 6, 23, 0.8)',
+            backgroundColor: 'var(--color-surface-scrim)',
             backdropFilter: 'blur(4px)',
           },
         },
         content: () => (
-          <div className="bg-slate-900 text-slate-100 p-0 flex flex-col max-h-[80vh]">
+          <div className={tw('bg-surface-panel text-fg-default p-0 flex flex-col max-h-[80vh]')}>
             {/* Search Bar Input */}
-            <div className="flex items-center px-4 py-3.5 border-b border-slate-800 gap-3">
-              <span className="iconify lucide--search w-5 h-5 text-sky-400 shrink-0" />
+            <div className={tw('flex items-center px-relaxed py-normal border-b border-line-default gap-normal')}>
+              <span className={`iconify lucide--search ${tw('size-icon-md shrink-0')}`} />
               <input
                 type="text"
                 autoFocus
@@ -248,26 +249,26 @@ export const useSearchModal = (
                   m.performSearch(e.target.value);
                 }}
                 placeholder="Search across Knowledge Base, Issues, ADR decisions..."
-                className="w-full bg-transparent text-slate-100 placeholder-slate-500 text-sm focus:outline-none"
+                className={tw('w-full bg-transparent text-fg-default placeholder-fg-muted text-body focus:outline-none')}
               />
               {m.loading && (
-                <span className="iconify lucide--loader-2 w-4 h-4 text-sky-400 animate-spin shrink-0" />
+                <span className={`iconify lucide--loader-2 ${tw('size-icon-sm animate-spin shrink-0')}`} />
               )}
               <button
                 type="button"
                 onClick={() => {
                   m.close();
                 }}
-                className="text-slate-500 hover:text-slate-300 p-1 rounded-lg cursor-pointer transition"
+                className={tw('text-fg-muted hover:text-fg-default p-tight rounded-control cursor-pointer transition')}
                 title="Close modal (Esc)"
               >
-                <span className="iconify lucide--x w-4 h-4" />
+                <span className="iconify lucide--x size-icon-sm" />
               </button>
             </div>
 
             {/* Filter Pills */}
-            <div className="flex items-center gap-1.5 px-4 py-2 bg-slate-950/60 border-b border-slate-800 text-[10px] font-mono">
-              <span className="text-slate-500 mr-1">Filter:</span>
+            <div className={tw('flex items-center gap-tight px-relaxed py-snug bg-surface-inset border-b border-line-default text-micro font-code')}>
+              <span className={tw('text-fg-muted mr-tight')}>Filter:</span>
               {['all', 'kb', 'issue', 'decision', 'session'].map((t) => (
                 <button
                   type="button"
@@ -278,10 +279,10 @@ export const useSearchModal = (
                       m.performSearch(m.query);
                     }
                   }}
-                  className={`px-2 py-0.5 rounded uppercase cursor-pointer transition ${
+                  className={`${tw('px-snug py-micro rounded-control uppercase cursor-pointer transition')} ${
                     m.activeTypeFilter === t
-                      ? 'bg-sky-600 text-white font-bold'
-                      : 'bg-slate-900 text-slate-400 hover:text-slate-200'
+                      ? tw('bg-primary text-primary-contrast font-emphasis')
+                      : tw('bg-surface-panel text-fg-muted hover:text-fg-default')
                   }`}
                 >
                   {t}
@@ -290,28 +291,28 @@ export const useSearchModal = (
             </div>
 
             {/* Results List */}
-            <div className="overflow-y-auto p-3 space-y-2 flex-1 max-h-[55vh]">
+            <div className={tw('overflow-y-auto p-normal space-y-snug flex-1 max-h-[55vh]')}>
               {m.results.map((r) => (
                 <div
                   key={r.id}
                   onClick={() => {
                     m.selectResult(r);
                   }}
-                  className="p-3 bg-slate-950 border border-slate-800/80 hover:border-sky-500/50 rounded-xl cursor-pointer transition group"
+                  className={tw('p-normal bg-surface-inset border border-line-default hover:border-line-strong rounded-panel cursor-pointer transition group')}
                 >
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-2">
-                      <span className="text-[10px] font-mono uppercase px-1.5 py-0.2 rounded bg-slate-900 text-sky-400 border border-slate-800">
+                  <div className={tw('flex items-center justify-between')}>
+                    <div className={tw('flex items-center gap-snug')}>
+                      <span className={tw('text-micro font-code uppercase px-tight py-micro rounded-control bg-surface-panel text-primary border border-line-default')}>
                         {r.type}
                       </span>
-                      <h4 className="text-xs font-bold text-slate-200 group-hover:text-sky-300 transition">
+                      <h4 className={tw('text-caption font-emphasis text-fg-default group-hover:text-primary transition')}>
                         {r.title}
                       </h4>
                     </div>
-                    <span className="text-[10px] text-slate-500 font-mono">{r.file_path}</span>
+                    <span className={tw('text-micro text-fg-muted font-code')}>{r.file_path}</span>
                   </div>
                   {r.snippet && (
-                    <p className="text-xs text-slate-400 mt-1.5 line-clamp-2 leading-relaxed">
+                    <p className={tw('text-caption text-fg-muted mt-snug line-clamp-2 leading-relaxed')}>
                       {r.snippet}
                     </p>
                   )}
@@ -319,13 +320,13 @@ export const useSearchModal = (
               ))}
 
               {m.query.trim() && !m.loading && m.results.length === 0 && (
-                <div className="py-12 text-center text-xs text-slate-500 font-mono italic">
+                <div className={tw('py-spacious text-center text-caption text-fg-muted font-code italic')}>
                   No results found for "{m.query}"
                 </div>
               )}
 
               {!m.query.trim() && (
-                <div className="py-8 text-center text-xs text-slate-500 font-mono">
+                <div className={tw('py-loose text-center text-caption text-fg-muted font-code')}>
                   Type to start searching knowledge base topics, issues, decisions, and sessions.
                 </div>
               )}

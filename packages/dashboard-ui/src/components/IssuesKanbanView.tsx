@@ -6,6 +6,7 @@ import {
   type ComponentModel,
 } from '@actdim/dynstruct/componentModel/contracts';
 import { useComponent, toReact } from '@actdim/dynstruct/componentModel/react/hooks';
+import { tw } from '@actdim/ui-core/theme';
 import { Issue } from '../types';
 import { DashboardAppMsgStruct, DashboardMsgChannels } from '../bus';
 
@@ -73,19 +74,19 @@ export const useIssuesView = (
     },
     view: () => {
       const columns: Array<{ id: 'open' | 'in-progress' | 'blocked' | 'done'; label: string; color: string }> = [
-        { id: 'open', label: 'Open / Backlog', color: 'border-slate-700 text-slate-300' },
-        { id: 'in-progress', label: 'In Progress', color: 'border-amber-700/60 text-amber-300' },
-        { id: 'blocked', label: 'Blocked', color: 'border-rose-700/60 text-rose-300' },
-        { id: 'done', label: 'Done (Completed)', color: 'border-emerald-700/60 text-emerald-300' },
+        { id: 'open', label: 'Open / Backlog', color: 'text-fg-default' },
+        { id: 'in-progress', label: 'In Progress', color: 'text-warning-strong' },
+        { id: 'blocked', label: 'Blocked', color: 'text-danger-strong' },
+        { id: 'done', label: 'Done (Completed)', color: 'text-success-strong' },
       ];
 
       return (
-        <div className="space-y-4">
+        <div className={tw('space-y-normal')}>
           {/* Controls and Filters Bar */}
-          <div className="bg-slate-900/90 border border-slate-800 rounded-2xl p-4 flex flex-col md:flex-row gap-4 items-center justify-between">
+          <div className={tw('bg-surface-panel border border-line-default rounded-dialog p-normal flex flex-col md:flex-row gap-normal items-center justify-between')}>
             {/* Search input */}
-            <div className="relative w-full md:w-72">
-              <span className="iconify lucide--search w-4 h-4 text-slate-400 absolute left-3 top-3" />
+            <div className={`md:w-72 ${tw('relative w-full')}`}>
+              <span className={`iconify lucide--search ${tw('size-icon-sm text-fg-muted absolute left-snug top-snug')}`} />
               <input
                 type="text"
                 value={m.searchQuery}
@@ -93,18 +94,18 @@ export const useIssuesView = (
                   m.searchQuery = e.target.value;
                 }}
                 placeholder="Filter issues..."
-                className="w-full pl-9 pr-3 py-1.5 bg-slate-950 border border-slate-800 rounded-xl text-xs text-slate-100 placeholder-slate-500 focus:outline-none focus:border-sky-500 transition"
+                className={tw('w-full pl-spacious pr-normal py-tight bg-surface-inset border border-line-default rounded-control text-caption text-fg-default placeholder-fg-muted focus:outline-none focus:border-focus transition')}
               />
             </div>
 
             {/* Filter Dropdowns */}
-            <div className="flex flex-wrap items-center gap-2 w-full md:w-auto">
+            <div className={tw('flex flex-wrap items-center gap-snug w-full md:w-auto')}>
               <select
                 value={m.statusFilter}
                 onChange={(e) => {
                   m.statusFilter = e.target.value;
                 }}
-                className="px-2.5 py-1.5 bg-slate-950 border border-slate-800 rounded-xl text-xs text-slate-300 focus:outline-none focus:border-sky-500"
+                className={tw('px-normal py-tight bg-surface-inset border border-line-default rounded-control text-caption text-fg-muted focus:outline-none focus:border-focus')}
               >
                 <option value="all">All Statuses</option>
                 <option value="open">Open</option>
@@ -118,7 +119,7 @@ export const useIssuesView = (
                 onChange={(e) => {
                   m.typeFilter = e.target.value;
                 }}
-                className="px-2.5 py-1.5 bg-slate-950 border border-slate-800 rounded-xl text-xs text-slate-300 focus:outline-none focus:border-sky-500"
+                className={tw('px-normal py-tight bg-surface-inset border border-line-default rounded-control text-caption text-fg-muted focus:outline-none focus:border-focus')}
               >
                 <option value="all">All Types</option>
                 <option value="feat">Feature (feat)</option>
@@ -134,7 +135,7 @@ export const useIssuesView = (
                 onChange={(e) => {
                   m.priorityFilter = e.target.value;
                 }}
-                className="px-2.5 py-1.5 bg-slate-950 border border-slate-800 rounded-xl text-xs text-slate-300 focus:outline-none focus:border-sky-500"
+                className={tw('px-normal py-tight bg-surface-inset border border-line-default rounded-control text-caption text-fg-muted focus:outline-none focus:border-focus')}
               >
                 <option value="all">All Priorities</option>
                 <option value="critical">Critical</option>
@@ -144,30 +145,30 @@ export const useIssuesView = (
               </select>
 
               {/* View Mode Toggle */}
-              <div className="flex items-center bg-slate-950 border border-slate-800 rounded-xl p-0.5 ml-auto">
+              <div className={tw('flex items-center bg-surface-inset border border-line-default rounded-control p-micro ml-auto')}>
                 <button
                   type="button"
                   onClick={() => {
                     m.viewMode = 'table';
                   }}
-                  className={`p-1.5 rounded-lg text-xs transition cursor-pointer ${
-                    m.viewMode === 'table' ? 'bg-sky-600 text-white' : 'text-slate-400 hover:text-slate-200'
+                  className={`${tw('p-tight rounded-control text-caption transition cursor-pointer')} ${
+                    m.viewMode === 'table' ? tw('bg-primary text-primary-contrast') : tw('text-fg-muted hover:text-fg-default')
                   }`}
                   title="Table View"
                 >
-                  <span className="iconify lucide--table w-4 h-4" />
+                  <span className="iconify lucide--table size-icon-sm" />
                 </button>
                 <button
                   type="button"
                   onClick={() => {
                     m.viewMode = 'kanban';
                   }}
-                  className={`p-1.5 rounded-lg text-xs transition cursor-pointer ${
-                    m.viewMode === 'kanban' ? 'bg-sky-600 text-white' : 'text-slate-400 hover:text-slate-200'
+                  className={`${tw('p-tight rounded-control text-caption transition cursor-pointer')} ${
+                    m.viewMode === 'kanban' ? tw('bg-primary text-primary-contrast') : tw('text-fg-muted hover:text-fg-default')
                   }`}
                   title="Kanban Board"
                 >
-                  <span className="iconify lucide--columns w-4 h-4" />
+                  <span className="iconify lucide--columns size-icon-sm" />
                 </button>
               </div>
             </div>
@@ -175,78 +176,78 @@ export const useIssuesView = (
 
           {/* View Output */}
           {m.viewMode === 'table' ? (
-            <div className="bg-slate-900 border border-slate-800 rounded-2xl overflow-hidden shadow-sm">
-              <div className="overflow-x-auto">
-                <table className="w-full text-left text-xs">
-                  <thead className="bg-slate-950 text-slate-400 border-b border-slate-800 font-mono">
+            <div className={tw('bg-surface-panel border border-line-default rounded-dialog overflow-hidden shadow-panel')}>
+              <div className={tw('overflow-x-auto')}>
+                <table className={tw('w-full text-left text-caption')}>
+                  <thead className={tw('bg-surface-inset text-fg-muted border-b border-line-default font-code')}>
                     <tr>
-                      <th className="py-3 px-4">Status</th>
-                      <th className="py-3 px-4">Type</th>
-                      <th className="py-3 px-4">Priority</th>
-                      <th className="py-3 px-4">Title / ID</th>
-                      <th className="py-3 px-4">Milestone</th>
-                      <th className="py-3 px-4">Tags</th>
-                      <th className="py-3 px-4 text-right">Updated</th>
+                      <th className={tw('py-normal px-normal')}>Status</th>
+                      <th className={tw('py-normal px-normal')}>Type</th>
+                      <th className={tw('py-normal px-normal')}>Priority</th>
+                      <th className={tw('py-normal px-normal')}>Title / ID</th>
+                      <th className={tw('py-normal px-normal')}>Milestone</th>
+                      <th className={tw('py-normal px-normal')}>Tags</th>
+                      <th className={tw('py-normal px-normal text-right')}>Updated</th>
                     </tr>
                   </thead>
-                  <tbody className="divide-y divide-slate-800 text-slate-300">
+                  <tbody className={tw('divide-y divide-line-muted text-fg-default')}>
                     {m.filteredIssues.map((iss) => (
                       <tr
                         key={iss.id}
                         onClick={() => {
                           m.selectIssue(iss.id, iss.type);
                         }}
-                        className="hover:bg-slate-800/60 cursor-pointer transition"
+                        className={tw('hover:bg-surface-hover cursor-pointer transition')}
                       >
-                        <td className="py-3 px-4">
+                        <td className={tw('py-normal px-normal')}>
                           <span
-                            className={`font-mono text-[10px] uppercase font-bold px-2 py-0.5 rounded border ${
+                            className={`${tw('font-code text-micro uppercase font-emphasis px-snug py-micro rounded-control')} ${
                               iss.status === 'done'
-                                ? 'bg-emerald-950 text-emerald-300 border-emerald-800'
+                                ? tw('bg-success-soft text-success-strong border border-success-line')
                                 : iss.status === 'in-progress'
-                                ? 'bg-amber-950 text-amber-300 border-amber-800'
+                                ? tw('bg-warning-soft text-warning-strong border border-warning-line')
                                 : iss.status === 'blocked'
-                                ? 'bg-rose-950 text-rose-300 border-rose-800'
-                                : 'bg-slate-800 text-slate-300 border-slate-700'
+                                ? tw('bg-danger-soft text-danger-strong border border-danger-line')
+                                : tw('bg-surface-inset text-fg-muted border border-line-default')
                             }`}
                           >
                             {iss.status}
                           </span>
                         </td>
-                        <td className="py-3 px-4 font-mono">{iss.type}</td>
-                        <td className="py-3 px-4 font-mono">
+                        <td className={tw('py-normal px-normal font-code')}>{iss.type}</td>
+                        <td className={tw('py-normal px-normal font-code')}>
                           <span
-                            className={`${
+                            className={
                               iss.priority === 'critical'
-                                ? 'text-rose-400 font-bold'
+                                ? tw('text-danger-strong font-emphasis')
                                 : iss.priority === 'high'
-                                ? 'text-amber-400'
-                                : 'text-slate-400'
-                            }`}
+                                ? tw('text-warning-strong')
+                                : tw('text-fg-muted')
+                            }
                           >
                             {iss.priority}
                           </span>
                         </td>
-                        <td className="py-3 px-4">
-                          <div className="font-semibold text-slate-100">{iss.title || iss.slug}</div>
-                          <div className="text-[10px] text-slate-400 font-mono mt-0.5">{iss.id}</div>
+                        <td className={tw('py-normal px-normal')}>
+                          <div className={tw('font-emphasis text-fg-default')}>{iss.title || iss.slug}</div>
+                          <div className={tw('text-micro text-fg-muted font-code mt-micro')}>{iss.id}</div>
                         </td>
-                        <td className="py-3 px-4 font-mono text-slate-400">
+                        <td className={tw('py-normal px-normal font-code text-fg-muted')}>
                           {iss.milestone ? `@${iss.milestone}` : '-'}
                         </td>
-                        <td className="py-3 px-4">
-                          <div className="flex flex-wrap gap-1">
+                        <td className={tw('py-normal px-normal')}>
+                          <div className={tw('flex flex-wrap gap-tight')}>
                             {iss.tags.slice(0, 3).map((t) => (
                               <span
                                 key={t}
-                                className="text-[10px] font-mono px-1.5 py-0.2 bg-slate-950 text-slate-400 border border-slate-800 rounded"
+                                className={tw('text-micro font-code px-tight py-micro bg-surface-inset text-fg-muted border border-line-default rounded-control')}
                               >
                                 #{t}
                               </span>
                             ))}
                           </div>
                         </td>
-                        <td className="py-3 px-4 text-right font-mono text-slate-400">
+                        <td className={tw('py-normal px-normal text-right font-code text-fg-muted')}>
                           {iss.updated || iss.created || '-'}
                         </td>
                       </tr>
@@ -256,45 +257,45 @@ export const useIssuesView = (
               </div>
             </div>
           ) : (
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+            <div className={tw('grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-normal')}>
               {columns.map((col) => {
                 const colIssues = m.filteredIssues.filter((i) => i.status === col.id);
                 return (
-                  <div key={col.id} className="bg-slate-900 border border-slate-800 rounded-2xl p-4 flex flex-col">
-                    <div className="flex items-center justify-between pb-3 border-b border-slate-800 mb-3">
-                      <h3 className={`text-xs font-bold uppercase tracking-wider ${col.color}`}>{col.label}</h3>
-                      <span className="text-xs font-mono px-2 py-0.5 rounded-full bg-slate-800 text-slate-300">
+                  <div key={col.id} className={tw('bg-surface-panel border border-line-default rounded-dialog p-normal flex flex-col')}>
+                    <div className={tw('flex items-center justify-between pb-normal border-b border-line-default mb-normal')}>
+                      <h3 className={`${tw('text-caption font-emphasis uppercase tracking-wider')} ${col.color}`}>{col.label}</h3>
+                      <span className={tw('text-caption font-code px-snug py-micro rounded-full bg-surface-inset text-fg-muted')}>
                         {colIssues.length}
                       </span>
                     </div>
-                    <div className="space-y-3 flex-1 overflow-y-auto max-h-[680px] pr-1">
+                    <div className={`max-h-[680px] ${tw('space-y-normal flex-1 overflow-y-auto pr-tight')}`}>
                       {colIssues.map((iss) => (
                         <div
                           key={iss.id}
                           onClick={() => {
                             m.selectIssue(iss.id, iss.type);
                           }}
-                          className="bg-slate-950 border border-slate-800/80 hover:border-slate-700 rounded-xl p-3.5 cursor-pointer transition hover:shadow-md space-y-2"
+                          className={tw('bg-surface-inset border border-line-default hover:border-line-strong rounded-panel p-normal cursor-pointer transition hover:shadow-panel space-y-snug')}
                         >
-                          <div className="flex items-center justify-between text-[10px] font-mono">
-                            <span className="text-slate-400 uppercase">{iss.type}</span>
+                          <div className={tw('flex items-center justify-between text-micro font-code')}>
+                            <span className={tw('text-fg-muted uppercase')}>{iss.type}</span>
                             <span
-                              className={`font-semibold ${
+                              className={
                                 iss.priority === 'critical'
-                                  ? 'text-rose-400'
+                                  ? tw('text-danger-strong font-emphasis')
                                   : iss.priority === 'high'
-                                  ? 'text-amber-400'
-                                  : 'text-slate-400'
-                              }`}
+                                  ? tw('text-warning-strong')
+                                  : tw('text-fg-muted')
+                              }
                             >
                               {iss.priority}
                             </span>
                           </div>
-                          <h4 className="text-xs font-bold text-slate-200 line-clamp-2">{iss.title || iss.slug}</h4>
+                          <h4 className={tw('text-caption font-emphasis text-fg-default line-clamp-2')}>{iss.title || iss.slug}</h4>
                           {iss.tags.length > 0 && (
-                            <div className="flex flex-wrap gap-1">
+                            <div className={tw('flex flex-wrap gap-tight')}>
                               {iss.tags.slice(0, 2).map((t) => (
-                                <span key={t} className="text-[9px] font-mono px-1 py-0.2 bg-slate-900 text-slate-400 rounded">
+                                <span key={t} className={tw('text-micro font-code px-tight py-micro bg-surface-panel text-fg-muted rounded-control')}>
                                   #{t}
                                 </span>
                               ))}
@@ -303,7 +304,7 @@ export const useIssuesView = (
                         </div>
                       ))}
                       {colIssues.length === 0 && (
-                        <div className="text-center text-xs text-slate-600 py-8 italic font-mono">No issues in column</div>
+                        <div className={tw('text-center text-caption text-fg-faint py-loose italic font-code')}>No issues in column</div>
                       )}
                     </div>
                   </div>
