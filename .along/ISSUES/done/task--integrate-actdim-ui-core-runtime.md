@@ -4,7 +4,8 @@ protocol_version: "4.7.0"
 slug: integrate-actdim-ui-core-runtime
 title: Integrate @actdim/ui-core Runtime Dependencies and CSS Tokens into Dashboard UI
 type: task
-status: in-progress
+status: done
+completed: 2026-11-09
 priority: high
 created: 2026-10-16
 updated: 2026-11-09

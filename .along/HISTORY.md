@@ -259,3 +259,4 @@ _Index of sessions (newest last). One line per session:_
 2026-11-08 - hermetic-suite-flaky-git-cache - antigravity - Classify working tree changes by content digest to distinguish git stat-cache flips from real mutations - [Session Log](./SESSIONS/2026/2026-11-08--hermetic-suite-flaky-git-cache.md)
 2026-11-09 - optimize-test-suite-execution-time - antigravity - Add integration test registry and parallel xdist execution support to test runners - [Session Log](./SESSIONS/2026/2026-11-09--optimize-test-suite-execution-time.md)
 2026-11-09 - domain-exceptions-and-error-flow - antigravity - Centralize domain exceptions hierarchy and eliminate sys.exit from command modules - [Session Log](./SESSIONS/2026/2026-11-09--domain-exceptions-and-error-flow.md)
+2026-11-09 - integrate-actdim-ui-core-runtime - antigravity - Integrate @actdim/ui-core runtime, tokens, and component tests - [Session Log](./SESSIONS/2026/2026-11-09--integrate-actdim-ui-core-runtime.md)

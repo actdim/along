@@ -1,7 +1,7 @@
 # Active Issues
 
 ## Active
-- [ ] `(task)` [integrate-actdim-ui-core-runtime](ISSUES/task--integrate-actdim-ui-core-runtime.md) - plan ready
+<!-- No active issues -->
 
 ## Backlog
 - [ ] `(bug)` [start-dirty-check-misattribution](ISSUES/bug--start-dirty-check-misattribution.md)
@@ -67,8 +67,8 @@
 
 ## Done (recent)
 - [x] `(task)` [optimize-test-suite-execution-time](ISSUES/done/task--optimize-test-suite-execution-time.md)
+- [x] `(task)` [integrate-actdim-ui-core-runtime](ISSUES/done/task--integrate-actdim-ui-core-runtime.md)
 - [x] `(task)` [domain-exceptions-and-error-flow](ISSUES/done/task--domain-exceptions-and-error-flow.md)
 - [x] `(task)` [simplify-cli-safety-gate-and-predicates](ISSUES/done/task--simplify-cli-safety-gate-and-predicates.md)
 - [x] `(task)` [refactor-cli-chdir-common](ISSUES/done/task--refactor-cli-chdir-common.md)
-- [x] `(task)` [pytest-support-and-test-runner-filtering](ISSUES/done/task--pytest-support-and-test-runner-filtering.md)
-<!-- 322 older completed issue(s) archived in .along/ISSUES/done/ -->
+<!-- 323 older completed issue(s) archived in .along/ISSUES/done/ -->
