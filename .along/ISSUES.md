@@ -1,7 +1,6 @@
 # Active Issues
 
 ## Active
-- [ ] `(task)` [domain-exceptions-and-error-flow](ISSUES/task--domain-exceptions-and-error-flow.md) - plan ready
 - [ ] `(task)` [integrate-actdim-ui-core-runtime](ISSUES/task--integrate-actdim-ui-core-runtime.md) - plan ready
 
 ## Backlog
@@ -68,8 +67,8 @@
 
 ## Done (recent)
 - [x] `(task)` [optimize-test-suite-execution-time](ISSUES/done/task--optimize-test-suite-execution-time.md)
+- [x] `(task)` [domain-exceptions-and-error-flow](ISSUES/done/task--domain-exceptions-and-error-flow.md)
 - [x] `(task)` [simplify-cli-safety-gate-and-predicates](ISSUES/done/task--simplify-cli-safety-gate-and-predicates.md)
 - [x] `(task)` [refactor-cli-chdir-common](ISSUES/done/task--refactor-cli-chdir-common.md)
 - [x] `(task)` [pytest-support-and-test-runner-filtering](ISSUES/done/task--pytest-support-and-test-runner-filtering.md)
-- [x] `(task)` [hermetic-suite-flaky-git-cache](ISSUES/done/task--hermetic-suite-flaky-git-cache.md)
-<!-- 321 older completed issue(s) archived in .along/ISSUES/done/ -->
+<!-- 322 older completed issue(s) archived in .along/ISSUES/done/ -->

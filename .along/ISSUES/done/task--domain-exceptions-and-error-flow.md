@@ -3,7 +3,8 @@ protocol: along
 protocol_version: "4.7.0"
 slug: domain-exceptions-and-error-flow
 type: task
-status: in-progress
+status: done
+completed: 2026-11-09
 priority: medium
 created: 2026-11-07
 updated: 2026-11-09
@@ -48,4 +49,4 @@ Command helpers print and call `sys.exit()` deep in the call stack, so callers c
 - [x] Structural test blocks new `sys.exit(` in `scripts/alongkit/commands/`.
 - [x] `tests/test_domain_exceptions.py` and the full suite pass.
 - [x] Follow-up issue for `except ...: pass` triage filed.
-- [ ] Repository passes `python scripts/sanitize_typography.py --check`.
+- [x] Repository passes `python scripts/sanitize_typography.py --check`.
