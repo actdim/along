@@ -3,10 +3,11 @@ protocol: along
 protocol_version: "4.6.1"
 slug: subproject-boundary-issue-folder-files
 type: bug
-status: open
+status: done
+completed: 2026-11-10
 priority: high
 created: 2026-11-08
-updated: 2026-11-08
+updated: 2026-11-10
 agent: claude-code
 tags: [gates, feedback]
 blocked_by: []
@@ -28,6 +29,6 @@ Root cause (`scripts/alongkit/hooks/predicates.py`, `_bound_subproject_owns_root
 - REQ-4: A `parent:` added mid-session MUST take effect on the next write (covered by a test, since the report suspected otherwise).
 
 ## Acceptance Criteria
-- [ ] A test: subproject-bound session, bound issue has `parent: task--umbrella`; writing `.along/ISSUES/task--umbrella/plans/01--x.md` is allowed; writing `.along/ISSUES/task--other/plan.md` is denied.
-- [ ] A test: the write is denied, `parent:` is then added to the bound issue, the same write is allowed.
-- [ ] Automated tests passing
+- [x] A test: subproject-bound session, bound issue has `parent: task--umbrella`; writing `.along/ISSUES/task--umbrella/plans/01--x.md` is allowed; writing `.along/ISSUES/task--other/plan.md` is denied.
+- [x] A test: the write is denied, `parent:` is then added to the bound issue, the same write is allowed.
+- [x] Automated tests passing

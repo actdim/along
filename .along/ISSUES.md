@@ -5,7 +5,6 @@
 
 ## Backlog
 - [ ] `(bug)` [start-dirty-check-misattribution](ISSUES/bug--start-dirty-check-misattribution.md)
-- [ ] `(bug)` [subproject-boundary-issue-folder-files](ISSUES/bug--subproject-boundary-issue-folder-files.md)
 - [ ] `(debt)` [autonomous-non-elevation-invariants](ISSUES/debt--autonomous-non-elevation-invariants.md)
 - [ ] `(debt)` [canonical-path-gate-expansion](ISSUES/debt--canonical-path-gate-expansion.md)
 - [ ] `(debt)` [dashboard-retire-risk-spike-views](ISSUES/debt--dashboard-retire-risk-spike-views.md)
@@ -68,8 +67,8 @@
 
 ## Done (recent)
 - [x] `(task)` [release-v4-8-0](ISSUES/done/task--release-v4-8-0.md)
+- [x] `(bug)` [subproject-boundary-issue-folder-files](ISSUES/done/bug--subproject-boundary-issue-folder-files.md)
 - [x] `(bug)` [gates-ack-cross-issue-denials](ISSUES/done/bug--gates-ack-cross-issue-denials.md)
 - [x] `(task)` [optimize-test-suite-execution-time](ISSUES/done/task--optimize-test-suite-execution-time.md)
 - [x] `(task)` [integrate-actdim-ui-core-runtime](ISSUES/done/task--integrate-actdim-ui-core-runtime.md)
-- [x] `(task)` [domain-exceptions-and-error-flow](ISSUES/done/task--domain-exceptions-and-error-flow.md)
-<!-- 325 older completed issue(s) archived in .along/ISSUES/done/ -->
+<!-- 326 older completed issue(s) archived in .along/ISSUES/done/ -->
