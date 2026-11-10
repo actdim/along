@@ -32,7 +32,6 @@
 - [ ] `(feat)` [deepseek-harness-bridge](ISSUES/feat--deepseek-harness-bridge.md)
 - [ ] `(feat)` [deepseek-runtime-adapter](ISSUES/feat--deepseek-runtime-adapter.md)
 - [ ] `(feat)` [doctor-granular-diagnostics](ISSUES/feat--doctor-granular-diagnostics.md)
-- [ ] `(feat)` [early-raw-runner-warning](ISSUES/feat--early-raw-runner-warning.md)
 - [ ] `(feat)` [empirical-benchmark-harness-and-metrics](ISSUES/feat--empirical-benchmark-harness-and-metrics.md)
 - [ ] `(feat)` [enterprise-governance-and-cloud-infrastructure](ISSUES/feat--enterprise-governance-and-cloud-infrastructure.md)
 - [ ] `(feat)` [enterprise-governance-and-compliance-pack](ISSUES/feat--enterprise-governance-and-compliance-pack.md)
@@ -66,4 +65,4 @@
 - [x] `(feat)` [top-down-umbrella-subproject-binding](ISSUES/done/feat--top-down-umbrella-subproject-binding.md)
 - [x] `(feat)` [plan-grants-write-scope](ISSUES/done/feat--plan-grants-write-scope.md)
 - [x] `(feat)` [lint-arbitrary-paths](ISSUES/done/feat--lint-arbitrary-paths.md)
-<!-- 331 older completed issue(s) archived in .along/ISSUES/done/ -->
+<!-- 332 older completed issue(s) archived in .along/ISSUES/done/ -->
