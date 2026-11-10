@@ -3,10 +3,11 @@ protocol: along
 protocol_version: "4.6.1"
 slug: lint-arbitrary-paths
 type: feat
-status: open
+status: done
+completed: 2026-11-10
 priority: low
 created: 2026-11-08
-updated: 2026-11-08
+updated: 2026-11-10
 agent: claude-code
 tags: [cli, feedback]
 blocked_by: []
@@ -25,6 +26,6 @@ Field report (2026-11-08): `along lint` takes only `--ci`, `--range`, `--no-link
 - REQ-3: Exit codes MUST match the staged mode (0 clean, 1 findings, 2 usage error).
 
 ## Acceptance Criteria
-- [ ] `along lint .along/ISSUES/x/plans/01--y.md` reports a non-ASCII dash in an unstaged file.
-- [ ] `along lint --help` documents the paths argument.
-- [ ] Automated tests passing
+- [x] `along lint .along/ISSUES/x/plans/01--y.md` reports a non-ASCII dash in an unstaged file.
+- [x] `along lint --help` documents the paths argument.
+- [x] Automated tests passing

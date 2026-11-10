@@ -41,7 +41,6 @@
 - [ ] `(feat)` [issue-drafts-lifecycle](ISSUES/feat--issue-drafts-lifecycle.md)
 - [ ] `(feat)` [jvm-ecosystem-support](ISSUES/feat--jvm-ecosystem-support.md)
 - [ ] `(feat)` [kb-search-hybrid-retrieval](ISSUES/feat--kb-search-hybrid-retrieval.md)
-- [ ] `(feat)` [lint-arbitrary-paths](ISSUES/feat--lint-arbitrary-paths.md)
 - [ ] `(feat)` [multi-runtime-and-omnichannel-expansion](ISSUES/feat--multi-runtime-and-omnichannel-expansion.md)
 - [ ] `(feat)` [native-ast-blast-radius-analyzer](ISSUES/feat--native-ast-blast-radius-analyzer.md)
 - [ ] `(feat)` [openclaw-and-hermes-agent-integration](ISSUES/feat--openclaw-and-hermes-agent-integration.md)
@@ -66,5 +65,5 @@
 - [x] `(feat)` [worktree-lifecycle-hardening](ISSUES/done/feat--worktree-lifecycle-hardening.md)
 - [x] `(feat)` [top-down-umbrella-subproject-binding](ISSUES/done/feat--top-down-umbrella-subproject-binding.md)
 - [x] `(feat)` [plan-grants-write-scope](ISSUES/done/feat--plan-grants-write-scope.md)
-- [x] `(bug)` [subproject-boundary-issue-folder-files](ISSUES/done/bug--subproject-boundary-issue-folder-files.md)
-<!-- 330 older completed issue(s) archived in .along/ISSUES/done/ -->
+- [x] `(feat)` [lint-arbitrary-paths](ISSUES/done/feat--lint-arbitrary-paths.md)
+<!-- 331 older completed issue(s) archived in .along/ISSUES/done/ -->

@@ -267,3 +267,4 @@ _Index of sessions (newest last). One line per session:_
 2026-11-10 - top-down-umbrella-subproject-binding - antigravity - Add top-down umbrella children binding and cross-context authorization - [Session Log](./SESSIONS/2026/2026-11-10--top-down-umbrella-subproject-binding.md)
 2026-11-10 - worktree-lifecycle-hardening - antigravity - Harden worktree lifecycle with wrap guards, automatic teardown, doctor audits, and commit notice - [Session Log](./SESSIONS/2026/2026-11-10--worktree-lifecycle-hardening.md)
 2026-11-10 - plan-grants-write-scope - antigravity - Approved plan grants Files to change as write scope outside subproject - [Session Log](./SESSIONS/2026/2026-11-10--plan-grants-write-scope.md)
+2026-11-10 - lint-arbitrary-paths - antigravity - Validate existence of specified paths in along lint and return code 2 on missing files - [Session Log](./SESSIONS/2026/2026-11-10--lint-arbitrary-paths.md)
