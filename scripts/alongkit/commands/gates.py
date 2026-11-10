@@ -151,8 +151,28 @@ def handle_gates_command(repo_root: str, args: List[str]):
         paths = repo.working_tree_changes(repo_root) or []
         violations = gitgates.check_files(repo_root, paths)
     elif opts.hook_args:
-        context = f"{len(opts.hook_args)} specified path(s)"
-        violations = gitgates.check_files(repo_root, opts.hook_args)
+        resolved_args = []
+        missing = []
+        for p in opts.hook_args:
+            if os.path.isabs(p):
+                if os.path.exists(p):
+                    resolved_args.append(p)
+                else:
+                    missing.append(p)
+            else:
+                in_repo = os.path.join(repo_root, p)
+                in_cwd = os.path.abspath(p)
+                if os.path.exists(in_repo):
+                    resolved_args.append(p)
+                elif os.path.exists(in_cwd):
+                    resolved_args.append(in_cwd)
+                else:
+                    missing.append(p)
+        if missing:
+            print(f"[Error] Path(s) not found: {', '.join(missing)}", file=sys.stderr)
+            return 2
+        context = f"{len(resolved_args)} specified path(s)"
+        violations = gitgates.check_files(repo_root, resolved_args)
     else:
         context = "staged changes"
         violations = gitgates.check_pre_commit(repo_root)

@@ -131,6 +131,31 @@ class TestLintUnstagedAndDoctorSubprojects(unittest.TestCase):
         self.assertIn("mismatch with root", output)
         self.assertIn("along update --recursive", output)
 
+    def test_lint_reports_non_ascii_in_unstaged_issue_plan(self):
+        plan_rel = ".along/ISSUES/x/plans/01--y.md"
+        _tlu_write(self.tmp, plan_rel, f"# Plan {chr(0x2014)} with em dash\n")
+        res = subprocess.run(
+            [sys.executable, EXEC, "lint", plan_rel],
+            cwd=self.tmp,
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+        )
+        self.assertEqual(res.returncode, 1)
+        self.assertIn("typography", res.stderr + res.stdout)
+        self.assertIn("01--y.md", res.stderr + res.stdout)
+
+    def test_lint_missing_path_exits_2(self):
+        res = subprocess.run(
+            [sys.executable, EXEC, "lint", "nonexistent/typo.md"],
+            cwd=self.tmp,
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+        )
+        self.assertEqual(res.returncode, 2)
+        self.assertIn("Path(s) not found: nonexistent/typo.md", res.stderr)
+
     def test_along_update_recursive_aligns_subprojects(self):
         sub_dir = os.path.join(self.tmp, "packages", "service-b")
         _tlu_write(sub_dir, "AGENTS.md", "<!-- BEGIN ALONG-PROTOCOL root -->\n# ALONG-PROTOCOL\n<!-- END ALONG-PROTOCOL -->\n")
