@@ -2,6 +2,26 @@
 
 All notable changes to this project, newest first.
 
+## v4.8.0 - 2026-11-10
+
+- chore: synchronize dependency registry, milestones, and issue tracking (refs #release-v4-8-0)
+- chore: Integrate @actdim/ui-core runtime, tokens, and component tests (refs #integrate-actdim-ui-core-runtime)
+- feat(dashboard): integrate @actdim/ui-core runtime dependencies, tokens and component tests (refs #integrate-actdim-ui-core-runtime)
+- chore: Centralize domain exceptions hierarchy and eliminate sys.exit from command modules (refs #domain-exceptions-and-error-flow)
+- refactor(errors): centralize domain exceptions hierarchy and error boundary (refs #domain-exceptions-and-error-flow)
+- chore: Add integration test registry and parallel xdist execution support to test runners (refs #optimize-test-suite-execution-time)
+- perf(test): add integration test registry and parallel xdist execution support (refs #optimize-test-suite-execution-time)
+- chore: Classify working tree changes by content digest to distinguish git stat-cache flips from real mutations (refs #hermetic-suite-flaky-git-cache)
+- fix(test): harden hermetic suite against windows git stat-cache flips (refs #hermetic-suite-flaky-git-cache)
+- chore: Fix heredoc detection false positives, add venv-awareness to pip install checks, and close global npm/system-package manager gaps (refs #simplify-cli-safety-gate-and-predicates)
+- fix(hooks): resolve cli_safety false positives and detection gaps (refs #simplify-cli-safety-gate-and-predicates)
+- chore: Relocate _handle_chdir_options to alongkit.cliargs and deduplicate import in along_exec.py (refs #refactor-cli-chdir-common)
+- refactor(cli): move _handle_chdir_options into dependency-free cliargs module (refs #refactor-cli-chdir-common)
+- chore: Enable pytest execution and IDE explorer integration via conftest.py/pyproject.toml, add -k filtering and path normalization to test.py with zero-test safeguard (refs #pytest-support-and-test-runner-filtering)
+- feat(test): add pytest runner support and fine-grained test runner filtering (refs #pytest-support-and-test-runner-filtering)
+- fix(worktree): handle POSIX and root-relative paths in inspect_git_dir on Windows under Python 3.13 (refs #ci-worktree-python313-posix-path)
+- fix: Fix worktree inspect_git_dir POSIX path handling on Windows in Python 3.13 (refs #ci-worktree-python313-posix-path)
+
 ## v4.7.0 - 2026-11-06
 
 - fix(lifecycle): prevent UnboundLocalError when updating already-done issue in wrap (refs #verify-worktree-env-readiness-hardening)
