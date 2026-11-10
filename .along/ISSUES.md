@@ -1,7 +1,7 @@
 # Active Issues
 
 ## Active
-- [ ] `(bug)` [gates-ack-cross-issue-denials](ISSUES/bug--gates-ack-cross-issue-denials.md)
+<!-- No active issues -->
 
 ## Backlog
 - [ ] `(bug)` [start-dirty-check-misattribution](ISSUES/bug--start-dirty-check-misattribution.md)
@@ -68,8 +68,8 @@
 
 ## Done (recent)
 - [x] `(task)` [release-v4-8-0](ISSUES/done/task--release-v4-8-0.md)
+- [x] `(bug)` [gates-ack-cross-issue-denials](ISSUES/done/bug--gates-ack-cross-issue-denials.md)
 - [x] `(task)` [optimize-test-suite-execution-time](ISSUES/done/task--optimize-test-suite-execution-time.md)
 - [x] `(task)` [integrate-actdim-ui-core-runtime](ISSUES/done/task--integrate-actdim-ui-core-runtime.md)
 - [x] `(task)` [domain-exceptions-and-error-flow](ISSUES/done/task--domain-exceptions-and-error-flow.md)
-- [x] `(task)` [simplify-cli-safety-gate-and-predicates](ISSUES/done/task--simplify-cli-safety-gate-and-predicates.md)
-<!-- 324 older completed issue(s) archived in .along/ISSUES/done/ -->
+<!-- 325 older completed issue(s) archived in .along/ISSUES/done/ -->

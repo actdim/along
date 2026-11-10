@@ -3,7 +3,8 @@ protocol: along
 protocol_version: "4.8.0"
 slug: gates-ack-cross-issue-denials
 type: bug
-status: in-progress
+status: done
+completed: 2026-11-10
 priority: high
 created: 2026-11-10
 updated: 2026-11-10
@@ -28,9 +29,9 @@ Gate denials are recorded under the issue the session was bound to at denial tim
 - REQ-5: Stop gate `unresolved_gate_denial` MUST check all open denials of the current session across all blackboards from the current turn.
 
 ## Acceptance Criteria
-- [ ] `along gates ack --all` acknowledges all open denials of the current agent session across issues.
-- [ ] `along gates ack <id>` resolves denials recorded under another issue.
-- [ ] Successful retries auto-resolve denials in their originating issue ledger with a note pointing to the successful call.
-- [ ] The ack output reports the issue name for each acknowledged denial.
-- [ ] Stop gate `unresolved_gate_denial` enforces unresolved denials across all rebound issues in the turn.
-- [ ] Automated tests passing with clean typography.
+- [x] `along gates ack --all` acknowledges all open denials of the current agent session across issues.
+- [x] `along gates ack <id>` resolves denials recorded under another issue.
+- [x] Successful retries auto-resolve denials in their originating issue ledger with a note pointing to the successful call.
+- [x] The ack output reports the issue name for each acknowledged denial.
+- [x] Stop gate `unresolved_gate_denial` enforces unresolved denials across all rebound issues in the turn.
+- [x] Automated tests passing with clean typography.
