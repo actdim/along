@@ -341,6 +341,40 @@ class TestActivityTrace(_TempRoot):
         enforce = {"enforce_unbound": True}
         self.assertIn("test-before-stop", check_test_before_stop(stop, self.root, options=enforce) or "")
 
+    def test_raw_test_runner_emits_early_warning_when_lifecycle_hook_exists(self):
+        from alongkit.hooks.adapters.claude import ClaudeCodeAdapter
+        _put(os.path.join(self.root, ".along", "scripts", "test.py"), "print('test')\n")
+        engine = HookEngine(config=HooksConfig(mode="enforce"), repo_root=self.root)
+        event = _bash_tool_event("pnpm run test", self.root)
+        result = engine.evaluate(event, repo_root=self.root)
+        self.assertTrue(result.is_allowed)
+        self.assertIsNotNone(result.notice)
+        self.assertIn("test_before_stop", result.notice)
+        self.assertIn("lifecycle test hook", result.notice)
+
+        adapter = ClaudeCodeAdapter()
+        adapter.parse(json.dumps({"tool_name": "Bash", "tool_input": {"command": "pnpm run test"}}), event_type=HookEventType.PRE_TOOL_USE)
+        code, out = adapter.format_response(result)
+        self.assertEqual(code, 0)
+        data = json.loads(out)
+        self.assertIn("test_before_stop", data.get("systemMessage", ""))
+        self.assertIn("additionalContext", data.get("hookSpecificOutput", {}))
+
+    def test_raw_test_runner_has_no_notice_without_lifecycle_hook(self):
+        engine = HookEngine(config=HooksConfig(mode="enforce"), repo_root=self.root)
+        event = _bash_tool_event("pnpm run test", self.root)
+        result = engine.evaluate(event, repo_root=self.root)
+        self.assertTrue(result.is_allowed)
+        self.assertIsNone(result.notice)
+
+    def test_lifecycle_runner_has_no_notice(self):
+        _put(os.path.join(self.root, ".along", "scripts", "test.py"), "print('test')\n")
+        engine = HookEngine(config=HooksConfig(mode="enforce"), repo_root=self.root)
+        event = _bash_tool_event("python .along/scripts/test.py", self.root)
+        result = engine.evaluate(event, repo_root=self.root)
+        self.assertTrue(result.is_allowed)
+        self.assertIsNone(result.notice)
+
 
 if __name__ == "__main__":
     unittest.main()

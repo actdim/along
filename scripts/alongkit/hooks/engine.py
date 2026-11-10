@@ -130,10 +130,11 @@ class HookEngine:
 
         # Track session activity (edits and test runs) only for what the gates let through:
         # a rejected write or test run is not the session's. [bug--hook-activation-and-gate-deadlock]
+        notice = None
         if effective_root:
-            record_tool_activity(event, effective_root)
+            notice = record_tool_activity(event, effective_root)
 
-        return GateResult(decision=GateDecision.ALLOW, exit_code=0)
+        return GateResult(decision=GateDecision.ALLOW, exit_code=0, notice=notice)
 
 
 def evaluate_event(

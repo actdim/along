@@ -62,6 +62,7 @@ class GateResult:
     permission_overrides: List[str] = field(default_factory=list)
     overwrite: Optional[Dict[str, Any]] = None
     exit_code: int = 0
+    notice: Optional[str] = None
 
     @property
     def is_allowed(self) -> bool:

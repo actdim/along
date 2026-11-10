@@ -523,7 +523,7 @@ def _exit_plan_mode_text(event: HookEvent) -> Optional[str]:
     return None
 
 
-def record_tool_activity(event: HookEvent, repo_root: str) -> None:
+def record_tool_activity(event: HookEvent, repo_root: str) -> Optional[str]:
     """Record file modifications and test runs to track lifecycle state.
 
     Called by the engine only for events the gates allowed. An edit counts on PostToolUse,
@@ -624,6 +624,11 @@ def record_tool_activity(event: HookEvent, repo_root: str) -> None:
         elif any(p.search(cmd) for p in TEST_COMMAND_PATTERNS):
             trace["last_raw_test_time"] = now_iso
             save_activity_trace(repo_root, trace, key)
+            return (
+                "[Along] This raw test run will not satisfy test_before_stop: this repository "
+                "has a lifecycle test hook. Run 'python .along/scripts/test.py' (or /along-test) instead."
+            )
+        return None
 
 
 def _repo_relative(target: str, repo_root: str) -> Optional[str]:

@@ -188,4 +188,12 @@ class ClaudeCodeAdapter(BaseAdapter):
             if self._event_type == HookEventType.STOP and self._stop_hook_active:
                 return 0, json.dumps({"systemMessage": f"[Along] Not enforced again this turn: {reason}"})
             return 2, reason
+        if result.notice and self._event_type == HookEventType.PRE_TOOL_USE:
+            return 0, json.dumps({
+                "systemMessage": result.notice,
+                "hookSpecificOutput": {
+                    "hookEventName": "PreToolUse",
+                    "additionalContext": result.notice,
+                },
+            })
         return 0, ""

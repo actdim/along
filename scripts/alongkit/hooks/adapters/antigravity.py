@@ -125,4 +125,8 @@ class AntigravityAdapter(BaseAdapter):
         if result.permission_overrides:
             response["permissionOverrides"] = result.permission_overrides
 
+        if result.notice and getattr(self, "_last_event_type", None) == HookEventType.PRE_TOOL_USE:
+            response["systemMessage"] = result.notice
+            response["additionalContext"] = result.notice
+
         return 0, json.dumps(response)
