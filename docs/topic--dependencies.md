@@ -1,7 +1,7 @@
 ---
 protocol: along
 protocol_version: "4.7.0"
-slug: topic--dependencies
+slug: dependencies
 title: Dependencies & Submodules AI Documentation and Rules
 type: topic
 created: 2026-11-10

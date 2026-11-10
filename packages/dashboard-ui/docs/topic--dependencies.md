@@ -1,7 +1,7 @@
 ---
 protocol: along
 protocol_version: "4.7.0"
-slug: topic--dependencies
+slug: dependencies
 title: Dependencies & AI Documentation for @along/dashboard-ui
 type: topic
 created: 2026-11-10
