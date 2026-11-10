@@ -76,7 +76,9 @@ class TestCliChdir(unittest.TestCase):
         cmd = [
             sys.executable,
             "-c",
-            "import sys; import alongkit.cli; "
+            "import sys; "
+            f"sys.path.insert(0, {self.scripts_dir!r}); "
+            "import alongkit.cli; "
             "assert 'alongkit.commands' not in sys.modules, 'alongkit.commands loaded prematurely'"
         ]
         res = subprocess.run(cmd, cwd=self.tmp, capture_output=True, text=True)
