@@ -1,72 +1,47 @@
-# Living Plan: Lightweight Untracked Workspace Activity Tracking and Heartbeat Engine
+# Plan: workspace activity (DEFERRED; minimal variant only if a consumer appears)
 
 ## Execution Mode
 Direct
 
-## 1. Context & Technical Scrutiny
+## Verdict: defer
+Checked against the code (2026-11-10):
+- Nothing would read the signal. The named consumers (background draft drainage,
+  idle auto-claim `feat--team-idle-auto-claim`) are not implemented, and
+  `feat--issue-drafts-lifecycle` (as re-planned) has no background promotion.
+- The daemon (`scripts/alongkit/daemon.py`) already keeps its own `busy`/`idle` state for
+  the only real background runner, and refuses a second task while busy.
+- A heartbeat file written from `along start`, `test.py`, `along scratch update` and the
+  hooks touches four write paths and adds a shared file that several processes write.
+  `wait_until_idle` with no caller is untestable in practice.
 
-In modern multi-agent systems, agents operate alongside human developers, test suites, and background watchers. Without an explicit activity signal, autonomous agents cannot detect whether the workspace is currently in an active mutation window (e.g., executing tests, running step loops) or quiescent.
+Recommendation: set the ticket to `blocked`, tag `risk`, `blocked_by:
+[feat--team-idle-auto-claim]`, and add one line: "Re-plan when the first consumer is
+designed; derive activity from existing state first." Do not implement now.
 
-### Architectural Safety Properties
-1. **Zero Git Footprint**: `activity.json` is stored inside `.along/.session/activity.json`, which is already in `.gitignore`. It is purely ephemeral machine-local memory and leaves zero traces in commits or worktree branches.
-2. **Crash-Resilient Heartbeats**: Instead of fragile persistent lock files that linger after unexpected process termination, activity state relies on sliding-window heartbeats (`last_ping`). If an agent process crashes or is killed, its activity automatically decays from `busy` to `idle` once the timeout window (e.g. 5 minutes) expires.
-3. **Atomic File Updates**: All writes to `activity.json` use atomic temp-file write-and-replace (`alongkit.textio.write_text`) to prevent partial reads by concurrent processes.
+## Minimal variant (only if the user asks for it before a consumer exists)
+Read-only, no new state file, no new writers.
 
----
+### Step 1: `session.workspace_activity(repo_root, threshold_seconds=300) -> Dict`
+Derive from what is already on disk:
+- bindings: `session.list_bindings(repo_root)` (key, slug).
+- last activity per key: mtime of the per-session activity trace
+  (`hooks.predicates.get_activity_trace_path(repo_root, key)`).
+- daemon: its existing status (`busy` / `idle`) if it exposes one on disk; else omit.
+Return `{"status": "busy" | "idle", "sessions": [{key, slug, last_activity, active}],
+"daemon": ...}`; `busy` when any session's trace mtime is newer than the threshold or
+the daemon is busy.
 
-## 2. Requirements & Traceability
+### Step 2: `along session activity [--json]`
+Add one subparser in `scripts/alongkit/commands/session.py`; print the dict (text table or
+JSON). No doctor/status integration.
 
-- **REQ-1 (Activity State File)**: Define `WorkspaceActivity` dataclass and schema in `scripts/alongkit/session.py`.
-- **REQ-2 (Heartbeat Updates)**:
-  - Add `record_heartbeat(repo_root, key, slug, runner_active=False)` in `alongkit.session`.
-  - Invoke `record_heartbeat` in `along start`, `along test` (at start and end), and during `along scratch update`.
-- **REQ-3 (Idle/Busy Evaluation)**:
-  - Implement `get_workspace_activity(repo_root, threshold_seconds=300) -> WorkspaceActivity`.
-  - Compare `last_ping` epoch with current system time.
-- **REQ-4 (CLI Inspection)**:
-  - Extend `scripts/alongkit/commands/session.py` with subcommand `activity [--json]`.
-- **REQ-5 (Idle Coordination Helper)**:
-  - Implement `is_workspace_idle(repo_root)` and `wait_until_idle(repo_root, timeout=60, poll_interval=1.0)`.
-- **REQ-6 (Testing & ASCII Hygiene)**:
-  - Implement hermetic unit tests in `tests/test_workspace_activity.py`.
-  - Enforce ASCII typography via `python scripts/sanitize_typography.py --check`.
+### Step 3: tests (`tests/test_workspace_activity.py`)
+Fresh repo -> idle; a binding with a fresh trace -> busy; trace mtime set 10 minutes back
+(`os.utime`) -> idle; `--json` parses.
 
----
+### Verification
+```bash
+python .along/scripts/test.py tests/test_workspace_activity.py
+```
 
-## 3. Step-by-Step Implementation Changes
-
-### Step 1: Core Activity Dataclass and File Operations
-In `scripts/alongkit/session.py`:
-- Define `ACTIVITY_FILENAME = "activity.json"`.
-- Implement `get_activity_file(repo_root: str) -> str`.
-- Implement `load_activity(repo_root: str) -> Optional[Dict[str, Any]]`.
-- Implement `record_heartbeat(repo_root: str, key: Optional[str] = None, slug: Optional[str] = None, runner_active: bool = False) -> Dict[str, Any]`.
-- Implement `get_workspace_activity(repo_root: str, threshold_seconds: int = 300) -> Dict[str, Any]`.
-
-### Step 2: Hook Activity Updates into Core Lifecycle Commands
-- In `scripts/alongkit/commands/lifecycle.py` (`along start`): record initial busy heartbeat.
-- In `scripts/along_wrap.py` / `lifecycle.py` (`along wrap`): mark activity as `idle` upon closeout.
-- In `.along/scripts/test.py`: record `runner_active=True` during test run and `runner_active=False` on completion.
-- In `scripts/alongkit/commands/scratch.py`: refresh heartbeat during step updates.
-
-### Step 3: Implement CLI Command `along session activity`
-In `scripts/alongkit/commands/session.py`:
-- Add parser for `activity` with `--json` option.
-- Output formatted active session, current slug, last ping, and status (`IDLE` or `BUSY`).
-
-### Step 4: Coordination Helpers
-In `scripts/alongkit/session.py`:
-- Implement `is_workspace_idle(repo_root: str) -> bool`.
-- Implement `wait_until_idle(repo_root: str, timeout: float = 60.0, poll_interval: float = 1.0) -> bool`.
-
----
-
-## 4. Verification Plan
-
-### Automated Test Cases
-1. Verify fresh repo reports `idle`.
-2. Verify calling `record_heartbeat` marks workspace as `busy`.
-3. Verify simulating an aged timestamp (> 300 seconds) causes status to decay to `idle`.
-4. Verify `runner_active=True` forces status to `busy` even if session is unassigned.
-5. Verify `along session activity` CLI command formats output properly in text and JSON modes.
-6. Verify `wait_until_idle` waits until simulated heartbeat expires or returns True immediately when idle.
+Not in the minimal variant: `activity.json`, heartbeats, `runner_active`, `wait_until_idle`.

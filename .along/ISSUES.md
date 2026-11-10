@@ -1,7 +1,7 @@
 # Active Issues
 
 ## Active
-<!-- No active issues -->
+- [ ] `(bug)` [gates-ack-cross-issue-denials](ISSUES/bug--gates-ack-cross-issue-denials.md)
 
 ## Backlog
 - [ ] `(bug)` [start-dirty-check-misattribution](ISSUES/bug--start-dirty-check-misattribution.md)
@@ -59,6 +59,7 @@
 - [ ] `(feat)` [team-typed-handoff-mailbox](ISSUES/feat--team-typed-handoff-mailbox.md)
 - [ ] `(feat)` [team-worktree-concurrency-rules](ISSUES/feat--team-worktree-concurrency-rules.md)
 - [ ] `(feat)` [team-worktree-lifecycle](ISSUES/feat--team-worktree-lifecycle.md)
+- [ ] `(feat)` [top-down-umbrella-subproject-binding](ISSUES/feat--top-down-umbrella-subproject-binding.md)
 - [ ] `(feat)` [workspace-activity-tracking](ISSUES/feat--workspace-activity-tracking.md)
 - [ ] `(feat)` [worktree-lifecycle-hardening](ISSUES/feat--worktree-lifecycle-hardening.md)
 - [ ] `(feat)` [zero-step-state-recovery-and-drift-detection](ISSUES/feat--zero-step-state-recovery-and-drift-detection.md)
