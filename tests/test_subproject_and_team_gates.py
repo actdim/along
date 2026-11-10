@@ -123,6 +123,39 @@ class TestSubprojectBoundary(Workspace):
                 self.assertIn("subproject-boundary", check_subproject_boundary(
                     _write_event(self.root, ".along/ISSUES/feat--stray.md"), self.root))
 
+    def test_umbrella_folder_file_allowed_on_parent_chain(self):
+        _put_issue(self.root, "task--umbrella")
+        _put_issue(self.web, "bug--child", parent="task--umbrella")
+        self.start(self.web, "bug--child")
+        self.assertIsNone(check_subproject_boundary(
+            _write_event(self.root, ".along/ISSUES/task--umbrella/plans/01--x.md"), self.root))
+
+    def test_other_root_issue_folder_file_denied(self):
+        _put_issue(self.root, "task--umbrella")
+        _put_issue(self.root, "task--other")
+        _put_issue(self.web, "bug--child", parent="task--umbrella")
+        self.start(self.web, "bug--child")
+        self.assertIn("subproject-boundary", check_subproject_boundary(
+            _write_event(self.root, ".along/ISSUES/task--other/plan.md"), self.root))
+
+    def test_done_ticket_path_unchanged(self):
+        _put_issue(self.root, "task--umbrella")
+        _put_issue(self.web, "bug--child", parent="task--umbrella")
+        self.start(self.web, "bug--child")
+        self.assertIsNone(check_subproject_boundary(
+            _write_event(self.root, ".along/ISSUES/done/task--umbrella.md"), self.root))
+        self.assertIsNone(check_subproject_boundary(
+            _write_event(self.root, ".along/ISSUES/done/task--umbrella/plans/01--x.md"), self.root))
+
+    def test_parent_added_mid_session_takes_effect(self):
+        _put_issue(self.root, "task--umbrella")
+        _put_issue(self.web, "bug--child")
+        self.start(self.web, "bug--child")
+        edit = _write_event(self.root, ".along/ISSUES/task--umbrella/plans/01--x.md")
+        self.assertIn("subproject-boundary", check_subproject_boundary(edit, self.root))
+        _put_issue(self.web, "bug--child", parent="task--umbrella")
+        self.assertIsNone(check_subproject_boundary(edit, self.root))
+
     def test_umbrella_covers_a_grandchild_context(self):
         deep = os.path.join(self.web, "pkg")
         os.makedirs(os.path.join(deep, ".along", "ISSUES"))

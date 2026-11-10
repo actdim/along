@@ -1981,6 +1981,7 @@ def _bound_subproject_owns_root_entity(repo_root: str, rel_path: str, key: Optio
     """Subproject path when the session is bound to a subproject issue and `rel_path` (an
     entity of the root `.along/`) is not on that issue's parent chain; else None.
 
+    Files inside .along/ISSUES/<key>/ count as entity <key> [bug--subproject-boundary-issue-folder-files].
     Decided from the target file and the binding, never from the shell cwd.
     [bug--subproject-boundary-cwd-context]
     """
@@ -1989,7 +1990,13 @@ def _bound_subproject_owns_root_entity(repo_root: str, rel_path: str, key: Optio
         return None
     if not repo.is_along_state_dir(os.path.join(ctx, repo.STATE_DIR)):
         return None
-    stem = os.path.basename(rel_path)
+    parts = rel_path.split("/")
+    in_done = len(parts) >= 3 and parts[1] == "ISSUES" and parts[2] == "done"
+    # A file inside .along/ISSUES/<key>/ or .along/ISSUES/done/<key>/ belongs to <key>.
+    if parts[1:2] == ["ISSUES"] and len(parts) >= (5 if in_done else 4):
+        stem = parts[3] if in_done else parts[2]
+    else:
+        stem = os.path.basename(rel_path)
     stem = stem[:-3] if stem.endswith(".md") else stem
     bound_fm = _issue_frontmatter(ctx, str(slug), include_done=True)
     if entities.parse_key(stem)[1] in _parent_chain_slugs(ctx, bound_fm):
