@@ -1316,7 +1316,8 @@ def denial_status(ctx: str, slug: str) -> List[Dict[str, Any]]:
                             "state": DENIAL_OPEN, "via": None, "note": None, "verified": None,
                             "ack_ts": None, "ack_session": None}
         elif kind == "resolve" and did in denials:
-            denials[did].update(state=DENIAL_RESOLVED, via=event.get("via") or "retry")
+            denials[did].update(state=DENIAL_RESOLVED, via=event.get("via") or "retry",
+                                note=event.get("note"))
         elif kind == "ack" and did in denials and denials[did]["state"] != DENIAL_RESOLVED:
             denials[did].update(state=DENIAL_ACKED, note=event.get("note"),
                                 ack_ts=event.get("ts"), ack_session=event.get("session"))
@@ -1352,7 +1353,7 @@ def denial_blockers(ctx: str, slug: str) -> List[str]:
     return reasons
 
 
-def format_denials(items: List[Dict[str, Any]], limit: int = 5) -> str:
+def format_denials(items: List[Dict[str, Any]], limit: int = 5, include_slug: bool = False) -> str:
     """`id [gate] target` for the first `limit` denials, `; `-separated."""
     parts = []
     for d in items[:limit]:
@@ -1360,7 +1361,8 @@ def format_denials(items: List[Dict[str, Any]], limit: int = 5) -> str:
         target = target if len(target) <= 60 else target[:57] + "..."
         agent = d.get("subagent_role") or d.get("agent") or d.get("subagent")
         by_agent = f" by subagent '{agent}'" if agent else ""
-        parts.append(f"{d['id']} [{d.get('gate')}]{by_agent} {target}".rstrip())
+        issue_part = f" (issue: {d['slug']})" if include_slug and d.get("slug") else ""
+        parts.append(f"{d['id']} [{d.get('gate')}]{by_agent} {target}{issue_part}".rstrip())
     if len(items) > limit:
         parts.append(f"+{len(items) - limit} more")
     return "; ".join(parts)

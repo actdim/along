@@ -191,14 +191,13 @@ def _handle_denials(repo_root: str, subcmd: str, args: List[str]) -> int:
         parser.add_argument("--json", action="store_true", help="Emit the denials as JSON")
     opts = parser.parse_args(args)
 
-    ctx, slug = _denials_target(repo_root, opts.slug)
-    if not ctx or not slug:
-        what = f"issue '{slug}' has no blackboard" if slug else "this session is not bound to an issue"
-        print(f"[Error] No gate denials to read: {what} (along start <slug>, or --slug).", file=sys.stderr)
-        return 2
-    items = session.denial_status(ctx, slug)
-
     if subcmd == "denials":
+        ctx, slug = _denials_target(repo_root, opts.slug)
+        if not ctx or not slug:
+            what = f"issue '{slug}' has no blackboard" if slug else "this session is not bound to an issue"
+            print(f"[Error] No gate denials to read: {what} (along start <slug>, or --slug).", file=sys.stderr)
+            return 2
+        items = session.denial_status(ctx, slug)
         if opts.json:
             print(json.dumps(items, indent=2))
             return 0
@@ -225,6 +224,26 @@ def _handle_denials(repo_root: str, subcmd: str, args: List[str]) -> int:
         print("[Error] along gates ack needs --note \"...\": what the user was told was not done, and why.",
               file=sys.stderr)
         return 2
+
+    key = session.current_session_key()
+    if opts.slug:
+        ctx, slug = _denials_target(repo_root, opts.slug)
+        if not ctx or not slug:
+            what = f"issue '{slug}' has no blackboard" if slug else "this session is not bound to an issue"
+            print(f"[Error] No gate denials to read: {what} (along start <slug>, or --slug).", file=sys.stderr)
+            return 2
+        items = session.denial_status(ctx, slug)
+        for d in items:
+            d["ctx"], d["slug"] = ctx, slug
+    else:
+        from ..hooks import predicates
+        items = predicates.session_denials(repo_root, key)
+        cur_ctx, cur_slug = session.bound_blackboard(repo_root, key)
+        trace = predicates.load_activity_trace(repo_root, key)
+        if not cur_slug and not (trace.get("open_denials") or []) and not items:
+            print("[Error] No gate denials to read: this session is not bound to an issue (along start <slug>, or --slug).", file=sys.stderr)
+            return 2
+
     open_items = [d for d in items if d["state"] == session.DENIAL_OPEN]
     if opts.all:
         chosen = open_items
@@ -237,12 +256,20 @@ def _handle_denials(repo_root: str, subcmd: str, args: List[str]) -> int:
             return 2
         chosen = [known[i] for i in opts.ids if known[i]["state"] != session.DENIAL_RESOLVED]
     if not chosen:
-        print(f"-> No open gate denials for '{slug}'.")
+        target_name = opts.slug or (cur_slug if 'cur_slug' in locals() and cur_slug else "current session")
+        print(f"-> No open gate denials for '{target_name}'.")
         return 0
-    key = session.current_session_key()
+
+    from collections import defaultdict
+    by_slug = defaultdict(list)
     for d in chosen:
-        session.append_event(ctx, slug, key, "ack", extra={"id": d["id"], "note": note})
+        d_ctx = d.get("ctx") or (ctx if 'ctx' in locals() else repo_root)
+        d_slug = d.get("slug") or (slug if 'slug' in locals() else "")
+        session.append_event(d_ctx, d_slug, key, "ack", extra={"id": d["id"], "note": note})
         session.trace_event(repo_root, key, f"acknowledged denial {d['id']} [{d['gate']}]: {note}")
-    print(f"-> Acknowledged {len(chosen)} gate denial(s) of '{slug}': {session.format_denials(chosen)}")
+        by_slug[d_slug].append(d)
+
+    for s, s_items in by_slug.items():
+        print(f"-> Acknowledged {len(s_items)} gate denial(s) of '{s}': {session.format_denials(s_items)}")
     print("   The user must see this in your reply; closeout accepts it once they have replied.")
     return 0

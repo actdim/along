@@ -387,7 +387,8 @@ def _record_denial_event(event: HookEvent, repo_root: str, key: Optional[str], g
                          reason: str, procedural: bool) -> None:
     import hashlib
     from .config import _get_audit_redactor, audit_target
-    if not session.bound_blackboard(repo_root, key)[1]:
+    ctx, slug = session.bound_blackboard(repo_root, key)
+    if not slug:
         return
     digest = _target_digest(event)
     trace = load_activity_trace(repo_root, key)
@@ -416,7 +417,8 @@ def _record_denial_event(event: HookEvent, repo_root: str, key: Optional[str], g
     record = session.record_event(repo_root, key, "deny", extra=extra)
     if not record or procedural:
         return
-    denial_entry = {"id": did, "gate": gate, "digest": digest, "ts": now}
+    denial_entry = {"id": did, "gate": gate, "digest": digest, "ts": now,
+                    "ctx": ctx, "slug": slug}
     if agent_tag:
         denial_entry["agent"] = agent_tag
         denial_entry["subagent"] = agent_tag
@@ -445,16 +447,56 @@ def _resolve_retried_denials(event: HookEvent, repo_root: str, key: Optional[str
     if not digest:
         return
     remaining = []
+    _cur_ctx, cur_slug = session.bound_blackboard(repo_root, key)
     for denial in open_denials:
         if denial.get("digest") == digest:
-            session.record_event(repo_root, key, "resolve", extra={"id": denial.get("id"), "via": "retry"})
-            session.trace_event(repo_root, key, f"resolved denial {denial.get('id')} [{denial.get('gate')}] by retry",
-                                collapse=True)
+            d_ctx, d_slug = denial.get("ctx"), denial.get("slug")
+            if not d_ctx or not d_slug:
+                d_ctx, d_slug = session.bound_blackboard(repo_root, key)
+            if d_ctx and d_slug:
+                note = f"redone successfully by {event.tool_name}"
+                if cur_slug and cur_slug != d_slug:
+                    note += f" under '{cur_slug}'"
+                session.append_event(d_ctx, d_slug, key, "resolve",
+                                     extra={"id": denial.get("id"), "via": "retry", "note": note})
+                session.trace_event(repo_root, key, f"resolved denial {denial.get('id')} [{denial.get('gate')}] by retry",
+                                    collapse=True)
         else:
             remaining.append(denial)
     if len(remaining) != len(open_denials):
         trace["open_denials"] = remaining
         save_activity_trace(repo_root, trace, key)
+
+
+def session_denials(repo_root: str, key: Optional[str]) -> List[Dict[str, Any]]:
+    """denial_status items of every issue this session has open denials in (from the
+    activity trace), plus the bound issue; each item carries `ctx` and `slug`."""
+    boards: List[Tuple[str, str]] = []
+    seen_boards = set()
+    roots = [repo_root] if repo_root else []
+    broot = session.binding_root(repo_root) if repo_root else None
+    if broot and os.path.realpath(broot) != os.path.realpath(repo_root):
+        roots.append(broot)
+    for r in roots:
+        trace = load_activity_trace(r, key)
+        for d in trace.get("open_denials") or []:
+            if isinstance(d, dict):
+                ctx, slug = d.get("ctx"), d.get("slug")
+                if ctx and slug and (ctx, slug) not in seen_boards:
+                    seen_boards.add((ctx, slug))
+                    boards.append((ctx, slug))
+    cur_ctx, cur_slug = session.bound_blackboard(repo_root, key)
+    if cur_ctx and cur_slug and (cur_ctx, cur_slug) not in seen_boards:
+        seen_boards.add((cur_ctx, cur_slug))
+        boards.append((cur_ctx, cur_slug))
+
+    out: List[Dict[str, Any]] = []
+    for ctx, slug in boards:
+        for item in session.denial_status(ctx, slug):
+            item["ctx"] = ctx
+            item["slug"] = slug
+            out.append(item)
+    return out
 
 
 def _exit_plan_mode_text(event: HookEvent) -> Optional[str]:
@@ -1558,13 +1600,14 @@ def check_unresolved_denials(event: HookEvent, repo_root: str, options: Optional
     if not ctx or not slug:
         return None
     turn_start = session.last_user_prompt_at(repo_root, key)
-    held = [d for d in session.denial_status(ctx, slug)
+    held = [d for d in session_denials(repo_root, key)
             if d["state"] == session.DENIAL_OPEN and (turn_start is None or str(d["ts"]) >= turn_start)]
     if not held:
         return None
+    include_slug = len({d["slug"] for d in held}) > 1
     return (
         f"Turn Completion Rejected [gate: unresolved-gate-denial]: {len(held)} tool call(s) denied by a gate "
-        f"in this turn are unresolved: {session.format_denials(held)}. Either redo the work within the "
+        f"in this turn are unresolved: {session.format_denials(held, include_slug=include_slug)}. Either redo the work within the "
         "gate's rules, or tell the user plainly what was not done and why, then record it with "
         f"'along gates ack <id> --note \"...\"' (or --all). Do not report the task as complete."
     )

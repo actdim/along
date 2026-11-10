@@ -317,5 +317,64 @@ class TestWrapAndIssueDone(_BoundSession):
         self.assertFalse(os.path.isfile(self.issue))
 
 
+class TestReboundSessionDenials(_BoundSession):
+    def setUp(self):
+        super().setUp()
+        self.issue_b = _write_text(
+            os.path.join(self.root, ".along", "ISSUES", "feat--other.md"),
+            ISSUE_TEXT.replace("slug: work", "slug: other"),
+        )
+        session.init_session(self.root, "other")
+
+    def _bind_b(self):
+        session.bind_session(self.root, "other", key=self.key)
+
+    def test_retry_after_rebind_resolves_in_originating_ledger(self):
+        did = self._deny_push()
+        self._bind_b()
+        self._engine().evaluate(self._cmd("git push --force"))
+        items_a = session.denial_status(self.root, SLUG)
+        self.assertEqual(items_a[0]["state"], session.DENIAL_RESOLVED)
+        self.assertIn("other", items_a[0]["note"] or "")
+        events_b = [e for e in session.load_events(self.root, "other") if e.get("kind") == "resolve"]
+        self.assertEqual(len(events_b), 0)
+
+    def test_ack_by_id_recorded_under_other_issue(self):
+        did = self._deny_push()
+        self._bind_b()
+        code = self._cli(gates_cmd._handle_denials, self.root, "ack", [did, "--note", "push omitted"])
+        self.assertEqual(code, 0)
+        self.assertIn(f"'{SLUG}'", self.output)
+        items_a = session.denial_status(self.root, SLUG)
+        self.assertEqual(items_a[0]["state"], session.DENIAL_ACKED)
+        self.assertEqual(items_a[0]["note"], "push omitted")
+
+    def test_ack_all_across_issues(self):
+        did_a = self._deny_push()
+        self._bind_b()
+        engine_b = self._engine(_DenyTarget("pull_guard", "git pull"))
+        self.assertFalse(engine_b.evaluate(self._cmd("git pull")).is_allowed)
+        code = self._cli(gates_cmd._handle_denials, self.root, "ack", ["--all", "--note", "skipped"])
+        self.assertEqual(code, 0)
+        self.assertIn(f"'{SLUG}'", self.output)
+        self.assertIn("'other'", self.output)
+        items_a = session.denial_status(self.root, SLUG)
+        items_b = session.denial_status(self.root, "other")
+        self.assertEqual(items_a[0]["state"], session.DENIAL_ACKED)
+        self.assertEqual(items_b[0]["state"], session.DENIAL_ACKED)
+
+    def test_stop_gate_holds_denial_from_previous_issue_in_turn(self):
+        did = self._deny_push()
+        self._bind_b()
+        decl = get_all_declarative_gates()
+        stop_gate = [g for g in decl if g.name == "unresolved_gate_denial"][0]
+        engine = HookEngine(gates=[stop_gate], config=HooksConfig(), repo_root=self.root)
+        self.assertFalse(engine.evaluate(self._stop()).is_allowed)
+        code = self._cli(gates_cmd._handle_denials, self.root, "ack", ["--all", "--note", "deferred"])
+        self.assertEqual(code, 0)
+        session.record_user_prompt(self.root, self.key, when=FUTURE)
+        self.assertTrue(engine.evaluate(self._stop()).is_allowed)
+
+
 if __name__ == "__main__":
     unittest.main()
