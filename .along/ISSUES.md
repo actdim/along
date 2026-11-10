@@ -1,7 +1,7 @@
 # Active Issues
 
 ## Active
-<!-- No active issues -->
+- [ ] `(task)` [release-v4-8-0](ISSUES/task--release-v4-8-0.md)
 
 ## Backlog
 - [ ] `(bug)` [start-dirty-check-misattribution](ISSUES/bug--start-dirty-check-misattribution.md)
