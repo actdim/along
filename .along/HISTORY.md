@@ -269,3 +269,4 @@ _Index of sessions (newest last). One line per session:_
 2026-11-10 - plan-grants-write-scope - antigravity - Approved plan grants Files to change as write scope outside subproject - [Session Log](./SESSIONS/2026/2026-11-10--plan-grants-write-scope.md)
 2026-11-10 - lint-arbitrary-paths - antigravity - Validate existence of specified paths in along lint and return code 2 on missing files - [Session Log](./SESSIONS/2026/2026-11-10--lint-arbitrary-paths.md)
 2026-11-10 - early-raw-runner-warning - antigravity - Emit early PreToolUse notice when a raw test runner is invoked in a repository with lifecycle test hook - [Session Log](./SESSIONS/2026/2026-11-10--early-raw-runner-warning.md)
+2026-11-10 - issue-drafts-lifecycle - antigravity - First-class untracked issue drafts with seamless start promotion, promotion command, and doctor hygiene - [Session Log](./SESSIONS/2026/2026-11-10--issue-drafts-lifecycle.md)
