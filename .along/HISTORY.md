@@ -263,3 +263,4 @@ _Index of sessions (newest last). One line per session:_
 2026-11-10 - release-v4-8-0 - antigravity - Release v4.8.0, synchronize dependency registry and milestones, and update global installation - [Session Log](./SESSIONS/2026/2026-11-10--release-v4-8-0.md)
 2026-11-10 - gates-ack-cross-issue-denials - antigravity - Fix cross-issue denial resolution and ack in rebound sessions - [Session Log](./SESSIONS/2026/2026-11-10--gates-ack-cross-issue-denials.md)
 2026-11-10 - subproject-boundary-issue-folder-files - antigravity - Allow subproject sessions to edit files inside umbrella issue folders on their parent chain - [Session Log](./SESSIONS/2026/2026-11-10--subproject-boundary-issue-folder-files.md)
+2026-11-10 - start-dirty-check-misattribution - antigravity - Do not blame dirty working tree files claimed by in-progress issues on wrapped issues - [Session Log](./SESSIONS/2026/2026-11-10--start-dirty-check-misattribution.md)

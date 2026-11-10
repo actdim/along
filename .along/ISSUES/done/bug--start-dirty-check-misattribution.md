@@ -3,10 +3,11 @@ protocol: along
 protocol_version: "4.6.1"
 slug: start-dirty-check-misattribution
 type: bug
-status: open
+status: done
+completed: 2026-11-10
 priority: high
 created: 2026-11-08
-updated: 2026-11-08
+updated: 2026-11-10
 agent: claude-code
 tags: [gates, feedback]
 blocked_by: []
@@ -27,7 +28,7 @@ Root cause (`scripts/alongkit/commands/lifecycle.py`, the dirty-tree block of `a
 - REQ-3: Paths that only a wrapped issue touched MUST still block, as today (`bug--wrapped-work-left-uncommitted` stays covered).
 
 ## Acceptance Criteria
-- [ ] A test reproduces the report: a wrapped issue's log lists `a.py`, the in-progress issue has an edit event for `a.py`, `a.py` is dirty; `along start <in-progress slug> --write-scope x` succeeds.
-- [ ] A test: re-start of the bound in-progress slug with other dirty files succeeds without `--allow-dirty`.
-- [ ] Existing start-guard tests (`feat--atomic-wrap-commit-and-start-guard`) still pass.
-- [ ] Automated tests passing
+- [x] A test reproduces the report: a wrapped issue's log lists `a.py`, the in-progress issue has an edit event for `a.py`, `a.py` is dirty; `along start <in-progress slug> --write-scope x` succeeds.
+- [x] A test: re-start of the bound in-progress slug with other dirty files succeeds without `--allow-dirty`.
+- [x] Existing start-guard tests (`feat--atomic-wrap-commit-and-start-guard`) still pass.
+- [x] Automated tests passing
