@@ -28,7 +28,7 @@ import shutil
 import sys
 from typing import List, Optional, Sequence, Tuple, Union
 
-from . import entities, frontmatter, gates, markdown, proc, repo, session, testruns, textio, transaction, verify
+from . import entities, frontmatter, gates, markdown, proc, repo, session, testruns, textio, transaction, verify, worktree
 
 LIFECYCLE_ACTIONS: tuple = ("build", "test", "dev", "debug")
 
@@ -1147,6 +1147,20 @@ def execute_wrap(
             return 2
         forced.append(f"Wrapped without a recorded plan: {force_reason}")
 
+    # [feat--worktree-lifecycle-hardening]
+    wt_blockers = worktree.close_blockers(repo_root, clean_slug)
+    if wt_blockers and not force_reason:
+        _check_failed()
+        print("[Error] Wrap aborted: the issue's worktree holds work not in this branch:\n"
+              + "\n".join(f"  - {b}" for b in wt_blockers)
+              + "\n  Merge it ('along worktree merge <slug>'), commit, or pass --force-reason \"...\".",
+              file=sys.stderr)
+        return 2
+    if wt_blockers and not _force_allowed():
+        return 2
+    if wt_blockers:
+        forced.append(f"Wrapped with unmerged worktree ({'; '.join(wt_blockers)}): {force_reason}")
+
     # [feat--anti-silent-fallback-gate]: a denied tool call is redone or disclosed to the user.
     denial_reasons = session.denial_blockers(repo_root, clean_slug) \
         if has_blackboard and status in entities.DELIVERED_ISSUE_STATUSES else []
@@ -1413,6 +1427,19 @@ def execute_wrap(
         attributed_map = session.attributed_files(repo_root, clean_slug)
         if purge_archived(repo_root, clean_slug, complete=not keep_open):
             print(f"-> Purged session blackboard: .along/.session/{clean_slug}")
+        if not dry_run and not keep_open:
+            wpath = worktree.get_worktree_path(repo_root, clean_slug)
+            if os.path.isdir(wpath):
+                if wt_blockers:
+                    print(f"[Notice] Preserved worktree .along/worktrees/{clean_slug} (wrapped with force).")
+                else:
+                    try:
+                        if worktree.remove_worktree(repo_root, clean_slug):
+                            print(f"-> Removed worktree .along/worktrees/{clean_slug}")
+                        else:
+                            print(f"[Notice] Worktree removal deferred (file locks); run 'along worktree gc' later.")
+                    except OSError as exc:
+                        print(f"[Notice] Worktree not removed: {exc}. Run 'along worktree remove {clean_slug}'.")
         print(f"-> [OK] Successfully wrapped up '{clean_slug}'.")
         if no_commit:
             _warn_uncommitted_work(repo_root, clean_slug, attributed_map, dest_file, log_path)

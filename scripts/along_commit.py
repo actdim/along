@@ -189,6 +189,12 @@ def main(argv=None):
     for warn in warnings:
         print(f"[Warning] {warn}", file=sys.stderr)
 
+    if active_issue and active_issue.get("slug"):
+        from alongkit import worktree
+        wt_path = worktree.get_worktree_path(repo_root, active_issue["slug"])
+        if os.path.isdir(wt_path) and not repo.is_within(wt_path, os.getcwd()):
+            print(f"[Notice] Issue '{active_issue['slug']}' has a worktree (.along/worktrees/{active_issue['slug']}); this commit goes to the main tree.")
+
     # AI co-author trailers make GitHub list the vendor as a contributor.
     if not attribution.allow_ai_coauthor(repo_root):
         cleaned = attribution.strip_ai_coauthor_trailers(raw_msg).strip()

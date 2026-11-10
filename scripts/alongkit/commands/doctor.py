@@ -163,6 +163,23 @@ def _doctor_stub_issues_checks(repo_root: str, warnings: int) -> Tuple[int, List
     return warnings, findings
 
 
+def _doctor_worktree_checks(repo_root: str, warnings: int) -> int:
+    from alongkit import worktree
+    zombies = []
+    for wt in worktree.list_worktrees(repo_root):
+        slug = wt.get("slug")
+        if not slug:
+            continue
+        iss = entities.find_issue_by_slug(repo_root, slug)
+        if not iss or iss.get("done") or (iss.get("frontmatter") or {}).get("status") in entities.CLOSED_ISSUE_STATUSES:
+            zombies.append(slug)
+    if zombies:
+        print(f"[WARN] {len(zombies)} dangling worktree(s): {', '.join(zombies)}. "
+              f"Run 'along worktree remove <slug>' (or 'along worktree gc').")
+        warnings += len(zombies)
+    return warnings
+
+
 def handle_doctor_command(repo_root: str, args: List[str]):
     if args and args[0] in ("-h", "--help", "help"):
         print("Usage: along doctor [entities|docs|issues|--entities|--docs|--issues] [--fix]")
@@ -365,6 +382,9 @@ def handle_doctor_command(repo_root: str, args: List[str]):
             print(f"    Commit with: along commit -i {wslug} --paths {paths_arg}")
             print(f"    Or close out: along session close {wslug}")
         warnings += 1
+
+    # Check dangling worktrees
+    warnings = _doctor_worktree_checks(repo_root, warnings)
 
     # Check DECISIONS
     dec_dir = os.path.join(along_dir, "DECISIONS")

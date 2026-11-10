@@ -62,6 +62,37 @@ def get_worktree_path(repo_root: str, slug: str) -> str:
     return os.path.join(repo.state_dir(repo_root), "worktrees", clean_slug)
 
 
+def close_blockers(repo_root: str, slug: str) -> List[str]:
+    """Blockers preventing wrap and teardown of `slug`'s worktree."""
+    wpath = get_worktree_path(repo_root, slug)
+    if not os.path.isdir(wpath):
+        return []
+    out = []
+    st = proc.git(["status", "--porcelain"], cwd=wpath)
+    dirty = []
+    for line in st.lines():
+        line_str = line.strip()
+        if not line_str:
+            continue
+        rel = line_str[3:].strip() if len(line_str) > 3 else ""
+        norm = rel.replace("\\", "/")
+        if norm in (".along-worktree.json",) or norm.startswith(".along/.session"):
+            continue
+        dirty.append(line_str)
+    if dirty:
+        out.append(f"{len(dirty)} uncommitted change(s) in {repo.safe_relpath(wpath, repo_root)}")
+    branch = f"along/{slug}"
+    base = proc.git(["merge-base", "HEAD", branch], cwd=repo_root)
+    if base.ok:
+        changed = [l for l in proc.git(["diff", "--name-only", base.stdout.strip(), branch],
+                                       cwd=repo_root).lines() if l.strip()]
+        if changed and not proc.git(["diff", "--quiet", "HEAD", branch, "--", *changed],
+                                    cwd=repo_root).ok:
+            out.append(f"branch '{branch}' has changes not in HEAD "
+                       f"(run 'along worktree merge {slug}' and commit)")
+    return out
+
+
 def inspect_git_dir(path: str) -> Dict[str, Any]:
     """Inspect Git metadata at `path` to determine repository topology."""
     git_entry = os.path.join(path, ".git")
@@ -391,7 +422,14 @@ def _ensure_git_exclude(repo_root: str) -> None:
     exclude_file = os.path.join(info_dir, "exclude")
     try:
         content = textio.read_text(exclude_file) if os.path.isfile(exclude_file) else ""
-        lines_to_add = [entry for entry in (".along/worktrees/", ".along/.pending_worktrees.json") if entry not in content]
+        lines_to_add = [
+            entry for entry in (
+                ".along/worktrees/",
+                ".along/.pending_worktrees.json",
+                ".along-worktree.json",
+                ".along/.session/",
+            ) if entry not in content
+        ]
         if lines_to_add:
             new_content = (content.rstrip() + "\n" + "\n".join(lines_to_add) + "\n").lstrip()
             textio.write_text(exclude_file, new_content)

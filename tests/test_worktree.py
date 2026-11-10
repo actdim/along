@@ -592,6 +592,112 @@ class TestWorktreeIsolation(unittest.TestCase):
             shutil.rmtree(ws_root, ignore_errors=True)
 
 
+class TestWorktreeLifecycleHardening(unittest.TestCase):
+    def setUp(self):
+        self.root = hermetic.make_repo_fixture(prefix="along-wt-harden-")
+        proc.git(["init"], cwd=self.root)
+        proc.git(["config", "user.name", "Test Committer"], cwd=self.root)
+        proc.git(["config", "user.email", "test@example.com"], cwd=self.root)
+        proc.git(["config", "commit.gpgSign", "false"], cwd=self.root)
+        proc.git(["add", "."], cwd=self.root)
+        proc.git(["commit", "-m", "init"], cwd=self.root)
+
+    def tearDown(self):
+        try:
+            os.chdir(REPO_ROOT)
+        except OSError:
+            pass
+        wt_dir = os.path.join(self.root, ".along", "worktrees")
+        if os.path.isdir(wt_dir):
+            for item in os.listdir(wt_dir):
+                sub = os.path.join(wt_dir, item)
+                worktree.unlink_environment(sub)
+        shutil.rmtree(self.root, ignore_errors=True)
+
+    def _setup_issue(self, slug: str = "feature-wt"):
+        ipath = os.path.join(self.root, ".along", "ISSUES", f"feat--{slug}.md")
+        textio.write_text(
+            ipath,
+            f"---\nprotocol: along\nprotocol_version: \"4.8.0\"\nslug: {slug}\ntype: feat\nstatus: in-progress\npriority: medium\n---\n# {slug}\n\n## Acceptance Criteria\n- [x] Done\n",
+        )
+        from alongkit import session
+        session.init_session(self.root, slug)
+        session.record_plan(self.root, slug, "# Living Plan\n1. Do work\n", "test")
+        return slug
+
+    def test_close_blockers_empty_when_no_worktree(self):
+        self.assertEqual(worktree.close_blockers(self.root, "no-such-issue"), [])
+
+    def test_dirty_worktree_blocks_wrap(self):
+        from alongkit import lifecycle
+        slug = self._setup_issue("dirty-wt")
+        info = worktree.create_worktree(self.root, slug)
+        textio.write_text(os.path.join(info.path, "dirty.txt"), "dirty\n")
+        out, err = io.StringIO(), io.StringIO()
+        with redirect_stdout(out), redirect_stderr(err):
+            code = lifecycle.execute_wrap(self.root, slug, no_verify=True, no_commit=True)
+        self.assertEqual(code, 2)
+        self.assertIn("worktree holds work not in this branch", err.getvalue() + out.getvalue())
+
+    def test_unmerged_branch_blocks_wrap(self):
+        from alongkit import lifecycle
+        slug = self._setup_issue("unmerged-wt")
+        info = worktree.create_worktree(self.root, slug)
+        textio.write_text(os.path.join(info.path, "file.txt"), "committed on branch\n")
+        proc.git(["add", "file.txt"], cwd=info.path)
+        proc.git(["commit", "-m", "work on branch"], cwd=info.path)
+        out, err = io.StringIO(), io.StringIO()
+        with redirect_stdout(out), redirect_stderr(err):
+            code = lifecycle.execute_wrap(self.root, slug, no_verify=True, no_commit=True)
+        self.assertEqual(code, 2)
+        self.assertIn("has changes not in HEAD", err.getvalue() + out.getvalue())
+
+    def test_squash_merged_branch_wrap_succeeds_and_removes_worktree(self):
+        from alongkit import lifecycle
+        slug = self._setup_issue("merged-wt")
+        info = worktree.create_worktree(self.root, slug)
+        textio.write_text(os.path.join(info.path, "merged.txt"), "merged content\n")
+        proc.git(["add", "merged.txt"], cwd=info.path)
+        proc.git(["commit", "-m", "merged commit"], cwd=info.path)
+        res = worktree.merge_worktree(self.root, slug)
+        self.assertTrue(res.ok)
+        proc.git(["commit", "-m", "squash merge worktree"], cwd=self.root)
+        out, err = io.StringIO(), io.StringIO()
+        with redirect_stdout(out), redirect_stderr(err):
+            code = lifecycle.execute_wrap(self.root, slug, no_verify=True, no_commit=True)
+        self.assertEqual(code, 0, f"STDOUT:\n{out.getvalue()}\nSTDERR:\n{err.getvalue()}")
+        self.assertFalse(os.path.isdir(info.path))
+        branches = proc.git(["branch", "--list", f"along/{slug}"], cwd=self.root).lines()
+        self.assertEqual(branches, [])
+
+    def test_force_reason_with_unmerged_branch_succeeds_and_keeps_worktree(self):
+        from alongkit import lifecycle
+        slug = self._setup_issue("forced-wt")
+        info = worktree.create_worktree(self.root, slug)
+        textio.write_text(os.path.join(info.path, "unmerged.txt"), "unmerged\n")
+        proc.git(["add", "unmerged.txt"], cwd=info.path)
+        proc.git(["commit", "-m", "unmerged"], cwd=info.path)
+        out, err = io.StringIO(), io.StringIO()
+        with redirect_stdout(out), redirect_stderr(err):
+            code = lifecycle.execute_wrap(self.root, slug, no_verify=True, no_commit=True,
+                                          force_reason="user accepts abandoning worktree")
+        self.assertEqual(code, 0, f"STDOUT:\n{out.getvalue()}\nSTDERR:\n{err.getvalue()}")
+        self.assertTrue(os.path.isdir(info.path))
+        self.assertIn("Preserved worktree", out.getvalue())
+
+    def test_doctor_reports_dangling_worktree_for_closed_issue(self):
+        from alongkit.commands import doctor as doctor_cmd
+        slug = self._setup_issue("zombie-wt")
+        info = worktree.create_worktree(self.root, slug)
+        ipath = os.path.join(self.root, ".along", "ISSUES", f"feat--{slug}.md")
+        done_path = os.path.join(self.root, ".along", "ISSUES", "done", f"feat--{slug}.md")
+        shutil.move(ipath, done_path)
+        out = io.StringIO()
+        with redirect_stdout(out):
+            warnings = doctor_cmd._doctor_worktree_checks(self.root, 0)
+        self.assertEqual(warnings, 1)
+        self.assertIn("dangling worktree(s): zombie-wt", out.getvalue())
+
 
 if __name__ == "__main__":
     unittest.main()
