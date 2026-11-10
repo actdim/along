@@ -2,6 +2,31 @@
 
 All notable changes to this project, newest first.
 
+## v4.8.1 - 2026-11-11
+
+- fix(ci): hermetic sys.path in test_cli_chdir for uv no-project (refs #ci-test-matrix-workflow)
+- feat(drafts): first-class untracked issue drafts with promotion and doctor hygiene (refs #issue-drafts-lifecycle)
+- feat: First-class untracked issue drafts with seamless start promotion, promotion command, and doctor hygiene (refs #issue-drafts-lifecycle)
+- feat(hooks): emit early PreToolUse notice for raw test runners when lifecycle hook exists (refs #early-raw-runner-warning)
+- feat: Emit early PreToolUse notice when a raw test runner is invoked in a repository with lifecycle test hook (refs #early-raw-runner-warning)
+- feat(lint): validate existence of specified paths and return code 2 on missing files (refs #lint-arbitrary-paths)
+- feat: Validate existence of specified paths in along lint and return code 2 on missing files (refs #lint-arbitrary-paths)
+- feat(planscope): approved plan grants Files to change as write scope (refs #plan-grants-write-scope)
+- feat: Approved plan grants Files to change as write scope outside subproject (refs #plan-grants-write-scope)
+- feat(worktree): harden lifecycle with wrap guards, teardown, and doctor audits (refs #worktree-lifecycle-hardening)
+- feat: Harden worktree lifecycle with wrap guards, automatic teardown, doctor audits, and commit notice (refs #worktree-lifecycle-hardening)
+- feat(subproject): support top-down children binding and cross-context authorization (refs #top-down-umbrella-subproject-binding)
+- feat: Add top-down umbrella children binding and cross-context authorization (refs #top-down-umbrella-subproject-binding)
+- fix(lifecycle): do not blame dirty files claimed by in-progress issues on wrapped issues (refs #start-dirty-check-misattribution)
+- fix: Do not blame dirty working tree files claimed by in-progress issues on wrapped issues (refs #start-dirty-check-misattribution)
+- fix(subproject): map issue folder files to issue key in subproject boundary (refs #subproject-boundary-issue-folder-files)
+- fix: Allow subproject sessions to edit files inside umbrella issue folders on their parent chain (refs #subproject-boundary-issue-folder-files)
+- fix(gates): resolve retried denials and ack across issues (refs #gates-ack-cross-issue-denials)
+- fix: Fix cross-issue denial resolution and ack in rebound sessions (refs #gates-ack-cross-issue-denials)
+- docs(plans): prepare plans and issues for backlog batch (refs #gates-ack-cross-issue-denials)
+- docs: finalize knowledge base index and llms-full synchronization (refs #release-v4-8-0)
+- chore: Release v4.8.0, synchronize dependency registry and milestones, and update global installation (refs #release-v4-8-0)
+
 ## v4.8.0 - 2026-11-10
 
 - chore: synchronize dependency registry, milestones, and issue tracking (refs #release-v4-8-0)
