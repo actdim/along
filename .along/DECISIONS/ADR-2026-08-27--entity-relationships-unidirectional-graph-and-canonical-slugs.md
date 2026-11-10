@@ -3,14 +3,15 @@ protocol: along
 slug: entity-relationships-unidirectional-graph-and-canonical-slugs
 title: "Entity Relationships, Unidirectional Graph Storage & Canonical Slug Invariance"
 date: 2026-08-27
-status: accepted
+status: superseded
+superseded_by: children-allowed-for-cross-context-links-only
 tags: [adr, architecture, decision]
 ---
 
 # ADR-2026-08-27--entity-relationships-unidirectional-graph-and-canonical-slugs - Entity Relationships, Unidirectional Graph Storage & Canonical Slug Invariance
 
 - Date: 2026-08-27
-- Status: accepted
+- Status: superseded by ADR-2026-11-10--children-allowed-for-cross-context-links-only
 - Context: Representing dependencies and associations between issues, risks, and spikes is required for dependency modeling and DAG/timeline visualizations. Using relative file paths breaks references when completed issues move into `done/`. Dual-syncing reciprocal fields (`blocks` vs `blocked_by`, `parent` vs `children`) causes drift by LLM agents.
 - Decision:
   1. Store dependencies unidirectionally in YAML front-matter (`blocked_by: []`, `related: []`, `parent: <slug>`). Reverse relationships (`blocks`, `children`) and full DAGs are computed dynamically by graph parsers and dashboard builders.

@@ -19,9 +19,12 @@ from .decisions import check_decision_conflicts
 from .query import (
     _context_entity_keys,
     _is_self_ref,
+    _ref_key,
     _resolve_ref,
     ancestor_contexts,
     descendant_entity_keys,
+    find_issue_by_slug,
+    reference_context,
     resolve_entity_reference,
     scan_issues,
     scan_milestones,
@@ -37,6 +40,7 @@ from .vocabulary import (
     PRIORITIES,
     canonical_key,
     is_iso_date,
+    parse_key,
 )
 
 _ARCHIVED_SUFFIX = " (archived issue)"
@@ -206,6 +210,27 @@ def validate_entities(repo_root: str, ancestors: bool = True,
             for c in children:
                 if c:
                     _check_ref(c, "children", rel, known_entity_keys)
+                    qualifier, target_key = _ref_key(c)
+                    if not qualifier:
+                        warnings.append((
+                            rel,
+                            f"unqualified children entry '{c}': store the link as 'parent:' on the child "
+                            "(ADR-2026-11-10--children-allowed-for-cross-context-links-only)"
+                        ))
+                    else:
+                        ctx_owner = reference_context(repo_root, c)
+                        if ctx_owner:
+                            target_slug = parse_key(target_key)[1]
+                            child_issue = find_issue_by_slug(ctx_owner, target_slug)
+                            if child_issue and child_issue.get("frontmatter"):
+                                child_parent = child_issue["frontmatter"].get("parent")
+                                if child_parent:
+                                    _pq, p_key = _ref_key(child_parent)
+                                    if parse_key(p_key)[1] == islug:
+                                        warnings.append((
+                                            rel,
+                                            f"link stored in both directions: drop 'children: {c}' or the child's parent"
+                                        ))
 
         superseded_by = fm.get("superseded_by")
         if isinstance(superseded_by, list):

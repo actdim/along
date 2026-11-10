@@ -3,6 +3,7 @@
 
 ## Active Decisions (49, newest 30 shown)
 
+- [Children allowed for cross-context links only](DECISIONS/ADR-2026-11-10--children-allowed-for-cross-context-links-only.md)
 - [Along Core and Dash Extra Architecture](DECISIONS/ADR-2026-10-29--along-core-and-dash-extra.md)
 - [Issue plans live with the ticket; only the CLI approves them](DECISIONS/ADR-2026-10-23--issue-plans-approved-ahead.md)
 - [Gate Denials Are Ledger Events; Closing Requires Resolution or User-Verified Disclosure](DECISIONS/ADR-2026-10-23--gate-denials-are-ledger-events.md)
@@ -32,15 +33,15 @@
 - [Bounded Context Budget, Active Constraints Projection, and Sliding Window Issues](DECISIONS/ADR-2026-09-07--bounded-context-budget-and-active-projections.md)
 - [Ban file:// Scheme in Markdown Links in Favor of Standard Relative Links](DECISIONS/ADR-2026-09-07--ban-file-uri-scheme-in-markdown-links.md)
 - [Authored vs Compiled Documentation Boundaries and Automated Consistency Gates](DECISIONS/ADR-2026-09-07--authored-vs-compiled-documentation-boundaries.md)
-- [Provider-Agnostic Subagent Primitives and Single-Agent Degradation in along-team](DECISIONS/ADR-2026-09-06--provider-agnostic-subagent-abstraction.md)
 
 Older decisions (19): docs/decisions/INDEX.md
 
-## Superseded & Retired Decisions (7)
+## Superseded & Retired Decisions (8)
 
 - single-file-append-only-decisions -> bounded-context-budget-and-active-projections
 - code-graph-mcp-and-hybrid-kb-search -> decouple-code-review-graph-from-mcp-to-direct-cli
 - protocol-v120-knowledge-base-architecture -> llm-wiki-docs-architecture-and-singular-skills-refactoring
+- entity-relationships-unidirectional-graph-and-canonical-slugs -> children-allowed-for-cross-context-links-only
 - protocol-v150-automated-entities-and-intent-heuristics -> entity-relationships-unidirectional-graph-and-canonical-slugs
 - universal-version-bumping-and-scripts-ecosystem -> version-ssot-consolidation-and-dynamic-packaging
 - windows-git-concurrency-and-index-lock-mitigation -> revert-git-stat-cache-workarounds

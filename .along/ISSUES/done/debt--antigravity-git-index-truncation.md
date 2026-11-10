@@ -12,6 +12,7 @@ tags: [risk]
 blocked_by: []
 related: []
 owner: user
+agent: antigravity
 ---
 
 # Upstream Antigravity Extension Git Index Truncation Bug and Mitigation

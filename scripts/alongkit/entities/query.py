@@ -458,6 +458,8 @@ def resolve_entity_reference(
         _, slug = parse_key(clean)
         if slug in target_keys:
             return True, None, False
+        if not ancestor_contexts(repo_root):
+            return False, f"unverified root reference '{ref}': no enclosing context (standalone checkout)", True
         return False, f"dangling root reference: '{ref}'", False
 
     keys = _subproject_entity_keys(repo_root, qualifier, sub_cache)

@@ -17,7 +17,7 @@ The managed block in `AGENTS.md` is the always-loaded core of the ALONG-PROTOCOL
 
 - **Nearest Context Boundary**: Any folder may carry its own `AGENTS.md` + `.along/`; use the NEAREST ones for the area you're working in. On conflict, the more specific wins.
 - **Subproject Localization** [gate: subproject-boundary]: In submodules, nested repos or symlinked folders: all entities (issues, sessions, ADRs, history) MUST be created in the NEAREST `.along/`. Agents are STRICTLY FORBIDDEN from dumping subproject changes into the workspace root `.along/`.
-- **Multi-Subproject Work** [gate: subproject-boundary]: A change spanning subprojects needs an issue in each touched `.along/`, or a root umbrella issue whose child issues there carry `parent: <umbrella key>`. Edits under a subproject `.along/` are checked by path.
+- **Multi-Subproject Work** [gate: subproject-boundary]: A change spanning subprojects needs an issue in each touched `.along/`, or a root umbrella issue whose child issues there carry `parent: <umbrella key>` or that the umbrella issue lists under `children: [<sub>:<child key>]`. Edits under a subproject `.along/` are checked by path.
 - **Subproject Boundary**: only a nested `.git` or a user-run `along init` makes a subproject; never init a manifest folder.
 - **Precedence**: Nearest `.along/` > higher-level `.along/` > global config (`~/.claude/CLAUDE.md`, `~/.codex/AGENTS.md`, `~/.gemini/config/GEMINI.md`).
 

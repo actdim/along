@@ -1949,6 +1949,16 @@ def _parent_chain_slugs(context_root: str, fm: Optional[Dict[str, Any]], limit: 
     return chain
 
 
+def _children_in_context(repo_root: str, fm: Optional[Dict[str, Any]], context_root: str) -> List[str]:
+    """Slugs of `fm`'s `children:` entries whose qualifier resolves to `context_root`."""
+    out = []
+    for c in (fm or {}).get("children") or []:
+        q, k = entities._ref_key(c)
+        if q and q != "root" and repo._same_path(os.path.normpath(os.path.join(repo_root, q)), context_root):
+            out.append(entities.parse_key(k)[1])
+    return out
+
+
 def _subproject_issue_ok(context_root: str, repo_root: str, key: Optional[str]) -> bool:
     """The session works on an issue of `context_root`, or on an umbrella issue whose child
     (at any depth, ISSUES/ or done/) lives there."""
@@ -1961,6 +1971,9 @@ def _subproject_issue_ok(context_root: str, repo_root: str, key: Optional[str]) 
     root_fm = _issue_frontmatter(repo_root, root_slug) if root_slug else None
     if not root_fm:
         return False
+    for cslug in _children_in_context(repo_root, root_fm, context_root):
+        if _issue_frontmatter(context_root, cslug, include_done=True):
+            return True
     issues_dir = _issues_dir(context_root)
     for d in (issues_dir, os.path.join(issues_dir, "done")):
         if not os.path.isdir(d):
@@ -2001,6 +2014,10 @@ def _bound_subproject_owns_root_entity(repo_root: str, rel_path: str, key: Optio
     bound_fm = _issue_frontmatter(ctx, str(slug), include_done=True)
     if entities.parse_key(stem)[1] in _parent_chain_slugs(ctx, bound_fm):
         return None
+    target_slug = entities.parse_key(stem)[1]
+    target_fm = _issue_frontmatter(repo_root, target_slug, include_done=True)
+    if str(slug) in _children_in_context(repo_root, target_fm, ctx):
+        return None
     return repo.canonical_relpath(ctx, repo_root)
 
 
@@ -2028,8 +2045,9 @@ def check_subproject_boundary(event: HookEvent, repo_root: str, **kwargs: Any) -
                 return (
                     f"Subproject Boundary Violation [gate: subproject-boundary]: '{rel}' belongs to subproject "
                     f"'{sub}', which has its own .along/. Work on it under an issue of '{sub}/.along/' "
-                    f"('along start <slug>' from '{sub}'), or give a child issue there "
-                    f"'parent: <root issue key>' of the umbrella issue this session is bound to."
+                    f"('along start <slug>' from '{sub}'), give a child issue there "
+                    f"'parent: <root issue key>' of the umbrella issue this session is bound to, "
+                    f"or list it in the root umbrella issue ('children: [<sub>:<child key>]')."
                 )
 
     rel_path = rel
@@ -2047,7 +2065,8 @@ def check_subproject_boundary(event: HookEvent, repo_root: str, **kwargs: Any) -
                 f"Subproject Boundary Violation [gate: subproject-boundary]: "
                 f"Cannot write root '{rel_path}' while this session works on an issue of subproject "
                 f"'{subpath}'. Entities of that work belong in '{subpath}/.along/'; root entities "
-                f"on the bound issue's parent chain (its umbrella) are allowed."
+                f"on the bound issue's parent chain (its umbrella) are allowed, "
+                f"or list it in the root umbrella issue ('children: [<sub>:<child key>]')."
             )
     return None
 

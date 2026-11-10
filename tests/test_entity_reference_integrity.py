@@ -278,6 +278,21 @@ class TestCrossContextParent(_ErRepo):
         self._child(self.sub, slug="other", parent="root:task--only-here")
         self.assertEqual(self._messages(self.sub), ["dangling parent reference: 'root:task--only-here'"])
 
+    def test_standalone_context_root_reference_is_warning(self):
+        _er_write(self.root, ".along/ISSUES/feat--standalone.md",
+                  _er_issue("standalone", milestone="", extra="parent: root:task--missing\n"))
+        res = entities.validate_entities(self.root)
+        self.assertEqual(res["errors"], [])
+        warn_msgs = [msg for _, msg in res["warnings"]]
+        self.assertTrue(any("unverified root reference" in m for m in warn_msgs))
+
+    def test_unqualified_children_entry_is_warning(self):
+        _er_write(self.root, ".along/ISSUES/task--umbrella-top.md",
+                  _er_issue("umbrella-top", itype="task", milestone="", extra="children: [task--child]\n"))
+        res = entities.validate_entities(self.root)
+        warn_msgs = [msg for _, msg in res["warnings"]]
+        self.assertTrue(any("unqualified children entry" in m for m in warn_msgs))
+
 
 class TestPreexistingProblemsDoNotBlock(_ErRepo):
     """[bug--entity-gate-blocks-preexisting-problems]."""

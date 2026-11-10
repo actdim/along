@@ -38,9 +38,11 @@ SID = "sess-1"
 KEY = session.session_key("claude", SID)
 
 
-def _put_issue(ctx: str, key: str, status: str = "in-progress", parent: str = "") -> None:
+def _put_issue(ctx: str, key: str, status: str = "in-progress", parent: str = "", children: Optional[List[str]] = None) -> None:
     itype, slug = key.split("--", 1)
     extra = f"parent: {parent}\n" if parent else ""
+    if children:
+        extra += "children:\n" + "".join(f"  - {c}\n" for c in children)
     textio.write_text(os.path.join(ctx, ".along", "ISSUES", f"{key}.md"),
                       f"---\nslug: {slug}\ntype: {itype}\nstatus: {status}\n{extra}---\n\n# {slug}\n")
 
@@ -155,6 +157,38 @@ class TestSubprojectBoundary(Workspace):
         self.assertIn("subproject-boundary", check_subproject_boundary(edit, self.root))
         _put_issue(self.web, "bug--child", parent="task--umbrella")
         self.assertIsNone(check_subproject_boundary(edit, self.root))
+
+    def test_top_down_children_allows_subproject_source_edits(self):
+        _put_issue(self.root, "task--umbrella", children=["webapp:task--child"])
+        _put_issue(self.web, "task--child", status="open")
+        self.start(self.root, "task--umbrella")
+        self.assertIsNone(check_subproject_boundary(_write_event(self.root, "webapp/src/code.py"), self.root))
+
+    def test_top_down_missing_child_denied(self):
+        _put_issue(self.root, "task--umbrella", children=["webapp:task--missing"])
+        self.start(self.root, "task--umbrella")
+        reason = check_subproject_boundary(_write_event(self.root, "webapp/src/code.py"), self.root)
+        self.assertIn("subproject-boundary", reason)
+
+    def test_top_down_other_subproject_child_denied(self):
+        _put_issue(self.root, "task--umbrella", children=["other:task--foo"])
+        _put_issue(self.web, "task--child", status="open")
+        self.start(self.root, "task--umbrella")
+        reason = check_subproject_boundary(_write_event(self.root, "webapp/src/code.py"), self.root)
+        self.assertIn("subproject-boundary", reason)
+
+    def test_child_session_writes_umbrella_ticket_and_folder_via_top_down(self):
+        _put_issue(self.root, "task--umbrella", children=["webapp:task--child"])
+        _put_issue(self.root, "task--other")
+        _put_issue(self.web, "task--child")
+        self.start(self.web, "task--child")
+        self.assertIsNone(check_subproject_boundary(
+            _write_event(self.root, ".along/ISSUES/task--umbrella.md"), self.root))
+        self.assertIsNone(check_subproject_boundary(
+            _write_event(self.root, ".along/ISSUES/task--umbrella/plans/01--x.md"), self.root))
+        reason = check_subproject_boundary(
+            _write_event(self.root, ".along/ISSUES/task--other/plan.md"), self.root)
+        self.assertIn("subproject-boundary", reason)
 
     def test_umbrella_covers_a_grandchild_context(self):
         deep = os.path.join(self.web, "pkg")

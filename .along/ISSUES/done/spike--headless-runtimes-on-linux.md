@@ -11,6 +11,7 @@ updated: 2026-10-23
 tags: [spike, runtimes, headless, linux, docker, claude-code, codex, opencode, antigravity]
 blocked_by: []
 related: [feat--autonomous-multi-runtime-mvp, feat--agent-runtime-adapters-claude-codex-opencode, feat--cross-runtime-supervisor-orchestrator, feat--isolated-environment-docker]
+agent: antigravity
 ---
 
 # Spike: headless agent runtimes on Linux

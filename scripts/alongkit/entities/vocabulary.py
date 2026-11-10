@@ -52,7 +52,7 @@ ENTITY_DIRS: Dict[str, str] = {
 #: converts their records; nothing else reads them.
 LEGACY_ENTITY_DIRS: Tuple[str, ...] = ("RISKS", "SPIKES", "CHECKLISTS")
 
-REFERENCE_FIELDS: Tuple[str, ...] = ("related", "blocked_by", "parent", "superseded_by", "duplicate_of")
+REFERENCE_FIELDS: Tuple[str, ...] = ("related", "blocked_by", "parent", "superseded_by", "duplicate_of", "children")
 MILESTONE_REFERENCE_FIELDS: Tuple[str, ...] = ("target_issues",)
 SESSION_REFERENCE_FIELDS: Tuple[str, ...] = ("issues_advanced", "issues_completed")
 

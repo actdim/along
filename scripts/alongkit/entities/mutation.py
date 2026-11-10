@@ -39,7 +39,7 @@ from .vocabulary import (
 _REFERENCING_DIRS: Tuple[str, ...] = ("ISSUES", "DECISIONS")
 _DANGLING_MILESTONE = "dangling milestone reference: "
 _DELETE_LIST_FIELDS: Tuple[str, ...] = ("related", "blocked_by", "target_issues")
-_DELETE_BLOCKING_FIELDS: Tuple[str, ...] = ("parent", "superseded_by", "duplicate_of")
+_DELETE_BLOCKING_FIELDS: Tuple[str, ...] = ("parent", "superseded_by", "duplicate_of", "children")
 
 
 def move_issue_folder(src_issue_file: str, dest_issue_file: str, tx: Any = None) -> bool:
