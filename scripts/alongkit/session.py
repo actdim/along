@@ -1609,10 +1609,46 @@ def issue_plan_state(repo_root: str, slug: str) -> Optional[str]:
 
 def approve_issue_plan(repo_root: str, slug: str, via: str, key: Optional[str] = None) -> bool:
     """Mark the ticket's plan approved and log the approval. False when there is no ticket."""
-    if not issue_file(repo_root, slug):
+    ipath = issue_file(repo_root, slug)
+    if not ipath:
         return False
     set_plan_status(repo_root, slug, "approved")
     record_plan_approval_event(repo_root, slug, "approve", via=via, key=key)
+
+    try:
+        from . import frontmatter, planscope
+        from .hooks import containment
+        plan_content = read_plan(repo_root, slug)
+        paths = planscope.plan_paths(plan_content)
+        if paths:
+            raw_fm = textio.read_text(ipath, strict=False) if os.path.isfile(ipath) else ""
+            mapping, _body, _err = frontmatter.try_parse(raw_fm)
+            current_allowed_roots = containment._as_list(mapping.get("allowed_roots")) if mapping else []
+            current_write_scope = containment._as_list(mapping.get("write_scope")) if mapping else []
+            b_root = binding_root(repo_root)
+            grant, rejected = planscope.split_grantable(
+                paths, repo_root, b_root, current_allowed_roots
+            )
+            if grant:
+                new_scope = list(current_write_scope)
+                changed = False
+                for p in grant:
+                    if p not in new_scope:
+                        new_scope.append(p)
+                        changed = True
+                if changed:
+                    content = textio.read_text(ipath)
+                    textio.write_text(
+                        ipath,
+                        frontmatter.update(content, {"write_scope": new_scope}, path=ipath),
+                        newline="\n",
+                    )
+                print(f"-> Plan grants write scope: {', '.join(grant)}")
+            if rejected:
+                print(f"[Notice] Not granted (outside workspace): {', '.join(rejected)}")
+    except (OSError, ValueError) as e:
+        print(f"[Notice] Plan write-scope inspection skipped: {e}")
+
     return True
 
 
