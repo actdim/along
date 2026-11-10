@@ -17,7 +17,6 @@ Decisions are authored and maintained in `.along/DECISIONS/` and published here 
 
 - **[along-v200-rebranding-and-namespace-isolation](./ADR-2026-08-27--along-v200-rebranding-and-namespace-isolation.md)** - Along v2.0.0: Rebranding, Isolated .along/ Directory, along-* Skill Prefixes, and protocol: along Metadata
 - **[autonomous-multi-mode-dashboard-and-analytics-engine](./ADR-2026-08-27--autonomous-multi-mode-dashboard-and-analytics-engine.md)** - Autonomous Multi-Mode Repository Dashboard & Analytics Engine
-- **[entity-relationships-unidirectional-graph-and-canonical-slugs](./ADR-2026-08-27--entity-relationships-unidirectional-graph-and-canonical-slugs.md)** - Entity Relationships, Unidirectional Graph Storage & Canonical Slug Invariance
 - **[mandatory-code-review-and-blast-radius-impact-gate](./ADR-2026-08-27--mandatory-code-review-and-blast-radius-impact-gate.md)** - Mandatory Agentic Code Review & Blast Radius Impact Assessment Gate
 - **[unified-along-wrap-commit-and-lifecycle-runners](./ADR-2026-08-27--unified-along-wrap-commit-and-lifecycle-runners.md)** - Unified /along-wrap, Smart /along-commit, and Lifecycle Execution Suite (/along-build, /along-test, /along-dev)
 - **[frontend-dynstruct-architecture-and-msgmesh-adapters](./ADR-2026-08-28--frontend-dynstruct-architecture-and-msgmesh-adapters.md)** - Frontend Architecture: Dynstruct Component Architecture, MessageMesh Integration, and NSwag Adapters
@@ -64,12 +63,14 @@ Decisions are authored and maintained in `.along/DECISIONS/` and published here 
 - **[gate-denials-are-ledger-events](./ADR-2026-10-23--gate-denials-are-ledger-events.md)** - Gate Denials Are Ledger Events; Closing Requires Resolution or User-Verified Disclosure
 - **[issue-plans-approved-ahead](./ADR-2026-10-23--issue-plans-approved-ahead.md)** - Issue plans live with the ticket; only the CLI approves them
 - **[along-core-and-dash-extra](./ADR-2026-10-29--along-core-and-dash-extra.md)** - Along Core and Dash Extra Architecture
+- **[children-allowed-for-cross-context-links-only](./ADR-2026-11-10--children-allowed-for-cross-context-links-only.md)** - Children allowed for cross-context links only
 
-## Superseded & Retired Decisions (7)
+## Superseded & Retired Decisions (8)
 
 - **[single-file-append-only-decisions](./ADR-2026-08-15--single-file-append-only-decisions.md)** - Single-file append-only DECISIONS.md over multi-file MADR/Nygard *(superseded by bounded-context-budget-and-active-projections)*
 - **[code-graph-mcp-and-hybrid-kb-search](./ADR-2026-08-26--code-graph-mcp-and-hybrid-kb-search.md)** - Code Graph & Hybrid Knowledge Base Search MCP Integration *(superseded by decouple-code-review-graph-from-mcp-to-direct-cli)*
 - **[protocol-v120-knowledge-base-architecture](./ADR-2026-08-26--protocol-v120-knowledge-base-architecture.md)** - Protocol v1.2.0 & Knowledge Base (KB) Architecture Standard *(superseded by llm-wiki-docs-architecture-and-singular-skills-refactoring)*
+- **[entity-relationships-unidirectional-graph-and-canonical-slugs](./ADR-2026-08-27--entity-relationships-unidirectional-graph-and-canonical-slugs.md)** - Entity Relationships, Unidirectional Graph Storage & Canonical Slug Invariance *(superseded by children-allowed-for-cross-context-links-only)*
 - **[protocol-v150-automated-entities-and-intent-heuristics](./ADR-2026-08-27--protocol-v150-automated-entities-and-intent-heuristics.md)** - Protocol v1.5.0: Automated Entity Ecosystem & Zero-Friction Intent Recognition *(superseded by entity-relationships-unidirectional-graph-and-canonical-slugs)*
 - **[universal-version-bumping-and-scripts-ecosystem](./ADR-2026-08-27--universal-version-bumping-and-scripts-ecosystem.md)** - Universal Project Version Bumping & Repository Scripts Ecosystem (.along/scripts/) *(superseded by version-ssot-consolidation-and-dynamic-packaging)*
 - **[windows-git-concurrency-and-index-lock-mitigation](./ADR-2026-09-06--windows-git-concurrency-and-index-lock-mitigation.md)** - Windows Git Concurrency Hardening: Disabling Optional Locks and Preload Races *(superseded by revert-git-stat-cache-workarounds)*

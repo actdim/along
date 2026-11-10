@@ -57,7 +57,6 @@
 - [ ] `(feat)` [team-typed-handoff-mailbox](ISSUES/feat--team-typed-handoff-mailbox.md)
 - [ ] `(feat)` [team-worktree-concurrency-rules](ISSUES/feat--team-worktree-concurrency-rules.md)
 - [ ] `(feat)` [team-worktree-lifecycle](ISSUES/feat--team-worktree-lifecycle.md)
-- [ ] `(feat)` [top-down-umbrella-subproject-binding](ISSUES/feat--top-down-umbrella-subproject-binding.md)
 - [ ] `(feat)` [workspace-activity-tracking](ISSUES/feat--workspace-activity-tracking.md)
 - [ ] `(feat)` [worktree-lifecycle-hardening](ISSUES/feat--worktree-lifecycle-hardening.md)
 - [ ] `(feat)` [zero-step-state-recovery-and-drift-detection](ISSUES/feat--zero-step-state-recovery-and-drift-detection.md)
@@ -66,8 +65,8 @@
 
 ## Done (recent)
 - [x] `(task)` [release-v4-8-0](ISSUES/done/task--release-v4-8-0.md)
+- [x] `(feat)` [top-down-umbrella-subproject-binding](ISSUES/done/feat--top-down-umbrella-subproject-binding.md)
 - [x] `(bug)` [subproject-boundary-issue-folder-files](ISSUES/done/bug--subproject-boundary-issue-folder-files.md)
 - [x] `(bug)` [start-dirty-check-misattribution](ISSUES/done/bug--start-dirty-check-misattribution.md)
 - [x] `(bug)` [gates-ack-cross-issue-denials](ISSUES/done/bug--gates-ack-cross-issue-denials.md)
-- [x] `(task)` [optimize-test-suite-execution-time](ISSUES/done/task--optimize-test-suite-execution-time.md)
-<!-- 327 older completed issue(s) archived in .along/ISSUES/done/ -->
+<!-- 328 older completed issue(s) archived in .along/ISSUES/done/ -->

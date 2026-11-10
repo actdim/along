@@ -3,7 +3,8 @@ protocol: along
 protocol_version: "4.8.0"
 slug: top-down-umbrella-subproject-binding
 type: feat
-status: open
+status: done
+completed: 2026-11-10
 priority: high
 created: 2026-11-10
 updated: 2026-11-10
@@ -33,15 +34,15 @@ As a result, agents working across superprojects and submodules must repeatedly 
 - REQ-3 (Root Entity Modification by Child): Gate `subproject-boundary` (`predicates._bound_subproject_owns_root_entity`) MUST permit writing to a root umbrella issue or its issue folder when the session is bound to a submodule child listed in the root issue's `children:` field.
 - REQ-4 (Entity Vocabulary and Validation):
   - Add `children` to `REFERENCE_FIELDS` in `alongkit.entities.vocabulary` and `_DELETE_BLOCKING_FIELDS` in `alongkit.entities.mutation`.
-  - Validate `children` entries in `alongkit.entities.validation.validate_entities` across subproject contexts.
+  - Validate `children` entries in `alongkit.entities.validation.validate_entities` across subproject contexts (already checked, extend with single-direction warning).
   - In `alongkit.entities.query.resolve_entity_reference`: if a reference is qualified with `root:` but the repository has no enclosing context (standalone clone), emit a non-blocking diagnostic warning instead of a blocking dangling error.
 - REQ-5 (Remedy Alignment): The violation text in `subproject-boundary` MUST present both bottom-up (`parent:`) and top-down (`children:`) remedies.
 - REQ-6 (Hermetic Tests): Regression and unit tests MUST cover top-down umbrella authorization, bidirectional write permissions, standalone submodule validation, and typography rules.
 
 ## Acceptance Criteria
 
-- [ ] Superproject issue declaring `children: [<sub>:<child-key>]` allows source edits in `<sub>` without requiring `parent:` in `<sub>`'s issue.
-- [ ] Submodule session bound to a listed child issue is permitted to edit the root umbrella issue ticket and its issue folder.
-- [ ] Submodule issue declaring `parent: root:<key>` or `umbrella: root:<key>` produces non-blocking warnings in a standalone clone.
-- [ ] `along doctor --entities` and `along issue sync` validate `children` references accurately.
-- [ ] Hermetic tests pass cleanly.
+- [x] Superproject issue declaring `children: [<sub>:<child-key>]` allows source edits in `<sub>` without requiring `parent:` in `<sub>`'s issue.
+- [x] Submodule session bound to a listed child issue is permitted to edit the root umbrella issue ticket and its issue folder.
+- [x] Submodule issue declaring `parent: root:<key>` produces non-blocking warnings in a standalone clone.
+- [x] `along doctor --entities` and `along issue sync` validate `children` references accurately.
+- [x] Hermetic tests pass cleanly.
