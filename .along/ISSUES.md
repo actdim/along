@@ -58,15 +58,14 @@
 - [ ] `(feat)` [team-worktree-concurrency-rules](ISSUES/feat--team-worktree-concurrency-rules.md)
 - [ ] `(feat)` [team-worktree-lifecycle](ISSUES/feat--team-worktree-lifecycle.md)
 - [ ] `(feat)` [workspace-activity-tracking](ISSUES/feat--workspace-activity-tracking.md)
-- [ ] `(feat)` [worktree-lifecycle-hardening](ISSUES/feat--worktree-lifecycle-hardening.md)
 - [ ] `(feat)` [zero-step-state-recovery-and-drift-detection](ISSUES/feat--zero-step-state-recovery-and-drift-detection.md)
 - [ ] `(task)` [gate-event-remeasure](ISSUES/task--gate-event-remeasure.md)
 - [ ] `(task)` [reconcile-dashboard-ui-core-conventions](ISSUES/task--reconcile-dashboard-ui-core-conventions.md)
 
 ## Done (recent)
 - [x] `(task)` [release-v4-8-0](ISSUES/done/task--release-v4-8-0.md)
+- [x] `(feat)` [worktree-lifecycle-hardening](ISSUES/done/feat--worktree-lifecycle-hardening.md)
 - [x] `(feat)` [top-down-umbrella-subproject-binding](ISSUES/done/feat--top-down-umbrella-subproject-binding.md)
 - [x] `(bug)` [subproject-boundary-issue-folder-files](ISSUES/done/bug--subproject-boundary-issue-folder-files.md)
 - [x] `(bug)` [start-dirty-check-misattribution](ISSUES/done/bug--start-dirty-check-misattribution.md)
-- [x] `(bug)` [gates-ack-cross-issue-denials](ISSUES/done/bug--gates-ack-cross-issue-denials.md)
-<!-- 328 older completed issue(s) archived in .along/ISSUES/done/ -->
+<!-- 329 older completed issue(s) archived in .along/ISSUES/done/ -->

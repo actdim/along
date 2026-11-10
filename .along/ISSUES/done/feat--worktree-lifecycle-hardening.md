@@ -3,10 +3,11 @@ protocol: along
 protocol_version: "4.7.0"
 slug: worktree-lifecycle-hardening
 type: feat
-status: open
+status: done
+completed: 2026-11-10
 priority: medium
 created: 2026-11-07
-updated: 2026-11-07
+updated: 2026-11-10
 agent: antigravity
 tags: [worktree, lifecycle, git, safety, cleanup]
 blocked_by: []
@@ -37,9 +38,9 @@ However, the lifecycle integration currently has critical gaps:
 
 ## Acceptance Criteria
 
-- [ ] `along wrap` detects unmerged worktrees and prevents accidental closeout without data migration.
-- [ ] `along wrap` automatically removes clean worktrees and unlinks dependency junctions.
-- [ ] `along doctor` detects and reports orphaned worktrees with actionable remediation commands.
-- [ ] `along commit` warns on root-vs-worktree branch divergence for active issues.
-- [ ] Hermetic tests verify wrap guards, teardown, and doctor reporting.
-- [ ] Passes `python scripts/sanitize_typography.py --check` with 0 banned characters.
+- [x] `along wrap` detects unmerged worktrees and prevents accidental closeout without data migration.
+- [x] `along wrap` automatically removes clean worktrees and unlinks dependency junctions.
+- [x] `along doctor` detects and reports orphaned worktrees with actionable remediation commands.
+- [x] `along commit` warns on root-vs-worktree branch divergence for active issues.
+- [x] Hermetic tests verify wrap guards, teardown, and doctor reporting.
+- [x] Passes `python scripts/sanitize_typography.py --check` with 0 banned characters.
