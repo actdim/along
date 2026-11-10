@@ -127,6 +127,55 @@ class TestStartGuard(unittest.TestCase):
                 code = cm.code
             self.assertEqual(code or 0, 0)
 
+    def test_dirty_path_claimed_by_in_progress_issue_is_not_blamed_on_wrapped(self):
+        from along_exec import handle_start_command
+        slug = "fixture-sample-task"
+        session.init_session(self.root, slug)
+        session.record_plan(self.root, slug, "1. Plan", "test")
+        session.append_event(self.root, slug, "sess-1", "edit", "src/work.py")
+        os.makedirs(os.path.join(self.root, "src"), exist_ok=True)
+        textio.write_text(os.path.join(self.root, "src", "work.py"), "code = 1\n")
+        code = lifecycle.execute_wrap(self.root, slug, status="done", no_verify=True, decisions=[], no_commit=True)
+        self.assertEqual(code, 0)
+        proc.run_capture(["git", "add", ".along"], cwd=self.root)
+        proc.run_capture(["git", "commit", "-q", "-m", "commit wrapped entity files"], cwd=self.root)
+
+        task_x = os.path.join(self.root, ".along", "ISSUES", "feat--task-x.md")
+        textio.write_text(task_x, "---\nslug: task-x\ntype: feat\nstatus: in-progress\n---\n# Task X\n")
+        session.init_session(self.root, "task-x")
+        session.record_plan(self.root, "task-x", "1. Plan", "test")
+        session.append_event(self.root, "task-x", "sess-x", "edit", "src/work.py")
+
+        with mock.patch("sys.stdout", new_callable=io.StringIO):
+            try:
+                code = handle_start_command(self.root, ["task-x", "--write-scope", "sub/"])
+            except SystemExit as cm:
+                code = cm.code
+            self.assertEqual(code or 0, 0)
+
+    def test_restart_own_bound_issue_skips_dirty_checks(self):
+        from along_exec import handle_start_command
+        task1 = os.path.join(self.root, ".along", "ISSUES", "feat--task-one.md")
+        textio.write_text(task1, "---\nslug: task-one\ntype: feat\nstatus: in-progress\n---\n# Task 1\n")
+        session.init_session(self.root, "task-one")
+        session.append_event(self.root, "task-one", "sess-1", "edit", "src/active.py")
+        os.makedirs(os.path.join(self.root, "src"), exist_ok=True)
+        textio.write_text(os.path.join(self.root, "src", "active.py"), "active = 1\n")
+
+        task2 = os.path.join(self.root, ".along", "ISSUES", "feat--task-two.md")
+        textio.write_text(task2, "---\nslug: task-two\ntype: feat\nstatus: in-progress\n---\n# Task 2\n")
+        session.init_session(self.root, "task-two")
+        key = session.session_key("claude", "sess-2")
+        session.bind_session(self.root, "task-two", key=key)
+
+        with mock.patch.dict(os.environ, {"ALONG_SESSION_KEY": key}):
+            with mock.patch("sys.stdout", new_callable=io.StringIO):
+                try:
+                    code = handle_start_command(self.root, ["task-two"])
+                except SystemExit as cm:
+                    code = cm.code
+                self.assertEqual(code or 0, 0)
+
 
 if __name__ == "__main__":
     unittest.main()

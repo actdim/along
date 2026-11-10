@@ -101,15 +101,27 @@ def handle_start_command(repo_root: str, args: List[str]):
     allow_dirty = "--allow-dirty" in args
     is_worktree = "--worktree" in args
 
-    if not is_worktree:
+    key_now = session.current_session_key()
+    _bctx, bound_slug = session.bound_blackboard(repo_root, key_now)
+    restart_own = issue.get("status") == "in-progress" and bound_slug == issue["slug"]
+
+    if not is_worktree and not restart_own:
         from alongkit import closeout
         top = closeout.git_top(repo_root)
         if top:
             changes = closeout.git_changes(repo_root)
             if changes:
+                in_progress = [i for i in entities.scan_issues(repo_root) if i.get("status") == "in-progress"]
+                if issue.get("status") != "in-progress":
+                    in_progress.append(issue)  # the issue being started may hold earlier edit events
+                claimed = set()
+                for ip in in_progress:
+                    for p in session.attributed_files(repo_root, ip["slug"]):
+                        claimed.add(closeout.path_key(repo.canonical_relpath(os.path.join(repo_root, p), top)))
+                unattributed_candidates = [p for p in changes if closeout.path_key(p) not in claimed]
+
                 # 1. Hard block if uncommitted files from previously completed (wrapped) issues exist
                 done_attr = closeout.done_issues_attribution(repo_root)
-                unattributed_candidates = list(changes.keys())
                 wrapped_groups: Dict[str, List[str]] = {}
                 for dkey, dinfo in done_attr.items():
                     all_dpaths = {closeout.path_key(p) for p in list(dinfo["files"].keys()) + dinfo["entity_files"]}
@@ -129,8 +141,7 @@ def handle_start_command(repo_root: str, args: List[str]):
                     raise CommandError("\n".join(msg_lines), exit_code=1)
 
                 # 2. Block if active in-progress issue exists with uncommitted working tree changes
-                active_others = [i for i in entities.scan_issues(repo_root)
-                                 if i.get("status") == "in-progress" and i.get("slug") != issue["slug"]]
+                active_others = [i for i in in_progress if i.get("slug") != issue["slug"]]
                 if active_others and not allow_dirty:
                     changed_keys = {closeout.path_key(p): p for p in changes}
                     active_with_changes = []
