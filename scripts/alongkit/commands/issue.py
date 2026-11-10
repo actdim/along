@@ -55,6 +55,7 @@ def _issue_create(repo_root: str, args: List[str], issues_dir: str, today: str):
     parser.add_argument("--agent", "-a", default=None)
     parser.add_argument("--milestone", "-m", default=None)
     parser.add_argument("--no-milestone", action="store_true")
+    parser.add_argument("--draft", action="store_true", help="Create as untracked draft in .along/.drafts/")
     parsed, extra = parser.parse_known_args(args[1:])
     check_unknown_args(extra, "along issue create")
 
@@ -66,6 +67,12 @@ def _issue_create(repo_root: str, args: List[str], issues_dir: str, today: str):
     if existing_issue:
         rel_existing = repo.safe_relpath(existing_issue["file_path"], repo_root)
         raise CommandError(f"An issue with slug '{islug}' already exists: {rel_existing}", exit_code=1)
+
+    from alongkit import drafts
+    existing_draft = drafts.find_draft(repo_root, islug)
+    if existing_draft:
+        rel_draft = repo.safe_relpath(existing_draft, repo_root)
+        raise CommandError(f"A draft with slug '{islug}' already exists: {rel_draft}", exit_code=1)
 
     title = parsed.title or islug.replace("-", " ").capitalize()
     priority = parsed.priority.lower()
@@ -95,7 +102,8 @@ def _issue_create(repo_root: str, args: List[str], issues_dir: str, today: str):
         print(f"-> [Notice] Title/slug matches {inferred} keywords. Consider using type '{inferred}' instead of 'feat'.")
 
     milestone_line = f"milestone: {milestone}\n" if milestone else ""
-    target_file = os.path.join(issues_dir, f"{itype}--{islug}.md")
+    target_dir = drafts.drafts_dir(repo_root) if parsed.draft else issues_dir
+    target_file = os.path.join(target_dir, f"{itype}--{islug}.md")
     tags_str = f"[{', '.join(tags)}]" if tags else "[]"
     if itype == "spike":
         # A spike concludes with what was learned; `## Outcome` is filled before it is wrapped.
@@ -125,6 +133,10 @@ related: []
 
 {body}"""
     textio.write_text(target_file, content, newline="\n", atomic=True)
+    if parsed.draft:
+        print(f"-> Created draft: {target_file}")
+        return 0
+
     print(f"-> Created issue: {target_file}")
 
     if milestone:
@@ -602,6 +614,10 @@ def build_parser() -> argparse.ArgumentParser:
     p_create.add_argument("--agent", "-a", default=None, help="Assigned agent")
     p_create.add_argument("--milestone", "-m", default=None, help="Assigned milestone")
     p_create.add_argument("--no-milestone", action="store_true", help="Explicitly assign no milestone")
+    p_create.add_argument("--draft", action="store_true", help="Create as untracked draft in .along/.drafts/")
+
+    p_promote = sub.add_parser("promote", help="Promote a draft into an active issue")
+    p_promote.add_argument("slug", help="Draft slug to promote")
 
     for name in ("done", "close"):
         p_done = sub.add_parser(name, help="Close an issue")
@@ -655,10 +671,22 @@ def build_parser() -> argparse.ArgumentParser:
     return parser
 
 
+def _issue_promote(repo_root: str, args: List[str]):
+    if len(args) < 2:
+        raise ValidationError("Usage: along issue promote <slug>")
+    slug = args[1].lower()
+    from alongkit import drafts
+    target_path = drafts.promote(repo_root, slug)
+    rel_path = repo.safe_relpath(target_path, repo_root)
+    print(f"-> Promoted draft to {rel_path}")
+    return 0
+
+
 def handle_issue_command(repo_root: str, args: List[str]):
     if not args or args[0] in ("-h", "--help", "help"):
-        print("Usage: along_exec.py issue [create|update|done|cancel|delete|reopen|sync|list|show|rename|supersede|lint] [args...]")
-        print("  create <type> <slug> --title \"Title\" [--priority high|medium|low] [--tags \"t1,t2\"] [--agent <name>] [--milestone <name>|--no-milestone]")
+        print("Usage: along_exec.py issue [create|update|done|cancel|delete|reopen|sync|list|show|rename|supersede|lint|promote] [args...]")
+        print("  create <type> <slug> --title \"Title\" [--draft] [--priority high|medium|low] [--tags \"t1,t2\"] [--agent <name>] [--milestone <name>|--no-milestone]")
+        print("  promote <slug>            Promote a draft from .along/.drafts/ to .along/ISSUES/")
         print("  update <slug> [--milestone <name>] [--priority <high|medium|low>] [--status <status>] [--tags <t1,t2>] [--title <title>]")
         print("  done   <slug> [--status done|superseded|cancelled|duplicate] [--superseded-by <key>] [--duplicate-of <key>]")
         print("                            [--force-reason \"...\"]  (past unsettled gate denials, after the user's reply)")
@@ -699,6 +727,7 @@ def handle_issue_command(repo_root: str, args: List[str]):
         "get": lambda: _issue_show(repo_root, args),
         "rename": lambda: _issue_rename(repo_root, args),
         "supersede": lambda: _issue_supersede(repo_root, args),
+        "promote": lambda: _issue_promote(repo_root, args),
     }
 
     handler = dispatch.get(subcmd)

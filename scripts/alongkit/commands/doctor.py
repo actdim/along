@@ -16,6 +16,7 @@ import os
 import re
 import shutil
 import sys
+import time
 from datetime import datetime
 from typing import Any, Dict, List, Optional, Tuple
 
@@ -177,6 +178,23 @@ def _doctor_worktree_checks(repo_root: str, warnings: int) -> int:
         print(f"[WARN] {len(zombies)} dangling worktree(s): {', '.join(zombies)}. "
               f"Run 'along worktree remove <slug>' (or 'along worktree gc').")
         warnings += len(zombies)
+    return warnings
+
+
+def _doctor_drafts_checks(repo_root: str, warnings: int) -> int:
+    from alongkit import drafts
+    cutoff = time.time() - (7 * 86400)
+    old = []
+    for d in drafts.list_drafts(repo_root):
+        if d.get("mtime", 0) < cutoff:
+            slug = d.get("key", "")
+            if "--" in slug:
+                slug = slug.split("--", 1)[1]
+            old.append(slug)
+    if old:
+        print(f"[WARN] {len(old)} draft(s) older than 7 days in .along/.drafts/: {', '.join(old)}. "
+              f"Promote ('along issue promote <slug>') or delete.")
+        warnings += len(old)
     return warnings
 
 
@@ -385,6 +403,9 @@ def handle_doctor_command(repo_root: str, args: List[str]):
 
     # Check dangling worktrees
     warnings = _doctor_worktree_checks(repo_root, warnings)
+
+    # Check stale drafts
+    warnings = _doctor_drafts_checks(repo_root, warnings)
 
     # Check DECISIONS
     dec_dir = os.path.join(along_dir, "DECISIONS")

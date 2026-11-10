@@ -48,7 +48,7 @@ STATE_ENTRIES: frozenset = frozenset({
 #: See [bug--hook-activation-and-gate-deadlock].
 RUNTIME_ONLY_ENTRIES: frozenset = frozenset({
     "diagnostics", ".gitignore", "scripts", "artifacts", ".session", ".migration-backup",
-    "worktrees",
+    "worktrees", ".drafts",
 })
 
 #: Along state inside a legacy `.agents/`; that name is also a third-party convention

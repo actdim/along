@@ -72,6 +72,13 @@ def handle_start_command(repo_root: str, args: List[str]):
     slug = require_entity_name(args[0].lower(), "along start <slug> [--approved] [--worktree] [--profile <profile>]")
     issue = entities.find_issue_by_slug(repo_root, slug)
     if not issue:
+        from alongkit import drafts
+        draft = drafts.find_draft(repo_root, slug)
+        if draft:
+            new_path = drafts.promote(repo_root, slug)
+            print(f"-> Promoted draft to {repo.safe_relpath(new_path, repo_root)}")
+            issue = entities.find_issue_by_slug(repo_root, slug)
+    if not issue:
         raise CommandError(f"Issue '{slug}' not found in .along/ISSUES/.", exit_code=1)
 
     issue_path = issue.get("file_path", "")
