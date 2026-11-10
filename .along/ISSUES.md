@@ -48,7 +48,6 @@
 - [ ] `(feat)` [operational-assets-and-playbooks](ISSUES/feat--operational-assets-and-playbooks.md)
 - [ ] `(feat)` [per-model-rework-metrics](ISSUES/feat--per-model-rework-metrics.md)
 - [ ] `(feat)` [pi-harness-support](ISSUES/feat--pi-harness-support.md)
-- [ ] `(feat)` [plan-grants-write-scope](ISSUES/feat--plan-grants-write-scope.md)
 - [ ] `(feat)` [planning-fields-and-ordering-gates](ISSUES/feat--planning-fields-and-ordering-gates.md)
 - [ ] `(feat)` [session-commit-binding](ISSUES/feat--session-commit-binding.md)
 - [ ] `(feat)` [subagent-execution-discipline](ISSUES/feat--subagent-execution-discipline.md)
@@ -66,6 +65,6 @@
 - [x] `(task)` [release-v4-8-0](ISSUES/done/task--release-v4-8-0.md)
 - [x] `(feat)` [worktree-lifecycle-hardening](ISSUES/done/feat--worktree-lifecycle-hardening.md)
 - [x] `(feat)` [top-down-umbrella-subproject-binding](ISSUES/done/feat--top-down-umbrella-subproject-binding.md)
+- [x] `(feat)` [plan-grants-write-scope](ISSUES/done/feat--plan-grants-write-scope.md)
 - [x] `(bug)` [subproject-boundary-issue-folder-files](ISSUES/done/bug--subproject-boundary-issue-folder-files.md)
-- [x] `(bug)` [start-dirty-check-misattribution](ISSUES/done/bug--start-dirty-check-misattribution.md)
-<!-- 329 older completed issue(s) archived in .along/ISSUES/done/ -->
+<!-- 330 older completed issue(s) archived in .along/ISSUES/done/ -->

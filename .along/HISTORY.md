@@ -266,3 +266,4 @@ _Index of sessions (newest last). One line per session:_
 2026-11-10 - start-dirty-check-misattribution - antigravity - Do not blame dirty working tree files claimed by in-progress issues on wrapped issues - [Session Log](./SESSIONS/2026/2026-11-10--start-dirty-check-misattribution.md)
 2026-11-10 - top-down-umbrella-subproject-binding - antigravity - Add top-down umbrella children binding and cross-context authorization - [Session Log](./SESSIONS/2026/2026-11-10--top-down-umbrella-subproject-binding.md)
 2026-11-10 - worktree-lifecycle-hardening - antigravity - Harden worktree lifecycle with wrap guards, automatic teardown, doctor audits, and commit notice - [Session Log](./SESSIONS/2026/2026-11-10--worktree-lifecycle-hardening.md)
+2026-11-10 - plan-grants-write-scope - antigravity - Approved plan grants Files to change as write scope outside subproject - [Session Log](./SESSIONS/2026/2026-11-10--plan-grants-write-scope.md)
