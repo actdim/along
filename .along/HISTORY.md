@@ -260,3 +260,4 @@ _Index of sessions (newest last). One line per session:_
 2026-11-09 - optimize-test-suite-execution-time - antigravity - Add integration test registry and parallel xdist execution support to test runners - [Session Log](./SESSIONS/2026/2026-11-09--optimize-test-suite-execution-time.md)
 2026-11-09 - domain-exceptions-and-error-flow - antigravity - Centralize domain exceptions hierarchy and eliminate sys.exit from command modules - [Session Log](./SESSIONS/2026/2026-11-09--domain-exceptions-and-error-flow.md)
 2026-11-09 - integrate-actdim-ui-core-runtime - antigravity - Integrate @actdim/ui-core runtime, tokens, and component tests - [Session Log](./SESSIONS/2026/2026-11-09--integrate-actdim-ui-core-runtime.md)
+2026-11-10 - release-v4-8-0 - antigravity - Release v4.8.0, synchronize dependency registry and milestones, and update global installation - [Session Log](./SESSIONS/2026/2026-11-10--release-v4-8-0.md)

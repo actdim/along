@@ -1,7 +1,7 @@
 # Active Issues
 
 ## Active
-- [ ] `(task)` [release-v4-8-0](ISSUES/task--release-v4-8-0.md)
+<!-- No active issues -->
 
 ## Backlog
 - [ ] `(bug)` [start-dirty-check-misattribution](ISSUES/bug--start-dirty-check-misattribution.md)
@@ -66,9 +66,9 @@
 - [ ] `(task)` [reconcile-dashboard-ui-core-conventions](ISSUES/task--reconcile-dashboard-ui-core-conventions.md)
 
 ## Done (recent)
+- [x] `(task)` [release-v4-8-0](ISSUES/done/task--release-v4-8-0.md)
 - [x] `(task)` [optimize-test-suite-execution-time](ISSUES/done/task--optimize-test-suite-execution-time.md)
 - [x] `(task)` [integrate-actdim-ui-core-runtime](ISSUES/done/task--integrate-actdim-ui-core-runtime.md)
 - [x] `(task)` [domain-exceptions-and-error-flow](ISSUES/done/task--domain-exceptions-and-error-flow.md)
 - [x] `(task)` [simplify-cli-safety-gate-and-predicates](ISSUES/done/task--simplify-cli-safety-gate-and-predicates.md)
-- [x] `(task)` [refactor-cli-chdir-common](ISSUES/done/task--refactor-cli-chdir-common.md)
-<!-- 323 older completed issue(s) archived in .along/ISSUES/done/ -->
+<!-- 324 older completed issue(s) archived in .along/ISSUES/done/ -->
