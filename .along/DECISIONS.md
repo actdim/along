@@ -1,8 +1,9 @@
 <!-- Generated projection from .along/DECISIONS/*.md. Do not edit by hand. Run: along decision sync -->
 # Decisions (ADR Projection Board)
 
-## Active Decisions (50, newest 30 shown)
+## Active Decisions (51, newest 30 shown)
 
+- [Issue-Level Test Scoping and Verify Policy Invariants](DECISIONS/ADR-2026-11-13--issue-test-scoping-policy.md)
 - [Feedback Inbox Location and GitHub PR Transport](DECISIONS/ADR-2026-11-13--feedback-inbox-and-pr-transport.md)
 - [Children allowed for cross-context links only](DECISIONS/ADR-2026-11-10--children-allowed-for-cross-context-links-only.md)
 - [Along Core and Dash Extra Architecture](DECISIONS/ADR-2026-10-29--along-core-and-dash-extra.md)
@@ -32,9 +33,8 @@
 - [Revert GIT_OPTIONAL_LOCKS and diff.autoRefreshIndex to Preserve Git Stat-Cache Integrity](DECISIONS/ADR-2026-09-07--revert-git-stat-cache-workarounds.md)
 - [Durable Multi-Agent Session Blackboard and Canonical CLI Skill Execution](DECISIONS/ADR-2026-09-07--durable-session-blackboard-and-canonical-cli.md)
 - [Bounded Context Budget, Active Constraints Projection, and Sliding Window Issues](DECISIONS/ADR-2026-09-07--bounded-context-budget-and-active-projections.md)
-- [Ban file:// Scheme in Markdown Links in Favor of Standard Relative Links](DECISIONS/ADR-2026-09-07--ban-file-uri-scheme-in-markdown-links.md)
 
-Older decisions (20): docs/decisions/INDEX.md
+Older decisions (21): docs/decisions/INDEX.md
 
 ## Superseded & Retired Decisions (8)
 
