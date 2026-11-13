@@ -5,7 +5,7 @@ title: System Comparisons & Alternative Architectural Paradigms
 type: explanation
 write_policy: manual
 created: 2026-09-27
-updated: 2026-09-27
+updated: 2026-11-13
 tags: [comparisons, architecture, paradigms, memory, zero-vector, mechanical-gates, governance, engineering-decisions]
 sources:
   - path: docs/topic--llm-wiki-architecture.md
@@ -60,7 +60,7 @@ More recent academic proposals extend this by arguing for a dual-process cogniti
 3. **Heavy Runtimes and Cloud Vendor Lock-in**:
    - Forcing a hard dependency on a closed SaaS classification API, or requiring local deployment of heavy 421M parameter PyTorch models, introduces massive environment fragility, GPU/CUDA overhead, and high token costs.
 4. **The "Neural System-1" Latency and Drift Trap**:
-   - Academic architectures claim that ~0.93 seconds per query is "fast" compared to pure autoregressive LLM memory agents (which take 2-30 seconds). In real-world engineering, ~1 second per search is unacceptably slow compared to local deterministic indexes. Furthermore, neural probabilistic memory consolidation causes memory drift, where critical constraints can be silently de-prioritized by neural link weights.
+   - Academic architectures report ~0.93 seconds per query as "fast" compared to pure autoregressive LLM memory agents (which take 2-30 seconds). Raw latency is not the deciding factor: a cold `along kb-search` call is of the same order (corpus load plus a ~0.25 s in-memory query, see `scripts/bench_kb_search.py`). The difference is that every ranking step is deterministic and inspectable, with no model inference or GPU in the loop. Neural probabilistic memory consolidation, by contrast, causes memory drift, where critical constraints can be silently de-prioritized by neural link weights.
 5. **The Chatbot Benchmark Fallacy (LoCoMo vs. Software Engineering)**:
    - Success on conversational QA benchmarks (such as LoCoMo) measures trivia recall across long character chats ("when did character X buy item Y?"). It completely fails to reflect the core constraints of software engineering: Git multi-branch concurrency, AST symbol call graphs, compilation invariants, and mechanical gate enforcement.
 
@@ -80,7 +80,7 @@ Along replaces passive chat scraping and neural controllers with **intentional s
 Repository documentation and code are processed through blind token chunkers (e.g. 512 tokens with 50-token overlap), passed through embedding models, and stored in vector databases (Chroma, Pinecone, Weaviate, FAISS). Agents query these indexes via cosine similarity.
 
 ### What Along Adopted / Evaluated
-- **The LLM-Wiki Paradigm**: Along fully embraced Andrej Karpathy's vision of an interconnected, human-readable repository wiki (`docs/`) tailored for AI consumption, complemented by deterministic `llms.txt` and `llms-full.txt` catalogs.
+- **The LLM-Wiki Idea, Made Deterministic**: Along adopted the core idea of Andrej Karpathy's LLM-Wiki, an interconnected, human-readable repository wiki (`docs/`) that AI agents navigate. It implements it as authored, topic-based documentation (IBM DITA, Diataxis) with deterministic `llms.txt` and `llms-full.txt` catalogs, not as an LLM-recompiled secondary wiki. See [Topic-Based Knowledge Base Architecture & Paradigm](./topic--llm-wiki-architecture.md) for why the naive LLM-Wiki model was rejected.
 
 ### What Along Critically Rejected and Why
 1. **Destruction of Syntax and AST Boundaries**:
