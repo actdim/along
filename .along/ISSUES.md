@@ -1,7 +1,7 @@
 # Active Issues
 
 ## Active
-- [ ] `(debt)` [stale-protocol-path-comment](ISSUES/debt--stale-protocol-path-comment.md)
+- [ ] `(debt)` [stale-protocol-path-comment](ISSUES/debt--stale-protocol-path-comment.md) - plan ready
 
 ## Backlog
 - [ ] `(debt)` [autonomous-non-elevation-invariants](ISSUES/debt--autonomous-non-elevation-invariants.md)
@@ -39,6 +39,7 @@
 - [ ] `(feat)` [feedback-github-pr-transport](ISSUES/feat--feedback-github-pr-transport.md)
 - [ ] `(feat)` [feedback-maintainer-telegram-email-channels](ISSUES/feat--feedback-maintainer-telegram-email-channels.md)
 - [ ] `(feat)` [golang-ecosystem-support](ISSUES/feat--golang-ecosystem-support.md)
+- [ ] `(feat)` [issue-test-scoping-policy](ISSUES/feat--issue-test-scoping-policy.md)
 - [ ] `(feat)` [jvm-ecosystem-support](ISSUES/feat--jvm-ecosystem-support.md)
 - [ ] `(feat)` [kb-search-hybrid-retrieval](ISSUES/feat--kb-search-hybrid-retrieval.md)
 - [ ] `(feat)` [multi-runtime-and-omnichannel-expansion](ISSUES/feat--multi-runtime-and-omnichannel-expansion.md)
