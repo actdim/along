@@ -36,7 +36,7 @@
 - [ ] `(feat)` [enterprise-governance-and-cloud-infrastructure](ISSUES/feat--enterprise-governance-and-cloud-infrastructure.md)
 - [ ] `(feat)` [enterprise-governance-and-compliance-pack](ISSUES/feat--enterprise-governance-and-compliance-pack.md)
 - [ ] `(feat)` [external-issue-trackers-sync-and-import](ISSUES/feat--external-issue-trackers-sync-and-import.md)
-- [ ] `(feat)` [feedback-github-pr-transport](ISSUES/feat--feedback-github-pr-transport.md)
+- [ ] `(feat)` [feedback-github-pr-transport](ISSUES/feat--feedback-github-pr-transport.md) - plan ready
 - [ ] `(feat)` [feedback-maintainer-telegram-email-channels](ISSUES/feat--feedback-maintainer-telegram-email-channels.md)
 - [ ] `(feat)` [golang-ecosystem-support](ISSUES/feat--golang-ecosystem-support.md)
 - [ ] `(feat)` [issue-test-scoping-policy](ISSUES/feat--issue-test-scoping-policy.md)

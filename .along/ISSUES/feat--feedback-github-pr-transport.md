@@ -11,6 +11,7 @@ agent: claude-code
 tags: [feedback, github]
 blocked_by: []
 related: [feat--feedback-maintainer-telegram-email-channels]
+plan_status: approved
 ---
 
 # Feedback GitHub PR transport (gh API or web fallback)
