@@ -3,7 +3,7 @@ protocol: along
 protocol_version: "4.8.1"
 slug: issue-test-scoping-policy
 type: feat
-status: open
+status: in-progress
 priority: high
 created: 2026-11-13
 updated: 2026-11-13

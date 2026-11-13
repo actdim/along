@@ -1235,7 +1235,20 @@ def execute_wrap(
         if skip_tests:
             print("-> [Wrap Quality Gate] Only documentation / Along state changes: tests skipped.")
         else:
+            wt_before = set(repo.working_tree_changes(repo_root) or [])
+            tree_before = testruns.tree_hash(repo_root)
             outcome = gates.run_test_gate(repo_root, label="Wrap Quality Gate")
+            wt_after = set(repo.working_tree_changes(repo_root) or [])
+            tree_after = testruns.tree_hash(repo_root)
+            if tree_before is not None and tree_after is not None and tree_after != tree_before:
+                diff = sorted(wt_after - wt_before)
+                paths_str = ", ".join(diff[:10]) if diff else "files already modified"
+                print(
+                    f"[Warning] Wrap Quality Gate: the test run changed the working tree "
+                    f"({paths_str}); add them to .gitignore or ignore_paths in "
+                    ".along/rules/gates.yaml, or the pre-commit gate runs the suite again.",
+                    file=sys.stderr,
+                )
             if outcome not in (gates.TESTS_PASSED, gates.TESTS_SKIPPED):
                 if guard_bypass:
                     bypass.record_failure(repo_root, bypass.TESTS)

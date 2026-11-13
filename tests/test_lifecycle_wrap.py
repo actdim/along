@@ -819,6 +819,106 @@ class TestLifecycleWrap(unittest.TestCase):
             prune_calls = [c for c in calls if any("--prune-intent" in str(arg) for arg in c[0][0])]
             self.assertTrue(len(prune_calls) > 0)
 
+    def test_26_wrap_test_run_dirties_tree_warns_and_avoids_bypass(self):
+        """[feat--issue-test-scoping-policy] REQ-1: dirty test run prints hermeticity warning, no bypass."""
+        scripts_dir = os.path.join(self.root, ".along", "scripts")
+        os.makedirs(scripts_dir, exist_ok=True)
+        test_script = os.path.join(scripts_dir, "test.py")
+        textio.write_text(
+            test_script,
+            "import unittest\n"
+            "class T(unittest.TestCase):\n"
+            "    def test_pass(self):\n"
+            "        with open('out.log', 'w') as f:\n"
+            "            f.write('dirty')\n"
+            "if __name__ == '__main__':\n"
+            "    unittest.main()\n",
+        )
+        # Sync KB so topic front-matter is already normalized and stable.
+        kb_script = repo.resolve_tool_script("along_kb_sync.py", self.root)
+        if kb_script:
+            proc.run_python([kb_script, self.root], cwd=self.root)
+
+        for cmd in (
+            ["git", "init", "-q"],
+            ["git", "config", "user.email", "t@example.com"],
+            ["git", "config", "user.name", "T"],
+            ["git", "add", "-A"],
+            ["git", "commit", "-q", "-m", "init"],
+        ):
+            proc.run_capture(cmd, cwd=self.root)
+
+        session.append_event(self.root, "fixture-sample-task", "sess-1", "edit", "src/module.py")
+        os.makedirs(os.path.join(self.root, "src"), exist_ok=True)
+        textio.write_text(os.path.join(self.root, "src", "module.py"), "print('code')\n")
+
+        with patch("sys.stdout", new_callable=io.StringIO) as mock_stdout, \
+             patch("sys.stderr", new_callable=io.StringIO) as mock_stderr:
+            code = lifecycle.execute_wrap(
+                self.root,
+                "fixture-sample-task",
+                status="done",
+                no_verify=False,
+                decisions=[],
+            )
+            err = mock_stderr.getvalue()
+            out = mock_stdout.getvalue()
+
+        self.assertEqual(code, 0)
+        self.assertIn("[Warning] Wrap Quality Gate: the test run changed the working tree (out.log)", err)
+        self.assertIn("add them to .gitignore or ignore_paths", err)
+        last_msg = proc.run_capture(["git", "log", "-1", "--pretty=%B"], cwd=self.root).stdout
+        self.assertNotIn("Bypass:", last_msg)
+        self.assertNotIn("bypass", last_msg.lower())
+
+    def test_27_wrap_clean_test_run_reuses_green_run_in_pre_commit(self):
+        """[feat--issue-test-scoping-policy] REQ-1: clean test run is reused by pre-commit gate."""
+        scripts_dir = os.path.join(self.root, ".along", "scripts")
+        os.makedirs(scripts_dir, exist_ok=True)
+        test_script = os.path.join(scripts_dir, "test.py")
+        textio.write_text(
+            test_script,
+            "import unittest\n"
+            "class T(unittest.TestCase):\n"
+            "    def test_pass(self):\n"
+            "        pass\n"
+            "if __name__ == '__main__':\n"
+            "    unittest.main()\n",
+        )
+        # Sync KB so topic front-matter is already normalized and stable.
+        kb_script = repo.resolve_tool_script("along_kb_sync.py", self.root)
+        if kb_script:
+            proc.run_python([kb_script, self.root], cwd=self.root)
+
+        for cmd in (
+            ["git", "init", "-q"],
+            ["git", "config", "user.email", "t@example.com"],
+            ["git", "config", "user.name", "T"],
+            ["git", "add", "-A"],
+            ["git", "commit", "-q", "-m", "init"],
+        ):
+            proc.run_capture(cmd, cwd=self.root)
+
+        session.append_event(self.root, "fixture-sample-task", "sess-1", "edit", "src/module.py")
+        os.makedirs(os.path.join(self.root, "src"), exist_ok=True)
+        textio.write_text(os.path.join(self.root, "src", "module.py"), "print('code')\n")
+
+        from alongkit import testruns
+        with patch("sys.stdout", new_callable=io.StringIO) as mock_stdout:
+            code = lifecycle.execute_wrap(
+                self.root,
+                "fixture-sample-task",
+                status="done",
+                no_verify=False,
+                decisions=[],
+            )
+            out = mock_stdout.getvalue()
+
+        self.assertEqual(code, 0)
+        runs = testruns.load_runs(self.root)
+        self.assertEqual(len(runs), 1)
+        self.assertIn("Tests passed on this tree", out)
+
 
 if __name__ == "__main__":
     unittest.main()
