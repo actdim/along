@@ -619,7 +619,32 @@ def record_tool_activity(event: HookEvent, repo_root: str) -> Optional[str]:
             else:
                 trace["last_test_time"] = now_iso
                 trace["last_doc_test_time"] = now_iso
-                trace["edited_files"] = []
+                test_mode = "plain"
+                test_scope = ""
+                m_scope = re.search(r"--scope(?:=|\s+)([^\s]+)", cmd)
+                if m_scope:
+                    test_mode = "scoped"
+                    test_scope = m_scope.group(1).strip("\"'")
+                elif re.search(r"--affected\b", cmd):
+                    test_mode = "affected"
+                elif re.search(r"--full\b", cmd):
+                    test_mode = "full"
+                trace["last_test_mode"] = test_mode
+                trace["last_test_scope"] = test_scope
+
+                # Clear edited files when test run covers or is plain
+                bound_slug = None
+                ctx_root = repo_root
+                if key:
+                    res = session.resolve_bound(repo_root, key)
+                    if res:
+                        ctx_root, bound_slug = res
+                eff_policy = verify.load_effective_policy(ctx_root, bound_slug)
+                req_mode = eff_policy.hook_mode() if eff_policy.tests != verify.TESTS_NONE else "full"
+                req_scope = eff_policy.scope if req_mode == "scoped" else ""
+
+                if test_mode == "plain" or testruns.covers_run(test_mode, test_scope, req_mode, req_scope):
+                    trace["edited_files"] = []
             save_activity_trace(repo_root, trace, key)
         elif any(p.search(cmd) for p in TEST_COMMAND_PATTERNS):
             trace["last_raw_test_time"] = now_iso
@@ -1631,11 +1656,25 @@ def check_test_before_stop(event: HookEvent, repo_root: str, options: Optional[D
     if not _enforce_unbound(options) and is_unbound(repo_root, key):
         return None
 
+    bound_slug = None
+    ctx_root = repo_root
+    if key:
+        res = session.resolve_bound(repo_root, key)
+        if res:
+            ctx_root, bound_slug = res
+
+    eff_policy = verify.load_effective_policy(ctx_root, bound_slug)
+    if eff_policy.tests == verify.TESTS_NONE:
+        return None
+
+    req_mode = eff_policy.hook_mode()
+    req_scope = eff_policy.scope if req_mode == "scoped" else ""
+
     # [feat--test-gate-cost-reduction] REQ-1: if the working tree has a recorded green run,
     # the gate passes without checking timestamps (covers clean / reverted trees and runs
     # recorded by agent runs, commit, wrap, or closeout).
     tree = testruns.tree_hash(repo_root)
-    if tree and testruns.green_run_for(repo_root, tree):
+    if tree and testruns.green_run_for(repo_root, tree, mode=req_mode, scope=req_scope):
         return None
 
     trace = load_activity_trace(repo_root, key)
@@ -1643,11 +1682,17 @@ def check_test_before_stop(event: HookEvent, repo_root: str, options: Optional[D
     doc_time = trace.get("last_doc_edit_time")
     test_time = trace.get("last_test_time")
     doc_test_time = trace.get("last_doc_test_time")
+    last_mode = trace.get("last_test_mode")
+    last_scope = trace.get("last_test_scope") or ""
+
+    last_covers = True
+    if last_mode and last_mode != "plain":
+        last_covers = testruns.covers_run(last_mode, last_scope, req_mode, req_scope)
 
     # [feat--test-gate-cost-reduction] REQ-2: Doc-only edits under count_docs: true
     # are satisfied by a scoped run of Markdown-facing tests.
     count_docs = bool((options or {}).get("count_docs"))
-    has_source_edits = (edit_time is not None) and (test_time is None or test_time < edit_time)
+    has_source_edits = (edit_time is not None) and (test_time is None or test_time < edit_time or not last_covers)
 
     if count_docs and doc_time:
         has_doc_edits = (test_time is None or doc_time > test_time) and (doc_test_time is None or doc_time > doc_test_time)
@@ -1660,6 +1705,10 @@ def check_test_before_stop(event: HookEvent, repo_root: str, options: Optional[D
         if raw and raw >= edit_time:
             hint = (" A raw test runner ran after the edit, but this repository has a lifecycle "
                     "test hook, and only it counts.")
+        non_covering_hint = ""
+        if test_time and test_time >= edit_time and not last_covers:
+            scope_desc = f" ({last_scope})" if last_scope else ""
+            non_covering_hint = f" The last run was {last_mode}{scope_desc}; the approved policy needs {req_mode}."
         edited = trace.get("edited_files", [])
         if edited:
             if len(edited) <= 5:
@@ -1670,7 +1719,7 @@ def check_test_before_stop(event: HookEvent, repo_root: str, options: Optional[D
             files_str = ""
         return (
             f"Turn Completion Rejected [gate: test-before-stop]: Source files were modified in this session{files_str}, "
-            f"but automated tests have not been executed afterward.{hint} "
+            f"but automated tests have not been executed afterward.{hint}{non_covering_hint} "
             "Run tests via 'along test' or 'python .along/scripts/test.py' before completing."
         )
 

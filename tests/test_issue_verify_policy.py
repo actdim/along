@@ -243,6 +243,30 @@ class TestIssueVerifyPolicy(unittest.TestCase):
         # Temp file must be deleted after gate completes
         self.assertFalse(os.path.exists(temp_files_path), "Attributed temp file must be unlinked in finally block")
 
+    def test_04_along_exec_strips_test_mode_flags_from_hook_argv(self):
+        along_exec = os.path.join(REPO_ROOT, "scripts", "along_exec.py")
+        argv_dump_path = os.path.join(self.root, "argv.json")
+        hook_path = os.path.join(self.root, ".along", "scripts", "test.py")
+        textio.write_text(
+            hook_path,
+            "#!/usr/bin/env python3\n"
+            "import json, sys\n"
+            f"with open(r'{argv_dump_path}', 'w', encoding='utf-8') as h:\n"
+            "    json.dump(sys.argv[1:], h)\n"
+            "sys.exit(0)\n",
+        )
+        res = proc.run_capture(
+            [sys.executable, along_exec, "test", "--scope", "api", "--extra-flag", "val"],
+            cwd=self.root,
+        )
+        self.assertEqual(res.returncode, 0, res.stderr)
+        self.assertTrue(os.path.isfile(argv_dump_path))
+        with open(argv_dump_path, "r", encoding="utf-8") as h:
+            argv = json.load(h)
+        self.assertNotIn("--scope", argv)
+        self.assertNotIn("api", argv)
+        self.assertEqual(argv, ["--extra-flag", "val"])
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -26,7 +26,8 @@ import re
 import shlex
 import shutil
 import sys
-from typing import List, Optional, Sequence, Tuple, Union
+import tempfile
+from typing import Dict, List, Optional, Sequence, Tuple, Union
 
 from . import entities, frontmatter, gates, markdown, proc, repo, session, testruns, textio, transaction, verify, worktree
 
@@ -205,7 +206,14 @@ def _package_test_script(repo_root: str, command: str) -> Optional[str]:
 NO_TESTS_EXIT_CODE = 5
 
 
-def run_lifecycle_command(action: str, cmd: Sequence[str], repo_root: str, mode: str) -> int:
+def run_lifecycle_command(
+    action: str,
+    cmd: Sequence[str],
+    repo_root: str,
+    mode: str,
+    test_mode: Optional[str] = None,
+    test_scope: str = "",
+) -> int:
     """Run a lifecycle command; in distill mode print the observation and keep the raw
     output in `.along/artifacts/lifecycle/<action>.log` (overwritten per run).
 
@@ -215,29 +223,84 @@ def run_lifecycle_command(action: str, cmd: Sequence[str], repo_root: str, mode:
     """
     from . import verify
 
+    effective_mode = test_mode or "full"
+    effective_scope = test_scope if effective_mode == "scoped" else ""
+    tmp_files_path = None
+    hook_env = None
+
     if action == "test":
-        # A declared `tests: none` policy runs its checks instead [bug--test-gate-no-tests-policy].
-        policy = verify.load_policy(repo_root)
-        if policy.tests == verify.TESTS_NONE:
-            problems = verify.policy_problems(repo_root, policy)
-            if problems:
-                print("[Error] Invalid verify policy in .along/config.json:\n"
-                      + "\n".join(f"  - {p}" for p in problems), file=sys.stderr)
-                return 1
-            print(f"-> {policy.describe()}")
-            return 0 if verify.run_checks(repo_root, policy.checks, "along test") else 1
-    tree = testruns.tree_hash(repo_root) if action == "test" else None
-    code = _run_lifecycle_command(action, cmd, repo_root, mode)
-    if action == "test":
-        # The tree is hashed before the run: a file changed during the run makes the record
-        # stale, never wrongly green [feat--parallel-session-closeout] REQ-8.
-        testruns.record_run(repo_root, code == 0, tree, "along test")
-        session.trace_test_run(repo_root, code == 0, "along test")
-        if code != 0 and code != NO_TESTS_EXIT_CODE:
-            note = testruns.baseline_note(repo_root)
-            if note:
-                print(note, file=sys.stderr)
-    return code
+        bound_key = session.current_session_key()
+        bound_slug = None
+        ctx_root = repo_root
+        if bound_key:
+            res = session.resolve_bound(repo_root, bound_key)
+            if res:
+                ctx_root, bound_slug = res
+
+        policy = verify.load_effective_policy(ctx_root, bound_slug)
+        issue_type = None
+        if bound_slug:
+            iss = entities.find_issue_by_slug(ctx_root, bound_slug)
+            if iss:
+                issue_type = iss.get("type") or (iss.get("frontmatter") or {}).get("type")
+        problems = verify.policy_problems(ctx_root, policy, issue_type=issue_type)
+        if problems:
+            source_desc = f"issue {bound_slug}" if policy.source == "issue" else ".along/config.json"
+            print(f"[Error] Invalid verify policy in {source_desc}:\n"
+                  + "\n".join(f"  - {p}" for p in problems), file=sys.stderr)
+            return 1
+
+        if not test_mode:
+            if policy.tests == verify.TESTS_NONE:
+                print(f"-> {policy.describe()}")
+                return 0 if verify.run_checks(ctx_root, policy.checks, "along test") else 1
+            effective_mode = policy.hook_mode()
+            effective_scope = policy.scope if effective_mode == "scoped" else ""
+
+        attributed_files = []
+        if effective_mode == "affected":
+            attributed = session.attributed_files(ctx_root, bound_slug) if bound_slug else {}
+            wt_changes = repo.working_tree_changes(ctx_root) or []
+            attributed_files = sorted(set(attributed.keys()) | set(wt_changes))
+            if not attributed_files:
+                effective_mode = "full"
+                print("-> affected mode has no attributed files; falling back to full suite.")
+
+        extra_env = {
+            "ALONG_TEST_MODE": effective_mode,
+            "ALONG_TEST_SCOPE": effective_scope,
+            "ALONG_ATTRIBUTED_FILES": "",
+        }
+        if effective_mode == "affected" and attributed_files:
+            fd, tmp_files_path = tempfile.mkstemp(prefix="along-attributed-", suffix=".txt")
+            with os.fdopen(fd, "w", encoding="utf-8", newline="\n") as h:
+                for p in attributed_files:
+                    abs_p = p if os.path.isabs(p) else os.path.join(ctx_root, p)
+                    h.write(repo.normalize_posix(repo.canonical_relpath(abs_p, ctx_root)) + "\n")
+            extra_env["ALONG_ATTRIBUTED_FILES"] = tmp_files_path
+
+        hook_env = proc.child_env(extra=extra_env)
+
+    try:
+        tree = testruns.tree_hash(repo_root) if action == "test" else None
+        code = _run_lifecycle_command(action, cmd, repo_root, mode, env=hook_env)
+        if action == "test":
+            # The tree is hashed before the run: a file changed during the run makes the record
+            # stale, never wrongly green [feat--parallel-session-closeout] REQ-8.
+            testruns.record_run(repo_root, code == 0, tree, "along test", mode=effective_mode, scope=effective_scope)
+            trace_label = f"along test [{effective_mode}]" if effective_mode != "full" else "along test"
+            session.trace_test_run(repo_root, code == 0, trace_label)
+            if code != 0 and code != NO_TESTS_EXIT_CODE:
+                note = testruns.baseline_note(repo_root)
+                if note:
+                    print(note, file=sys.stderr)
+        return code
+    finally:
+        if tmp_files_path and os.path.exists(tmp_files_path):
+            try:
+                os.unlink(tmp_files_path)
+            except OSError:
+                pass
 
 
 def _print_misconfiguration(output: str, code: int) -> None:
@@ -254,14 +317,14 @@ def _no_tests_message(cmd: Sequence[str]) -> str:
             "Point the test hook (.along/scripts/test.py) at the test projects or the solution.")
 
 
-def _run_tee(cmd: Sequence[str], cwd: str) -> Tuple[int, str]:
+def _run_tee(cmd: Sequence[str], cwd: str, env: Optional[Dict[str, str]] = None) -> Tuple[int, str]:
     """Stream a command's combined output to stdout while keeping its tail for inspection."""
     import collections
     import subprocess
 
     tail: "collections.deque[str]" = collections.deque(maxlen=400)
     try:
-        child = subprocess.Popen(list(cmd), cwd=cwd, env=proc.child_env(), stdout=subprocess.PIPE,
+        child = subprocess.Popen(list(cmd), cwd=cwd, env=env or proc.child_env(), stdout=subprocess.PIPE,
                                  stderr=subprocess.STDOUT, text=True, encoding="utf-8",
                                  errors="replace")
     except OSError as exc:
@@ -276,11 +339,11 @@ def _run_tee(cmd: Sequence[str], cwd: str) -> Tuple[int, str]:
     return child.wait(), "".join(tail)
 
 
-def _run_lifecycle_command(action: str, cmd: Sequence[str], repo_root: str, mode: str) -> int:
+def _run_lifecycle_command(action: str, cmd: Sequence[str], repo_root: str, mode: str, env: Optional[Dict[str, str]] = None) -> int:
     if mode != "distill":
         if action != "test":
             return proc.run_passthrough(list(cmd), cwd=repo_root)
-        code, output = _run_tee(cmd, repo_root)
+        code, output = _run_tee(cmd, repo_root, env=env)
         if code == 0 and tests_ran(cmd, output, repo_root) == 0:
             print(_no_tests_message(cmd))
             return NO_TESTS_EXIT_CODE
@@ -291,7 +354,7 @@ def _run_lifecycle_command(action: str, cmd: Sequence[str], repo_root: str, mode
     rel_log = repo.safe_relpath(log_path, repo_root).replace("\\", "/")
     # No anomaly classification: test output legitimately contains strings such as
     # "bad signature" from fixtures, and passthrough mode never classified it either.
-    result = proc.run_capture(list(cmd), cwd=repo_root, distill=True)
+    result = proc.run_capture(list(cmd), cwd=repo_root, distill=True, env=env)
     raw = result.stdout + ("\n" if result.stdout and result.stderr else "") + result.stderr
     try:
         os.makedirs(os.path.dirname(log_path), exist_ok=True)
@@ -444,6 +507,10 @@ def find_repo_root(start_dir=None):
 
 def main():
     repo_root = find_repo_root(os.path.dirname(__file__))
+    # Scoped test environment variables (when configured):
+    # test_mode = os.environ.get("ALONG_TEST_MODE", "full")       # full | affected | scoped
+    # test_scope = os.environ.get("ALONG_TEST_SCOPE", "")          # name from verify.scopes
+    # attr_files = os.environ.get("ALONG_ATTRIBUTED_FILES", "")    # path to file list
     base_cmd = {base_cmd_repr}
     full_cmd = list(base_cmd) + sys.argv[1:]
     print(f"-> Running: {{' '.join(full_cmd)}}")

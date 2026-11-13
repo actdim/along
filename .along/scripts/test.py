@@ -260,7 +260,14 @@ def main():
 
                 tree = testruns.tree_hash(repo_root)
                 if tree:
-                    testruns.record_run(repo_root, True, tree, "test.py")
+                    testruns.record_run(
+                        repo_root,
+                        True,
+                        tree,
+                        "test.py",
+                        mode=os.environ.get("ALONG_TEST_MODE") or "full",
+                        scope=os.environ.get("ALONG_TEST_SCOPE", ""),
+                    )
 
             sys.exit(0)
 
@@ -325,7 +332,14 @@ def main():
     if not is_doc and not normalized_args and not k_pattern and not is_unit:
         tree = testruns.tree_hash(repo_root)
         if tree:
-            testruns.record_run(repo_root, result.wasSuccessful(), tree, "test.py")
+            testruns.record_run(
+                repo_root,
+                result.wasSuccessful(),
+                tree,
+                "test.py",
+                mode=os.environ.get("ALONG_TEST_MODE") or "full",
+                scope=os.environ.get("ALONG_TEST_SCOPE", ""),
+            )
 
     if not result.wasSuccessful():
         note = testruns.baseline_note(repo_root)

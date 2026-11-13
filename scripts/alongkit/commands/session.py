@@ -48,7 +48,12 @@ def _tests_evidence_line(repo_root: str) -> str:
     for root in roots:
         run = testruns.green_run_for(root, tree) if tree else None
         if run:
-            return (f"- Tests: a passing `along test` run was recorded for this working tree at "
+            mode_desc = ""
+            run_mode = run.get("mode") or "full"
+            run_scope = run.get("scope", "")
+            if run_mode != "full":
+                mode_desc = f" [{run_mode}: {run_scope}]" if run_scope else f" [{run_mode}]"
+            return (f"- Tests: a passing `along test` run{mode_desc} was recorded for this working tree at "
                     f"{run.get('ts', '?')}; state the command here.")
     try:
         from alongkit.hooks.predicates import load_activity_trace

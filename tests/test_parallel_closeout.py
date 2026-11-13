@@ -268,6 +268,37 @@ class TestTestRunReuse(GitFixture):
         self.assertIsNotNone(head)
         self.assertEqual(head, tree)
 
+    def test_scoped_run_not_reused_for_full_request(self):
+        from alongkit import testruns
+        tree = testruns.tree_hash(self.root)
+        testruns.record_run(self.root, True, tree, "test", mode="scoped", scope="api")
+        self.assertIsNone(testruns.green_run_for(self.root, tree, mode="full"))
+
+    def test_full_run_reused_for_scoped_request(self):
+        from alongkit import testruns
+        tree = testruns.tree_hash(self.root)
+        testruns.record_run(self.root, True, tree, "test", mode="full")
+        run = testruns.green_run_for(self.root, tree, mode="scoped", scope="api")
+        self.assertIsNotNone(run)
+        self.assertTrue(run.get("ok"))
+
+    def test_legacy_record_counts_as_full(self):
+        from alongkit import testruns
+        tree = testruns.tree_hash(self.root)
+        # Manually append legacy record without mode/scope
+        runs = testruns.load_runs(self.root)
+        runs.append({"tree_hash": tree, "ok": True, "source": "legacy"})
+        runs_file = os.path.join(self.root, ".along", "diagnostics", "test_runs.json")
+        textio.write_text(runs_file, json.dumps(runs) + "\n")
+        self.assertIsNotNone(testruns.green_run_for(self.root, tree, mode="full"))
+        self.assertIsNotNone(testruns.green_run_for(self.root, tree, mode="scoped", scope="api"))
+
+    def test_scoped_api_not_reused_for_scoped_web(self):
+        from alongkit import testruns
+        tree = testruns.tree_hash(self.root)
+        testruns.record_run(self.root, True, tree, "test", mode="scoped", scope="api")
+        self.assertIsNone(testruns.green_run_for(self.root, tree, mode="scoped", scope="web"))
+
     def test_head_tree_hash_none_without_commits(self):
         from alongkit import testruns
         empty_git = tempfile.mkdtemp(prefix="along-empty-git-")

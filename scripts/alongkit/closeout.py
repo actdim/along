@@ -738,7 +738,8 @@ def run_closeout(repo_root: str, keys: Optional[List[str]] = None, ready: bool =
         if all(_is_wrap_byproduct(p) for p in run["byproducts"]):
             from . import testruns
             testruns.record_run(real_root, True, testruns.tree_hash(real_root),
-                                "Closeout Quality Gate (carried over its wraps)")
+                                "Closeout Quality Gate (carried over its wraps)",
+                                mode="full", scope="")
         _save_run(real_root, run)
 
     # Commits: one per issue, then the shared ones, then the projections.

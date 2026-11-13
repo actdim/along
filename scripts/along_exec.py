@@ -359,6 +359,30 @@ def main():
     # 3. Check if command is a Lifecycle Hook (build / test / dev / debug)
     if cmd in LIFECYCLE_ACTIONS:
         output_mode, extra_args = resolve_output_mode(cmd, extra_args)
+        test_mode = None
+        test_scope = ""
+        if cmd == "test":
+            clean_args = []
+            i = 0
+            while i < len(extra_args):
+                arg = extra_args[i]
+                if arg == "--full":
+                    test_mode = "full"
+                elif arg == "--affected":
+                    test_mode = "affected"
+                elif arg == "--scope":
+                    test_mode = "scoped"
+                    if i + 1 < len(extra_args):
+                        i += 1
+                        test_scope = extra_args[i]
+                elif arg.startswith("--scope="):
+                    test_mode = "scoped"
+                    test_scope = arg.split("=", 1)[1]
+                else:
+                    clean_args.append(arg)
+                i += 1
+            extra_args = clean_args
+
         script_file = get_lifecycle_script_path(repo_root, cmd)
         if not os.path.exists(script_file):
             enclosing = lifecycle.enclosing_hook(repo_root, cmd)
@@ -373,7 +397,8 @@ def main():
 
             print(f"-> Executing .along/scripts/{os.path.basename(script_file)}...")
             full_cmd = lifecycle.build_interpreter_cmd(script_file, extra_args)
-            sys.exit(run_lifecycle_command(cmd, full_cmd, repo_root, output_mode))
+            sys.exit(run_lifecycle_command(cmd, full_cmd, repo_root, output_mode,
+                                           test_mode=test_mode, test_scope=test_scope))
 
         detected_cmd, verified = detect_lifecycle_action(repo_root, cmd)
 
@@ -384,7 +409,8 @@ def main():
                 sys.exit(2)
             print(f"-> Along is not installed in {repo_root}: running {detected_cmd} without writing a hook.")
             sys.exit(run_lifecycle_command(cmd, shlex.split(detected_cmd) + extra_args,
-                                           repo_root, output_mode))
+                                           repo_root, output_mode,
+                                           test_mode=test_mode, test_scope=test_scope))
 
         if detected_cmd and verified:
             status_tag = "verified"
@@ -392,7 +418,8 @@ def main():
             synthesize_lifecycle_script(script_file, py_content)
             print(f"-> Running: {detected_cmd}")
             sys.exit(run_lifecycle_command(cmd, shlex.split(detected_cmd) + extra_args,
-                                           repo_root, output_mode))
+                                           repo_root, output_mode,
+                                           test_mode=test_mode, test_scope=test_scope))
         else:
             status_tag = "unconfigured"
             py_content = lifecycle.render_lifecycle_script(cmd, base_cmd=None, status_tag=status_tag)

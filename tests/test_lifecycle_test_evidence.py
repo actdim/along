@@ -318,6 +318,39 @@ class TestTreeHashReuse(unittest.TestCase):
         self.assertEqual(code, 1)
         self.assertIn("[Baseline]", stderr.getvalue())
 
+    def test_scoped_run_under_full_policy_leaves_stop_gate_armed(self):
+        tree = testruns.tree_hash(self.tmp)
+        testruns.record_run(self.tmp, True, tree, "test")
+
+        self._edit("src/app.py", "v2\n")
+        predicates.record_tool_activity(HookEvent(
+            event_type=HookEventType.PRE_TOOL_USE,
+            tool_name="run_command",
+            tool_args={"CommandLine": "along test --scope api"},
+            workspace_root=self.tmp
+        ), repo_root=self.tmp)
+
+        msg = self._stop()
+        self.assertIsNotNone(msg)
+        self.assertIn("test-before-stop", msg)
+        self.assertIn("last run was scoped (api)", msg.lower())
+        self.assertIn("approved policy needs full", msg.lower())
+
+    def test_tree_hash_reuse_respects_run_coverage(self):
+        tree = testruns.tree_hash(self.tmp)
+        testruns.record_run(self.tmp, True, tree, "test", mode="scoped", scope="api")
+
+        self._edit("src/app.py", "v2\n")
+        self._edit("src/app.py", "v1\n")
+        self.assertEqual(testruns.tree_hash(self.tmp), tree)
+
+        msg = self._stop()
+        self.assertIsNotNone(msg)
+        self.assertIn("test-before-stop", msg)
+
+        testruns.record_run(self.tmp, True, tree, "test", mode="full")
+        self.assertIsNone(self._stop())
+
 
 
 if __name__ == "__main__":

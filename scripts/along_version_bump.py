@@ -874,7 +874,7 @@ def main():
             # so along wrap can reuse it without re-running the full suite.
             post_tree = testruns.tree_hash(repo_root)
             if post_tree:
-                testruns.record_run(repo_root, True, post_tree, "along bump")
+                testruns.record_run(repo_root, True, post_tree, "along bump", mode="full", scope="")
     except ReleaseAborted as exc:
         report_rollback(tx, str(exc))
         sys.exit(1)
