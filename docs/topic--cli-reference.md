@@ -554,14 +554,20 @@ Typography inspection and ASCII enforcement utility.
 
 ### `along feedback` (aliases `diagnostics`, `telemetry`)
 System diagnostics and incident dispatch engine.
-- Gathers sanitized incident traces from `~/.along/diagnostics/` and exports or dispatches reports via Telegram bot, Webhook, or local export.
-- **Options**:
-  - `--export`: Exports sanitized diagnostics archive to disk.
-  - `--send`: Dispatches incident report to configured alert endpoint.
+- Gathers sanitized incident traces from `~/.along/diagnostics/` and exports or dispatches reports via GitHub Pull Request, Telegram bot, Webhook, or local export.
+- **Subcommands**:
+  - `list`: Lists unresolved diagnostic incidents (`--all` includes resolved).
+  - `show <id>`: Shows full details of an incident.
+  - `record --component <name> --error <msg>`: Records an incident manually.
+  - `report`: Generates markdown diagnostics report (`--output <path>` saves to file).
+  - `send`: Dispatches report or feedback note (`--channel {all,telegram,webhook,file,github}`, `--title <title>`, `--body-file <path>`, `--yes`, `--dry-run`).
+  - `clear`: Purges diagnostic incident logs (`--all` purges resolved too).
+  - `config`: Manages feedback transport configuration (`show`, `init`, `path`).
 - **Usage**:
   ```bash
-  along feedback
-  along feedback --export
+  along feedback list
+  along feedback send --dry-run
+  along feedback send --channel github --title "Feedback Title" --body-file feedback.md --yes
   ```
 
 ### `along graph-check`

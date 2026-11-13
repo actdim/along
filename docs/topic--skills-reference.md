@@ -345,15 +345,16 @@ flowchart TD
 ---
 
 ### `along-feedback`
-- **What it is**: Self-diagnostics and incident reporting subsystem. Collects sanitized diagnostic logs, redacts PII and credentials, and dispatches feedback via Telegram, Webhook, or File export.
+- **What it is**: Self-diagnostics, incident reporting, and maintainer feedback subsystem. Collects sanitized diagnostic logs, redacts PII and credentials, and dispatches feedback via GitHub Pull Request, Telegram, Webhook, or File export.
 - **Architectural Rationale**:
   - *Zero-Leak Redaction*: Automatic regex-based redaction of user home paths, tokens, and credentials guarantees that sensitive data is never transmitted.
-  - *Pluggable Transports*: Supports offline file export, direct Telegram bot notifications, or custom webhook endpoints.
+  - *Pluggable Transports*: Supports GitHub Pull Request creation (with automatic fork and browser web fallback), offline file export, direct Telegram bot notifications, or custom webhook endpoints.
+  - *Explicit User Consent*: GitHub Pull Request creation requires explicit confirmation (`--yes`) before any network dispatch or browser interaction.
 - **Invocation Triggers**:
-  - *Explicit*: `/along-feedback [--export|--send]`, `along feedback` (fallback: `python ~/.along/bin/along_exec.py feedback`).
-  - *Semantic / Automatic*: Triggered when an Along internal script encounters unhandled exceptions or when prompted with *"Report bug in Along"*.
-- **Entities Operated On**: `~/.along/diagnostics/incidents/`, `~/.along/diagnostics/REPORT.md`.
-- **Ecosystem Chaining**: Provides operational telemetry and continuous improvement for the Along protocol.
+  - *Explicit*: `/along-feedback`, `along feedback` (fallback: `python ~/.along/bin/along_exec.py feedback`), `along feedback send --channel github --title "<title>" --body-file <path> --yes`.
+  - *Semantic / Automatic*: Triggered when an Along internal script encounters unhandled exceptions or when prompted with *"Report bug in Along"* or *"Create feedback for Along"*.
+- **Entities Operated On**: `~/.along/diagnostics/incidents/`, `~/.along/diagnostics/REPORT.md`, `.along/inbox/`.
+- **Ecosystem Chaining**: Provides operational telemetry, user feedback loops, and continuous improvement for the Along protocol.
 
 ---
 

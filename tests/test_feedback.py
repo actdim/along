@@ -189,6 +189,321 @@ class TestAlongFeedbackEngine(unittest.TestCase):
         exec_res = proc.run_capture([sys.executable, exec_script, "feedback", "list"])
         self.assertEqual(exec_res.returncode, 0)
 
+    def test_07_note_building_and_redaction(self):
+        """Verify build_inbox_note sanitizes secrets, normalizes typography, and structures front-matter."""
+        raw_title = "Issue with C:\\Users\\Admin\\repo and sk-123456789012345678901234567890"
+        raw_body = "Body mentioning ghp_123456789012345678901234567890 and password=secret -- text."
+        incidents = [{
+            "id": "inc-42",
+            "component": "cli_engine",
+            "error_message": "Crash with Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.tok"
+        }]
+
+        rel_path, text = along_feedback.build_inbox_note(
+            title=raw_title,
+            body=raw_body,
+            incidents=incidents,
+            date="2026-11-13"
+        )
+
+        self.assertTrue(rel_path.startswith(".along/inbox/feedback--2026-11-13-"))
+        self.assertTrue(rel_path.endswith(".md"))
+
+        # Verify redaction
+        self.assertNotIn("sk-123456789012345678901234567890", text)
+        self.assertIn("sk-[REDACTED]", text)
+        self.assertNotIn("ghp_123456789012345678901234567890", text)
+        self.assertIn("ghp_[REDACTED]", text)
+        self.assertNotIn("password=secret", text)
+        self.assertIn("password=[REDACTED]", text)
+        self.assertNotIn("Bearer eyJhbGci", text)
+        self.assertIn("Bearer [REDACTED]", text)
+
+        # Verify typography is pure ASCII
+        text.encode("ascii")
+
+        # Verify front-matter and incidents section
+        self.assertIn("source: along-feedback", text)
+        self.assertIn("tags: [feedback]", text)
+        self.assertIn("along_version:", text)
+        self.assertIn("## Incidents", text)
+        self.assertIn("inc-42", text)
+
+    def test_08_preview_without_yes_and_dry_run(self):
+        """Verify preview mode outputs plan, note content, and NOT SENT without modifications."""
+        body_file = os.path.join(self.temp_dir, "preview_body.md")
+        with open(body_file, "w", encoding="utf-8") as f:
+            f.write("Preview body test content")
+
+        fb_script = os.path.join(REPO_ROOT, "scripts", "along_feedback.py")
+        res = proc.run_capture([
+            sys.executable, fb_script, "send",
+            "--channel", "github",
+            "--title", "Preview Feedback Test",
+            "--body-file", body_file
+        ])
+
+        self.assertEqual(res.returncode, 0)
+        self.assertIn("Target Note Path:", res.stdout)
+        self.assertIn(".along/inbox/feedback--", res.stdout)
+        self.assertIn("Planned Actions:", res.stdout)
+        self.assertIn("Preview Feedback Test", res.stdout)
+        self.assertIn("NOT SENT", res.stdout)
+
+    def test_09_gh_missing_falls_back_to_browser(self):
+        """Verify that missing gh CLI triggers browser fallback with pre-filled new file URL."""
+        mock_open = MagicMock(return_value=True)
+        mock_run = MagicMock()
+
+        ok, url = along_feedback.GitHubTransport.send(
+            title="Missing GH Test",
+            body="Feedback body without gh",
+            yes=True,
+            which=lambda b: None,
+            run=mock_run,
+            open_url=mock_open,
+            date="2026-11-13",
+            export_dir=self.temp_dir
+        )
+
+        self.assertTrue(ok)
+        self.assertEqual(mock_run.call_count, 0)
+        mock_open.assert_called_once()
+        opened_url = mock_open.call_args[0][0]
+        self.assertIn("https://github.com/actdim/along/new/main?filename=", opened_url)
+        self.assertIn("filename=.along/inbox/feedback--2026-11-13-missing-gh-test.md", opened_url)
+        self.assertIn("Feedback%20body%20without%20gh", opened_url)
+
+    def test_10_gh_unauthenticated_falls_back_to_browser(self):
+        """Verify unauthenticated gh CLI falls back to browser URL."""
+        mock_open = MagicMock(return_value=True)
+        def fake_run(cmd, **kwargs):
+            if cmd == ["gh", "auth", "status"]:
+                return proc.Result(cmd=cmd, returncode=1, stdout="", stderr="You are not logged into any GitHub hosts.")
+            return proc.Result(cmd=cmd, returncode=0, stdout="", stderr="")
+
+        ok, url = along_feedback.GitHubTransport.send(
+            title="Unauthenticated Test",
+            body="Feedback body with unauthenticated gh",
+            yes=True,
+            which=lambda b: "/fake/bin/gh",
+            run=fake_run,
+            open_url=mock_open,
+            date="2026-11-13",
+            export_dir=self.temp_dir
+        )
+
+        self.assertTrue(ok)
+        mock_open.assert_called_once()
+        opened_url = mock_open.call_args[0][0]
+        self.assertIn("https://github.com/actdim/along/new/main?", opened_url)
+
+    def test_11_collaborator_path_call_sequence(self):
+        """Verify collaborator workflow executes direct branch creation, commit, and PR without clone or fork."""
+        executed_cmds = []
+
+        def fake_run(cmd, **kwargs):
+            executed_cmds.append(cmd)
+            if cmd == ["gh", "auth", "status"]:
+                return proc.Result(cmd=cmd, returncode=0, stdout="Logged in", stderr="")
+            if cmd == ["gh", "api", "user", "--jq", ".login"]:
+                return proc.Result(cmd=cmd, returncode=0, stdout="collab_user\n", stderr="")
+            if cmd == ["gh", "api", "repos/actdim/along", "--jq", ".permissions.push"]:
+                return proc.Result(cmd=cmd, returncode=0, stdout="true\n", stderr="")
+            if cmd == ["gh", "api", "repos/actdim/along/git/ref/heads/main", "--jq", ".object.sha"]:
+                return proc.Result(cmd=cmd, returncode=0, stdout="commit_sha_123\n", stderr="")
+            if len(cmd) > 4 and cmd[0:4] == ["gh", "api", "-X", "POST"] and "refs" in cmd[4]:
+                return proc.Result(cmd=cmd, returncode=0, stdout="", stderr="")
+            if len(cmd) > 4 and cmd[0:4] == ["gh", "api", "-X", "PUT"] and "contents" in cmd[4]:
+                return proc.Result(cmd=cmd, returncode=0, stdout="", stderr="")
+            if len(cmd) > 3 and cmd[0:3] == ["gh", "pr", "create"]:
+                return proc.Result(cmd=cmd, returncode=0, stdout="https://github.com/actdim/along/pull/101\n", stderr="")
+            return proc.Result(cmd=cmd, returncode=0, stdout="", stderr="")
+
+        mock_open = MagicMock()
+        ok, res = along_feedback.GitHubTransport.send(
+            title="Collab Feedback",
+            body="Everything works",
+            yes=True,
+            which=lambda b: "/fake/bin/gh",
+            run=fake_run,
+            open_url=mock_open,
+            date="2026-11-13",
+            export_dir=self.temp_dir
+        )
+
+        self.assertTrue(ok)
+        self.assertEqual(res, "https://github.com/actdim/along/pull/101")
+        mock_open.assert_not_called()
+
+        # Verify no clone or fork was called
+        for cmd in executed_cmds:
+            self.assertNotIn("clone", cmd)
+            self.assertNotIn("fork", cmd)
+
+    def test_12_non_collaborator_fork_path(self):
+        """Verify non-collaborator workflow executes server-side fork and PR without local clone."""
+        executed_cmds = []
+
+        def fake_run(cmd, **kwargs):
+            executed_cmds.append(cmd)
+            if cmd == ["gh", "auth", "status"]:
+                return proc.Result(cmd=cmd, returncode=0, stdout="Logged in", stderr="")
+            if cmd == ["gh", "api", "user", "--jq", ".login"]:
+                return proc.Result(cmd=cmd, returncode=0, stdout="contributor_user\n", stderr="")
+            if cmd == ["gh", "api", "repos/actdim/along", "--jq", ".permissions.push"]:
+                return proc.Result(cmd=cmd, returncode=0, stdout="false\n", stderr="")
+            if cmd[0:3] == ["gh", "repo", "fork"]:
+                return proc.Result(cmd=cmd, returncode=0, stdout="Fork created", stderr="")
+            if cmd[0:4] == ["gh", "api", "repos/contributor_user/along", "--jq"]:
+                return proc.Result(cmd=cmd, returncode=0, stdout="actdim/along\n", stderr="")
+            if "merge-upstream" in cmd[4]:
+                return proc.Result(cmd=cmd, returncode=0, stdout="", stderr="")
+            if cmd == ["gh", "api", "repos/actdim/along/git/ref/heads/main", "--jq", ".object.sha"]:
+                return proc.Result(cmd=cmd, returncode=0, stdout="commit_sha_789\n", stderr="")
+            if len(cmd) > 4 and "git/refs" in cmd[4]:
+                return proc.Result(cmd=cmd, returncode=0, stdout="", stderr="")
+            if len(cmd) > 4 and "contents" in cmd[4]:
+                return proc.Result(cmd=cmd, returncode=0, stdout="", stderr="")
+            if cmd[0:3] == ["gh", "pr", "create"]:
+                return proc.Result(cmd=cmd, returncode=0, stdout="https://github.com/actdim/along/pull/202\n", stderr="")
+            return proc.Result(cmd=cmd, returncode=0, stdout="", stderr="")
+
+        mock_open = MagicMock()
+        ok, res = along_feedback.GitHubTransport.send(
+            title="Contributor Feedback",
+            body="Contribution report",
+            yes=True,
+            which=lambda b: "/fake/bin/gh",
+            run=fake_run,
+            open_url=mock_open,
+            date="2026-11-13",
+            export_dir=self.temp_dir
+        )
+
+        self.assertTrue(ok)
+        self.assertEqual(res, "https://github.com/actdim/along/pull/202")
+        mock_open.assert_not_called()
+
+        # Assert fork was executed without clone
+        fork_invocations = [c for c in executed_cmds if c[0:3] == ["gh", "repo", "fork"]]
+        self.assertEqual(len(fork_invocations), 1)
+        self.assertIn("--clone=false", fork_invocations[0])
+
+        for cmd in executed_cmds:
+            self.assertNotIn("clone", cmd)
+
+    def test_13_branch_exists_retry(self):
+        """Verify branch creation retries with -2 suffix when reference already exists."""
+        created_branches = []
+
+        def fake_run(cmd, **kwargs):
+            if cmd == ["gh", "auth", "status"]:
+                return proc.Result(cmd=cmd, returncode=0, stdout="Logged in", stderr="")
+            if cmd == ["gh", "api", "user", "--jq", ".login"]:
+                return proc.Result(cmd=cmd, returncode=0, stdout="collab_user\n", stderr="")
+            if cmd == ["gh", "api", "repos/actdim/along", "--jq", ".permissions.push"]:
+                return proc.Result(cmd=cmd, returncode=0, stdout="true\n", stderr="")
+            if cmd == ["gh", "api", "repos/actdim/along/git/ref/heads/main", "--jq", ".object.sha"]:
+                return proc.Result(cmd=cmd, returncode=0, stdout="commit_sha_123\n", stderr="")
+            if len(cmd) > 4 and "git/refs" in cmd[4]:
+                ref_arg = cmd[6] # -f ref=refs/heads/...
+                created_branches.append(ref_arg)
+                if len(created_branches) == 1:
+                    return proc.Result(cmd=cmd, returncode=1, stdout="", stderr="Reference already exists (422)")
+                return proc.Result(cmd=cmd, returncode=0, stdout="", stderr="")
+            if len(cmd) > 4 and "contents" in cmd[4]:
+                return proc.Result(cmd=cmd, returncode=0, stdout="", stderr="")
+            if cmd[0:3] == ["gh", "pr", "create"]:
+                return proc.Result(cmd=cmd, returncode=0, stdout="https://github.com/actdim/along/pull/303\n", stderr="")
+            return proc.Result(cmd=cmd, returncode=0, stdout="", stderr="")
+
+        ok, res = along_feedback.GitHubTransport.send(
+            title="Collision Test",
+            body="Collision body",
+            yes=True,
+            which=lambda b: "/fake/bin/gh",
+            run=fake_run,
+            open_url=MagicMock(),
+            date="2026-11-13",
+            export_dir=self.temp_dir
+        )
+
+        self.assertTrue(ok)
+        self.assertEqual(len(created_branches), 2)
+        self.assertIn("ref=refs/heads/feedback/2026-11-13-collision-test", created_branches[0])
+        self.assertIn("ref=refs/heads/feedback/2026-11-13-collision-test-2", created_branches[1])
+
+    def test_14_gh_failure_midway_falls_back_to_browser(self):
+        """Verify that midway gh failure reports stderr and falls back to browser."""
+        mock_open = MagicMock(return_value=True)
+
+        def fake_run(cmd, **kwargs):
+            if cmd == ["gh", "auth", "status"]:
+                return proc.Result(cmd=cmd, returncode=0, stdout="Logged in", stderr="")
+            if cmd == ["gh", "api", "user", "--jq", ".login"]:
+                return proc.Result(cmd=cmd, returncode=1, stdout="", stderr="HTTP 500: Server Error in GitHub API")
+            return proc.Result(cmd=cmd, returncode=0, stdout="", stderr="")
+
+        ok, res = along_feedback.GitHubTransport.send(
+            title="Midway Fail Test",
+            body="Midway body",
+            yes=True,
+            which=lambda b: "/fake/bin/gh",
+            run=fake_run,
+            open_url=mock_open,
+            date="2026-11-13",
+            export_dir=self.temp_dir
+        )
+
+        self.assertTrue(ok)
+        mock_open.assert_called_once()
+        opened_url = mock_open.call_args[0][0]
+        self.assertIn("https://github.com/actdim/along/new/main?", opened_url)
+
+    def test_15_long_body_truncation(self):
+        """Verify bodies creating URLs exceeding 7000 chars are truncated and saved to export dir."""
+        mock_open = MagicMock(return_value=True)
+        long_body = "A" * 10000
+
+        ok, res = along_feedback.GitHubTransport.send(
+            title="Long Body Test",
+            body=long_body,
+            yes=True,
+            which=lambda b: None, # trigger web fallback
+            open_url=mock_open,
+            date="2026-11-13",
+            export_dir=self.temp_dir
+        )
+
+        self.assertTrue(ok)
+        mock_open.assert_called_once()
+        opened_url = mock_open.call_args[0][0]
+        self.assertLessEqual(len(opened_url), 7000)
+        self.assertIn("Body%20truncated%20due%20to%20URL%20length%20limit", opened_url)
+
+        # Verify full note was saved to export_dir
+        exported = os.listdir(self.temp_dir)
+        matching = [f for f in exported if f.startswith("feedback-full--2026-11-13-long-body-test")]
+        self.assertEqual(len(matching), 1)
+
+    def test_16_channel_all_does_not_include_github(self):
+        """Verify dispatching with --channel all does not invoke github transport."""
+        along_feedback.DiagnosticsStore.record_incident(
+            component="scripts/test.py",
+            error_message="Sample test anomaly",
+            event_type="command_error",
+            repo_root=REPO_ROOT
+        )
+
+        with patch.object(along_feedback.GitHubTransport, "send") as mock_gh_send:
+            results = along_feedback.dispatch_feedback(channel="all")
+            mock_gh_send.assert_not_called()
+
+        channel_names = [ch for ch, _, _ in results]
+        self.assertNotIn("github", channel_names)
+        self.assertIn("file", channel_names)
+
 
 if __name__ == "__main__":
     unittest.main(verbosity=2)

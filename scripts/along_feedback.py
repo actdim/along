@@ -11,7 +11,7 @@ Usage:
     python scripts/along_feedback.py list [--all]
     python scripts/along_feedback.py show <incident_id>
     python scripts/along_feedback.py report [--output <path>]
-    python scripts/along_feedback.py send [--channel telegram|webhook|file|all] [--note <text>] [--dry-run]
+    python scripts/along_feedback.py send [--channel telegram|webhook|file|github|all] [--title <title>] [--body-file <path>] [--note <text>] [--yes] [--dry-run]
     python scripts/along_feedback.py clear [--all]
     python scripts/along_feedback.py config [init|show|path]
 """
@@ -42,6 +42,7 @@ from alongkit import version
 CURRENT_VERSION = version.CURRENT_VERSION
 
 from alongkit import diagnostics
+from alongkit.feedback_github import GitHubTransport, build_inbox_note
 
 GLOBAL_ALONG_DIR = diagnostics.GLOBAL_ALONG_DIR
 DIAGNOSTICS_DIR = diagnostics.DIAGNOSTICS_DIR
@@ -154,7 +155,10 @@ def dispatch_feedback(
     incident_id: Optional[str] = None,
     note: Optional[str] = None,
     dry_run: bool = False,
-    repo_root: Optional[str] = None
+    repo_root: Optional[str] = None,
+    title: Optional[str] = None,
+    body_file: Optional[str] = None,
+    yes: bool = False,
 ) -> List[Tuple[str, bool, str]]:
     config = ConfigManager.load_config(repo_root)
 
@@ -164,7 +168,7 @@ def dispatch_feedback(
     else:
         incidents = DiagnosticsStore.list_incidents(all_status=False)
 
-    if not incidents:
+    if not incidents and channel != "github":
         return [("all", True, "No unresolved diagnostic incidents to dispatch.")]
 
     if note:
@@ -174,7 +178,7 @@ def dispatch_feedback(
 
     report_text = DiagnosticsStore.generate_markdown_report(unresolved_only=bool(not incident_id))
 
-    if dry_run:
+    if dry_run and channel != "github":
         return [("dry-run", True, f"Simulated dispatch of {len(incidents)} incident(s) via channel '{channel}'.\nPayload length: {len(report_text)} chars.")]
 
     results = []
@@ -199,11 +203,34 @@ def dispatch_feedback(
         elif ch == "webhook":
             ok, msg = WebhookTransport.send(report_text, incidents, config)
             results.append(("webhook", ok, msg))
+        elif ch == "github":
+            body_content = ""
+            if body_file:
+                try:
+                    with open(body_file, "r", encoding="utf-8") as bf:
+                        body_content = bf.read()
+                except OSError as e:
+                    results.append(("github", False, f"Failed to read body file '{body_file}': {str(e)}"))
+                    continue
+            elif note:
+                body_content = note
+
+            fb_title = title or (f"Feedback report ({len(incidents)} incidents)" if incidents else "Feedback")
+            ok, msg = GitHubTransport.send(
+                title=fb_title,
+                body=body_content,
+                incidents=incidents if incidents else None,
+                config=config,
+                yes=yes,
+                dry_run=dry_run,
+                repo_root=repo_root,
+            )
+            results.append(("github", ok, msg))
         else:
             results.append((ch, False, f"Unknown transport channel '{ch}'."))
 
     # If at least one successful dispatch, mark incidents resolved
-    if any(ok for _, ok, _ in results):
+    if any(ok for ch, ok, _ in results if ch != "github" or (yes and not dry_run)):
         for inc in incidents:
             DiagnosticsStore.mark_resolved(inc["id"])
 
@@ -239,9 +266,12 @@ def main():
 
     # send
     p_send = subparsers.add_parser("send", help="Send diagnostics feedback")
-    p_send.add_argument("--channel", choices=["all", "telegram", "webhook", "file"], default="all", help="Target transport channel")
+    p_send.add_argument("--channel", choices=["all", "telegram", "webhook", "file", "github"], default="all", help="Target transport channel")
     p_send.add_argument("--id", help="Specific incident ID to send")
     p_send.add_argument("--note", help="Additional user note to attach to report")
+    p_send.add_argument("--title", help="Title for feedback report (required for github channel)")
+    p_send.add_argument("--body-file", help="Path to markdown body file (required for github channel)")
+    p_send.add_argument("--yes", "-y", action="store_true", help="Explicit consent confirmation to dispatch github PR/web fallback")
     p_send.add_argument("--dry-run", action="store_true", help="Simulate without network/disk dispatch")
 
     # clear
@@ -302,11 +332,21 @@ def main():
         sys.exit(0)
 
     if args.action == "send":
+        if args.channel == "github":
+            if not getattr(args, "title", None) or not getattr(args, "body_file", None):
+                parser.error("--title and --body-file are required when --channel is 'github'.")
+            if not os.path.isfile(args.body_file):
+                print(f"[Error] Body file '{args.body_file}' not found.", file=sys.stderr)
+                sys.exit(1)
+
         results = dispatch_feedback(
             channel=args.channel,
             incident_id=args.id,
             note=args.note,
-            dry_run=args.dry_run
+            dry_run=args.dry_run,
+            title=getattr(args, "title", None),
+            body_file=getattr(args, "body_file", None),
+            yes=getattr(args, "yes", False),
         )
         for ch, ok, msg in results:
             prefix = "[Success]" if ok else "[Failed]"
