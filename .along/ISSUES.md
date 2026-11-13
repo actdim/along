@@ -4,6 +4,7 @@
 <!-- No active issues -->
 
 ## Backlog
+- [ ] `(bug)` [stop-gate-false-positives](ISSUES/bug--stop-gate-false-positives.md)
 - [ ] `(debt)` [autonomous-non-elevation-invariants](ISSUES/debt--autonomous-non-elevation-invariants.md)
 - [ ] `(debt)` [canonical-path-gate-expansion](ISSUES/debt--canonical-path-gate-expansion.md)
 - [ ] `(debt)` [dashboard-retire-risk-spike-views](ISSUES/debt--dashboard-retire-risk-spike-views.md)
@@ -31,6 +32,7 @@
 - [ ] `(feat)` [dart-flutter-ecosystem-support](ISSUES/feat--dart-flutter-ecosystem-support.md)
 - [ ] `(feat)` [deepseek-harness-bridge](ISSUES/feat--deepseek-harness-bridge.md)
 - [ ] `(feat)` [deepseek-runtime-adapter](ISSUES/feat--deepseek-runtime-adapter.md)
+- [ ] `(feat)` [doctor-detect-protocol-leak](ISSUES/feat--doctor-detect-protocol-leak.md)
 - [ ] `(feat)` [doctor-granular-diagnostics](ISSUES/feat--doctor-granular-diagnostics.md)
 - [ ] `(feat)` [empirical-benchmark-harness-and-metrics](ISSUES/feat--empirical-benchmark-harness-and-metrics.md)
 - [ ] `(feat)` [enterprise-governance-and-cloud-infrastructure](ISSUES/feat--enterprise-governance-and-cloud-infrastructure.md)
@@ -55,6 +57,7 @@
 - [ ] `(feat)` [team-typed-handoff-mailbox](ISSUES/feat--team-typed-handoff-mailbox.md)
 - [ ] `(feat)` [team-worktree-concurrency-rules](ISSUES/feat--team-worktree-concurrency-rules.md)
 - [ ] `(feat)` [team-worktree-lifecycle](ISSUES/feat--team-worktree-lifecycle.md)
+- [ ] `(feat)` [trivial-fix-lifecycle](ISSUES/feat--trivial-fix-lifecycle.md)
 - [ ] `(feat)` [workspace-activity-tracking](ISSUES/feat--workspace-activity-tracking.md)
 - [ ] `(feat)` [zero-step-state-recovery-and-drift-detection](ISSUES/feat--zero-step-state-recovery-and-drift-detection.md)
 - [ ] `(task)` [gate-event-remeasure](ISSUES/task--gate-event-remeasure.md)
