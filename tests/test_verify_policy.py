@@ -262,5 +262,69 @@ class TestCommitUnderPolicy(_Fixture):
         self.assertNotIn("Fix failing tests", res.stderr)
 
 
+class TestVerifyPolicyIssueExtension(_Fixture):
+    def test_mode_validation(self):
+        textio.write_text(
+            os.path.join(self.root, ".along", "config.json"),
+            json.dumps({"verify": {"scopes": {"api": ["src/api/**"]}}}) + "\n",
+        )
+
+        p_req = verify.VerifyPolicy(tests="required", source="issue", issue="test-1")
+        self.assertEqual(verify.policy_problems(self.root, p_req), [])
+
+        p_aff_no_reason = verify.VerifyPolicy(tests="affected", source="issue", issue="test-1")
+        self.assertIn("needs a non-empty verify.reason", verify.policy_problems(self.root, p_aff_no_reason)[0])
+
+        p_aff = verify.VerifyPolicy(tests="affected", reason="api only", source="issue", issue="test-1")
+        self.assertEqual(verify.policy_problems(self.root, p_aff), [])
+
+        p_sc_no_scope = verify.VerifyPolicy(tests="scoped", reason="api", source="issue", issue="test-1")
+        self.assertIn("needs verify.scope", verify.policy_problems(self.root, p_sc_no_scope)[0])
+
+        p_sc_bad = verify.VerifyPolicy(tests="scoped", scope="worker", reason="worker", source="issue", issue="test-1")
+        self.assertIn("not declared in verify.scopes", verify.policy_problems(self.root, p_sc_bad)[0])
+
+        p_sc_ok = verify.VerifyPolicy(tests="scoped", scope="api", reason="api", source="issue", issue="test-1")
+        self.assertEqual(verify.policy_problems(self.root, p_sc_ok), [])
+
+    def test_spike_exemption_from_tracked_by(self):
+        p_none = verify.VerifyPolicy(tests="none", reason="spike prototype", source="issue", issue="test-spike")
+        problems_feat = verify.policy_problems(self.root, p_none, issue_type="feat")
+        self.assertTrue(any("needs verify.tracked_by" in p for p in problems_feat))
+
+        problems_spike = verify.policy_problems(self.root, p_none, issue_type="spike")
+        self.assertEqual(problems_spike, [])
+
+    def test_precedence_and_drift_warning(self):
+        from alongkit import session
+        self.policy(tests="required")
+
+        eff = verify.load_effective_policy(self.root, "debt--add-tests")
+        self.assertEqual(eff.tests, "required")
+        self.assertEqual(eff.source, "repo")
+
+        session.record_plan_approval_event(
+            self.root, "debt--add-tests", "approve",
+            verify={"tests": "affected", "reason": "touching tests only"},
+        )
+        eff_snap = verify.load_effective_policy(self.root, "debt--add-tests")
+        self.assertEqual(eff_snap.tests, "affected")
+        self.assertEqual(eff_snap.source, "issue")
+        self.assertEqual(eff_snap.reason, "touching tests only")
+
+        from alongkit import entities
+        entities.update_issue_frontmatter(
+            self.root, "add-tests",
+            {"verify": {"tests": "none", "reason": "changed"}},
+        )
+        import io
+        from unittest.mock import patch
+        with patch("sys.stderr", new_callable=io.StringIO) as mock_err:
+            eff_drift = verify.load_effective_policy(self.root, "debt--add-tests")
+            err = mock_err.getvalue()
+        self.assertIn("[Warning] verify changed after plan approval", err)
+        self.assertEqual(eff_drift.tests, "affected")
+
+
 if __name__ == "__main__":
     unittest.main(verbosity=2)

@@ -291,6 +291,30 @@ def handle_start_command(repo_root: str, args: List[str]):
     return 0
 
 
+def _validate_issue_verify_for_approval(repo_root: str, slug: str) -> Optional[Dict[str, Any]]:
+    from .. import entities, verify as verify_mod
+    ctx = entities.reference_context(repo_root, slug) or repo_root
+    iss = entities.find_issue_by_slug(ctx, slug)
+    if not iss or not iss.get("frontmatter"):
+        return None
+    raw_verify = iss["frontmatter"].get("verify")
+    if raw_verify is None:
+        return None
+    if not isinstance(raw_verify, dict):
+        raise CommandError(f"Plan approval refused: verify in issue '{slug}' must be a mapping.", exit_code=1)
+    verify_dict = dict(raw_verify)
+    policy = verify_mod.policy_from_block(verify_dict, source="issue", issue=slug)
+    itype = iss.get("type") or (iss.get("frontmatter") or {}).get("type")
+    problems = verify_mod.policy_problems(ctx, policy, issue_type=itype)
+    if problems:
+        raise CommandError(
+            f"Plan approval refused: invalid verify policy in issue '{slug}':\n"
+            + "\n".join(f"  - {p}" for p in problems),
+            exit_code=1,
+        )
+    return verify_dict
+
+
 def _handle_batch_plan_approve(repo_root: str, from_dir: str, dry_run: bool, key: Optional[str]) -> None:
     if not os.path.isdir(from_dir):
         raise ValidationError(f"Plan directory does not exist: '{from_dir}'", exit_code=2)
@@ -344,6 +368,13 @@ def _handle_batch_plan_approve(repo_root: str, from_dir: str, dry_run: bool, key
             has_errors = True
             continue
 
+        try:
+            _validate_issue_verify_for_approval(repo_root, clean_slug)
+        except CommandError as err:
+            candidates.append({"file": fname, "path": p, "slug": clean_slug, "error": str(err)})
+            has_errors = True
+            continue
+
         candidates.append({"file": fname, "path": p, "slug": clean_slug, "content": content, "error": None})
 
     if dry_run:
@@ -368,8 +399,9 @@ def _handle_batch_plan_approve(repo_root: str, from_dir: str, dry_run: bool, key
     for c in candidates:
         slug = c["slug"]
         text = c["content"]
+        verify_block = _validate_issue_verify_for_approval(repo_root, slug)
         session.write_issue_plan(repo_root, slug, text, f"plan approve --from {from_dir}")
-        session.approve_issue_plan(repo_root, slug, session.APPROVED_VIA_CLI, key=key)
+        session.approve_issue_plan(repo_root, slug, session.APPROVED_VIA_CLI, key=key, verify=verify_block)
         plan_rel = repo.normalize_posix(repo.safe_relpath(session.plan_path(repo_root, slug), repo_root))
         print(f"-> Approved plan for '{slug}' (kept in {plan_rel})")
         approved_count += 1
@@ -472,10 +504,11 @@ def handle_plan_command(repo_root: str, args: List[str]):
                         )
                 except OSError:
                     pass
+            verify_block = _validate_issue_verify_for_approval(repo_root, slug)
             session.set_session_phase(repo_root, "execution", slug=slug, plan_approved=True)
             plan_now = session.read_plan(repo_root, slug)
             session.mark_approval(repo_root, key, via, plan_now)
-            session.approve_issue_plan(repo_root, slug, via, key=key)
+            session.approve_issue_plan(repo_root, slug, via, key=key, verify=verify_block)
             sha = session.plan_sha256(plan_now)
             trace_extra = f", plan_sha256: {sha[:12]}" if sha else ""
             session.append_trace(repo_root, slug, f"plan approved (along plan approve) approved_via: {via}{trace_extra}")
@@ -586,11 +619,12 @@ def _approve_ahead(repo_root: str, slug: str, key: Optional[str], plan_file: Opt
                 text = textio.read_text(plan_file, strict=False)
             except OSError as exc:
                 raise ValidationError(f"Cannot read --plan-file '{plan_file}': {exc}", exit_code=2)
+    verify_block = _validate_issue_verify_for_approval(repo_root, slug)
     if text:
         session.write_issue_plan(repo_root, slug, text, source)
     if not session.plan_recorded(repo_root, slug):
         raise ValidationError(f"No plan for '{slug}': pass '--plan-file <path>' or write .along/ISSUES/<key>/plan.md.", exit_code=2)
-    session.approve_issue_plan(repo_root, slug, via, key=key)
+    session.approve_issue_plan(repo_root, slug, via, key=key, verify=verify_block)
     if accepted:
         session.release_pending_plan(repo_root, key)
     entities.sync_issues_board(repo_root, recent_done_limit=entities.RECENT_DONE_LIMIT)

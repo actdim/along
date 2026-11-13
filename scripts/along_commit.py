@@ -165,7 +165,7 @@ def main(argv=None):
         if planned and verify.docs_only_change(repo_root, planned, lambda p: _staged_or_worktree_diff(repo_root, p)):
             print("-> [Pre-Commit Quality Gate] Only documentation / Along state changes: tests skipped.")
         else:
-            outcome = gates.run_test_gate(repo_root, "Pre-Commit Quality Gate")
+            outcome = gates.run_test_gate(repo_root, "Pre-Commit Quality Gate", slug=parsed.issue, files=planned)
             if outcome not in (gates.TESTS_PASSED, gates.TESTS_SKIPPED):
                 _abort(repo_root, f"Commit aborted: {gates.test_gate_abort_reason(outcome)}.")
 

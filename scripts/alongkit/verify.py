@@ -21,7 +21,7 @@ import os
 import re
 import sys
 from dataclasses import dataclass, field
-from typing import List, Optional, Sequence, Tuple
+from typing import Any, Dict, List, Optional, Sequence, Tuple
 
 if __name__ == "__main__":
     raise SystemExit(
@@ -32,8 +32,11 @@ if __name__ == "__main__":
 from . import bootstrap, proc, repo, textio
 
 TESTS_REQUIRED = "required"
+TESTS_AFFECTED = "affected"
+TESTS_SCOPED = "scoped"
 TESTS_NONE = "none"
 TEST_POLICIES = (TESTS_REQUIRED, TESTS_NONE)
+ISSUE_TEST_POLICIES = (TESTS_REQUIRED, TESTS_AFFECTED, TESTS_SCOPED, TESTS_NONE)
 #: Lifecycle hooks a `tests: none` policy may run instead of tests.
 CHECK_NAMES = ("build", "lint", "typecheck")
 
@@ -45,12 +48,81 @@ class VerifyPolicy:
     tracked_by: str = ""
     checks: List[str] = field(default_factory=list)
     declared: bool = False
+    scope: str = ""
+    source: str = "default"
+    issue: str = ""
 
     def describe(self) -> str:
+        if self.source == "issue":
+            issue_tag = f" (issue {self.issue})" if self.issue else ""
+            if self.tests == TESTS_SCOPED:
+                reason = f" - {self.reason}" if self.reason else ""
+                checks = f"; checks: {', '.join(self.checks)}" if self.checks else ""
+                return f"tests: scoped ({self.scope}){reason}{issue_tag}{checks}"
+            if self.tests == TESTS_AFFECTED:
+                reason = f" - {self.reason}" if self.reason else ""
+                checks = f"; checks: {', '.join(self.checks)}" if self.checks else ""
+                return f"tests: affected{reason}{issue_tag}{checks}"
+            if self.tests == TESTS_NONE:
+                reason = f" - {self.reason}" if self.reason else ""
+                tracked = f" ({self.tracked_by})" if self.tracked_by else ""
+                checks = f"; checks: {', '.join(self.checks)}" if self.checks else ""
+                return f"tests: none{reason}{tracked}{issue_tag}{checks}"
+            return f"tests: required{issue_tag}"
         if self.tests == TESTS_NONE:
             checks = f"; checks: {', '.join(self.checks)}" if self.checks else ""
             return f"tests: none - {self.reason} ({self.tracked_by}){checks}"
         return "tests: required" + ("" if self.declared else " (default)")
+
+    def hook_mode(self) -> str:
+        if self.tests == TESTS_REQUIRED:
+            return "full"
+        if self.tests == TESTS_AFFECTED:
+            return "affected"
+        if self.tests == TESTS_SCOPED:
+            return "scoped"
+        return self.tests
+
+
+def load_scopes(repo_root: str) -> Dict[str, List[str]]:
+    """Declared test scopes in .along/config.json under `verify.scopes`."""
+    path = os.path.join(repo.state_dir(repo_root), "config.json")
+    try:
+        data = json.loads(textio.read_text(path)) if os.path.isfile(path) else {}
+    except (OSError, ValueError):
+        return {}
+    verify_block = data.get("verify") if isinstance(data, dict) else None
+    if not isinstance(verify_block, dict):
+        return {}
+    scopes = verify_block.get("scopes")
+    if not isinstance(scopes, dict):
+        return {}
+    res: Dict[str, List[str]] = {}
+    for k, v in scopes.items():
+        if isinstance(k, str) and k.strip():
+            if isinstance(v, list):
+                res[k.strip()] = [str(x) for x in v if str(x).strip()]
+            elif isinstance(v, str) and v.strip():
+                res[k.strip()] = [v.strip()]
+    return res
+
+
+def policy_from_block(block: Optional[Dict[str, Any]], source: str = "default", issue: str = "") -> VerifyPolicy:
+    """Parse a verify policy from a dictionary block."""
+    if not isinstance(block, dict):
+        return VerifyPolicy(source=source, issue=issue)
+    checks = block.get("checks") or []
+    checks_list = [str(c).strip().lower() for c in checks if str(c).strip()] if isinstance(checks, list) else []
+    return VerifyPolicy(
+        tests=str(block.get("tests") or TESTS_REQUIRED).strip().lower(),
+        reason=str(block.get("reason") or "").strip(),
+        tracked_by=str(block.get("tracked_by") or "").strip(),
+        checks=checks_list,
+        declared=True,
+        scope=str(block.get("scope") or "").strip(),
+        source=source,
+        issue=issue,
+    )
 
 
 def load_policy(repo_root: str) -> VerifyPolicy:
@@ -63,33 +135,69 @@ def load_policy(repo_root: str) -> VerifyPolicy:
     block = data.get("verify") if isinstance(data, dict) else None
     if not isinstance(block, dict):
         return VerifyPolicy()
-    checks = block.get("checks") or []
-    return VerifyPolicy(
-        tests=str(block.get("tests") or TESTS_REQUIRED).strip().lower(),
-        reason=str(block.get("reason") or "").strip(),
-        tracked_by=str(block.get("tracked_by") or "").strip(),
-        checks=[str(c).strip().lower() for c in checks if str(c).strip()] if isinstance(checks, list) else [],
-        declared=True,
-    )
+    return policy_from_block(block, source="repo")
 
 
-def policy_problems(repo_root: str, policy: VerifyPolicy) -> List[str]:
+def policy_problems(repo_root: str, policy: VerifyPolicy, issue_type: Optional[str] = None) -> List[str]:
     """Why `policy` is not a valid declaration (empty when it is)."""
     problems: List[str] = []
-    if policy.tests not in TEST_POLICIES:
-        problems.append(f"verify.tests must be one of {', '.join(TEST_POLICIES)} (got '{policy.tests}')")
-        return problems
-    if policy.tests == TESTS_NONE:
-        if not policy.reason:
-            problems.append("verify.tests = \"none\" needs a non-empty verify.reason")
-        if not policy.tracked_by:
-            problems.append("verify.tests = \"none\" needs verify.tracked_by (the issue key that tracks the missing tests)")
-        elif not _issue_exists(repo_root, policy.tracked_by):
-            problems.append(f"verify.tracked_by '{policy.tracked_by}' names no issue in this or an enclosing context")
+    if policy.source == "issue":
+        if policy.tests not in ISSUE_TEST_POLICIES:
+            problems.append(f"verify.tests must be one of {', '.join(ISSUE_TEST_POLICIES)} (got '{policy.tests}')")
+            return problems
+        if policy.tests != TESTS_REQUIRED and not policy.reason:
+            problems.append(f"verify.tests = \"{policy.tests}\" needs a non-empty verify.reason")
+        if policy.tests == TESTS_NONE:
+            if issue_type != "spike":
+                if not policy.tracked_by:
+                    problems.append("verify.tests = \"none\" needs verify.tracked_by (the issue key that tracks the missing tests)")
+                elif not _issue_exists(repo_root, policy.tracked_by):
+                    problems.append(f"verify.tracked_by '{policy.tracked_by}' names no issue in this or an enclosing context")
+        elif policy.tests == TESTS_SCOPED:
+            if not policy.scope:
+                problems.append("verify.tests = \"scoped\" needs verify.scope")
+            else:
+                scopes = load_scopes(repo_root)
+                if policy.scope not in scopes:
+                    problems.append(f"verify.scope '{policy.scope}' is not declared in verify.scopes in .along/config.json")
+    else:
+        if policy.tests not in TEST_POLICIES:
+            problems.append(f"verify.tests must be one of {', '.join(TEST_POLICIES)} (got '{policy.tests}')")
+            return problems
+        if policy.tests == TESTS_NONE:
+            if not policy.reason:
+                problems.append("verify.tests = \"none\" needs a non-empty verify.reason")
+            if not policy.tracked_by:
+                problems.append("verify.tests = \"none\" needs verify.tracked_by (the issue key that tracks the missing tests)")
+            elif not _issue_exists(repo_root, policy.tracked_by):
+                problems.append(f"verify.tracked_by '{policy.tracked_by}' names no issue in this or an enclosing context")
     for name in policy.checks:
         if name not in CHECK_NAMES:
             problems.append(f"verify.checks: unknown check '{name}' (allowed: {', '.join(CHECK_NAMES)})")
     return problems
+
+
+def load_effective_policy(repo_root: str, slug: Optional[str] = None) -> VerifyPolicy:
+    """Load the approved issue verify policy snapshot if slug is given, otherwise repository policy."""
+    if slug:
+        from . import entities, session
+        ctx = entities.reference_context(repo_root, slug) or repo_root
+        snapshot = session.approved_verify_snapshot(ctx, slug)
+        if snapshot is not None and isinstance(snapshot, dict):
+            iss = entities.find_issue_by_slug(ctx, slug)
+            if iss and iss.get("frontmatter"):
+                fm_verify = iss["frontmatter"].get("verify")
+                if fm_verify is not None:
+                    norm_fm = {k: v for k, v in dict(fm_verify).items() if v is not None} if isinstance(fm_verify, dict) else {}
+                    norm_snap = {k: v for k, v in snapshot.items() if v is not None}
+                    if norm_fm != norm_snap:
+                        print(
+                            "[Warning] verify changed after plan approval; using the approved policy; "
+                            "re-approve the plan to apply it.",
+                            file=sys.stderr,
+                        )
+            return policy_from_block(snapshot, source="issue", issue=slug)
+    return load_policy(repo_root)
 
 
 def _issue_exists(repo_root: str, key: str) -> bool:

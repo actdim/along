@@ -56,12 +56,35 @@ def _issue_create(repo_root: str, args: List[str], issues_dir: str, today: str):
     parser.add_argument("--milestone", "-m", default=None)
     parser.add_argument("--no-milestone", action="store_true")
     parser.add_argument("--draft", action="store_true", help="Create as untracked draft in .along/.drafts/")
+    parser.add_argument("--verify-tests", default=None)
+    parser.add_argument("--verify-scope", default=None)
+    parser.add_argument("--verify-reason", default=None)
+    parser.add_argument("--verify-tracked-by", default=None)
+    parser.add_argument("--verify-checks", default=None)
     parsed, extra = parser.parse_known_args(args[1:])
     check_unknown_args(extra, "along issue create")
 
     islug = parsed.slug.lower()
     if not entities.is_valid_slug(islug):
         raise CommandError(f"Invalid issue slug '{islug}'. Slug must be 2-5 lowercase kebab-case words (e.g. my-feature-name).", exit_code=1)
+
+    verify_block = None
+    if any(v is not None for v in (parsed.verify_tests, parsed.verify_scope, parsed.verify_reason, parsed.verify_tracked_by, parsed.verify_checks)):
+        from alongkit import verify as verify_mod
+        verify_block = {
+            "tests": (parsed.verify_tests or "required").strip().lower(),
+            "scope": (parsed.verify_scope or "").strip(),
+            "reason": (parsed.verify_reason or "").strip(),
+            "tracked_by": (parsed.verify_tracked_by or "").strip(),
+            "checks": [c.strip().lower() for c in parsed.verify_checks.split(",") if c.strip()] if parsed.verify_checks else [],
+        }
+        policy = verify_mod.policy_from_block(verify_block, source="issue", issue=islug)
+        problems = verify_mod.policy_problems(repo_root, policy, issue_type=itype)
+        if problems:
+            raise CommandError(
+                f"Invalid verify block for issue '{islug}':\n" + "\n".join(f"  - {p}" for p in problems),
+                exit_code=2,
+            )
 
     existing_issue = entities.find_issue_by_slug(repo_root, islug)
     if existing_issue:
@@ -133,6 +156,13 @@ related: []
 
 {body}"""
     textio.write_text(target_file, content, newline="\n", atomic=True)
+    if verify_block:
+        if parsed.draft:
+            fcontent = textio.read_text(target_file)
+            from alongkit import frontmatter
+            textio.write_text(target_file, frontmatter.update(fcontent, {"verify": verify_block}, path=target_file), newline="\n", atomic=True)
+        else:
+            entities.update_issue_frontmatter(repo_root, islug, {"verify": verify_block})
     if parsed.draft:
         print(f"-> Created draft: {target_file}")
         return 0
@@ -466,6 +496,12 @@ def _issue_update(repo_root: str, args: List[str], today: str):
     parser.add_argument("--status", "-s", default=None)
     parser.add_argument("--tags", default=None)
     parser.add_argument("--title", "-t", default=None)
+    parser.add_argument("--verify-tests", default=None)
+    parser.add_argument("--verify-scope", default=None)
+    parser.add_argument("--verify-reason", default=None)
+    parser.add_argument("--verify-tracked-by", default=None)
+    parser.add_argument("--verify-checks", default=None)
+    parser.add_argument("--verify-clear", action="store_true")
     parsed, extra = parser.parse_known_args(args[1:])
     check_unknown_args(extra, "along issue update")
 
@@ -507,6 +543,31 @@ def _issue_update(repo_root: str, args: List[str], today: str):
 
     if parsed.title is not None:
         updates["title"] = parsed.title
+
+    if parsed.verify_clear:
+        updates["verify"] = None
+    elif any(v is not None for v in (parsed.verify_tests, parsed.verify_scope, parsed.verify_reason, parsed.verify_tracked_by, parsed.verify_checks)):
+        from alongkit import verify as verify_mod
+        current_verify = dict(issue["frontmatter"].get("verify") or {}) if isinstance(issue["frontmatter"].get("verify"), dict) else {}
+        if parsed.verify_tests is not None:
+            current_verify["tests"] = parsed.verify_tests.strip().lower()
+        if parsed.verify_scope is not None:
+            current_verify["scope"] = parsed.verify_scope.strip()
+        if parsed.verify_reason is not None:
+            current_verify["reason"] = parsed.verify_reason.strip()
+        if parsed.verify_tracked_by is not None:
+            current_verify["tracked_by"] = parsed.verify_tracked_by.strip()
+        if parsed.verify_checks is not None:
+            current_verify["checks"] = [c.strip().lower() for c in parsed.verify_checks.split(",") if c.strip()]
+        policy = verify_mod.policy_from_block(current_verify, source="issue", issue=issue["slug"])
+        itype = issue.get("type") or (issue.get("frontmatter") or {}).get("type")
+        problems = verify_mod.policy_problems(repo_root, policy, issue_type=itype)
+        if problems:
+            raise CommandError(
+                f"Invalid verify block for issue '{issue['slug']}':\n" + "\n".join(f"  - {p}" for p in problems),
+                exit_code=2,
+            )
+        updates["verify"] = current_verify
 
     fpath, new_fm = entities.update_issue_frontmatter(repo_root, issue["slug"], updates)
     rel_path = repo.normalize_posix(repo.safe_relpath(fpath, repo_root))
@@ -568,6 +629,8 @@ def _issue_show(repo_root: str, args: List[str]):
                 print(f"Requires:  {', '.join(req_parts)}")
             else:
                 print(f"Requires:  {requires}")
+        if summary.get("verify_effective"):
+            print(f"Verify:    {summary['verify_effective']}")
         print(f"Path:      {summary['file_path']}")
         if summary.get("body"):
             print("\n--- Summary / Body ---")
@@ -758,9 +821,9 @@ def _issue_find(repo_root: str, args: List[str]) -> int:
 def handle_issue_command(repo_root: str, args: List[str]):
     if not args or args[0] in ("-h", "--help", "help"):
         print("Usage: along_exec.py issue [create|update|done|cancel|delete|reopen|sync|list|show|find|rename|supersede|lint|promote] [args...]")
-        print("  create <type> <slug> --title \"Title\" [--draft] [--priority high|medium|low] [--tags \"t1,t2\"] [--agent <name>] [--milestone <name>|--no-milestone]")
+        print("  create <type> <slug> --title \"Title\" [--draft] [--priority high|medium|low] [--tags \"t1,t2\"] [--agent <name>] [--milestone <name>|--no-milestone] [--verify-tests <mode>] [--verify-scope <name>] [--verify-reason \"...\"] [--verify-tracked-by <key>] [--verify-checks <a,b>]")
         print("  promote <slug>            Promote a draft from .along/.drafts/ to .along/ISSUES/")
-        print("  update <slug> [--milestone <name>] [--priority <high|medium|low>] [--status <status>] [--tags <t1,t2>] [--title <title>]")
+        print("  update <slug> [--milestone <name>] [--priority <high|medium|low>] [--status <status>] [--tags <t1,t2>] [--title <title>] [--verify-tests <mode>] [--verify-scope <name>] [--verify-reason \"...\"] [--verify-tracked-by <key>] [--verify-checks <a,b>] [--verify-clear]")
         print("  done   <slug> [--status done|superseded|cancelled|duplicate] [--superseded-by <key>] [--duplicate-of <key>]")
         print("                            [--force-reason \"...\"]  (past unsettled gate denials, after the user's reply)")
         print("  cancel <slug>             Close as cancelled (moved to done/)")

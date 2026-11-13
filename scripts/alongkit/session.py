@@ -1569,7 +1569,8 @@ def plan_approval_events(repo_root: str, slug: str) -> List[Dict[str, Any]]:
 
 
 def record_plan_approval_event(repo_root: str, slug: str, event: str, via: Optional[str] = None,
-                               key: Optional[str] = None, reason: Optional[str] = None) -> Dict[str, Any]:
+                               key: Optional[str] = None, reason: Optional[str] = None,
+                               verify: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
     """Append `approve` / `rework` for `slug` to the approval log (written only by the CLI)."""
     item: Dict[str, Any] = {"slug": _bare_slug(slug), "event": event, "at": _utc_now_iso()}
     if via:
@@ -1578,11 +1579,25 @@ def record_plan_approval_event(repo_root: str, slug: str, event: str, via: Optio
         item["session"] = key
     if reason:
         item["reason"] = reason
+    if verify is not None:
+        item["verify"] = dict(verify)
     path = _plan_approvals_file(repo_root)
     os.makedirs(os.path.dirname(path), exist_ok=True)
     with open(path, "a", encoding="utf-8", newline="\n") as handle:
         handle.write(json.dumps(item) + "\n")
     return item
+
+
+def approved_verify_snapshot(repo_root: str, slug: str) -> Optional[Dict[str, Any]]:
+    """The verify block of the latest approve event for slug, or None."""
+    events = plan_approval_events(repo_root, slug)
+    if not events:
+        return None
+    latest = events[-1]
+    if latest.get("event") == "approve" and "verify" in latest:
+        val = latest.get("verify")
+        return dict(val) if isinstance(val, dict) else {}
+    return None
 
 
 def plan_approval_confirmed(repo_root: str, slug: str, since: Optional[str] = None) -> bool:
@@ -1608,13 +1623,22 @@ def issue_plan_state(repo_root: str, slug: str) -> Optional[str]:
     return PLAN_READY if plan_approval_confirmed(repo_root, slug) else PLAN_UNCONFIRMED
 
 
-def approve_issue_plan(repo_root: str, slug: str, via: str, key: Optional[str] = None) -> bool:
+def approve_issue_plan(repo_root: str, slug: str, via: str, key: Optional[str] = None,
+                       verify: Optional[Dict[str, Any]] = None) -> bool:
     """Mark the ticket's plan approved and log the approval. False when there is no ticket."""
     ipath = issue_file(repo_root, slug)
     if not ipath:
         return False
+    if verify is None:
+        try:
+            from . import entities
+            iss = entities.find_issue_by_slug(repo_root, slug)
+            if iss and iss.get("frontmatter") and isinstance(iss["frontmatter"].get("verify"), dict):
+                verify = dict(iss["frontmatter"]["verify"])
+        except (OSError, ValueError, KeyError):
+            pass
     set_plan_status(repo_root, slug, "approved")
-    record_plan_approval_event(repo_root, slug, "approve", via=via, key=key)
+    record_plan_approval_event(repo_root, slug, "approve", via=via, key=key, verify=verify)
 
     try:
         from . import frontmatter, planscope

@@ -131,11 +131,31 @@ def load_runs(repo_root: str) -> List[Dict[str, Any]]:
     return [r for r in data if isinstance(r, dict)] if isinstance(data, list) else []
 
 
-def record_run(repo_root: str, ok: bool, tree: Optional[str], source: str) -> None:
+def covers_run(run_mode: str, run_scope: str, req_mode: str, req_scope: str) -> bool:
+    """True when a test run with run_mode/run_scope satisfies a request for req_mode/req_scope."""
+    if run_mode == "full":
+        return True
+    if req_mode == "full":
+        return False
+    if req_mode == "scoped":
+        return run_mode == "scoped" and run_scope == req_scope
+    if req_mode == "affected":
+        return run_mode == "affected"
+    return False
+
+
+def record_run(repo_root: str, ok: bool, tree: Optional[str], source: str,
+               mode: str = "full", scope: str = "") -> None:
     """Remember a test run and the tree it ran on (machine-local diagnostics)."""
     runs = load_runs(repo_root)
-    runs.append({"tree_hash": tree, "ok": bool(ok), "source": source,
-                 "ts": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")})
+    runs.append({
+        "tree_hash": tree,
+        "ok": bool(ok),
+        "source": source,
+        "mode": mode,
+        "scope": scope,
+        "ts": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
+    })
     try:
         repo.ensure_diagnostics_dir(repo_root)
         textio.write_text(_runs_file(repo_root), json.dumps(runs[-MAX_RUNS:], indent=2) + "\n", newline="\n")
@@ -143,12 +163,20 @@ def record_run(repo_root: str, ok: bool, tree: Optional[str], source: str) -> No
         pass
 
 
-def green_run_for(repo_root: str, tree: Optional[str]) -> Optional[Dict[str, Any]]:
-    """The last run, when it was green on exactly this tree; else None."""
+def green_run_for(repo_root: str, tree: Optional[str],
+                  mode: str = "full", scope: str = "") -> Optional[Dict[str, Any]]:
+    """The last run satisfying coverage on this tree, when it was green; else None."""
     if not tree:
         return None
     runs = load_runs(repo_root)
-    last = next((r for r in reversed(runs) if r.get("tree_hash") == tree), None)
+    last = next(
+        (
+            r for r in reversed(runs)
+            if r.get("tree_hash") == tree
+            and covers_run(r.get("mode") or "full", r.get("scope") or "", mode, scope)
+        ),
+        None,
+    )
     return last if last and last.get("ok") else None
 
 

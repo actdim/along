@@ -37,7 +37,8 @@ from dataclasses import dataclass
 import json
 import os
 import sys
-from typing import List, Optional, Tuple
+import tempfile
+from typing import List, Optional, Sequence, Tuple
 
 from . import bootstrap, proc, repo, sanitizer, session, testruns, textio
 
@@ -110,7 +111,9 @@ def test_gate_abort_reason(outcome: str) -> str:
     }.get(outcome, "automated tests failed")
 
 
-def run_test_gate(repo_root: str, label: str = "Quality Gate") -> str:
+def run_test_gate(repo_root: str, label: str = "Quality Gate",
+                  slug: Optional[str] = None,
+                  files: Optional[Sequence[str]] = None) -> str:
     """Run the repository's test gate under its verify policy; one of the TESTS_* outcomes.
 
     `verify.tests = "none"` runs the declared checks instead. Under `required` (default) a
@@ -119,15 +122,29 @@ def run_test_gate(repo_root: str, label: str = "Quality Gate") -> str:
     """
     from . import lifecycle, verify
 
-    policy = verify.load_policy(repo_root)
-    problems = verify.policy_problems(repo_root, policy)
+    policy = verify.load_effective_policy(repo_root, slug)
+    issue_type = None
+    if slug:
+        from . import entities
+        iss = entities.find_issue_by_slug(repo_root, slug)
+        if iss:
+            issue_type = iss.get("type") or (iss.get("frontmatter") or {}).get("type")
+    problems = verify.policy_problems(repo_root, policy, issue_type=issue_type)
     if problems:
-        print(f"[Error] {label}: invalid verify policy in .along/config.json:\n"
+        source_desc = f"issue {slug}" if policy.source == "issue" else ".along/config.json"
+        print(f"[Error] {label}: invalid verify policy in {source_desc}:\n"
               + "\n".join(f"  - {p}" for p in problems), file=sys.stderr)
         return TESTS_POLICY_INVALID
     if policy.tests == verify.TESTS_NONE:
         print(f"-> [{label}] {policy.describe()}")
         return TESTS_PASSED if verify.run_checks(repo_root, policy.checks, label) else TESTS_FAILED
+
+    print(f"-> [{label}] {policy.describe()}")
+    mode = policy.hook_mode()
+    scope = policy.scope if mode == "scoped" else ""
+    if mode == "affected" and not files:
+        mode = "full"
+        print(f"-> [{label}] affected mode has no attributed files; falling back to full suite.")
 
     cmd = detect_test_command(repo_root)
     if not cmd:
@@ -151,42 +168,64 @@ def run_test_gate(repo_root: str, label: str = "Quality Gate") -> str:
     # [feat--parallel-session-closeout] REQ-8: one run per completion; a green run on the
     # same tree (Along state and KB projections aside) is reused.
     tree = testruns.tree_hash(repo_root)
-    reused = testruns.green_run_for(repo_root, tree)
+    reused = testruns.green_run_for(repo_root, tree, mode=mode, scope=scope)
     if reused:
         print(f"-> [{label}] Tests passed on this tree at {reused.get('ts')} ({reused.get('source')}); "
               "not running them again.")
         return TESTS_PASSED
 
-    print(f"-> [{label}] Running automated tests: {' '.join(cmd)}")
-    # No anomaly classification: a failing suite prints fixture signatures such as
-    # "bad signature" [bug--breaker-trips-on-test-output].
-    res = proc.run_capture(cmd, cwd=repo_root)
-    output = res.stdout + "\n" + res.stderr
-    executed = lifecycle.tests_ran(cmd, output, repo_root) if res.ok else None
-    passed = res.ok and executed != 0
-    testruns.record_run(repo_root, passed, tree, label)
-    session.trace_test_run(repo_root, passed, label)
-    if passed:
-        print(f"-> [{label}] All tests passed successfully.")
-        return TESTS_PASSED
+    tmp_files_path = None
+    try:
+        extra_env = {
+            "ALONG_TEST_MODE": mode,
+            "ALONG_TEST_SCOPE": scope,
+            "ALONG_ATTRIBUTED_FILES": "",
+        }
+        if mode == "affected" and files:
+            fd, tmp_files_path = tempfile.mkstemp(prefix="along-attributed-", suffix=".txt")
+            with os.fdopen(fd, "w", encoding="utf-8", newline="\n") as h:
+                for p in files:
+                    abs_p = p if os.path.isabs(p) else os.path.join(repo_root, p)
+                    h.write(repo.normalize_posix(repo.canonical_relpath(abs_p, repo_root)) + "\n")
+            extra_env["ALONG_ATTRIBUTED_FILES"] = tmp_files_path
 
-    if res.ok:
-        print(f"[Error] {label}: {' '.join(cmd)} exited 0 but executed no tests: nothing is verified. "
-              "Point .along/scripts/test.py at the tests, or set verify.tests = \"none\".", file=sys.stderr)
-        return TESTS_NONE_EXECUTED
-    detail = verify.misconfiguration(output, res.returncode)
-    if detail:
-        print(f"[Error] {label}: {verify.misconfiguration_message(detail)}", file=sys.stderr)
-    else:
-        print(f"[Error] {label}: automated tests failed.\n", file=sys.stderr)
-        note = testruns.baseline_note(repo_root)
-        if note:
-            print(note, file=sys.stderr)
-    if res.stdout:
-        print(res.stdout, file=sys.stderr)
-    if res.stderr:
-        print(res.stderr, file=sys.stderr)
-    return TESTS_MISCONFIGURED if detail else TESTS_FAILED
+        hook_env = proc.child_env(extra=extra_env)
+        print(f"-> [{label}] Running automated tests: {' '.join(cmd)}")
+        # No anomaly classification: a failing suite prints fixture signatures such as
+        # "bad signature" [bug--breaker-trips-on-test-output].
+        res = proc.run_capture(cmd, cwd=repo_root, env=hook_env)
+        output = res.stdout + "\n" + res.stderr
+        executed = lifecycle.tests_ran(cmd, output, repo_root) if res.ok else None
+        passed = res.ok and executed != 0
+        testruns.record_run(repo_root, passed, tree, label, mode=mode, scope=scope)
+        session.trace_test_run(repo_root, passed, label)
+        if passed:
+            print(f"-> [{label}] All tests passed successfully.")
+            return TESTS_PASSED
+
+        if res.ok:
+            print(f"[Error] {label}: {' '.join(cmd)} exited 0 but executed no tests: nothing is verified. "
+                  "Point .along/scripts/test.py at the tests, or set verify.tests = \"none\".", file=sys.stderr)
+            return TESTS_NONE_EXECUTED
+        detail = verify.misconfiguration(output, res.returncode)
+        if detail:
+            print(f"[Error] {label}: {verify.misconfiguration_message(detail)}", file=sys.stderr)
+        else:
+            print(f"[Error] {label}: automated tests failed.\n", file=sys.stderr)
+            note = testruns.baseline_note(repo_root)
+            if note:
+                print(note, file=sys.stderr)
+        if res.stdout:
+            print(res.stdout, file=sys.stderr)
+        if res.stderr:
+            print(res.stderr, file=sys.stderr)
+        return TESTS_MISCONFIGURED if detail else TESTS_FAILED
+    finally:
+        if tmp_files_path and os.path.exists(tmp_files_path):
+            try:
+                os.unlink(tmp_files_path)
+            except OSError:
+                pass
 
 
 def link_integrity_gate(repo_root: str, label: str = "Quality Gate", strict: bool = True) -> bool:

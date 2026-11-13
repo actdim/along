@@ -1237,7 +1237,12 @@ def execute_wrap(
         else:
             wt_before = set(repo.working_tree_changes(repo_root) or [])
             tree_before = testruns.tree_hash(repo_root)
-            outcome = gates.run_test_gate(repo_root, label="Wrap Quality Gate")
+            outcome = gates.run_test_gate(
+                repo_root,
+                label="Wrap Quality Gate",
+                slug=clean_slug,
+                files=sorted(combined_changes),
+            )
             wt_after = set(repo.working_tree_changes(repo_root) or [])
             tree_after = testruns.tree_hash(repo_root)
             if tree_before is not None and tree_after is not None and tree_after != tree_before:

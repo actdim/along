@@ -300,6 +300,9 @@ def get_issue_summary(repo_root: str, slug: str) -> Optional[Dict[str, Any]]:
     except OSError:
         fm, body = iss["frontmatter"], ""
 
+    from .. import verify as verify_mod
+    eff_policy = verify_mod.load_effective_policy(repo_root, iss["slug"])
+
     return {
         "slug": iss["slug"],
         "type": iss["type"],
@@ -315,6 +318,8 @@ def get_issue_summary(repo_root: str, slug: str) -> Optional[Dict[str, Any]]:
         "blocked_by": fm.get("blocked_by", []),
         "related": fm.get("related", []),
         "requires": fm.get("requires"),
+        "verify": fm.get("verify"),
+        "verify_effective": eff_policy.describe(),
         "file_path": repo.safe_relpath(fpath, repo_root),
         "body": body.strip(),
     }
