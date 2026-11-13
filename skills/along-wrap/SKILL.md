@@ -33,7 +33,7 @@ along wrap <slug> -s superseded --no-decisions
 - `-m`, `--summary "<text>"`: One-line summary appended to `.along/HISTORY.md` (optional; falls back to issue title if omitted).
 - `--dry-run`: Inspect planned actions without writing or moving files.
 - `-n`, `--no-verify`: Skip pre-flight automated tests. Requires `--reason "..."` (or `--force-reason`); where user messages are recorded, the test gate must have failed in this session and the user must have replied after the failure. The bypass is logged.
-- `--no-commit`: Skip automatic git commit of attributed files and wrap metadata (by default, `along wrap` automatically commits).
+- `--no-commit`: Skip automatic git commit of attributed files and wrap metadata (by default, `along wrap` automatically commits). Use when keeping local experiment files without auto-committing them or preparing custom commits.
 - `-a`, `--agent "<name>"`: Explicit agent name (defaults to detected agent).
 
 All checks (team steps, plan, tests, zero-byte audit, entity graph) run before the first write: a failed wrap leaves the tree unchanged. KB sync runs after the transaction commits and only warns on failure.
@@ -63,7 +63,7 @@ All checks (team steps, plan, tests, zero-byte audit, entity graph) run before t
 4. **Execute Transactional Wrap**:
    - Run: `along wrap <slug> --no-decisions --summary "Concise summary of work"` (or `--decisions ADR-...`)
    - The engine automatically:
-     - Runs pre-flight automated tests (halts if failing, leaving repo untouched).
+     - Runs pre-flight automated tests under the effective verify policy (approved issue snapshot > repo config). Reuses green runs on matching tree and coverage; if a test run dirties the tree, prints a hermeticity warning naming dirty paths. Halts if failing, leaving repo untouched.
      - Audits working tree for zero-byte corrupt files: a tracked file truncated to 0 bytes or an empty file an agent session edited halts the wrap; other empty files only warn.
      - Sets `status: done`, `completed: YYYY-MM-DD`, `updated: YYYY-MM-DD` in issue front-matter.
      - Adjusts sibling issue markdown links and relocates issue file to `.along/ISSUES/done/`.

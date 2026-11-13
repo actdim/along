@@ -12,6 +12,7 @@ if __name__ == "__main__":
         "Run: python .along/scripts/test.py"
     )
 
+import json
 import os
 import re
 import shutil
@@ -565,6 +566,64 @@ def handle_doctor_command(repo_root: str, args: List[str]):
         warnings += 1
     else:
         print(f"[OK] Verify: {policy.describe()}")
+
+    # Validate verify.scopes in .along/config.json
+    cfg_path = os.path.join(repo.state_dir(repo_root), "config.json")
+    try:
+        cfg_data = json.loads(textio.read_text(cfg_path)) if os.path.isfile(cfg_path) else {}
+    except (OSError, ValueError):
+        cfg_data = {}
+    verify_block = cfg_data.get("verify") if isinstance(cfg_data, dict) else None
+    if isinstance(verify_block, dict) and "scopes" in verify_block:
+        scopes = verify_block.get("scopes")
+        if not isinstance(scopes, dict):
+            print("[FAIL] verify.scopes in .along/config.json must be a mapping of scope names to lists of globs.")
+            errors += 1
+        else:
+            for sname, sglobs in scopes.items():
+                if not isinstance(sname, str) or not sname.strip():
+                    print(f"[FAIL] verify.scopes has invalid scope name: {sname!r}")
+                    errors += 1
+                elif not isinstance(sglobs, list) or not sglobs:
+                    print(f"[FAIL] verify.scopes.{sname} must be a non-empty list of glob patterns.")
+                    errors += 1
+                else:
+                    for g in sglobs:
+                        if not isinstance(g, str) or not g.strip():
+                            print(f"[FAIL] verify.scopes.{sname} contains an empty or non-string glob pattern: {g!r}")
+                            errors += 1
+
+    # Validate ignore_paths in gates.yaml
+    raw_ignore = verify.test_gate_option(repo_root, "ignore_paths", default=None)
+    if raw_ignore is not None:
+        if not isinstance(raw_ignore, list):
+            print("[FAIL] ignore_paths under test_before_stop in gates.yaml must be a list of non-empty strings.")
+            errors += 1
+        else:
+            for item in raw_ignore:
+                if not isinstance(item, str) or not item.strip():
+                    print(f"[FAIL] ignore_paths under test_before_stop contains an empty or non-string entry: {item!r}")
+                    errors += 1
+
+    # Open issues with verify blocks
+    open_issues = entities.scan_issues(repo_root, include_done=False)
+    for iss in open_issues:
+        fm = iss.get("frontmatter") or {}
+        v_block = fm.get("verify")
+        if not v_block:
+            continue
+        slug = iss.get("slug") or ""
+        itype = iss.get("type") or fm.get("type")
+        pol = verify.policy_from_block(v_block, source="issue", issue=slug)
+        iss_problems = verify.policy_problems(repo_root, pol, issue_type=itype)
+        if iss_problems:
+            print(f"[FAIL] Issue '{slug}' verify policy invalid: " + "; ".join(iss_problems))
+            errors += 1
+        else:
+            snapshot = session.approved_verify_snapshot(repo_root, slug)
+            if snapshot is None:
+                print(f"[WARN] Issue '{slug}' has verify policy '{pol.describe()}' not yet approved in plan.")
+                warnings += 1
 
     # Gate friction
     from alongkit import gatestats

@@ -107,7 +107,7 @@ Also, when relevant: `.along/VISION.md`, `.along/GLOSSARY.md`. These reflect the
 
 When a stage or session completes, agents MUST execute in this order:
 <!-- profile: !light -->
-1. [ ] **Tests** [gate: test_before_stop]: Run via `/along-test` with quiet flags. Zero failures caused by this issue. On a failure the test gate prints a `[Baseline]` line. Pre-existing failures (red at HEAD, code the issue did not touch): halt, report the exact failures to the user, file an issue, and only with their agreement bypass: `along commit -n --reason "pre-existing failure in <suite>, tracked in <key>"`, `along wrap <slug> -n --reason "..."`. Never edit tests or fixtures to make them pass unless the issue is about them.
+1. [ ] **Tests** [gate: test_before_stop]: Run via `/along-test` with quiet flags. Zero failures caused by this issue. Tests follow the effective verify policy (issue-level approved snapshot > repo config); `none` is a recorded, legitimate skip, not a bypass. On a failure the test gate prints a `[Baseline]` line. Pre-existing failures (red at HEAD, code the issue did not touch): halt, report the exact failures to the user, file an issue, and only with their agreement bypass: `along commit -n --reason "pre-existing failure in <suite>, tracked in <key>"`, `along wrap <slug> -n --reason "..."`. Never edit tests or fixtures to make them pass unless the issue is about them.
 2. [ ] **File Integrity**: `git status -u` - all new/modified files non-zero size, no empty placeholders.
 3. [ ] **Code Review**: Inspect diff for side effects, verify REQ-N coverage, evaluate blast radius via `along graph-impact` (or static search), verify architectural decision compliance.
 4. [ ] **Entity Reconciliation**: Close issues (`done` + move to `done/`), update milestones, record the `## Outcome` of a spike. [gate: unresolved_gate_denial]: every tool call a gate denied is redone within the gate's rules or disclosed (`along gates denials`, `along gates ack <id> --note "..."`); `along wrap` / `along issue done` refuse until the user has replied to a disclosure (`--force-reason` after their reply).
@@ -118,7 +118,7 @@ When a stage or session completes, agents MUST execute in this order:
 9. [ ] **Compaction**: Advise user to run `/compact`.
 <!-- /profile -->
 <!-- profile: light -->
-1. [ ] **Tests** [gate: test_before_stop]: Run via `/along-test` with quiet flags. Zero failures caused by this issue. On a failure the test gate prints a `[Baseline]` line. Pre-existing failures (red at HEAD, code the issue did not touch): halt, report the exact failures to the user, file an issue, and only with their agreement bypass: `along commit -n --reason "pre-existing failure in <suite>, tracked in <key>"`, `along wrap <slug> -n --reason "..."`. Never edit tests or fixtures to make them pass unless the issue is about them.
+1. [ ] **Tests** [gate: test_before_stop]: Run via `/along-test` with quiet flags. Zero failures caused by this issue. Tests follow the effective verify policy (issue-level approved snapshot > repo config); `none` is a recorded, legitimate skip, not a bypass. On a failure the test gate prints a `[Baseline]` line. Pre-existing failures (red at HEAD, code the issue did not touch): halt, report the exact failures to the user, file an issue, and only with their agreement bypass: `along commit -n --reason "pre-existing failure in <suite>, tracked in <key>"`, `along wrap <slug> -n --reason "..."`. Never edit tests or fixtures to make them pass unless the issue is about them.
 2. [ ] **File Integrity**: `git status -u` - all new/modified files non-zero size, no empty placeholders.
 3. [ ] **Entity Reconciliation**: Close issues (`done` + move to `done/`), update milestones, record the `## Outcome` of a spike. Settle gate denials first (`along gates denials`).
 4. [ ] **Session Log & Wrap** [gate: wrap_before_stop]: `along wrap <slug>` records session log and appends to `.along/HISTORY.md`.
@@ -162,3 +162,13 @@ When a stage or session completes, agents MUST execute in this order:
 - Windows-safe filenames: dates `YYYY-MM-DD`, date first.
 - Keep `ISSUES.md` compact: `along context-budget --check` enforces the limit.
 - Never write secrets into tracked files.
+
+## Testing Invariants
+
+- **Levels and Precedence**: Verify policy is declared at repository level (`.along/config.json`: `tests: required | none`) and optionally overridden at issue level (`tests: required | affected | scoped | none`). Effective policy precedence: approved issue plan snapshot > repository config > default (`required`).
+- **Plan Approval Snapshot & Drift**: The issue-level verify block takes effect ONLY through the plan-approval snapshot stored in `.along/.session/plan-approvals.jsonl`. Raw edits to issue front matter after approval are ignored with a drift warning; re-approve the plan to update the policy.
+- **Environment Variables**: The test runner contract injects `ALONG_TEST_MODE` (`full | affected | scoped`), `ALONG_TEST_SCOPE` (name from `verify.scopes`), and `ALONG_ATTRIBUTED_FILES` (path to newline-delimited attributed files list).
+- **Run Coverage & Reuse**: A green `full` run satisfies any subsequent test request on the same tree. An `affected` or `scoped` run satisfies only requests matching the exact mode and scope. Partial runs never satisfy a `full` request.
+- **Manual CLI Flags**: `along test` runs under the effective policy by default. Agents can explicitly pass `--full`, `--affected`, or `--scope <name>` to override mode for a run.
+- **Hermeticity & Dirty Tree Warning**: Test suites must not mutate the tracked repository tree. If a test run dirties the tree, the Wrap Quality Gate prints a hermeticity warning naming dirty paths. Add generated artifacts to `.gitignore` or `ignore_paths` under `test_before_stop` in `.along/rules/gates.yaml`.
+- **Local Experiments**: Use `along wrap <slug> --no-commit` when keeping local experiment files without auto-committing them.

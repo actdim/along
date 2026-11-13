@@ -256,17 +256,52 @@ When an AI agent runs `/along-test` or `/along-build` in a repository that lacks
 
 ### Test Policy (`verify`)
 
-The wrap / commit / bump test gate follows the `verify` block of `.along/config.json`:
+The wrap / commit / bump test gate follows the effective `verify` policy resolved for the active context and issue:
 
 ```json
-{ "verify": { "tests": "none", "reason": "prototype, no test harness yet", "tracked_by": "debt--add-test-harness", "checks": ["build", "lint"] } }
+{
+  "verify": {
+    "tests": "required",
+    "scopes": {
+      "api": ["src/api/**", "tests/api/**"],
+      "web": ["src/web/**", "tests/web/**"]
+    }
+  }
+}
 ```
 
-- `tests: "required"` (the default): tests must actually run. A run that exits `0` without executing tests fails; a hook that cannot run (missing npm script, runner not found, runner config missing) is reported as `Test hook misconfigured: ... Fix .along/scripts/test.py or set verify.tests = "none"`.
-- `tests: "none"`: needs a `reason` and a `tracked_by` key of an existing issue (resolved across contexts), so the missing tests stay on the board. The declared `checks` (`build`, `lint`, `typecheck`) run instead via `.along/scripts/<check>.py`; `build` may fall back to the detected build command.
-- No declared policy and no test command keeps the old skip; a declared `required` with no test command is misconfigured.
+#### Policy Levels & Precedence
+
+1. **Repository Level** (`.along/config.json`):
+   - `tests: "required"` (default): automated tests must run and exit code 0.
+   - `tests: "none"`: requires `reason` and `tracked_by` pointing to an existing issue. Declared `checks` (`build`, `lint`, `typecheck`) run instead.
+   - `scopes`: mapping of scope names to path globs for targeted test runs.
+2. **Issue Level** (YAML frontmatter in `.along/ISSUES/<type>--<slug>.md`):
+   - `verify: {tests: required | affected | scoped | none, scope: "<name>", reason: "...", tracked_by: "...", checks: []}`
+   - `affected`: runs tests targeting attributed files. Falls back to `full` if no attributed files exist.
+   - `scoped`: runs tests for the named scope declared in repository `verify.scopes`.
+   - `none`: requires `reason` and `tracked_by` (except spikes, which are exempt from `tracked_by`).
+   - Every mode other than `required` requires `reason`.
+3. **Plan Approval Snapshot**:
+   - The issue-level verify policy takes effect **only** when snapshotted during `along plan approve`.
+   - Manual edits to the issue frontmatter after plan approval trigger a drift warning; the gate uses the approved snapshot until the plan is re-approved.
+   - Effective precedence: approved issue plan snapshot > repository config > default (`required`).
+
+#### Runner Contract & Scoping
+
+The test runner passes execution context to `.along/scripts/test.py` via environment variables:
+- `ALONG_TEST_MODE`: `full | affected | scoped`
+- `ALONG_TEST_SCOPE`: scope name from `verify.scopes`
+- `ALONG_ATTRIBUTED_FILES`: path to file listing repo-relative paths of modified files
+
+#### Target-Repository Guidance
+
+- **Choosing Mode**: Use `required` for broad changes; use `scoped` for isolated modular components declared in `verify.scopes`; use `affected` for targeted incremental updates; use `none` on spikes or early prototypes tracked by debt issues.
+- **Scoped `test.py`**: In `.along/scripts/test.py`, inspect `os.environ.get("ALONG_TEST_MODE")` and dispatch to targeted runners or test file paths.
+- **AGENTS.md Project Specifics**: Document available test scopes and runner commands in the project specifics section of `AGENTS.md`.
+
 - `along commit` skips the test gate when the change touches only `*.md`, `docs/**`, `.along/**` (not `.along/scripts/`), `llms*.txt` or a version-only `package.json` change.
-- `along status`, `along doctor` and the dashboard metrics (`verify_policy`) show the policy line, e.g. `tests: none - <reason> (<tracked_by>)`.
+- `along status`, `along doctor` and dashboard metrics (`verify_policy`) show the effective policy line, e.g. `tests: scoped (api) - <reason> (issue feat--slug)`.
 
 ### Typography: checking and repairing
 

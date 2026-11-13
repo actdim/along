@@ -267,6 +267,31 @@ class TestIssueVerifyPolicy(unittest.TestCase):
         self.assertNotIn("api", argv)
         self.assertEqual(argv, ["--extra-flag", "val"])
 
+    def test_05_doctor_detects_invalid_scope_and_unapproved_verify(self):
+        along_exec = os.path.join(REPO_ROOT, "scripts", "along_exec.py")
+        bad_issue_path = os.path.join(self.root, ".along", "ISSUES", "feat--bad-scope.md")
+        textio.write_text(
+            bad_issue_path,
+            "---\nprotocol: along\nprotocol_version: \"4.8.1\"\nslug: bad-scope\ntype: feat\nstatus: open\n"
+            "priority: medium\ncreated: 2026-11-13\nupdated: 2026-11-13\nagent: antigravity\ntags: []\n"
+            "blocked_by: []\nrelated: []\nverify: {tests: scoped, scope: unknown-scope, reason: \"test\"}\n---\n\n"
+            "# Bad Scope\n\nProblem.\n\n## Requirements\n- REQ-1\n\n## Acceptance Criteria\n- [ ] Crit\n",
+        )
+        res = proc.run_capture([sys.executable, along_exec, "doctor"], cwd=self.root)
+        self.assertIn("[FAIL] Issue 'bad-scope' verify policy invalid", res.stdout)
+        self.assertIn("unknown-scope", res.stdout)
+
+        textio.write_text(
+            bad_issue_path,
+            "---\nprotocol: along\nprotocol_version: \"4.8.1\"\nslug: bad-scope\ntype: feat\nstatus: open\n"
+            "priority: medium\ncreated: 2026-11-13\nupdated: 2026-11-13\nagent: antigravity\ntags: []\n"
+            "blocked_by: []\nrelated: []\nverify: {tests: scoped, scope: api, reason: \"test\"}\n---\n\n"
+            "# Bad Scope\n\nProblem.\n\n## Requirements\n- REQ-1\n\n## Acceptance Criteria\n- [ ] Crit\n",
+        )
+        res = proc.run_capture([sys.executable, along_exec, "doctor"], cwd=self.root)
+        self.assertIn("[WARN] Issue 'bad-scope' has verify policy", res.stdout)
+        self.assertIn("not yet approved in plan", res.stdout)
+
 
 if __name__ == "__main__":
     unittest.main()

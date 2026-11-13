@@ -257,7 +257,7 @@ MIT License. See [LICENSE](./LICENSE) for details.
 This repo carries its own agent context, provider-agnostically. Follow it every session, whatever tool you are. This is the core; procedures (completion checklist, doc routing, merges, along-team, tool-use rules) live in `.along/PROTOCOL.md` - pull the section you need via `/along-kb-search`. A gate's error message carries its detail.
 
 ## Where state lives
-- **Nearest wins**: any folder may carry its own `AGENTS.md` + `.along/`; use the NEAREST for the area you work in. Nearest `.along/` > higher-level `.along/` > global config. Only a nested `.git` or a user-run `along init` makes a subproject.
+- **Nearest wins**: any folder may carry `AGENTS.md` + `.along/`; use NEAREST for your working area: nearest `.along/` > parent `.along/` > global config. A nested `.git` or `along init` makes a subproject.
 - **Read at session start** (not auto-loaded): `.along/ISSUES.md`, `.along/CONSTRAINTS.md`, your issue `.along/ISSUES/<type>--<slug>.md`; when relevant `.along/VISION.md`, `.along/GLOSSARY.md`. They reflect the state WHEN WRITTEN - verify named files/APIs/flags against the code.
 - **Entities**: issues (`feat|bug|debt|task|docs|spike`), ADRs (`.along/DECISIONS/`, never edited - superseded), milestones, sessions. Keys `<type>--<slug>`, referenced by key, never by path; schemas in `docs/topic--domain-model.md`. Create them from intent unprompted (build/fix -> issue, blocked -> issue tagged `risk`, compare -> `spike` issue, release -> milestone).
 - **Projections** (`ISSUES.md`, `DECISIONS.md`, `CONSTRAINTS.md`, `docs/INDEX.md`) are compiled: on conflict take either side and re-run the sync.
@@ -283,7 +283,7 @@ Runtime hooks enforce these where installed; elsewhere (`along doctor` shows the
 - [gate: untracked-exports] - dashboards and `.along/diagnostics/` stay out of Git.
 - [gate: cli_safety] - file content via file tools, never heredocs or `python -c`; no global installs.
 - [gate: team-step-active] [gate: team-reviews-before-stop] - an `along-team` blackboard holds you to its step loop.
-- [gate: test_before_stop] [gate: wrap_before_stop] [gate: projection_sync_before_stop] - before stopping: tests run after your last edit, session wrapped, projections synced.
+- [gate: test_before_stop] [gate: wrap_before_stop] [gate: projection_sync_before_stop] - before stopping: tests (per the approved verify policy) run after your last edit, session wrapped, projections synced.
 - [gate: unresolved_gate_denial] - a denied tool call is redone within the gate's rules or told to the user (`along gates ack`), never dropped silently; closing waits for their reply.
 - Commit-time (`along lint`, pre-commit + CI): ASCII typography, fence languages, relative links, no `docs/` -> `.along/` links, Windows-safe names, no secrets, no stubs.
 - Bypass is the user's call: `-n`, `--force-reason`, `scratch fallback` need `--reason` after their reply; recorded in `along gates stats`.
@@ -1476,7 +1476,13 @@ Executes automated test suites using quiet, token-efficient flags.
 - **Auto-Detection Fallback**: Detects `pytest` (`pytest -q`), `npm` (`npm test`, only when `package.json` has a `test` script; no `--silent` is added), `dotnet` (`dotnet test <solution or test project> -v q`, only with a `*.sln` / `*.slnx` or a test project referencing `Microsoft.NET.Test.Sdk` / `<IsTestProject>`; a library project alone detects nothing), `cargo` (`cargo test -q`).
 - **Enclosing hook**: a nested context without its own hook runs the nearest enclosing context's hook of the same git repository instead of synthesizing one; a folder with only an `AGENTS.md` uses the enclosing context.
 - **No tests is not a pass**: when the runner output shows zero executed tests (`Ran 0 tests`, `no tests ran`, `Total tests: 0`, `No test is available`, `No test files found`, ...), `along test` prints `FAIL: ... executed no tests` and exits `5`, and the run is not recorded green. Output that says nothing about test counts is judged by the exit code alone. Executed-test counting strips ANSI colour codes first, and `npm test` resolves to the `package.json` `test` script for runner detection.
-- **Test policy**: the `verify` block of `.along/config.json` (`{"tests": "required" | "none", "reason": "", "tracked_by": "", "checks": []}`) decides what the wrap / commit / bump test gate demands. `required` (the default): tests must actually run; a run that exits `0` without executing tests fails, and a hook that cannot run (missing npm script, runner not found, runner config missing) is reported as `Test hook misconfigured: ... Fix .along/scripts/test.py or set verify.tests = "none"`. `none`: needs a `reason` and a `tracked_by` issue key that exists (resolved across contexts), and runs the declared `checks` (`build`, `lint`, `typecheck`) via `.along/scripts/<check>.py` instead (`build` may use the detected build command). With no declared policy and no test command the gate is skipped as before; a declared `required` with no test command is misconfigured. See [Setup and Workflow](./topic--setup-and-workflow.md).
+- **Test policy & scoping flags**:
+  - By default, `along test` runs under the effective verify policy of the bound issue (approved plan snapshot > repository config).
+  - `--full`: Forces running the full test suite.
+  - `--affected`: Runs tests targeting attributed files in the active session.
+  - `--scope <name>`: Runs a named test scope declared in `.along/config.json` under `verify.scopes`.
+  - Flags are consumed by Along and stripped from the hook's argv. Environment variables `ALONG_TEST_MODE`, `ALONG_TEST_SCOPE`, and `ALONG_ATTRIBUTED_FILES` are passed to `.along/scripts/test.py`.
+  - The repository `verify` block of `.along/config.json` (`{"tests": "required" | "none", "reason": "", "tracked_by": "", "checks": []}`) sets the repository default. `required`: tests must actually run. `none`: requires `reason` and `tracked_by` issue key. See [Setup and Workflow](./topic--setup-and-workflow.md).
 - **Distilled Output** (`along test`, `along build`): When stdout is not a terminal (an agent or a pipe reads it), the output is distilled by `alongkit.distill`. A pass becomes `PASS: <cmd> completed successfully (code 0, <s>s)` plus the runner summary (`Ran N tests`, `OK`). A failure keeps the failure blocks: tracebacks, unittest `FAIL:` / `ERROR:` sections, pytest `E` lines, compiler `error:` lines, panics. Resolver chatter, deprecation notices, progress redraws and passing-test lines are dropped. The result is capped at 50 lines / 2 KB, with the runner summary always kept. The raw output is written to `.along/artifacts/lifecycle/<action>.log` (gitignored, overwritten per run). In a terminal the output streams as before.
   - `--raw` streams the full output, `--distill` forces distillation. Both flags are consumed by Along and not passed on; `--verbose` is left alone because pytest and cargo use it. `ALONG_OUTPUT=raw|distill` sets the mode for a whole session. `along dev` / `along debug` always stream.
 - **Usage**:
@@ -1554,7 +1560,7 @@ Validates repository compliance with the Along protocol. Audits `.along/` direct
 Manages atomic issue files in `.along/ISSUES/` and recompiles the active board projection (`.along/ISSUES.md`).
 - **Subcommands**:
   - `along issue create <type> <slug> --title "Title" [options...]`: Creates a new issue file. Valid types: `feat`, `bug`, `debt`, `task`, `docs`, `spike`. A `spike` is scaffolded with an `## Outcome` section, filled before it is closed as `done`. A risk or blocker is an ordinary issue (usually `debt`) tagged `risk` with a `## Mitigation` section.
-    - Options: `--priority {high,medium,low,critical}`, `--tags "t1,t2"`, `--agent <name>`, `--milestone <name>`.
+    - Options: `--priority {high,medium,low,critical}`, `--tags "t1,t2"`, `--agent <name>`, `--milestone <name>`, `--verify-tests {required,affected,scoped,none}`, `--verify-scope <name>`, `--verify-reason "<text>"`, `--verify-tracked-by <key>`, `--verify-checks <c1,c2>`.
   - `along issue update <slug> [options...]` (alias: `along issue edit`): Updates frontmatter metadata of an existing issue, preserving YAML comments and ordering.
     - Options:
       - `--milestone <name>`, `-m <name>`: Assigns or reassigns issue to a milestone. Supports fuzzy matching (exact slug, version prefix such as `v4.0` or `4.0`, or unambiguous substring). Use `"none"`, `"null"`, or `""` to unassign. Automatically triggers bidirectional milestone synchronization.
@@ -1562,8 +1568,9 @@ Manages atomic issue files in `.along/ISSUES/` and recompiles the active board p
       - `--status <s>`, `-s <s>`: Updates status (`open`, `in-progress`, `blocked`, `done`, `superseded`, `cancelled`, `duplicate`).
       - `--tags <t1,t2>`: Replaces tags with a comma-separated list.
       - `--title <title>`, `-t <title>`: Updates the issue title in frontmatter.
+      - `--verify-tests {required,affected,scoped,none}`, `--verify-scope <name>`, `--verify-reason "<text>"`, `--verify-tracked-by <key>`, `--verify-checks <c1,c2>`, `--verify-clear`: Updates or clears the issue verify policy block.
     - Side-effects: Automatically recompiles `.along/ISSUES.md` board projection and synchronizes affected milestones.
-  - `along issue show <slug> [--json]` (alias: `along issue get`): Displays detailed summary of an issue, including frontmatter metadata, priority, status, milestone, and body excerpt.
+  - `along issue show <slug> [--json]` (alias: `along issue get`): Displays detailed summary of an issue, including frontmatter metadata, priority, status, milestone, body excerpt, `verify` (frontmatter block) and `verify_effective` (effective policy description).
     - Options: `--json` outputs structured JSON payload.
   - `along issue done <slug> [options...]`: Marks the issue as completed, records `completed: YYYY-MM-DD`, and moves the file into `.along/ISSUES/done/`. In the same transaction the issue's blackboard (if any) is archived into today's session log `.along/SESSIONS/<YYYY>/<date>--<slug>.md` and, with status `done`, the key is added to its `issues_completed` (the log is created without a blackboard too); the blackboard is purged after the commit. See [Session Lifecycle](./topic--session-lifecycle.md).
     - Options: `--status {done,superseded,cancelled,duplicate}`, `--superseded-by <slug>`, `--duplicate-of <slug>`, `--force-reason "..."`.
@@ -1856,7 +1863,7 @@ Conventional Commits generator with active issue binding and typography validati
   - `-a, --all` / `--paths <file>...`: Stage the whole tree / only these paths. Prefer `--paths` when other sessions have uncommitted work in the tree.
   - `-p, --push`: Push after the commit.
 - **Plan gate**: commits (`along commit`, `git commit`) are not held by `require_plan_approval`; it judges file-tool targets and, at turn end, the files the turn changed (see [Runtime Hooks & Gates](./topic--runtime-hooks-and-gates.md)).
-- **Test reuse**: the pre-commit test gate (also of `along wrap` and `along bump`) skips the suite when the last run on the same working tree was green (tree hash without `.along/` state, KB projections and `__pycache__`; `.along/scripts/` counts). `along test` always runs. Runs are kept in `.along/diagnostics/test_runs.json`.
+- **Test reuse**: the pre-commit test gate (also of `along wrap` and `along bump`) skips the suite when a recorded green run on the same working tree covers the effective verify policy (full covers all; scoped/affected cover matching mode and scope). Partial runs never satisfy full. Runs are kept in `.along/diagnostics/test_runs.json`.
 - **Docs-only skip**: `along commit` skips the test gate when the change touches only `*.md`, `docs/**`, `.along/**` (not `.along/scripts/`), `llms*.txt` or a version-only `package.json` change.
 - **Usage**:
   ```bash
@@ -2280,7 +2287,7 @@ The catalogue defines 33 gates; the ones below are described here (the team, doc
 5. `projection_protection`: Intercepts file writes to derived projections (`.along/ISSUES.md`, `docs/INDEX.md`, `DECISIONS.md`).
 6. `typography` (`enforcement: [git, ci]`): Enforces ASCII typography at commit time (no em-dashes, curly quotes, guillemets, ellipsis glyphs, or NBSP); no runtime hook.
 7. `require_active_issue`: Stateful predicate requiring an active `in-progress` issue in `.along/ISSUES/` bound to the current session. It never fires on Along state under any `.along/` (except `.along/scripts/`, which is code). Its `exclude_paths` (`docs/**`, `CHANGELOG.md`) match relative to the context owning the file, so a subproject's own state and docs pass like the root's. A session bound to a subproject issue may also edit inside that issue's `write_scope` / `allowed_roots` (`along start --write-scope/--allow-root`, relative to the issue's context).
-8. `test_before_stop`: Intercepts session termination (`Stop`) to ensure `/along-test` or test suites ran cleanly if code was modified. Passes immediately when the working tree matches a recorded green run (`alongkit.testruns`). Documentation edits re-arm it only with the option `count_docs: true`, where doc-only edits can be satisfied by scoped tests declared under `doc_tests: [...]` (`along test --doc`). Built-in test-inert paths (`.vscode/**`, `.idea/**`, `*.code-workspace`, `.editorconfig`, `.claude/**`, `.codex/**`, `.cursor/**`) and patterns declared under `ignore_paths` do not arm the gate. On rejection, the gate message lists the modified source files.
+8. `test_before_stop`: Intercepts session termination (`Stop`) to ensure `/along-test` or test suites ran cleanly if code was modified. Passes immediately when the working tree matches a recorded green run (`alongkit.testruns`) covering the effective verify policy (full covers all; scoped/affected require matching mode and scope). If tests ran but did not cover the approved verify policy, the gate remains armed and states the mismatch. Documentation edits re-arm it only with the option `count_docs: true`, where doc-only edits can be satisfied by scoped tests declared under `doc_tests: [...]` (`along test --doc`). Built-in test-inert paths (`.vscode/**`, `.idea/**`, `*.code-workspace`, `.editorconfig`, `.claude/**`, `.codex/**`, `.cursor/**`) and patterns declared under `ignore_paths` do not arm the gate. On rejection, the gate message lists the modified source files.
 9. `wrap_before_stop`: Intercepts session termination (`Stop`) to ensure a session log exists if an issue was marked done.
 10. `projection_sync_before_stop`: At session termination (`Stop`) recompiles a stale `ISSUES.md` itself (content compared with the compiled board); it never blocks.
 11. `subproject_boundary`: Enforces context localization for subprojects with their own `.along/`, preventing subproject entities from leaking to workspace root `.along/`. A folder with only a package manifest is not a subproject.
@@ -4326,17 +4333,52 @@ When an AI agent runs `/along-test` or `/along-build` in a repository that lacks
 
 ### Test Policy (`verify`)
 
-The wrap / commit / bump test gate follows the `verify` block of `.along/config.json`:
+The wrap / commit / bump test gate follows the effective `verify` policy resolved for the active context and issue:
 
 ```json
-{ "verify": { "tests": "none", "reason": "prototype, no test harness yet", "tracked_by": "debt--add-test-harness", "checks": ["build", "lint"] } }
+{
+  "verify": {
+    "tests": "required",
+    "scopes": {
+      "api": ["src/api/**", "tests/api/**"],
+      "web": ["src/web/**", "tests/web/**"]
+    }
+  }
+}
 ```
 
-- `tests: "required"` (the default): tests must actually run. A run that exits `0` without executing tests fails; a hook that cannot run (missing npm script, runner not found, runner config missing) is reported as `Test hook misconfigured: ... Fix .along/scripts/test.py or set verify.tests = "none"`.
-- `tests: "none"`: needs a `reason` and a `tracked_by` key of an existing issue (resolved across contexts), so the missing tests stay on the board. The declared `checks` (`build`, `lint`, `typecheck`) run instead via `.along/scripts/<check>.py`; `build` may fall back to the detected build command.
-- No declared policy and no test command keeps the old skip; a declared `required` with no test command is misconfigured.
+#### Policy Levels & Precedence
+
+1. **Repository Level** (`.along/config.json`):
+   - `tests: "required"` (default): automated tests must run and exit code 0.
+   - `tests: "none"`: requires `reason` and `tracked_by` pointing to an existing issue. Declared `checks` (`build`, `lint`, `typecheck`) run instead.
+   - `scopes`: mapping of scope names to path globs for targeted test runs.
+2. **Issue Level** (YAML frontmatter in `.along/ISSUES/<type>--<slug>.md`):
+   - `verify: {tests: required | affected | scoped | none, scope: "<name>", reason: "...", tracked_by: "...", checks: []}`
+   - `affected`: runs tests targeting attributed files. Falls back to `full` if no attributed files exist.
+   - `scoped`: runs tests for the named scope declared in repository `verify.scopes`.
+   - `none`: requires `reason` and `tracked_by` (except spikes, which are exempt from `tracked_by`).
+   - Every mode other than `required` requires `reason`.
+3. **Plan Approval Snapshot**:
+   - The issue-level verify policy takes effect **only** when snapshotted during `along plan approve`.
+   - Manual edits to the issue frontmatter after plan approval trigger a drift warning; the gate uses the approved snapshot until the plan is re-approved.
+   - Effective precedence: approved issue plan snapshot > repository config > default (`required`).
+
+#### Runner Contract & Scoping
+
+The test runner passes execution context to `.along/scripts/test.py` via environment variables:
+- `ALONG_TEST_MODE`: `full | affected | scoped`
+- `ALONG_TEST_SCOPE`: scope name from `verify.scopes`
+- `ALONG_ATTRIBUTED_FILES`: path to file listing repo-relative paths of modified files
+
+#### Target-Repository Guidance
+
+- **Choosing Mode**: Use `required` for broad changes; use `scoped` for isolated modular components declared in `verify.scopes`; use `affected` for targeted incremental updates; use `none` on spikes or early prototypes tracked by debt issues.
+- **Scoped `test.py`**: In `.along/scripts/test.py`, inspect `os.environ.get("ALONG_TEST_MODE")` and dispatch to targeted runners or test file paths.
+- **AGENTS.md Project Specifics**: Document available test scopes and runner commands in the project specifics section of `AGENTS.md`.
+
 - `along commit` skips the test gate when the change touches only `*.md`, `docs/**`, `.along/**` (not `.along/scripts/`), `llms*.txt` or a version-only `package.json` change.
-- `along status`, `along doctor` and the dashboard metrics (`verify_policy`) show the policy line, e.g. `tests: none - <reason> (<tracked_by>)`.
+- `along status`, `along doctor` and dashboard metrics (`verify_policy`) show the effective policy line, e.g. `tests: scoped (api) - <reason> (issue feat--slug)`.
 
 ### Typography: checking and repairing
 
