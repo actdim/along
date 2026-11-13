@@ -175,8 +175,10 @@ def along_hooks_registered(runtime: str, repo_root: Optional[str] = None) -> boo
         try:
             with open(path, "r", encoding="utf-8") as handle:
                 content = handle.read()
-                if runtime == "opencode" and ("AlongPlugin" in content or "along_hook" in content):
-                    return True
+                if runtime == "opencode":
+                    if ("along-gates" in content or "along_hook" in content) and "setup" in content:
+                        return True
+                    continue
                 if "along_hook" in content:
                     return True
         except OSError:

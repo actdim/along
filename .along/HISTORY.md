@@ -271,3 +271,4 @@ _Index of sessions (newest last). One line per session:_
 2026-11-10 - early-raw-runner-warning - antigravity - Emit early PreToolUse notice when a raw test runner is invoked in a repository with lifecycle test hook - [Session Log](./SESSIONS/2026/2026-11-10--early-raw-runner-warning.md)
 2026-11-10 - issue-drafts-lifecycle - antigravity - First-class untracked issue drafts with seamless start promotion, promotion command, and doctor hygiene - [Session Log](./SESSIONS/2026/2026-11-10--issue-drafts-lifecycle.md)
 2026-11-13 - opencode-runtime-integration - antigravity - feat: opencode runtime hooks integration and multi-subproject issue discovery - [Session Log](./SESSIONS/2026/2026-11-13--opencode-runtime-integration.md)
+2026-11-13 - opencode-runtime-v2-hardening - antigravity - fix(opencode): v2 plugin definition, complete lifecycle coverage and argument normalization - [Session Log](./SESSIONS/2026/2026-11-13--opencode-runtime-v2-hardening.md)

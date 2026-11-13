@@ -502,6 +502,7 @@ if ($hookTool) {
             'claude'      { $ClaudeHome }
             'codex'       { $CodexHome }
             'antigravity' { $AntigravityHome }
+            'opencode'    { $OpencodeHome }
             default       { $null }
         }
         if ($homeDir) {

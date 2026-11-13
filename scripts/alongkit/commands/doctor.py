@@ -37,7 +37,32 @@ def _doctor_runtime_checks(repo_root: str, errors: int, warnings: int) -> Tuple[
     else:
         beat = runtime.last_heartbeat(repo_root, agent)
         if beat:
-            print(f"[OK] Last {agent} hook run in this repository: {beat}.")
+            is_stale = False
+            age_desc = ""
+            try:
+                from datetime import timezone
+                ts_str = beat.replace("Z", "+00:00")
+                beat_dt = datetime.fromisoformat(ts_str)
+                now_dt = datetime.now(timezone.utc) if beat_dt.tzinfo else datetime.now()
+                delta_sec = (now_dt - beat_dt).total_seconds()
+                hours = delta_sec / 3600.0
+                if hours >= 24:
+                    is_stale = True
+                    age_desc = f"{int(hours)}h ago"
+                elif hours >= 1:
+                    age_desc = f"{int(hours)}h ago"
+                else:
+                    age_desc = f"{int(delta_sec / 60)}m ago"
+            except (ValueError, TypeError):
+                pass
+
+            if is_stale:
+                print(f"[WARN] Stale {agent} hook heartbeat ({beat}, {age_desc}). "
+                      "If this session already used tools, the runtime is not currently loading the hooks.")
+                warnings += 1
+            else:
+                extra = f" ({age_desc})" if age_desc else ""
+                print(f"[OK] Last {agent} hook run in this repository: {beat}{extra}.")
         else:
             print(f"[WARN] No {agent} hook run recorded in this repository yet "
                   "(.along/diagnostics/hook_heartbeat.json). If this session already used tools, "

@@ -62,8 +62,8 @@
 
 ## Done (recent)
 - [x] `(feat)` [opencode-runtime-integration](ISSUES/done/feat--opencode-runtime-integration.md)
+- [x] `(bug)` [opencode-runtime-v2-hardening](ISSUES/done/bug--opencode-runtime-v2-hardening.md)
 - [x] `(task)` [release-v4-8-0](ISSUES/done/task--release-v4-8-0.md)
 - [x] `(feat)` [worktree-lifecycle-hardening](ISSUES/done/feat--worktree-lifecycle-hardening.md)
 - [x] `(feat)` [top-down-umbrella-subproject-binding](ISSUES/done/feat--top-down-umbrella-subproject-binding.md)
-- [x] `(feat)` [plan-grants-write-scope](ISSUES/done/feat--plan-grants-write-scope.md)
-<!-- 334 older completed issue(s) archived in .along/ISSUES/done/ -->
+<!-- 335 older completed issue(s) archived in .along/ISSUES/done/ -->

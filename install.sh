@@ -368,6 +368,7 @@ if [ -n "$PYTHON" ] && [ -f "$SCRIPT_DIR/scripts/along_hook.py" ]; then
     case "$provider" in
       claude)      target_home="$CLAUDE_HOME" ;;
       codex)       target_home="$CODEX_HOME" ;;
+      opencode)    target_home="$OPENCODE_HOME" ;;
       antigravity) target_home="$ANTIGRAVITY_HOME" ;;
     esac
     if [ -n "$target_home" ]; then

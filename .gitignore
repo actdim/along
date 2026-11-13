@@ -58,4 +58,8 @@ site/
 # Raw command output offloaded by telemetry and distilled lifecycle runs
 .along/artifacts/
 
+# Local OpenCode workspace configuration and plugins
+.opencode/
+
+
 

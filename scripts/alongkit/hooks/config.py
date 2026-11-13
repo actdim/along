@@ -804,6 +804,12 @@ def install_opencode_hooks(
 
     try:
         os.makedirs(plugins_dir, exist_ok=True)
+        legacy_file = os.path.join(plugins_dir, "along-opencode-plugin.js")
+        if os.path.isfile(legacy_file):
+            try:
+                os.remove(legacy_file)
+            except OSError:
+                pass
         textio.write_text(plugin_file, plugin_content, newline="\n")
         return "installed", f"{plugin_file}: installed OpenCode Along plugin"
     except OSError as exc:

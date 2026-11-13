@@ -3604,8 +3604,8 @@ For full specification and architecture, see [Declarative Gate Engine & Traceabi
   ```
 
   State then resolves to `<root>/.along/` (`repo.state_dir`), while gates keep evaluating paths against the declaring directory; paths inside the state directory are matched as `.along/...`.
-- Subcommand `along hook install`: Scaffolds runtime hook configurations (`.agents/hooks.json` for Antigravity, `.claude/settings.json` for Claude Code, `.codex/hooks.json` for OpenAI Codex, `.cursor/hooks.json` for Cursor). Accepts `--runtime {antigravity,claude,codex,cursor,all}`. Also turns off AI commit attribution where the runtime documents a key for it (see 2.7).
-- Subcommand `along run <cmd...>` (and `along_hook.py run <cmd...>`): Command proxy wrapper evaluating `run_command` through `HookEngine` prior to execution. Provides mechanical gate enforcement in environments without native PreToolUse lifecycle hooks (OpenCode, CI, and external terminals).
+- Subcommand `along hook install`: Scaffolds runtime hook configurations (`.agents/hooks.json` for Antigravity, `.claude/settings.json` for Claude Code, `.codex/hooks.json` for OpenAI Codex, `plugins/along-gates.js` for OpenCode, `.cursor/hooks.json` for Cursor). Accepts `--runtime {antigravity,claude,codex,cursor,opencode,all}`. Also turns off AI commit attribution where the runtime documents a key for it (see 2.7).
+- Subcommand `along run <cmd...>` (and `along_hook.py run <cmd...>`): Command proxy wrapper evaluating `run_command` through `HookEngine` prior to execution. Provides mechanical gate enforcement in environments without native PreToolUse lifecycle hooks (CI and external terminals).
 - Subcommand `along hook verify`: Audits bi-directional traceability between prose badges and YAML gates.
 
 ### 2.6 End-of-Turn Result Check (`alongkit.hooks.turnstate`)
@@ -3824,7 +3824,8 @@ Gates are mechanical only where the runtime loads Along's `PreToolUse`/`Stop` ho
 | Google Antigravity | auto (`~/.gemini`) | yes (`~/.gemini/config/hooks.json`) | mechanical once installed |
 | OpenAI Codex | auto (`~/.codex`) | yes (`~/.codex/hooks.json`) | mechanical once installed |
 | Claude Cowork | not loaded (Cowork reads plugins from the claude.ai account, not `~/.claude`) | no (Cowork ignores `settings.json`; plugin hooks are tracked in `feat--cowork-plugin-skill-packaging`) | advisory |
-| OpenCode, Cursor, plain shell, human | rules only | no | advisory |
+| OpenCode | commands (`~/.config/opencode/commands`) | yes (`plugins/along-gates.js`) | mechanical once `along hook install --runtime opencode` ran |
+| Cursor, plain shell, human | rules only | no | advisory |
 
 Advisory runtimes are still covered at commit time by the portable layer: `along hooks install --git` (opt-in, local) and the CI job `along gates check --ci` enforce the gates whose catalogue entry lists `git` / `ci` (typography, conflict markers, anti-stub on added lines, issue binding, AI co-author trailers, projection freshness, rule pack integrity), regardless of which agent or human made the commit.
 

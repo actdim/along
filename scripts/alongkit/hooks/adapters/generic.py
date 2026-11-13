@@ -179,21 +179,30 @@ class GenericCliAdapter(BaseAdapter):
         # Normalize write content
         for key in ("content", "code", "text", "file_text", "CodeContent"):
             if key in tool_args and "CodeContent" not in tool_args:
-                tool_args["CodeContent"] = tool_args[key]
-                break
+                if tool_name not in ("run_command", "execute", "bash", "shell", "powershell", "cmd"):
+                    tool_args["CodeContent"] = tool_args[key]
+                    break
 
         # Normalize edit / replacement content
-        for key in ("new_string", "replacement", "new_content", "patch", "ReplacementContent"):
+        for key in ("new_string", "newString", "replacement", "new_content", "patch", "ReplacementContent"):
             if key in tool_args:
                 tool_args.setdefault("ReplacementContent", tool_args[key])
                 tool_args.setdefault("content", tool_args[key])
                 break
 
-        # Normalize command line
-        for key in ("command", "cmd", "script", "CommandLine"):
-            if key in tool_args and "CommandLine" not in tool_args:
-                tool_args["CommandLine"] = tool_args[key]
+        # Normalize edit / target content
+        for key in ("old_string", "oldString", "target_string", "target", "Target", "OldString"):
+            if key in tool_args and key != "TargetFile":
+                tool_args.setdefault("OldString", tool_args[key])
+                tool_args.setdefault("Target", tool_args[key])
                 break
+
+        # Normalize command line
+        for key in ("command", "cmd", "script", "code", "CommandLine"):
+            if key in tool_args and "CommandLine" not in tool_args:
+                if key != "code" or tool_name in ("run_command", "execute", "bash", "shell", "powershell", "cmd"):
+                    tool_args["CommandLine"] = tool_args[key]
+                    break
 
         # Fallback tool name detection based on normalized arguments
         if not tool_name:

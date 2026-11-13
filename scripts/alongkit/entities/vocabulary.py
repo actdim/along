@@ -207,10 +207,6 @@ def detect_agent(explicit: Optional[str] = None) -> str:
     env = os.environ
     if env.get("ALONG_AGENT"):
         return env["ALONG_AGENT"].strip()
-    if env.get("AGENT"):
-        val = env["AGENT"].strip()
-        if val:
-            return val
 
     from .. import runtime
     if runtime.is_cowork_env(env):
@@ -228,5 +224,10 @@ def detect_agent(explicit: Optional[str] = None) -> str:
 
     if any(k in env for k in ("OPENCODE_CLI", "OPENCODE_AGENT", "OPENCODE_SESSION_ID")):
         return "opencode"
+
+    if env.get("AGENT"):
+        val = env["AGENT"].strip()
+        if val and val.lower() not in ("1", "0", "true", "false", "yes", "no"):
+            return val
 
     return "unknown"
