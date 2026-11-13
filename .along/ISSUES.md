@@ -1,7 +1,7 @@
 # Active Issues
 
 ## Active
-<!-- No active issues -->
+- [ ] `(feat)` [provenance-drift-gate](ISSUES/feat--provenance-drift-gate.md) - plan ready
 
 ## Backlog
 - [ ] `(bug)` [stop-gate-false-positives](ISSUES/bug--stop-gate-false-positives.md)
@@ -11,6 +11,7 @@
 - [ ] `(debt)` [gate-config-layers](ISSUES/debt--gate-config-layers.md)
 - [ ] `(debt)` [triage-silent-exception-handlers](ISSUES/debt--triage-silent-exception-handlers.md)
 - [ ] `(docs)` [arxiv-academic-paper-preprint](ISSUES/docs--arxiv-academic-paper-preprint.md)
+- [ ] `(docs)` [dita-topics-and-drift](ISSUES/docs--dita-topics-and-drift.md)
 - [ ] `(docs)` [engineering-deepdive-medium-devto](ISSUES/docs--engineering-deepdive-medium-devto.md)
 - [ ] `(docs)` [operations-and-autonomous-systems-paradigm](ISSUES/docs--operations-and-autonomous-systems-paradigm.md)
 - [ ] `(docs)` [tiered-model-workflow-guide](ISSUES/docs--tiered-model-workflow-guide.md)
