@@ -38,7 +38,7 @@
 - [ ] `(feat)` [external-issue-trackers-sync-and-import](ISSUES/feat--external-issue-trackers-sync-and-import.md)
 - [ ] `(feat)` [feedback-maintainer-telegram-email-channels](ISSUES/feat--feedback-maintainer-telegram-email-channels.md)
 - [ ] `(feat)` [golang-ecosystem-support](ISSUES/feat--golang-ecosystem-support.md)
-- [ ] `(feat)` [issue-test-scoping-policy](ISSUES/feat--issue-test-scoping-policy.md) - plan approved
+- [ ] `(feat)` [issue-test-scoping-policy](ISSUES/feat--issue-test-scoping-policy.md) - plan ready
 - [ ] `(feat)` [jvm-ecosystem-support](ISSUES/feat--jvm-ecosystem-support.md)
 - [ ] `(feat)` [kb-search-hybrid-retrieval](ISSUES/feat--kb-search-hybrid-retrieval.md)
 - [ ] `(feat)` [multi-runtime-and-omnichannel-expansion](ISSUES/feat--multi-runtime-and-omnichannel-expansion.md)
@@ -63,7 +63,7 @@
 ## Done (recent)
 - [x] `(feat)` [opencode-runtime-integration](ISSUES/done/feat--opencode-runtime-integration.md)
 - [x] `(feat)` [feedback-github-pr-transport](ISSUES/done/feat--feedback-github-pr-transport.md)
+- [x] `(docs)` [system-comparisons](ISSUES/done/docs--system-comparisons.md)
+- [x] `(docs)` [kb-search-docs-accuracy](ISSUES/done/docs--kb-search-docs-accuracy.md)
 - [x] `(debt)` [stale-protocol-path-comment](ISSUES/done/debt--stale-protocol-path-comment.md)
-- [x] `(bug)` [opencode-runtime-v2-hardening](ISSUES/done/bug--opencode-runtime-v2-hardening.md)
-- [x] `(task)` [release-v4-8-0](ISSUES/done/task--release-v4-8-0.md)
-<!-- 337 older completed issue(s) archived in .along/ISSUES/done/ -->
+<!-- 338 older completed issue(s) archived in .along/ISSUES/done/ -->
