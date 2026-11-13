@@ -13,7 +13,7 @@ tags: [adr, architecture, decisions, index]
 This directory contains the project's Architectural Decision Records.
 Decisions are authored and maintained in `.along/DECISIONS/` and published here as first-class documentation.
 
-## Active Decisions (49)
+## Active Decisions (50)
 
 - **[along-v200-rebranding-and-namespace-isolation](./ADR-2026-08-27--along-v200-rebranding-and-namespace-isolation.md)** - Along v2.0.0: Rebranding, Isolated .along/ Directory, along-* Skill Prefixes, and protocol: along Metadata
 - **[autonomous-multi-mode-dashboard-and-analytics-engine](./ADR-2026-08-27--autonomous-multi-mode-dashboard-and-analytics-engine.md)** - Autonomous Multi-Mode Repository Dashboard & Analytics Engine
@@ -64,6 +64,7 @@ Decisions are authored and maintained in `.along/DECISIONS/` and published here 
 - **[issue-plans-approved-ahead](./ADR-2026-10-23--issue-plans-approved-ahead.md)** - Issue plans live with the ticket; only the CLI approves them
 - **[along-core-and-dash-extra](./ADR-2026-10-29--along-core-and-dash-extra.md)** - Along Core and Dash Extra Architecture
 - **[children-allowed-for-cross-context-links-only](./ADR-2026-11-10--children-allowed-for-cross-context-links-only.md)** - Children allowed for cross-context links only
+- **[feedback-inbox-and-pr-transport](./ADR-2026-11-13--feedback-inbox-and-pr-transport.md)** - Feedback Inbox Location and GitHub PR Transport
 
 ## Superseded & Retired Decisions (8)
 

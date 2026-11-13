@@ -36,10 +36,9 @@
 - [ ] `(feat)` [enterprise-governance-and-cloud-infrastructure](ISSUES/feat--enterprise-governance-and-cloud-infrastructure.md)
 - [ ] `(feat)` [enterprise-governance-and-compliance-pack](ISSUES/feat--enterprise-governance-and-compliance-pack.md)
 - [ ] `(feat)` [external-issue-trackers-sync-and-import](ISSUES/feat--external-issue-trackers-sync-and-import.md)
-- [ ] `(feat)` [feedback-github-pr-transport](ISSUES/feat--feedback-github-pr-transport.md) - plan ready
 - [ ] `(feat)` [feedback-maintainer-telegram-email-channels](ISSUES/feat--feedback-maintainer-telegram-email-channels.md)
 - [ ] `(feat)` [golang-ecosystem-support](ISSUES/feat--golang-ecosystem-support.md)
-- [ ] `(feat)` [issue-test-scoping-policy](ISSUES/feat--issue-test-scoping-policy.md)
+- [ ] `(feat)` [issue-test-scoping-policy](ISSUES/feat--issue-test-scoping-policy.md) - plan approved
 - [ ] `(feat)` [jvm-ecosystem-support](ISSUES/feat--jvm-ecosystem-support.md)
 - [ ] `(feat)` [kb-search-hybrid-retrieval](ISSUES/feat--kb-search-hybrid-retrieval.md)
 - [ ] `(feat)` [multi-runtime-and-omnichannel-expansion](ISSUES/feat--multi-runtime-and-omnichannel-expansion.md)
@@ -63,8 +62,8 @@
 
 ## Done (recent)
 - [x] `(feat)` [opencode-runtime-integration](ISSUES/done/feat--opencode-runtime-integration.md)
+- [x] `(feat)` [feedback-github-pr-transport](ISSUES/done/feat--feedback-github-pr-transport.md)
 - [x] `(debt)` [stale-protocol-path-comment](ISSUES/done/debt--stale-protocol-path-comment.md)
 - [x] `(bug)` [opencode-runtime-v2-hardening](ISSUES/done/bug--opencode-runtime-v2-hardening.md)
 - [x] `(task)` [release-v4-8-0](ISSUES/done/task--release-v4-8-0.md)
-- [x] `(feat)` [worktree-lifecycle-hardening](ISSUES/done/feat--worktree-lifecycle-hardening.md)
-<!-- 336 older completed issue(s) archived in .along/ISSUES/done/ -->
+<!-- 337 older completed issue(s) archived in .along/ISSUES/done/ -->

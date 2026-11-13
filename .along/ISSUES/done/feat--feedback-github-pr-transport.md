@@ -3,10 +3,11 @@ protocol: along
 protocol_version: "4.8.1"
 slug: feedback-github-pr-transport
 type: feat
-status: open
+status: done
+completed: 2026-11-13
 priority: medium
 created: 2026-11-11
-updated: 2026-11-11
+updated: 2026-11-13
 agent: claude-code
 tags: [feedback, github]
 blocked_by: []
@@ -61,8 +62,8 @@ All via the GitHub API, nothing is cloned locally:
 - REQ-6: The written file MUST pass `along sanitize` (ASCII typography) and carry front-matter (title, date, along version, OS, source tag `feedback`).
 
 ## Acceptance Criteria
-- [ ] `--channel github` implemented in `scripts/along_feedback.py` (Path A and Path B)
-- [ ] `skills/along-feedback/SKILL.md` teaches the agent the "create feedback for Along" flow, including the consent step
-- [ ] Hermetic tests with a faked `gh` and faked browser opener (no network)
-- [ ] Inbox location decided and documented
-- [ ] Automated tests passing
+- [x] `--channel github` implemented in `scripts/along_feedback.py` (Path A and Path B)
+- [x] `skills/along-feedback/SKILL.md` teaches the agent the "create feedback for Along" flow, including the consent step
+- [x] Hermetic tests with a faked `gh` and faked browser opener (no network)
+- [x] Inbox location decided and documented
+- [x] Automated tests passing

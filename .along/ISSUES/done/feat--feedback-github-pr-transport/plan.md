@@ -32,13 +32,13 @@ Defaults chosen (change at approval if needed):
 
 ## Steps
 
-- [ ] Step 1: Free-text feedback payload in `alongkit` (REQ-5, REQ-6)
+- [x] Step 1: Free-text feedback payload in `alongkit` (REQ-5, REQ-6)
   - New module `scripts/alongkit/feedback_github.py`.
   - `build_inbox_note(title, body, incidents) -> (rel_path, text)`: slug from title (ASCII, lowercase, `-`, max 50 chars), path per D1; front-matter `title`, `date`, `along_version`, `os` (`platform.system()` + release), `python`, `source: along-feedback`, `tags: [feedback]`; body = user text, then an "Incidents" section only if incidents are given (id, component, first 200 chars of error).
   - Everything passes `Redactor.sanitize_text`, then `typography.clean`.
   - Done when: unit tests show redacted paths/tokens and pure ASCII output.
 
-- [ ] Step 2: `GitHubTransport` with `gh` path (REQ-1, REQ-2, REQ-4)
+- [x] Step 2: `GitHubTransport` with `gh` path (REQ-1, REQ-2, REQ-4)
   - In `feedback_github.py`; dependencies injected for tests: `which` (default `shutil.which`), `run` (default `proc.run_capture`), `open_url` (default `webbrowser.open`).
   - Preconditions: `which("gh")` and `gh auth status` exit 0; otherwise go to Step 3.
   - Sequence: `gh api user --jq .login`; `gh api repos/<repo> --jq .permissions.push`; if not `true`: `gh repo fork <repo> --clone=false --default-branch-only`, resolve the fork (`gh api repos/<login>/<name> --jq .parent.full_name` must equal `<repo>`, else clear error), `gh api -X POST repos/<fork>/merge-upstream -f branch=main`; base sha `gh api repos/<repo>/git/ref/heads/main --jq .object.sha`; `POST repos/<target>/git/refs` for `refs/heads/feedback/<date>-<slug>` (on 422 "already exists" append `-2`, `-3`); `PUT repos/<target>/contents/<rel_path>` with `--input` JSON temp file (`message`, base64 `content`, `branch`); `gh pr create --repo <repo> --base main --head <owner>:<branch> --title "feedback: <title>" --body <short body with Along version>`.
@@ -46,29 +46,29 @@ Defaults chosen (change at approval if needed):
   - Any failing `gh` call: report its stderr verbatim, then fall back to Step 3 (browser) and say that the automatic path failed.
   - Done when: faked-`run` tests cover collaborator and fork paths and assert no `git clone` is ever called.
 
-- [ ] Step 3: Web fallback (REQ-3, REQ-4)
+- [x] Step 3: Web fallback (REQ-3, REQ-4)
   - Message first: "GitHub CLI (gh) not found / not authenticated: with gh this would be fully automatic. Install it and run `gh auth login` to skip the browser next time. Opening the GitHub page instead."
   - URL `https://github.com/<repo>/new/main?filename=<rel_path>&value=<urlencoded text>`; if the URL exceeds 7000 chars, truncate the body, save the full note to `EXPORT_DIR` and tell the user to paste/attach it (print the path with the home directory redacted).
   - `open_url(url)`; print the URL and "click 'Propose changes', then 'Create pull request'; the PR link appears there".
   - Done when: tests for gh missing, gh unauthenticated and over-long body pass.
 
-- [ ] Step 4: Wire into `along_feedback.py` (REQ-1..REQ-5)
+- [x] Step 4: Wire into `along_feedback.py` (REQ-1..REQ-5)
   - `send` gains `--channel github`, `--title`, `--body-file`, `--yes`; `--title` and `--body-file` required for `github` (argparse error exit 2 otherwise).
   - `dispatch_feedback` no longer returns early for the `github` channel when there are no incidents; incidents (if any) are attached and marked resolved only after success, as today.
   - Without `--yes` or with `--dry-run`: print note path, full note text and the planned actions (gh path or browser), print "NOT SENT", no subprocess and no browser call (D5).
   - Update the module docstring usage line.
   - Done when: CLI test via `proc.run_capture` shows the preview and "NOT SENT".
 
-- [ ] Step 5: Tests in `tests/test_feedback.py` (all REQs)
+- [x] Step 5: Tests in `tests/test_feedback.py` (all REQs)
   - New test methods (test_07..): note building and redaction; preview without `--yes`; gh missing -> browser URL contains `filename=.along/inbox/` and the encoded title; gh unauthenticated -> browser; collaborator path call sequence (no fork); non-collaborator path (fork + merge-upstream); branch-exists retry; gh failure mid-way -> stderr reported + browser fallback; long body truncation; `all` does not include github.
   - Fakes only: no network, no real `gh`, no real browser; temp dirs as in existing tests; no name clashes with `alongkit` (TestNoDuplicateHelpers).
 
-- [ ] Step 6: Skill and docs
+- [x] Step 6: Skill and docs
   - `skills/along-feedback/SKILL.md`: section "Send feedback to the Along maintainers": trigger phrases ("create/send feedback for Along"), flow = draft text -> write to a temp file -> run with `--dry-run`, show the output to the user -> after an explicit yes re-run with `--yes` -> give the user the PR URL (or the page instructions).
   - `docs/topic--cli-reference.md` `along feedback` section: real subcommands and the new flags (drop the non-existent `--export` / `--send`).
   - `docs/topic--skills-reference.md` `along-feedback` section: add the GitHub PR channel.
 
-- [ ] Step 7: Verify and close
+- [x] Step 7: Verify and close
   - `/along-test` (`python .along/scripts/test.py`) green; `along sanitize` and `along lint` clean on changed files; `git diff --stat` matches the 6 files.
   - Manual smoke (only on the user's explicit yes, it creates a real PR): `along feedback send --channel github --title "smoke test" --body-file <f> --yes` from another repo.
   - Record an ADR for D1 (inbox location) and D2 via `/along-decision-sync`; `along wrap feedback-github-pr-transport --summary "..." --decisions <ADR>`.
