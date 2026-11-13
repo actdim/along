@@ -3,10 +3,11 @@ protocol: along
 protocol_version: "4.8.1"
 slug: stale-protocol-path-comment
 type: debt
-status: in-progress
+status: done
+completed: 2026-11-13
 priority: low
 created: 2026-11-12
-updated: 2026-11-12
+updated: 2026-11-13
 agent: claude-code
 tags: [docs, comment]
 blocked_by: []
@@ -22,5 +23,5 @@ plan_status: approved
 - REQ-1: The `agents_md_bytes` comment in `scripts/alongkit/budget.py` MUST name `.along/PROTOCOL.md` as the location of situational procedures.
 
 ## Acceptance Criteria
-- [ ] `scripts/alongkit/budget.py` no longer references `docs/topic--along-protocol.md`.
-- [ ] Test suite (`python .along/scripts/test.py`) passes after the edit.
+- [x] `scripts/alongkit/budget.py` no longer references `docs/topic--along-protocol.md`.
+- [x] Test suite (`python .along/scripts/test.py`) passes after the edit.
