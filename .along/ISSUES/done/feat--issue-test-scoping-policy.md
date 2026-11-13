@@ -3,7 +3,8 @@ protocol: along
 protocol_version: "4.8.1"
 slug: issue-test-scoping-policy
 type: feat
-status: in-progress
+status: done
+completed: 2026-11-13
 priority: high
 created: 2026-11-13
 updated: 2026-11-13
@@ -143,14 +144,14 @@ When only test-inert files changed, `docs_only_change` is true and the tests are
 
 ## Acceptance Criteria
 
-- [ ] A normal `along wrap` still runs the syntax, link and typography gates on auto-commit and records no bypass; the pre-commit test run reuses the wrap green run on an unchanged tree.
-- [ ] Wrap prints a hermeticity warning naming the paths a test run created or changed.
-- [ ] Issue front matter `verify` block is parsed and validated by the shared `verify.policy_problems` (modes, `reason`, `tracked_by` except for spikes, declared scopes).
-- [ ] The effective policy (approved issue snapshot over `.along/config.json`) drives `test_before_stop`, the `Wrap Quality Gate` and the `Pre-Commit Quality Gate`, and each prints the policy and its source.
-- [ ] A `verify` block edited after plan approval is ignored with a warning until re-approval.
-- [ ] `along issue create|update` accept `--verify-tests`, `--verify-scope`, `--verify-reason`, `--verify-tracked-by`; `along issue show` prints the effective policy.
-- [ ] `.along/scripts/test.py` receives `ALONG_TEST_MODE`, `ALONG_TEST_SCOPE` and `ALONG_ATTRIBUTED_FILES`; a hook that ignores them still runs the full suite.
-- [ ] Run records carry mode and scope; a scoped green run is never reused as a full run.
-- [ ] `protocol.md` stays within 6 KB; `protocol-reference.md`, `along-wrap` and `along-test` skills and the KB document the policy, scopes, runner contract, `ignore_paths` and `--no-commit`.
-- [ ] `along doctor` reports the effective policy and validates `verify.scopes`, `ignore_paths` and open issues' `verify` blocks.
-- [ ] Automated tests cover each requirement and pass.
+- [x] A normal `along wrap` still runs the syntax, link and typography gates on auto-commit and records no bypass; the pre-commit test run reuses the wrap green run on an unchanged tree.
+- [x] Wrap prints a hermeticity warning naming the paths a test run created or changed.
+- [x] Issue front matter `verify` block is parsed and validated by the shared `verify.policy_problems` (modes, `reason`, `tracked_by` except for spikes, declared scopes).
+- [x] The effective policy (approved issue snapshot over `.along/config.json`) drives `test_before_stop`, the `Wrap Quality Gate` and the `Pre-Commit Quality Gate`, and each prints the policy and its source.
+- [x] A `verify` block edited after plan approval is ignored with a warning until re-approval.
+- [x] `along issue create|update` accept `--verify-tests`, `--verify-scope`, `--verify-reason`, `--verify-tracked-by`; `along issue show` prints the effective policy.
+- [x] `.along/scripts/test.py` receives `ALONG_TEST_MODE`, `ALONG_TEST_SCOPE` and `ALONG_ATTRIBUTED_FILES`; a hook that ignores them still runs the full suite.
+- [x] Run records carry mode and scope; a scoped green run is never reused as a full run.
+- [x] `protocol.md` stays within 6 KB; `protocol-reference.md`, `along-wrap` and `along-test` skills and the KB document the policy, scopes, runner contract, `ignore_paths` and `--no-commit`.
+- [x] `along doctor` reports the effective policy and validates `verify.scopes`, `ignore_paths` and open issues' `verify` blocks.
+- [x] Automated tests cover each requirement and pass.

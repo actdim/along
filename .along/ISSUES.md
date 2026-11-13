@@ -1,8 +1,7 @@
 # Active Issues
 
 ## Active
-- [ ] `(feat)` [issue-test-scoping-policy](ISSUES/feat--issue-test-scoping-policy.md) - plan ready
-- [ ] `(feat)` [provenance-drift-gate](ISSUES/feat--provenance-drift-gate.md) - plan ready
+- [ ] `(feat)` [provenance-drift-gate](ISSUES/feat--provenance-drift-gate.md) - plan approved
 
 ## Backlog
 - [ ] `(bug)` [stop-gate-false-positives](ISSUES/bug--stop-gate-false-positives.md)
@@ -66,8 +65,8 @@
 
 ## Done (recent)
 - [x] `(feat)` [opencode-runtime-integration](ISSUES/done/feat--opencode-runtime-integration.md)
+- [x] `(feat)` [issue-test-scoping-policy](ISSUES/done/feat--issue-test-scoping-policy.md)
 - [x] `(feat)` [feedback-github-pr-transport](ISSUES/done/feat--feedback-github-pr-transport.md)
 - [x] `(docs)` [system-comparisons](ISSUES/done/docs--system-comparisons.md)
 - [x] `(docs)` [kb-search-docs-accuracy](ISSUES/done/docs--kb-search-docs-accuracy.md)
-- [x] `(debt)` [stale-protocol-path-comment](ISSUES/done/debt--stale-protocol-path-comment.md)
-<!-- 338 older completed issue(s) archived in .along/ISSUES/done/ -->
+<!-- 339 older completed issue(s) archived in .along/ISSUES/done/ -->
