@@ -274,3 +274,5 @@ _Index of sessions (newest last). One line per session:_
 2026-11-13 - opencode-runtime-v2-hardening - antigravity - fix(opencode): v2 plugin definition, complete lifecycle coverage and argument normalization - [Session Log](./SESSIONS/2026/2026-11-13--opencode-runtime-v2-hardening.md)
 2026-11-13 - stale-protocol-path-comment - claude-code - Point budget.py comment at .along/PROTOCOL.md (leftover from bug--protocol-leaks-into-docs) - [Session Log](./SESSIONS/2026/2026-11-13--stale-protocol-path-comment.md)
 2026-11-13 - feedback-github-pr-transport - antigravity - Implement GitHub PR feedback transport with gh CLI and web fallback - [Session Log](./SESSIONS/2026/2026-11-13--feedback-github-pr-transport.md)
+2026-11-13 - system-comparisons - claude-code - Aligned system-comparisons with topic-based KB architecture and measured kb-search latency - [Session Log](./SESSIONS/2026/2026-11-13--system-comparisons.md)
+2026-11-13 - kb-search-docs-accuracy - claude-code - Aligned KB search docs with along_kb_search.py; added authoring-for-retrieval and progressive-disclosure sections - [Session Log](./SESSIONS/2026/2026-11-13--kb-search-docs-accuracy.md)

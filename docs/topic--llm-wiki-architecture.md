@@ -4,9 +4,11 @@ slug: llm-wiki-architecture
 title: Topic-Based Knowledge Base Architecture & Paradigm
 type: topic
 created: 2026-08-30
-updated: 2026-10-13
-tags: [topic-based-authoring, diataxis, tf-idf, architecture, knowledge-base, token-efficiency, indexing, methodology, search, karpathy]
+updated: 2026-11-13
+tags: [topic-based-authoring, diataxis, tf-idf, architecture, knowledge-base, token-efficiency, indexing, methodology, search, karpathy, progressive-disclosure, authoring]
 sources:
+  - path: scripts/along_kb_search.py
+    hash: "3fefb5c8ebb8b9e9d475b0b951c6e1303143a9a68717ce8878697a3d4d821776"
   - path: skills/along-kb-sync/SKILL.md
     hash: "e43f8e63715f943e940edd5abf260b6ea45bf69f784213bac3b1bd7327f75527"
   - path: scripts/along_kb_sync.py
@@ -44,7 +46,7 @@ For an exhaustive architectural comparison against vector DBs, passive conversat
 Along synthesizes 25 years of industrial technical writing and 50 years of information retrieval into a production-grade system:
 - **Modular Topic Files (`docs/topic--*.md`)**: Single, human-readable source of truth in Git, organized by domain.
 - **Zero-Manual-Merge Indexing (`docs/INDEX.md`)**: Catalog and navigation compiled 100% deterministically by lightweight Python scripts without LLM hallucinations.
-- **Sub-Millisecond Lexical Retrieval (`along-kb-search`)**: Pure standard-library TF-IDF engine returning targeted 230-character snippet windows with exact line numbers, achieving >99% token reduction.
+- **In-Memory Lexical Retrieval (`along-kb-search`)**: Pure standard-library TF-IDF engine returning the single best-matching paragraph (<= 150 words) with its section heading and exact line range, instead of whole files.
 
 ---
 
@@ -75,7 +77,7 @@ flowchart TD
 
     subgraph Retrieval["Agent Fast Retrieval (along-kb-search)"]
         SEARCH["Multi-Tier Weighted Search Engine"]
-        SNIPPET["230-Char Snippet Window (< 100 Tokens Context)"]
+        SNIPPET["Best Paragraph Snippet (<= 150 Words + Line Range)"]
         AGENT["Host AI Agent (Antigravity / Claude / Codex)"]
     end
 
@@ -108,33 +110,110 @@ Instead of deploying opaque, heavy vector databases or dumping whole articles in
 1. **Exact Code Symbol Precision**:
    - Vector embeddings project distinct identifiers (`user_id`, `user_uuid`, `get_user_account`) into nearby fuzzy clusters, causing ambiguity during code refactoring.
    - TF-IDF enforces exact token and quoted phrase matching, ensuring agents locate the precise function, flag, or configuration key without semantic drift.
-2. **Zero Native Dependencies & Zero Latency**:
-   - Pure Python standard library implementation executes in under 50ms across hundreds of documents, eliminating C++ compilation failures (such as `onnxruntime` or `hnswlib` native build issues on developer machines).
-3. **Bounded Progressive Disclosure**:
-   - Search returns targeted snippets (< 100-200 tokens) aligned to sentence and section boundaries, paired with exact file paths and line ranges (`docs/topic--cli-reference.md#L589-L605`).
-   - Agents perform progressive disclosure: inspect the snippet -> micro-inspect 20-30 surrounding lines if necessary -> execute with zero full-file context waste.
+2. **Zero Native Dependencies, No Index to Rebuild**:
+   - Pure Python standard library implementation: no embeddings, no database, no native builds (no `onnxruntime` or `hnswlib` compilation failures on developer machines).
+   - The corpus is read from the working tree on every call, so a branch switch never leaves a stale index behind.
+3. **Bounded Snippets**:
+   - Search returns one paragraph per hit (<= 150 words) with its section heading and an exact file path and line range (`docs/topic--cli-reference.md#L589-L605`), feeding the [Progressive Disclosure Ladder](#5-progressive-disclosure-ladder).
 
-### Token-Based Weighted Scoring & IDF Algorithm
-The search engine ranks results using word-boundary token matching, lightweight English stemming, and smoothed Inverse Document Frequency (IDF):
+### Corpus & Query Semantics
+- **Corpus**: `docs/` topics, `.along/PROTOCOL.md`, and living memory (issues, ADRs, milestones, sessions); `--category` narrows it. Archived entities (done issues, session logs, superseded ADRs) are excluded unless `-a` / `--archive` is passed. Results default to the top 8 (`--limit`).
+- **Tokens**: lowercase word tokens (`[\w\-]+`), so hyphenated and underscored identifiers such as `kb-sync` or slugs stay one token and match only as a whole (or by prefix with `--prefix`).
+- **Stemming**: `light_stem` strips English suffixes (`-s`, `-es`, `-ies`, `-ing`, `-ed`). Non-English text is matched by exact tokens only.
+- **AND by default**: every query term and quoted phrase must match somewhere in the entry. `--any` switches to OR; `--prefix` lets terms match token prefixes.
+- **Quoted phrases**: `"bounded context budget"` must appear as an exact adjacent sequence.
+- **Literal mode** (`--literal`): a raw substring match with its own fixed scoring (see below).
 
-| Match Scope | Base Weight | Rationale |
+### IDF Formula
+`compute_idf` counts document frequency over title, slug, tags and body (stems are counted too) and applies smoothed IDF:
+
+```text
+IDF(term) = ln((N + 1) / (df + 1)) + 1
+```
+
+A term found in 1-2 topics out of hundreds scores several times higher than a term found everywhere. That is why one-topic-per-file matters (see [Authoring Topics for Retrieval](#4-authoring-topics-for-retrieval)).
+
+### Ranking Weights
+`search_knowledge_base` adds up the following per entry. Each term scores at most one tier per field (exact > stem > prefix).
+
+| Match Scope | Exact | Stem | Prefix (`--prefix`) | Rationale |
+| :--- | :--- | :--- | :--- | :--- |
+| **Title** | **+15 x IDF** | +7.5 x IDF | +6 x IDF | Direct match on the article subject. |
+| **Slug** | **+12 x IDF** | +6 x IDF | +5 x IDF | Stable architectural identifier. |
+| **Tags** | **+10 x IDF** | - | - | Curated keywords; whole-tag exact match only. |
+| **Body** | **min(TF x IDF, 25)** | stems add to TF | prefix TF if no exact hit | Frequency is capped so long articles cannot drown short precise ones. |
+| **Quoted Phrase** | +30 title / +20 slug / min(15 x count, 30) body | - | - | Exact adjacent sequence. |
+
+| Entry Adjustment | Weight | Rationale |
 | :--- | :--- | :--- |
-| **Quoted Phrase** | **+30 title / +20 slug / +15 body** | Exact adjacent multi-word sequence match. |
-| **Title Match** | **+15.0 * IDF** | Direct topic match indicating the exact domain article. |
-| **Slug Match** | **+12.0 * IDF** | Exact architectural identifier match. |
-| **Tags Match** | **+10.0 * IDF** | Curated metadata keywords matching the conceptual domain. |
-| **Body Content** | **min(TF * IDF, 25.0)** | Frequency-saturated body occurrences scaled by discriminative rarity. |
-| **Active Entity Boost** | **+2.0 points** | Boost for active, open, or in-progress issues and ADRs. |
+| **Curated docs boost** | **+20** | `docs/topic--*.md` and `.along/PROTOCOL.md` outrank issues and sessions that merely mention the same words. |
+| **Active status** | +2 | Open, in-progress, active or accepted entities. |
+| **Archived** | -10 | Only when archived entities are included. |
 
-### Snippet Window Extraction (Targeted Context Optimization)
-When a match is identified, `along-kb-search` extracts a targeted word-boundary aligned passage centered around the matching query terms.
-- *Prompt Impact*: Delivers the precise architectural constraint or API contract in **under 100-200 tokens**, compared to thousands of tokens for loading full files.
-- *Verifiable Metrics*: Run with `--stats` to inspect live corpus size, returned token counts, and token savings percentage (>99% token reduction).
-- *Performance*: Sub-50ms execution across hundreds of documents using pure standard library in-memory tokenization without database locking risks or vector embeddings latency.
+**Literal mode** scores differently: base 100, +50 slug substring, +30 title substring, min(10 x count, 30) body, +20 curated docs, -10 archived.
+
+### Snippet Extraction
+`extract_passage_location_and_snippet` splits the matched file into blocks. A block is a paragraph separated by blank lines or headings. Front-matter is skipped and a fenced code block stays whole. Each block is scored (+15 per phrase, +6 per exact term, +3 per stem match); the best block is returned with:
+- its enclosing heading (`section`),
+- its 1-indexed line range (`file#Lstart-Lend`),
+- its text, flattened and capped at **150 words**.
+
+### Measured Performance
+`scripts/bench_kb_search.py` measures both the real repository and a synthetic 1,000-entity fixture. Sample run on this repository (Windows, Python 3.12, 2026-11-13):
+
+| Corpus | Load | Query p50 | Query p95 | Snippet vs matched documents |
+| :--- | :--- | :--- | :--- | :--- |
+| This repository (837 entities, ~0.8M tokens) | ~0.8 s | ~245 ms | ~290 ms | 95-98% fewer tokens |
+| Synthetic fixture (1,000 entities) | - | ~158 ms | ~168 ms | ~85% fewer tokens |
+
+- The ADR-2026-09-09 gate is **p95 < 250 ms on the 1,000-entity fixture**.
+- Measured against the whole corpus rather than the matched documents, savings exceed 99%. `--stats` prints live corpus size, returned tokens and the savings percentage for any query.
 
 ---
 
-## 4. In-Place Source Grounding, Provenance & Drift Gate
+## 4. Authoring Topics for Retrieval
+
+Search quality is a property of how topics are written. Every authoring rule below produces a concrete ranking or snippet signal in `along-kb-search`:
+
+| Structure Rule | Search Signal It Produces |
+| :--- | :--- |
+| **One topic per file (DITA)** | Clean document boundaries. A domain term appears in few files, so its IDF is high and it points at the right topic instead of being diluted across mixed articles. |
+| **Specific `title`** | Strongest field: +15 x IDF per exact term. Name the subject in words people search for. |
+| **Descriptive `slug`** | +12 x IDF, but only when the query contains the whole slug: hyphens do not split tokens, so `llm-wiki-architecture` is one token (`--prefix` also matches its beginning). Put every searchable word in the title too. |
+| **`tags` in front-matter** | +10 x IDF for synonyms and concepts the body may not spell out. Tags match whole: prefer single-word tags (`search`, `idf`) over long multi-word ones. |
+| **`##` headings + short paragraphs** | The snippet is one paragraph. Short, single-idea paragraphs under a clear heading return a complete answer with its section and line range. |
+| **Exact identifiers in backticks** | Lexical exact match on `kb-sync`, `compute_idf`, flag names. Hyphenated and underscored names are single tokens, so a query for `search` does not hit `kb-search`; spell the plain words out in prose as well. The AST grounding gate also checks identifiers against the code. |
+| **English prose** | `light_stem` normalizes plural and tense forms only for English text. |
+| **Topic lives in `docs/`** | +20 curated boost over issues and sessions mentioning the same terms. |
+
+### Author Checklist
+1. One subject per `docs/topic--<slug>.md`; split when a file starts answering two unrelated questions.
+2. Title and slug use the words a reader would type.
+3. Add 5-12 single-word tags, including synonyms absent from the body.
+4. Keep paragraphs short and self-contained under `##` / `###` headings. A paragraph should make sense when returned alone.
+5. Write identifiers exactly as in code, in backticks.
+6. Check with `along kb-search "<query>" --stats` that the topic ranks first for its own subject.
+
+---
+
+## 5. Progressive Disclosure Ladder
+
+Humans and agents read the knowledge base the same way. They descend one step at a time and stop as soon as they have enough:
+
+```text
+INDEX.md  ->  front-matter  ->  search snippet   ->  surrounding lines  ->  full file
+(catalog)     (what it is)      (<= 150 words)       (20-30 lines)          (last resort)
+```
+
+1. **`docs/INDEX.md`** (or the compact `along kb-search --toc` catalog): compiled list of topics with titles and tags.
+2. **Front-matter**: title, type, tags, provenance sources and write policy tell what a topic covers and how far to trust it.
+3. **Snippet**: `along kb-search` returns the best paragraph with `file#Lstart-Lend`.
+4. **Surrounding lines**: read 20-30 lines around that range when the paragraph needs context.
+5. **Full file**: only when the task really concerns the whole topic.
+
+---
+
+## 6. In-Place Source Grounding, Provenance & Drift Gate
 
 Along enforces in-place provenance for all synthesized Knowledge Base articles:
 
@@ -151,7 +230,7 @@ Along enforces in-place provenance for all synthesized Knowledge Base articles:
 
 ---
 
-## 5. Deterministic LLM Context Compilation: llms.txt & llms-full.txt
+## 7. Deterministic LLM Context Compilation: llms.txt & llms-full.txt
 
 To provide external LLMs and IDE assistants with immediate context, `along-kb-sync` deterministically manages both index and full-context exports:
 
@@ -175,7 +254,7 @@ To provide external LLMs and IDE assistants with immediate context, `along-kb-sy
 
 ---
 
-## 6. Documentation Blast Radius & Code-Graph-to-Wiki Synchronization
+## 8. Documentation Blast Radius & Code-Graph-to-Wiki Synchronization
 
 In the LLM-Wiki paradigm, documentation is a living asset that evolves alongside code. Along enforces a **Deterministic 2-Phase Blast Radius Gate**:
 
@@ -197,7 +276,7 @@ flowchart LR
 
 ---
 
-## 7. Deterministic Topic Dictionary, Auto-Crosslinking & AST Symbol Grounding
+## 9. Deterministic Topic Dictionary, Auto-Crosslinking & AST Symbol Grounding
 
 To guarantee factual precision and cross-reference coherence without human micro-management, Along equips `along-kb-sync` with three deterministic compiler mechanisms:
 
@@ -258,12 +337,13 @@ Along adopts the industrial **Diataxis technical writing framework** (standardiz
 
 ---
 
-## 8. References & Useful Links
+## 10. References & Useful Links
 
 - **DITA (Darwin Information Typing Architecture)**: OASIS standard for modular, topic-based technical authoring developed by IBM (2001).
 - **Diataxis Framework (Daniele Procida)**: Architecture for technical documentation used by Python, Django, and Canonical (Tutorials, How-To Guides, Reference, Explanation).
 - **Karen Sparck Jones (1972)**: "A Statistical Interpretation of Term Specificity and Its Application in Retrieval", Journal of Documentation.
 - **Andrej Karpathy's LLM-Wiki Note**: Conceptual observation of LLM navigation over interlinked Markdown files.
+- **`scripts/bench_kb_search.py`**: Reproducible latency and token-savings benchmark for `along-kb-search`.
 - **[System Architecture & Flow](./topic--architecture.md)**: System topology, multi-branch concurrency, and multi-agent state machine.
 - **[System Comparisons & Alternative Memory Architectures](./topic--system-comparisons.md)**: Comparative analysis against jevmem, Laya, vector databases, and prompt stuffing.
 - **[Domain Model & Entity Ecosystem](./topic--domain-model.md)**: Taxonomy of issues, milestones, ADRs, and living memory.

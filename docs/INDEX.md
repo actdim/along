@@ -97,7 +97,7 @@ flowchart TD
 - **[Dependencies & Submodules AI Documentation and Rules](./topic--dependencies.md)** (topic) `dependencies`, `ai-context`, `submodules`, `vendor`, `rules`
 - **[Domain Model & Entity Ecosystem](./topic--domain-model.md)** (domain-model) `domain-model`, `entities`, `schemas`, `dag`, `metadata`, `issues`, `milestones`, `spikes`, `sessions`
 - **[License](./topic--license.md)** (license) `license`, `mit`
-- **[Topic-Based Knowledge Base Architecture & Paradigm](./topic--llm-wiki-architecture.md)** (topic) `topic-based-authoring`, `diataxis`, `tf-idf`, `architecture`, `knowledge-base`, `token-efficiency`, `indexing`, `methodology`, `search`, `karpathy`
+- **[Topic-Based Knowledge Base Architecture & Paradigm](./topic--llm-wiki-architecture.md)** (topic) `topic-based-authoring`, `diataxis`, `tf-idf`, `architecture`, `knowledge-base`, `token-efficiency`, `indexing`, `methodology`, `search`, `karpathy`, `progressive-disclosure`, `authoring`
 - **[Protocol & Repository Migrations Guide](./topic--migrations.md)** (guide) `migrations`, `upgrade`, `protocol`, `changelog`, `versioning`, `data-safety`
 - **[Parallel Sessions & Closeout Guide](./topic--parallel-sessions.md)** (guide) `session`, `parallel`, `closeout`, `attribution`, `ledger`, `commit`, `readiness`, `approval`
 - **[Controlled Natural Language (STE-Inspired) Requirement Format](./topic--requirement-format.md)** (guide) `ste`, `cnl`, `requirements`, `specifications`, `convention`, `cross-runtime`
