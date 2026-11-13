@@ -27,7 +27,7 @@ CHARS_PER_TOKEN = 3.8
 
 DEFAULT_BUDGET_LIMITS = {
     # AGENTS.md without its "Project specifics" section: the protocol Along owns.
-    # Core-only since [debt--agents-md-core-slimming]; procedure lives in docs/topic--along-protocol.md.
+    # Core-only since [debt--agents-md-core-slimming]; procedure lives in .along/PROTOCOL.md.
     "agents_md_bytes": 7168,           # 7 KB (measured: ~5.4 KB incl. the rule-pack block)
     # The repository's own "Project specifics" section: a soft limit (warns, never fails);
     # past it, move details into docs/topic--*.md and link them.
