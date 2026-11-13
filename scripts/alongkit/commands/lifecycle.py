@@ -79,6 +79,37 @@ def handle_start_command(repo_root: str, args: List[str]):
             print(f"-> Promoted draft to {repo.safe_relpath(new_path, repo_root)}")
             issue = entities.find_issue_by_slug(repo_root, slug)
     if not issue:
+        matches = []
+        try:
+            contexts = repo.find_agent_contexts(repo_root)
+            for ctx in contexts:
+                if repo._same_path(ctx, repo_root):
+                    continue
+                found = entities.find_issue_by_slug(ctx, slug)
+                if found:
+                    matches.append((ctx, found))
+        except (OSError, ValueError):
+            pass
+
+        if len(matches) == 1:
+            sub_ctx, found_iss = matches[0]
+            rel_sub = repo.canonical_relpath(sub_ctx, repo_root)
+            k = entities.canonical_key(found_iss["type"], found_iss["slug"])
+            raise CommandError(
+                f"Issue '{slug}' was not found in the current context (.along/ISSUES/).\n"
+                f"It belongs to subproject '{rel_sub}' ({k}).\n"
+                f"To work on it, navigate to that subproject first:\n"
+                f"    (cd {rel_sub} && along start {found_iss['slug']})",
+                exit_code=1,
+            )
+        elif len(matches) > 1:
+            lines = [f"Issue '{slug}' was not found in the current context, but exists in multiple subprojects:"]
+            for sub_ctx, found_iss in matches:
+                rel_sub = repo.canonical_relpath(sub_ctx, repo_root)
+                k = entities.canonical_key(found_iss["type"], found_iss["slug"])
+                lines.append(f"  - {rel_sub} ({k}) -> (cd {rel_sub} && along start {found_iss['slug']})")
+            raise CommandError("\n".join(lines), exit_code=1)
+
         raise CommandError(f"Issue '{slug}' not found in .along/ISSUES/.", exit_code=1)
 
     issue_path = issue.get("file_path", "")

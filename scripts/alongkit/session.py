@@ -289,6 +289,7 @@ SESSION_ENV_MARKERS: Tuple[Tuple[str, str], ...] = (
     ("CLAUDE_CODE_SESSION_ID", "claude"),
     ("ANTIGRAVITY_CONVERSATION_ID", "antigravity"),
     ("CODEX_SESSION_ID", "codex"),
+    ("OPENCODE_SESSION_ID", "opencode"),
 )
 
 #: Every environment variable that ties a process to an agent session or issue; the test

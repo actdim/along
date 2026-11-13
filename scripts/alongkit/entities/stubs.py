@@ -178,6 +178,31 @@ def lint_issues(repo_root: str, strict: bool = False) -> Dict[str, Any]:
         if missing:
             rel = repo.safe_relpath(fpath, repo_root)
             findings.append({"slug": iss["slug"], "path": rel, "missing": missing})
+
+        fm = iss.get("frontmatter") or {}
+        if str(fm.get("plan_status") or "").strip().lower() == "approved":
+            plan_candidates = []
+            iss_dir = fpath[:-3]
+            if os.path.isdir(iss_dir):
+                plan_candidates.append(os.path.join(iss_dir, "plan.md"))
+            plan_candidates.append(os.path.join(repo_root, ".along", ".session", iss["slug"], "plan.md"))
+
+            for p_path in plan_candidates:
+                if os.path.isfile(p_path):
+                    try:
+                        p_text = textio.read_text(p_path, strict=False)
+                        for line in p_text.splitlines()[:20]:
+                            line_clean = line.strip().lower()
+                            if line_clean.startswith("status:") and any(w in line_clean for w in ("proposed", "needs-approval", "needs approval", "draft")):
+                                rel_plan = repo.safe_relpath(p_path, repo_root)
+                                findings.append({
+                                    "slug": iss["slug"],
+                                    "path": rel_plan,
+                                    "missing": [f"stale status header '{line.strip()}' contradicts front matter 'plan_status: approved'"],
+                                })
+                                break
+                    except OSError:
+                        pass
     return {
         "scanned": len(issues),
         "findings": findings,

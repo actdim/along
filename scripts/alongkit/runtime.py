@@ -33,7 +33,7 @@ RUNTIME_MATRIX: Dict[str, Dict[str, Any]] = {
     "antigravity": {"skills": "auto (~/.gemini)", "runtime_hooks": True},
     "codex": {"skills": "auto (~/.codex)", "runtime_hooks": True},
     "cowork": {"skills": "not loaded (account plugins only)", "runtime_hooks": False},
-    "opencode": {"skills": "auto (~/.config/opencode)", "runtime_hooks": False},
+    "opencode": {"skills": "auto (~/.config/opencode)", "runtime_hooks": True},
     "cursor": {"skills": "rules only", "runtime_hooks": False},
     "unknown": {"skills": "unknown", "runtime_hooks": False},
 }
@@ -164,10 +164,20 @@ def along_hooks_registered(runtime: str, repo_root: Optional[str] = None) -> boo
         candidates = [os.path.join(home, ".gemini", "config", "hooks.json")]
         if repo_root:
             candidates.append(os.path.join(repo_root, ".agents", "hooks.json"))
+    elif runtime == "opencode":
+        candidates = [
+            os.path.join(home, ".config", "opencode", "plugins", "along-gates.js"),
+            os.path.join(home, ".config", "opencode", "plugins", "along-opencode-plugin.js"),
+        ]
+        if repo_root:
+            candidates.append(os.path.join(repo_root, ".opencode", "plugins", "along-gates.js"))
     for path in candidates:
         try:
             with open(path, "r", encoding="utf-8") as handle:
-                if "along_hook" in handle.read():
+                content = handle.read()
+                if runtime == "opencode" and ("AlongPlugin" in content or "along_hook" in content):
+                    return True
+                if "along_hook" in content:
                     return True
         except OSError:
             continue

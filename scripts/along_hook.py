@@ -130,8 +130,8 @@ def main() -> int:
         parser.add_argument(
             "--runtime",
             default="antigravity",
-            choices=["antigravity", "claude", "codex", "cursor", "all"],
-            help="Target runtime (antigravity, claude, codex, cursor, all)",
+            choices=["antigravity", "claude", "codex", "cursor", "opencode", "all"],
+            help="Target runtime (antigravity, claude, codex, cursor, opencode, all)",
         )
         parser.add_argument("--global", dest="is_global", action="store_true", help="Install hooks globally in user home")
         parser.add_argument("--target-home", default=None, help="Target home directory for global installation")
@@ -157,6 +157,7 @@ def main() -> int:
             install_claude_hooks,
             install_codex_hooks,
             install_cursor_hooks,
+            install_opencode_hooks,
         )
 
         statuses = []
@@ -183,6 +184,13 @@ def main() -> int:
 
         if args.runtime in ("cursor", "all"):
             status, msg = install_cursor_hooks(
+                repo_root, dry_run=args.dry_run, is_global=args.is_global, target_home=args.target_home
+            )
+            print(f"-> [Along Hook] {msg}")
+            statuses.append(status)
+
+        if args.runtime in ("opencode", "all"):
+            status, msg = install_opencode_hooks(
                 repo_root, dry_run=args.dry_run, is_global=args.is_global, target_home=args.target_home
             )
             print(f"-> [Along Hook] {msg}")

@@ -12,6 +12,7 @@ from .base import BaseAdapter
 from .claude import ClaudeCodeAdapter
 from .codex import CodexAdapter
 from .generic import GenericCliAdapter
+from .opencode import OpenCodeAdapter
 
 ADAPTERS: Dict[str, Type[BaseAdapter]] = {
     "antigravity": AntigravityAdapter,
@@ -28,8 +29,8 @@ ADAPTERS: Dict[str, Type[BaseAdapter]] = {
     "generic-cli": GenericCliAdapter,
     "generic_cli": GenericCliAdapter,
     "cursor": GenericCliAdapter,
-    "opencode": GenericCliAdapter,
-    "open-code": GenericCliAdapter,
+    "opencode": OpenCodeAdapter,
+    "open-code": OpenCodeAdapter,
 }
 
 

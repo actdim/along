@@ -220,6 +220,7 @@ class GenericCliAdapter(BaseAdapter):
         session_id = (
             payload.get("session_id")
             or payload.get("sessionId")
+            or payload.get("sessionID")
             or payload.get("conversation_id")
             or payload.get("conversationId")
         )

@@ -765,6 +765,52 @@ def install_cursor_hooks(
     return "installed", f"updated {hooks_file} with Along hooks"
 
 
+def install_opencode_hooks(
+    repo_root: Optional[str] = None,
+    dry_run: bool = False,
+    is_global: bool = False,
+    target_home: Optional[str] = None,
+) -> Tuple[str, str]:
+    """Scaffold or update along-gates.js plugin for OpenCode globally or in repo_root."""
+    if is_global:
+        base_dir = target_home or os.path.expanduser("~/.config/opencode")
+    else:
+        if not repo_root:
+            return "failed", "repo_root is required for local hook install"
+        base_dir = os.path.join(repo_root, ".opencode")
+
+    plugins_dir = os.path.join(base_dir, "plugins")
+    plugin_file = os.path.join(plugins_dir, "along-gates.js")
+
+    src_plugin = os.path.join(os.path.dirname(__file__), "opencode_plugin.js")
+    if not os.path.isfile(src_plugin):
+        return "failed", f"Source plugin template not found: {src_plugin}"
+
+    try:
+        plugin_content = textio.read_text(src_plugin, strict=False)
+    except OSError as exc:
+        return "failed", f"cannot read {src_plugin}: {exc}"
+
+    if os.path.isfile(plugin_file):
+        try:
+            existing = textio.read_text(plugin_file, strict=False)
+            if existing == plugin_content:
+                return "present", f"{plugin_file}: already up to date"
+        except OSError:
+            pass
+
+    if dry_run:
+        return "dry-run", f"{plugin_file}: would install OpenCode Along plugin"
+
+    try:
+        os.makedirs(plugins_dir, exist_ok=True)
+        textio.write_text(plugin_file, plugin_content, newline="\n")
+        return "installed", f"{plugin_file}: installed OpenCode Along plugin"
+    except OSError as exc:
+        return "failed", f"cannot write {plugin_file}: {exc}"
+
+
+
 def _apply_json_settings(
     config_file: str,
     apply: Callable[[Dict[str, Any]], bool],

@@ -406,6 +406,29 @@ def validate_entities(repo_root: str, ancestors: bool = True,
         for c in conflicts:
             errors.append((c.get("rel", "DECISIONS"), f"decision conflict: {c['message']}"))
 
+    board_path = os.path.join(sdir, "ISSUES.md")
+    if os.path.isfile(board_path):
+        try:
+            b_text = textio.read_text(board_path, strict=False)
+            from .projections import _PLAN_STATUS_NOTES
+            for iss in all_issues:
+                if iss.get("done") or iss.get("status") in CLOSED_ISSUE_STATUSES:
+                    continue
+                fm = iss.get("frontmatter") or {}
+                plan_st = str(fm.get("plan_status") or "").strip().lower()
+                expected_note = _PLAN_STATUS_NOTES.get(plan_st, "")
+                if expected_note:
+                    islug = iss["slug"]
+                    for line in b_text.splitlines():
+                        if f"[{islug}](" in line and not line.strip().startswith("<!--"):
+                            if expected_note not in line:
+                                warnings.append((
+                                    repo.canonical_relpath(board_path, repo_root),
+                                    f"projection plan note mismatch for '{islug}': expected '{expected_note.strip()}' for plan_status '{plan_st}', but line is '{line.strip()}' (run 'along issue sync')",
+                                ))
+        except (OSError, ValueError):
+            pass
+
     return {
         "clean": len(errors) == 0,
         "errors": errors,

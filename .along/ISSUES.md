@@ -1,7 +1,7 @@
 # Active Issues
 
 ## Active
-<!-- No active issues -->
+- [ ] `(debt)` [stale-protocol-path-comment](ISSUES/debt--stale-protocol-path-comment.md)
 
 ## Backlog
 - [ ] `(debt)` [autonomous-non-elevation-invariants](ISSUES/debt--autonomous-non-elevation-invariants.md)
@@ -36,6 +36,8 @@
 - [ ] `(feat)` [enterprise-governance-and-cloud-infrastructure](ISSUES/feat--enterprise-governance-and-cloud-infrastructure.md)
 - [ ] `(feat)` [enterprise-governance-and-compliance-pack](ISSUES/feat--enterprise-governance-and-compliance-pack.md)
 - [ ] `(feat)` [external-issue-trackers-sync-and-import](ISSUES/feat--external-issue-trackers-sync-and-import.md)
+- [ ] `(feat)` [feedback-github-pr-transport](ISSUES/feat--feedback-github-pr-transport.md)
+- [ ] `(feat)` [feedback-maintainer-telegram-email-channels](ISSUES/feat--feedback-maintainer-telegram-email-channels.md)
 - [ ] `(feat)` [golang-ecosystem-support](ISSUES/feat--golang-ecosystem-support.md)
 - [ ] `(feat)` [jvm-ecosystem-support](ISSUES/feat--jvm-ecosystem-support.md)
 - [ ] `(feat)` [kb-search-hybrid-retrieval](ISSUES/feat--kb-search-hybrid-retrieval.md)
@@ -59,9 +61,9 @@
 - [ ] `(task)` [reconcile-dashboard-ui-core-conventions](ISSUES/task--reconcile-dashboard-ui-core-conventions.md)
 
 ## Done (recent)
+- [x] `(feat)` [opencode-runtime-integration](ISSUES/done/feat--opencode-runtime-integration.md)
 - [x] `(task)` [release-v4-8-0](ISSUES/done/task--release-v4-8-0.md)
 - [x] `(feat)` [worktree-lifecycle-hardening](ISSUES/done/feat--worktree-lifecycle-hardening.md)
 - [x] `(feat)` [top-down-umbrella-subproject-binding](ISSUES/done/feat--top-down-umbrella-subproject-binding.md)
 - [x] `(feat)` [plan-grants-write-scope](ISSUES/done/feat--plan-grants-write-scope.md)
-- [x] `(feat)` [lint-arbitrary-paths](ISSUES/done/feat--lint-arbitrary-paths.md)
-<!-- 333 older completed issue(s) archived in .along/ISSUES/done/ -->
+<!-- 334 older completed issue(s) archived in .along/ISSUES/done/ -->

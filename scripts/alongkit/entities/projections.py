@@ -20,7 +20,7 @@ from .vocabulary import RECENT_DONE_LIMIT, canonical_key, parse_key
 from .query import _ref_key, scan_issues
 
 _PLAN_STATUS_NOTES: Dict[str, str] = {
-    "approved": " - plan ready",
+    "approved": " - plan approved",
     "needs-approval": " - plan: needs approval",
     "needs-rework": " - plan: needs rework",
 }

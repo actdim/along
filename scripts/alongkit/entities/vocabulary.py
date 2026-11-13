@@ -226,7 +226,7 @@ def detect_agent(explicit: Optional[str] = None) -> str:
     if any(k in env for k in ("CODEX_CLI", "OPENAI_CODEX")):
         return "codex"
 
-    if any(k in env for k in ("OPENCODE_CLI", "OPENCODE_AGENT")):
+    if any(k in env for k in ("OPENCODE_CLI", "OPENCODE_AGENT", "OPENCODE_SESSION_ID")):
         return "opencode"
 
     return "unknown"

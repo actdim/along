@@ -427,7 +427,7 @@ def engine_files(source_root: str) -> Dict[str, str]:
         if os.path.isfile(path) and (name.endswith(".py") or name in ("along.cmd", "along.ps1", "along")):
             pairs[name] = path
     package = os.path.join(scripts_dir, "alongkit")
-    for path in walk_tree(package, (".py", ".yaml", ".json")):
+    for path in walk_tree(package, (".py", ".yaml", ".json", ".js")):
         pairs[os.path.join("alongkit", repo.safe_relpath(path, package))] = path
     dashboard_dir = os.path.join(source_root, "dashboard")
     if os.path.isdir(dashboard_dir):

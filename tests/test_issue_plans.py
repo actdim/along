@@ -242,7 +242,7 @@ class TestPlanFolderMovesWithTicket(PlanFixture):
         self.issue("alpha")
         self.run_cli(along_exec.handle_plan_command, ["approve", "alpha", "--plan-file", self.plan_file()])
         board = entities.compile_issues_board(self.root)
-        self.assertIn("plan ready", board)
+        self.assertIn("plan approved", board)
 
 
 class TestApprovedStatusIsCliOnly(PlanFixture):

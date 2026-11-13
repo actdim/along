@@ -657,6 +657,10 @@ def build_parser() -> argparse.ArgumentParser:
         p_sh.add_argument("slug", help="Issue slug")
         p_sh.add_argument("--json", action="store_true", help="Format as JSON")
 
+    p_find = sub.add_parser("find", help="Search repository root and all nested subprojects for an issue")
+    p_find.add_argument("query", help="Issue slug or canonical key")
+    p_find.add_argument("--json", action="store_true", help="Format as JSON")
+
     p_lint = sub.add_parser("lint", help="Audit issue section contracts")
     p_lint.add_argument("--strict", action="store_true")
 
@@ -682,9 +686,78 @@ def _issue_promote(repo_root: str, args: List[str]):
     return 0
 
 
+def _issue_find(repo_root: str, args: List[str]) -> int:
+    if len(args) < 2 or args[1] in ("-h", "--help", "help") or args[1].startswith("-"):
+        print("Usage: along issue find <slug_or_key> [--json]")
+        print("  Search repository root and all nested subproject contexts for an issue.")
+        return 0
+
+    query = args[1].strip()
+    is_json = "--json" in args
+
+    clean_type, clean_slug = entities.parse_key(query)
+    target_slug = clean_slug if clean_slug else query
+    target_type = clean_type
+
+    contexts = repo.find_agent_contexts(repo_root)
+    matches: List[Dict[str, Any]] = []
+
+    for ctx in contexts:
+        rel_ctx = repo.canonical_relpath(ctx, repo_root) or "."
+        for iss in entities.scan_issues(ctx, include_done=True):
+            itype = iss["type"]
+            islug = iss["slug"]
+            ckey = entities.canonical_key(itype, islug)
+
+            matched = False
+            if query.lower() in (ckey.lower(), islug.lower()):
+                matched = True
+            elif target_slug.lower() == islug.lower():
+                if not target_type or target_type.lower() == itype.lower():
+                    matched = True
+
+            if matched:
+                fm = iss.get("frontmatter") or {}
+                plan_st = str(fm.get("plan_status") or "none").strip()
+                matches.append({
+                    "context": rel_ctx,
+                    "key": ckey,
+                    "type": itype,
+                    "slug": islug,
+                    "title": iss.get("title") or "",
+                    "status": iss.get("status") or "open",
+                    "plan_status": plan_st,
+                    "file_path": repo.canonical_relpath(iss["file_path"], repo_root),
+                    "done": bool(iss.get("done")),
+                })
+
+    if is_json:
+        print(json.dumps(matches, indent=2))
+        return 0
+
+    if not matches:
+        print(f"No issue matching '{query}' found across {len(contexts)} context(s).")
+        return 1
+
+    print(f"Found {len(matches)} match(es) for '{query}':\n")
+    for m in matches:
+        ctx_display = "root" if m["context"] == "." else m["context"]
+        start_cmd = f"along start {m['slug']}" if m["context"] == "." else f"(cd {m['context']} && along start {m['slug']})"
+        done_tag = " [closed]" if m["done"] else ""
+        print(f"  Key:         {m['key']}{done_tag}")
+        print(f"  Title:       {m['title']}")
+        print(f"  Subproject:  {ctx_display}")
+        print(f"  Status:      {m['status']}")
+        print(f"  Plan Status: {m['plan_status']}")
+        print(f"  File:        {m['file_path']}")
+        print(f"  To start:    {start_cmd}")
+        print()
+    return 0
+
+
 def handle_issue_command(repo_root: str, args: List[str]):
     if not args or args[0] in ("-h", "--help", "help"):
-        print("Usage: along_exec.py issue [create|update|done|cancel|delete|reopen|sync|list|show|rename|supersede|lint|promote] [args...]")
+        print("Usage: along_exec.py issue [create|update|done|cancel|delete|reopen|sync|list|show|find|rename|supersede|lint|promote] [args...]")
         print("  create <type> <slug> --title \"Title\" [--draft] [--priority high|medium|low] [--tags \"t1,t2\"] [--agent <name>] [--milestone <name>|--no-milestone]")
         print("  promote <slug>            Promote a draft from .along/.drafts/ to .along/ISSUES/")
         print("  update <slug> [--milestone <name>] [--priority <high|medium|low>] [--status <status>] [--tags <t1,t2>] [--title <title>]")
@@ -697,6 +770,7 @@ def handle_issue_command(repo_root: str, args: List[str]):
         print("  sync                      Recompile the .along/ISSUES.md board")
         print("  list   [--compact]        List active issues (or compact backlog digest)")
         print("  show   <slug> [--json]")
+        print("  find   <slug_or_key> [--json]    Search root and all nested subprojects for an issue")
         print("  lint   [--strict]         Audit active issues against mandatory section contracts")
         print("  rename <old-key> <new-key>")
         print("  supersede <old-key> --by <new-key>")
@@ -725,6 +799,7 @@ def handle_issue_command(repo_root: str, args: List[str]):
         "edit": lambda: _issue_update(repo_root, args, today),
         "show": lambda: _issue_show(repo_root, args),
         "get": lambda: _issue_show(repo_root, args),
+        "find": lambda: _issue_find(repo_root, args),
         "rename": lambda: _issue_rename(repo_root, args),
         "supersede": lambda: _issue_supersede(repo_root, args),
         "promote": lambda: _issue_promote(repo_root, args),
