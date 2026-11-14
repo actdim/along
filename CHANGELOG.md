@@ -2,6 +2,32 @@
 
 All notable changes to this project, newest first.
 
+## v4.9.0 - 2026-11-14
+
+- fix(gates): resolve Stop gate false positives and add trace-backed denials (refs #stop-gate-false-positives)
+- feat: implement named orchestration profiles, OpenObserve OTLP telemetry sink, and orchestrator tracing (refs #openobserve-telemetry-sink)
+- docs(decisions): record ADR for issue-level test scoping and verify policy (refs #issue-test-scoping-policy)
+- feat: Implement issue-scoped verify policy with plan-approval snapshots and coverage-aware test reuse (refs #issue-test-scoping-policy)
+- docs: document scoped testing and verify policy (refs #issue-test-scoping-policy)
+- feat: scoped test runs with coverage-aware reuse (refs #issue-test-scoping-policy)
+- feat: issue-level verify policy snapshotted at plan approval (refs #issue-test-scoping-policy)
+- fix: warn when wrap test run dirties the tree (refs #issue-test-scoping-policy)
+- docs(issues): file provenance drift gate issue with approved plan (refs #provenance-drift-gate)
+- docs(issues): file DITA topic paragraph and stale provenance hash review (refs #dita-topics-and-drift)
+- docs(issues): add stop-gate, trivial-fix lifecycle and doctor leak-check issues with plans (refs #stop-gate-false-positives)
+- docs(kb): align kb-search docs with engine; add authoring and progressive-disclosure sections (refs #kb-search-docs-accuracy)
+- docs(comparisons): align LLM-Wiki stance and kb-search latency claim with measured behavior (refs #system-comparisons)
+- docs(issues): file issue-test-scoping-policy with approved plan (refs #issue-test-scoping-policy)
+- feat(feedback): implement GitHub PR transport with gh CLI and web fallback (refs #feedback-github-pr-transport)
+- feat: Implement GitHub PR feedback transport with gh CLI and web fallback (refs #feedback-github-pr-transport)
+- docs(plan): approve plan for feedback GitHub PR transport (refs #feedback-github-pr-transport)
+- refactor: Point budget.py comment at .along/PROTOCOL.md (leftover from bug--protocol-leaks-into-docs) (refs #stale-protocol-path-comment)
+- docs(budget): point protocol comment at .along/PROTOCOL.md (refs #stale-protocol-path-comment)
+- docs(issues): add feedback GitHub PR transport and maintainer Telegram/email channel issues (refs #feedback-github-pr-transport)
+- fix: fix(opencode): v2 plugin definition, complete lifecycle coverage and argument normalization (refs #opencode-runtime-v2-hardening)
+- feat: feat: opencode runtime hooks integration and multi-subproject issue discovery (refs #opencode-runtime-integration)
+- chore(docs): sync index projections after v4.8.1 release (refs #bump-minor-version-and-reconcile-protocol-references)
+
 ## v4.8.1 - 2026-11-11
 
 - fix(ci): hermetic sys.path in test_cli_chdir for uv no-project (refs #ci-test-matrix-workflow)

@@ -9,7 +9,7 @@ created: 2026-11-14
 updated: 2026-11-14
 agent: antigravity
 tags: [git, merge, gitattributes, resolve, update, concurrency, markdown]
-milestone: v4.9.0-stop-gate-resilience-and-runtime-stabilization
+milestone: v5.0.0-agent-run-protocol-and-observability
 blocked_by: []
 related: [git-merge-drivers-and-setup, docs-semantic-conflict-resolution]
 plan_status: approved
