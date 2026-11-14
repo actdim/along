@@ -17,7 +17,7 @@ import re
 import sys
 from typing import Any, Dict, List, Optional, Tuple
 
-from .. import attribution, entities, frontmatter, kb, proc, repo, sanitizer, session, testruns, textio, typography, verify, worktree
+from .. import attribution, closeout, entities, frontmatter, kb, proc, repo, sanitizer, session, testruns, textio, typography, verify, worktree
 from . import shellparse, shellwrite
 from .models import GateDecision, GateResult, HookEvent, HookEventType
 
@@ -348,6 +348,17 @@ def save_activity_trace(repo_root: str, data: Dict[str, Any], key: Optional[str]
         pass
 
 
+#: Stop denials kept per agent session in the activity trace. REQ-5
+STOP_DENIALS_MAX: int = 50
+
+
+def stop_denial_id(gate: str, key: Optional[str], paths: List[str], turn_start: Optional[str]) -> str:
+    """Deterministic id of a Stop denial: the gate can name it in its message."""
+    import hashlib
+    seed = "|".join([gate, key or "", turn_start or "", *sorted(paths)])
+    return "d-" + hashlib.sha256(seed.encode("utf-8")).hexdigest()[:6]
+
+
 #: Open denials kept per agent session in the activity trace (for retry matching).
 OPEN_DENIALS_MAX: int = 50
 
@@ -381,6 +392,8 @@ def record_gate_denial(event: HookEvent, repo_root: Optional[str], gate: str, re
     bypass.record_hook_denial(repo_root, gate, key)
     if event.event_type == HookEventType.PRE_TOOL_USE:
         _record_denial_event(event, repo_root, key, gate, first, procedural)
+    elif event.event_type == HookEventType.STOP:
+        _record_stop_denial(repo_root, key, gate, first)
 
 
 def _record_denial_event(event: HookEvent, repo_root: str, key: Optional[str], gate: str,
@@ -429,6 +442,54 @@ def _record_denial_event(event: HookEvent, repo_root: str, key: Optional[str], g
     open_denials.append(denial_entry)
     trace["open_denials"] = open_denials[-OPEN_DENIALS_MAX:]
     save_activity_trace(repo_root, trace, key)
+
+
+def _record_stop_denial(repo_root: str, key: Optional[str], gate: str, reason: str) -> None:
+    from .config import _get_audit_redactor
+    trace = load_activity_trace(repo_root, key)
+    last = trace.get("last_stop_denial")
+    if isinstance(last, dict) and last.get("gate") == gate:
+        did = last["id"]
+        target = ", ".join(last.get("paths") or [])
+    else:
+        turn_start = session.last_user_prompt_at(repo_root, key)
+        did = stop_denial_id(gate, key, [reason], turn_start)
+        target = None
+
+    stop_list = [d for d in trace.get("stop_denials") or [] if isinstance(d, dict)]
+    if any(d.get("id") == did for d in stop_list):
+        return
+
+    ctx, slug = session.bound_blackboard(repo_root, key)
+    redactor = _get_audit_redactor()
+    entry = {
+        "id": did,
+        "gate": gate,
+        "tool": "Stop",
+        "target": redactor.sanitize_text(target) if target else None,
+        "reason": redactor.sanitize_text(reason) if reason else None,
+        "ts": session._utc_now_iso(),
+        "state": "open",
+        "ctx": ctx,
+        "slug": slug,
+    }
+    stop_list.append(entry)
+    trace["stop_denials"] = stop_list[-STOP_DENIALS_MAX:]
+    trace.pop("last_stop_denial", None)
+    save_activity_trace(repo_root, trace, key)
+
+    if slug:
+        session.append_event(
+            ctx, slug, key, "deny",
+            extra={
+                "id": did,
+                "gate": gate,
+                "tool": "Stop",
+                "target": target,
+                "reason": reason,
+                "procedural": True,
+            }
+        )
 
 
 def _resolve_retried_denials(event: HookEvent, repo_root: str, key: Optional[str],
@@ -499,6 +560,65 @@ def session_denials(repo_root: str, key: Optional[str]) -> List[Dict[str, Any]]:
     return out
 
 
+def stop_denials(repo_root: str, key: Optional[str]) -> List[Dict[str, Any]]:
+    """Stop denial items from the activity trace (both repo_root and binding_root). REQ-5"""
+    roots = [repo_root] if repo_root else []
+    broot = session.binding_root(repo_root) if repo_root else None
+    if broot and os.path.realpath(broot) != os.path.realpath(repo_root):
+        roots.append(broot)
+    seen_ids = set()
+    out = []
+    for r in roots:
+        trace = load_activity_trace(r, key)
+        for d in trace.get("stop_denials") or []:
+            if isinstance(d, dict) and d.get("id") and d["id"] not in seen_ids:
+                seen_ids.add(d["id"])
+                st = session.DENIAL_ACKED if d.get("state") == "acked" else session.DENIAL_OPEN
+                out.append({
+                    "id": d["id"],
+                    "gate": d.get("gate"),
+                    "tool": d.get("tool", "Stop"),
+                    "target": d.get("target"),
+                    "reason": d.get("reason"),
+                    "state": st,
+                    "verified": None,
+                    "note": d.get("note"),
+                    "via": None,
+                    "ts": d.get("ts"),
+                    "ctx": d.get("ctx"),
+                    "slug": d.get("slug"),
+                })
+    return out
+
+
+def ack_stop_denials(repo_root: str, key: Optional[str], ids: List[str], note: str) -> List[Dict[str, Any]]:
+    """Acknowledge Stop denials in the activity trace and append ledger ack events when blackboard exists. REQ-5"""
+    id_set = set(ids)
+    roots = [repo_root] if repo_root else []
+    broot = session.binding_root(repo_root) if repo_root else None
+    if broot and os.path.realpath(broot) != os.path.realpath(repo_root):
+        roots.append(broot)
+    acked_items = []
+    now = session._utc_now_iso()
+    for r in roots:
+        trace = load_activity_trace(r, key)
+        changed = False
+        for d in trace.get("stop_denials") or []:
+            if isinstance(d, dict) and d.get("id") in id_set and d.get("state") != "acked":
+                d["state"] = "acked"
+                d["note"] = note
+                d["ack_ts"] = now
+                changed = True
+                acked_items.append(d)
+                ctx = d.get("ctx")
+                slug = d.get("slug")
+                if ctx and slug and session.load_state(ctx, slug):
+                    session.append_event(ctx, slug, key, "ack", extra={"id": d["id"], "note": note})
+        if changed:
+            save_activity_trace(r, trace, key)
+    return acked_items
+
+
 def _exit_plan_mode_text(event: HookEvent) -> Optional[str]:
     """The plan the user accepted through ExitPlanMode, wherever the payload carries it.
 
@@ -544,6 +664,8 @@ def record_tool_activity(event: HookEvent, repo_root: str) -> Optional[str]:
         trace_key = event_session_key(event)
         trace = load_activity_trace(repo_root, trace_key)
         trace["turn_baseline"] = turnstate.snapshot(repo_root)
+        trace["turn_writes"] = []
+        trace.pop("shell_pending", None)
 
         # Baseline of plan approval state for this session [bug--autonomous-gate-residual-holes] REQ-2
         slug, _ = session.resolve_active_session(repo_root, trace_key)
@@ -583,6 +705,12 @@ def record_tool_activity(event: HookEvent, repo_root: str) -> Optional[str]:
         if event.event_type != HookEventType.POST_TOOL_USE:
             return
         rel = _repo_relative(_extract_target_file(event), repo_root)
+        if rel:
+            norm_rel = repo.normalize_posix(rel)
+            writes = trace.setdefault("turn_writes", [])
+            if norm_rel not in writes:
+                writes.append(norm_rel)
+            trace["turn_writes"] = writes[-500:]
         # Every repository edit goes into the bound issue's execution trace, except the
         # blackboard and diagnostics themselves [bug--session-records-not-captured].
         if rel and not _matches_pattern(rel, list(TRACE_EXCLUDED_PATTERNS)):
@@ -601,13 +729,28 @@ def record_tool_activity(event: HookEvent, repo_root: str) -> Optional[str]:
             if rel not in edited:
                 edited.append(rel)
             trace["edited_files"] = edited[-200:]
-            save_activity_trace(repo_root, trace, key)
         elif rel and is_doc_edit(rel):
             trace["last_doc_edit_time"] = now_iso
-            save_activity_trace(repo_root, trace, key)
+        save_activity_trace(repo_root, trace, key)
 
     # Track test executions
     elif event.tool_name in ("run_command", "execute_command", "bash", "shell"):
+        from . import turnstate
+        if event.event_type == HookEventType.PRE_TOOL_USE:
+            trace["shell_pending"] = {"snap": turnstate.snapshot(repo_root) or {}}
+            save_activity_trace(repo_root, trace, key)
+        elif event.event_type == HookEventType.POST_TOOL_USE:
+            pending = trace.pop("shell_pending", None)
+            if isinstance(pending, dict):
+                writes = trace.setdefault("turn_writes", [])
+                for p in turnstate.changed_since(repo_root, pending.get("snap") or {}):
+                    norm_p = repo.normalize_posix(p)
+                    if norm_p not in writes:
+                        writes.append(norm_p)
+                trace["turn_writes"] = writes[-500:]
+                save_activity_trace(repo_root, trace, key)
+            return None
+
         cmd = _extract_command(event)
         if not cmd or event.event_type != HookEventType.PRE_TOOL_USE:
             return
@@ -1313,7 +1456,7 @@ def check_mutation_authorization(event: HookEvent, repo_root: str, options: Opti
                 "Only 'along plan approve <slug>' sets it, after the user's explicit yes to the plan; "
                 "set needs-approval and show the plan to the user."
             )
-        if _matches_in_context(rel_target, repo_root, list(MUTATION_WHITELIST_PATTERNS)):
+        if _matches_in_context(rel_target, repo_root, list(MUTATION_WHITELIST_PATTERNS)) or closeout.is_compiled_projection(rel_target, repo_root):
             return None
         changed = [rel_target]
     elif event.event_type == HookEventType.STOP:
@@ -1363,6 +1506,46 @@ def check_mutation_authorization(event: HookEvent, repo_root: str, options: Opti
             return (f"PLAN_REQUIRED [gate: require-plan-approval]: this turn set plan_status: approved in "
                     f"{', '.join(forged)} without 'along plan approve'. Revert it to needs-approval and ask "
                     "the user to approve the plan.")
+
+        writes = trace.get("turn_writes")
+        if isinstance(writes, list):
+            mine = set(writes)
+            pending = trace.get("shell_pending")
+            if isinstance(pending, dict):  # a shell command without PostToolUse: count it
+                mine.update(turnstate.changed_since(repo_root, pending.get("snap") or {}))
+            real_root = os.path.realpath(repo_root)
+
+            def _norm_k(p: str) -> str:
+                try:
+                    abs_p = os.path.realpath(os.path.join(repo_root, p))
+                    rel_p = repo.safe_relpath(abs_p, real_root)
+                    return closeout.path_key(rel_p)
+                except (ValueError, OSError):
+                    return closeout.path_key(p)
+
+            mine_keys = {_norm_k(p) for p in mine}
+            if mine_keys:
+                foreign = [p for p in turn_changes if _norm_k(p) not in mine_keys]
+                turn_changes = [p for p in turn_changes if _norm_k(p) in mine_keys]
+            else:
+                other_writes = set()
+                act_dir = os.path.join(repo.diagnostics_dir(repo_root), "activity")
+                if os.path.isdir(act_dir):
+                    for fname in os.listdir(act_dir):
+                        if fname.endswith(".json"):
+                            k = fname[:-5]
+                            if k != trace_key:
+                                other_trace = load_activity_trace(repo_root, k)
+                                for p in other_trace.get("turn_writes") or []:
+                                    other_writes.add(_norm_k(p))
+                foreign = [p for p in turn_changes if _norm_k(p) in other_writes]
+                turn_changes = [p for p in turn_changes if _norm_k(p) not in other_writes]
+
+            if foreign:
+                session.trace_event(repo_root, trace_key,
+                                    f"stop: {len(foreign)} path(s) changed this turn outside this "
+                                    "session's tool calls were not counted", collapse=True)
+
         changed = [p for p in turn_changes if _is_plan_governed(p, repo_root)]
         if not changed:
             return None
@@ -1386,10 +1569,19 @@ def check_mutation_authorization(event: HookEvent, repo_root: str, options: Opti
         target = "this session (several in-progress issues, none bound to it)"
     approve = "EnterPlanMode / ExitPlanMode, or 'along plan approve --plan-file <path>' after the user's yes"
     if event.event_type == HookEventType.STOP:
+        turn_start = session.last_user_prompt_at(repo_root, key)
+        did = stop_denial_id("require_plan_approval", key, changed, turn_start)
+        stop_list = [d for d in trace.get("stop_denials") or [] if isinstance(d, dict)]
+        if any(d.get("id") == did and d.get("state") == "acked" for d in stop_list):
+            return None
+
+        trace["last_stop_denial"] = {"id": did, "gate": "require_plan_approval", "paths": changed}
+        save_activity_trace(repo_root, trace, key)
+
         shown = ", ".join(changed[:5]) + (f" (+{len(changed) - 5})" if len(changed) > 5 else "")
         return (f"PLAN_REQUIRED [gate: require-plan-approval]: this turn changed {shown} with no approved "
                 f"plan for {target}. Ask the user: approve ({approve}) or revert ('git checkout -- <files>' / "
-                "delete the new files).")
+                f"delete the new files). Or tell the user what is left and why, then 'along gates ack {did} --note \"...\"'.")
     reason = (f"PLAN_REQUIRED [gate: require-plan-approval]: no approved plan for {target} to edit "
               f"'{changed[0]}'. Fix: {approve}.")
     from .. import profiles
@@ -1458,8 +1650,11 @@ def _is_along_state(rel: str) -> bool:
 
 
 def _is_plan_governed(rel: str, repo_root: str) -> bool:
-    """A path whose change needs an approved plan: not Along state, not a planning artifact."""
+    """A path whose change needs an approved plan: not Along state, not a planning
+    artifact, not a projection the KB engines compile (any level). REQ-1"""
     if _matches_in_context(rel, repo_root, list(MUTATION_WHITELIST_PATTERNS)):
+        return False
+    if closeout.is_compiled_projection(rel, repo_root):
         return False
     return not _is_along_state(rel)
 

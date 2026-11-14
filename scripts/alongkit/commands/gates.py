@@ -211,18 +211,38 @@ def _handle_denials(repo_root: str, subcmd: str, args: List[str]) -> int:
         parser.add_argument("--json", action="store_true", help="Emit the denials as JSON")
     opts = parser.parse_args(args)
 
+    from ..hooks import predicates
+    key = session.current_session_key()
+
     if subcmd == "denials":
-        ctx, slug = _denials_target(repo_root, opts.slug)
-        if not ctx or not slug:
-            what = f"issue '{slug}' has no blackboard" if slug else "this session is not bound to an issue"
-            print(f"[Error] No gate denials to read: {what} (along start <slug>, or --slug).", file=sys.stderr)
-            return 2
-        items = session.denial_status(ctx, slug)
+        items = []
+        if opts.slug:
+            ctx, slug = _denials_target(repo_root, opts.slug)
+            if not ctx or not slug:
+                what = f"issue '{slug}' has no blackboard"
+                print(f"[Error] No gate denials to read: {what} (along start <slug>, or --slug).", file=sys.stderr)
+                return 2
+            items = session.denial_status(ctx, slug)
+        else:
+            ctx, slug = _denials_target(repo_root, None)
+            if ctx and slug:
+                items = session.denial_status(ctx, slug)
+            stop_items = predicates.stop_denials(repo_root, key)
+            known_ids = {d["id"] for d in items}
+            for sd in stop_items:
+                if sd["id"] not in known_ids:
+                    items.append(sd)
+            if not items and not (ctx and slug):
+                what = "this session is not bound to an issue"
+                print(f"[Error] No gate denials to read: {what} (along start <slug>, or --slug).", file=sys.stderr)
+                return 2
+
         if opts.json:
             print(json.dumps(items, indent=2))
             return 0
         if not items:
-            print(f"No gate denials recorded for '{slug}'.")
+            target_slug = opts.slug or slug or "current session"
+            print(f"No gate denials recorded for '{target_slug}'.")
             return 0
         for d in items:
             state = d["state"]
@@ -230,10 +250,10 @@ def _handle_denials(repo_root: str, subcmd: str, args: List[str]) -> int:
                 state = f"resolved ({d['via']})"
             elif state == session.DENIAL_ACKED:
                 state = {True: "acked", False: "acked, awaiting the user's reply",
-                         None: "acked (unverified)"}[d["verified"]]
+                         None: "acked (unverified)"}.get(d.get("verified"), "acked")
             agent = d.get("subagent_role") or d.get("agent") or d.get("subagent")
             agent_str = f"  (subagent: {agent})" if agent else ""
-            print(f"{d['id']}  {str(d['ts'])[:19]}  [{d['gate']}]{agent_str}  {state}")
+            print(f"{d['id']}  {str(d.get('ts', ''))[:19]}  [{d['gate']}]{agent_str}  {state}")
             print(f"    {d.get('target') or d.get('tool') or ''}")
             if d.get("note"):
                 print(f"    note: {d['note']}")
@@ -245,7 +265,6 @@ def _handle_denials(repo_root: str, subcmd: str, args: List[str]) -> int:
               file=sys.stderr)
         return 2
 
-    key = session.current_session_key()
     if opts.slug:
         ctx, slug = _denials_target(repo_root, opts.slug)
         if not ctx or not slug:
@@ -256,8 +275,12 @@ def _handle_denials(repo_root: str, subcmd: str, args: List[str]) -> int:
         for d in items:
             d["ctx"], d["slug"] = ctx, slug
     else:
-        from ..hooks import predicates
         items = predicates.session_denials(repo_root, key)
+        stop_items = predicates.stop_denials(repo_root, key)
+        known_ids = {d["id"] for d in items}
+        for sd in stop_items:
+            if sd["id"] not in known_ids:
+                items.append(sd)
         cur_ctx, cur_slug = session.bound_blackboard(repo_root, key)
         trace = predicates.load_activity_trace(repo_root, key)
         if not cur_slug and not (trace.get("open_denials") or []) and not items:
@@ -282,11 +305,16 @@ def _handle_denials(repo_root: str, subcmd: str, args: List[str]) -> int:
 
     from collections import defaultdict
     by_slug = defaultdict(list)
+    stop_ids = {d["id"] for d in predicates.stop_denials(repo_root, key)}
     for d in chosen:
-        d_ctx = d.get("ctx") or (ctx if 'ctx' in locals() else repo_root)
-        d_slug = d.get("slug") or (slug if 'slug' in locals() else "")
-        session.append_event(d_ctx, d_slug, key, "ack", extra={"id": d["id"], "note": note})
+        if d["id"] in stop_ids:
+            predicates.ack_stop_denials(repo_root, key, [d["id"]], note)
+        else:
+            d_ctx = d.get("ctx") or (ctx if 'ctx' in locals() else repo_root)
+            d_slug = d.get("slug") or (slug if 'slug' in locals() else "")
+            session.append_event(d_ctx, d_slug, key, "ack", extra={"id": d["id"], "note": note})
         session.trace_event(repo_root, key, f"acknowledged denial {d['id']} [{d['gate']}]: {note}")
+        d_slug = d.get("slug") or (slug if 'slug' in locals() else "") or "current session"
         by_slug[d_slug].append(d)
 
     for s, s_items in by_slug.items():

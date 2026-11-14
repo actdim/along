@@ -12,7 +12,7 @@ This repo carries its own agent context, provider-agnostically. Follow it every 
 
 ## Anchor work to an issue
 1. Find or create the issue with `status: in-progress`; `along start <slug>` binds this session.
-2. Source edits unlock after the user approves the plan (`EnterPlanMode` -> `ExitPlanMode`, or `along plan approve --plan-file <path>` after their explicit yes). Questions get read-only answers; 1-line typo/comment edits are exempt.
+2. Source edits unlock after the user approves the plan (`EnterPlanMode` -> `ExitPlanMode`, or `along plan approve --plan-file <path>` after their explicit yes). Questions get read-only answers.
 3. Commit via `/along-commit`: bound to the slug, no AI `Co-Authored-By:` trailers.
 4. Finish with the completion checklist, ending in `along wrap <slug> --summary "..." (--decisions <ADR...> | --no-decisions)`.
 

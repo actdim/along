@@ -34,7 +34,7 @@ DEFAULT_BUDGET_LIMITS = {
     # [debt--agents-md-budget-project-specifics]
     "project_specifics_bytes": 4096,
     "issues_md_bytes": 8192,           # 8 KB (measured: ~6.9 KB with extended backlog)
-    "constraints_md_bytes": 16384,      # 16 KB (measured: ~12.3 KB)
+    "constraints_md_bytes": 20480,      # 20 KB (measured: ~16.4 KB with 60 ADRs)
     "mandatory_session_bytes": 36864,  # 36 KB (measured: ~29 KB)
 }
 
@@ -111,6 +111,7 @@ def measure_context(repo_root: str,
                     limits: Optional[Dict[str, int]] = None) -> Dict[str, Any]:
     """Analyze context costs for a repository across auto_loaded, session start, and skills."""
     effective_limits = dict(DEFAULT_BUDGET_LIMITS)
+    effective_limits.update(config_limits(repo_root))
     if limits:
         effective_limits.update(limits)
 

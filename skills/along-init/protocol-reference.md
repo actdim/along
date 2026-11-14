@@ -49,7 +49,7 @@ Also, when relevant: `.along/VISION.md`, `.along/GLOSSARY.md`. These reflect the
 <!-- profile: light -->
 - **Session Binding & Plan Alignment**: `along start <slug>` binds THIS agent session to the issue; parallel sessions keep their own bindings. Formal plan mode is recommended for complex architectural refactors; direct execution with user alignment is permitted.
 <!-- /profile -->
-- **Exemptions**: Read-only Q&A and 1-line micro-edits (typo fixes, comments) do not require issues.
+- **Exemptions**: Read-only Q&A does not require an issue. Every repository edit, including a 1-line typo or comment fix, needs an in-progress issue and an approved plan.
 - **Inquiry Read-Only Invariance (Zero-Mutation Rule on Questions)** [gate: require-plan-approval]: On interrogative prompts ("is X done?", "why did Y fail?"), write/modify tools are STRICTLY PROHIBITED. Return a read-only audit report and ask for confirmation before modifying anything.
 - **Commit Binding** [gate: commit-issue-binding]: Every commit via `/along-commit` MUST bind to the active issue slug.
 - **No AI Co-Authors**: Commit messages MUST NOT carry `Co-Authored-By:` trailers naming an AI agent (GitHub lists the vendor as a contributor). `along hook install` turns runtime attribution off; opt out via `.along/config.json` `commits.allow_ai_coauthor: true`.

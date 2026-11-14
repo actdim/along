@@ -13,7 +13,7 @@ This repo carries its own agent context, provider-agnostically. Follow it every 
 ## Anchor work to an issue
 1. Find or create the issue with `status: in-progress`; `along start <slug>` binds this session.
 <!-- profile: !light -->
-2. Source edits unlock after the user approves the plan (`EnterPlanMode` -> `ExitPlanMode`, or `along plan approve --plan-file <path>` after their explicit yes). Questions get read-only answers; 1-line typo/comment edits are exempt.
+2. Source edits unlock after the user approves the plan (`EnterPlanMode` -> `ExitPlanMode`, or `along plan approve --plan-file <path>` after their explicit yes). Questions get read-only answers.
 <!-- /profile -->
 <!-- profile: light -->
 2. Align the plan with the user; formal plan mode is recommended for complex refactors. Questions get read-only answers.

@@ -9,7 +9,7 @@ created: 2026-09-27
 updated: 2026-11-06
 agent: cowork
 tags: [cowork, plugin, skills, install]
-milestone: v4.8.0-empirical-benchmarking-and-publications
+milestone: v5.1.0-language-ecosystem-expansion
 blocked_by: [bug--py310-fstring-syntax-error]
 related: [feat--cowork-runtime-support, feat--git-level-gate-enforcement]
 ---

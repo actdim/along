@@ -29,7 +29,7 @@ import sys
 import tempfile
 from typing import Dict, List, Optional, Sequence, Tuple, Union
 
-from . import entities, frontmatter, gates, markdown, proc, repo, session, testruns, textio, transaction, verify, worktree
+from . import closeout, entities, frontmatter, gates, markdown, proc, repo, session, testruns, textio, transaction, verify, worktree
 
 LIFECYCLE_ACTIONS: tuple = ("build", "test", "dev", "debug")
 
@@ -872,6 +872,7 @@ def _auto_commit_wrapped_work(
     dry_run: bool = False,
     no_verify: bool = False,
     bypass_reason: Optional[str] = None,
+    extra_projections: Optional[List[str]] = None,
 ) -> int:
     """Automatically commit attributed files and wrap metadata [feat--atomic-wrap-commit-and-start-guard] REQ-1."""
     from . import closeout
@@ -902,6 +903,11 @@ def _auto_commit_wrapped_work(
             pk = closeout.path_key(top_rel)
             if pk in changed_keys:
                 dirty_projections.append(changed_keys[pk])
+
+    for p in extra_projections or []:
+        pk = closeout.path_key(p)
+        if pk in changed_keys:
+            dirty_projections.append(changed_keys[pk])
 
     # Engine-refreshed managed blocks carry no edit events [bug--wrap-misses-engine-writes].
     dirty_managed = closeout.managed_only_agents_changes(repo_root, changes)
@@ -1494,8 +1500,11 @@ def execute_wrap(
         # Knowledge Base projections are regenerable and written by a subprocess the
         # transaction cannot undo, so they run after the commit; a failure warns.
         # [bug--wrap-not-transactional] REQ-2
+        kb_written: List[str] = []
         kb_script = repo.resolve_tool_script("along_kb_sync.py", repo_root)
         if kb_script:
+            top = closeout.git_top(repo_root)
+            pre = closeout.content_fingerprint(top, sorted(closeout.git_changes(repo_root))) if top else {}
             kb_cmd = [kb_script, repo_root]
             issue_type = str(issue.get("type", "")).lower()
             issue_tags = [str(t).lower() for t in (issue.get("tags") or [])]
@@ -1507,6 +1516,9 @@ def execute_wrap(
             else:
                 print(f"[Warning] Knowledge Base sync failed; run 'along kb-sync':\n{kb_res.stderr or kb_res.stdout}",
                       file=sys.stderr)
+            if top:
+                post = closeout.content_fingerprint(top, sorted(set(closeout.git_changes(repo_root)) | set(pre)))
+                kb_written = [p for p, blob in post.items() if pre.get(p, "absent") != blob and closeout.is_compiled_projection(p, top)]
         # This session keeps a completion token for the commit that follows
         # [bug--commit-blocked-after-wrap].
         attributed_map = session.attributed_files(repo_root, clean_slug)
@@ -1541,6 +1553,7 @@ def execute_wrap(
             dry_run=dry_run,
             no_verify=no_verify,
             bypass_reason=bypass_reason or force_reason,
+            extra_projections=kb_written,
         )
         return code
 

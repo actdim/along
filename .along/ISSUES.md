@@ -1,7 +1,6 @@
 # Active Issues
 
 ## Active
-- [ ] `(bug)` [stop-gate-false-positives](ISSUES/bug--stop-gate-false-positives.md) - plan approved
 - [ ] `(feat)` [git-automerge-protection-and-semantic-merge](ISSUES/feat--git-automerge-protection-and-semantic-merge.md) - plan approved
 - [ ] `(feat)` [provenance-drift-gate](ISSUES/feat--provenance-drift-gate.md) - plan approved
 
@@ -66,8 +65,8 @@
 
 ## Done (recent)
 - [x] `(feat)` [openobserve-telemetry-sink](ISSUES/done/feat--openobserve-telemetry-sink.md)
+- [x] `(bug)` [stop-gate-false-positives](ISSUES/done/bug--stop-gate-false-positives.md)
 - [x] `(feat)` [opencode-runtime-integration](ISSUES/done/feat--opencode-runtime-integration.md)
 - [x] `(feat)` [issue-test-scoping-policy](ISSUES/done/feat--issue-test-scoping-policy.md)
 - [x] `(feat)` [feedback-github-pr-transport](ISSUES/done/feat--feedback-github-pr-transport.md)
-- [x] `(docs)` [system-comparisons](ISSUES/done/docs--system-comparisons.md)
-<!-- 340 older completed issue(s) archived in .along/ISSUES/done/ -->
+<!-- 341 older completed issue(s) archived in .along/ISSUES/done/ -->

@@ -407,6 +407,48 @@ PROJECTION_FILES: Tuple[str, ...] = (".along/ISSUES.md", ".along/HISTORY.md", "d
                                      "docs/decisions/INDEX.md", "llms.txt", "llms-full.txt",
                                      ".along/PROTOCOL.md")
 
+#: File names `along kb-sync` / `along decision sync` compile at any level (root,
+#: subproject, package doc root). [bug--stop-gate-false-positives] REQ-1
+COMPILED_PROJECTION_NAMES: Tuple[str, ...] = ("llms.txt", "llms-full.txt")
+
+
+def is_compiled_projection(rel: str, base: str) -> bool:
+    """`rel` (POSIX, relative to `base`) is an index or llms file the KB engines compile.
+
+    - `<any>/docs/INDEX.md` or `<any>/docs/decisions/INDEX.md` whose front matter on disk
+      says `protocol: along` and `type: index`;
+    - `<any>/llms.txt`, `<any>/llms-full.txt` (also under `.well-known/`) when the owning
+      directory has a `docs/` folder.
+    A missing file is not a projection (a deletion stays plan-governed).
+    """
+    path = os.path.join(base, rel)
+    if not os.path.isfile(path):
+        return False
+
+    norm = repo.normalize_posix(rel).lstrip("/")
+    parts = norm.split("/")
+    if not parts:
+        return False
+
+    if parts[-1] == "INDEX.md" and (parts[-2:-1] == ["docs"] or parts[-3:-1] == ["docs", "decisions"]):
+        try:
+            text = textio.read_text(path, strict=False)
+            mapping, _body, _err = frontmatter.try_parse(text)
+            return mapping.get("protocol") == "along" and str(mapping.get("type")) == "index"
+        except (OSError, UnicodeDecodeError, ValueError):
+            return False
+
+    if parts[-1] in COMPILED_PROJECTION_NAMES:
+        if len(parts) >= 2 and parts[-2] == ".well-known":
+            owner_rel = "/".join(parts[:-2])
+        else:
+            owner_rel = "/".join(parts[:-1])
+        owner_abs = os.path.join(base, owner_rel) if owner_rel else base
+        return os.path.isfile(path) and os.path.isdir(os.path.join(owner_abs, "docs"))
+
+    return False
+
+
 _RULES_BLOCK_RE = re.compile(r"<!-- BEGIN ALONG-RULES -->.*?<!-- END ALONG-RULES -->", re.DOTALL)
 
 

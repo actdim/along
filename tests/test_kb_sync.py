@@ -626,5 +626,88 @@ class TestKbSyncCliIntegration(unittest.TestCase):
             self.assertNotIn("slug collision", res.stdout.lower() + res.stderr.lower(), res.stdout)
 
 
+class TestIdempotentSync(unittest.TestCase):
+    """Verifies that running kb-sync on an unchanged KB produces no file modifications. REQ-2"""
+
+    def test_kb_sync_twice_leaves_zero_file_changes(self):
+        from datetime import datetime
+        with hermetic.repo_fixture() as root:
+            # Setup AGENTS.md, docs/topic--a.md
+            docs_dir = os.path.join(root, "docs")
+            os.makedirs(docs_dir, exist_ok=True)
+            textio.write_text(os.path.join(docs_dir, "topic--a.md"), (
+                "---\n"
+                "protocol: along\n"
+                "slug: a\n"
+                "title: Topic A\n"
+                "type: architecture\n"
+                "tags: [a]\n"
+                "---\n\n"
+                "# Topic A\n\n"
+                "Content for topic A.\n"
+            ))
+
+            dec_dir = os.path.join(root, ".along", "DECISIONS")
+            os.makedirs(dec_dir, exist_ok=True)
+            textio.write_text(os.path.join(dec_dir, "ADR-2026-01-01--x.md"), (
+                "---\n"
+                "protocol: along\n"
+                "slug: ADR-2026-01-01--x\n"
+                "title: Architectural Decision X\n"
+                "status: accepted\n"
+                "date: 2026-01-01\n"
+                "decision_type: architecture\n"
+                "---\n\n"
+                "# ADR-2026-01-01--x: Architectural Decision X\n\n"
+                "Context and Decision.\n"
+            ))
+
+            pkg_dir = os.path.join(root, "packages", "pkg")
+            pkg_docs = os.path.join(pkg_dir, "docs")
+            os.makedirs(pkg_docs, exist_ok=True)
+            textio.write_text(os.path.join(pkg_dir, "AGENTS.md"), "# Package Agents\n")
+            textio.write_text(os.path.join(pkg_docs, "topic--b.md"), (
+                "---\n"
+                "protocol: along\n"
+                "slug: b\n"
+                "title: Topic B\n"
+                "type: architecture\n"
+                "tags: [b]\n"
+                "---\n\n"
+                "# Topic B\n\n"
+                "Content for topic B.\n"
+            ))
+
+            # Run 1: initial sync
+            along_kb_sync.sync_kb(root)
+
+            # Record file bytes across the tree
+            file_map_1 = {}
+            for dirpath, _, filenames in os.walk(root):
+                for f in filenames:
+                    p = os.path.join(dirpath, f)
+                    with open(p, "rb") as fp:
+                        file_map_1[os.path.relpath(p, root)] = fp.read()
+
+            # Run 2: patched date to tomorrow
+            class MockDatetime(datetime):
+                @classmethod
+                def now(cls, tz=None):
+                    return datetime(2099, 1, 2)
+
+            with patch("along_kb_sync.datetime", MockDatetime):
+                along_kb_sync.sync_kb(root)
+
+            # Record file bytes after second run
+            file_map_2 = {}
+            for dirpath, _, filenames in os.walk(root):
+                for f in filenames:
+                    p = os.path.join(dirpath, f)
+                    with open(p, "rb") as fp:
+                        file_map_2[os.path.relpath(p, root)] = fp.read()
+
+            self.assertEqual(file_map_1, file_map_2)
+
+
 if __name__ == "__main__":
     unittest.main()

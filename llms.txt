@@ -40,6 +40,7 @@ ActDim Along provides repositories with an isolated, durable, and human-readable
 - [docs/topic--license.md](docs/topic--license.md): License.
 - [docs/topic--llm-wiki-architecture.md](docs/topic--llm-wiki-architecture.md): Topic-Based Knowledge Base Architecture & Paradigm.
 - [docs/topic--migrations.md](docs/topic--migrations.md): Protocol & Repository Migrations Guide.
+- [docs/topic--multi-runtime-orchestration.md](docs/topic--multi-runtime-orchestration.md): Multi-Runtime Orchestration, Named Profiles & OpenObserve Observability.
 - [docs/topic--parallel-sessions.md](docs/topic--parallel-sessions.md): Parallel Sessions & Closeout Guide.
 - [docs/topic--requirement-format.md](docs/topic--requirement-format.md): Controlled Natural Language (STE-Inspired) Requirement Format.
 - [docs/topic--runtime-hooks-and-gates.md](docs/topic--runtime-hooks-and-gates.md): Runtime Lifecycle Hooks & Mechanical Gates.

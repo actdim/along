@@ -265,7 +265,7 @@ This repo carries its own agent context, provider-agnostically. Follow it every 
 
 ## Anchor work to an issue
 1. Find or create the issue with `status: in-progress`; `along start <slug>` binds this session.
-2. Source edits unlock after the user approves the plan (`EnterPlanMode` -> `ExitPlanMode`, or `along plan approve --plan-file <path>` after their explicit yes). Questions get read-only answers; 1-line typo/comment edits are exempt.
+2. Source edits unlock after the user approves the plan (`EnterPlanMode` -> `ExitPlanMode`, or `along plan approve --plan-file <path>` after their explicit yes). Questions get read-only answers.
 3. Commit via `/along-commit`: bound to the slug, no AI `Co-Authored-By:` trailers.
 4. Finish with the completion checklist, ending in `along wrap <slug> --summary "..." (--decisions <ADR...> | --no-decisions)`.
 
@@ -2062,8 +2062,8 @@ Runs the commit-time gate subset (catalogue entries with `git` or `ci` in `enfor
   - `along gates check --hook commit-msg <file>`: Issue binding and AI co-author trailers in the message.
   - `along gates check --ci [--range R] [--no-links] [--json]`: Every non-merge commit message in the range, the range diff, projection freshness of the checkout, and link integrity (`along kb-sync --check`). The range defaults to `origin/$GITHUB_BASE_REF...HEAD` for PRs, `$ALONG_CI_BEFORE..HEAD` for pushes, else `HEAD^..HEAD`. Used by `.github/workflows/tests.yml`.
   - `along gates stats [--since YYYY-MM-DD]`: Per-gate blocked / warned / bypassed counts aggregated from `.along/diagnostics/hooks_audit.jsonl` (shadow-mode records, `decision: "warn"`, count as warnings; `decision: bypass` entries as bypasses), then "Repeated blocks": identical (gate, target) blocks >= 3 in one conversation, a loop indicator. Each audit entry ends with `target` (the judged command or file path, redacted, at most 200 chars); entries without it fall back to the reason. Read-only.
-  - `along gates denials [--slug SLUG] [--json]`: Gate denials of the bound issue (or `--slug`) from its event ledger: `open`, `resolved (retry)` (the same command or path later went through; a write counts once it succeeded), `resolved (approve)` (a `denial: procedural` gate - `require_plan_approval`, `require_active_issue` - after the plan approval), or `acked` (verified once the user replied after the ack). Read-only. [feat--anti-silent-fallback-gate]
-  - `along gates ack (ID... | --all) --note "..." [--slug SLUG]`: Records that the user was told what a denied tool call left undone (`ack` ledger event plus a trace line). Releases [gate: unresolved_gate_denial] at turn end; `along wrap`, `along issue done` and `along session close` accept it once the user has replied after it. Exit `2` without `--note` or with an unknown id.
+  - `along gates denials [--slug SLUG] [--json]`: Gate denials of the bound issue (or `--slug`) from its event ledger, as well as Stop denials from the session activity trace: `open`, `resolved (retry)` (the same command or path later went through; a write counts once it succeeded), `resolved (approve)` (a `denial: procedural` gate - `require_plan_approval`, `require_active_issue` - after the plan approval), or `acked` (verified once the user replied after the ack). Operates even without active session binding by inspecting recent session activity traces. Read-only. [feat--anti-silent-fallback-gate]
+  - `along gates ack (ID... | --all) --note "..." [--slug SLUG]`: Records that the user was told what a denied tool call left undone (`ack` ledger event plus a trace line). Acknowledges PreToolUse ledger denials and Stop-time activity trace denials alike, even after session unbinding or wrap. Releases [gate: unresolved_gate_denial] at turn end; `along wrap`, `along issue done` and `along session close` accept it once the user has replied after it. Exit `2` without `--note` or with an unknown id.
 - **Usage**:
   ```bash
   along gates check --ci --range origin/main...HEAD
@@ -3386,6 +3386,268 @@ fails if the engine calls `shutil.move`, `os.remove` or their neighbours directl
 
 ---
 
+## Document: docs/topic--multi-runtime-orchestration.md (Multi-Runtime Orchestration, Named Profiles & OpenObserve Observability)
+
+# Multi-Runtime Orchestration, Named Profiles & OpenObserve Observability
+
+## 1. Overview and Problem Statement
+
+Engineering tasks vary widely in complexity. A single-file bugfix or typo correction does not warrant multi-agent decomposition, while complex refactorings benefit from specialized models (such as an advanced model for architecture and planning, a cost-efficient or local code model for step implementation, and an independent model for code review).
+
+To prevent operational overhead and excessive token consumption, Along separates task execution into configurable **Orchestration Profiles**. These profiles govern which agent runtime harnesses (Claude Code, OpenAI Codex, OpenCode, Google Antigravity) execute each phase, while streaming real-time OpenTelemetry (OTel) traces to an analytical backend such as **OpenObserve**.
+
+---
+
+## 2. Core Components & Engine Implementation
+
+Along provides a decoupled engine architecture for multi-runtime task execution:
+
+### 2.1 Orchestration Modes
+
+Along supports three distinct operational modes:
+
+1. **`direct` (Single-Agent Fast-Path)**:
+   - A single agent runtime handles the entire task in one continuous session.
+   - Skips dedicated Scout and Reviewer subagent phases.
+   - Ideal for S-size tasks (1-2 files), documentation updates, and straightforward fixes.
+
+2. **`team-native` (In-Harness Sequential Roles)**:
+   - Execution is divided into deterministic roles (`scout`, `architect`, `implementer`, `reviewer`).
+   - All roles run within a single provider harness (for example, native Antigravity subagents or Claude Code `Task` tools, falling back to a single-agent Ralph loop when subagents are unavailable).
+   - Suitable for M-size tasks requiring structured planning and review without cross-runtime switching.
+
+3. **`cross-runtime` (Heterogeneous Multi-CLI Orchestration)**:
+   - Supervised by `CrossRuntimeOrchestrator`.
+   - Each role is dispatched to a dedicated CLI process and model configuration (for example, Claude Code for planning, OpenCode for coding, Codex or Antigravity for review).
+   - Artifacts and state are synchronized via the repository session blackboard (`.along/.session/<slug>/`).
+   - Designed for L/XL tasks and specialized enterprise or air-gapped environments.
+
+### 2.2 Named Profiles Configuration & Schema
+
+Profiles are defined as declarative YAML documents stored in `.along/orchestration/<name>.yaml`. Shorthand configs can also reside directly in `along.yaml` or `.along/config.yaml`.
+
+```yaml
+name: "cross-tiered"
+description: "Tiered multi-agent execution with Claude planner and OpenCode worker"
+mode: "cross-runtime" # direct | team-native | cross-runtime
+workspace: "inherit"  # inherit | worktree
+timeout: 1800         # global timeout in seconds
+
+roles:
+  scout:
+    runtime: "claude-code"
+    model: "claude-3-7-sonnet"
+    timeout: 600
+    args: ["--permission-mode", "headless"]
+    env:
+      ANTHROPIC_API_KEY: "${ANTHROPIC_API_KEY}"
+
+  architect:
+    runtime: "claude-code"
+    model: "claude-3-7-sonnet"
+    timeout: 900
+
+  implementer:
+    runtime: "opencode"
+    model: "qwen2.5-coder:32b"
+    timeout: 1800
+    args: ["--variant", "code"]
+    env:
+      OPENAI_BASE_URL: "http://localhost:11434/v1"
+      OPENAI_API_KEY: "ollama"
+
+  reviewer:
+    runtime: "codex"
+    model: "o3-mini"
+    timeout: 600
+```
+
+For a simple single-agent profile (`.along/orchestration/direct.yaml`):
+
+```yaml
+name: "direct"
+description: "Default single-agent fast path"
+mode: "direct"
+workspace: "inherit"
+runner:
+  runtime: "claude-code"
+  model: "claude-3-7-sonnet"
+  timeout: 1200
+```
+
+---
+
+## 3. Data Flow & Execution Workflows
+
+### 3.1 Parameter Resolution Cascade
+
+Orchestration parameters resolve in strict order of precedence:
+
+1. **CLI Overrides (Highest Precedence)**:
+   Flags passed directly to `along orchestrate <slug>`:
+   ```bash
+   along orchestrate <slug> --profile cross-tiered --model "claude-3-7-sonnet" --timeout 2400
+   ```
+2. **Issue Front-Matter**:
+   Specified in `.along/ISSUES/<slug>.md`:
+   ```yaml
+   ---
+   slug: core-compiler-refactor
+   orchestration: cross-tiered
+   ---
+   ```
+3. **Repository Profiles Directory**:
+   Matching `.along/orchestration/<name>.yaml` file.
+4. **Repository Default Configuration**:
+   Default profile specified in `along.yaml` or `.along/config.yaml`:
+   ```yaml
+   orchestration: "direct"
+   ```
+5. **Built-in Fallback (Lowest Precedence)**:
+   In-memory `direct` mode using the currently active agent runtime.
+
+### 3.2 Phased Execution Lifecycle
+
+The execution lifecycle coordinates across isolated subprocesses:
+
+1. **Phase 1: Scout (Research)**: Generates `research.md` containing symbols, dependencies, and blast radius.
+2. **Phase 2: Architect (Living Plan)**: Creates `plan.md` with numbered steps (`Step 1`, `Step 2`). Requires human or automated plan approval before mutating code.
+3. **Phase 3 & 4: Step Implementation & Review Loop**:
+   - `Implementer` executes Step N, updates code, and records touched files.
+   - `Reviewer` audits git diff, executes automated tests, and issues a verdict (`PASS` / `FAIL`).
+   - On `PASS`, advances to Step N+1. On `FAIL`, increments retry counter and feeds defects back into the prompt.
+4. **Phase 5: Wrap & Closeout**: Reconciles history, synchronizes knowledge base projections, and creates release commit.
+
+---
+
+## 4. Invariants, Security Boundaries & Failure Modes
+
+1. **Fail-Open Telemetry Invariant**:
+   Network failures, timeouts, or unreachable OpenObserve instances MUST NOT halt or crash orchestrator execution. Failed span batches are safely appended to local disk WAL files (`.along/.session/<slug>/telemetry/spool.wal`).
+2. **Single-Run Concurrency Claim**:
+   Only one supervisor run may hold an active lock on an issue at any given time. Process claims are recorded in `state.json` with bounded TTL margins (`CLAIM_TTL_MARGIN_SECONDS = 300`).
+3. **Plan Approval Guard**:
+   Source code mutation is strictly locked until a living plan is verified and approved (`[gate: require-plan-approval]`).
+4. **Workspace Isolation**:
+   When configured with `workspace: worktree`, work is executed in an isolated git worktree branch linked with directory junctions for `node_modules` and `.venv`, protecting the parent working tree.
+
+
+---
+
+## 5. OpenObserve Telemetry Integration
+
+During orchestration, `CrossRuntimeOrchestrator` instruments every execution phase with standard OpenTelemetry traces sent over OTLP/HTTP to OpenObserve.
+
+### 5.1 Telemetry Configuration
+
+Telemetry settings can be set in `along.yaml`, `.along/config.yaml`, or via standard OpenTelemetry environment variables:
+
+```yaml
+telemetry:
+  endpoint: "http://localhost:5080/api/default/v1/traces"
+  headers:
+    Authorization: "Basic YWRtaW5AZXhhbXBsZS5jb206UGFzc3dvcmQxMjM="
+  service_name: "actdim-along"
+  timeout: 3.0
+```
+
+Environment variables supported:
+- `OTEL_EXPORTER_OTLP_ENDPOINT`: Full traces endpoint URL (e.g. `http://localhost:5080/api/default/v1/traces`).
+- `OTEL_EXPORTER_OTLP_HEADERS`: Comma-separated or key-value headers (e.g. `Authorization=Basic YWRtaW46cGFzc3dvcmQ=`).
+- `OTEL_SERVICE_NAME`: Logical service identifier (defaults to `actdim-along`).
+
+### 5.2 Span Hierarchy and Semantic Conventions
+
+Every orchestration run generates a structured trace hierarchy:
+
+- **Root Span**: `along.orchestrator.run`
+  - Attributes:
+    - `along.issue.slug`: Target issue slug.
+    - `along.orchestration.profile`: Profile name (e.g. `cross-tiered`).
+    - `along.orchestration.mode`: Execution mode (`direct`, `team-native`, `cross-runtime`).
+    - `along.run.id`: Unique orchestrator execution identifier.
+    - `along.workspace.mode`: `inherit` or `worktree`.
+
+- **Phase Spans (Child Spans)**:
+  - `phase.scout`: Execution of the research/scout role.
+  - `phase.architect`: Generation and validation of `plan.md`.
+  - `phase.step.<N>`: Implementation of step N by the designated worker.
+    - Attributes: `runner.runtime`, `runner.model`, `step.number`, `process.exit_code`.
+  - `phase.reviewer.<N>`: Audit of step N against reviewer rubrics.
+    - Attributes: `reviewer.verdict` (`PASS` | `FAIL`), `reviewer.retries`.
+
+### 5.3 Fail-Open Disk Spooling
+
+Telemetry is strictly non-blocking and fail-open:
+- If the OpenObserve server is offline, returns an HTTP error, or times out, spans are spooled to local disk in `.along/.session/<slug>/telemetry/spool.wal`.
+- Telemetry network failures never cause orchestrator execution or test suites to fail.
+
+---
+
+## 6. Strategic Positioning: Quality Governance vs Process Multiplexers
+
+When evaluating AI multi-agent orchestration for production engineering, it is crucial to distinguish between two fundamentally different layers of the software stack: **Infrastructure Process Multiplexers** and **Engineering Governance Protocols**.
+
+### 6.1 The Limits of Pure Process Multiplexing (T3 Code, Herdr, BB IDE)
+
+Recent desktop applications such as T3 Code, Herdr, and BB IDE function primarily as **Host Runtime Multiplexers and Terminal Switchboards**:
+- **What they solve:** They manage OS-level processes, PTY sessions, WebSockets, desktop tabs, and git worktree directories, allowing a developer to run multiple terminal CLI sessions (Claude Code, Codex, Cursor) side-by-side.
+- **Where they stop:** To a process multiplexer, the AI coding agent is an uninspected black box. The runner captures `stdout`, detects whether the process is idle or busy, and waits for exit code 0. It has no understanding of repository architectural invariants, test regressions, negative constraints, or whether the agent fabricated its verification claims.
+- **The failure mode in real projects:** Running 5 uncoordinated agents in separate terminal windows without an engineering protocol rapidly produces merge conflicts, architectural drift, instruction decay, and unverified commits.
+
+### 6.2 The Along Protocol Advantage: Deterministic Engineering Control
+
+Along operates at the **Repository, Protocol, and Living Memory Layer**:
+- **Living State Machine:** Tasks progress through deterministic, auditable roles: Supervisor -> Scout (read-only research) -> Architect (living plan) -> Implementer (step execution) -> Reviewer (rubric verification) -> Reassess (retry control) -> Wrap.
+- **Quality Gates:** Code edits unlock only after explicit plan approval (`[gate: require-plan-approval]`); commits are strictly bound to issue slugs (`[gate: commit-issue-binding]`); and sessions cannot close without passing tests (`[gate: test_before_stop]`).
+- **Unified Observability via OpenObserve:** Rather than parsing raw terminal streams, Along streams structured OpenTelemetry and OpenInference traces directly into OpenObserve, exposing exact step durations, token costs, runner exit codes, and failure events across all heterogeneous CLIs.
+- **Git-Committed Memory:** State is not trapped in ephemeral application databases or local caches. Architectural decisions (ADRs), issue history, session logs, and living plans are committed directly to Git, surviving machine migrations and team handoffs.
+
+### 6.3 Layered Symbiosis
+
+Along does not compete with process multiplexers; it complements them:
+
+```text
++-------------------------------------------------------------+
+| User Interface & Terminal Layer (T3 Code, Herdr, Ghostty)   |
+| (Manages PTYs, windows, notifications, remote access)       |
++-------------------------------------------------------------+
+                              |
+                              v
++-------------------------------------------------------------+
+| Along Engineering Protocol Layer (along-team, alongkit)     |
+| (Living Plan, Quality Gates, ADRs, Blast Radius, Blackboard)|
++-------------------------------------------------------------+
+                              |
+                              v
++-------------------------------------------------------------+
+| Heterogeneous Agent Runtimes (Claude, Codex, OpenCode, AGY) |
+| (Code generation, reasoning, tool execution)                |
++-------------------------------------------------------------+
+                              |
+                              v
++-------------------------------------------------------------+
+| Observability Layer (OpenObserve / OTLP)                    |
+| (Real-time traces, span metrics, error events, audit logs)  |
++-------------------------------------------------------------+
+```
+
+An agent running inside Herdr, T3 Code, or a cloud VPS runner that adopts the Along protocol transforms from an unconstrained terminal process into a disciplined senior engineer that plans before modifying code, verifies every step against automated rubrics, and emits transparent telemetry.
+
+### 6.4 Comparative Evaluation Matrix
+
+| Capability / Invariant | Host Process Multiplexers (T3 Code, Herdr, BB IDE) | ActDim Along Protocol |
+| :--- | :--- | :--- |
+| **Primary Scope** | OS-level PTY/terminal multiplexing, process supervisor, and desktop GUI | Repository-level engineering protocol, living memory, and quality gates |
+| **Verification & Review** | None (relies on model self-reporting and exit code 0) | Independent Reviewer role with deterministic pass/fail rubrics and retry limits |
+| **Living Plan & Approval** | None (unstructured conversational chat) | Formal `plan.md` state machine with mandatory human/supervisor approval gate |
+| **Observability Standard** | Ephemeral terminal logs and UI websocket events | Standard OpenTelemetry (OTel) traces streamed to OpenObserve |
+| **Project Memory Persistence** | Local SQLite, app-specific thread caches, or lost on exit | Versioned repository artifacts (`.along/ISSUES/`, `DECISIONS/`, `HISTORY.md`) |
+| **Multi-Model Heterogeneity** | Can launch multiple CLI tools concurrently | Can orchestrate specific roles across different CLIs with shared blackboard |
+| **CI/CD & Headless Portability**| Requires desktop GUI or running Node/Electron daemon | Zero daemon requirement; runs in pure CLI, CI/CD, or containers |
+
+---
+
 ## Document: docs/topic--parallel-sessions.md (Parallel Sessions & Closeout Guide)
 
 # Parallel Sessions & Closeout Guide
@@ -3701,9 +3963,9 @@ For full specification and architecture, see [Declarative Gate Engine & Traceabi
 
 ### 2.6 End-of-Turn Result Check (`alongkit.hooks.turnstate`)
 Gates do not predict harm from command text: whether a shell command writes is not decidable before it runs (`debt--gate-simplification`). `require_plan_approval` (catalogue `event: [PreToolUse, Stop]`) judges facts instead:
-- **Before a file-writing tool** (`PreToolUse`): the target path. It holds a write to a repository file that is not a planning or session artifact while no plan is approved. Shell commands are never checked before they run.
+- **Before a file-writing tool** (`PreToolUse`): the target path. It holds a write to a repository file that is not a planning or session artifact while no plan is approved. Shell commands are never checked before they run. Compiled projections (such as `.along/ISSUES.md`, `.along/DECISIONS.md`, `docs/INDEX.md`, or package-level indexes like `packages/<pkg>/docs/INDEX.md` carrying `protocol: along` and `type: index`) are not plan-governed (`closeout.is_compiled_projection`).
 - **Baseline** (`UserPromptSubmit`): `turnstate.snapshot` records `git status --porcelain -uall` plus content hashes of the dirty files as `turn_baseline` in the session activity trace.
-- **At turn end** (`Stop`): `turnstate.changed_since` compares the working tree with the baseline. Paths the turn changed outside Along state (`.along/**`, except `.along/scripts/**`) and planning artifacts, with no approved plan, hold the turn once: `PLAN_REQUIRED [gate: require-plan-approval]: this turn changed <files> ... Ask the user: approve (...) or revert (...)`. Files already dirty before the turn and unchanged are not attributed to it.
+- **At turn end** (`Stop`): `turnstate.changed_since` compares the working tree with the baseline. Paths the turn changed outside Along state (`.along/**`, except `.along/scripts/**`), compiled projections, and planning artifacts, with no approved plan, hold the turn once: `PLAN_REQUIRED [gate: require-plan-approval]: this turn changed <files> ... Ask the user: approve (...) or revert (...)`. The Stop check filters mutations by session-attributed writes (`turn_writes` from file tools or pending shell diff snapshots), ensuring changes from external tools or concurrent sessions are not falsely attributed to the active turn. Files already dirty before the turn and unchanged are not attributed to it.
 - **One continuation**: Claude Code's `stop_hook_active` keeps the hold to a single continuation. Antigravity still gets ASK for file-tool holds.
 - **Commits** (`along commit`, `git commit`) are not held by this gate.
 - **Process hangs** are handled by runner timeouts; there is no circuit breaker and Stop gates do not wait on one.
@@ -3733,7 +3995,7 @@ Several agent sessions may work in one repository at once, so gates never read a
 - **Plan approval**: `along start` binds with `phase: planning`, `plan_approved: false`. Approval is recorded per session when the user accepts a plan in Claude Code (`PostToolUse` on `ExitPlanMode`; the plan text from `tool_input.plan` is written into the blackboard `plan.md`, or kept as `pending_plan` in the binding until the first `along start`), or by `along plan approve [<slug>] [--plan-file <path>]` after the user's explicit yes, which is refused while `plan.md` is still the scaffold (`session.is_scaffold_plan`); an approval given before `along start` carries over to the first bound slug, and an `ExitPlanMode` approval carries over to a newly started slug until the user's next message (the plan is recorded under the new slug). `along start --approved` is for scripted runs.
 - **Issue plans approved ahead** ([feat--pre-approved-plans], ADR-2026-10-23--issue-plans-approved-ahead): an issue's plan is `.along/ISSUES/<key>/plan.md` (`session.plan_path`; a plan written into an issue's blackboard `plan.md` is moved there on first use). Every CLI or `ExitPlanMode` approval of a slug with a ticket also sets the ticket's `plan_status: approved` (`session.approve_issue_plan`) and appends `{slug, event: approve, at, via, session}` to `.along/.session/plan-approvals.jsonl`; `along plan rework` appends `event: rework`. `along plan approve <slug>` before `along start` does only that (no blackboard). `along start` binds approved when `session.issue_plan_state` is `ready` (status `approved` and the log's last event for the slug an approval). The plan gate denies file-tool writes to the log (`APPROVAL_RECORD_PATTERNS`) and file-tool edits of a ticket that add `plan_status: approved` (`_sets_plan_approved`), and at Stop reports tickets the turn changed that say `approved` with no logged approval (`_unlogged_plan_approvals`).
 - **User reply check** (`session.record_user_prompt`, `session.check_cli_approval`): the Claude Code `UserPromptSubmit` hook records the time of the user's last message in `.along/.session/prompts/<key>.json` (it does not bind the session). CLI approvals (`along plan approve`, `along start --approved`, `along scratch approve|phase --approve|update --approve`) are refused when the plan file changed after that message ("plan changed after the user's last message; show it and wait for a reply"); with no recorded message they pass as `approved_via: cli-unverified`. Bindings record `approved_via` (`exit-plan-mode` | `cli` | `cli-unverified`), `approved_at` and `plan_sha256`. The denial hint reads: "Call EnterPlanMode, write the plan, then ExitPlanMode. If plan mode is unavailable, show the plan in chat and wait for the user's reply; run 'along plan approve' only after that reply."
-- **What the plan gate holds** (see 2.6): file-tool writes to repository files before approval, and at turn end the files the turn changed according to `git status`. Shell commands are never classified before they run. File-tool writes to `.along/ISSUES|SESSIONS|.session|diagnostics` (spike issues included) and planning artifacts (`implementation_plan.md`, `walkthrough.md`, `living_plan.md`) pass, and the end-of-turn check ignores Along state under `.along/` (except `.along/scripts/`), so an issue can be written and started before a plan exists.
+- **What the plan gate holds** (see 2.6): file-tool writes to repository files before approval, and at turn end the files the turn changed according to `git status`. Shell commands are never classified before they run. File-tool writes to `.along/ISSUES|SESSIONS|.session|diagnostics` (spike issues included), compiled projections (`closeout.is_compiled_projection`), and planning artifacts (`implementation_plan.md`, `walkthrough.md`, `living_plan.md`) pass, and the end-of-turn check ignores Along state under `.along/` (except `.along/scripts/`), so an issue can be written and started before a plan exists.
 - **Unbound sessions**: `require_plan_approval` and `test_before_stop` hold only sessions bound to an issue (`along start`, or `ALONG_ISSUE_SLUG` from a runner). A repository that wants unbound sessions held too sets `enforce_unbound: true` for those gates in `.along/rules/gates.yaml` (this repository does). `require_active_issue` is unaffected: source edits still need an in-progress issue.
 - **Completion tokens**: `along wrap` purges the blackboard and every binding of the wrapped slug. The wrapping session, if its plan for that slug was approved, keeps a token in its binding (`completed: [{slug, approved_at, wrapped_at}]`; `slug` and approval cleared). The token is ignored after 72 h (by `wrapped_at`), survives `along start <other>`, and leaves with the binding (`along session gc`). `along scratch purge` leaves no token. Tokens and closeout approvals serve `along session close` and the `wrapped_work_uncommitted` warning; commits are not held by `require_plan_approval`.
 - **Shell parsing** (`alongkit.hooks.shellparse`): only `split_segments()` and `words()` remain, used to find the explicit forms of `destructive_command` (2.11) and entity deletions (`entity_deletion_protection`). Command substitutions become the placeholder word `SUBST`. There is no read-only or verification classification, so tests and builds run in every phase without a special case.
@@ -3744,7 +4006,7 @@ Several agent sessions may work in one repository at once, so gates never read a
 - **Activity trace** (`test_before_stop`): per session in `.along/diagnostics/activity/<key>.json`; edits under `.along/` are not source edits, and documentation edits (Markdown anywhere, anything under a `docs/`) count only when the gate sets `count_docs: true` (this repository does, since its suite tests Markdown). Under `count_docs: true`, doc-only edits can be satisfied by a scoped run of Markdown-facing tests (`along test --doc` or `python .along/scripts/test.py --doc`, running declared `doc_tests: [...]` from `.along/rules/gates.yaml`) rather than the full suite. Built-in test-inert paths (`.vscode/**`, `.idea/**`, `*.code-workspace`, `.editorconfig`, `.claude/**`, `.codex/**`, `.cursor/**`) and patterns declared under `ignore_paths` in `.along/rules/gates.yaml` update neither edit timestamp and never arm `test_before_stop`. On turn completion rejection, the Stop gate message lists up to 5 modified source files. The activity trace tracks `last_doc_test_time` separately from `last_test_time`. Only what the gates let through is recorded: an edit on `PostToolUse` (the tool succeeded), a test run on `PreToolUse` after every gate allowed it, so changes made outside the session or writes a gate rejected never count. Full test runs reset `edited_files`. Where `.along/scripts/test.py` exists only `along test` / that script count as a test run; raw runners are named in the Stop message. The same trace holds `turn_baseline` (2.6).
 - **Execution trace** (`session.trace_event`): the bound issue's `.along/.session/<slug>/execution_trace.md` records, in direct and role-based mode, every repository edit (`PostToolUse`, except `.along/.session/**` and diagnostics; repeated edits of a path collapse to `(xN)`), enforced gate denials (`engine.py` -> `predicates.record_gate_denial`), plan recorded / approved, phase, step and retry changes (`session.update_state`), and test runs with their result from `along test` and the wrap / commit test gate (`gates.run_repository_tests`). Raw runners are not traced (no Bash `PostToolUse`). Unbound sessions write nothing; the trace keeps the newest 400 entries. See [Session Lifecycle](./topic--session-lifecycle.md).
 - **Session event ledger** (ADR-2026-10-05--session-event-ledger-feeds-telemetry): the same capture points append one versioned record `{schema, ts, session, slug, kind, path, path_kind, ok}` (`kind`: edit, test, plan, approve, deny, resolve, ack; `path_kind`: source, docs, state; `path` relative to the workspace root; gate-denial records add `id`, `gate`, `tool`, `target`, `reason`, `procedural`, `via`, `note`) to `.along/.session/<slug>/events.jsonl` (`session.record_event`, append only, at most 2000 events per issue, oldest edits dropped first). It is the source of truth for attribution and closeout readiness (`alongkit.closeout`); the session log keeps the attributed paths as the front-matter list `files:` (older logs carry a `### Attributed Files` table, still read). A failed append is reported on stderr and counted in `.along/diagnostics/ledger_errors.json`, which blocks that issue's closeout. With a runner Tracer, the PostToolUse span event carries the same record (`along.session.key`, `along.event.*`, `along.issue.slug`; fail-open).
-- **Gate denials** (`unresolved_gate_denial`, [feat--anti-silent-fallback-gate]): an enforced denial of a bound session's tool call (PreToolUse; Stop denials hold the turn by themselves) is a `deny` ledger event with a short id, recorded once per gate and target while open (`predicates.record_gate_denial`); the session's activity trace keeps `open_denials` with a digest of the raw target. It is settled by an allowed retry on the same target (`resolve`, via retry: a write once it succeeded on PostToolUse, any other tool on Pre- or PostToolUse), by a later `approve` event when the catalogue marks the gate `denial: procedural` (`require_plan_approval`, `require_active_issue`), or disclosed by `along gates ack` (`ack`, counted once the user replied after it, as for bypasses). The Stop gate holds a turn with open denials raised since the user's last message (strict/standard block, light warn); `session.denial_blockers` adds the closeout reasons that `along session status/close`, `along wrap` and `along issue done` (delivered statuses) refuse on, passable only with `--force-reason` under the bypass rules. Unsettled denials are listed in the session log under "Disclosed Gate Denials".
+- **Gate denials** (`unresolved_gate_denial`, [feat--anti-silent-fallback-gate]): an enforced denial of a bound session's tool call (PreToolUse; Stop denials hold the turn by themselves) is a `deny` ledger event with a short id, recorded once per gate and target while open (`predicates.record_gate_denial`); the session's activity trace keeps `open_denials` with a digest of the raw target. Stop denials (such as `require-plan-approval` at `Stop`) are also recorded in the session activity trace with deterministic IDs (`predicates.stop_denials`) and can be listed or acknowledged via `along gates ack <id>` even after session unbinding or wrap. It is settled by an allowed retry on the same target (`resolve`, via retry: a write once it succeeded on PostToolUse, any other tool on Pre- or PostToolUse), by a later `approve` event when the catalogue marks the gate `denial: procedural` (`require_plan_approval`, `require_active_issue`), or disclosed by `along gates ack` (`ack`, counted once the user replied after it, as for bypasses). The Stop gate holds a turn with open denials raised since the user's last message (strict/standard block, light warn); `session.denial_blockers` adds the closeout reasons that `along session status/close`, `along wrap` and `along issue done` (delivered statuses) refuse on, passable only with `--force-reason` under the bypass rules. Unsettled denials are listed in the session log under "Disclosed Gate Denials".
 - **Test reuse & baseline** (`alongkit.testruns`): every test run is recorded with the tree hash of the working tree (`git write-tree` through a throwaway index; `.along/` except `.along/scripts/`, KB projections, `__pycache__`, and test-inert paths left out) in `.along/diagnostics/test_runs.json`. The Stop gate (`test_before_stop`) as well as `along wrap`, `along commit` and `along bump` reuse the last run on the same tree when it was green (`testruns.green_run_for(repo_root, tree_hash)`), allowing clean or reverted trees to pass immediately without re-running tests. Failing test runs output a `[Baseline]` diagnostic indicating whether the suite already failed at `HEAD` (pre-existing defect: report to user and file an issue, do not fix under the active task, bypass with agreement) or passed at `HEAD` (regressions introduced by the working-tree changes). `along bump` records a green run for the post-bump tree so `along wrap` can reuse it. `along test` always runs.
 - **Diagnostics** (`hooks_audit.jsonl`, activity traces, `hook_heartbeat.json`) are machine-local: `.along/diagnostics/` carries its own `*` `.gitignore`. They go to the resolved state directory (`repo.diagnostics_dir`); without one they go to `~/.along/diagnostics/workspaces/<path>/`. The hooks never create a `.along/` of their own.
 
@@ -5380,6 +5642,9 @@ Along provides dedicated diagnostic commands to inspect repository health and is
 ### Gate Messages
 
 - **`PLAN_REQUIRED [gate: require-plan-approval]: this turn changed <files> ...`** at the end of a turn: the turn changed repository files (by a file tool or a shell command) while the bound issue has no approved plan. Fix: ask the user, then either approve the plan (`EnterPlanMode` / `ExitPlanMode`, or `along plan approve --plan-file <path>` after the user's yes) or revert the listed files (`git checkout -- <files>`, delete new files). Files that were already dirty before the turn and unchanged are not listed.
+  - **Compiled projections (`INDEX.md`, `ISSUES.md`, `DECISIONS.md`)**: Projections generated by `along kb-sync` or wrap pipelines at any workspace depth (including package-level index files such as `packages/<pkg>/docs/INDEX.md` carrying `protocol: along` and `type: index`) are compiled views and exempt from plan approval (`closeout.is_compiled_projection`). If a custom index file triggers `PLAN_REQUIRED`, ensure it carries standard front-matter metadata identifying it as a projection.
+  - **Concurrent or external writes**: The Stop check isolates session-attributed writes (`turn_writes` from file tools or pending shell diff snapshots), preventing background processes or parallel sessions from causing false positives in the active turn.
+  - **Acknowledging Stop denials**: Stop-time denials generate deterministic IDs (`d-stop-require-plan-approval-...`) recorded in the session activity trace. They can be inspected via `along gates denials` and acknowledged via `along gates ack <id> --note "..."` even after the issue session unbinds or wraps.
 - **`DESTRUCTIVE [gate: destructive-command]: ...`** asks before a recursive delete, `git clean -f`, `git reset --hard` or `git push --force` (denied in autonomous sessions): the target is empty, unexpandable, outside the repository, the repository itself, or holds uncommitted work. Fix: follow the `Fix:` in the message - commit or stash the work first, or name a committed or ignored path inside the repository, or let the user run the command.
 
 ---

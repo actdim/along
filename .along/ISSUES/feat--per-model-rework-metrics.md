@@ -9,7 +9,7 @@ created: 2026-09-29
 updated: 2026-09-29
 agent: claude
 tags: [metrics, model-tiers, telemetry, cost]
-milestone: v4.8.0-empirical-benchmarking-and-publications
+milestone: v5.1.0-language-ecosystem-expansion
 blocked_by: []
 related: [feat--empirical-benchmark-harness-and-metrics, feat--agent-run-protocol-and-observability, feat--gate-strictness-profiles, docs--tiered-model-workflow-guide]
 ---

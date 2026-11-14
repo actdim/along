@@ -3,14 +3,17 @@ protocol: along
 protocol_version: "4.8.1"
 slug: stop-gate-false-positives
 type: bug
-status: open
+status: done
+completed: 2026-11-14
 priority: high
 created: 2026-11-13
-updated: 2026-11-13
+updated: 2026-11-14
 agent: claude-code
 tags: [gates, hooks, stop, parallel-sessions]
+milestone: v4.9.0-stop-gate-resilience-and-runtime-stabilization
 blocked_by: []
 related: [debt--stale-protocol-path-comment, feat--trivial-fix-lifecycle]
+plan_status: approved
 ---
 
 # Stop gate blocks on engine-written projections and other sessions' edits; Stop denials have no ack path
@@ -42,12 +45,12 @@ Separately, the protocol says "1-line typo/comment edits are exempt" (`skills/al
 - REQ-6: The 1-line exemption MUST either be implemented in `check_active_issue` and the plan gate (single-hunk, <= 1 changed line, comment or typo only) or removed from `skills/along-init/protocol.md` and `.along/PROTOCOL.md`; protocol text and gate behavior MUST agree.
 
 ## Acceptance Criteria
-- [ ] Regression test: a `wrap` that re-syncs a package-level `docs/INDEX.md` ends with a clean tree and no Stop denial.
-- [ ] Regression test: running `along kb-sync` twice leaves the second run with no file changes.
-- [ ] Regression test: a file changed by a second session key during the turn does not trigger the Stop plan gate for the first.
-- [ ] Regression test: after a Stop denial, `along gates denials` lists it and `along gates ack <id> --note "..."` acknowledges it, bound or not.
-- [ ] The 1-line exemption decision is reflected in both the gate and the protocol text, with a test for the chosen behavior.
-- [ ] `python .along/scripts/test.py` passes.
+- [x] Regression test: a `wrap` that re-syncs a package-level `docs/INDEX.md` ends with a clean tree and no Stop denial.
+- [x] Regression test: running `along kb-sync` twice leaves the second run with no file changes.
+- [x] Regression test: a file changed by a second session key during the turn does not trigger the Stop plan gate for the first.
+- [x] Regression test: after a Stop denial, `along gates denials` lists it and `along gates ack <id> --note "..."` acknowledges it, bound or not.
+- [x] The 1-line exemption decision is reflected in both the gate and the protocol text, with a test for the chosen behavior.
+- [x] `python .along/scripts/test.py` passes.
 
 ## Plan
 

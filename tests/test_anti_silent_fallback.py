@@ -376,5 +376,114 @@ class TestReboundSessionDenials(_BoundSession):
         self.assertTrue(engine.evaluate(self._stop()).is_allowed)
 
 
+class TestStopDenialAck(_BoundSession):
+    """Verifies that Stop denials are recorded in the trace and ackable, bound or unbound. REQ-5"""
+
+    def _cli(self, fn, *args):
+        buf = io.StringIO()
+        with redirect_stdout(buf), redirect_stderr(buf):
+            code = fn(*args)
+        self.output = buf.getvalue()
+        return code
+
+    def test_bound_stop_denial_ack_lifecycle(self):
+        from alongkit.hooks import predicates
+        import subprocess
+        subprocess.run(["git", "init", "-q"], cwd=self.root, check=True)
+        subprocess.run(["git", "config", "user.name", "T"], cwd=self.root, check=True)
+        subprocess.run(["git", "config", "user.email", "t@example.com"], cwd=self.root, check=True)
+        _write_text(os.path.join(self.root, "src", "a.py"), "a = 1\n")
+        subprocess.run(["git", "add", "-A"], cwd=self.root, check=True)
+        subprocess.run(["git", "commit", "-q", "-m", "init"], cwd=self.root, check=True)
+
+        ev_prompt = HookEvent(event_type=HookEventType.USER_PROMPT_SUBMIT, workspace_root=self.root, runtime="claude", conversation_id="sess-1")
+        predicates.record_tool_activity(ev_prompt, self.root)
+
+        # Write a file without plan approval
+        _write_text(os.path.join(self.root, "src", "new.py"), "new = 1\n")
+        ev_write = HookEvent(event_type=HookEventType.POST_TOOL_USE, tool_name="write_to_file",
+                             tool_args={"TargetFile": os.path.join(self.root, "src", "new.py")},
+                             workspace_root=self.root, runtime="claude", conversation_id="sess-1")
+        predicates.record_tool_activity(ev_write, self.root)
+
+        ev_stop = HookEvent(event_type=HookEventType.STOP, workspace_root=self.root, runtime="claude", conversation_id="sess-1")
+        res = predicates.check_mutation_authorization(ev_stop, self.root, options={"enforce_unbound": True})
+        self.assertIsNotNone(res)
+        predicates.record_gate_denial(ev_stop, self.root, "require_plan_approval", str(res))
+
+        # Check stop_denials
+        stops = predicates.stop_denials(self.root, self.key)
+        self.assertEqual(len(stops), 1)
+        did = stops[0]["id"]
+        self.assertEqual(stops[0]["state"], session.DENIAL_OPEN)
+
+        # Check ledger has deny with that id
+        events = session.load_events(self.root, SLUG)
+        deny_events = [e for e in events if e.get("kind") == "deny" and e.get("id") == did]
+        self.assertEqual(len(deny_events), 1)
+
+        # Check along gates denials lists it
+        code = self._cli(gates_cmd._handle_denials, self.root, "denials", [])
+        self.assertEqual(code, 0)
+        self.assertIn(did, self.output)
+
+        # Repeated Stop denial in the same turn -> still one entry
+        res2 = predicates.check_mutation_authorization(ev_stop, self.root, options={"enforce_unbound": True})
+        predicates.record_gate_denial(ev_stop, self.root, "require_plan_approval", str(res2))
+        self.assertEqual(len(predicates.stop_denials(self.root, self.key)), 1)
+
+        # Acknowledge via along gates ack
+        code = self._cli(gates_cmd._handle_denials, self.root, "ack", [did, "--note", "told the user"])
+        self.assertEqual(code, 0)
+        stops_after = predicates.stop_denials(self.root, self.key)
+        self.assertEqual(stops_after[0]["state"], session.DENIAL_ACKED)
+
+        # After ack, check_mutation_authorization Stop returns None for the same paths
+        res_after = predicates.check_mutation_authorization(ev_stop, self.root, options={"enforce_unbound": True})
+        self.assertIsNone(res_after)
+
+    def test_unbound_stop_denial_ack_lifecycle(self):
+        from alongkit.hooks import predicates
+        import subprocess
+        subprocess.run(["git", "init", "-q"], cwd=self.root, check=True)
+        subprocess.run(["git", "config", "user.name", "T"], cwd=self.root, check=True)
+        subprocess.run(["git", "config", "user.email", "t@example.com"], cwd=self.root, check=True)
+        _write_text(os.path.join(self.root, "src", "a.py"), "a = 1\n")
+        subprocess.run(["git", "add", "-A"], cwd=self.root, check=True)
+        subprocess.run(["git", "commit", "-q", "-m", "init"], cwd=self.root, check=True)
+
+        ev_prompt = HookEvent(event_type=HookEventType.USER_PROMPT_SUBMIT, workspace_root=self.root, runtime="claude", conversation_id="sess-1")
+        predicates.record_tool_activity(ev_prompt, self.root)
+
+        _write_text(os.path.join(self.root, "src", "new.py"), "new = 1\n")
+        ev_write = HookEvent(event_type=HookEventType.POST_TOOL_USE, tool_name="write_to_file",
+                             tool_args={"TargetFile": os.path.join(self.root, "src", "new.py")},
+                             workspace_root=self.root, runtime="claude", conversation_id="sess-1")
+        predicates.record_tool_activity(ev_write, self.root)
+
+        ev_stop = HookEvent(event_type=HookEventType.STOP, workspace_root=self.root, runtime="claude", conversation_id="sess-1")
+        res = predicates.check_mutation_authorization(ev_stop, self.root, options={"enforce_unbound": True})
+        self.assertIsNotNone(res)
+        predicates.record_gate_denial(ev_stop, self.root, "require_plan_approval", str(res))
+
+        stops = predicates.stop_denials(self.root, self.key)
+        did = stops[0]["id"]
+
+        # Now simulate session unbind + purge blackboard (e.g. after wrap)
+        session.unbind_slug(self.root, SLUG)
+        shutil.rmtree(session.get_session_dir(self.root, SLUG), ignore_errors=True)
+
+        # along gates denials still works when unbound
+        code = self._cli(gates_cmd._handle_denials, self.root, "denials", [])
+        self.assertEqual(code, 0)
+        self.assertIn(did, self.output)
+
+        # along gates ack still works when unbound
+        code = self._cli(gates_cmd._handle_denials, self.root, "ack", [did, "--note", "deferred unbound"])
+        self.assertEqual(code, 0)
+        stops_after = predicates.stop_denials(self.root, self.key)
+        self.assertEqual(stops_after[0]["state"], session.DENIAL_ACKED)
+
+
 if __name__ == "__main__":
     unittest.main()

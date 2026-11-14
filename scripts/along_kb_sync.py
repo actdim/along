@@ -909,6 +909,7 @@ def sync_decisions_to_docs(repo_root: str, check_only: bool = False) -> str:
 
     active_adrs = []
     superseded_adrs = []
+    wrote_any = False
 
     for d in decisions:
         fname = d.get("filename")
@@ -918,7 +919,15 @@ def sync_decisions_to_docs(repo_root: str, check_only: bool = False) -> str:
         if not check_only and d.get("abs_path"):
             try:
                 content = textio.read_text(d["abs_path"])
-                textio.write_text(dest_file, content)
+                existing = None
+                if os.path.isfile(dest_file):
+                    try:
+                        existing = textio.read_text(dest_file)
+                    except OSError:
+                        pass
+                if existing != content:
+                    textio.write_text(dest_file, content)
+                    wrote_any = True
             except OSError:
                 pass
 
@@ -973,8 +982,17 @@ def sync_decisions_to_docs(repo_root: str, check_only: bool = False) -> str:
     index_content = "\n".join(index_lines)
     index_path = os.path.join(target_dir, "INDEX.md")
     if not check_only:
-        textio.write_text(index_path, index_content)
-        print(f"   -> Synchronized docs/decisions/ ({len(active_adrs) + len(superseded_adrs)} ADRs published).")
+        existing_index = None
+        if os.path.isfile(index_path):
+            try:
+                existing_index = textio.read_text(index_path)
+            except OSError:
+                pass
+        if existing_index != index_content:
+            textio.write_text(index_path, index_content)
+            wrote_any = True
+        if wrote_any:
+            print(f"   -> Synchronized docs/decisions/ ({len(active_adrs) + len(superseded_adrs)} ADRs published).")
 
     return target_dir
 
@@ -1216,6 +1234,8 @@ def _kb_check_shrunk_articles(shrunk_articles, prune_intent, repo_root=None):
 def _kb_generate_index(repo_root: str, docs_dir: str, articles, doc_cross_links, today: str, check_only: bool):
     index_path = os.path.join(docs_dir, "INDEX.md")
     index_created = today
+    cur_content = None
+    cur_fm = None
     if os.path.isfile(index_path):
         try:
             cur_content = textio.read_text(index_path)
@@ -1308,7 +1328,14 @@ def _kb_generate_index(repo_root: str, docs_dir: str, articles, doc_cross_links,
         index_body_lines.append("- Active Issues & History: Tracked in `.along/` (see `AGENTS.md`).")
 
     if not check_only and os.path.exists(docs_dir):
-        full_index = dump_frontmatter(index_fm, "\n".join(index_body_lines))
+        body = "\n".join(index_body_lines)
+        if cur_fm and cur_fm.get("updated") and cur_content is not None:
+            candidate = dump_frontmatter(dict(index_fm, updated=str(cur_fm["updated"])), body)
+            if candidate == cur_content:
+                print("   -> docs/INDEX.md unchanged.")
+                return index_path
+
+        full_index = dump_frontmatter(index_fm, body)
         with open(index_path, "w", encoding="utf-8", newline="\n") as fp:
             fp.write(full_index)
         print(f"   -> Rebuilt docs/INDEX.md ({len(articles)} articles indexed).")

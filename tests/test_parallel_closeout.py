@@ -836,5 +836,45 @@ class TestCloseoutScenario(unittest.TestCase):
         self.assertNotIn("src/alpha.py", changes)
 
 
+class TestWrapCommitsPackageIndex(GitFixture):
+    """Verifies wrap commits package-level compiled projections changed by kb-sync. [bug--stop-gate-false-positives] REQ-3"""
+
+    def test_wrap_commits_package_docs_index(self):
+        from alongkit import closeout, lifecycle
+        # Setup package docs and issue
+        _co_put(self.root, "packages/pkg/AGENTS.md", "# Pkg Agents\n")
+        _co_put(self.root, "packages/pkg/docs/topic--b.md", (
+            "---\nprotocol: along\nslug: b\ntitle: Old Title\ntype: architecture\ntags: [b]\n---\n\n# Old Title\n\nContent.\n"
+        ))
+        _co_git(self.root, "add", "-A")
+        _co_git(self.root, "commit", "-q", "-m", "add package")
+
+        # Create in-progress issue
+        slug = "pkg-task"
+        _closeout_issue(self.root, slug, status="in-progress", body="## Acceptance Criteria\n- [x] Done\n")
+        session.init_session(self.root, slug, execution_mode="direct")
+        session.record_plan(self.root, slug, "1. Plan", "test")
+        session.approve_issue_plan(self.root, slug, via="cli-unverified")
+
+        # Edit topic title so package index changes
+        _co_put(self.root, "packages/pkg/docs/topic--b.md", (
+            "---\nprotocol: along\nslug: b\ntitle: New Title\ntype: architecture\ntags: [b]\n---\n\n# New Title\n\nContent.\n"
+        ))
+        session.append_event(self.root, slug, "sess-1", "edit", "packages/pkg/docs/topic--b.md")
+
+        # Wrap with commit enabled
+        code = lifecycle.execute_wrap(self.root, slug, status="done", no_verify=True, decisions=[])
+        self.assertEqual(code, 0)
+
+        # Working tree must be clean
+        changes = closeout.git_changes(self.root)
+        self.assertFalse(changes, f"Dirty files left after wrap: {changes}")
+
+        # packages/pkg/docs/INDEX.md must be committed in the wrap commit
+        last_commit_files = _co_git(self.root, "show", "--name-only", "--format=", "HEAD").strip().splitlines()
+        norm_files = [f.replace("\\", "/") for f in last_commit_files]
+        self.assertIn("packages/pkg/docs/INDEX.md", norm_files)
+
+
 if __name__ == "__main__":
     unittest.main(verbosity=2)

@@ -13,7 +13,7 @@ tags: [adr, architecture, decisions, index]
 This directory contains the project's Architectural Decision Records.
 Decisions are authored and maintained in `.along/DECISIONS/` and published here as first-class documentation.
 
-## Active Decisions (51)
+## Active Decisions (53)
 
 - **[along-v200-rebranding-and-namespace-isolation](./ADR-2026-08-27--along-v200-rebranding-and-namespace-isolation.md)** - Along v2.0.0: Rebranding, Isolated .along/ Directory, along-* Skill Prefixes, and protocol: along Metadata
 - **[autonomous-multi-mode-dashboard-and-analytics-engine](./ADR-2026-08-27--autonomous-multi-mode-dashboard-and-analytics-engine.md)** - Autonomous Multi-Mode Repository Dashboard & Analytics Engine
@@ -66,6 +66,8 @@ Decisions are authored and maintained in `.along/DECISIONS/` and published here 
 - **[children-allowed-for-cross-context-links-only](./ADR-2026-11-10--children-allowed-for-cross-context-links-only.md)** - Children allowed for cross-context links only
 - **[feedback-inbox-and-pr-transport](./ADR-2026-11-13--feedback-inbox-and-pr-transport.md)** - Feedback Inbox Location and GitHub PR Transport
 - **[issue-test-scoping-policy](./ADR-2026-11-13--issue-test-scoping-policy.md)** - Issue-Level Test Scoping and Verify Policy Invariants
+- **[named-orchestration-profiles-and-openobserve-telemetry](./ADR-2026-11-14--named-orchestration-profiles-and-openobserve-telemetry.md)** - Named Orchestration Profiles and OpenObserve OTLP Telemetry
+- **[stop-gate-session-attribution-and-trace-denials](./ADR-2026-11-14--stop-gate-session-attribution-and-trace-denials.md)** - Stop Gate Session Attribution and Trace-Backed Denials
 
 ## Superseded & Retired Decisions (8)
 

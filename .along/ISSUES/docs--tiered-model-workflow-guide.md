@@ -9,7 +9,7 @@ created: 2026-09-29
 updated: 2026-11-06
 agent: claude
 tags: [docs, explanation, model-tiers, planning, gates]
-milestone: v4.8.0-empirical-benchmarking-and-publications
+milestone: v5.1.0-language-ecosystem-expansion
 blocked_by: []
 related: [feat--gate-strictness-profiles, debt--prose-rules-to-deterministic-checks, feat--per-model-rework-metrics, feat--clean-turn-context-isolation-in-along-team]
 ---

@@ -4,7 +4,7 @@ slug: INDEX
 title: ActDim Along - Knowledge Base Topic Index
 type: index
 created: 2026-09-10
-updated: 2026-11-13
+updated: 2026-11-14
 tags: [index, kb, topics, map]
 ---
 
@@ -37,6 +37,8 @@ flowchart TD
     INDEX --> T_LLM_WIKI_ARCHITECTURE
     T_MIGRATIONS["Protocol & Repository Migrations Guide"]
     INDEX --> T_MIGRATIONS
+    T_MULTI_RUNTIME_ORCHESTRATION["Multi-Runtime Orchestration, Named Profiles & OpenObserve Observability"]
+    INDEX --> T_MULTI_RUNTIME_ORCHESTRATION
     T_PARALLEL_SESSIONS["Parallel Sessions & Closeout Guide"]
     INDEX --> T_PARALLEL_SESSIONS
     T_REQUIREMENT_FORMAT["Controlled Natural Language (STE-Inspired) Requirement Format"]
@@ -99,6 +101,7 @@ flowchart TD
 - **[License](./topic--license.md)** (license) `license`, `mit`
 - **[Topic-Based Knowledge Base Architecture & Paradigm](./topic--llm-wiki-architecture.md)** (topic) `topic-based-authoring`, `diataxis`, `tf-idf`, `architecture`, `knowledge-base`, `token-efficiency`, `indexing`, `methodology`, `search`, `karpathy`, `progressive-disclosure`, `authoring`
 - **[Protocol & Repository Migrations Guide](./topic--migrations.md)** (guide) `migrations`, `upgrade`, `protocol`, `changelog`, `versioning`, `data-safety`
+- **[Multi-Runtime Orchestration, Named Profiles & OpenObserve Observability](./topic--multi-runtime-orchestration.md)** (architecture) `orchestration`, `profiles`, `opencode`, `antigravity`, `claude`, `codex`, `openobserve`, `telemetry`, `worktree`
 - **[Parallel Sessions & Closeout Guide](./topic--parallel-sessions.md)** (guide) `session`, `parallel`, `closeout`, `attribution`, `ledger`, `commit`, `readiness`, `approval`
 - **[Controlled Natural Language (STE-Inspired) Requirement Format](./topic--requirement-format.md)** (guide) `ste`, `cnl`, `requirements`, `specifications`, `convention`, `cross-runtime`
 - **[Runtime Lifecycle Hooks & Mechanical Gates](./topic--runtime-hooks-and-gates.md)** (architecture) `hooks`, `gates`, `runtime`, `enforcement`, `antigravity`, `claude`, `codex`, `typography`, `cli-safety`, `destructive-command`, `attribution`
