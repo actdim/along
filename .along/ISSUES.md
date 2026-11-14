@@ -1,10 +1,11 @@
 # Active Issues
 
 ## Active
+- [ ] `(bug)` [stop-gate-false-positives](ISSUES/bug--stop-gate-false-positives.md) - plan approved
+- [ ] `(feat)` [git-automerge-protection-and-semantic-merge](ISSUES/feat--git-automerge-protection-and-semantic-merge.md) - plan approved
 - [ ] `(feat)` [provenance-drift-gate](ISSUES/feat--provenance-drift-gate.md) - plan approved
 
 ## Backlog
-- [ ] `(bug)` [stop-gate-false-positives](ISSUES/bug--stop-gate-false-positives.md)
 - [ ] `(debt)` [autonomous-non-elevation-invariants](ISSUES/debt--autonomous-non-elevation-invariants.md)
 - [ ] `(debt)` [canonical-path-gate-expansion](ISSUES/debt--canonical-path-gate-expansion.md)
 - [ ] `(debt)` [dashboard-retire-risk-spike-views](ISSUES/debt--dashboard-retire-risk-spike-views.md)
@@ -64,9 +65,9 @@
 - [ ] `(task)` [reconcile-dashboard-ui-core-conventions](ISSUES/task--reconcile-dashboard-ui-core-conventions.md)
 
 ## Done (recent)
+- [x] `(feat)` [openobserve-telemetry-sink](ISSUES/done/feat--openobserve-telemetry-sink.md)
 - [x] `(feat)` [opencode-runtime-integration](ISSUES/done/feat--opencode-runtime-integration.md)
 - [x] `(feat)` [issue-test-scoping-policy](ISSUES/done/feat--issue-test-scoping-policy.md)
 - [x] `(feat)` [feedback-github-pr-transport](ISSUES/done/feat--feedback-github-pr-transport.md)
 - [x] `(docs)` [system-comparisons](ISSUES/done/docs--system-comparisons.md)
-- [x] `(docs)` [kb-search-docs-accuracy](ISSUES/done/docs--kb-search-docs-accuracy.md)
-<!-- 339 older completed issue(s) archived in .along/ISSUES/done/ -->
+<!-- 340 older completed issue(s) archived in .along/ISSUES/done/ -->

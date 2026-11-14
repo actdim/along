@@ -73,7 +73,7 @@ class Tracer:
         self.redactor = Redactor()
         self.offloader = ArtifactOffloader(self.repo_root, self.run_id)
         self.spooler = Spooler(self.repo_root, self.run_id)
-        self.exporter = exporter if exporter is not None else OTLPExporter(spooler=self.spooler)
+        self.exporter = exporter if exporter is not None else OTLPExporter(spooler=self.spooler, repo_root=self.repo_root)
 
         self._span_stack: List[Span] = []
         self._buffered_spans: List[Span] = []
@@ -197,6 +197,65 @@ class Tracer:
             start_time_ns=start_time_ns,
             parent_span_id=parent_id,
             attributes=attributes,
+        )
+
+        self._span_stack.append(span)
+        try:
+            yield span
+        except Exception as exc:
+            span.finish(status=StatusCode.ERROR, message=str(exc))
+            raise
+        else:
+            if span.status_code == StatusCode.UNSET:
+                span.finish(status=StatusCode.OK)
+            elif span.end_time_ns is None:
+                span.finish(status=span.status_code, message=span.status_message)
+        finally:
+            if self._span_stack and self._span_stack[-1] is span:
+                self._span_stack.pop()
+            elif span in self._span_stack:
+                self._span_stack.remove(span)
+            self._buffered_spans.append(span)
+            self._pending_spans.append(span)
+            if self.auto_flush:
+                self.flush()
+
+    @contextlib.contextmanager
+    def phase_span(
+        self,
+        name: str,
+        role: Optional[str] = None,
+        runtime: Optional[str] = None,
+        model: Optional[str] = None,
+        step: Optional[int] = None,
+        attributes: Optional[Dict[str, Any]] = None,
+    ) -> Iterator[Span]:
+        start_time_ns = time.time_ns()
+        span_id = self._new_span_id()
+        parent_id = self.active_span_id
+
+        attrs: Dict[str, Any] = {
+            conventions.SPAN_KIND: SpanKind.CHAIN.value,
+        }
+        if role:
+            attrs["along.orchestration.role"] = str(role)
+        if runtime:
+            attrs["along.runner.runtime"] = str(runtime)
+        if model:
+            attrs["along.runner.model"] = str(model)
+        if step is not None:
+            attrs["along.step.number"] = int(step)
+        if attributes:
+            attrs.update(self.redactor.sanitize_dict(attributes))
+
+        span = Span(
+            trace_id=self.trace_id,
+            span_id=span_id,
+            name=name,
+            kind=SpanKind.CHAIN,
+            start_time_ns=start_time_ns,
+            parent_span_id=parent_id,
+            attributes=attrs,
         )
 
         self._span_stack.append(span)
@@ -381,4 +440,8 @@ class Tracer:
             return
         spans_to_export = list(self._pending_spans)
         self._pending_spans.clear()
-        self.exporter.export(spans_to_export, service_name=self.service_name)
+        try:
+            self.exporter.export(spans_to_export, service_name=self.service_name)
+        except (ValueError, OSError, RuntimeError, TimeoutError):
+            # Telemetry export must strictly fail-open and never interrupt application execution
+            pass

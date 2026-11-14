@@ -277,3 +277,4 @@ _Index of sessions (newest last). One line per session:_
 2026-11-13 - system-comparisons - claude-code - Aligned system-comparisons with topic-based KB architecture and measured kb-search latency - [Session Log](./SESSIONS/2026/2026-11-13--system-comparisons.md)
 2026-11-13 - kb-search-docs-accuracy - claude-code - Aligned KB search docs with along_kb_search.py; added authoring-for-retrieval and progressive-disclosure sections - [Session Log](./SESSIONS/2026/2026-11-13--kb-search-docs-accuracy.md)
 2026-11-13 - issue-test-scoping-policy - antigravity - Implement issue-scoped verify policy with plan-approval snapshots and coverage-aware test reuse - [Session Log](./SESSIONS/2026/2026-11-13--issue-test-scoping-policy.md)
+2026-11-14 - openobserve-telemetry-sink - antigravity - Implement named orchestration profiles, OpenObserve OTLP telemetry sink, and orchestrator tracing - [Session Log](./SESSIONS/2026/2026-11-14--openobserve-telemetry-sink.md)

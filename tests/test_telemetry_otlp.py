@@ -510,5 +510,87 @@ class TestOTLPExporter(unittest.TestCase):
         self.assertEqual(len(self.spooler.read_spool()), 2)
 
 
+class TestOpenObserveHeaderResolution(unittest.TestCase):
+    def test_parse_otlp_headers(self) -> None:
+        from alongkit.telemetry.otlp import parse_otlp_headers
+
+        self.assertEqual(parse_otlp_headers(None), {})
+        self.assertEqual(parse_otlp_headers(""), {})
+        res = parse_otlp_headers("Authorization=Basic%20dXNlcjpwYXNz,X-Custom=123")
+        self.assertEqual(res["Authorization"], "Basic dXNlcjpwYXNz")
+        self.assertEqual(res["X-Custom"], "123")
+
+    def test_build_basic_auth_header(self) -> None:
+        from alongkit.telemetry.otlp import build_basic_auth_header
+        import base64
+
+        header = build_basic_auth_header("admin@example.com", "secret")
+        self.assertTrue(header.startswith("Basic "))
+        encoded = header.split(" ")[1]
+        decoded = base64.b64decode(encoded).decode("utf-8")
+        self.assertEqual(decoded, "admin@example.com:secret")
+
+    def test_resolve_telemetry_config_env(self) -> None:
+        from alongkit.telemetry.otlp import resolve_telemetry_config
+
+        with patch.dict(
+            os.environ,
+            {
+                "OTEL_EXPORTER_OTLP_ENDPOINT": "http://openobserve:5080/api/default/v1/traces",
+                "OTEL_EXPORTER_OTLP_HEADERS": "Authorization=Basic%20dXNlcjpwYXNz",
+                "OTEL_SERVICE_NAME": "test-along-service",
+            },
+            clear=False,
+        ):
+            cfg = resolve_telemetry_config()
+            self.assertEqual(cfg["endpoint"], "http://openobserve:5080/api/default/v1/traces")
+            self.assertEqual(cfg["headers"].get("Authorization"), "Basic dXNlcjpwYXNz")
+            self.assertEqual(cfg["service_name"], "test-along-service")
+
+    def test_resolve_telemetry_config_openobserve_direct_env(self) -> None:
+        from alongkit.telemetry.otlp import resolve_telemetry_config
+
+        with patch.dict(
+            os.environ,
+            {
+                "ALONG_OPENOBSERVE_ENDPOINT": "http://localhost:5080/api/default/v1/traces",
+                "ALONG_OPENOBSERVE_USER": "root@example.com",
+                "ALONG_OPENOBSERVE_PASSWORD": "Password123",
+            },
+            clear=True,
+        ):
+            cfg = resolve_telemetry_config()
+            self.assertEqual(cfg["endpoint"], "http://localhost:5080/api/default/v1/traces")
+            self.assertTrue(cfg["headers"].get("Authorization", "").startswith("Basic "))
+
+    def test_resolve_telemetry_config_repo_config(self) -> None:
+        from alongkit.telemetry.otlp import resolve_telemetry_config
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            along_dir = os.path.join(tmpdir, ".along")
+            os.makedirs(along_dir, exist_ok=True)
+            cfg_path = os.path.join(along_dir, "config.json")
+            with open(cfg_path, "w", encoding="utf-8") as f:
+                json.dump(
+                    {
+                        "telemetry": {
+                            "endpoint": "http://oo.internal:5080/api/default/v1/traces",
+                            "openobserve": {
+                                "user": "oo_user",
+                                "password": "oo_password",
+                                "organization": "default",
+                            },
+                        }
+                    },
+                    f,
+                )
+
+            with patch.dict(os.environ, {}, clear=True):
+                resolved = resolve_telemetry_config(repo_root=tmpdir)
+                self.assertEqual(resolved["endpoint"], "http://oo.internal:5080/api/default/v1/traces")
+                self.assertTrue(resolved["headers"].get("Authorization", "").startswith("Basic "))
+                self.assertEqual(resolved["headers"].get("openobserve-organization"), "default")
+
+
 if __name__ == "__main__":
     unittest.main()

@@ -22,6 +22,7 @@ if __name__ == "__main__":
         "Run: along orchestrate --help   (or: python scripts/along_exec.py orchestrate --help)"
     )
 
+import contextlib
 import copy
 import json
 import os
@@ -61,69 +62,23 @@ DEFAULT_ROLES: Dict[str, Dict[str, Any]] = {
 def load_role_config(
     repo_root: Optional[str] = None,
     overrides: Optional[Dict[str, Any]] = None,
+    profile: Optional[str] = None,
 ) -> Dict[str, Dict[str, Any]]:
-    """Load role-to-runtime configuration from repo config or defaults with overrides."""
+    """Load role-to-runtime configuration from repo config, named profile, or defaults with overrides."""
+    from . import orchestration_profiles
+
     root = repo_root or repo.find_repo_root()
+    profile_data = orchestration_profiles.resolve_orchestration_profile(
+        name=profile,
+        repo_root=root,
+        overrides=overrides,
+    )
+    roles = profile_data.get("roles")
     config = copy.deepcopy(DEFAULT_ROLES)
-
-    if root:
-        state_dir = repo.state_dir(root)
-        config_files = [
-            os.path.join(state_dir, "config.yaml"),
-            os.path.join(state_dir, "config.json"),
-            os.path.join(root, "along.yaml"),
-            os.path.join(root, "along.json"),
-        ]
-        for cpath in config_files:
-            if not os.path.isfile(cpath):
-                continue
-            try:
-                raw = textio.read_text(cpath, strict=False)
-                parsed: Optional[Dict[str, Any]] = None
-                if cpath.endswith((".yaml", ".yml")):
-                    from . import bootstrap
-                    ruamel = bootstrap.require("ruamel.yaml")
-                    yaml = ruamel.YAML(typ="safe")
-                    parsed = yaml.load(raw)
-                else:
-                    parsed = json.loads(raw)
-                if isinstance(parsed, dict):
-                    orch_section = parsed.get("orchestration") or parsed.get("orchestrator")
-                    if isinstance(orch_section, dict):
-                        for role in SUPPORTED_ROLES:
-                            val = orch_section.get(role)
-                            if isinstance(val, str):
-                                config[role] = {"runtime": val.strip(), "args": []}
-                            elif isinstance(val, dict):
-                                r_cfg = dict(val)
-                                if "runtime" in r_cfg:
-                                    r_cfg["runtime"] = str(r_cfg["runtime"]).strip()
-                                if "args" in r_cfg and not isinstance(r_cfg["args"], list):
-                                    r_cfg["args"] = [str(r_cfg["args"])]
-                                config[role].update(r_cfg)
-                        break
-            except (OSError, ValueError, TypeError, KeyError, AttributeError):
-                continue
-
-    if overrides:
-        for role in SUPPORTED_ROLES:
-            val = overrides.get(role)
-            if val:
-                if isinstance(val, str):
-                    config[role]["runtime"] = val.strip()
-                elif isinstance(val, dict):
-                    config[role].update(val)
-        if overrides.get("model"):
-            for role in SUPPORTED_ROLES:
-                config[role]["model"] = str(overrides["model"]).strip()
-        if overrides.get("timeout"):
-            try:
-                timeout_val = int(overrides["timeout"])
-                for role in SUPPORTED_ROLES:
-                    config[role]["timeout"] = timeout_val
-            except (ValueError, TypeError):
-                pass
-
+    if isinstance(roles, dict):
+        for r_name in SUPPORTED_ROLES:
+            if r_name in roles and isinstance(roles[r_name], dict):
+                config[r_name] = dict(roles[r_name])
     return config
 
 
@@ -192,10 +147,12 @@ class CrossRuntimeOrchestrator:
         dry_run: bool = False,
         force: bool = False,
         runner_factory: Optional[Callable[..., BaseRunner]] = None,
+        profile: Optional[str] = None,
     ) -> None:
         self.repo_root = os.path.abspath(repo_root) if repo_root else (repo.find_repo_root() or os.getcwd())
         self.slug = resolve_orchestrator_issue(self.repo_root, slug)
-        self.role_config = role_config or load_role_config(self.repo_root)
+        self.profile_name = profile
+        self.role_config = role_config or load_role_config(self.repo_root, profile=profile)
         for r_name in SUPPORTED_ROLES:
             cfg = self.role_config.get(r_name, {})
             rt = cfg.get("runtime")
@@ -211,6 +168,18 @@ class CrossRuntimeOrchestrator:
         self.run_id = f"orch-{uuid.uuid4().hex[:12]}"
         self.active_runner: Optional[BaseRunner] = None
         self.execution_log: List[Dict[str, Any]] = []
+
+        self.tracer: Optional[Any] = None
+        try:
+            from .telemetry.tracer import Tracer
+            self.tracer = Tracer(
+                repo_root=self.repo_root,
+                run_id=self.run_id,
+                issue_slug=self.slug,
+                agent_name="orchestrator",
+            )
+        except (ValueError, OSError, RuntimeError):
+            self.tracer = None
 
     def _role_timeout(self, role: str) -> int:
         """Per-run timeout for `role`: role config, then the orchestrator's, then DEFAULT_TIMEOUT."""
@@ -249,18 +218,31 @@ class CrossRuntimeOrchestrator:
         extra_args = r_cfg.get("args") or []
         r_timeout = self._role_timeout(role)
 
-        factory = self.runner_factory or get_runner
-        runner = factory(
-            runtime=runtime,
-            repo_root=self.repo_root,
-            issue_slug=self.slug,
-            model=model,
-            timeout=r_timeout,
-            extra_args=extra_args,
-            dry_run=self.dry_run,
-            role=role,
-            env_passthrough=r_cfg.get("env_passthrough"),
-        )
+        if not self.runner_factory and runtime in ("antigravity", "agy"):
+            from .runner.antigravity import AntigravityRunner
+            runner = AntigravityRunner(
+                repo_root=self.repo_root,
+                issue_slug=self.slug,
+                model=model,
+                timeout=r_timeout,
+                extra_args=extra_args,
+                dry_run=self.dry_run,
+                role=role,
+                env_passthrough=r_cfg.get("env_passthrough"),
+            )
+        else:
+            factory = self.runner_factory or get_runner
+            runner = factory(
+                runtime=runtime,
+                repo_root=self.repo_root,
+                issue_slug=self.slug,
+                model=model,
+                timeout=r_timeout,
+                extra_args=extra_args,
+                dry_run=self.dry_run,
+                role=role,
+                env_passthrough=r_cfg.get("env_passthrough"),
+            )
         self.active_runner = runner
         return runner
 
@@ -275,8 +257,19 @@ class CrossRuntimeOrchestrator:
         if not self._renew_claim("scout"):
             return self._claim_lost("scout")
         runner = self._instantiate_runner("scout")
-        record = runner.execute_run(brief=brief, role="scout", step=None, dry_run=self.dry_run)
-        self.execution_log.append({"phase": "scout", "record": record})
+        scout_span = (
+            self.tracer.phase_span(
+                "phase.scout",
+                role="scout",
+                runtime=getattr(runner, "runtime", None),
+                model=getattr(runner, "model", None),
+            )
+            if self.tracer
+            else contextlib.nullcontext()
+        )
+        with scout_span:
+            record = runner.execute_run(brief=brief, role="scout", step=None, dry_run=self.dry_run)
+            self.execution_log.append({"phase": "scout", "record": record})
 
         outcome = record.get("outcome")
         if outcome == "needs-input" or handoff.has_open_questions(self.repo_root, self.slug):
@@ -321,8 +314,19 @@ class CrossRuntimeOrchestrator:
         if not self._renew_claim("architect"):
             return self._claim_lost("architect")
         runner = self._instantiate_runner("architect")
-        record = runner.execute_run(brief=brief, role="architect", step=None, dry_run=self.dry_run)
-        self.execution_log.append({"phase": "architect", "record": record})
+        arch_span = (
+            self.tracer.phase_span(
+                "phase.architect",
+                role="architect",
+                runtime=getattr(runner, "runtime", None),
+                model=getattr(runner, "model", None),
+            )
+            if self.tracer
+            else contextlib.nullcontext()
+        )
+        with arch_span:
+            record = runner.execute_run(brief=brief, role="architect", step=None, dry_run=self.dry_run)
+            self.execution_log.append({"phase": "architect", "record": record})
 
         outcome = record.get("outcome")
         if outcome == "needs-input" or handoff.has_open_questions(self.repo_root, self.slug):
@@ -586,17 +590,29 @@ class CrossRuntimeOrchestrator:
             if not self._renew_claim("implementer"):
                 return self._claim_lost("implementer", current_step)
             impl_runner = self._instantiate_runner("implementer")
-            impl_record = impl_runner.execute_run(
-                brief=impl_brief,
-                role="implementer",
-                step=current_step,
-                dry_run=self.dry_run,
+            impl_span = (
+                self.tracer.phase_span(
+                    f"phase.step.{current_step}",
+                    role="implementer",
+                    runtime=getattr(impl_runner, "runtime", None),
+                    model=getattr(impl_runner, "model", None),
+                    step=current_step,
+                )
+                if self.tracer
+                else contextlib.nullcontext()
             )
-            self.execution_log.append({
-                "phase": "implementer",
-                "step": current_step,
-                "record": impl_record,
-            })
+            with impl_span:
+                impl_record = impl_runner.execute_run(
+                    brief=impl_brief,
+                    role="implementer",
+                    step=current_step,
+                    dry_run=self.dry_run,
+                )
+                self.execution_log.append({
+                    "phase": "implementer",
+                    "step": current_step,
+                    "record": impl_record,
+                })
 
             impl_outcome = impl_record.get("outcome")
             if impl_outcome == "needs-input" or handoff.has_open_questions(self.repo_root, self.slug):
@@ -646,17 +662,29 @@ class CrossRuntimeOrchestrator:
             if not self._renew_claim("reviewer"):
                 return self._claim_lost("reviewer", current_step)
             rev_runner = self._instantiate_runner("reviewer")
-            rev_record = rev_runner.execute_run(
-                brief=rev_brief,
-                role="reviewer",
-                step=current_step,
-                dry_run=self.dry_run,
+            rev_span = (
+                self.tracer.phase_span(
+                    f"phase.reviewer.{current_step}",
+                    role="reviewer",
+                    runtime=getattr(rev_runner, "runtime", None),
+                    model=getattr(rev_runner, "model", None),
+                    step=current_step,
+                )
+                if self.tracer
+                else contextlib.nullcontext()
             )
-            self.execution_log.append({
-                "phase": "reviewer",
-                "step": current_step,
-                "record": rev_record,
-            })
+            with rev_span:
+                rev_record = rev_runner.execute_run(
+                    brief=rev_brief,
+                    role="reviewer",
+                    step=current_step,
+                    dry_run=self.dry_run,
+                )
+                self.execution_log.append({
+                    "phase": "reviewer",
+                    "step": current_step,
+                    "record": rev_record,
+                })
 
             rev_outcome = rev_record.get("outcome")
             if rev_outcome == "needs-input" or handoff.has_open_questions(self.repo_root, self.slug):
@@ -765,6 +793,14 @@ class CrossRuntimeOrchestrator:
             signal.signal(signal.SIGTERM, _cleanup_handler)
 
         try:
+            if self.tracer:
+                try:
+                    self.tracer.start_run()
+                    if self.profile_name and self.tracer.root_span:
+                        self.tracer.root_span.attributes["along.orchestration.profile"] = str(self.profile_name)
+                except (ValueError, OSError, RuntimeError):
+                    pass
+
             if not skip_scout:
                 scout_res = self.run_scout_phase()
                 if scout_res.get("status") != "done":
@@ -779,6 +815,12 @@ class CrossRuntimeOrchestrator:
             return step_res
 
         finally:
+            if self.tracer:
+                try:
+                    self.tracer.end_run()
+                    self.tracer.flush()
+                except (ValueError, OSError, RuntimeError):
+                    pass
             handoff.release_claim(self.repo_root, self.slug, run_id=self.run_id)
             signal.signal(signal.SIGINT, old_sigint)
             if hasattr(signal, "SIGTERM") and old_sigterm:
@@ -796,9 +838,10 @@ def run_orchestration(
     skip_scout: bool = False,
     skip_architect: bool = False,
     runner_factory: Optional[Callable[..., BaseRunner]] = None,
+    profile: Optional[str] = None,
 ) -> Dict[str, Any]:
     """Convenience function to configure and execute orchestration."""
-    role_cfg = load_role_config(repo_root, overrides=overrides)
+    role_cfg = load_role_config(repo_root, overrides=overrides, profile=profile)
     orch = CrossRuntimeOrchestrator(
         repo_root=repo_root,
         slug=slug,
@@ -808,6 +851,7 @@ def run_orchestration(
         dry_run=dry_run,
         force=force,
         runner_factory=runner_factory,
+        profile=profile,
     )
     return orch.orchestrate(skip_scout=skip_scout, skip_architect=skip_architect)
 

@@ -1,8 +1,10 @@
 <!-- Generated projection from .along/DECISIONS/*.md. Do not edit by hand. Run: along decision sync -->
 # Decisions (ADR Projection Board)
 
-## Active Decisions (51, newest 30 shown)
+## Active Decisions (53, newest 30 shown)
 
+- [Stop Gate Session Attribution and Trace-Backed Denials](DECISIONS/ADR-2026-11-14--stop-gate-session-attribution-and-trace-denials.md)
+- [Named Orchestration Profiles and OpenObserve OTLP Telemetry](DECISIONS/ADR-2026-11-14--named-orchestration-profiles-and-openobserve-telemetry.md)
 - [Issue-Level Test Scoping and Verify Policy Invariants](DECISIONS/ADR-2026-11-13--issue-test-scoping-policy.md)
 - [Feedback Inbox Location and GitHub PR Transport](DECISIONS/ADR-2026-11-13--feedback-inbox-and-pr-transport.md)
 - [Children allowed for cross-context links only](DECISIONS/ADR-2026-11-10--children-allowed-for-cross-context-links-only.md)
@@ -31,10 +33,8 @@
 - [Explicit Error Handling, Failure Visibility, and Centralized Diagnostics](DECISIONS/ADR-2026-09-09--error-handling-and-failure-visibility.md)
 - [Relative Path Prefixing for Subproject Git Revisions under Intent Gate](DECISIONS/ADR-2026-09-07--subproject-git-path-resolution-under-intent-gate.md)
 - [Revert GIT_OPTIONAL_LOCKS and diff.autoRefreshIndex to Preserve Git Stat-Cache Integrity](DECISIONS/ADR-2026-09-07--revert-git-stat-cache-workarounds.md)
-- [Durable Multi-Agent Session Blackboard and Canonical CLI Skill Execution](DECISIONS/ADR-2026-09-07--durable-session-blackboard-and-canonical-cli.md)
-- [Bounded Context Budget, Active Constraints Projection, and Sliding Window Issues](DECISIONS/ADR-2026-09-07--bounded-context-budget-and-active-projections.md)
 
-Older decisions (21): docs/decisions/INDEX.md
+Older decisions (23): docs/decisions/INDEX.md
 
 ## Superseded & Retired Decisions (8)
 

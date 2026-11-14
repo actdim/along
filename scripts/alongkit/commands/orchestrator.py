@@ -35,6 +35,7 @@ def handle_orchestrate_command(repo_root: str, args: List[str]) -> int:
     parser.add_argument("--architect", type=str, default=None, choices=orchestrator.ORCHESTRATOR_RUNTIMES, help="Runtime adapter for architect role")
     parser.add_argument("--implementer", type=str, default=None, choices=orchestrator.ORCHESTRATOR_RUNTIMES, help="Runtime adapter for implementer role")
     parser.add_argument("--reviewer", type=str, default=None, choices=orchestrator.ORCHESTRATOR_RUNTIMES, help="Runtime adapter for reviewer role")
+    parser.add_argument("--profile", type=str, default=None, help="Named orchestration profile (e.g. direct, cross-tiered)")
     parser.add_argument("--model", type=str, default=None, help="Default model override across roles")
     parser.add_argument("--skip-scout", action="store_true", help="Skip scout research phase")
     parser.add_argument("--skip-architect", action="store_true", help="Skip architect living plan phase")
@@ -81,6 +82,7 @@ def handle_orchestrate_command(repo_root: str, args: List[str]) -> int:
         force=parsed.force,
         skip_scout=parsed.skip_scout,
         skip_architect=parsed.skip_architect,
+        profile=parsed.profile,
     )
 
     if parsed.json:
