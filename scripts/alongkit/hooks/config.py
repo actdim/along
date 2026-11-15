@@ -794,7 +794,7 @@ def install_opencode_hooks(
     if os.path.isfile(plugin_file):
         try:
             existing = textio.read_text(plugin_file, strict=False)
-            if existing == plugin_content:
+            if existing.replace("\r\n", "\n") == plugin_content.replace("\r\n", "\n"):
                 return "present", f"{plugin_file}: already up to date"
         except OSError:
             pass

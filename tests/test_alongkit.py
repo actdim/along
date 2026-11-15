@@ -455,14 +455,14 @@ class TestTextIO(unittest.TestCase):
         mismatches = []
         for line in (result.stdout or "").splitlines():
             line = line.strip()
-            if not line:
+            if not line or "\t" not in line:
                 continue
-            parts = line.split(None, 3)
-            if len(parts) < 4:
+            meta, path = line.split("\t", 1)
+            meta_parts = meta.split()
+            if len(meta_parts) < 3:
                 continue
-            w_eol = parts[1]
-            attr = parts[2]
-            path = parts[3]
+            w_eol = meta_parts[1]
+            attr = " ".join(meta_parts[2:])
 
             if "eol=lf" in attr and w_eol == "w/crlf":
                 mismatches.append(f"{path}: working copy has CRLF, but .gitattributes declared eol=lf")

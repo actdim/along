@@ -22,7 +22,7 @@ if SCRIPTS_DIR not in sys.path:
 from alongkit import bootstrap
 bootstrap.ensure_deps()
 
-from alongkit import entities, runtime, session
+from alongkit import entities, runtime, session, textio
 from alongkit.hooks import HookEventType, get_adapter
 from alongkit.hooks.adapters.opencode import OpenCodeAdapter
 from alongkit.hooks.config import install_opencode_hooks
@@ -152,6 +152,28 @@ class TestOpenCodeHookInstallAndRegistration(unittest.TestCase):
             level, why = runtime.enforcement_level("opencode")
             self.assertEqual(level, runtime.MECHANICAL)
             self.assertIn("Along hooks are registered for opencode", why)
+
+    def test_install_idempotency_with_crlf(self):
+        target_home = os.path.join(self.tmp_home, ".config", "opencode")
+        status, _ = install_opencode_hooks(is_global=True, target_home=target_home)
+        self.assertEqual(status, "installed")
+
+        # Simulate CRLF line endings on disk in target file
+        plugin_path = os.path.join(target_home, "plugins", "along-gates.js")
+        content = textio.read_text(plugin_path, strict=False)
+        with open(plugin_path, "wb") as handle:
+            handle.write(content.replace("\r\n", "\n").replace("\n", "\r\n").encode("utf-8"))
+
+        status_repeat, _ = install_opencode_hooks(is_global=True, target_home=target_home)
+        self.assertEqual(status_repeat, "present")
+
+        # Simulate CRLF line endings in source template
+        src_plugin = os.path.join(REPO_ROOT, "scripts", "alongkit", "hooks", "opencode_plugin.js")
+        crlf_content = content.replace("\r\n", "\n").replace("\n", "\r\n")
+        real_read_text = textio.read_text
+        with mock.patch("alongkit.textio.read_text", side_effect=lambda path, **kw: crlf_content if path == src_plugin else real_read_text(path, **kw)):
+            status_crlf_template, _ = install_opencode_hooks(is_global=True, target_home=target_home)
+            self.assertEqual(status_crlf_template, "present")
 
 
 class TestOpenCodeNodePluginContract(unittest.TestCase):

@@ -40,6 +40,7 @@ from along_update import get_global_skill_paths, get_source_protocol_paths
 SCRIPTS_DIR = os.path.dirname(os.path.abspath(__file__))
 
 GITATTRIBUTES_LINES = (
+    "* text=auto eol=lf",
     "*.md text eol=lf",
     ".along/HISTORY.md merge=union",
     ".along/DECISIONS.md merge=union",

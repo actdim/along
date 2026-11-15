@@ -1,5 +1,6 @@
 # Git configuration for Along Protocol repositories
-# Ensure clean LF line endings for Markdown and text files
+# Ensure clean LF line endings for text files
+* text=auto eol=lf
 *.md text eol=lf
 *.py text eol=lf
 *.json text eol=lf
@@ -7,6 +8,13 @@
 *.yml text eol=lf
 *.sh text eol=lf
 *.txt text eol=lf
+*.js text eol=lf
+*.ts text eol=lf
+*.tsx text eol=lf
+*.jsx text eol=lf
+*.css text eol=lf
+*.html text eol=lf
+*.svg text eol=lf
 *.ps1 text eol=crlf
 *.bat text eol=crlf
 
