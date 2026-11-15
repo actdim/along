@@ -257,6 +257,94 @@ class TestStopCountsSessionWrites(unittest.TestCase):
         self.assertIn("src/legacy_foreign.py", str(res).replace("\\", "/"))
 
 
+class TestStopUntracedChanges(unittest.TestCase):
+    """The Stop plan gate applies one rule whatever this session wrote: a change is excused only
+    when another session recorded it; an untraced change always counts.
+    [bug--stop-gate-empty-writes-fallback]"""
+
+    SID = "sess-1"
+
+    def setUp(self):
+        import subprocess
+        self.tmp = tempfile.mkdtemp(prefix="along-stop-empty-")
+        for args in (["init", "-q"], ["config", "user.name", "Test"],
+                     ["config", "user.email", "test@example.com"]):
+            subprocess.run(["git", *args], cwd=self.tmp, check=True)
+        os.makedirs(os.path.join(self.tmp, "src"), exist_ok=True)
+        with open(os.path.join(self.tmp, "src", "init.py"), "w", encoding="utf-8") as f:
+            f.write("x = 0\n")
+        subprocess.run(["git", "add", "-A"], cwd=self.tmp, check=True)
+        subprocess.run(["git", "commit", "-q", "-m", "init"], cwd=self.tmp, check=True)
+
+    def tearDown(self):
+        shutil.rmtree(self.tmp, ignore_errors=True)
+
+    def _event(self, event_type, **kwargs):
+        from alongkit.hooks.models import HookEvent
+        return HookEvent(event_type=event_type, workspace_root=self.tmp, runtime="claude",
+                         conversation_id=self.SID, **kwargs)
+
+    def _activity(self, event_type, **kwargs):
+        from alongkit.hooks.predicates import record_tool_activity
+        record_tool_activity(self._event(event_type, **kwargs), self.tmp)
+
+    def _own_write(self, name, conversation_id=None):
+        from alongkit.hooks.models import HookEvent, HookEventType
+        from alongkit.hooks.predicates import record_tool_activity
+        path = os.path.join(self.tmp, "src", name)
+        with open(path, "w", encoding="utf-8") as f:
+            f.write("z = 1\n")
+        record_tool_activity(HookEvent(
+            event_type=HookEventType.POST_TOOL_USE, tool_name="write_to_file",
+            tool_args={"TargetFile": path, "CodeContent": "z = 1\n"}, workspace_root=self.tmp,
+            runtime="claude", conversation_id=conversation_id or self.SID), self.tmp)
+
+    def _untraced_write(self, name="foreign.py"):
+        # Written by something with no activity trace (the user's editor, a hookless runtime).
+        with open(os.path.join(self.tmp, "src", name), "w", encoding="utf-8") as f:
+            f.write("y = 1\n")
+
+    def _stop(self):
+        from alongkit.hooks.models import HookEventType
+        from alongkit.hooks.predicates import check_mutation_authorization
+        return check_mutation_authorization(self._event(HookEventType.STOP), self.tmp,
+                                            options={"enforce_unbound": True})
+
+    def _prompt(self):
+        from alongkit.hooks.models import HookEventType
+        self._activity(HookEventType.USER_PROMPT_SUBMIT)
+
+    def test_untraced_change_counts_when_session_wrote_nothing(self):
+        self._prompt()
+        self._untraced_write("first.py")
+        res = self._stop()
+        self.assertIsNotNone(res)
+        self.assertIn("src/first.py", str(res).replace("\\", "/"))
+
+    def test_untraced_change_counts_when_session_also_wrote(self):
+        # The case the first fix let through: one own write must not excuse untraced changes.
+        self._prompt()
+        self._own_write("own.py")
+        self._untraced_write("second.py")
+        res = str(self._stop()).replace("\\", "/")
+        self.assertIn("src/own.py", res)
+        self.assertIn("src/second.py", res)
+
+    def test_change_recorded_by_another_session_is_excused(self):
+        self._prompt()
+        self._own_write("own.py")
+        self._own_write("theirs.py", conversation_id="sess-2")
+        res = str(self._stop()).replace("\\", "/")
+        self.assertIn("src/own.py", res)
+        self.assertNotIn("src/theirs.py", res)
+
+    def test_path_written_by_both_sessions_counts(self):
+        self._prompt()
+        self._own_write("shared.py", conversation_id="sess-2")
+        self._own_write("shared.py")
+        self.assertIn("src/shared.py", str(self._stop()).replace("\\", "/"))
+
+
 class TestNoMicroEditExemption(unittest.TestCase):
     """Verifies that the protocol text and mutation authorization agree: no micro-edit exemption. REQ-6 (D1: A)"""
 

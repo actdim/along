@@ -4,7 +4,7 @@ slug: runtime-hooks-and-gates
 title: Runtime Lifecycle Hooks & Mechanical Gates
 type: architecture
 created: 2026-09-11
-updated: 2026-10-17
+updated: 2026-11-15
 tags: [hooks, gates, runtime, enforcement, antigravity, claude, codex, typography, cli-safety, destructive-command, attribution]
 sources:
   - path: scripts/alongkit/attribution.py
@@ -125,7 +125,7 @@ For full specification and architecture, see [Declarative Gate Engine & Traceabi
 Gates do not predict harm from command text: whether a shell command writes is not decidable before it runs (`debt--gate-simplification`). `require_plan_approval` (catalogue `event: [PreToolUse, Stop]`) judges facts instead:
 - **Before a file-writing tool** (`PreToolUse`): the target path. It holds a write to a repository file that is not a planning or session artifact while no plan is approved. Shell commands are never checked before they run. Compiled projections (such as `.along/ISSUES.md`, `.along/DECISIONS.md`, `docs/INDEX.md`, or package-level indexes like `packages/<pkg>/docs/INDEX.md` carrying `protocol: along` and `type: index`) are not plan-governed (`closeout.is_compiled_projection`).
 - **Baseline** (`UserPromptSubmit`): `turnstate.snapshot` records `git status --porcelain -uall` plus content hashes of the dirty files as `turn_baseline` in the session activity trace.
-- **At turn end** (`Stop`): `turnstate.changed_since` compares the working tree with the baseline. Paths the turn changed outside Along state (`.along/**`, except `.along/scripts/**`), compiled projections, and planning artifacts, with no approved plan, hold the turn once: `PLAN_REQUIRED [gate: require-plan-approval]: this turn changed <files> ... Ask the user: approve (...) or revert (...)`. The Stop check filters mutations by session-attributed writes (`turn_writes` from file tools or pending shell diff snapshots), ensuring changes from external tools or concurrent sessions are not falsely attributed to the active turn. Files already dirty before the turn and unchanged are not attributed to it.
+- **At turn end** (`Stop`): `turnstate.changed_since` compares the working tree with the baseline. Paths the turn changed outside Along state (`.along/**`, except `.along/scripts/**`), compiled projections, and planning artifacts, with no approved plan, hold the turn once: `PLAN_REQUIRED [gate: require-plan-approval]: this turn changed <files> ... Ask the user: approve (...) or revert (...)`. The Stop check filters mutations by session-attributed writes (`turn_writes` from file tools or pending shell diff snapshots), so that writes a concurrent session recorded are not attributed to the active turn. The rule is the same whatever the session wrote: a change is excused only when another session recorded it in its `turn_writes` and this session did not write it. A change no session recorded counts, because the hook cannot tell the user's editor from a write through a tool it does not see (an MCP tool, for example); an edit made by hand during a turn is held and can be acknowledged with `along gates ack`. Files already dirty before the turn and unchanged are not attributed to it.
 - **One continuation**: Claude Code's `stop_hook_active` keeps the hold to a single continuation. Antigravity still gets ASK for file-tool holds.
 - **Commits** (`along commit`, `git commit`) are not held by this gate.
 - **Process hangs** are handled by runner timeouts; there is no circuit breaker and Stop gates do not wait on one.

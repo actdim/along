@@ -1524,27 +1524,27 @@ def check_mutation_authorization(event: HookEvent, repo_root: str, options: Opti
                     return closeout.path_key(p)
 
             mine_keys = {_norm_k(p) for p in mine}
-            if mine_keys:
-                foreign = [p for p in turn_changes if _norm_k(p) not in mine_keys]
-                turn_changes = [p for p in turn_changes if _norm_k(p) in mine_keys]
-            else:
-                other_writes = set()
-                act_dir = os.path.join(repo.diagnostics_dir(repo_root), "activity")
-                if os.path.isdir(act_dir):
-                    for fname in os.listdir(act_dir):
-                        if fname.endswith(".json"):
-                            k = fname[:-5]
-                            if k != trace_key:
-                                other_trace = load_activity_trace(repo_root, k)
-                                for p in other_trace.get("turn_writes") or []:
-                                    other_writes.add(_norm_k(p))
-                foreign = [p for p in turn_changes if _norm_k(p) in other_writes]
-                turn_changes = [p for p in turn_changes if _norm_k(p) not in other_writes]
+            # [bug--stop-gate-empty-writes-fallback] One rule, whatever this session wrote:
+            # a change is excused only when another session recorded it in its turn_writes.
+            # A change no session recorded is counted: the user's editor and a write through a
+            # tool the hooks do not see (an MCP tool, say) look the same here, and excusing the
+            # first would let the second bypass the plan. This session's own writes always count.
+            other_writes = set()
+            act_dir = os.path.join(repo.diagnostics_dir(repo_root), "activity")
+            if os.path.isdir(act_dir):
+                for fname in os.listdir(act_dir):
+                    if fname.endswith(".json") and fname[:-5] != trace_key:
+                        other_trace = load_activity_trace(repo_root, fname[:-5])
+                        for p in other_trace.get("turn_writes") or []:
+                            other_writes.add(_norm_k(p))
+            foreign = [p for p in turn_changes
+                       if _norm_k(p) in other_writes and _norm_k(p) not in mine_keys]
+            turn_changes = [p for p in turn_changes if p not in foreign]
 
             if foreign:
                 session.trace_event(repo_root, trace_key,
-                                    f"stop: {len(foreign)} path(s) changed this turn outside this "
-                                    "session's tool calls were not counted", collapse=True)
+                                    f"stop: {len(foreign)} path(s) recorded by other sessions this turn "
+                                    "were not counted", collapse=True)
 
         changed = [p for p in turn_changes if _is_plan_governed(p, repo_root)]
         if not changed:
