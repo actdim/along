@@ -13,7 +13,7 @@ tags: [adr, architecture, decisions, index]
 This directory contains the project's Architectural Decision Records.
 Decisions are authored and maintained in `.along/DECISIONS/` and published here as first-class documentation.
 
-## Active Decisions (53)
+## Active Decisions (54)
 
 - **[along-v200-rebranding-and-namespace-isolation](./ADR-2026-08-27--along-v200-rebranding-and-namespace-isolation.md)** - Along v2.0.0: Rebranding, Isolated .along/ Directory, along-* Skill Prefixes, and protocol: along Metadata
 - **[autonomous-multi-mode-dashboard-and-analytics-engine](./ADR-2026-08-27--autonomous-multi-mode-dashboard-and-analytics-engine.md)** - Autonomous Multi-Mode Repository Dashboard & Analytics Engine
@@ -68,6 +68,7 @@ Decisions are authored and maintained in `.along/DECISIONS/` and published here 
 - **[issue-test-scoping-policy](./ADR-2026-11-13--issue-test-scoping-policy.md)** - Issue-Level Test Scoping and Verify Policy Invariants
 - **[named-orchestration-profiles-and-openobserve-telemetry](./ADR-2026-11-14--named-orchestration-profiles-and-openobserve-telemetry.md)** - Named Orchestration Profiles and OpenObserve OTLP Telemetry
 - **[stop-gate-session-attribution-and-trace-denials](./ADR-2026-11-14--stop-gate-session-attribution-and-trace-denials.md)** - Stop Gate Session Attribution and Trace-Backed Denials
+- **[drivers-bound-per-clone-merge-protection-committed](./ADR-2026-11-15--drivers-bound-per-clone-merge-protection-committed.md)** - Merge drivers are bound per clone; committed .gitattributes carries only built-in -merge protection
 
 ## Superseded & Retired Decisions (8)
 

@@ -65,8 +65,8 @@
 
 ## Done (recent)
 - [x] `(bug)` [windows-ci-line-endings](ISSUES/done/bug--windows-ci-line-endings.md)
+- [x] `(bug)` [stop-gate-empty-writes-fallback](ISSUES/done/bug--stop-gate-empty-writes-fallback.md)
 - [x] `(feat)` [openobserve-telemetry-sink](ISSUES/done/feat--openobserve-telemetry-sink.md)
 - [x] `(bug)` [stop-gate-false-positives](ISSUES/done/bug--stop-gate-false-positives.md)
 - [x] `(feat)` [opencode-runtime-integration](ISSUES/done/feat--opencode-runtime-integration.md)
-- [x] `(feat)` [issue-test-scoping-policy](ISSUES/done/feat--issue-test-scoping-policy.md)
-<!-- 342 older completed issue(s) archived in .along/ISSUES/done/ -->
+<!-- 343 older completed issue(s) archived in .along/ISSUES/done/ -->

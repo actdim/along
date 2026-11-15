@@ -3,7 +3,8 @@ protocol: along
 protocol_version: "4.9.0"
 slug: stop-gate-empty-writes-fallback
 type: bug
-status: in-progress
+status: done
+completed: 2026-11-15
 priority: medium
 created: 2026-11-15
 updated: 2026-11-15
@@ -50,4 +51,4 @@ strict rule in both cases; an untraced change always counts.
 - [x] Regression test: one own write + untraced change -> denied, both paths reported.
 - [x] Regression test: a path another session recorded is excused; a path both sessions wrote counts.
 - [x] Existing `TestStopCountsSessionWrites` and `tests/test_shell_classification.py` pass unchanged.
-- [ ] `python .along/scripts/test.py` passes.
+- [x] `python .along/scripts/test.py` passes.

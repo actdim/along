@@ -246,7 +246,7 @@ When an agent emits a tool call, the execution loop flows through the hook harne
 1. **No Git Hooks by Default Invariant** (supersedes "Zero Git Hooks", see ADR `opt-in-git-hooks-supersede-zero-git-hooks`):
    - Nothing Along installs by default (`along-init`, `along update`, `install.*`) writes `.git/hooks/*`. Standard Git commands stay untouched until the user opts in.
    - Opt-in: `along hooks install --git` writes `pre-commit` and `commit-msg` shims that run `along gates check --hook <name>`. A foreign hook already in place is moved to `<hook>.pre-along` and run first; with `core.hooksPath` (husky, lefthook) nothing is written and the command to add to the manager is printed. `--uninstall` removes the shims and restores the previous hooks. The checks are read-only.
-   - Merge drivers (`along git setup`) are per-clone `.git/config` entries, not hooks. See ADR `projection-merge-driver-defers-recompile`.
+   - Merge drivers (`along git setup`) are per-clone `.git/config` entries bound in `.git/info/attributes`, not hooks. The tracked `.gitattributes` carries only the built-in `-merge` / `merge=union` baseline, so a clone without the drivers stops on concurrent edits of Along markdown instead of line-merging them. See ADR `projection-merge-driver-defers-recompile` and ADR `drivers-bound-per-clone-merge-protection-committed`.
    - Runtime gates (`PreToolUse`, `Stop`) remain the primary layer, but they exist only where the host runtime loads Along's hooks. The portable baseline is the CI job `along gates check --ci`, plus the opt-in git hooks. Each gate declares its layers in `enforcement: [runtime, git, ci]`; `along hook verify` prints the matrix.
 2. **Deterministic Rejection over Silent Overwrites**:
    - In `enforce` mode, gate violations result in an immediate `deny` decision with actionable remediation text. Silent auto-replacement is avoided so LLMs receive explicit negative feedback and learn rule adherence.
@@ -283,6 +283,7 @@ Since `debt--agents-md-core-slimming` the managed block is a core of at most 6 K
 | Subproject boundary: only a nested `.git` or a user-run `along init` (never a manifest folder) | a | `subproject_boundary` ignores bare manifests; `along update` creates no context; `along doctor` lists unmarked nested installs | runtime |
 | Zero-manual-merge of projections | a | `projection_protection`, merge drivers (`along git setup`) | runtime, git, ci |
 | Append-only `HISTORY.md` merge | a | `along git setup` writes `merge=union` | git |
+| No silent line merge of `.along/`, `docs/`, `AGENTS.md`, `CLAUDE.md` markdown | a | `along git setup` writes `-merge` (committed); `along doctor` probes `git check-attr`; `along resolve` / `along git sync` resolve from index stages | git |
 | Untracked exports | a | `untracked_exports` | git, ci |
 | Context isolation | c | - | - |
 | No code without issue | a | `require_active_issue` | runtime |
