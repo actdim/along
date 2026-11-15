@@ -64,9 +64,9 @@
 - [ ] `(task)` [reconcile-dashboard-ui-core-conventions](ISSUES/task--reconcile-dashboard-ui-core-conventions.md)
 
 ## Done (recent)
+- [x] `(bug)` [windows-ci-line-endings](ISSUES/done/bug--windows-ci-line-endings.md)
 - [x] `(feat)` [openobserve-telemetry-sink](ISSUES/done/feat--openobserve-telemetry-sink.md)
 - [x] `(bug)` [stop-gate-false-positives](ISSUES/done/bug--stop-gate-false-positives.md)
 - [x] `(feat)` [opencode-runtime-integration](ISSUES/done/feat--opencode-runtime-integration.md)
 - [x] `(feat)` [issue-test-scoping-policy](ISSUES/done/feat--issue-test-scoping-policy.md)
-- [x] `(feat)` [feedback-github-pr-transport](ISSUES/done/feat--feedback-github-pr-transport.md)
-<!-- 341 older completed issue(s) archived in .along/ISSUES/done/ -->
+<!-- 342 older completed issue(s) archived in .along/ISSUES/done/ -->

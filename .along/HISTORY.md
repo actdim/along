@@ -279,3 +279,4 @@ _Index of sessions (newest last). One line per session:_
 2026-11-13 - issue-test-scoping-policy - antigravity - Implement issue-scoped verify policy with plan-approval snapshots and coverage-aware test reuse - [Session Log](./SESSIONS/2026/2026-11-13--issue-test-scoping-policy.md)
 2026-11-14 - openobserve-telemetry-sink - antigravity - Implement named orchestration profiles, OpenObserve OTLP telemetry sink, and orchestrator tracing - [Session Log](./SESSIONS/2026/2026-11-14--openobserve-telemetry-sink.md)
 2026-11-14 - stop-gate-false-positives - antigravity - Fix Stop gate false positives on compiled projections and foreign session edits; enable ackable Stop denials - [Session Log](./SESSIONS/2026/2026-11-14--stop-gate-false-positives.md)
+2026-11-15 - windows-ci-line-endings - antigravity - Fix Windows CI line ending normalization and gitattributes defaults - [Session Log](./SESSIONS/2026/2026-11-15--windows-ci-line-endings.md)
