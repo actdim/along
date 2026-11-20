@@ -1,8 +1,9 @@
 <!-- Generated projection from .along/DECISIONS/*.md. Do not edit by hand. Run: along decision sync -->
 # Decisions (ADR Projection Board)
 
-## Active Decisions (53, newest 30 shown)
+## Active Decisions (54, newest 30 shown)
 
+- [Merge drivers are bound per clone; committed .gitattributes carries only built-in -merge protection](DECISIONS/ADR-2026-11-15--drivers-bound-per-clone-merge-protection-committed.md)
 - [Stop Gate Session Attribution and Trace-Backed Denials](DECISIONS/ADR-2026-11-14--stop-gate-session-attribution-and-trace-denials.md)
 - [Named Orchestration Profiles and OpenObserve OTLP Telemetry](DECISIONS/ADR-2026-11-14--named-orchestration-profiles-and-openobserve-telemetry.md)
 - [Issue-Level Test Scoping and Verify Policy Invariants](DECISIONS/ADR-2026-11-13--issue-test-scoping-policy.md)
@@ -32,9 +33,8 @@
 - [In-Memory Word-Boundary Token Indexing and Ranking over SQLite FTS5](DECISIONS/ADR-2026-09-09--kb-search-in-memory-ranking-vs-sqlite-fts5.md)
 - [Explicit Error Handling, Failure Visibility, and Centralized Diagnostics](DECISIONS/ADR-2026-09-09--error-handling-and-failure-visibility.md)
 - [Relative Path Prefixing for Subproject Git Revisions under Intent Gate](DECISIONS/ADR-2026-09-07--subproject-git-path-resolution-under-intent-gate.md)
-- [Revert GIT_OPTIONAL_LOCKS and diff.autoRefreshIndex to Preserve Git Stat-Cache Integrity](DECISIONS/ADR-2026-09-07--revert-git-stat-cache-workarounds.md)
 
-Older decisions (23): docs/decisions/INDEX.md
+Older decisions (24): docs/decisions/INDEX.md
 
 ## Superseded & Retired Decisions (8)
 
