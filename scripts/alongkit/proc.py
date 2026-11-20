@@ -334,11 +334,14 @@ def kill_process_tree(popen: Any, grace: float = 5.0) -> None:
     """
     pid = getattr(popen, "pid", None)
     if not pid:
-        try:
-            popen.kill()
-        except (OSError, AttributeError):
-            pass
-        return
+        if isinstance(popen, int):
+            pid = popen
+        else:
+            try:
+                popen.kill()
+            except (OSError, AttributeError):
+                pass
+            return
 
     if os.name == "nt":
         try:
