@@ -137,6 +137,8 @@ def main(argv: Optional[List[str]] = None) -> int:
     # session
     p_session = subparsers.add_parser("session", help="Interactive browser session daemon")
     p_session.add_argument("action", choices=["start", "step", "batch", "save", "stop", "status"], help="Session action")
+    p_session.add_argument("--issue", default=None, help="Issue key to attribute session")
+    p_session.add_argument("--headed", action="store_true", help="Launch browser in headed mode")
     p_session.add_argument("--as", dest="save_as", default=None, help="Output scenario path for save")
     p_session.add_argument("--step", default=None, help="JSON or YAML step payload for step")
     p_session.add_argument("--batch", default=None, help="JSON or YAML array of steps for batch")
@@ -167,6 +169,7 @@ def main(argv: Optional[List[str]] = None) -> int:
     p_check.add_argument("action", choices=["compile"], help="Checklist action")
     p_check.add_argument("target", help="Markdown checklist file path or issue key")
     p_check.add_argument("--out", default=None, help="Output scenario YAML path")
+    p_check.add_argument("--json", action="store_true", help="Emit JSON output")
 
     args = parser.parse_args(argv if argv is not None else sys.argv[1:])
     if not args.subcommand:
