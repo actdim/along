@@ -3,10 +3,11 @@ protocol: along
 protocol_version: "4.8.1"
 slug: provenance-drift-gate
 type: feat
-status: in-progress
+status: done
+completed: 2026-11-21
 priority: medium
 created: 2026-11-13
-updated: 2026-11-13
+updated: 2026-11-21
 agent: claude-code
 tags: [docs, kb-sync, provenance, gates]
 blocked_by: []
@@ -34,10 +35,10 @@ Out of scope: section- or symbol-level hashing of sources (separate issue), and 
 - REQ-8: `docs/topic--llm-wiki-architecture.md`, `docs/topic--cli-reference.md`, `docs/topic--runtime-hooks-and-gates.md` and `skills/along-kb-sync/SKILL.md` MUST describe the new flags and the gate.
 
 ## Acceptance Criteria
-- [ ] Staging an edit to a tracked source without updating the topic hash makes `along gates check` fail with `provenance_drift`, naming the topic and the source.
-- [ ] After `along kb-sync --accept-drift <topic> --reviewed` (or `--no-doc-impact "..."`) the same commit passes.
-- [ ] A commit that touches no tracked source passes even while other topics carry pre-existing drift.
-- [ ] `--accept-drift` leaves all other front-matter keys and the body byte-identical (round-trip test).
-- [ ] `--drift-diff` prints the source diff for a drifted topic in a test repository.
-- [ ] New tests in `tests/` cover REQ-1 to REQ-6; `python .along/scripts/test.py` passes.
-- [ ] Docs and skill updated per REQ-8; `along kb-sync --strict` passes.
+- [x] Staging an edit to a tracked source without updating the topic hash makes `along gates check` fail with `provenance_drift`, naming the topic and the source.
+- [x] After `along kb-sync --accept-drift <topic> --reviewed` (or `--no-doc-impact "..."`) the same commit passes.
+- [x] A commit that touches no tracked source passes even while other topics carry pre-existing drift.
+- [x] `--accept-drift` leaves all other front-matter keys and the body byte-identical (round-trip test).
+- [x] `--drift-diff` prints the source diff for a drifted topic in a test repository.
+- [x] New tests in `tests/` cover REQ-1 to REQ-6; `python .along/scripts/test.py` passes.
+- [x] Docs and skill updated per REQ-8; `along kb-sync --strict` passes.

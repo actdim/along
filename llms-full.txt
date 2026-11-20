@@ -1811,6 +1811,10 @@ Idempotent compiler and integrity gate for the living LLM-Wiki in `docs/`.
 - Validates SHA-256 provenance against source files, recompiles `docs/INDEX.md`, updates `llms.txt` and `llms-full.txt`, rewrites legacy `.along/KB/` links, and enforces link integrity.
 - **Options**:
   - `--strict`: Fails with non-zero exit code on broken relative links or missing targets.
+  - `--accept-drift <topic> [<source>...]`: Accepts current LF-normalized SHA-256 content hashes for drifted sources in a topic. Requires `--reviewed` or `--no-doc-impact "<reason>"`.
+  - `--reviewed`: Confirms topic text was verified against the source code changes.
+  - `--no-doc-impact "<reason>"`: Specifies why source changes do not require documentation revisions.
+  - `--drift-diff <topic>`: Shows the git diff of drifted sources from the last commit whose topic front-matter recorded the expected hash.
   - `--crosslink-check`: Audits documentation for unlinked topic concepts.
   - `--crosslink-apply`: Automatically applies deterministic markdown cross-links.
   - `--strict-sections`: Enforces Section Taxonomy Contracts across standard topic files.
@@ -1819,6 +1823,9 @@ Idempotent compiler and integrity gate for the living LLM-Wiki in `docs/`.
   ```bash
   along kb-sync
   along kb-sync --strict
+  along kb-sync --drift-diff topic--mod
+  along kb-sync --accept-drift topic--mod --reviewed
+  along kb-sync --accept-drift topic--mod src/app.py --no-doc-impact "Internal refactor only"
   along kb-sync --crosslink-check
   ```
 
@@ -3124,6 +3131,16 @@ Along enforces in-place provenance for all synthesized Knowledge Base articles:
    - To guard against accidental LLM deletions, `along-kb-sync` calculates net line-count reductions against Git `HEAD`.
    - In monorepos and nested subprojects, path queries use `HEAD:./<rel_path>` to ensure Git resolves paths relative to the subproject working directory rather than the repository root.
    - If an article shrinks by >25% in lines (and at least 10 lines), compilation halts with exit code 2 unless `--prune-intent [REASON]` is explicitly supplied.
+4. **Inspecting Source Drift (`--drift-diff`)**:
+   - `along kb-sync --drift-diff <topic>` queries git log for the last commit recording the expected hash (`git log -1 -S <hash> -- <topic>`) and prints `git diff <commit> -- <source>` to inspect what changed in the source file since the documentation was authored.
+5. **Settling Drift (`--accept-drift`)**:
+   - `along kb-sync --accept-drift <topic> [<source>...]` updates only the `hash` entries in the topic front-matter with current LF-normalized SHA-256 hashes, preserving comments, key order, and body byte-identically.
+   - Requires an explicit review intent flag: `--reviewed` (topic was verified against source edits) or `--no-doc-impact "<reason>"` (source change does not affect documentation).
+   - Emits `Doc-Provenance: <topic>; <source>; reviewed|no-doc-impact: <reason>` lines to document the review in the commit record.
+6. **Commit-Time & CI Provenance Gate (`provenance_drift`)**:
+   - Active at commit time (`along commit`, pre-commit hook) and in CI (`along gates check --ci`).
+   - Blocks any staged change that touches a tracked source without updating the topic hash.
+   - Scoped strictly to touched sources: pre-existing drift in untouched files never blocks unrelated commits.
 
 ---
 
@@ -4021,6 +4038,7 @@ Several agent sessions may work in one repository at once, so gates never read a
 - One archive path (`lifecycle.write_session_record`, `lifecycle.archive_and_purge`) serves `along wrap`, `along scratch purge`, `along issue done` and `along session gc`: no blackboard is deleted without its record; scaffold placeholders are not rendered; a forced purge's reason goes into the record; a second record on the same day is appended as `## Blackboard Record (<n>, <ts>)`.
 - `wrap_before_stop` (Stop): every issue closed as `done` today (local date) must be in `issues_completed` of a session log of today. `along doctor` warns about orphan blackboards (no binding, issue closed or missing), stale bindings and issues in progress with no session bound.
 - `session_record_append_only` (git, ci; `gitgates.check_session_records`, also run by `along commit`): a change never removes or rewrites lines inside a `## Blackboard Record` section of a committed session log; the Summary stays editable.
+- `provenance_drift` (git, ci; `gitgates.check_provenance`, also run by `along commit`): rejects staged changes to tracked doc sources when topic provenance hashes are not updated. Settle via `along kb-sync --accept-drift <topic> <source> (--reviewed | --no-doc-impact "<reason>")`.
 
 ### 2.10 Stop Gates, Subproject Boundary & Gate Tiers
 - **`projection_sync_before_stop`** (`predicates.check_projection_sync_before_stop`): compares content (the compiled board vs `ISSUES.md`, not mtimes) in every context and rewrites a stale board itself, reporting `Auto-synced stale projection(s): ...` on stderr. It never blocks.
@@ -4138,6 +4156,7 @@ Since `debt--agents-md-core-slimming` the managed block is a core of at most 6 K
 | ADRs never edited, only superseded | c | - | - |
 | Issue lifecycle (`done/` placement) | a | `issue_lifecycle` | git, ci |
 | Session log Blackboard Record is append-only | a | `session_record_append_only` (also `along commit`) | git, ci |
+| Doc provenance drift (tracked sources match topic hashes) | a | `provenance_drift` (also `along commit`) | git, ci |
 | Auto-entity creation | c | - | - |
 | Stable entry point | a | `stable_entry_point` (also `along kb-sync --check`) | git, ci |
 | Portable links | a | `portable_links` (also `along kb-sync --check`) | git, ci |
