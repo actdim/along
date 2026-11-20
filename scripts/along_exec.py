@@ -89,6 +89,7 @@ TOOL_MAPPINGS = {
     "conflict-check": "along_conflict_check.py", "conflictcheck": "along_conflict_check.py",
     "env": "along_env.py",
     "daemon": "along_daemon.py",
+    "webdev": "along_webdev.py",
 }
 
 LIFECYCLE_ACTIONS = {"build", "test", "dev", "debug"}
@@ -195,6 +196,7 @@ Along Protocol Tools:
   graph-impact   Determine blast radius and affected flows for symbol or file
   graph-arch     Architectural overview, coupling hotspots, and bridge nodes
   patch          Deterministic AST code patching (replace-func)
+  webdev         Self-contained webdev and browser execution substrate
   resolve        Semantic and test-gated conflict resolution (--docs, --code)
   conflict-check Predict branch merge conflict risks and AST symbol collisions
 """)

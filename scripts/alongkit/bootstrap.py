@@ -245,6 +245,82 @@ def ensure_deps(dependencies: Sequence[str] = RUNTIME_DEPENDENCIES,
     _reexec(command, missing_exit_code, stdin_data=stdin_data)
 
 
+def named_runtime_venv_dir(name: str) -> str:
+    """Location of a named runtime environment, e.g. 'webdev' -> ~/.along/runtimes/<name>-venv."""
+    env_key = f"ALONG_{name.upper().replace('-', '_')}_VENV"
+    return os.environ.get(env_key) or os.path.join(os.path.expanduser("~"), ".along", "runtimes", f"{name}-venv")
+
+
+def ensure_runtime(name: str,
+                   dependencies: Sequence[str],
+                   modules: Sequence[str],
+                   missing_exit_code: int = 2,
+                   quiet: bool = False,
+                   stdin_data: Optional[bytes] = None) -> None:
+    """Guarantee a named runtime's dependencies are available, re-executing under a dedicated venv.
+
+    Similar to ensure_deps, but builds and uses ~/.along/runtimes/<name>-venv/ so core
+    runtime dependencies stay lean while specialized toolchains (e.g. webdev) have their
+    isolated environment.
+    """
+    if have_deps(modules):
+        os.environ.pop(f"ALONGKIT_RUNTIME_{name.upper().replace('-', '_')}_BOOTSTRAPPED", None)
+        return
+
+    guard = f"ALONGKIT_RUNTIME_{name.upper().replace('-', '_')}_BOOTSTRAPPED"
+    if os.environ.get(guard) == "1":
+        print(f"[Error] {MissingDependency(modules[0])}", file=sys.stderr)
+        sys.exit(missing_exit_code)
+
+    is_inline = bool(sys.argv and sys.argv[0] == "-c")
+    code_str = ""
+    trailing_args: List[str] = []
+    if is_inline:
+        orig = getattr(sys, "orig_argv", [])
+        if "-c" in orig:
+            c_idx = orig.index("-c")
+            if c_idx + 1 < len(orig):
+                code_str = orig[c_idx + 1]
+                trailing_args = list(sys.argv[1:])
+
+    script = os.path.abspath(sys.argv[0]) if (sys.argv and sys.argv[0] and not is_inline) else ""
+    if is_inline and not code_str:
+        print(f"[Error] {MissingDependency(modules[0])}", file=sys.stderr)
+        sys.exit(missing_exit_code)
+    if not is_inline and (not script or not os.path.isfile(script)):
+        print(f"[Error] {MissingDependency(modules[0])}", file=sys.stderr)
+        sys.exit(missing_exit_code)
+
+    venv_dir = named_runtime_venv_dir(name)
+    if _venv_is_current(venv_dir, dependencies):
+        reexec_cmd = [venv_python(venv_dir), "-c", code_str, *trailing_args] if is_inline else [venv_python(venv_dir), script, *sys.argv[1:]]
+        _reexec(reexec_cmd, missing_exit_code, guard=guard, stdin_data=stdin_data)
+
+    uv = shutil.which("uv")
+    if not uv:
+        print(f"[Error] {MissingDependency(modules[0])}", file=sys.stderr)
+        sys.exit(missing_exit_code)
+
+    if not quiet:
+        print(f"-> [Along] building cached runtime environment '{name}' at {venv_dir}: {' '.join(dependencies)}",
+              file=sys.stderr)
+    if _build_venv(uv, venv_dir, dependencies):
+        reexec_cmd = [venv_python(venv_dir), "-c", code_str, *trailing_args] if is_inline else [venv_python(venv_dir), script, *sys.argv[1:]]
+        _reexec(reexec_cmd, missing_exit_code, guard=guard, stdin_data=stdin_data)
+
+    command: List[str] = [uv, "run", "--quiet"]
+    for spec in dependencies:
+        command += ["--with", spec]
+    if is_inline:
+        command += ["python", "-c", code_str, *trailing_args]
+    else:
+        command += [script, *sys.argv[1:]]
+    if not quiet:
+        print(f"-> [Along] resolving dependencies for runtime '{name}' via uv: {' '.join(dependencies)}",
+              file=sys.stderr)
+    _reexec(command, missing_exit_code, guard=guard, stdin_data=stdin_data)
+
+
 def ensure_project_env(project_root: str, modules: Sequence[str]) -> None:
     """Re-execute the current script inside the uv project at `project_root` when `modules` are missing.
 
