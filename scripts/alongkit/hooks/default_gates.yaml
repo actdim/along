@@ -445,6 +445,19 @@ gates:
       handler: alongkit.gitgates.check_session_records
       error: "Session log rejected by [gate: session-record-append-only]."
 
+  - id: provenance_drift
+    profiles:
+      strict: block
+      standard: block
+      light: warn
+    enforcement: [git, ci]
+    title: "Documentation Provenance Drift"
+    description: "Rejects staged edits to tracked doc sources when topic provenance hashes are not updated"
+    rule:
+      type: predicate
+      handler: alongkit.gitgates.check_provenance
+      error: "Commit rejected by [gate: provenance_drift]."
+
   - id: no_tracked_secrets
     tier: invariant
     profiles:

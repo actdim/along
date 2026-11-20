@@ -365,6 +365,30 @@ def check_doc_routing(paths: Sequence[str], layer: str, read) -> List[Violation]
             for location, message in repochecks.check_doc_routing_compliance(paths, read, defn.options)]
 
 
+PROVENANCE_DRIFT_GATE = "provenance_drift"
+
+
+def check_provenance(repo_root: str, changed: Sequence[str], layer: str, read) -> List[Violation]:
+    """[gate: provenance-drift] at git / ci: staged edits to tracked sources match topic hashes."""
+    defn = _definitions(layer).get(PROVENANCE_DRIFT_GATE)
+    if defn is None:
+        return []
+    from . import provenance
+    drifted = provenance.drift_for(repo_root, changed, read=read)
+    violations: List[Violation] = []
+    for topic_rel, src_rel, rec_hash, actual_hash in drifted:
+        actual_str = actual_hash[:8] if actual_hash else "deleted"
+        rec_str = rec_hash[:8] if rec_hash else "none"
+        violations.append(Violation(
+            PROVENANCE_DRIFT_GATE,
+            topic_rel,
+            f"tracked source '{src_rel}' content changed (recorded {rec_str}, actual {actual_str}). "
+            f"Settle with: along kb-sync --accept-drift {topic_rel} {src_rel} --reviewed "
+            f"(or --no-doc-impact \"<reason>\")",
+        ))
+    return violations
+
+
 ENTITY_GATE = "entity_reference_integrity"
 ENTITY_SUBDIRS: Tuple[str, ...] = ("ISSUES", "MILESTONES", "DECISIONS", "SESSIONS")
 
@@ -754,6 +778,7 @@ def check_pre_commit(repo_root: str) -> List[Violation]:
                   + check_repo_state(repo_root, added, "git", _index_reader(repo_root))
                   + check_rule_packs(added, "git", _index_reader(repo_root))
                   + check_doc_routing(added, "git", _index_reader(repo_root))
+                  + check_provenance(repo_root, staged, "git", _index_reader(repo_root))
                   + check_entity_references(repo_root, staged, "git", "index", head)
                   + check_session_records(repo_root, staged, "git", head))
     from . import gates
@@ -892,6 +917,7 @@ def check_ci(repo_root: str, commit_range: Optional[str] = None, links: bool = T
     violations += check_repo_state(repo_root, tracked, "ci", _tree_reader(repo_root))
     violations += check_rule_packs(tracked, "ci", _tree_reader(repo_root))
     violations += check_doc_routing(tracked, "ci", _tree_reader(repo_root))
+    violations += check_provenance(repo_root, changed, "ci", _tree_reader(repo_root))
 
     if links and kb_script and os.path.isdir(os.path.join(repo_root, "docs")):
         result = proc.run_capture([sys.executable, kb_script, "--check"], cwd=repo_root,

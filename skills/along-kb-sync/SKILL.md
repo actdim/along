@@ -16,7 +16,7 @@ Idempotent LLM-Wiki Knowledge Base synchronization, inbound link rewriting, comp
 7. **Graduated Safety Gates**:
    - **Hard Errors** (exit 1): Invalid YAML syntax, missing mandatory metadata (`slug`, `title`, `protocol`), or broken relative links in `--strict` mode.
    - **Intent Gate (`--prune-intent [REASON]`)** (exit 2): Halts with a warning if any article shrinks by >25% in lines (and >= 10 lines), requiring explicit developer or agent intent to confirm deletion.
-   - **Drift Warnings**: Reports `[DRIFT]` when underlying source files change, prompting agentic smart merging.
+   - **Drift Warnings & Provenance Gate**: Reports `[DRIFT]` when underlying source files change. `along kb-sync --drift-diff <topic>` prints git diff from the recording commit. `along kb-sync --accept-drift <topic> [<source>...] (--reviewed | --no-doc-impact "<reason>")` records current hashes into front-matter. Staged source edits are enforced at commit-time via the `provenance_drift` gate.
 8. **LLM-Wiki Paradigm**: Native Python implementation of the Andrej Karpathy LLM-Wiki methodology. Zero heavy dependencies; standard library and `ruamel.yaml` resolved automatically by `uv`.
 9. **Deterministic Topic Dictionary & Auto-Crosslinking**: Automatically indexes topic titles, slugs, and tags with longest-term alias prioritization. In `--crosslink-check` mode, reports unlinked concept mentions. In `--crosslink-apply` mode, inserts relative cross-links for the first occurrence of each concept per section while strictly masking headings, code fences, inline code spans, and existing links.
 10. **AST Code Symbol Grounding Gate (`--check-symbols`)**: Extracts substantive codebase symbols (classes, functions, async methods, constants) via standard library `ast` and flags phantom "ghost symbols" documented in backticks. Exits with code 1 in `--strict` mode if ungrounded symbols are detected.
@@ -46,6 +46,8 @@ When executing `/along-kb-sync`:
 ## Usage
 ```bash
 along kb-sync [REPO_ROOT] [--check] [--strict]
+along kb-sync [REPO_ROOT] --drift-diff <topic>
+along kb-sync [REPO_ROOT] --accept-drift <topic> [<source>...] (--reviewed | --no-doc-impact "<reason>")
 along kb-sync [REPO_ROOT] [--crosslink-check] [--crosslink-apply]
 along kb-sync [REPO_ROOT] [--check-symbols] [--strict]
 along kb-sync [REPO_ROOT] [--strict-sections]

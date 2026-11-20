@@ -20,15 +20,10 @@ from alongkit import bootstrap
 # installers and the documented skill commands invoke it.
 bootstrap.ensure_deps()
 
-from alongkit import frontmatter, kb, markdown, proc, repo, textio
+from alongkit import frontmatter, kb, markdown, proc, provenance, repo, textio
 from alongkit.kb import STANDARD_ARTICLES, LEGACY_FILE_MAPPING, SECTION_CONTRACTS
+from alongkit.provenance import compute_content_hash
 from alongkit.version import CURRENT_PROTOCOL_VERSION
-
-
-def compute_content_hash(text: str) -> str:
-    """Computes deterministic SHA-256 hash of text normalized to LF line endings."""
-    normalized = text.replace("\r\n", "\n")
-    return hashlib.sha256(normalized.encode("utf-8")).hexdigest()
 
 
 #: Configured legacy KB storage directory roots (REQ-1).
@@ -1080,7 +1075,7 @@ def _kb_ingest_articles(
                                 cur_hash = compute_content_hash(src_text)
                                 if cur_hash != rec_hash:
                                     drifted_sources.append((f, src_rel, rec_hash, cur_hash))
-                                    print(f"   [DRIFT] docs/{f}: Source '{src_rel}' has changed (expected {rec_hash[:8]}, got {cur_hash[:8]}). Agent review required.")
+                                    print(f"   [DRIFT] docs/{f}: Source '{src_rel}' has changed (expected {rec_hash[:8]}, got {cur_hash[:8]}). Agent review required. Hint: along kb-sync --drift-diff docs/{f}, then --accept-drift.")
                             except (OSError, UnicodeDecodeError) as e:
                                 print(f"   [WARN] Failed to read source '{src_rel}' for docs/{f}: {e}")
 
@@ -1771,6 +1766,61 @@ def sync_kb(
 
     return total_articles, len(broken_links)
 
+def handle_accept_drift(repo_root: str, accept_drift_args: List[str], reviewed: bool, no_doc_impact: Optional[str]) -> int:
+    if not (reviewed ^ bool(no_doc_impact)):
+        print("[Error] along kb-sync --accept-drift requires exactly one of --reviewed or --no-doc-impact \"<reason>\".", file=sys.stderr)
+        return 2
+
+    topic_spec = accept_drift_args[0]
+    sources = accept_drift_args[1:] if len(accept_drift_args) > 1 else None
+
+    try:
+        topic_rel, accepted = provenance.accept(repo_root, topic_spec, sources)
+    except FileNotFoundError as exc:
+        print(f"[Error] {exc}", file=sys.stderr)
+        return 1
+
+    decision = "reviewed" if reviewed else f"no-doc-impact: {no_doc_impact}"
+    if not accepted:
+        print(f"-> No drifted sources updated for topic '{topic_rel}'.")
+    else:
+        for src_path, old_hash, new_hash in accepted:
+            print(f"Doc-Provenance: {topic_rel}; {src_path}; {decision}")
+
+    topic_full = os.path.join(repo_root, topic_rel)
+    try:
+        fm, _ = frontmatter.parse(textio.read_text(topic_full, strict=False), path=topic_rel)
+        if fm.get("write_policy") == "manual":
+            print(f"[Notice] Topic '{topic_rel}' has write_policy: manual; content edits still require a docs-- issue.")
+    except (frontmatter.FrontmatterError, OSError, ValueError):
+        pass
+    return 0
+
+
+def handle_drift_diff(repo_root: str, topic_spec: str) -> int:
+    try:
+        diffs = provenance.drift_diff(repo_root, topic_spec)
+    except FileNotFoundError as exc:
+        print(f"[Error] {exc}", file=sys.stderr)
+        return 1
+
+    if not diffs:
+        print(f"-> No drifted sources found for topic '{topic_spec}'.")
+        return 0
+
+    for src, commit, diff_text, note in diffs:
+        print(f"=== Source: {src} ===")
+        if note:
+            print(f"   {note}")
+        elif commit:
+            print(f"   Recording commit: {commit}")
+            if diff_text:
+                print(diff_text.rstrip())
+            else:
+                print("   (empty diff)")
+    return 0
+
+
 def main():
     parser = argparse.ArgumentParser(description="Along Knowledge Base Compiler, Link Rewriter & Integrity Gate")
     parser.add_argument("repo_root", nargs="?", default=".", help="Target repository root directory")
@@ -1785,9 +1835,19 @@ def main():
     parser.add_argument("--crosslink-check", action="store_true", help="Audit documentation for unlinked topic mentions")
     parser.add_argument("--crosslink-apply", action="store_true", help="Deterministically insert relative cross-links for first mention per section")
     parser.add_argument("--check-symbols", action="store_true", help="Extract codebase AST symbols and verify code spans in documentation")
+    parser.add_argument("--accept-drift", nargs="+", metavar=("TOPIC", "SOURCE"), help="Accept current content hashes for drifted sources in a topic")
+    parser.add_argument("--reviewed", action="store_true", help="Confirm topic text was reviewed against source changes")
+    parser.add_argument("--no-doc-impact", metavar="REASON", help="Reason why source changes do not impact topic documentation")
+    parser.add_argument("--drift-diff", metavar="TOPIC", help="Show git diff for drifted sources in topic from the recording commit")
     parser.add_argument("--verbose", "-v", action="store_true", help="Verbose output")
     parser.add_argument("--debug", action="store_true", help="Debug output with full tracebacks")
     args = parser.parse_args()
+
+    if args.drift_diff:
+        sys.exit(handle_drift_diff(args.repo_root, args.drift_diff))
+
+    if args.accept_drift:
+        sys.exit(handle_accept_drift(args.repo_root, args.accept_drift, reviewed=args.reviewed, no_doc_impact=args.no_doc_impact))
 
     check_mode = args.check or args.dry_run
     if not args.json:

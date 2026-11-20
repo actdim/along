@@ -10,9 +10,9 @@ sources:
   - path: scripts/along_kb_search.py
     hash: "3fefb5c8ebb8b9e9d475b0b951c6e1303143a9a68717ce8878697a3d4d821776"
   - path: skills/along-kb-sync/SKILL.md
-    hash: "e43f8e63715f943e940edd5abf260b6ea45bf69f784213bac3b1bd7327f75527"
+    hash: "de21b4bfb49f9c19ee803123814309bf476f64272aca45dd790e76b13b8407c3"
   - path: scripts/along_kb_sync.py
-    hash: "9dee3d79a0bce2f7948a0b8eb2b09f2265e6812d865bdd9f4bd51e1e82f50c4e"
+    hash: "139ac480563b6a44d7e9735e9ea14c894fb53f94db7c9378eec84d49f0f10005"
 ---
 
 # Topic-Based Knowledge Base Architecture & Paradigm
@@ -227,6 +227,16 @@ Along enforces in-place provenance for all synthesized Knowledge Base articles:
    - To guard against accidental LLM deletions, `along-kb-sync` calculates net line-count reductions against Git `HEAD`.
    - In monorepos and nested subprojects, path queries use `HEAD:./<rel_path>` to ensure Git resolves paths relative to the subproject working directory rather than the repository root.
    - If an article shrinks by >25% in lines (and at least 10 lines), compilation halts with exit code 2 unless `--prune-intent [REASON]` is explicitly supplied.
+4. **Inspecting Source Drift (`--drift-diff`)**:
+   - `along kb-sync --drift-diff <topic>` queries git log for the last commit recording the expected hash (`git log -1 -S <hash> -- <topic>`) and prints `git diff <commit> -- <source>` to inspect what changed in the source file since the documentation was authored.
+5. **Settling Drift (`--accept-drift`)**:
+   - `along kb-sync --accept-drift <topic> [<source>...]` updates only the `hash` entries in the topic front-matter with current LF-normalized SHA-256 hashes, preserving comments, key order, and body byte-identically.
+   - Requires an explicit review intent flag: `--reviewed` (topic was verified against source edits) or `--no-doc-impact "<reason>"` (source change does not affect documentation).
+   - Emits `Doc-Provenance: <topic>; <source>; reviewed|no-doc-impact: <reason>` lines to document the review in the commit record.
+6. **Commit-Time & CI Provenance Gate (`provenance_drift`)**:
+   - Active at commit time (`along commit`, pre-commit hook) and in CI (`along gates check --ci`).
+   - Blocks any staged change that touches a tracked source without updating the topic hash.
+   - Scoped strictly to touched sources: pre-existing drift in untouched files never blocks unrelated commits.
 
 ---
 

@@ -177,6 +177,7 @@ Several agent sessions may work in one repository at once, so gates never read a
 - One archive path (`lifecycle.write_session_record`, `lifecycle.archive_and_purge`) serves `along wrap`, `along scratch purge`, `along issue done` and `along session gc`: no blackboard is deleted without its record; scaffold placeholders are not rendered; a forced purge's reason goes into the record; a second record on the same day is appended as `## Blackboard Record (<n>, <ts>)`.
 - `wrap_before_stop` (Stop): every issue closed as `done` today (local date) must be in `issues_completed` of a session log of today. `along doctor` warns about orphan blackboards (no binding, issue closed or missing), stale bindings and issues in progress with no session bound.
 - `session_record_append_only` (git, ci; `gitgates.check_session_records`, also run by `along commit`): a change never removes or rewrites lines inside a `## Blackboard Record` section of a committed session log; the Summary stays editable.
+- `provenance_drift` (git, ci; `gitgates.check_provenance`, also run by `along commit`): rejects staged changes to tracked doc sources when topic provenance hashes are not updated. Settle via `along kb-sync --accept-drift <topic> <source> (--reviewed | --no-doc-impact "<reason>")`.
 
 ### 2.10 Stop Gates, Subproject Boundary & Gate Tiers
 - **`projection_sync_before_stop`** (`predicates.check_projection_sync_before_stop`): compares content (the compiled board vs `ISSUES.md`, not mtimes) in every context and rewrites a stale board itself, reporting `Auto-synced stale projection(s): ...` on stderr. It never blocks.
@@ -294,6 +295,7 @@ Since `debt--agents-md-core-slimming` the managed block is a core of at most 6 K
 | ADRs never edited, only superseded | c | - | - |
 | Issue lifecycle (`done/` placement) | a | `issue_lifecycle` | git, ci |
 | Session log Blackboard Record is append-only | a | `session_record_append_only` (also `along commit`) | git, ci |
+| Doc provenance drift (tracked sources match topic hashes) | a | `provenance_drift` (also `along commit`) | git, ci |
 | Auto-entity creation | c | - | - |
 | Stable entry point | a | `stable_entry_point` (also `along kb-sync --check`) | git, ci |
 | Portable links | a | `portable_links` (also `along kb-sync --check`) | git, ci |

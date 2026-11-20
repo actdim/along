@@ -10,7 +10,7 @@ sources:
   - path: skills/along-init/SKILL.md
     hash: "9e3c3052d051eb87f3d590aedc06550b963996dc86da0e1e22485a710c17e5a6"
   - path: skills/along-kb-sync/SKILL.md
-    hash: "e43f8e63715f943e940edd5abf260b6ea45bf69f784213bac3b1bd7327f75527"
+    hash: "de21b4bfb49f9c19ee803123814309bf476f64272aca45dd790e76b13b8407c3"
   - path: skills/along-update/SKILL.md
     hash: "4630138bdeafa292c59e0efc9a6b4b960fd48b0a6f2ecd5db0f8dfefeae62645"
 ---

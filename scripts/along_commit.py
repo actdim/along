@@ -281,6 +281,12 @@ def main(argv=None):
             print(gitgates.format_report(cut, "Pre-Commit Quality Gate"), file=sys.stderr)
             _abort(repo_root, "Commit aborted. Restore the removed Blackboard Record lines.")
 
+        # 7. Documentation provenance drift check [feat--provenance-drift-gate]
+        cut_prov = gitgates.check_provenance(repo_root, staged_files, "git", gitgates._index_reader(repo_root))
+        if cut_prov:
+            print(gitgates.format_report(cut_prov, "Pre-Commit Quality Gate"), file=sys.stderr)
+            _abort(repo_root, "Commit aborted. Settle doc provenance drift before committing.")
+
     if bypass_trailer:
         final_msg = f"{final_msg}\n\n{bypass_trailer}"
 

@@ -403,6 +403,10 @@ Idempotent compiler and integrity gate for the living LLM-Wiki in `docs/`.
 - Validates SHA-256 provenance against source files, recompiles `docs/INDEX.md`, updates `llms.txt` and `llms-full.txt`, rewrites legacy `.along/KB/` links, and enforces link integrity.
 - **Options**:
   - `--strict`: Fails with non-zero exit code on broken relative links or missing targets.
+  - `--accept-drift <topic> [<source>...]`: Accepts current LF-normalized SHA-256 content hashes for drifted sources in a topic. Requires `--reviewed` or `--no-doc-impact "<reason>"`.
+  - `--reviewed`: Confirms topic text was verified against the source code changes.
+  - `--no-doc-impact "<reason>"`: Specifies why source changes do not require documentation revisions.
+  - `--drift-diff <topic>`: Shows the git diff of drifted sources from the last commit whose topic front-matter recorded the expected hash.
   - `--crosslink-check`: Audits documentation for unlinked topic concepts.
   - `--crosslink-apply`: Automatically applies deterministic markdown cross-links.
   - `--strict-sections`: Enforces Section Taxonomy Contracts across standard topic files.
@@ -411,6 +415,9 @@ Idempotent compiler and integrity gate for the living LLM-Wiki in `docs/`.
   ```bash
   along kb-sync
   along kb-sync --strict
+  along kb-sync --drift-diff topic--mod
+  along kb-sync --accept-drift topic--mod --reviewed
+  along kb-sync --accept-drift topic--mod src/app.py --no-doc-impact "Internal refactor only"
   along kb-sync --crosslink-check
   ```
 
