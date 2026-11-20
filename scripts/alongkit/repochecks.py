@@ -154,12 +154,16 @@ def check_untracked_exports(paths: Sequence[str], read: Reader,
     """
     findings: List[Finding] = []
     for path in paths:
+        norm = path.replace("\\", "/")
         if posixpath.basename(path) in _EXPORTS and posixpath.basename(posixpath.dirname(path)) == ".along":
             findings.append((path, "local dashboard export must not be tracked; `git rm --cached` it "
                                    "and keep it in .gitignore"))
         elif is_diagnostics_path(path):
             findings.append((path, "per-machine diagnostics must not be tracked; `git rm --cached` it "
                                    "(the directory ignores itself) or run `along migrate --apply`"))
+        elif ".along/artifacts/" in norm or norm.startswith(".along/artifacts/"):
+            findings.append((path, "local runtime artifact must not be tracked; `git rm --cached` it "
+                                   "(the directory ignores itself via .along/artifacts/.gitignore)"))
     return findings
 
 
