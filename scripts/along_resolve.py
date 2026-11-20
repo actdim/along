@@ -2,7 +2,8 @@
 """
 along_resolve.py - Semantic conflict auto-resolution engine for documentation and markdown.
 
-Detects unmerged markdown documentation files (docs/**/*.md, README.md, AGENTS.md),
+Detects unmerged markdown files (docs at any depth, root instruction files, .along/
+entities), resolves marker-less `-merge` conflicts from git index stages :1:/:2:/:3:,
 parses conflict hunks outside fenced code, performs structural reconciliation
 (non-overlapping sections, checklist deduplication, table rows), verifies link integrity
 and clean ASCII typography, and synchronizes the Knowledge Base via along kb sync.
@@ -27,29 +28,11 @@ from alongkit import proc, repo, resolve, resolve_code, textio
 
 def resolve_file(abs_path: str, repo_root: str, dry_run: bool = False,
                  strict: bool = False) -> Tuple[bool, List[str]]:
-    """Resolve conflicts in one file. Returns (clean, notes)."""
-    rel_path = repo.safe_relpath(abs_path, repo_root).replace("\\", "/")
-    if not os.path.isfile(abs_path):
-        return False, [f"File not found: {rel_path}"]
+    """Resolve conflicts in one file. Returns (clean, notes).
 
-    try:
-        content = textio.read_text(abs_path)
-    except (OSError, UnicodeDecodeError, ValueError) as exc:
-        return False, [f"Failed to read {rel_path}: {exc}"]
-
-    merged, clean, warnings = resolve.resolve_markdown_content(
-        content, file_path=abs_path, repo_root=repo_root, strict=strict
-    )
-
-    notes = [f"{rel_path}: {w}" for w in warnings]
-
-    if not dry_run and merged != content:
-        try:
-            textio.write_text(abs_path, merged)
-        except (OSError, ValueError) as exc:
-            return False, notes + [f"Failed to write {rel_path}: {exc}"]
-
-    return clean, notes
+    `-merge` conflicts (no text markers) are resolved from git index stages :1:/:2:/:3:.
+    """
+    return resolve.resolve_path(abs_path, repo_root, dry_run=dry_run, strict=strict)
 
 
 def run_resolve(args: argparse.Namespace) -> int:

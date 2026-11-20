@@ -175,6 +175,29 @@ def scaffold_gitattributes(mig, root, report):
     _note(report, "updated" if existing else "created", path, root)
 
 
+def scaffold_merge_protection(root, report, dry_run=False):
+    """`along git setup` for a git top-level: `-merge` baseline plus driver bindings.
+
+    Only at the repository top-level: the managed `**/` patterns there already cover
+    nested `.along/` contexts. [feat--git-automerge-protection-and-semantic-merge]
+    """
+    if dry_run or not os.path.exists(os.path.join(root, ".git")):
+        return
+    from alongkit import merge as along_merge
+    try:
+        result = along_merge.setup(root)
+    except (OSError, ValueError) as exc:
+        print(f"[WARN] Git merge protection not set up (run `along git setup`): {exc}",
+              file=sys.stderr)
+        return
+    if result.get("gitattributes_changed"):
+        rel = repo.normalize_posix(repo.safe_relpath(os.path.join(root, ".gitattributes"), root))
+        if rel in report["untouched"]:
+            report["untouched"].remove(rel)
+        if rel not in report["updated"] and rel not in report["created"]:
+            report["updated"].append(rel)
+
+
 def is_nested_context(root):
     """True when `root` sits under a FULL-protocol ancestor in the same git tree (REF block).
 
@@ -328,6 +351,7 @@ def main(argv=None) -> int:
     scaffold_protocol_reference(mig, root, load_protocol_reference_text(root), report, profile=args.profile)
     scaffold_claude_md(mig, root, report)
     scaffold_gitattributes(mig, root, report)
+    scaffold_merge_protection(root, report, dry_run=args.dry_run)
     nested = is_nested_context(root)
     scaffold_state_dir(mig, root, report, nested=nested)
     scaffold_vision(mig, root, report, nested=nested)

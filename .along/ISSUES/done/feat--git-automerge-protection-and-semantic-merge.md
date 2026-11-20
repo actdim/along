@@ -3,10 +3,11 @@ protocol: along
 protocol_version: "4.8.1"
 slug: git-automerge-protection-and-semantic-merge
 type: feat
-status: in-progress
+status: done
+completed: 2026-11-20
 priority: high
 created: 2026-11-14
-updated: 2026-11-14
+updated: 2026-11-20
 agent: antigravity
 tags: [git, merge, gitattributes, resolve, update, concurrency, markdown]
 milestone: v5.0.0-agent-run-protocol-and-observability
@@ -44,9 +45,9 @@ Specifically:
 
 ## Acceptance Criteria
 
-- [ ] `along git setup` renders managed `.gitattributes` with `text -merge` protection for `.along/`, `docs/`, and root instruction files.
-- [ ] Concurrent edits to protected markdown files on separate branches result in clean Git stop (`CONFLICT (content)`) without silent line merges and without corrupting working tree files with text markers.
-- [ ] `along update` automatically applies and updates the managed `.gitattributes` block in existing repositories.
-- [ ] `along doctor` reports `[OK]` when `-merge` protection is active and `[WARN]` when missing.
-- [ ] `along resolve` cleanly detects unmerged files from Git index stages (`:1:`, `:2:`, `:3:`) and produces valid resolved markdown matching Along formatting and typography rules.
-- [ ] Automated tests cover `.gitattributes` rendering, `along update` git setup execution, stage extraction, and conflict resolution.
+- [x] `along git setup` renders managed `.gitattributes` with `-merge` protection for `.along/`, `docs/`, and root instruction files (custom drivers bound per clone in `.git/info/attributes`, see ADR `drivers-bound-per-clone-merge-protection-committed`).
+- [x] Concurrent edits to protected markdown files on separate branches result in clean Git stop (`CONFLICT (content)`) without silent line merges and without corrupting working tree files with text markers.
+- [x] `along update` automatically applies and updates the managed `.gitattributes` block in existing repositories.
+- [x] `along doctor` reports `[OK]` when `-merge` protection is active and `[WARN]` when missing.
+- [x] `along resolve` cleanly detects unmerged files from Git index stages (`:1:`, `:2:`, `:3:`) and produces valid resolved markdown matching Along formatting and typography rules.
+- [x] Automated tests cover `.gitattributes` rendering, `along update` git setup execution, stage extraction, and conflict resolution.

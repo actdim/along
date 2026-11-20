@@ -193,15 +193,38 @@ class TestGitattributesBlock(unittest.TestCase):
         twice = merge.render_gitattributes(once, self.tmp)
         self.assertEqual(once, twice)
         self.assertEqual(once.count(merge.ATTR_BEGIN), 1)
-        self.assertIn("**/.along/ISSUES/**/*.md merge=along-frontmatter", once)
+        for line in ("**/.along/**/*.md -merge", "**/docs/**/*.md -merge",
+                     "AGENTS.md -merge", "CLAUDE.md -merge"):
+            self.assertIn(line, once)
         self.assertEqual(merge.render_gitattributes(once, self.tmp, uninstall=True), user)
 
-    def test_decisions_board_bound_only_with_modular_adrs(self):
-        self.assertNotIn(merge.DECISIONS_BOARD_PATTERN + " merge=along-projection",
-                         merge.desired_attributes(self.tmp))
+    def test_committed_block_never_names_a_custom_driver(self):
+        # An undefined driver name falls back to git's TEXT merge, so a committed
+        # `merge=along-*` line would line-merge on every clone without `along git setup`.
         os.makedirs(os.path.join(self.tmp, ".along", "DECISIONS"))
-        self.assertIn(merge.DECISIONS_BOARD_PATTERN + " merge=along-projection",
-                      merge.desired_attributes(self.tmp))
+        rendered = merge.render_gitattributes("", self.tmp)
+        self.assertNotIn("merge=along-", rendered)
+
+    def test_union_logs_come_after_the_protection_line(self):
+        lines = merge.desired_attributes(self.tmp)
+        protected = lines.index("**/.along/**/*.md -merge")
+        self.assertGreater(lines.index("**/.along/HISTORY.md merge=union"), protected)
+        self.assertGreater(lines.index(merge.DECISIONS_BOARD_PATTERN + " merge=union"), protected)
+
+    def test_info_attributes_render_is_idempotent_and_reversible(self):
+        user = "*.bin binary\n"
+        once = merge.render_info_attributes(user, self.tmp)
+        self.assertEqual(once, merge.render_info_attributes(once, self.tmp))
+        self.assertIn("**/.along/ISSUES/**/*.md merge=along-frontmatter", once)
+        self.assertEqual(merge.render_info_attributes(once, self.tmp, uninstall=True), user)
+
+    def test_decisions_board_bound_only_with_modular_adrs(self):
+        board = merge.DECISIONS_BOARD_PATTERN
+        self.assertNotIn(board + " merge=along-projection", merge.desired_driver_attributes(self.tmp))
+        self.assertIn(board + " merge=union", merge.desired_attributes(self.tmp))
+        os.makedirs(os.path.join(self.tmp, ".along", "DECISIONS"))
+        self.assertIn(board + " merge=along-projection", merge.desired_driver_attributes(self.tmp))
+        self.assertNotIn(board + " merge=union", merge.desired_attributes(self.tmp))
 
 
 @unittest.skipUnless(shutil.which("git"), "git not available")
@@ -271,11 +294,124 @@ class TestEndToEndMerge(unittest.TestCase):
         for slug in ("feat--a", "feat--b", "feat--c"):
             self.assertIn(slug, board)
 
+    def test_drivers_bound_per_clone_not_committed(self):
+        info_path = merge.info_attributes_path(self.repo)
+        self.assertIn(merge.INFO_ATTR_BEGIN, _read_file(info_path))
+        self.assertNotIn("merge=along-", _read_file(os.path.join(self.repo, ".gitattributes")))
+        attr = _run_git(self.repo, "check-attr", "merge", "--", ".along/ISSUES/feat--a.md").stdout
+        self.assertIn("merge: along-frontmatter", attr)
+        protection = merge.protection_status(self.repo)
+        self.assertTrue(protection["active"], protection)
+
     def test_uninstall_removes_config_and_block(self):
         merge.setup(self.repo, uninstall=True)
         info = merge.status(self.repo)
         self.assertTrue(all(v == "missing" for v in info["config"].values()))
         self.assertNotIn(merge.ATTR_BEGIN, _read_file(os.path.join(self.repo, ".gitattributes")))
+        info_path = merge.info_attributes_path(self.repo)
+        if os.path.isfile(info_path):
+            self.assertNotIn(merge.INFO_ATTR_BEGIN, _read_file(info_path))
+
+
+@unittest.skipUnless(shutil.which("git"), "git not available")
+class TestUnconfiguredCloneProtection(unittest.TestCase):
+    """Only the committed `.gitattributes` baseline: no drivers, no info/attributes."""
+
+    DOC = "# Topic\n\nIntro.\n\n## A\n\nalpha\n\n## B\n\nbeta\n\n## C\n\ngamma\n"
+
+    def setUp(self):
+        self.repo = tempfile.mkdtemp(prefix="along-merge-bare-")
+        _run_git(self.repo, "init", "-q", "-b", "main")
+        _run_git(self.repo, "config", "user.name", "Along Test")
+        _run_git(self.repo, "config", "user.email", "test@example.invalid")
+        _run_git(self.repo, "config", "commit.gpgsign", "false")
+        _run_git(self.repo, "config", "core.autocrlf", "false")
+        _write_file(os.path.join(self.repo, ".gitattributes"),
+                    merge.render_gitattributes("*.md text eol=lf\n", self.repo))
+        body = "one\n\ntwo\n\nthree\n\nfour\n\nfive\n"
+        _write_file(self._p(".along/ISSUES/feat--a.md"), _issue("feat--a", body=body))
+        _write_file(self._p("docs/topic--x.md"), self.DOC)
+        _write_file(self._p(".along/HISTORY.md"), "# History\n\n- base\n")
+        _run_git(self.repo, "add", "-A")
+        _run_git(self.repo, "commit", "-q", "-m", "base")
+
+        _run_git(self.repo, "checkout", "-q", "-b", "feature")
+        _write_file(self._p(".along/ISSUES/feat--a.md"),
+                    _issue("feat--a", status="in-progress", tags="[git, theirs]",
+                           updated="2026-09-22", body=body.replace("five", "FIVE")))
+        _write_file(self._p("docs/topic--x.md"), self.DOC.replace("gamma", "gamma theirs"))
+        _write_file(self._p(".along/HISTORY.md"), "# History\n\n- base\n- theirs\n")
+        _run_git(self.repo, "commit", "-q", "-am", "feature")
+
+        _run_git(self.repo, "checkout", "-q", "main")
+        _write_file(self._p(".along/ISSUES/feat--a.md"),
+                    _issue("feat--a", tags="[git, ours]", updated="2026-09-21",
+                           body=body.replace("one", "ONE")))
+        _write_file(self._p("docs/topic--x.md"), self.DOC.replace("alpha", "alpha ours"))
+        _write_file(self._p(".along/HISTORY.md"), "# History\n\n- base\n- ours\n")
+        _run_git(self.repo, "commit", "-q", "-am", "main")
+
+    def tearDown(self):
+        shutil.rmtree(self.repo, ignore_errors=True)
+
+    def _p(self, rel):
+        return os.path.join(self.repo, *rel.split("/"))
+
+    def _unmerged(self):
+        out = _run_git(self.repo, "diff", "--name-only", "--diff-filter=U").stdout
+        return sorted(line for line in out.splitlines() if line)
+
+    def test_protection_is_active_without_drivers(self):
+        self.assertTrue(merge.protection_status(self.repo)["active"])
+
+    def test_non_overlapping_edits_stop_without_markers(self):
+        res = _run_git(self.repo, "merge", "--no-edit", "feature", check=False)
+        self.assertNotEqual(res.returncode, 0, res.stdout)
+        self.assertEqual(self._unmerged(), [".along/ISSUES/feat--a.md", "docs/topic--x.md"])
+        issue = _read_file(self._p(".along/ISSUES/feat--a.md"))
+        self.assertNotIn("<<<<<<<", issue)
+        self.assertIn("ONE", issue)
+        self.assertNotIn("FIVE", issue)
+        history = _read_file(self._p(".along/HISTORY.md"))
+        self.assertIn("- ours", history)
+        self.assertIn("- theirs", history)
+
+    def test_stage_aware_resolve_and_sync(self):
+        from alongkit import resolve
+        from alongkit.commands import gates
+
+        _run_git(self.repo, "merge", "--no-edit", "feature", check=False)
+        self.assertEqual(resolve.get_unmerged_docs(self.repo),
+                         [".along/ISSUES/feat--a.md", "docs/topic--x.md"])
+        stages = resolve.get_unmerged_stages("docs/topic--x.md", self.repo)
+        self.assertIsNotNone(stages)
+        self.assertIn("gamma theirs", stages[2])
+
+        rc = gates._git_sync(self.repo)
+        self.assertEqual(self._unmerged(), [])
+        issue = _read_file(self._p(".along/ISSUES/feat--a.md"))
+        self.assertIn("status: in-progress", issue)
+        self.assertIn("tags: [git, ours, theirs]", issue)
+        self.assertIn("ONE", issue)
+        self.assertIn("FIVE", issue)
+        doc = _read_file(self._p("docs/topic--x.md"))
+        self.assertIn("alpha ours", doc)
+        self.assertIn("gamma theirs", doc)
+        self.assertNotIn("<<<<<<<", doc)
+        self.assertIn(rc, (0, 1))  # gate violations in the fixture are not under test
+
+    def test_overlapping_prose_stays_unresolved(self):
+        from alongkit import resolve
+
+        _run_git(self.repo, "merge", "--abort", check=False)
+        _run_git(self.repo, "checkout", "-q", "-b", "clash", "main~1")
+        _write_file(self._p("docs/topic--x.md"), self.DOC.replace("alpha", "alpha CLASH"))
+        _run_git(self.repo, "commit", "-q", "-am", "clash")
+        _run_git(self.repo, "checkout", "-q", "main")
+        _run_git(self.repo, "merge", "--no-edit", "clash", check=False)
+        clean, _ = resolve.resolve_path(self._p("docs/topic--x.md"), self.repo)
+        self.assertFalse(clean)
+        self.assertIn("docs/topic--x.md", self._unmerged())
 
 
 if __name__ == "__main__":

@@ -56,8 +56,30 @@ FRONTMATTER_PATTERNS: Tuple[str, ...] = (
     "**/.along/DECISIONS/**/*.md",
 )
 
+#: Committed baseline: Git refuses a line merge of these files in ANY clone (`-merge`
+#: is built in and needs no config). A concurrent edit stops with a conflict, keeps
+#: "ours" in the working tree without text markers, and leaves stages :1:/:2:/:3: for
+#: `along resolve`. [feat--git-automerge-protection-and-semantic-merge]
+PROTECTED_PATTERNS: Tuple[str, ...] = (
+    "**/.along/**/*.md",
+    "**/docs/**/*.md",
+    "AGENTS.md",
+    "CLAUDE.md",
+)
+#: Append-only logs keep the built-in union driver; written AFTER the protected lines
+#: because git applies the last matching line per attribute.
+UNION_PATTERNS: Tuple[str, ...] = (
+    "**/.along/HISTORY.md",
+)
+
 ATTR_BEGIN = "# >>> along git setup (managed merge drivers) >>>"
 ATTR_END = "# <<< along git setup <<<"
+#: Driver bindings live in `$GIT_COMMON_DIR/info/attributes`, never in the committed
+#: `.gitattributes`: git falls back to the built-in TEXT merge for a driver name that is
+#: not defined in `.git/config`, so a committed `merge=along-*` line would silently
+#: line-merge on every clone that never ran `along git setup`.
+INFO_ATTR_BEGIN = "# >>> along git setup (merge driver bindings, this clone only) >>>"
+INFO_ATTR_END = "# <<< along git setup (merge driver bindings) <<<"
 
 #: Lifecycle ranks for `status`: when both sides changed it, the most advanced wins.
 STATUS_RANK: Dict[str, int] = {
@@ -393,22 +415,37 @@ def driver_command(mode: str, python: Optional[str] = None,
     return f'"{_posix(python)}" "{_posix(script)}" {mode} %O %A %B %P'
 
 
+def _has_modular_decisions(repo_root: str) -> bool:
+    return os.path.isdir(os.path.join(repo_root, ".along", "DECISIONS"))
+
+
 def desired_attributes(repo_root: str) -> List[str]:
+    """Committed `.gitattributes` baseline: `-merge` protection, then union logs."""
+    lines = [f"{p} -merge" for p in PROTECTED_PATTERNS]
+    lines += [f"{p} merge=union" for p in UNION_PATTERNS]
+    if not _has_modular_decisions(repo_root):
+        # A monolithic DECISIONS.md is the append-only ADR log itself.
+        lines.append(f"{DECISIONS_BOARD_PATTERN} merge=union")
+    return lines
+
+
+def desired_driver_attributes(repo_root: str) -> List[str]:
+    """Per-clone driver bindings for `$GIT_COMMON_DIR/info/attributes`."""
     lines = [f"{p} merge={DRIVER_PROJECTION}" for p in PROJECTION_PATTERNS]
-    if os.path.isdir(os.path.join(repo_root, ".along", "DECISIONS")):
+    if _has_modular_decisions(repo_root):
         lines.append(f"{DECISIONS_BOARD_PATTERN} merge={DRIVER_PROJECTION}")
     lines += [f"{p} merge={DRIVER_FRONTMATTER}" for p in FRONTMATTER_PATTERNS]
     return lines
 
 
-def _strip_managed(text: str) -> str:
+def _strip_managed(text: str, begin: str = ATTR_BEGIN, end: str = ATTR_END) -> str:
     out: List[str] = []
     inside = False
     for line in text.splitlines():
-        if line.strip() == ATTR_BEGIN:
+        if line.strip() == begin:
             inside = True
             continue
-        if line.strip() == ATTR_END:
+        if line.strip() == end:
             inside = False
             continue
         if not inside:
@@ -418,19 +455,44 @@ def _strip_managed(text: str) -> str:
     return "\n".join(out) + ("\n" if out else "")
 
 
-def render_gitattributes(current: str, repo_root: str, uninstall: bool = False) -> str:
-    """Return `.gitattributes` content with the managed block refreshed (or removed).
-
-    When modular ADRs exist, a legacy `.along/DECISIONS.md merge=union` line outside the
-    block is left in place; the managed block comes later in the file and git applies the
-    last matching line, so the projection driver wins without editing user lines.
-    """
-    base = _strip_managed(current.replace("\r\n", "\n"))
+def _render_block(current: str, lines: List[str], begin: str, end: str,
+                  uninstall: bool) -> str:
+    base = _strip_managed(current.replace("\r\n", "\n"), begin, end)
     if uninstall:
         return base
-    block = [ATTR_BEGIN, *desired_attributes(repo_root), ATTR_END]
+    block = [begin, *lines, end]
     sep = "\n" if base else ""
     return base + sep + "\n".join(block) + "\n"
+
+
+def render_gitattributes(current: str, repo_root: str, uninstall: bool = False) -> str:
+    """Return `.gitattributes` content with the managed baseline block refreshed (or removed).
+
+    The block comes last in the file and git applies the last matching line per
+    attribute, so `-merge` overrides older user `merge=` lines for protected paths, and
+    the union lines written after it restore `merge=union` for append-only logs.
+    """
+    return _render_block(current, desired_attributes(repo_root), ATTR_BEGIN, ATTR_END, uninstall)
+
+
+def render_info_attributes(current: str, repo_root: str, uninstall: bool = False) -> str:
+    """Return `info/attributes` content with the driver-binding block refreshed (or removed)."""
+    return _render_block(current, desired_driver_attributes(repo_root), INFO_ATTR_BEGIN,
+                         INFO_ATTR_END, uninstall)
+
+
+def info_attributes_path(repo_root: str) -> Optional[str]:
+    """`$GIT_COMMON_DIR/info/attributes` (shared by all worktrees), or None outside git."""
+    from . import proc
+
+    result = proc.run_capture(["git", "rev-parse", "--git-common-dir"], cwd=repo_root,
+                              check=False)
+    if not result.ok or not result.stdout.strip():
+        return None
+    common = result.stdout.strip()
+    if not os.path.isabs(common):
+        common = os.path.join(repo_root, common)
+    return os.path.join(os.path.abspath(common), "info", "attributes")
 
 
 def _git_config(repo_root: str, *args: str):
@@ -458,6 +520,7 @@ def setup(repo_root: str, uninstall: bool = False, dry_run: bool = False) -> Dic
     from . import textio
 
     report: Dict[str, Any] = {"git": False, "config_changed": [], "gitattributes_changed": False,
+                              "info_attributes_changed": False,
                               "uninstall": uninstall, "dry_run": dry_run}
     if not git_dir(repo_root):
         return report
@@ -486,7 +549,77 @@ def setup(repo_root: str, uninstall: bool = False, dry_run: bool = False) -> Dic
         report["gitattributes_changed"] = True
         if not dry_run and (wanted or os.path.isfile(attr_path)):
             textio.write_text(attr_path, wanted, newline="\n")
+
+    info_path = info_attributes_path(repo_root)
+    if info_path:
+        current_info = textio.read_text(info_path, strict=False) if os.path.isfile(info_path) else ""
+        wanted_info = render_info_attributes(current_info, repo_root, uninstall=uninstall)
+        if wanted_info != current_info.replace("\r\n", "\n"):
+            report["info_attributes_changed"] = True
+            if not dry_run and (wanted_info or os.path.isfile(info_path)):
+                os.makedirs(os.path.dirname(info_path), exist_ok=True)
+                textio.write_text(info_path, wanted_info, newline="\n")
     return report
+
+
+def _lines(path: Optional[str]) -> List[str]:
+    from . import textio
+
+    if not path or not os.path.isfile(path):
+        return []
+    return textio.read_text(path, strict=False).replace("\r\n", "\n").splitlines()
+
+
+#: Paths probed by `protection_status`; any file name works, git matches patterns only.
+PROTECTION_PROBES: Tuple[str, ...] = (
+    ".along/ISSUES/feat--probe.md",
+    ".along/ISSUES.md",
+    ".along/HISTORY.md",
+    "docs/topic--probe.md",
+    "AGENTS.md",
+    "CLAUDE.md",
+)
+
+
+def protection_status(repo_root: str) -> Dict[str, Any]:
+    """Whether Git refuses silent line merges of Along markdown in this clone.
+
+    `baseline`: the committed `.gitattributes` carries the managed `-merge` block (what
+    every clone gets). `paths`: the effective `merge` attribute per probe path, judged
+    `protected` (`unset`, i.e. `-merge`), `union`, `driver` (a registered Along driver)
+    or `unprotected` (text merge, or a driver name `.git/config` does not define).
+    """
+    from . import proc
+
+    info: Dict[str, Any] = {"git": bool(git_dir(repo_root)), "baseline": False, "paths": {},
+                            "active": False}
+    if not info["git"]:
+        return info
+    present = _lines(os.path.join(repo_root, ".gitattributes"))
+    info["baseline"] = all(line in present for line in desired_attributes(repo_root))
+    result = proc.run_capture(["git", "check-attr", "merge", "--", *PROTECTION_PROBES],
+                              cwd=repo_root, check=False)
+    values: Dict[str, str] = {}
+    if result.ok:
+        for row in result.stdout.splitlines():
+            path, _, rest = row.partition(": merge: ")
+            if rest:
+                values[path.strip()] = rest.strip()
+    for probe in PROTECTION_PROBES:
+        value = values.get(probe, "unspecified")
+        if value == "unset":
+            verdict = "protected"
+        elif value == "union":
+            verdict = "union"
+        elif value in (DRIVER_PROJECTION, DRIVER_FRONTMATTER) and \
+                _git_config(repo_root, "--get", f"merge.{value}.driver").ok:
+            verdict = "driver"
+        else:
+            verdict = "unprotected"
+        info["paths"][probe] = {"value": value, "verdict": verdict}
+    info["active"] = info["baseline"] and all(
+        p["verdict"] != "unprotected" for p in info["paths"].values())
+    return info
 
 
 def status(repo_root: str) -> Dict[str, Any]:
@@ -494,23 +627,25 @@ def status(repo_root: str) -> Dict[str, Any]:
     from . import textio
 
     info: Dict[str, Any] = {"git": bool(git_dir(repo_root)), "config": {}, "gitattributes": False,
-                            "pending_resync": []}
+                            "info_attributes": False, "pending_resync": []}
     if not info["git"]:
         return info
     for key, value in desired_config().items():
         current = _git_config(repo_root, "--get", key)
         info["config"][key] = "ok" if current.ok and current.stdout.strip() == value else (
             "stale" if current.ok else "missing")
-    attr_path = os.path.join(repo_root, ".gitattributes")
-    if os.path.isfile(attr_path):
-        text = textio.read_text(attr_path, strict=False).replace("\r\n", "\n")
-        info["gitattributes"] = all(line in text.splitlines() for line in desired_attributes(repo_root))
+    attrs = _lines(os.path.join(repo_root, ".gitattributes"))
+    info["gitattributes"] = bool(attrs) and all(line in attrs for line in desired_attributes(repo_root))
+    bindings = _lines(info_attributes_path(repo_root))
+    info["info_attributes"] = bool(bindings) and all(
+        line in bindings for line in desired_driver_attributes(repo_root))
     info["pending_resync"] = pending_resync(repo_root)
     return info
 
 
 def is_configured(info: Dict[str, Any]) -> bool:
     return bool(info.get("git")) and info.get("gitattributes") is True and \
+        info.get("info_attributes") is True and \
         all(v == "ok" for v in info.get("config", {}).values())
 
 
@@ -561,6 +696,8 @@ __all__: Sequence[str] = (
     "DRIVER_PROJECTION", "DRIVER_FRONTMATTER", "RESYNC_MARKER", "STATUS_RANK",
     "text_merge", "is_projection", "merge_projection", "merge_frontmatter_values",
     "merge_entity_text", "merge_frontmatter", "run_driver", "driver_command",
-    "desired_attributes", "render_gitattributes", "setup", "status", "is_configured",
+    "PROTECTED_PATTERNS", "UNION_PATTERNS", "desired_attributes", "desired_driver_attributes",
+    "render_gitattributes", "render_info_attributes", "info_attributes_path",
+    "setup", "status", "is_configured", "protection_status",
     "pending_resync", "mark_resync", "resync",
 )

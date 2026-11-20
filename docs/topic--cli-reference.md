@@ -315,14 +315,17 @@ Manages runtime Git worktree workspace isolation for parallel or multi-agent exe
   ```
 
 ### `along git`
-Registers Along's custom git merge drivers so concurrent branches merge projections and entity files without conflict markers. Drivers live in the local `.git/config` (per clone, never tracked); the file bindings live in a managed block of the tracked `.gitattributes`. No git hooks are installed. `along update` runs `setup` on the root context automatically.
+Protects Along markdown from silent line merges and registers Along's custom git merge drivers. No git hooks are installed. `along update` and `along init` run `setup` on the root context automatically.
+- **Two layers** (`feat--git-automerge-protection-and-semantic-merge`):
+  - *Committed baseline* (managed block of the tracked `.gitattributes`): `-merge` on `**/.along/**/*.md`, `**/docs/**/*.md`, `AGENTS.md`, `CLAUDE.md`, followed by `merge=union` for `**/.along/HISTORY.md` (and a monolithic `**/.along/DECISIONS.md`). `-merge` is built into git, so EVERY clone stops on concurrent edits of these files with a conflict, keeps "ours" in the working tree without markers, and leaves index stages `:1:`/`:2:`/`:3:` for `along resolve` / `along git sync`.
+  - *Per-clone drivers*: the driver commands live in `.git/config` and their file bindings in `$GIT_COMMON_DIR/info/attributes` (highest attribute precedence, never tracked). A committed `merge=along-*` line would be unsafe: git falls back to its built-in TEXT merge for a driver name that `.git/config` does not define, so a fresh clone would line-merge silently.
 - **Drivers**:
   - `along-projection` (`**/.along/ISSUES.md`, `**/.along/CONSTRAINTS.md`, `**/docs/INDEX.md`, plus `**/.along/DECISIONS.md` when modular `.along/DECISIONS/` exists): keeps "ours", exits 0, and records the path in `$GIT_DIR/along-projection-resync`. Git runs drivers before the merged entity files reach the working tree, so recompiling inside the driver would only rebuild the pre-merge board. A file that is not an Along projection falls back to a standard 3-way merge.
   - `along-frontmatter` (`**/.along/ISSUES/**/*.md`, `**/.along/DECISIONS/**/*.md`): 3-way YAML merge. A key changed on one side takes that side; if both sides changed it, lists get a 3-way set merge, `status` takes the most advanced lifecycle state, `updated`/`completed` take the later date, and other scalars take the side with the newer `updated` (ours on a tie). Bodies merge through `git merge-file`; overlapping body edits still leave conflict markers and a non-zero exit.
 - **Subcommands**:
-  - `along git setup [--uninstall] [--dry-run]`: Idempotently writes `merge.along-projection.*` / `merge.along-frontmatter.*` (absolute paths to the interpreter and `along_merge_driver.py`) and refreshes the `.gitattributes` block. `--uninstall` removes both.
-  - `along git status [--json]`: Reports driver registration, the `.gitattributes` bindings, and projections awaiting a resync. `along doctor` reports the same.
-  - `along git sync`: Recompiles `ISSUES.md`, `DECISIONS.md`, `CONSTRAINTS.md` (root and subprojects named in the marker) and `docs/INDEX.md`, then clears the marker. Run it after a merge.
+  - `along git setup [--uninstall] [--dry-run]`: Idempotently writes `merge.along-projection.*` / `merge.along-frontmatter.*` (absolute paths to the interpreter and `along_merge_driver.py`), refreshes the `.gitattributes` protection block and the `info/attributes` driver bindings. `--uninstall` removes all three.
+  - `along git status [--json]`: Reports driver registration, the `.gitattributes` protection block, the `info/attributes` bindings, and projections awaiting a resync. `along doctor` reports the same and also probes the effective `merge` attribute (`git check-attr`) of sample paths: `[OK] Git auto-merge protection: active` or `[WARN] ... missing`.
+  - `along git sync`: After a merge: resolves unmerged markdown (index stages for `-merge` conflicts, `git add` when clean), recompiles `ISSUES.md`, `DECISIONS.md`, `CONSTRAINTS.md` (root and subprojects named in the marker) and `docs/INDEX.md`, clears the marker, and runs the commit-time file gates on the touched files. Exits 1 while conflicts or gate violations remain.
 - **Usage**:
   ```bash
   along git setup
@@ -722,7 +725,8 @@ Cross-runtime multi-agent supervisor orchestrator for tiered model workflows. Ex
 ### `along resolve`
 Semantic and test-gated conflict auto-resolution engine for documentation and source code (`feat--docs-semantic-conflict-resolution`, `feat--test-gated-code-merge-pipeline`).
 - **Documentation mode (`--docs`, default)**:
-  - Detects unmerged markdown files (`UU`, `AA`, `UD`, `DU` in `docs/**/*.md`, `README.md`, `AGENTS.md`) and reconciles structural conflicts outside fenced code blocks.
+  - Detects unmerged markdown files (`UU`, `AA`, `UD`, `DU` in any `*.md`: docs at any depth, root instruction files, `.along/` entities) and reconciles structural conflicts outside fenced code blocks.
+  - Marker-less conflicts (left by the `-merge` protection of `along git setup`) are resolved from index stages `:1:` base, `:2:` ours, `:3:` theirs: projections keep ours for `along git sync`; files with front-matter on both sides use the Along entity merge (status rank, latest dates, list union); other files a 3-way text merge; leftover hunks go through the reconcilers below. A clean result is staged with `git add`. Delete/modify conflicts stay manual.
   - Non-overlapping headings/sections combined in deterministic order.
   - Task checklists (`- [ ]`, `- [x]`) merged via set-union with `[x]` completion priority; table rows deduplicated.
   - Recompiles the Knowledge Base via `along kb sync` after successful resolution.
@@ -730,7 +734,7 @@ Semantic and test-gated conflict auto-resolution engine for documentation and so
   - Detects unmerged source code files, reconciling non-overlapping imports, functions, classes, and methods.
   - Enforces test-gated verification: executes the project test suite (`along test`) immediately after code resolution. If tests fail, `FileTransaction` restores all original conflict markers and exits with code 1.
 - **Options**:
-  - `--docs`: Target unmerged documentation files across `docs/` and root markdown (default).
+  - `--docs`: Target unmerged markdown files (default).
   - `--code`: Resolve unmerged source code files with test-gated verification.
   - `--no-tests`: Skip running test runner during code conflict resolution verification.
   - `--check`, `--dry-run`: Test resolution and report outcomes without writing changes to disk.

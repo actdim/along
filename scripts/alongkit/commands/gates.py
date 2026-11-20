@@ -28,7 +28,8 @@ def handle_git_command(repo_root: str, args: List[str]):
         print("Usage: along git [setup|status|sync] [args...]")
         print("  setup  [--uninstall] [--dry-run]  Register merge drivers and .gitattributes bindings")
         print("  status [--json]                   Report driver registration and pending resync")
-        print("  sync                              Recompile projections after a driver-handled merge")
+        print("  sync                              After a merge: resolve unmerged markdown, recompile")
+        print("                                    projections, run file gates on the result")
         return 0
 
     subcmd = args[0].lower()
@@ -41,13 +42,15 @@ def handle_git_command(repo_root: str, args: List[str]):
         verb = "Would change" if report["dry_run"] else "Changed"
         action = "removal" if report["uninstall"] else "registration"
         changed = report["config_changed"]
-        if not changed and not report["gitattributes_changed"]:
+        if not changed and not report["gitattributes_changed"] and not report.get("info_attributes_changed"):
             print(f"-> Merge driver {action}: already up to date.")
         else:
             for key in changed:
                 print(f"   {verb} .git/config: {key}")
             if report["gitattributes_changed"]:
-                print(f"   {verb} .gitattributes (managed merge driver block)")
+                print(f"   {verb} .gitattributes (managed -merge protection block)")
+            if report.get("info_attributes_changed"):
+                print(f"   {verb} .git/info/attributes (merge driver bindings, this clone only)")
             print(f"-> Merge driver {action} " + ("planned (dry run, nothing written)." if report["dry_run"] else "complete."))
         return 0
 
@@ -58,8 +61,10 @@ def handle_git_command(repo_root: str, args: List[str]):
             return 0
         for key, state in info["config"].items():
             print(f"[{'OK' if state == 'ok' else 'WARN'}] {key}: {state}")
-        print(f"[{'OK' if info['gitattributes'] else 'WARN'}] .gitattributes bindings: "
+        print(f"[{'OK' if info['gitattributes'] else 'WARN'}] .gitattributes -merge protection: "
               f"{'present' if info['gitattributes'] else 'missing'}")
+        print(f"[{'OK' if info['info_attributes'] else 'WARN'}] .git/info/attributes driver bindings: "
+              f"{'present' if info['info_attributes'] else 'missing'}")
         if info["pending_resync"]:
             print("[WARN] Projections kept as 'ours' during a merge; run `along git sync`: "
                   + ", ".join(info["pending_resync"]))
@@ -68,14 +73,47 @@ def handle_git_command(repo_root: str, args: List[str]):
         return 0
 
     if subcmd == "sync":
-        kb_script = repo.resolve_tool_script("along_kb_sync.py", repo_root)
-        done = merge.resync(repo_root, kb_script=kb_script)
-        for path in done:
-            print(f"   -> Recompiled {path}")
-        print("-> Projections synchronized.")
-        return 0
+        return _git_sync(repo_root)
 
     raise CommandError(f"Unknown git subcommand: {subcmd}. Use setup, status, or sync.")
+
+
+def _git_sync(repo_root: str) -> int:
+    """Post-merge reconciliation [feat--git-automerge-protection-and-semantic-merge].
+
+    1. resolve unmerged markdown (index stages for `-merge` conflicts, hunks otherwise);
+    2. recompile projections from the merged entities;
+    3. run the commit-time file gates on what was touched.
+    Exit 1 while conflicts or gate violations remain.
+    """
+    from .. import proc, resolve
+
+    unmerged = resolve.get_unmerged_docs(repo_root)
+    resolved: List[str] = []
+    left: List[str] = []
+    for rel in unmerged:
+        clean, notes = resolve.resolve_path(os.path.join(repo_root, rel), repo_root)
+        for note in notes:
+            print(f"      - {note}")
+        print(f"   [{'OK' if clean else 'CONFLICT'}] {rel}")
+        (resolved if clean else left).append(rel)
+
+    kb_script = repo.resolve_tool_script("along_kb_sync.py", repo_root)
+    done = merge.resync(repo_root, kb_script=kb_script)
+    for path in done:
+        print(f"   -> Recompiled {path}")
+        if path in resolved:
+            proc.run_capture(["git", "add", "--", path], cwd=repo_root, check=False)
+    print("-> Projections synchronized.")
+
+    touched = sorted({*resolved, *done})
+    touched = [p for p in touched if os.path.isfile(os.path.join(repo_root, p))]
+    violations = gitgates.check_files(repo_root, touched) if touched else []
+    if violations:
+        print(gitgates.format_report(violations, "merged files"), file=sys.stderr)
+    if left:
+        print("-> Unresolved conflicts remain (edit them, then `git add`): " + ", ".join(left))
+    return 1 if (left or violations) else 0
 
 
 def handle_lint_command(repo_root: str, args: List[str]):

@@ -290,7 +290,7 @@ def handle_doctor_command(repo_root: str, args: List[str]):
     # Check .gitattributes
     gitattributes_file = os.path.join(repo_root, ".gitattributes")
     if not os.path.exists(gitattributes_file):
-        print("[WARN] Missing .gitattributes (recommended for merge=union on HISTORY.md/DECISIONS.md).")
+        print("[WARN] Missing .gitattributes (line endings, merge=union logs and -merge protection).")
         warnings += 1
     else:
         ga_content = textio.read_text(gitattributes_file, strict=False)
@@ -304,6 +304,16 @@ def handle_doctor_command(repo_root: str, args: List[str]):
     from alongkit import merge as along_merge
     driver_info = along_merge.status(repo_root)
     if driver_info["git"]:
+        protection = along_merge.protection_status(repo_root)
+        if protection["active"]:
+            print("[OK] Git auto-merge protection: active (.gitattributes blocks silent line-merge).")
+        else:
+            weak = [p for p, v in protection["paths"].items() if v["verdict"] == "unprotected"]
+            detail = "managed -merge block missing or stale" if not protection["baseline"] else \
+                "line-merged: " + ", ".join(weak)
+            print(f"[WARN] Git auto-merge protection: missing ({detail}). "
+                  "Run `along git setup` or `along update`.")
+            warnings += 1
         if along_merge.is_configured(driver_info):
             print("[OK] Along merge drivers registered (projection, frontmatter).")
         else:

@@ -435,8 +435,10 @@ def apply_migration_to_context(ctx_dir, protocol_text, migrate_script, is_root=T
         try:
             from alongkit import merge as along_merge
             report = along_merge.setup(ctx_dir)
-            if report["git"] and (report["config_changed"] or report["gitattributes_changed"]):
-                print("   [OK] Registered Along merge drivers (along git setup)")
+            if report["git"] and (report["config_changed"] or report["gitattributes_changed"]
+                                  or report.get("info_attributes_changed")):
+                print("   [OK] Refreshed Git auto-merge protection (.gitattributes -merge) "
+                      "and merge driver bindings (along git setup)")
         except (OSError, ValueError) as e:
             print(f"   [WARN] Could not register Along merge drivers: {e}")
 

@@ -6,6 +6,8 @@ description: Check and update Along protocol and skills to the latest version ac
 # Along Update (`/along-update`)
 Discovers all existing agent contexts across the repository tree and updates them to the latest protocol standard: synchronizing global skill installations, executing versioned migrations, automatically configuring runtime lifecycle hooks for supported agents (Antigravity, Claude Code, OpenAI Codex), rewriting legacy inbound links, and validating repository-wide link integrity.
 
+On the git root it also refreshes Git auto-merge protection (`along git setup`): the committed `.gitattributes` `-merge` block for Along markdown and the per-clone merge driver bindings in `.git/info/attributes`.
+
 ## When to use
 - The user requests an update of Along protocol, instructions, or skills (`/along-update`, "update along", "upgrade protocol").
 - Upgrading an existing workspace from an older protocol version.

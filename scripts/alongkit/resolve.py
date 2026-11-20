@@ -477,13 +477,136 @@ def resolve_markdown_content(text: str, file_path: str = "",
 
 
 def get_unmerged_docs(repo_root: str) -> List[str]:
-    """Find unmerged markdown files across the repository."""
+    """Find unmerged markdown files across the repository.
+
+    Every `*.md` counts: docs at any depth, root instruction files and `.along/` entities,
+    which `-merge` protection now stops instead of line-merging them.
+    """
     changes = closeout.git_changes(repo_root)
     unmerged: List[str] = []
     for path, code in changes.items():
         if code in closeout._UNMERGED_CODES:
             norm_path = path.replace("\\", "/")
             if norm_path.endswith(".md"):
-                if norm_path.startswith("docs/") or norm_path in ("README.md", "AGENTS.md", "CONTRIBUTING.md"):
-                    unmerged.append(norm_path)
+                unmerged.append(norm_path)
     return sorted(unmerged)
+
+
+def get_unmerged_stages(rel_path: str, repo_root: str) -> Optional[Tuple[str, str, str]]:
+    """Return (base, ours, theirs) blobs of an unmerged path from index stages :1:/:2:/:3:.
+
+    A missing base (add/add) is returned as "". Returns None when the path is not
+    unmerged or when ours or theirs is absent (delete/modify stays a manual decision).
+    """
+    rel_path = rel_path.replace("\\", "/")
+    listing = proc.run_capture(["git", "ls-files", "-u", "--", rel_path], cwd=repo_root,
+                               check=False)
+    if not listing.ok:
+        return None
+    stages: Set[int] = set()
+    for row in listing.stdout.splitlines():
+        meta, _, _path = row.partition("\t")
+        parts = meta.split()
+        if len(parts) == 3 and parts[2].isdigit():
+            stages.add(int(parts[2]))
+    if 2 not in stages or 3 not in stages:
+        return None
+    blobs: Dict[int, str] = {}
+    for stage in (1, 2, 3):
+        if stage not in stages:
+            blobs[stage] = ""
+            continue
+        shown = proc.run_capture(["git", "show", f":{stage}:{rel_path}"], cwd=repo_root,
+                                 check=False)
+        if not shown.ok:
+            return None
+        blobs[stage] = shown.stdout.replace("\r\n", "\n")
+    return blobs[1], blobs[2], blobs[3]
+
+
+def resolve_path(abs_path: str, repo_root: str, dry_run: bool = False,
+                 strict: bool = False) -> Tuple[bool, List[str]]:
+    """Resolve one conflicted markdown file in place. Returns (clean, notes).
+
+    Marker-less files (`-merge` protection) are resolved from index stages and staged
+    with `git add` when clean; files with text markers go through the hunk reconcilers.
+    """
+    from . import textio
+
+    rel_path = repo.safe_relpath(abs_path, repo_root).replace("\\", "/")
+    if not os.path.isfile(abs_path):
+        return False, [f"File not found: {rel_path}"]
+    try:
+        content = textio.read_text(abs_path)
+    except (OSError, UnicodeDecodeError, ValueError) as exc:
+        return False, [f"Failed to read {rel_path}: {exc}"]
+
+    staged = None
+    if not has_conflict_markers(content):
+        staged = resolve_staged_conflict(rel_path, repo_root, strict=strict)
+    if staged is not None:
+        merged, clean, warnings = staged
+    else:
+        merged, clean, warnings = resolve_markdown_content(
+            content, file_path=abs_path, repo_root=repo_root, strict=strict)
+
+    notes = [f"{rel_path}: {w}" for w in warnings]
+    if not dry_run and merged != content:
+        try:
+            textio.write_text(abs_path, merged)
+        except (OSError, ValueError) as exc:
+            return False, notes + [f"Failed to write {rel_path}: {exc}"]
+
+    if staged is not None and clean and not dry_run:
+        added = proc.run_capture(["git", "add", "--", rel_path], cwd=repo_root, check=False)
+        if added.ok:
+            notes.append(f"{rel_path}: staged as resolved (git add)")
+        else:
+            notes.append(f"{rel_path}: resolved but `git add` failed: {added.stderr.strip()}")
+    return clean, notes
+
+
+def has_conflict_markers(text: str) -> bool:
+    """True when `text` carries git conflict hunks outside fenced code."""
+    chunks, valid = parse_conflict_hunks(text)
+    return not valid or any(isinstance(c, ConflictHunk) for c in chunks)
+
+
+def resolve_staged_conflict(rel_path: str, repo_root: str,
+                            strict: bool = False) -> Optional[Tuple[str, bool, List[str]]]:
+    """Resolve a marker-less (`-merge`) conflict from index stages.
+
+    Returns (merged_text, clean, notes), or None when the stages are not available.
+    - projection (compiled board): keep ours and mark it for `along git sync`;
+    - front-matter on both sides: Along entity merge (status rank, latest dates, list union);
+    - otherwise: git 3-way text merge;
+    leftover hunks then go through the structural markdown reconcilers.
+    """
+    stages = get_unmerged_stages(rel_path, repo_root)
+    if stages is None:
+        return None
+    base, ours, theirs = stages
+    abs_path = os.path.join(repo_root, rel_path)
+    notes: List[str] = []
+
+    if merge.is_projection(ours, rel_path) or merge.is_projection(theirs, rel_path):
+        merge.mark_resync(rel_path, cwd=repo_root)
+        return ours, True, ["projection kept as ours; recompiled by `along git sync`"]
+
+    if frontmatter.split(ours) is not None and frontmatter.split(theirs) is not None:
+        merged, clean, entity_notes = merge.merge_entity_text(base, ours, theirs, rel_path)
+        notes.extend(f"front-matter: {n}" for n in entity_notes)
+    else:
+        merged, clean = merge.text_merge(base, ours, theirs, rel_path)
+        notes.append("3-way text merge from index stages")
+
+    if not clean or has_conflict_markers(merged):
+        merged, clean, warnings = resolve_markdown_content(
+            merged, file_path=abs_path, repo_root=repo_root, strict=strict)
+        notes.extend(warnings)
+    elif repo_root:
+        sanitized, changed = typography.clean(merged)
+        if changed:
+            merged = sanitized
+            notes.append("Sanitized non-ASCII typographic characters")
+    return merged, clean, notes

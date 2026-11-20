@@ -211,7 +211,7 @@ Along provides **21 singular automation skills** structured across 6 core lifecy
 | **`along-commit`** (`/along-commit`) | Smart ASCII-clean Conventional Committer linked to active `.along/` issue. |
 | **`along hook verify`** (`along hook`) | Verify bi-directional traceability between prose badges and YAML gates, and print which layer (runtime, git, ci) enforces each gate. |
 | **`along gates check`** | Commit-time gates outside agent runtimes: `--hook pre-commit` / `--hook commit-msg` (opt-in via `along hooks install --git`) or `--ci` over a commit range. |
-| **`along git setup`** | Register merge drivers for projections and entity front-matter (`along git sync` after a merge). |
+| **`along git setup`** | Block silent line merges of Along markdown (`-merge` in `.gitattributes`) and register merge drivers for projections and entity front-matter (`along git sync` after a merge resolves and recompiles). |
 | **`along-graph-check`** (`/along-graph-check`) | Preflight health check and verification for `code-review-graph` AST engine. |
 | **`along-graph-sync`** (`/along-graph-sync`) | Build or incrementally update `code-review-graph` AST code intelligence database. |
 | **`along-graph-impact`** (`/along-graph-impact`) | Determine blast radius, affected flows, and candidate tests for changed symbols or files. |

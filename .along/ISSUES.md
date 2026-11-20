@@ -1,7 +1,6 @@
 # Active Issues
 
 ## Active
-- [ ] `(feat)` [git-automerge-protection-and-semantic-merge](ISSUES/feat--git-automerge-protection-and-semantic-merge.md) - plan approved
 - [ ] `(feat)` [provenance-drift-gate](ISSUES/feat--provenance-drift-gate.md) - plan approved
 
 ## Backlog
@@ -22,7 +21,7 @@
 - [ ] `(feat)` [along-plan-strategies](ISSUES/feat--along-plan-strategies.md)
 - [ ] `(feat)` [along-report-engine](ISSUES/feat--along-report-engine.md)
 - [ ] `(feat)` [along-storage-providers](ISSUES/feat--along-storage-providers.md)
-- [ ] `(feat)` [along-webdev-runner](ISSUES/feat--along-webdev-runner.md)
+- [ ] `(feat)` [along-webdev-runner](ISSUES/feat--along-webdev-runner.md) - plan approved
 - [ ] `(feat)` [autonomous-multi-runtime-mvp](ISSUES/feat--autonomous-multi-runtime-mvp.md)
 - [ ] `(feat)` [byoc-kubernetes-operator-and-private-sandboxes](ISSUES/feat--byoc-kubernetes-operator-and-private-sandboxes.md)
 - [ ] `(feat)` [centralized-gpu-inference-pool-and-cloud-topologies](ISSUES/feat--centralized-gpu-inference-pool-and-cloud-topologies.md)
@@ -64,9 +63,9 @@
 - [ ] `(task)` [reconcile-dashboard-ui-core-conventions](ISSUES/task--reconcile-dashboard-ui-core-conventions.md)
 
 ## Done (recent)
+- [x] `(feat)` [git-automerge-protection-and-semantic-merge](ISSUES/done/feat--git-automerge-protection-and-semantic-merge.md)
 - [x] `(bug)` [windows-ci-line-endings](ISSUES/done/bug--windows-ci-line-endings.md)
 - [x] `(bug)` [stop-gate-empty-writes-fallback](ISSUES/done/bug--stop-gate-empty-writes-fallback.md)
 - [x] `(feat)` [openobserve-telemetry-sink](ISSUES/done/feat--openobserve-telemetry-sink.md)
 - [x] `(bug)` [stop-gate-false-positives](ISSUES/done/bug--stop-gate-false-positives.md)
-- [x] `(feat)` [opencode-runtime-integration](ISSUES/done/feat--opencode-runtime-integration.md)
-<!-- 343 older completed issue(s) archived in .along/ISSUES/done/ -->
+<!-- 344 older completed issue(s) archived in .along/ISSUES/done/ -->
