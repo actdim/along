@@ -64,6 +64,9 @@ MCP_SERVER_PACKAGE = f"{MCP_SERVER_NAME}=={MCP_SERVER_VERSION}"
 #: the package on first use, so no separate install step is needed.
 MCP_SERVER_ENTRY = {"command": "uvx", "args": [MCP_SERVER_PACKAGE]}
 
+WEBDEV_MCP_SERVER_NAME = "along-webdev"
+WEBDEV_MCP_SERVER_ENTRY = {"command": "along", "args": ["webdev", "mcp"]}
+
 PROVIDERS: Tuple[str, ...] = ("claude", "codex", "opencode", "antigravity")
 
 #: Only `along-*` folders are skills; anything else under `skills/` is not installed.
@@ -183,20 +186,22 @@ def mcp_target(provider: str, homes: Homes) -> McpTarget:
     raise ValueError(f"unknown provider: {provider}")
 
 
-def mcp_snippet(target: McpTarget) -> str:
+def mcp_snippet(target: McpTarget, server_name: Optional[str] = None, server_entry: Optional[dict] = None) -> str:
     """What a user would add by hand, in the layout that target expects."""
+    s_name = server_name or MCP_SERVER_NAME
+    s_entry = server_entry or MCP_SERVER_ENTRY
     if target.layout == "codex_toml":
-        args_toml = ", ".join(f'"{arg}"' for arg in MCP_SERVER_ENTRY["args"])
-        return (f"[mcp_servers.{MCP_SERVER_NAME}]\n"
-                f"command = \"{MCP_SERVER_ENTRY['command']}\"\n"
+        args_toml = ", ".join(f'"{arg}"' for arg in s_entry["args"])
+        return (f"[mcp_servers.{s_name}]\n"
+                f"command = \"{s_entry['command']}\"\n"
                 f"args = [{args_toml}]\n")
     if target.layout == "opencode_json":
-        return json.dumps({"mcp": {MCP_SERVER_NAME: {
+        return json.dumps({"mcp": {s_name: {
             "type": "local",
-            "command": [MCP_SERVER_ENTRY["command"]] + list(MCP_SERVER_ENTRY["args"]),
+            "command": [s_entry["command"]] + list(s_entry["args"]),
             "enabled": True,
         }}}, indent=2)
-    return json.dumps({"mcpServers": {MCP_SERVER_NAME: MCP_SERVER_ENTRY}}, indent=2)
+    return json.dumps({"mcpServers": {s_name: s_entry}}, indent=2)
 
 
 def _load_json_config(path: str) -> Tuple[Optional[dict], Optional[str]]:
@@ -222,13 +227,17 @@ def _load_json_config(path: str) -> Tuple[Optional[dict], Optional[str]]:
 
 
 def register_mcp(target: McpTarget, *, include_unverified: bool = False,
-                 dry_run: bool = False) -> Tuple[str, str]:
-    """Register `code-review-graph` in `target`.
+                 dry_run: bool = False,
+                 server_name: Optional[str] = None,
+                 server_entry: Optional[dict] = None) -> Tuple[str, str]:
+    """Register MCP server in `target`.
 
     Returns `(status, message)` where status is one of `registered`, `present`,
     `skipped` or `failed`. Nothing here raises: a provider that cannot be configured
     must not abort an install, but it must also never be reported as configured.
     """
+    s_name = server_name or MCP_SERVER_NAME
+    s_entry = server_entry or MCP_SERVER_ENTRY
     if not target.verified and not include_unverified:
         return "skipped", (
             f"{target.provider}: not written. {target.contract}\n"
@@ -242,23 +251,23 @@ def register_mcp(target: McpTarget, *, include_unverified: bool = False,
             return "failed", f"{target.provider}: left {target.path} alone - {refusal}."
 
     if target.layout == "codex_toml":
-        return _register_codex_toml(target, dry_run=dry_run)
+        return _register_codex_toml(target, dry_run=dry_run, server_name=s_name, server_entry=s_entry)
 
     assert data is not None
     if target.layout == "opencode_json":
         section = data.setdefault("mcp", {})
         entry = {"type": "local",
-                 "command": [MCP_SERVER_ENTRY["command"]] + list(MCP_SERVER_ENTRY["args"]),
+                 "command": [s_entry["command"]] + list(s_entry["args"]),
                  "enabled": True}
     else:
         section = data.setdefault("mcpServers", {})
-        entry = dict(MCP_SERVER_ENTRY)
+        entry = dict(s_entry)
     if not isinstance(section, dict):
         return "failed", (f"{target.provider}: left {target.path} alone - its MCP "
                           f"section is not an object.")
-    if MCP_SERVER_NAME in section:
+    if s_name in section:
         return "present", f"{target.provider}: already configured in {target.path}."
-    section[MCP_SERVER_NAME] = entry
+    section[s_name] = entry
     if dry_run:
         return "registered", f"{target.provider}: would register in {target.path}."
     try:
@@ -268,12 +277,15 @@ def register_mcp(target: McpTarget, *, include_unverified: bool = False,
     return "registered", f"{target.provider}: registered in {target.path}."
 
 
-def _register_codex_toml(target: McpTarget, *, dry_run: bool = False) -> Tuple[str, str]:
+def _register_codex_toml(target: McpTarget, *, dry_run: bool = False,
+                         server_name: Optional[str] = None,
+                         server_entry: Optional[dict] = None) -> Tuple[str, str]:
     """Append a `[mcp_servers.<name>]` table, or report that one is already there.
 
     Appending a table header at the end of a TOML document is always valid: a header
     closes whatever table preceded it. Nothing existing is parsed or rewritten.
     """
+    s_name = server_name or MCP_SERVER_NAME
     existing = ""
     if os.path.isfile(target.path):
         try:
@@ -281,14 +293,14 @@ def _register_codex_toml(target: McpTarget, *, dry_run: bool = False) -> Tuple[s
         except (OSError, UnicodeDecodeError) as exc:
             return "failed", (f"{target.provider}: left {target.path} alone - cannot "
                               f"read it ({exc.__class__.__name__}).")
-    pattern = re.compile(r"^\s*\[mcp_servers\.[\"']?" + re.escape(MCP_SERVER_NAME)
+    pattern = re.compile(r"^\s*\[mcp_servers\.[\"']?" + re.escape(s_name)
                          + r"[\"']?\]", re.MULTILINE)
     if pattern.search(existing):
         return "present", f"{target.provider}: already configured in {target.path}."
     if dry_run:
         return "registered", f"{target.provider}: would register in {target.path}."
     newline = textio.detect_newline(existing) if existing else os.linesep
-    block = mcp_snippet(target)
+    block = mcp_snippet(target, server_name=s_name, server_entry=server_entry)
     prefix = "" if (not existing or existing.endswith("\n")) else "\n"
     body = existing + prefix + "\n" + block
     try:
@@ -298,12 +310,14 @@ def _register_codex_toml(target: McpTarget, *, dry_run: bool = False) -> Tuple[s
     return "registered", f"{target.provider}: registered in {target.path}."
 
 
-def unregister_mcp(target: McpTarget, *, dry_run: bool = False) -> Tuple[str, str]:
-    """Remove `code-review-graph` from `target` configuration file.
+def unregister_mcp(target: McpTarget, *, dry_run: bool = False,
+                   server_name: Optional[str] = None) -> Tuple[str, str]:
+    """Remove named MCP server from `target` configuration file.
 
     Returns `(status, message)` where status is one of `cleaned`, `absent`,
     or `failed`.
     """
+    s_name = server_name or MCP_SERVER_NAME
     if not os.path.exists(target.path):
         return "absent", f"{target.provider}: {target.path} does not exist."
 
@@ -313,16 +327,16 @@ def unregister_mcp(target: McpTarget, *, dry_run: bool = False) -> Tuple[str, st
             return "failed", f"{target.provider}: left {target.path} alone - {refusal}."
         assert data is not None
         section = data.get("mcp", {}) if target.layout == "opencode_json" else data.get("mcpServers", {})
-        if not isinstance(section, dict) or MCP_SERVER_NAME not in section:
-            return "absent", f"{target.provider}: {MCP_SERVER_NAME} not configured in {target.path}."
+        if not isinstance(section, dict) or s_name not in section:
+            return "absent", f"{target.provider}: {s_name} not configured in {target.path}."
         if dry_run:
-            return "cleaned", f"{target.provider}: would remove {MCP_SERVER_NAME} from {target.path}."
-        del section[MCP_SERVER_NAME]
+            return "cleaned", f"{target.provider}: would remove {s_name} from {target.path}."
+        del section[s_name]
         try:
             textio.write_text(target.path, json.dumps(data, indent=2, ensure_ascii=False) + "\n")
         except OSError as exc:
             return "failed", f"{target.provider}: could not write {target.path} ({exc})."
-        return "cleaned", f"{target.provider}: removed {MCP_SERVER_NAME} from {target.path}."
+        return "cleaned", f"{target.provider}: removed {s_name} from {target.path}."
 
     if target.layout == "codex_toml":
         try:
@@ -331,20 +345,20 @@ def unregister_mcp(target: McpTarget, *, dry_run: bool = False) -> Tuple[str, st
             return "failed", (f"{target.provider}: left {target.path} alone - cannot "
                               f"read it ({exc.__class__.__name__}).")
         pattern = re.compile(
-            r"\n?\s*\[mcp_servers\.[\"']?" + re.escape(MCP_SERVER_NAME) + r"[\"']?\](?:\n[^\[]*)*",
+            r"\n?\s*\[mcp_servers\.[\"']?" + re.escape(s_name) + r"[\"']?\](?:\n[^\[]*)*",
             re.MULTILINE
         )
         if not pattern.search(existing):
-            return "absent", f"{target.provider}: {MCP_SERVER_NAME} not configured in {target.path}."
+            return "absent", f"{target.provider}: {s_name} not configured in {target.path}."
         if dry_run:
-            return "cleaned", f"{target.provider}: would remove {MCP_SERVER_NAME} from {target.path}."
+            return "cleaned", f"{target.provider}: would remove {s_name} from {target.path}."
         cleaned_body = pattern.sub("", existing).strip() + "\n"
         newline = textio.detect_newline(existing) if existing else os.linesep
         try:
             textio.write_text(target.path, cleaned_body, newline=newline)
         except OSError as exc:
             return "failed", f"{target.provider}: could not write {target.path} ({exc})."
-        return "cleaned", f"{target.provider}: removed {MCP_SERVER_NAME} from {target.path}."
+        return "cleaned", f"{target.provider}: removed {s_name} from {target.path}."
 
     return "absent", f"{target.provider}: unsupported configuration layout."
 
@@ -352,16 +366,19 @@ def unregister_mcp(target: McpTarget, *, dry_run: bool = False) -> Tuple[str, st
 def configure_mcp(providers: Sequence[str], homes: Homes, *,
                   include_unverified: bool = False,
                   dry_run: bool = False,
-                  clean: bool = False) -> List[dict]:
+                  clean: bool = False,
+                  server_name: Optional[str] = None,
+                  server_entry: Optional[dict] = None) -> List[dict]:
     """Register or unregister the MCP server for each provider."""
     report = []
     for provider in providers:
         target = mcp_target(provider, homes)
         if clean:
-            status, message = unregister_mcp(target, dry_run=dry_run)
+            status, message = unregister_mcp(target, dry_run=dry_run, server_name=server_name)
         else:
             status, message = register_mcp(target, include_unverified=include_unverified,
-                                           dry_run=dry_run)
+                                           dry_run=dry_run, server_name=server_name,
+                                           server_entry=server_entry)
         report.append({"provider": provider, "path": target.path,
                        "verified": target.verified, "status": status,
                        "message": message})

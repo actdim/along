@@ -308,7 +308,7 @@ See the following engineering guidelines:
 
 This repository is **ActDim Along** (`actdim-along`) - the provider-agnostic agent-context protocol and skills suite.
 
-- **Skills Source**: `skills/` (`along-init`, `along-update`, `along-dash`, `along-wrap`, `along-commit`, `along-build`, `along-test`, `along-dev`, `along-team`, `along-kb-sync`, `along-kb-search`, `along-issue-sync`, `along-decision-sync`, `along-history-sync`, `along-graph-check`, `along-graph-sync`, `along-graph-impact`, `along-graph-arch`, `along-dep-scan`, `along-version-bump`, `along-feedback`).
+- **Skills Source**: `skills/` (`along-init`, `along-update`, `along-dash`, `along-wrap`, `along-commit`, `along-build`, `along-test`, `along-dev`, `along-team`, `along-kb-sync`, `along-kb-search`, `along-issue-sync`, `along-decision-sync`, `along-history-sync`, `along-graph-check`, `along-graph-sync`, `along-graph-impact`, `along-graph-arch`, `along-dep-scan`, `along-version-bump`, `along-feedback`, `along-webdev`).
 - **Engines**: `scripts/` (one per skill) on shared `scripts/alongkit/` package. Helpers live there only (`tests/test_alongkit.py` checks). Runtime dep: `ruamel.yaml`.
 - **Typography**: `along sanitize [--write]`; `/along-commit` and `/along-version-bump` abort on it (`--fix-typography` rewrites). Scope: `.md .py .sh .ps1 .bat`.
 - **Release**: `/along-version-bump`: pre-mutation gates, rollback via `alongkit.transaction.FileTransaction`.
@@ -2191,6 +2191,26 @@ Compile compact, role-specific handoff context for an issue (`scripts/alongkit/c
   ```bash
   along brief my-feature --role implementer
   along brief my-feature --role reviewer
+  ```
+
+### `along webdev`
+Substrate for web development services, interactive browser sessions, visual proof capture, and Playwright verification (`scripts/along_webdev.py`).
+- **Subcommands**:
+  - `bootstrap`: Provision or inspect portable Chrome for Testing (CfT) runtime (`--status`, `--download`, `--version`, `--json`).
+  - `limits`: Display declared unverifiable surfaces and emulation substitutes (`--json`).
+  - `schema`: Print declarative scenario JSON Schema.
+  - `serve`: Manage application dev services lifecycle (`up`, `status`, `logs`, `down`).
+  - `session`: Interactive browser session daemon (`start`, `step`, `batch`, `save`, `status`, `stop`).
+  - `run`: Run Playwright script or declarative YAML scenario (`--issue`, `--check`, `--matrix`, `--headed`, `--file-failures`, `--keep-evidence`, `--json`).
+  - `shot`: Quick visual proof screenshot of a web route (`--url`, `--out`, `--viewport`, `--theme`).
+  - `checklist`: Compile natural-language Markdown checklist into scenario skeleton (`compile <target> [--out <file>]`).
+  - `mcp`: Run stdio Model Context Protocol (MCP) server.
+- **Usage**:
+  ```bash
+  along webdev serve up
+  along webdev session start --issue my-feature
+  along webdev run scenario.yaml --issue my-feature
+  along webdev shot --url http://localhost:5173 --out proof.png
   ```
 
 ---
@@ -4187,6 +4207,7 @@ Since `debt--agents-md-core-slimming` the managed block is a core of at most 6 K
 | along-team step loop and reviews | a | `team_step_active`, `team_reviews_before_stop`, `along scratch purge` / `along wrap` refusal | runtime |
 | Bounded subagent step prompt footprint | a | `bounded_prompt_gate` (`[gate: bounded-prompt-gate]`, hard limit 32 KB, soft warning 16 KB, attention leak detection) | runtime |
 | ADR question at wrap | a | `along wrap --decisions / --no-decisions` (required) | runtime |
+| WebDev browser verification | a | `along wrap` refusal on FAIL or unreasoned NOT RUN when `verify.checks` includes `webdev` | runtime |
 | Windows-safe filenames | a | `windows_safe_filenames` | git, ci |
 | `ISSUES.md` compact | a | `along context-budget --check`, `tests/test_context_budget.py` | ci |
 | No secrets in tracked files | a | `no_tracked_secrets` | git, ci |
@@ -5297,6 +5318,20 @@ flowchart TD
 
 ---
 
+### `along-webdev`
+- **What it is**: Self-contained web development and browser execution substrate for Playwright verification, exploratory sessions, and visual proof.
+- **Architectural Rationale**:
+  - *Provider-Agnostic Substrate*: Runs standalone without requiring harness-specific browser tools.
+  - *Hermetic Evidence*: Writes deterministic screenshot evidence under `.along/artifacts/webdev/` protected by self-ignoring `.gitignore`.
+  - *Lifecycle Alignment*: Integrates application service lifecycle probes, interactive exploratory daemons, and declarative scenario execution.
+- **Invocation Triggers**:
+  - *Explicit*: `/along-webdev`, `along webdev` (`along webdev serve up`, `along webdev session start`, `along webdev run`).
+  - *Semantic / Automatic*: Triggered when validating web UI routes, interactive browser flows, or checking layout invariants across viewports.
+- **Entities Operated On**: `.along/webdev.json`, `.along/artifacts/webdev/`, `.along/ISSUES/`.
+- **Ecosystem Chaining**: Provides browser verification results for issue completion and wrap verification gates.
+
+---
+
 ### `along-wrap`
 - **What it is**: Unified session and stage wrap-up orchestrator. Executes the mandatory completion checklist: runs tests, checks documentation blast radius, moves finished issues to `done/`, reconciles `ISSUES.md`, appends to `HISTORY.md`, compiles engineering provenance, and purges session blackboards.
 - **Architectural Rationale**:
@@ -5678,3 +5713,92 @@ Along provides dedicated diagnostic commands to inspect repository health and is
 - [Setup & Developer Workflow](./topic--setup-and-workflow.md) - Installation and runner configuration
 - [Along CLI Command Reference](./topic--cli-reference.md) - Complete CLI command reference
 - [Runtime Lifecycle Hooks & Mechanical Gates](./topic--runtime-hooks-and-gates.md) - Gate enforcement and safety rules
+
+---
+
+## Document: docs/topic--webdev-verification.md (WebDev & Browser Execution Substrate)
+
+# WebDev & Browser Execution Substrate
+
+The Along WebDev substrate provides a self-contained, provider-agnostic browser execution environment for automated UI verification, exploratory agent sessions, and visual proof capture.
+
+---
+
+## 1. Architecture Overview
+
+The system is organized into modular layers:
+- **Runtime & CfT Manager (`cft.py`, `browser.py`)**: Provisions isolated Python Playwright dependencies and portable Chrome for Testing (CfT) binaries without requiring global installs or harness-specific browser tools.
+- **Services Lifecycle (`services.py`, `config.py`)**: Spawns, monitors, and terminates background dev servers and mock backends with HTTP/port readiness probes and secret redaction.
+- **Engine & Probes (`session.py`, `locators.py`, `steps.py`, `probes.js`)**: Executes semantic actions using accessibility roles, labels, and text locators; measures in-page geometry and spatial relationships (`above`, `covered_by`, `overflow_x`); filters diagnostic noise.
+- **Interactive Session Daemon (`daemon.py`)**: Runs a persistent browser behind a local token-authenticated HTTP service on 127.0.0.1, recording exploratory steps into reusable scenario transcripts.
+- **Natural-Language Checklist Compiler (`checklist.py`)**: Compiles Markdown verification checklists from files or issue descriptions into declarative scenario skeletons.
+- **Scenario Runner & Failure Filing (`runner.py`, `evidence.py`, `results.py`, `failures.py`)**: Expands checks across viewport and theme matrices, writes deterministic evidence to self-ignoring `.along/artifacts/webdev/`, updates issue verification tables, and auto-files reproducible bug tickets on failures.
+- **Model Context Protocol (MCP) Server (`mcp_server.py`)**: Exposes stdio MCP tools mapping 1:1 to CLI verbs.
+
+---
+
+## 2. Configuration (`.along/webdev.json`)
+
+Declare application services, viewports, origins, and noise filters:
+
+```json
+{
+  "services": {
+    "web": {
+      "command": "npm run dev",
+      "cwd": "packages/web",
+      "probe": {"http": "http://localhost:5173", "status": [200, 304], "timeout_seconds": 30}
+    },
+    "api": {
+      "command": "python server.py",
+      "probe": {"port": 8000, "timeout_seconds": 15}
+    }
+  },
+  "defaults": {
+    "origins": ["http://localhost:5173", "http://localhost:8000"],
+    "viewport": "desktop-1440x900",
+    "theme": "light"
+  }
+}
+```
+
+---
+
+## 3. CLI Commands Reference
+
+### Service Management
+- `along webdev serve up [services...]`: Start declared services and wait for readiness probes.
+- `along webdev serve status`: Inspect running services and health status.
+- `along webdev serve logs [services...] [--tail N] [--grep REGEX]`: Harvest log excerpts.
+- `along webdev serve down [services...]`: Gracefully terminate spawned service process trees.
+
+### Interactive Exploratory Sessions
+- `along webdev session start [--issue SLUG] [--headed]`: Launch daemon and persistent browser session.
+- `along webdev session step --step '<json-or-yaml>'`: Execute single exploratory step.
+- `along webdev session batch --batch '<json-or-yaml>'`: Execute multiple steps sequentially.
+- `along webdev session save --as <scenario.yaml>`: Save recorded transcript as a reusable scenario.
+- `along webdev session status`: Check daemon health and recorded step count.
+- `along webdev session stop`: Terminate browser and daemon.
+
+### Scenario Execution & Verification
+- `along webdev run <scenario.yaml> [--issue SLUG] [--check ID] [--file-failures]`: Run verification checks.
+- `along webdev shot --url <url> --out <path> [--viewport VP] [--theme light|dark]`: Capture quick visual proof.
+- `along webdev checklist compile <file|slug> [--out <scenario.yaml>]`: Compile checklist to scenario skeleton.
+- `along webdev limits`: Display declared unverifiable surfaces and emulation substitutes.
+- `along webdev mcp`: Run stdio MCP server for agent integration.
+
+---
+
+## 4. Verification Policy & Wrap Gate
+
+When an issue declares `webdev` in its `verify.checks` policy:
+```yaml
+verify:
+  tests: required
+  checks: [webdev]
+```
+
+The wrap gate (`along wrap`) enforces:
+1. The issue must contain a valid `## Browser Verification Results` section.
+2. All executed checks must report `PASS` (or `NOT RUN` with an approved `platform-limit:<name>` reason).
+3. Any check with `FAIL` or unreasoned `NOT RUN` blocks issue wrap unless `--force-reason` is explicitly supplied.

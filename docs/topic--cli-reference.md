@@ -785,6 +785,26 @@ Compile compact, role-specific handoff context for an issue (`scripts/alongkit/c
   along brief my-feature --role reviewer
   ```
 
+### `along webdev`
+Substrate for web development services, interactive browser sessions, visual proof capture, and Playwright verification (`scripts/along_webdev.py`).
+- **Subcommands**:
+  - `bootstrap`: Provision or inspect portable Chrome for Testing (CfT) runtime (`--status`, `--download`, `--version`, `--json`).
+  - `limits`: Display declared unverifiable surfaces and emulation substitutes (`--json`).
+  - `schema`: Print declarative scenario JSON Schema.
+  - `serve`: Manage application dev services lifecycle (`up`, `status`, `logs`, `down`).
+  - `session`: Interactive browser session daemon (`start`, `step`, `batch`, `save`, `status`, `stop`).
+  - `run`: Run Playwright script or declarative YAML scenario (`--issue`, `--check`, `--matrix`, `--headed`, `--file-failures`, `--keep-evidence`, `--json`).
+  - `shot`: Quick visual proof screenshot of a web route (`--url`, `--out`, `--viewport`, `--theme`).
+  - `checklist`: Compile natural-language Markdown checklist into scenario skeleton (`compile <target> [--out <file>]`).
+  - `mcp`: Run stdio Model Context Protocol (MCP) server.
+- **Usage**:
+  ```bash
+  along webdev serve up
+  along webdev session start --issue my-feature
+  along webdev run scenario.yaml --issue my-feature
+  along webdev shot --url http://localhost:5173 --out proof.png
+  ```
+
 ---
 
 ## 5. Exit Codes and CI/CD Automation

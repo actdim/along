@@ -171,6 +171,9 @@ def main(argv: Optional[List[str]] = None) -> int:
     p_check.add_argument("--out", default=None, help="Output scenario YAML path")
     p_check.add_argument("--json", action="store_true", help="Emit JSON output")
 
+    # mcp
+    subparsers.add_parser("mcp", help="Run stdio Model Context Protocol (MCP) server")
+
     args = parser.parse_args(argv if argv is not None else sys.argv[1:])
     if not args.subcommand:
         parser.print_help()
@@ -210,6 +213,10 @@ def main(argv: Optional[List[str]] = None) -> int:
     if args.subcommand == "checklist":
         from alongkit.webdev import checklist
         return checklist.handle_checklist_cli(args)
+
+    if args.subcommand == "mcp":
+        from alongkit.webdev import mcp_server
+        return mcp_server.run_stdio_server()
 
     print(f"[Error] Unknown subcommand: {args.subcommand}", file=sys.stderr)
     return 2

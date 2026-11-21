@@ -326,6 +326,7 @@ Since `debt--agents-md-core-slimming` the managed block is a core of at most 6 K
 | along-team step loop and reviews | a | `team_step_active`, `team_reviews_before_stop`, `along scratch purge` / `along wrap` refusal | runtime |
 | Bounded subagent step prompt footprint | a | `bounded_prompt_gate` (`[gate: bounded-prompt-gate]`, hard limit 32 KB, soft warning 16 KB, attention leak detection) | runtime |
 | ADR question at wrap | a | `along wrap --decisions / --no-decisions` (required) | runtime |
+| WebDev browser verification | a | `along wrap` refusal on FAIL or unreasoned NOT RUN when `verify.checks` includes `webdev` | runtime |
 | Windows-safe filenames | a | `windows_safe_filenames` | git, ci |
 | `ISSUES.md` compact | a | `along context-budget --check`, `tests/test_context_budget.py` | ci |
 | No secrets in tracked files | a | `no_tracked_secrets` | git, ci |

@@ -36,9 +36,10 @@ USAGE = """Usage: python configure_mcp.py [options]
 
 Targets (default: every provider):
   --provider NAME        claude | codex | opencode | antigravity (repeatable)
+  --server NAME          code-review-graph (default) | along-webdev
 
 Behaviour:
-  --clean, --unregister  remove code-review-graph from provider configurations
+  --clean, --unregister  remove MCP server from provider configurations
   --include-unverified   also write providers whose config contract is unconfirmed
   --dry-run              report what would be written, write nothing
   --json                 machine-readable report on stdout
@@ -57,6 +58,7 @@ def main():
     dry_run = False
     as_json = False
     clean = False
+    server_choice = "code-review-graph"
     homes = {}
     home_flags = {
         "--user-home": "user", "--claude-home": "claude", "--codex-home": "codex",
@@ -69,8 +71,14 @@ def main():
         if arg in ("-h", "--help"):
             sys.stderr.write(USAGE)
             return 0
-        elif arg in ("--clean", "--unregister"):
+        elif arg == "--clean" or arg == "--unregister":
             clean = True
+        elif arg == "--server":
+            index += 1
+            if index >= len(argv):
+                sys.stderr.write("--server needs a name\n")
+                return 2
+            server_choice = argv[index]
         elif arg == "--provider":
             index += 1
             if index >= len(argv):
@@ -105,10 +113,14 @@ def main():
 
     user_home = homes.pop("user", None)
     resolved = install.Homes.defaults(user_home, **homes)
+    s_name = install.WEBDEV_MCP_SERVER_NAME if server_choice == "along-webdev" else install.MCP_SERVER_NAME
+    s_entry = install.WEBDEV_MCP_SERVER_ENTRY if server_choice == "along-webdev" else install.MCP_SERVER_ENTRY
     report = install.configure_mcp(providers or list(install.PROVIDERS), resolved,
                                    include_unverified=include_unverified,
                                    dry_run=dry_run,
-                                   clean=clean)
+                                   clean=clean,
+                                   server_name=s_name,
+                                   server_entry=s_entry)
 
     log = sys.stderr if as_json else sys.stdout
     for entry in report:

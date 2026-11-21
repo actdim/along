@@ -49,3 +49,4 @@ ActDim Along provides repositories with an isolated, durable, and human-readable
 - [docs/topic--skills-reference.md](docs/topic--skills-reference.md): Skills & Slash Commands Technical Reference.
 - [docs/topic--system-comparisons.md](docs/topic--system-comparisons.md): System Comparisons & Alternative Architectural Paradigms.
 - [docs/topic--troubleshooting.md](docs/topic--troubleshooting.md): Troubleshooting & Developer Diagnostics Guide.
+- [docs/topic--webdev-verification.md](docs/topic--webdev-verification.md): WebDev & Browser Execution Substrate.

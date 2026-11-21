@@ -8,7 +8,7 @@ updated: 2026-09-22
 tags: [domain-model, entities, schemas, dag, metadata, issues, milestones, spikes, sessions]
 sources:
   - path: AGENTS.md
-    hash: "0cb05514b12e5bef94ec6ce94df1d464db480fa4d35aebe1e27106123d236512"
+    hash: "4654f51244fd79c937f0dee1accb5468e28c7fb29ad961af039f17fd3128c9f4"
   - path: dashboard/schemas/entities.py
     hash: "365e4096e0103403487a1785ac13dab45376c73ed2b179d14dac263b15285f8c"
 ---

@@ -55,7 +55,7 @@ See the following engineering guidelines:
 
 This repository is **ActDim Along** (`actdim-along`) - the provider-agnostic agent-context protocol and skills suite.
 
-- **Skills Source**: `skills/` (`along-init`, `along-update`, `along-dash`, `along-wrap`, `along-commit`, `along-build`, `along-test`, `along-dev`, `along-team`, `along-kb-sync`, `along-kb-search`, `along-issue-sync`, `along-decision-sync`, `along-history-sync`, `along-graph-check`, `along-graph-sync`, `along-graph-impact`, `along-graph-arch`, `along-dep-scan`, `along-version-bump`, `along-feedback`).
+- **Skills Source**: `skills/` (`along-init`, `along-update`, `along-dash`, `along-wrap`, `along-commit`, `along-build`, `along-test`, `along-dev`, `along-team`, `along-kb-sync`, `along-kb-search`, `along-issue-sync`, `along-decision-sync`, `along-history-sync`, `along-graph-check`, `along-graph-sync`, `along-graph-impact`, `along-graph-arch`, `along-dep-scan`, `along-version-bump`, `along-feedback`, `along-webdev`).
 - **Engines**: `scripts/` (one per skill) on shared `scripts/alongkit/` package. Helpers live there only (`tests/test_alongkit.py` checks). Runtime dep: `ruamel.yaml`.
 - **Typography**: `along sanitize [--write]`; `/along-commit` and `/along-version-bump` abort on it (`--fix-typography` rewrites). Scope: `.md .py .sh .ps1 .bat`.
 - **Release**: `/along-version-bump`: pre-mutation gates, rollback via `alongkit.transaction.FileTransaction`.

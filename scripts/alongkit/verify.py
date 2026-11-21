@@ -38,7 +38,7 @@ TESTS_NONE = "none"
 TEST_POLICIES = (TESTS_REQUIRED, TESTS_NONE)
 ISSUE_TEST_POLICIES = (TESTS_REQUIRED, TESTS_AFFECTED, TESTS_SCOPED, TESTS_NONE)
 #: Lifecycle hooks a `tests: none` policy may run instead of tests.
-CHECK_NAMES = ("build", "lint", "typecheck")
+CHECK_NAMES = ("build", "lint", "typecheck", "webdev")
 
 
 @dataclass

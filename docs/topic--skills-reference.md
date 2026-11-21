@@ -358,6 +358,20 @@ flowchart TD
 
 ---
 
+### `along-webdev`
+- **What it is**: Self-contained web development and browser execution substrate for Playwright verification, exploratory sessions, and visual proof.
+- **Architectural Rationale**:
+  - *Provider-Agnostic Substrate*: Runs standalone without requiring harness-specific browser tools.
+  - *Hermetic Evidence*: Writes deterministic screenshot evidence under `.along/artifacts/webdev/` protected by self-ignoring `.gitignore`.
+  - *Lifecycle Alignment*: Integrates application service lifecycle probes, interactive exploratory daemons, and declarative scenario execution.
+- **Invocation Triggers**:
+  - *Explicit*: `/along-webdev`, `along webdev` (`along webdev serve up`, `along webdev session start`, `along webdev run`).
+  - *Semantic / Automatic*: Triggered when validating web UI routes, interactive browser flows, or checking layout invariants across viewports.
+- **Entities Operated On**: `.along/webdev.json`, `.along/artifacts/webdev/`, `.along/ISSUES/`.
+- **Ecosystem Chaining**: Provides browser verification results for issue completion and wrap verification gates.
+
+---
+
 ### `along-wrap`
 - **What it is**: Unified session and stage wrap-up orchestrator. Executes the mandatory completion checklist: runs tests, checks documentation blast radius, moves finished issues to `done/`, reconciles `ISSUES.md`, appends to `HISTORY.md`, compiles engineering provenance, and purges session blackboards.
 - **Architectural Rationale**:

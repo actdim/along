@@ -4,7 +4,7 @@ slug: INDEX
 title: ActDim Along - Knowledge Base Topic Index
 type: index
 created: 2026-09-10
-updated: 2026-11-14
+updated: 2026-11-21
 tags: [index, kb, topics, map]
 ---
 
@@ -55,6 +55,8 @@ flowchart TD
     INDEX --> T_SYSTEM_COMPARISONS
     T_TROUBLESHOOTING["Troubleshooting & Developer Diagnostics Guide"]
     INDEX --> T_TROUBLESHOOTING
+    T_WEBDEV_VERIFICATION["WebDev & Browser Execution Substrate"]
+    INDEX --> T_WEBDEV_VERIFICATION
     T_ARCHITECTURE -.->|references| T_CLI_REFERENCE
     T_ARCHITECTURE -.->|references| T_SETUP_AND_WORKFLOW
     T_ARCHITECTURE -.->|references| T_SESSION_LIFECYCLE
@@ -110,6 +112,7 @@ flowchart TD
 - **[Skills & Slash Commands Technical Reference](./topic--skills-reference.md)** (reference) `skills`, `commands`, `reference`, `runners`, `lifecycle`, `automation`, `multi-agent`
 - **[System Comparisons & Alternative Architectural Paradigms](./topic--system-comparisons.md)** (explanation) `comparisons`, `architecture`, `paradigms`, `memory`, `zero-vector`, `mechanical-gates`, `governance`, `engineering-decisions`
 - **[Troubleshooting & Developer Diagnostics Guide](./topic--troubleshooting.md)** (guide) `troubleshooting`, `diagnostics`, `packaging`, `alongkit`, `uv`, `pep-723`, `api-discovery`, `anti-patterns`
+- **[WebDev & Browser Execution Substrate](./topic--webdev-verification.md)** (reference) `webdev`, `browser`, `playwright`, `cft`, `verification`, `testing`, `runner`
 
 ---
 

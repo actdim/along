@@ -2,6 +2,7 @@
 
 ## Active
 - [ ] `(bug)` [opencode-shell-env-runner-fix](ISSUES/bug--opencode-shell-env-runner-fix.md)
+- [ ] `(feat)` [along-webdev-runner](ISSUES/feat--along-webdev-runner.md) - plan approved
 
 ## Backlog
 - [ ] `(debt)` [autonomous-non-elevation-invariants](ISSUES/debt--autonomous-non-elevation-invariants.md)
@@ -21,7 +22,6 @@
 - [ ] `(feat)` [along-plan-strategies](ISSUES/feat--along-plan-strategies.md)
 - [ ] `(feat)` [along-report-engine](ISSUES/feat--along-report-engine.md)
 - [ ] `(feat)` [along-storage-providers](ISSUES/feat--along-storage-providers.md)
-- [ ] `(feat)` [along-webdev-runner](ISSUES/feat--along-webdev-runner.md) - plan approved
 - [ ] `(feat)` [autonomous-multi-runtime-mvp](ISSUES/feat--autonomous-multi-runtime-mvp.md)
 - [ ] `(feat)` [byoc-kubernetes-operator-and-private-sandboxes](ISSUES/feat--byoc-kubernetes-operator-and-private-sandboxes.md)
 - [ ] `(feat)` [centralized-gpu-inference-pool-and-cloud-topologies](ISSUES/feat--centralized-gpu-inference-pool-and-cloud-topologies.md)

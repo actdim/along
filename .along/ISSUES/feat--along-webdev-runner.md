@@ -3,14 +3,16 @@ protocol: along
 protocol_version: "4.5.1"
 slug: along-webdev-runner
 type: feat
-status: open
+status: in-progress
 priority: medium
 created: 2026-10-22
-updated: 2026-11-14
+updated: 2026-11-21
 agent: antigravity
 tags: [webdev, browser, cft, playwright, cdp, runner, verification, provider-agnostic]
 blocked_by: []
 related: [feat--along-storage-providers, feat--along-report-engine, feat--automated-ui-screenshots-and-visual-verification]
+plan_status: approved
+milestone: v5.0.0-agent-run-protocol-and-observability
 ---
 
 # Self-Contained WebDev and Browser Execution Substrate
@@ -257,33 +259,35 @@ checks:
 - `scripts/along_webdev.py` - CLI front; `scripts/along_webdev_mcp.py` - MCP front; both call the same engine functions.
 
 ## Acceptance Criteria
-- [ ] Portable CfT downloader and version resolver implemented in pure Python (`scripts/alongkit/webdev/cft.py`).
-- [ ] Browser process launcher with ephemeral ports, temporary user data directory, and clean teardown.
-- [ ] Playwright CDP bridge and execution runner implemented.
-- [ ] Declarative YAML scenario parser and runner implemented.
-- [ ] CDP diagnostics listener capturing console errors and HTTP 4xx/5xx network failures.
-- [ ] Step screenshot capture with WebP/PNG compression.
-- [ ] Structured `run-result.json` output conforming to `feat--along-report-engine` schema.
-- [ ] CLI command `along webdev` implemented in `scripts/along_webdev.py` and routed via `along_exec.py`.
-- [ ] Hermetic tests covering bootstrap logic, scenario parsing, and teardown.
-- [ ] REQ-1: `along webdev serve up` starts two declared services plus a `static` helper on a second origin, returns only after all probes pass; a service that exits after readiness is reported `crashed`; a `noise:`-matched warning does not fail the run; `serve down` leaves no child process (tested with a fake server script, no network).
-- [ ] REQ-1: an already-running service on a declared port is attached, not duplicated, and not stopped by `serve down`.
-- [ ] REQ-2: a click that navigates to a non-allowlisted origin fails the step with `blocked-origin` and a screenshot; a role/name locator matching 2 elements fails with both candidates listed; a coordinate click without `allow_coordinates: true` is a schema error.
-- [ ] REQ-3: filling a `type=password` field from a literal value is refused; a `${env:KEY}` value never appears in stdout, stderr, `results.json`, captured console/network or error text (test asserts by searching all outputs for the secret).
-- [ ] REQ-4: a check with `matrix: {viewport: [375x812, 1440x900], theme: [light, dark]}` produces 4 result rows; inside the page `innerWidth`, `matchMedia('(prefers-color-scheme: dark)').matches` and a seeded localStorage key read back the requested values before the first app script runs.
-- [ ] REQ-5: fixture page tests cover `press Shift+Enter` (newline, no submit), `press Escape` closing a dialog, `upload` of a generated file reaching the `change` handler with the right name and size, `back`/`forward`/`reload`.
-- [ ] REQ-6: `above`, `covered_by`, `overflow_x`, `box` return correct JSON on fixture pages built to pass and to fail each probe; a `spy` on `navigator.mediaSession.setPositionState` records calls made by page scripts.
-- [ ] REQ-7: `Authorization` / `Cookie` headers and configured body keys are redacted in every written artifact; noise filters suppress a configured favicon 404 at assertion time while the raw log still contains it.
-- [ ] REQ-8: evidence lands under `.along/artifacts/webdev/<issue>/<run-id>/` with deterministic names; `along init` adds the ignore rule in a fresh repo; `along lint` fails when a file under `.along/artifacts/` is staged.
-- [ ] REQ-9: `along webdev schema` prints a JSON Schema that validates the extended example above; YAML and JSON forms of the same scenario produce identical results; exit codes 0/1/2 as specified.
-- [ ] REQ-10: an interactive session of 5 steps followed by `save` yields a scenario whose `run` reproduces the same statuses; `checklist compile` on a 3-item Markdown checklist yields 3 checks with ids and `ac:` links; an uncompiled check reports NOT RUN `not-compiled`.
-- [ ] REQ-11: `run --issue <key>` replaces (not appends) the `## Browser Verification Results` section; `--file-failures` creates one bug issue per FAIL with reproduction steps and evidence paths, and creates none on an all-PASS run.
-- [ ] REQ-12: `route` fulfil-500, `network: offline` and `throttle` work on a fixture page; a check with `not_run:` reason appears as NOT RUN with that reason; `along webdev limits` lists the known platform limits; `serve down` refuses to stop a service the run did not start.
-- [ ] REQ-13: a contract test runs the same scenario through the CLI (`--json`) and through the MCP server and gets byte-identical result JSON (timings excluded); MCP registration is written for providers with a verified contract and reported for the rest.
-- [ ] REQ-14: `along wrap` on a `ui`-tagged issue with a FAIL or an unreasoned NOT RUN in its latest result is refused with a message naming the checks; `along doctor` shows webdev readiness.
-- [ ] Docs: `docs/topic--webdev-verification.md` (new) covers config, scenario schema, checklist flow, limits and emulation substitutes; `docs/topic--cli-reference.md` lists the `webdev` verbs.
+- [x] Portable CfT downloader and version resolver implemented in pure Python (`scripts/alongkit/webdev/cft.py`).
+- [x] Browser process launcher with ephemeral ports, temporary user data directory, and clean teardown.
+- [x] Playwright CDP bridge and execution runner implemented.
+- [x] Declarative YAML scenario parser and runner implemented.
+- [x] CDP diagnostics listener capturing console errors and HTTP 4xx/5xx network failures.
+- [x] Step screenshot capture with WebP/PNG compression.
+- [x] Structured `run-result.json` output conforming to `feat--along-report-engine` schema.
+- [x] CLI command `along webdev` implemented in `scripts/along_webdev.py` and routed via `along_exec.py`.
+- [x] Hermetic tests covering bootstrap logic, scenario parsing, and teardown.
+- [x] REQ-1: `along webdev serve up` starts two declared services plus a `static` helper on a second origin, returns only after all probes pass; a service that exits after readiness is reported `crashed`; a `noise:`-matched warning does not fail the run; `serve down` leaves no child process (tested with a fake server script, no network).
+- [x] REQ-1: an already-running service on a declared port is attached, not duplicated, and not stopped by `serve down`.
+- [x] REQ-2: a click that navigates to a non-allowlisted origin fails the step with `blocked-origin` and a screenshot; a role/name locator matching 2 elements fails with both candidates listed; a coordinate click without `allow_coordinates: true` is a schema error.
+- [x] REQ-3: filling a `type=password` field from a literal value is refused; a `${env:KEY}` value never appears in stdout, stderr, `results.json`, captured console/network or error text (test asserts by searching all outputs for the secret).
+- [x] REQ-4: a check with `matrix: {viewport: [375x812, 1440x900], theme: [light, dark]}` produces 4 result rows; inside the page `innerWidth`, `matchMedia('(prefers-color-scheme: dark)').matches` and a seeded localStorage key read back the requested values before the first app script runs.
+- [x] REQ-5: fixture page tests cover `press Shift+Enter` (newline, no submit), `press Escape` closing a dialog, `upload` of a generated file reaching the `change` handler with the right name and size, `back`/`forward`/`reload`.
+- [x] REQ-6: `above`, `covered_by`, `overflow_x`, `box` return correct JSON on fixture pages built to pass and to fail each probe; a `spy` on `navigator.mediaSession.setPositionState` records calls made by page scripts.
+- [x] REQ-7: `Authorization` / `Cookie` headers and configured body keys are redacted in every written artifact; noise filters suppress a configured favicon 404 at assertion time while the raw log still contains it.
+- [x] REQ-8: evidence lands under `.along/artifacts/webdev/<issue>/<run-id>/` with deterministic names; `along init` adds the ignore rule in a fresh repo; `along lint` fails when a file under `.along/artifacts/` is staged.
+- [x] REQ-9: `along webdev schema` prints a JSON Schema that validates the extended example above; YAML and JSON forms of the same scenario produce identical results; exit codes 0/1/2 as specified.
+- [x] REQ-10: an interactive session of 5 steps followed by `save` yields a scenario whose `run` reproduces the same statuses; `checklist compile` on a 3-item Markdown checklist yields 3 checks with ids and `ac:` links; an uncompiled check reports NOT RUN `not-compiled`.
+- [x] REQ-11: `run --issue <key>` replaces (not appends) the `## Browser Verification Results` section; `--file-failures` creates one bug issue per FAIL with reproduction steps and evidence paths, and creates none on an all-PASS run.
+- [x] REQ-12: `route` fulfil-500, `network: offline` and `throttle` work on a fixture page; a check with `not_run:` reason appears as NOT RUN with that reason; `along webdev limits` lists the known platform limits; `serve down` refuses to stop a service the run did not start.
+- [x] REQ-13: a contract test runs the same scenario through the CLI (`--json`) and through the MCP server and gets byte-identical result JSON (timings excluded); MCP registration is written for providers with a verified contract and reported for the rest.
+- [x] REQ-14: `along wrap` on a `ui`-tagged issue with a FAIL or an unreasoned NOT RUN in its latest result is refused with a message naming the checks; `along doctor` shows webdev readiness.
+- [x] Docs: `docs/topic--webdev-verification.md` (new) covers config, scenario schema, checklist flow, limits and emulation substitutes; `docs/topic--cli-reference.md` lists the `webdev` verbs.
 
 ## Open Questions
+Resolved 2026-11-15: answers to 1-4 and 6 are the settled "Design decisions" of the approved issue plan (Python Playwright in an isolated runtime venv; Along-provisioned CfT; dedicated `along-webdev` MCP server; one issue in six phases; `webdev` opt-in via `verify.checks`). 5: milestone `v5.0.0-agent-run-protocol-and-observability`. Kept below for the record.
+
 1. Driver dependency: Python `playwright` package (pip, brings its own driver) vs Node Playwright (needs Node in the target repo) vs raw CDP over a websocket (stdlib has no websocket client; would add a small dependency). Along's runtime dependency today is only `ruamel.yaml`; which footprint is acceptable?
 2. Should the CfT download be replaced by `playwright install chromium` when option 1 is chosen, to avoid maintaining a second browser cache?
 3. MCP server: a new `along-webdev` server, or one general `along` MCP server where webdev is the first tool group?

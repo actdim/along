@@ -226,6 +226,11 @@ def scaffold_state_dir(mig, root, report, nested=False):
         mig.makedirs(diag_dir)
         _note(report, "created", diag_dir, root)
     write_if_missing(mig, os.path.join(diag_dir, ".gitignore"), "*\n", report, root)
+    art_dir = os.path.join(along_dir, "artifacts")
+    if not os.path.isdir(art_dir):
+        mig.makedirs(art_dir)
+        _note(report, "created", art_dir, root)
+    write_if_missing(mig, os.path.join(art_dir, ".gitignore"), "*\n!.gitignore\n", report, root)
 
 
 def scaffold_vision(mig, root, report, nested=False):

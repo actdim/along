@@ -1112,6 +1112,61 @@ def tick_issue_phase(content: str, phase_name: str) -> Tuple[str, bool]:
     return content, False
 
 
+def _check_webdev_wrap_blockers(repo_root: str, slug: str) -> List[str]:
+    """Inspect issue body and latest webdev results for wrap verification gate (REQ-14)."""
+    issue = entities.find_issue_by_slug(repo_root, slug)
+    if not issue:
+        return [f"Issue '{slug}' not found."]
+
+    fpath = issue.get("file_path") or issue.get("path")
+    if not fpath or not os.path.isfile(fpath):
+        return [f"Issue file for '{slug}' not found."]
+
+    content = textio.read_text(fpath, strict=False)
+    block = frontmatter.split(content)
+    body = block.body if block else content
+
+    m = re.search(
+        r"^##\s+Browser Verification Results\b(.*?)(?=(?:^## |\Z))",
+        body,
+        re.MULTILINE | re.DOTALL,
+    )
+    if not m:
+        return ["No '## Browser Verification Results' section found in issue. Run 'along webdev run ... --issue <slug>'."]
+
+    sec_text = m.group(1).strip()
+    if not sec_text or "No checks executed" in sec_text:
+        return ["Browser verification results section is empty or contains no executed checks."]
+
+    table_lines = [ln.strip() for ln in sec_text.splitlines() if ln.strip().startswith("|")]
+    if len(table_lines) < 2:
+        return ["No results table found under '## Browser Verification Results'."]
+
+    blockers: List[str] = []
+    for line in table_lines[2:]:
+        cols = [c.strip() for c in line.split("|")[1:-1]]
+        if len(cols) < 5:
+            continue
+        chk_name = cols[0]
+        vp = cols[2] if len(cols) > 2 else ""
+        theme = cols[3] if len(cols) > 3 else ""
+        status_col = cols[4] if len(cols) > 4 else ""
+        reason_col = cols[5] if len(cols) > 5 else ""
+
+        clean_status = status_col.replace("*", "").replace("`", "").strip().upper()
+
+        if "FAIL" in clean_status:
+            blockers.append(f"Check {chk_name} ({vp}/{theme}) failed: {reason_col or 'unknown failure'}")
+        elif "NOT RUN" in clean_status:
+            clean_reason = reason_col.replace("*", "").replace("`", "").strip()
+            if not clean_reason.startswith("platform-limit:") and not clean_reason.startswith("limit:"):
+                blockers.append(
+                    f"Check {chk_name} ({vp}/{theme}) was NOT RUN without an approved platform limit substitute (reason: {clean_reason or 'unspecified'})"
+                )
+
+    return blockers
+
+
 def execute_wrap(
     repo_root: str,
     slug: str,
@@ -1295,6 +1350,24 @@ def execute_wrap(
             if not _force_allowed():
                 return 2
             forced.append(f"Wrapped with open plan checklist items: {force_reason}")
+
+    # [feat--along-webdev-runner] REQ-14: webdev verification wrap gate
+    eff_policy = verify.load_effective_policy(repo_root, clean_slug)
+    if eff_policy and "webdev" in (eff_policy.checks or []):
+        webdev_blockers = _check_webdev_wrap_blockers(repo_root, clean_slug)
+        if webdev_blockers:
+            if not force_reason:
+                _check_failed()
+                print(
+                    f"[Error] Wrap aborted: webdev verification required by policy for '{clean_slug}':\n"
+                    + "\n".join(f"  - {b}" for b in webdev_blockers)
+                    + "\n  Run 'along webdev run ... --issue <slug>', fix failing checks, or pass --force-reason \"...\".",
+                    file=sys.stderr,
+                )
+                return 2
+            if not _force_allowed():
+                return 2
+            forced.append(f"Wrapped with unverified webdev checks ({'; '.join(webdev_blockers)}): {force_reason}")
 
     # 1. Pre-Flight Test Gate
     if not no_verify and not dry_run:

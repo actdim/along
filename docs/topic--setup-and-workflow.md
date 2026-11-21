@@ -10,7 +10,7 @@ sources:
   - path: README.md
     hash: "b484c5a6e8c8fb26a99582aab02af16fc9223ee6dcc2e5324c461fa69917d64b"
   - path: AGENTS.md
-    hash: "0cb05514b12e5bef94ec6ce94df1d464db480fa4d35aebe1e27106123d236512"
+    hash: "4654f51244fd79c937f0dee1accb5468e28c7fb29ad961af039f17fd3128c9f4"
 ---
 
 # Setup & Developer Workflow

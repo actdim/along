@@ -224,6 +224,20 @@ def _doctor_drafts_checks(repo_root: str, warnings: int) -> int:
     return warnings
 
 
+def _doctor_webdev_checks(repo_root: str, warnings: int) -> int:
+    """Doctor check for Along WebDev substrate (runtime, CfT browser, services)."""
+    try:
+        from alongkit.webdev import cft
+        b_status = cft.get_browser_status(repo_root)
+        if b_status.get("installed"):
+            print(f"[OK] WebDev Chrome for Testing browser installed ({b_status.get('version')}).")
+        else:
+            print("[INFO] WebDev CfT browser not cached locally. Run 'along webdev bootstrap --download'.")
+    except (ImportError, OSError, ValueError):
+        pass
+    return warnings
+
+
 def handle_doctor_command(repo_root: str, args: List[str]):
     if args and args[0] in ("-h", "--help", "help"):
         print("Usage: along doctor [entities|docs|issues|--entities|--docs|--issues] [--fix]")
@@ -700,6 +714,7 @@ def handle_doctor_command(repo_root: str, args: List[str]):
 
     warnings, _ = _doctor_zombie_docs_checks(repo_root, warnings)
     warnings, _ = _doctor_stub_issues_checks(repo_root, warnings)
+    warnings = _doctor_webdev_checks(repo_root, warnings)
 
     errors, warnings = _doctor_runtime_checks(repo_root, errors, warnings)
 
