@@ -287,3 +287,4 @@ _Index of sessions (newest last). One line per session:_
 2026-11-21 - opencode-shell-env-runner-fix - antigravity - Fix OpenCode V2 hook crash and runner CLI contract - [Session Log](./SESSIONS/2026/2026-11-21--opencode-shell-env-runner-fix.md)
 2026-11-21 - webdev-session-create-browser-helper - antigravity - Fix webdev interactive session browser creation, Playwright greenlet thread affinity, tempfile directory helper, and doctor status checks - [Session Log](./SESSIONS/2026/2026-11-21--webdev-session-create-browser-helper.md)
 2026-11-21 - webdev-session-ux-improvements - antigravity - Prevent dual browser windows, handle SIGINT cleanly, and support CMD step shortcuts - [Session Log](./SESSIONS/2026/2026-11-21--webdev-session-ux-improvements.md)
+2026-11-21 - deepseek-harness-bridge - antigravity - Implement DeepSeek Harness hooks bridge and provider integration - [Session Log](./SESSIONS/2026/2026-11-21--deepseek-harness-bridge.md)

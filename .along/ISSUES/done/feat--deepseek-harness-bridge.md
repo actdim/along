@@ -3,15 +3,17 @@ protocol: along
 protocol_version: "3.7.0"
 slug: deepseek-harness-bridge
 type: feat
-status: open
+status: done
+completed: 2026-11-21
 priority: medium
 created: 2026-09-18
-updated: 2026-09-18
+updated: 2026-11-21
 agent: antigravity
 tags: [deepseek-harness, dsh, hooks, bridge, providers, documentation]
 milestone: v5.2.0-external-harness-expansion
 blocked_by: []
 related: [feat--runtime-enforcement-of-prose-rules, feat--pi-harness-support]
+plan_status: approved
 ---
 
 # DeepSeek Harness (DSH) Hooks Bridge & Provider Integration
@@ -40,8 +42,8 @@ DeepSeek Harness (DSH, `dsh`) introduces bridge plugins (`@deepseek-ai/dsh-hooks
    - Add DSH to `docs/INDEX.md` and related topic articles.
 
 ## Acceptance Criteria
-- [ ] DSH hook bridge compatibility with `along_hook.py` verified across PreToolUse and Stop events.
-- [ ] `along hook install` provides verified DSH configuration or documentation recipe.
-- [ ] `docs/topic--runtime-hooks-and-gates.md` includes dedicated section on DeepSeek Harness bridge.
-- [ ] Tests covering hook dispatch and installer integrity pass without regression.
-- [ ] `python scripts/along_kb_sync.py --check` passes cleanly.
+- [x] DSH hook bridge compatibility with `along_hook.py` verified across PreToolUse and Stop events.
+- [x] `along hook install` provides verified DSH configuration or documentation recipe.
+- [x] `docs/topic--runtime-hooks-and-gates.md` includes dedicated section on DeepSeek Harness bridge.
+- [x] Tests covering hook dispatch and installer integrity pass without regression.
+- [x] `python scripts/along_kb_sync.py --check` passes cleanly.

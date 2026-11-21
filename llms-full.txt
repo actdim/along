@@ -2054,7 +2054,7 @@ Architectural intelligence, community clustering, and coupling hotspot analyzer.
 Runtime lifecycle hook interceptor and declarative gate evaluation harness.
 - **Subcommands**:
   - `along hook eval <event> [--runtime {antigravity,claude,codex,generic}]`: Evaluates declarative gates against an incoming event payload passed via stdin or argument.
-  - `along hook install [--runtime {antigravity,claude,codex,all}]`: Scaffolds or updates runtime hook configuration manifests (`.agents/hooks.json`, `.claude/settings.json`, `.codex/hooks.json`).
+  - `along hook install [--runtime {antigravity,claude,codex,cursor,opencode,dsh,all}]`: Scaffolds or updates runtime hook configuration manifests (`.agents/hooks.json`, `.claude/settings.json`, `.codex/hooks.json`, `.dsh/cordis.patch.yml`).
   - `along hook attribution [--runtime {claude,cursor,all}] [--claude-home DIR] [--cursor-home DIR] [--dry-run]`: Turns off AI commit attribution (`Co-Authored-By:` trailers) in existing runtime homes: `attribution.commit = ""` + `includeCoAuthoredBy = false` in Claude Code `settings.json`, `attribution.attributeCommitsToAgent = false` in Cursor `cli-config.json`. Writes no hooks. Also run by the installers and every `/along-update`.
   - `along hook install --git [--uninstall] [--dry-run]`: Opt-in, never run by init/update. Writes `pre-commit` and `commit-msg` shims into the repository's hooks directory that run `along gates check --hook <name>`. A foreign hook already there is kept as `<hook>.pre-along` and run first (restored on `--uninstall`); with `core.hooksPath` set (husky, lefthook) nothing is written and the commands to add to the manager are printed.
   - `along hook verify [--strict]`: Audits bi-directional traceability between prose badges (`[gate: <id>]`) across documentation/skills and declarative YAML gate rules in `default_gates.yaml`, and prints the enforcement matrix (`runtime` / `git` / `ci` per gate).
@@ -3915,6 +3915,7 @@ The Along Runtime Hook and Gate System establishes deterministic, programmatic i
 |       Google Antigravity (.agents/hooks.json)                           |
 |       Claude Code (.claude/settings.json)                               |
 |       OpenAI Codex (.codex/hooks.json)                                  |
+|       DeepSeek Harness (.dsh/cordis.patch.yml)                          |
 +-------------------------------------------------------------------------+
                                    |
                          stdin (JSON / protojson)
@@ -3941,6 +3942,7 @@ The Along Runtime Hook and Gate System establishes deterministic, programmatic i
 |     - AntigravityAdapter: JSON { decision: "deny" | "allow" }          |
 |     - ClaudeCodeAdapter: exit code 0 (allow) / 2 (deny + stderr)        |
 |     - CodexAdapter: exit code 0 (allow) / 2 (deny + stderr)             |
+|     - DeepSeekHarnessAdapter: exit code 0 (allow) / 2 (deny + stderr)   |
 +-------------------------------------------------------------------------+
 ```
 
@@ -3986,6 +3988,7 @@ For full specification and architecture, see [Declarative Gate Engine & Traceabi
 - **`ClaudeCodeAdapter`**: Translates Anthropic Claude Code payloads to `HookEvent`, mapping `Write` to `write_to_file`, `Edit`/`MultiEdit`/`NotebookEdit` to `replace_file_content`, `Bash`/`PowerShell` to `run_command`, and `Read`/`Grep`/`Glob` to the read tools; `session_id` becomes the event's session id. Responses: exit 0 for allow; exit 2 with the remediation on `stderr` for a denial; exit 0 with `hookSpecificOutput.permissionDecision: "ask"` for an ASK (the user decides); on `Stop` with `stop_hook_active: true` a denial is reported once as a `systemMessage` instead of forcing another continuation.
 - **Claude Code hook schema**: `along hook install --runtime claude [--global]` writes the nested schema Claude Code reads, `{"matcher": ..., "hooks": [{"type": "command", "command": ..., "timeout": 30}]}`, for `PreToolUse` (`Write|Edit|MultiEdit|NotebookEdit|Bash|PowerShell|Read|Grep|Glob`), `PostToolUse` (edits and `ExitPlanMode`), `Stop` and `UserPromptSubmit` (no matcher; records the time of the user's last message, see 2.8). Legacy flat `{matcher, command}` entries, which Claude Code ignores, are migrated in place; foreign hooks are kept.
 - **`CodexAdapter`**: Translates OpenAI Codex CLI and headless harness JSON payloads to HookEvent, mapping write_file/create_file to write_to_file, edit_file/patch to replace_file_content, and shell/bash/exec to run_command. Formats exit code 0 for allow, and exit code 2 with the remediation message written to stderr for gate denials.
+- **`DeepSeekHarnessAdapter`**: Translates DeepSeek Harness (DSH) lifecycle events mounted through `@deepseek-ai/dsh-hooks-claude-code`. Normalizes Windows (`tool-pwsh`) and Unix (`tool-bash`) execution to `run_command`, filesystem mutations (`tool-fs`, `fs_write`, `fs_edit`) to `write_to_file` and `replace_file_content`, and search (`tool-fs-search`) to `find_by_name`. Formats exit code 0 for allow, and exit code 2 with the stderr remediation message for gate denials. Configured via `along hook install --runtime dsh` into `cordis.patch.yml`.
 - **`GenericCliAdapter`**: Translates generic CLI tool invocations, terminal proxy wrappers, Cursor (`.cursor/hooks.json`), and OpenCode to `HookEvent`. Normalizes arguments across tool types, supports plain command strings as fallback `run_command`, and formats exit code 0 for allow or exit code 2 with stderr remediation message for gate denials.
 
 ### 2.5 Execution Pipeline & Dispatcher (`alongkit.hooks.engine` & `scripts/along_hook.py`)
@@ -3999,7 +4002,7 @@ For full specification and architecture, see [Declarative Gate Engine & Traceabi
   ```
 
   State then resolves to `<root>/.along/` (`repo.state_dir`), while gates keep evaluating paths against the declaring directory; paths inside the state directory are matched as `.along/...`.
-- Subcommand `along hook install`: Scaffolds runtime hook configurations (`.agents/hooks.json` for Antigravity, `.claude/settings.json` for Claude Code, `.codex/hooks.json` for OpenAI Codex, `plugins/along-gates.js` for OpenCode, `.cursor/hooks.json` for Cursor). Accepts `--runtime {antigravity,claude,codex,cursor,opencode,all}`. Also turns off AI commit attribution where the runtime documents a key for it (see 2.7).
+- Subcommand `along hook install`: Scaffolds runtime hook configurations (`.agents/hooks.json` for Antigravity, `.claude/settings.json` for Claude Code, `.codex/hooks.json` for OpenAI Codex, `plugins/along-gates.js` for OpenCode, `.dsh/cordis.patch.yml` for DeepSeek Harness, `.cursor/hooks.json` for Cursor). Accepts `--runtime {antigravity,claude,codex,cursor,opencode,dsh,all}`. Also turns off AI commit attribution where the runtime documents a key for it (see 2.7).
 - Subcommand `along run <cmd...>` (and `along_hook.py run <cmd...>`): Command proxy wrapper evaluating `run_command` through `HookEngine` prior to execution. Provides mechanical gate enforcement in environments without native PreToolUse lifecycle hooks (CI and external terminals).
 - Subcommand `along hook verify`: Audits bi-directional traceability between prose badges and YAML gates.
 
@@ -4224,6 +4227,7 @@ Gates are mechanical only where the runtime loads Along's `PreToolUse`/`Stop` ho
 | OpenAI Codex | auto (`~/.codex`) | yes (`~/.codex/hooks.json`) | mechanical once installed |
 | Claude Cowork | not loaded (Cowork reads plugins from the claude.ai account, not `~/.claude`) | no (Cowork ignores `settings.json`; plugin hooks are tracked in `feat--cowork-plugin-skill-packaging`) | advisory |
 | OpenCode | commands (`~/.config/opencode/commands`) | yes (`plugins/along-gates.js`) | mechanical once `along hook install --runtime opencode` ran |
+| DeepSeek Harness | auto (`~/.dsh/skills`) | yes (`cordis.patch.yml` via bridge) | mechanical once `along hook install --runtime dsh` ran |
 | Cursor, plain shell, human | rules only | no | advisory |
 
 Advisory runtimes are still covered at commit time by the portable layer: `along hooks install --git` (opt-in, local) and the CI job `along gates check --ci` enforce the gates whose catalogue entry lists `git` / `ci` (typography, conflict markers, anti-stub on added lines, issue binding, AI co-author trailers, projection freshness, rule pack integrity), regardless of which agent or human made the commit.

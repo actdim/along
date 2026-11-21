@@ -29,7 +29,6 @@
 - [ ] `(feat)` [cpp-ecosystem-support](ISSUES/feat--cpp-ecosystem-support.md)
 - [ ] `(feat)` [cursor-agent-and-rules-integration](ISSUES/feat--cursor-agent-and-rules-integration.md)
 - [ ] `(feat)` [dart-flutter-ecosystem-support](ISSUES/feat--dart-flutter-ecosystem-support.md)
-- [ ] `(feat)` [deepseek-harness-bridge](ISSUES/feat--deepseek-harness-bridge.md)
 - [ ] `(feat)` [deepseek-runtime-adapter](ISSUES/feat--deepseek-runtime-adapter.md)
 - [ ] `(feat)` [doctor-detect-protocol-leak](ISSUES/feat--doctor-detect-protocol-leak.md)
 - [ ] `(feat)` [doctor-granular-diagnostics](ISSUES/feat--doctor-granular-diagnostics.md)
@@ -63,8 +62,8 @@
 
 ## Done (recent)
 - [x] `(feat)` [provenance-drift-gate](ISSUES/done/feat--provenance-drift-gate.md)
+- [x] `(feat)` [deepseek-harness-bridge](ISSUES/done/feat--deepseek-harness-bridge.md)
 - [x] `(feat)` [along-webdev-runner](ISSUES/done/feat--along-webdev-runner.md)
 - [x] `(bug)` [webdev-session-ux-improvements](ISSUES/done/bug--webdev-session-ux-improvements.md)
 - [x] `(bug)` [webdev-session-create-browser-helper](ISSUES/done/bug--webdev-session-create-browser-helper.md)
-- [x] `(bug)` [opencode-shell-env-runner-fix](ISSUES/done/bug--opencode-shell-env-runner-fix.md)
-<!-- 349 older completed issue(s) archived in .along/ISSUES/done/ -->
+<!-- 350 older completed issue(s) archived in .along/ISSUES/done/ -->
