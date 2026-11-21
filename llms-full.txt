@@ -187,7 +187,7 @@ The repository's complete technical specification is maintained as a living LLM-
 
 ## Automation Skills Reference (Grouped by Workflow Phase)
 
-Along provides **21 singular automation skills** structured across 6 core lifecycle phases:
+Along provides **22 singular automation skills** structured across 6 core lifecycle phases:
 
 ### 1. Bootstrap & Repository Protocol Management
 | Skill / Command | Purpose |
@@ -212,6 +212,7 @@ Along provides **21 singular automation skills** structured across 6 core lifecy
 | **`along-build`** (`/along-build`) | Project build lifecycle hook via `.along/scripts/build.py` or auto-detected runner. |
 | **`along-test`** (`/along-test`) | Automated test suite with quiet flags via `.along/scripts/test.py` or runner. |
 | **`along-dev`** (`/along-dev`) | Local development/debugging server via `.along/scripts/dev.py` or runner. |
+| **`along-webdev`** (`/along-webdev`) | Self-contained web development, browser execution, and Playwright verification substrate. |
 
 ### 4. Quality Gates, Code Graph & Commit Integrity
 | Skill / Command | Purpose |

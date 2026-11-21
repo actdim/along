@@ -1,7 +1,7 @@
 # Active Issues
 
 ## Active
-- [ ] `(bug)` [webdev-session-create-browser-helper](ISSUES/bug--webdev-session-create-browser-helper.md) - plan approved
+<!-- No active issues -->
 
 ## Backlog
 - [ ] `(debt)` [autonomous-non-elevation-invariants](ISSUES/debt--autonomous-non-elevation-invariants.md)
@@ -64,7 +64,7 @@
 ## Done (recent)
 - [x] `(feat)` [provenance-drift-gate](ISSUES/done/feat--provenance-drift-gate.md)
 - [x] `(feat)` [along-webdev-runner](ISSUES/done/feat--along-webdev-runner.md)
+- [x] `(bug)` [webdev-session-create-browser-helper](ISSUES/done/bug--webdev-session-create-browser-helper.md)
 - [x] `(bug)` [opencode-shell-env-runner-fix](ISSUES/done/bug--opencode-shell-env-runner-fix.md)
 - [x] `(feat)` [git-automerge-protection-and-semantic-merge](ISSUES/done/feat--git-automerge-protection-and-semantic-merge.md)
-- [x] `(bug)` [windows-ci-line-endings](ISSUES/done/bug--windows-ci-line-endings.md)
-<!-- 347 older completed issue(s) archived in .along/ISSUES/done/ -->
+<!-- 348 older completed issue(s) archived in .along/ISSUES/done/ -->
