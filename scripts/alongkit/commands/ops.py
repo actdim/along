@@ -307,7 +307,8 @@ def handle_run_command(repo_root: Optional[str], args: List[str]):
                 try:
                     timeout = int(sub_args[i + 1])
                 except ValueError:
-                    timeout = None
+                    sys.stderr.write(f"[Along Error] Invalid integer for --timeout: '{sub_args[i + 1]}'\n")
+                    return 1
                 i += 2
             elif arg in ("--binary", "-b") and i + 1 < len(sub_args):
                 binary = sub_args[i + 1]
@@ -363,7 +364,8 @@ def handle_run_command(repo_root: Optional[str], args: List[str]):
             sys.stderr.write(f"[Along Runner Error] {exc}\n")
             return 1
         print(json.dumps(record, indent=2))
-        return record.get("exit_code") or 0
+        ret = record.get("exit_code")
+        return ret if ret is not None else 1
 
     from alongkit.hooks import HookEvent, HookEventType, evaluate_event, load_config
     config = load_config(repo_root)

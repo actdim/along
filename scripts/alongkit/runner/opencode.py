@@ -24,7 +24,7 @@ class OpenCodeRunner(BaseRunner):
     runtime_label: str = "OpenCode"
     default_binary: str = "opencode"
     cli_version: str = "1.18.32"
-    brief_via_stdin: bool = True
+    brief_via_stdin: bool = False
 
     RUNTIME_ENV_ALLOW: Set[str] = {
         "OPENAI_API_KEY",
@@ -90,6 +90,8 @@ class OpenCodeRunner(BaseRunner):
         cmd = merge_args(cmd, r_args, self.VALUE_FLAGS)
         if self.extra_args:
             cmd = merge_args(cmd, self.extra_args, self.VALUE_FLAGS)
+        if prompt:
+            cmd.append(prompt)
         return cmd
 
     def build_env(self) -> Dict[str, str]:

@@ -95,6 +95,7 @@ class TestCommandLineAndFlagMapping(unittest.TestCase):
             model="ollama/qwen2.5-coder:32b",
             extra_args=["--port", "8080"],
         )
+        self.assertFalse(runner.brief_via_stdin)
         cmd = runner.build_command("Review security policy")
         expected = [
             "custom-opencode",
@@ -108,6 +109,7 @@ class TestCommandLineAndFlagMapping(unittest.TestCase):
             "--auto",
             "--port",
             "8080",
+            "Review security policy",
         ]
         self.assertEqual(cmd, expected)
 
@@ -625,7 +627,10 @@ class TestRunRecordSynthesis(unittest.TestCase):
         self.assertIsNotNone(runner.last_result)
         dry_payload = json.loads(runner.last_result.stdout)
         self.assertIn("stdin_bytes", dry_payload)
-        self.assertEqual(dry_payload["stdin_bytes"], len("Dry run test".encode("utf-8")))
+        self.assertEqual(dry_payload["stdin_bytes"], 0)
+        self.assertIn("Dry run test", dry_payload["command"])
+        self.assertIn("env", dry_payload)
+        self.assertIn("env_overrides", dry_payload)
 
 
 if __name__ == "__main__":

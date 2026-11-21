@@ -29,12 +29,20 @@ function extractSessionId(input, output, event) {
     input?.sessionID ||
     input?.sessionId ||
     input?.session_id ||
+    input?.properties?.sessionID ||
+    input?.data?.sessionID ||
+    input?.info?.id ||
     output?.sessionID ||
     output?.sessionId ||
     output?.session_id ||
+    output?.properties?.sessionID ||
+    output?.data?.sessionID ||
     event?.sessionID ||
     event?.sessionId ||
     event?.session_id ||
+    event?.properties?.sessionID ||
+    event?.data?.sessionID ||
+    event?.info?.id ||
     activeSessionId
   );
   if (sid) {
@@ -253,8 +261,14 @@ function handlePrompt(event, projectDir) {
 function handleShellEnv(input, output) {
   const sid = extractSessionId(input, output, null);
   if (sid) {
-    output.env = output.env || {};
-    injectSessionEnv(output.env, sid);
+    if (output && typeof output === "object") {
+      output.env = output.env || {};
+      injectSessionEnv(output.env, sid);
+    }
+    if (input && typeof input === "object") {
+      input.env = input.env || {};
+      injectSessionEnv(input.env, sid);
+    }
   }
 }
 

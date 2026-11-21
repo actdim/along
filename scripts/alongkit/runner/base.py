@@ -326,6 +326,8 @@ class BaseRunner:
                 "model": effective_model,
                 "timeout": effective_timeout,
                 "stdin_bytes": len(brief.encode("utf-8")) if self.brief_via_stdin else 0,
+                "env": env,
+                "env_overrides": self.env_overrides or {},
             }
             stdout = json.dumps(dry_payload, indent=2)
             stderr = ""
@@ -339,6 +341,8 @@ class BaseRunner:
                 usage=None,
                 handoff_note=handoff_note,
             )
+            if isinstance(record, dict):
+                record.update(dry_payload)
             self.last_result = RunResult(
                 run_id=effective_run_id,
                 outcome="done",
