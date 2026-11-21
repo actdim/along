@@ -3,7 +3,8 @@ protocol: along
 protocol_version: "4.9.1"
 slug: webdev-session-ux-improvements
 type: bug
-status: in-progress
+status: done
+completed: 2026-11-21
 priority: high
 created: 2026-11-21
 updated: 2026-11-21
