@@ -2207,6 +2207,7 @@ Substrate for web development services, interactive browser sessions, visual pro
   - `run`: Run Playwright script or declarative YAML scenario (`--issue`, `--check`, `--matrix`, `--headed`, `--file-failures`, `--keep-evidence`, `--json`).
   - `shot`: Quick visual proof screenshot of a web route (`--url`, `--out`, `--viewport`, `--theme`).
   - `checklist`: Compile natural-language Markdown checklist into scenario skeleton (`compile <target> [--out <file>]`).
+  - `nl`: Compile conversational verification instructions into executable scenario YAML or run via Playwright offline (`"<instruction>" [--url <url>] [--backend {auto,local-http,template}] [--dry-run] [--run] [--out <file>]`).
   - `mcp`: Run stdio Model Context Protocol (MCP) server.
 - **Usage**:
   ```bash

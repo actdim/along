@@ -54,16 +54,15 @@
 - [ ] `(feat)` [team-worktree-concurrency-rules](ISSUES/feat--team-worktree-concurrency-rules.md)
 - [ ] `(feat)` [team-worktree-lifecycle](ISSUES/feat--team-worktree-lifecycle.md)
 - [ ] `(feat)` [trivial-fix-lifecycle](ISSUES/feat--trivial-fix-lifecycle.md)
-- [ ] `(feat)` [webdev-local-llm-engine](ISSUES/feat--webdev-local-llm-engine.md) - plan approved
 - [ ] `(feat)` [workspace-activity-tracking](ISSUES/feat--workspace-activity-tracking.md)
 - [ ] `(feat)` [zero-step-state-recovery-and-drift-detection](ISSUES/feat--zero-step-state-recovery-and-drift-detection.md)
 - [ ] `(task)` [gate-event-remeasure](ISSUES/task--gate-event-remeasure.md)
 - [ ] `(task)` [reconcile-dashboard-ui-core-conventions](ISSUES/task--reconcile-dashboard-ui-core-conventions.md)
 
 ## Done (recent)
+- [x] `(feat)` [webdev-local-llm-engine](ISSUES/done/feat--webdev-local-llm-engine.md)
 - [x] `(feat)` [provenance-drift-gate](ISSUES/done/feat--provenance-drift-gate.md)
 - [x] `(feat)` [deepseek-runtime-adapter](ISSUES/done/feat--deepseek-runtime-adapter.md)
 - [x] `(feat)` [deepseek-harness-bridge](ISSUES/done/feat--deepseek-harness-bridge.md)
 - [x] `(feat)` [along-webdev-runner](ISSUES/done/feat--along-webdev-runner.md)
-- [x] `(bug)` [webdev-session-ux-improvements](ISSUES/done/bug--webdev-session-ux-improvements.md)
-<!-- 351 older completed issue(s) archived in .along/ISSUES/done/ -->
+<!-- 352 older completed issue(s) archived in .along/ISSUES/done/ -->
