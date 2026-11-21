@@ -2,6 +2,28 @@
 
 All notable changes to this project, newest first.
 
+## v4.9.1 - 2026-11-21
+
+- fix: Fix webdev interactive session browser creation, Playwright greenlet thread affinity, tempfile directory helper, and doctor status checks (refs #webdev-session-create-browser-helper)
+- fix(webdev): session browser creation, thread affinity, and doctor checks (refs #webdev-session-create-browser-helper)
+- fix: Fix OpenCode V2 hook crash and runner CLI contract (refs #opencode-shell-env-runner-fix)
+- fix(opencode): guard undefined output in shell hooks and align runner CLI contract (refs #opencode-shell-env-runner-fix)
+- feat: Self-contained webdev and browser execution substrate (refs #along-webdev-runner)
+- feat(webdev): MCP server, protocol wrap verification gate, docs, and skill (refs #along-webdev-runner)
+- feat(webdev): interactive session daemon, transcript recorder, and checklist compiler (refs #along-webdev-runner)
+- feat(webdev): scenario runner, JSON schema, evidence management, and failure filing (refs #along-webdev-runner)
+- feat(webdev): browser engine, semantic locators, redaction, in-page probes, and diagnostics capture (refs #along-webdev-runner)
+- feat(webdev): application services lifecycle, probes, log harvesting, and attachment (refs #along-webdev-runner)
+- feat(webdev): runtime bootstrap, CfT resolution, and browser teardown lifecycle (refs #along-webdev-runner)
+- feat: Doc provenance drift CLI and commit-time verification gate (refs #provenance-drift-gate)
+- feat(kb-sync): doc provenance drift CLI and commit-time verification gate (refs #provenance-drift-gate)
+- docs(adr): record decision for per-clone merge driver binding (refs #git-automerge-protection-and-semantic-merge)
+- feat: Preventive Git auto-merge protection, update propagation and stage-aware conflict resolution (refs #git-automerge-protection-and-semantic-merge)
+- fix: Stop plan gate applies one rule: a change is excused only when another session recorded it; untraced changes always count (closes the bypass through hook-invisible writes) (refs #stop-gate-empty-writes-fallback)
+- fix(gates): count untraced changes at Stop with one rule (refs #stop-gate-empty-writes-fallback)
+- fix(ci): normalize line endings in opencode hooks and configure gitattributes text defaults (refs #windows-ci-line-endings)
+- fix: Fix Windows CI line ending normalization and gitattributes defaults (refs #windows-ci-line-endings)
+
 ## v4.9.0 - 2026-11-14
 
 - fix(gates): resolve Stop gate false positives and add trace-backed denials (refs #stop-gate-false-positives)
