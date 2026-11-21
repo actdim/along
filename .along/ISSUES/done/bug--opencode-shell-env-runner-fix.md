@@ -3,7 +3,8 @@ protocol: along
 protocol_version: "4.9.0"
 slug: opencode-shell-env-runner-fix
 type: bug
-status: in-progress
+status: done
+completed: 2026-11-21
 priority: high
 created: 2026-11-21
 updated: 2026-11-21

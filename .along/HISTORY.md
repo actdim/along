@@ -284,3 +284,4 @@ _Index of sessions (newest last). One line per session:_
 2026-11-20 - git-automerge-protection-and-semantic-merge - antigravity - Preventive Git auto-merge protection, update propagation and stage-aware conflict resolution - [Session Log](./SESSIONS/2026/2026-11-20--git-automerge-protection-and-semantic-merge.md)
 2026-11-21 - provenance-drift-gate - antigravity - Doc provenance drift CLI and commit-time verification gate - [Session Log](./SESSIONS/2026/2026-11-21--provenance-drift-gate.md)
 2026-11-21 - along-webdev-runner - antigravity - Self-contained webdev and browser execution substrate - [Session Log](./SESSIONS/2026/2026-11-21--along-webdev-runner.md)
+2026-11-21 - opencode-shell-env-runner-fix - antigravity - Fix OpenCode V2 hook crash and runner CLI contract - [Session Log](./SESSIONS/2026/2026-11-21--opencode-shell-env-runner-fix.md)
