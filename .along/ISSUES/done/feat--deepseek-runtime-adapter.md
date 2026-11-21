@@ -3,15 +3,17 @@ protocol: along
 protocol_version: "4.5.4"
 slug: deepseek-runtime-adapter
 type: feat
-status: open
+status: done
+completed: 2026-11-21
 priority: medium
 created: 2026-10-30
-updated: 2026-10-30
+updated: 2026-11-21
 agent: antigravity
 tags: [deepseek, runtime, runner, adapter, cli]
 milestone: v5.2.0-external-harness-expansion
 blocked_by: []
 related: [feat--deepseek-harness-bridge, feat--agent-runtime-adapters-claude-codex-opencode]
+plan_status: approved
 ---
 
 # DeepSeek Runtime Adapter for Headless CLI Orchestration
@@ -47,7 +49,7 @@ Currently, `scripts/alongkit/runner/` defines adapters for `claude` (Claude Code
 
 ## Acceptance Criteria
 
-- [ ] `deepseek` is accepted as a valid runtime by `along run` and `along orchestrate`.
-- [ ] Runner constructs valid CLI execution command with `--model` and API endpoint parameters.
-- [ ] Child environment contains `DEEPSEEK_API_KEY` but excludes unrelated provider secrets.
-- [ ] Unit tests added to `tests/test_runtime_adapters.py` and green.
+- [x] `deepseek` is accepted as a valid runtime by `along run` and `along orchestrate`.
+- [x] Runner constructs valid CLI execution command with `--model` and API endpoint parameters.
+- [x] Child environment contains `DEEPSEEK_API_KEY` but excludes unrelated provider secrets.
+- [x] Unit tests added to `tests/test_runtime_adapters.py` and green.

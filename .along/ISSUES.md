@@ -29,7 +29,6 @@
 - [ ] `(feat)` [cpp-ecosystem-support](ISSUES/feat--cpp-ecosystem-support.md)
 - [ ] `(feat)` [cursor-agent-and-rules-integration](ISSUES/feat--cursor-agent-and-rules-integration.md)
 - [ ] `(feat)` [dart-flutter-ecosystem-support](ISSUES/feat--dart-flutter-ecosystem-support.md)
-- [ ] `(feat)` [deepseek-runtime-adapter](ISSUES/feat--deepseek-runtime-adapter.md)
 - [ ] `(feat)` [doctor-detect-protocol-leak](ISSUES/feat--doctor-detect-protocol-leak.md)
 - [ ] `(feat)` [doctor-granular-diagnostics](ISSUES/feat--doctor-granular-diagnostics.md)
 - [ ] `(feat)` [empirical-benchmark-harness-and-metrics](ISSUES/feat--empirical-benchmark-harness-and-metrics.md)
@@ -55,6 +54,7 @@
 - [ ] `(feat)` [team-worktree-concurrency-rules](ISSUES/feat--team-worktree-concurrency-rules.md)
 - [ ] `(feat)` [team-worktree-lifecycle](ISSUES/feat--team-worktree-lifecycle.md)
 - [ ] `(feat)` [trivial-fix-lifecycle](ISSUES/feat--trivial-fix-lifecycle.md)
+- [ ] `(feat)` [webdev-local-llm-engine](ISSUES/feat--webdev-local-llm-engine.md) - plan approved
 - [ ] `(feat)` [workspace-activity-tracking](ISSUES/feat--workspace-activity-tracking.md)
 - [ ] `(feat)` [zero-step-state-recovery-and-drift-detection](ISSUES/feat--zero-step-state-recovery-and-drift-detection.md)
 - [ ] `(task)` [gate-event-remeasure](ISSUES/task--gate-event-remeasure.md)
@@ -62,8 +62,8 @@
 
 ## Done (recent)
 - [x] `(feat)` [provenance-drift-gate](ISSUES/done/feat--provenance-drift-gate.md)
+- [x] `(feat)` [deepseek-runtime-adapter](ISSUES/done/feat--deepseek-runtime-adapter.md)
 - [x] `(feat)` [deepseek-harness-bridge](ISSUES/done/feat--deepseek-harness-bridge.md)
 - [x] `(feat)` [along-webdev-runner](ISSUES/done/feat--along-webdev-runner.md)
 - [x] `(bug)` [webdev-session-ux-improvements](ISSUES/done/bug--webdev-session-ux-improvements.md)
-- [x] `(bug)` [webdev-session-create-browser-helper](ISSUES/done/bug--webdev-session-create-browser-helper.md)
-<!-- 350 older completed issue(s) archived in .along/ISSUES/done/ -->
+<!-- 351 older completed issue(s) archived in .along/ISSUES/done/ -->

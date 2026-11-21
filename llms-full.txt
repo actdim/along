@@ -2100,6 +2100,8 @@ Supervises an autonomous agent runtime (such as Google Antigravity), enforcing w
 ```bash
 along run antigravity [--dry-run] [-i|--issue <slug>] [--run-id <id>] [-e|--endpoint <url>] [-b|--binary <path>] [-- <agent-args...>]
 along run agy [--dry-run] [-i|--issue <slug>] [--run-id <id>] [-e|--endpoint <url>] [-b|--binary <path>] [-- <agent-args...>]
+along run deepseek [--dry-run] [-i|--issue <slug>] [--run-id <id>] [-m|--model <name>] [-- <dsh-args...>]
+along run dsh [--dry-run] [-i|--issue <slug>] [--run-id <id>] [-m|--model <name>] [-- <dsh-args...>]
 ```
 
 Parameters:
@@ -2118,7 +2120,7 @@ along run npm test
 ```
 
 ### `along orchestrate`
-Cross-runtime multi-agent supervisor orchestrator for tiered model workflows. Executes sequential multi-agent loops across heterogeneous CLI runtimes (claude, claude-code, codex, opencode, generic).
+Cross-runtime multi-agent supervisor orchestrator for tiered model workflows. Executes sequential multi-agent loops across heterogeneous CLI runtimes (claude, claude-code, codex, deepseek, dsh, opencode, generic).
 
 - **Usage**:
   ```bash
@@ -2128,7 +2130,7 @@ Cross-runtime multi-agent supervisor orchestrator for tiered model workflows. Ex
   - `--dry-run`: Preview prompt payloads and simulated runs without launching processes.
   - `--max-retries <N>`: Maximum retry attempts per step (default: 3).
   - `--timeout <sec>`: Process timeout per role execution in seconds.
-  - `--scout <runtime>`: Runtime adapter for scout role (choices: claude, claude-code, codex, opencode, generic).
+  - `--scout <runtime>`: Runtime adapter for scout role (choices: claude, claude-code, codex, deepseek, dsh, opencode, generic).
   - `--architect <runtime>`: Runtime adapter for architect role.
   - `--implementer <runtime>`: Runtime adapter for implementer role.
   - `--reviewer <runtime>`: Runtime adapter for reviewer role.
