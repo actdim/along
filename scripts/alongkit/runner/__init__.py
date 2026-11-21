@@ -16,6 +16,7 @@ from .antigravity import AntigravityRunner
 from .base import BaseRunner, RunResult
 from .claude import ClaudeCodeRunner
 from .codex import CodexRunner
+from .deepseek import DeepSeekHarnessRunner
 from .generic import GenericCliRunner
 from .opencode import OpenCodeRunner
 from .stream import ChunkedStreamSupervisor
@@ -24,6 +25,9 @@ RUNNER_MAP: Dict[str, Type[BaseRunner]] = {
     "claude": ClaudeCodeRunner,
     "claude-code": ClaudeCodeRunner,
     "codex": CodexRunner,
+    "deepseek": DeepSeekHarnessRunner,
+    "deepseek-harness": DeepSeekHarnessRunner,
+    "dsh": DeepSeekHarnessRunner,
     "opencode": OpenCodeRunner,
     "generic": GenericCliRunner,
 }
@@ -45,6 +49,7 @@ __all__ = [
     "ChunkedStreamSupervisor",
     "ClaudeCodeRunner",
     "CodexRunner",
+    "DeepSeekHarnessRunner",
     "GenericCliRunner",
     "OpenCodeRunner",
     "RunResult",

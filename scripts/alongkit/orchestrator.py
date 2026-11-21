@@ -37,7 +37,16 @@ from . import entities, frontmatter, handoff, proc, repo, session, textio
 from .runner import BaseRunner, RunResult, get_runner
 
 SUPPORTED_ROLES: Tuple[str, ...] = ("scout", "architect", "implementer", "reviewer")
-ORCHESTRATOR_RUNTIMES: Tuple[str, ...] = ("claude", "claude-code", "codex", "opencode", "generic")
+ORCHESTRATOR_RUNTIMES: Tuple[str, ...] = (
+    "claude",
+    "claude-code",
+    "codex",
+    "deepseek",
+    "deepseek-harness",
+    "dsh",
+    "opencode",
+    "generic",
+)
 DEFAULT_MAX_RETRIES: int = 3
 DEFAULT_TIMEOUT: int = 1800
 #: The claim outlives one run by this much, so a renewal before the next run never finds it expired.

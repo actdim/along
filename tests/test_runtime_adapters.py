@@ -24,6 +24,7 @@ from alongkit.runner import (
     BaseRunner,
     ClaudeCodeRunner,
     CodexRunner,
+    DeepSeekHarnessRunner,
     GenericCliRunner,
     OpenCodeRunner,
     RunResult,
@@ -110,6 +111,28 @@ class TestCommandLineAndFlagMapping(unittest.TestCase):
             "--port",
             "8080",
             "Review security policy",
+        ]
+        self.assertEqual(cmd, expected)
+
+    def test_deepseek_command_line_and_flags(self) -> None:
+        runner = DeepSeekHarnessRunner(
+            repo_root=self.repo,
+            binary_path="custom-dsh",
+            model="deepseek-reasoner",
+            extra_args=["--session-id", "session-xyz"],
+        )
+        self.assertTrue(runner.brief_via_stdin)
+        cmd = runner.build_command("Execute refactoring")
+        expected = [
+            "custom-dsh",
+            "--profile",
+            "headless",
+            "--json",
+            "--model",
+            "deepseek-reasoner",
+            "--session-id",
+            "session-xyz",
+            "-",
         ]
         self.assertEqual(cmd, expected)
 
@@ -233,6 +256,15 @@ class TestCommandLineAndFlagMapping(unittest.TestCase):
         generic = get_runner("generic", repo_root=self.repo)
         self.assertIsInstance(generic, GenericCliRunner)
 
+        deepseek = get_runner("deepseek", repo_root=self.repo)
+        self.assertIsInstance(deepseek, DeepSeekHarnessRunner)
+
+        dsh = get_runner("dsh", repo_root=self.repo)
+        self.assertIsInstance(dsh, DeepSeekHarnessRunner)
+
+        dsh_alias = get_runner("deepseek-harness", repo_root=self.repo)
+        self.assertIsInstance(dsh_alias, DeepSeekHarnessRunner)
+
         with self.assertRaises(ValueError):
             get_runner("unsupported-runtime")
 
@@ -277,6 +309,60 @@ class TestOpenCodeEnvironmentAndLocalEndpoint(unittest.TestCase):
                 os.environ["OPENAI_BASE_URL"] = original
             else:
                 os.environ.pop("OPENAI_BASE_URL", None)
+
+
+class TestDeepSeekEnvironmentAndBinaryFallback(unittest.TestCase):
+    """Verify DeepSeek Harness environment isolation and binary resolution."""
+
+    def setUp(self) -> None:
+        self.repo = hermetic.make_repo_fixture(prefix="along-test-deepseek-")
+        self.slug = "deepseek-task"
+        session.init_session(self.repo, self.slug, title="DeepSeek Task")
+
+    def tearDown(self) -> None:
+        shutil.rmtree(self.repo, ignore_errors=True)
+
+    def test_deepseek_environment_isolation(self) -> None:
+        orig_env = os.environ.copy()
+        try:
+            os.environ["DEEPSEEK_API_KEY"] = "sk-deepseek-test"
+            os.environ["DEEPSEEK_BASE_URL"] = "https://api.deepseek.com"
+            os.environ["DEEPSEEK_MODEL"] = "deepseek-chat"
+            os.environ["ANTHROPIC_API_KEY"] = "sk-ant-secret"
+            os.environ["OPENAI_API_KEY"] = "sk-oai-secret"
+            os.environ["TELEGRAM_BOT_TOKEN"] = "123456:secret"
+
+            runner = DeepSeekHarnessRunner(
+                repo_root=self.repo,
+                issue_slug=self.slug,
+            )
+            child_env = runner.build_env()
+
+            self.assertEqual(child_env.get("DEEPSEEK_API_KEY"), "sk-deepseek-test")
+            self.assertEqual(child_env.get("DEEPSEEK_BASE_URL"), "https://api.deepseek.com")
+            self.assertEqual(child_env.get("DEEPSEEK_MODEL"), "deepseek-chat")
+            self.assertEqual(child_env.get("DSH_PERMISSION_MODE"), "danger-full-access")
+
+            # Unrelated keys must be scrubbed
+            self.assertNotIn("ANTHROPIC_API_KEY", child_env)
+            self.assertNotIn("OPENAI_API_KEY", child_env)
+            self.assertNotIn("TELEGRAM_BOT_TOKEN", child_env)
+        finally:
+            os.environ.clear()
+            os.environ.update(orig_env)
+
+    def test_deepseek_binary_resolution(self) -> None:
+        runner_explicit = DeepSeekHarnessRunner(
+            repo_root=self.repo,
+            binary_path="/custom/path/to/dsh",
+        )
+        self.assertEqual(runner_explicit.resolve_binary(), "/custom/path/to/dsh")
+
+        runner_default = DeepSeekHarnessRunner(
+            repo_root=self.repo,
+        )
+        resolved = runner_default.resolve_binary()
+        self.assertTrue(resolved.endswith("dsh") or resolved.endswith("dsh.cmd"))
 
 
 class TestOutputParsing(unittest.TestCase):
@@ -351,6 +437,33 @@ class TestOutputParsing(unittest.TestCase):
         parsed = runner.parse_output(stdout_payload, "", exit_code=0)
         self.assertEqual(parsed["outcome"], "done")
         self.assertIn("hello.txt", parsed["changed_files"])
+
+    def test_deepseek_ndjson_output_parsing(self) -> None:
+        runner = DeepSeekHarnessRunner(repo_root=self.repo)
+        ndjson_payload = "\n".join([
+            json.dumps({"type": "session", "id": "sess-1"}),
+            json.dumps({"type": "text", "part": {"type": "text", "text": "Analyzing repo structure..."}}),
+            json.dumps({"type": "tool_call", "part": {"type": "tool", "input": {"path": "src/module.py"}}}),
+            json.dumps({"type": "step_finish", "part": {"tokens": {"input": 1500, "output": 250}}}),
+            json.dumps({"type": "text", "part": {"type": "text", "text": " Done."}}),
+            json.dumps({"handoff_note": "Refactored module."}),
+        ])
+        parsed = runner.parse_output(ndjson_payload, "", exit_code=0)
+        self.assertEqual(parsed["outcome"], "done")
+        self.assertIn("Analyzing repo structure... Done.", parsed["text"])
+        self.assertIn("src/module.py", parsed["changed_files"])
+        self.assertEqual(parsed["usage"]["input_tokens"], 1500)
+        self.assertEqual(parsed["usage"]["output_tokens"], 250)
+        self.assertEqual(parsed["handoff_note"], "Refactored module.")
+
+    def test_deepseek_is_error_parsing(self) -> None:
+        runner = DeepSeekHarnessRunner(repo_root=self.repo)
+        ndjson_payload = "\n".join([
+            json.dumps({"type": "session", "id": "sess-err"}),
+            json.dumps({"type": "error", "message": "Context window exceeded"}),
+        ])
+        parsed = runner.parse_output(ndjson_payload, "", exit_code=0)
+        self.assertEqual(parsed["outcome"], "fail")
 
     def test_generic_line_buffered_capture(self) -> None:
         runner = GenericCliRunner(repo_root=self.repo)

@@ -36,6 +36,9 @@ VALID_RUNTIMES: Tuple[str, ...] = (
     "claude",
     "claude-code",
     "codex",
+    "deepseek",
+    "deepseek-harness",
+    "dsh",
     "opencode",
     "generic",
 )
