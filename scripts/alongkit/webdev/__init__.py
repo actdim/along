@@ -6,4 +6,6 @@ from __future__ import annotations
 __all__ = [
     "cft",
     "browser",
+    "compiler",
+    "local_llm",
 ]

@@ -104,6 +104,61 @@ def handle_limits(args: argparse.Namespace) -> int:
     return 0
 
 
+def handle_nl_cli(args: argparse.Namespace) -> int:
+    """Handle along webdev nl natural language compilation and execution."""
+    from alongkit.webdev.compiler import NLScenarioCompiler
+    from alongkit.webdev.local_llm import LocalInferenceClient
+    import ruamel.yaml
+    import io
+    import tempfile
+
+    client = LocalInferenceClient()
+    compiler = NLScenarioCompiler(client=client, base_url=args.url)
+
+    try:
+        scenario = compiler.compile(args.instruction, backend=args.backend)
+    except (ValueError, TypeError, KeyError) as exc:
+        print(f"[Error] Failed to compile NL instruction: {exc}", file=sys.stderr)
+        return 1
+
+    yaml = ruamel.yaml.YAML()
+    yaml.default_flow_style = False
+
+    if args.out:
+        with open(args.out, "w", encoding="utf-8") as f:
+            yaml.dump(scenario, f)
+        print(f"-> Saved compiled scenario to: {args.out}")
+
+    if args.dry_run or not args.run:
+        buf = io.StringIO()
+        yaml.dump(scenario, buf)
+        print(buf.getvalue().rstrip())
+        if not args.run:
+            return 0
+
+    from alongkit.webdev import runner
+    with tempfile.NamedTemporaryFile("w", suffix=".yaml", delete=False, encoding="utf-8") as tmp:
+        yaml.dump(scenario, tmp)
+        tmp_path = tmp.name
+
+    try:
+        run_args = argparse.Namespace(
+            scenario=tmp_path,
+            viewport=None,
+            theme=None,
+            record=False,
+            out=None,
+            json=False,
+            keep_browser=False,
+        )
+        return runner.handle_run_cli(run_args)
+    finally:
+        try:
+            os.remove(tmp_path)
+        except OSError:
+            pass
+
+
 def main(argv: Optional[List[str]] = None) -> int:
     parser = argparse.ArgumentParser(
         prog="along webdev",
@@ -175,6 +230,15 @@ def main(argv: Optional[List[str]] = None) -> int:
     p_check.add_argument("--out", default=None, help="Output scenario YAML path")
     p_check.add_argument("--json", action="store_true", help="Emit JSON output")
 
+    # nl
+    p_nl = subparsers.add_parser("nl", help="Natural language test step compiler and offline runner")
+    p_nl.add_argument("instruction", help="Conversational verification instruction")
+    p_nl.add_argument("--url", default=None, help="Base application URL (default: http://localhost:3000)")
+    p_nl.add_argument("--backend", default="auto", choices=["auto", "local-http", "template"], help="Inference backend (default: auto)")
+    p_nl.add_argument("--dry-run", action="store_true", help="Print compiled scenario YAML without launching browser")
+    p_nl.add_argument("--run", action="store_true", help="Execute compiled scenario via AlongWebDevRunner")
+    p_nl.add_argument("--out", default=None, help="Save compiled scenario to target file (.yaml)")
+
     # mcp
     subparsers.add_parser("mcp", help="Run stdio Model Context Protocol (MCP) server")
 
@@ -217,6 +281,9 @@ def main(argv: Optional[List[str]] = None) -> int:
     if args.subcommand == "checklist":
         from alongkit.webdev import checklist
         return checklist.handle_checklist_cli(args)
+
+    if args.subcommand == "nl":
+        return handle_nl_cli(args)
 
     if args.subcommand == "mcp":
         from alongkit.webdev import mcp_server
