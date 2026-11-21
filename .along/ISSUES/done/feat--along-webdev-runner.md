@@ -3,7 +3,8 @@ protocol: along
 protocol_version: "4.5.1"
 slug: along-webdev-runner
 type: feat
-status: in-progress
+status: done
+completed: 2026-11-21
 priority: medium
 created: 2026-10-22
 updated: 2026-11-21

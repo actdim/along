@@ -1,8 +1,7 @@
 # Active Issues
 
 ## Active
-- [ ] `(bug)` [opencode-shell-env-runner-fix](ISSUES/bug--opencode-shell-env-runner-fix.md)
-- [ ] `(feat)` [along-webdev-runner](ISSUES/feat--along-webdev-runner.md) - plan approved
+- [ ] `(bug)` [opencode-shell-env-runner-fix](ISSUES/bug--opencode-shell-env-runner-fix.md) - plan approved
 
 ## Backlog
 - [ ] `(debt)` [autonomous-non-elevation-invariants](ISSUES/debt--autonomous-non-elevation-invariants.md)
@@ -64,8 +63,8 @@
 
 ## Done (recent)
 - [x] `(feat)` [provenance-drift-gate](ISSUES/done/feat--provenance-drift-gate.md)
+- [x] `(feat)` [along-webdev-runner](ISSUES/done/feat--along-webdev-runner.md)
 - [x] `(feat)` [git-automerge-protection-and-semantic-merge](ISSUES/done/feat--git-automerge-protection-and-semantic-merge.md)
 - [x] `(bug)` [windows-ci-line-endings](ISSUES/done/bug--windows-ci-line-endings.md)
 - [x] `(bug)` [stop-gate-empty-writes-fallback](ISSUES/done/bug--stop-gate-empty-writes-fallback.md)
-- [x] `(feat)` [openobserve-telemetry-sink](ISSUES/done/feat--openobserve-telemetry-sink.md)
-<!-- 345 older completed issue(s) archived in .along/ISSUES/done/ -->
+<!-- 346 older completed issue(s) archived in .along/ISSUES/done/ -->
