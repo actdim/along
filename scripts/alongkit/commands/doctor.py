@@ -228,12 +228,12 @@ def _doctor_webdev_checks(repo_root: str, warnings: int) -> int:
     """Doctor check for Along WebDev substrate (runtime, CfT browser, services)."""
     try:
         from alongkit.webdev import cft
-        b_status = cft.get_browser_status(repo_root)
-        if b_status.get("installed"):
-            print(f"[OK] WebDev Chrome for Testing browser installed ({b_status.get('version')}).")
+        b_status = cft.status(repo_root=repo_root)
+        if b_status.get("available"):
+            print(f"[OK] WebDev Chrome for Testing browser ready ({b_status.get('version')}).")
         else:
             print("[INFO] WebDev CfT browser not cached locally. Run 'along webdev bootstrap --download'.")
-    except (ImportError, OSError, ValueError):
+    except (ImportError, OSError, ValueError, AttributeError):
         pass
     return warnings
 

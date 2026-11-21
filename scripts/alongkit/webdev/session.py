@@ -135,3 +135,20 @@ def setup_storage_seeding(context_or_page: Any, storage_spec: Dict[str, Any]) ->
     if init_js:
         full_code = "\n".join(init_js)
         context_or_page.add_init_script(full_code)
+
+
+def create_browser_session(
+    repo_root: Optional[str] = None,
+    headed: bool = False,
+    allowed_origins: Optional[List[str]] = None,
+) -> Tuple[Any, Tuple[Any, Any]]:
+    """Spawn CfT browser process and connect Playwright page (REQ-10)."""
+    from . import browser
+
+    bp = browser.launch_cft(headless=not headed, repo_root=repo_root)
+    pw, b_inst = browser.connect_playwright(bp)
+    page = b_inst.new_page()
+    if allowed_origins:
+        setup_origin_guard(page, allowed_origins)
+    return bp, (pw, page)
+

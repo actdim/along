@@ -7,6 +7,7 @@ import http.server
 import json
 import os
 import secrets
+import subprocess
 import sys
 import threading
 import time
@@ -82,19 +83,6 @@ class InteractiveSessionServer:
         """Start services, browser, and HTTP daemon."""
         if self.service_names:
             services.serve_up(self.repo_root, service_names=self.service_names)
-
-        is_hermetic = os.environ.get("ALONG_WEBDEV_HERMETIC") == "1"
-        if not is_hermetic:
-            try:
-                b_proc, (pw, page) = session.create_browser_session(
-                    self.repo_root,
-                    headed=self.headed,
-                )
-                self.b_proc = b_proc
-                self.pw = pw
-                self.page = page
-            except (RuntimeError, OSError, ValueError) as exc:
-                print(f"[Warning] Interactive browser creation fallback: {exc}", file=sys.stderr)
 
         server_instance = self
 
@@ -202,8 +190,51 @@ class InteractiveSessionServer:
         bound_port = self.httpd.server_port
         self.is_running = True
 
-        self.server_thread = threading.Thread(target=self.httpd.serve_forever, daemon=True)
+        ready_event = threading.Event()
+
+        def _worker_target() -> None:
+            is_hermetic = os.environ.get("ALONG_WEBDEV_HERMETIC") == "1"
+            if not is_hermetic:
+                try:
+                    b_proc, (pw, page) = session.create_browser_session(
+                        self.repo_root,
+                        headed=self.headed,
+                    )
+                    self.b_proc = b_proc
+                    self.pw = pw
+                    self.page = page
+                except (RuntimeError, OSError, ValueError) as exc:
+                    print(f"[Warning] Interactive browser creation fallback: {exc}", file=sys.stderr)
+            ready_event.set()
+            if self.httpd:
+                self.httpd.serve_forever()
+
+            # Clean teardown on the same thread where Playwright was initialized
+            if self.page:
+                try:
+                    self.page.close()
+                except (RuntimeError, OSError, AttributeError):
+                    pass
+                self.page = None
+
+            if self.pw:
+                try:
+                    self.pw.stop()
+                except (RuntimeError, OSError, AttributeError):
+                    pass
+                self.pw = None
+
+            if self.b_proc:
+                try:
+                    self.b_proc.close()
+                except (RuntimeError, OSError, AttributeError):
+                    pass
+                self.b_proc = None
+
+
+        self.server_thread = threading.Thread(target=_worker_target, daemon=True)
         self.server_thread.start()
+        ready_event.wait(timeout=25.0)
 
         # Start idle watchdog
         self.watchdog_thread = threading.Thread(target=self._watchdog_loop, daemon=True)
@@ -277,29 +308,8 @@ class InteractiveSessionServer:
                 break
 
     def shutdown(self) -> None:
-        """Shutdown browser and HTTP daemon, clean up state file."""
+        """Shutdown HTTP daemon, triggering thread-local resource cleanup."""
         self.is_running = False
-
-        if self.page:
-            try:
-                self.page.close()
-            except (RuntimeError, OSError, AttributeError):
-                pass
-            self.page = None
-
-        if self.pw:
-            try:
-                self.pw.stop()
-            except (RuntimeError, OSError, AttributeError):
-                pass
-            self.pw = None
-
-        if self.b_proc:
-            try:
-                self.b_proc.close()
-            except (RuntimeError, OSError, AttributeError):
-                pass
-            self.b_proc = None
 
         if self.httpd:
             try:
@@ -352,17 +362,89 @@ def _dispatch_request(
         raise RuntimeError(f"Failed to communicate with webdev session daemon: {net_err}") from net_err
 
 
+def run_daemon_worker(
+    repo_root: str,
+    issue_key: str,
+    services_list: Optional[List[str]] = None,
+    headed: bool = False,
+    idle_timeout: int = DEFAULT_IDLE_TIMEOUT_SECONDS,
+) -> int:
+    """Run interactive session server in the foreground until stopped or timed out."""
+    server = InteractiveSessionServer(
+        repo_root=repo_root,
+        issue_key=issue_key,
+        service_names=services_list,
+        idle_timeout_seconds=idle_timeout,
+        headed=headed,
+    )
+    server.start()
+    try:
+        while server.is_running:
+            time.sleep(0.5)
+    except (KeyboardInterrupt, SystemExit):
+        server.shutdown()
+    return 0
+
+
 def session_start(
     repo_root: str,
     issue_key: str,
     services_list: Optional[List[str]] = None,
     headed: bool = False,
     idle_timeout: int = DEFAULT_IDLE_TIMEOUT_SECONDS,
+    spawn_process: bool = False,
 ) -> Dict[str, Any]:
     """Start interactive session daemon."""
     existing = read_session_info(repo_root)
     if existing:
         return {"ok": True, "already_running": True, "session": existing}
+
+    if spawn_process:
+        script_path = os.path.join(repo_root, "scripts", "along_webdev.py")
+        if not os.path.isfile(script_path):
+            script_path = sys.argv[0]
+        cmd = [
+            sys.executable,
+            script_path,
+            "session",
+            "_worker",
+            "--issue",
+            issue_key,
+        ]
+        if headed:
+            cmd.append("--headed")
+
+        log_path = os.path.join(repo_root, ".along", ".session", "webdev_daemon.log")
+        os.makedirs(os.path.dirname(log_path), exist_ok=True)
+        log_handle = open(log_path, "w", encoding="utf-8")
+        spawn_kwargs = proc.spawn_group_kwargs()
+        p = subprocess.Popen(
+            cmd,
+            cwd=repo_root,
+            stdin=subprocess.DEVNULL,
+            stdout=log_handle,
+            stderr=subprocess.STDOUT,
+            **spawn_kwargs,
+        )
+
+        deadline = time.monotonic() + 15.0
+        while time.monotonic() < deadline:
+            time.sleep(0.2)
+            if p.poll() is not None:
+                log_handle.close()
+                with open(log_path, "r", encoding="utf-8", errors="replace") as f:
+                    err_text = f.read()
+                raise RuntimeError(f"Daemon process exited prematurely (code {p.returncode}): {err_text}")
+            info = read_session_info(repo_root)
+            if info:
+                try:
+                    _dispatch_request(repo_root, "/status")
+                    log_handle.close()
+                    return {"ok": True, "already_running": False, "session": info}
+                except (RuntimeError, OSError, ConnectionError, urllib.error.URLError):
+                    pass
+        log_handle.close()
+        raise TimeoutError("Timed out waiting for session daemon to start.")
 
     daemon = InteractiveSessionServer(
         repo_root=repo_root,
@@ -410,7 +492,27 @@ def session_stop(repo_root: str) -> Dict[str, Any]:
     info = read_session_info(repo_root)
     if not info:
         return {"ok": True, "already_stopped": True}
-    return _dispatch_request(repo_root, "/stop", method="POST")
+
+    res: Dict[str, Any] = {}
+    try:
+        res = _dispatch_request(repo_root, "/stop", method="POST")
+    except (RuntimeError, OSError, ConnectionError, urllib.error.URLError):
+        pass
+
+    pid = info.get("pid")
+    if pid and pid != os.getpid():
+        from .services import is_pid_alive
+        if is_pid_alive(pid):
+            proc.kill_process_tree(pid, grace=2.0)
+
+    info_path = get_session_info_path(repo_root)
+    if os.path.isfile(info_path):
+        try:
+            os.remove(info_path)
+        except OSError:
+            pass
+
+    return {"ok": True, "stopped": True, "dispatch_result": res}
 
 
 def handle_session_cli(args: Any) -> int:
@@ -423,12 +525,16 @@ def handle_session_cli(args: Any) -> int:
         if not issue_key:
             active, _ = entities.resolve_active_issue(repo_root)
             issue_key = active["slug"] if active else "scratch"
-        res = session_start(repo_root, issue_key=issue_key, headed=getattr(args, "headed", False))
+        res = session_start(repo_root, issue_key=issue_key, headed=getattr(args, "headed", False), spawn_process=True)
         if getattr(args, "json", False):
             print(json.dumps(res, indent=2))
         else:
             print(f"Session started on port {res.get('session', {}).get('port')} (issue: {issue_key})")
         return 0
+
+    elif action == "_worker":
+        issue_key = getattr(args, "issue", None) or "scratch"
+        return run_daemon_worker(repo_root, issue_key=issue_key, headed=getattr(args, "headed", False))
 
     elif action == "status":
         try:

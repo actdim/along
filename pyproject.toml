@@ -40,9 +40,15 @@ dash = [
     "rich>=13.0.0",
 ]
 
-# All optional extensions: dashboard (kept as a stable alias).
+# WebDev browser verification and Playwright runner.
+webdev = [
+    "playwright>=1.40.0",
+]
+
+# All optional extensions: dashboard and webdev runner.
 all = [
     "actdim-along[dash]",
+    "actdim-along[webdev]",
 ]
 
 [dependency-groups]

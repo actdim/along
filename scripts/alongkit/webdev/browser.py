@@ -86,7 +86,7 @@ def launch_cft(
     if not profile_dir:
         is_temp = True
         session_id = uuid.uuid4().hex[:12]
-        profile_dir = os.path.join(tempfile.get_tempdir(), f"along-cft-session-{session_id}")
+        profile_dir = os.path.join(tempfile.gettempdir(), f"along-cft-session-{session_id}")
 
     os.makedirs(profile_dir, exist_ok=True)
     port_marker = os.path.join(profile_dir, DEVTOOLS_ACTIVE_PORT_FILE)

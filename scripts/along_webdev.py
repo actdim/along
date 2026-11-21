@@ -136,7 +136,7 @@ def main(argv: Optional[List[str]] = None) -> int:
 
     # session
     p_session = subparsers.add_parser("session", help="Interactive browser session daemon")
-    p_session.add_argument("action", choices=["start", "step", "batch", "save", "stop", "status"], help="Session action")
+    p_session.add_argument("action", choices=["start", "step", "batch", "save", "stop", "status", "_worker"], help="Session action")
     p_session.add_argument("--issue", default=None, help="Issue key to attribute session")
     p_session.add_argument("--headed", action="store_true", help="Launch browser in headed mode")
     p_session.add_argument("--as", dest="save_as", default=None, help="Output scenario path for save")

@@ -168,6 +168,26 @@ class TestInteractiveSessionDaemon(unittest.TestCase):
         self.assertTrue(stop_res["ok"])
         self.assertIsNone(daemon.read_session_info(self.temp_repo))
 
+    def test_create_browser_session_interface(self):
+        from unittest.mock import MagicMock, patch
+        from alongkit.webdev import session
+
+        mock_bp = MagicMock()
+        mock_pw = MagicMock()
+        mock_b_inst = MagicMock()
+        mock_page = MagicMock()
+        mock_b_inst.new_page.return_value = mock_page
+
+        with patch("alongkit.webdev.browser.launch_cft", return_value=mock_bp) as p_launch, \
+             patch("alongkit.webdev.browser.connect_playwright", return_value=(mock_pw, mock_b_inst)) as p_conn:
+            bp, (pw, page) = session.create_browser_session(self.temp_repo, headed=True, allowed_origins=["http://localhost:3000"])
+            self.assertEqual(bp, mock_bp)
+            self.assertEqual(pw, mock_pw)
+            self.assertEqual(page, mock_page)
+            p_launch.assert_called_once_with(headless=False, repo_root=self.temp_repo)
+            p_conn.assert_called_once_with(mock_bp)
+
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -8,7 +8,7 @@ updated: 2026-09-27
 tags: [setup-workflow, installation, lifecycle, runners, developer-workflow, testing]
 sources:
   - path: README.md
-    hash: "b484c5a6e8c8fb26a99582aab02af16fc9223ee6dcc2e5324c461fa69917d64b"
+    hash: "a6d41a4f4316fe41108c7eefe0d327e7e607849d9b5478c5912127ed0f6cf62e"
   - path: AGENTS.md
     hash: "4654f51244fd79c937f0dee1accb5468e28c7fb29ad961af039f17fd3128c9f4"
 ---

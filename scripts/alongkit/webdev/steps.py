@@ -227,4 +227,18 @@ def execute_step(
                 raise AssertionError(f"Failed network requests detected: {fail_text}")
         return {"action": "assert_no_failed_requests", "ok": True}
 
+    if action == "screenshot":
+        spec = step.get("screenshot")
+        out_path = None
+        if isinstance(spec, dict):
+            out_path = spec.get("out") or spec.get("path")
+        elif isinstance(spec, str):
+            out_path = spec
+        if not out_path:
+            out_path = step.get("out") or step.get("path") or "screenshot.png"
+        abs_path = os.path.abspath(out_path)
+        os.makedirs(os.path.dirname(abs_path), exist_ok=True)
+        page.screenshot(path=abs_path)
+        return {"action": "screenshot", "path": abs_path, "ok": True}
+
     return {"action": action or "unknown", "ok": True}
