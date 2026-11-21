@@ -29,6 +29,7 @@ CLAUDE_HOME="${CLAUDE_HOME:-$HOME/.claude}"
 CODEX_HOME="${CODEX_HOME:-$HOME/.codex}"
 OPENCODE_HOME="${OPENCODE_HOME:-$HOME/.config/opencode}"
 ANTIGRAVITY_HOME="${ANTIGRAVITY_HOME:-$HOME/.gemini/config}"
+DSH_HOME="${DSH_HOME:-$HOME/.dsh}"
 CURSOR_HOME="${CURSOR_HOME:-$HOME/.cursor}"
 CACHE_DIR="${ALONG_CACHE_DIR:-$HOME/.cache/actdim-along/repo}"
 
@@ -66,6 +67,7 @@ for arg in "$@"; do
     --codex-home=*)       CODEX_HOME="${arg#*=}" ;;
     --opencode-home=*)    OPENCODE_HOME="${arg#*=}" ;;
     --antigravity-home=*) ANTIGRAVITY_HOME="${arg#*=}" ;;
+    --dsh-home=*)         DSH_HOME="${arg#*=}" ;;
     --cursor-home=*)      CURSOR_HOME="${arg#*=}" ;;
     --cache-dir=*)        CACHE_DIR="${arg#*=}" ;;
     *) echo "unknown arg: $arg" >&2; exit 1 ;;
@@ -149,6 +151,7 @@ HOME_ARGS=(
   --codex-home "$CODEX_HOME"
   --opencode-home "$OPENCODE_HOME"
   --antigravity-home "$ANTIGRAVITY_HOME"
+  --dsh-home "$DSH_HOME"
 )
 
 if [ "$UNINSTALL" -eq 1 ]; then
@@ -179,15 +182,16 @@ fi
 src="$SCRIPT_DIR/skills"
 [ -d "$src" ] || { echo "Source skills folder not found: $src" >&2; exit 1; }
 
-do_claude=0; do_codex=0; do_opencode=0; do_antigravity=0
+do_claude=0; do_codex=0; do_opencode=0; do_antigravity=0; do_dsh=0
 case "$TARGET" in
   claude)      do_claude=1 ;;
   codex)       do_codex=1 ;;
   opencode)    do_opencode=1 ;;
   antigravity) do_antigravity=1 ;;
+  dsh)         do_dsh=1 ;;
   both)        do_claude=1; do_codex=1 ;;
-  all)         do_claude=1; do_codex=1; do_opencode=1; do_antigravity=1 ;;
-  *) echo "invalid --target: $TARGET (claude|codex|opencode|antigravity|both|all)" >&2; exit 1 ;;
+  all)         do_claude=1; do_codex=1; do_opencode=1; do_antigravity=1; do_dsh=1 ;;
+  *) echo "invalid --target: $TARGET (claude|codex|opencode|antigravity|dsh|both|all)" >&2; exit 1 ;;
 esac
 
 purge_legacy_skills() {
@@ -334,6 +338,10 @@ if [ "$do_antigravity" -eq 1 ]; then
   install_skillfolders "$ANTIGRAVITY_HOME"
   PROVIDER_ARGS+=(antigravity)
 fi
+if [ "$do_dsh" -eq 1 ]; then
+  install_skillfolders "$DSH_HOME"
+  PROVIDER_ARGS+=(dsh)
+fi
 
 # --- MCP cleanup / optional registration ---
 # By default, code-review-graph executes directly as a CLI engine via uvx (ADR-2026-09-27)
@@ -348,13 +356,13 @@ if [ -n "$PYTHON" ]; then
     "$PYTHON" "$SCRIPT_DIR/scripts/configure_mcp.py" "${mcp_args[@]}" \
       --user-home "$(dirname "$CLAUDE_HOME")" --claude-home "$CLAUDE_HOME" \
       --codex-home "$CODEX_HOME" --opencode-home "$OPENCODE_HOME" \
-      --antigravity-home "$ANTIGRAVITY_HOME" || true
+      --antigravity-home "$ANTIGRAVITY_HOME" --dsh-home "$DSH_HOME" || true
   else
     echo "-> code-review-graph MCP cleanup (CLI is default):"
     "$PYTHON" "$SCRIPT_DIR/scripts/configure_mcp.py" --clean "${mcp_args[@]}" \
       --user-home "$(dirname "$CLAUDE_HOME")" --claude-home "$CLAUDE_HOME" \
       --codex-home "$CODEX_HOME" --opencode-home "$OPENCODE_HOME" \
-      --antigravity-home "$ANTIGRAVITY_HOME" || true
+      --antigravity-home "$ANTIGRAVITY_HOME" --dsh-home "$DSH_HOME" || true
   fi
 else
   echo "   (skipped: python3 not found, so no provider configuration was touched)"
@@ -370,6 +378,7 @@ if [ -n "$PYTHON" ] && [ -f "$SCRIPT_DIR/scripts/along_hook.py" ]; then
       codex)       target_home="$CODEX_HOME" ;;
       opencode)    target_home="$OPENCODE_HOME" ;;
       antigravity) target_home="$ANTIGRAVITY_HOME" ;;
+      dsh)         target_home="$DSH_HOME" ;;
     esac
     if [ -n "$target_home" ]; then
       "$PYTHON" "$SCRIPT_DIR/scripts/along_hook.py" install --runtime "$provider" --global --target-home "$target_home" || true

@@ -14,7 +14,7 @@
 #   powershell ... -File install.ps1 -Uninstall        # remove exactly what the install manifest records
 
 param(
-    [ValidateSet('claude', 'codex', 'opencode', 'antigravity', 'both', 'all')][string]$Target = 'all',
+    [ValidateSet('claude', 'codex', 'opencode', 'antigravity', 'dsh', 'both', 'all')][string]$Target = 'all',
     [switch]$Symlink,
     [switch]$InstallDeps,
     [switch]$Migrate,
@@ -27,6 +27,7 @@ param(
     [string]$CodexHome       = (Join-Path $env:USERPROFILE '.codex'),
     [string]$OpencodeHome    = (Join-Path $env:USERPROFILE '.config\opencode'),
     [string]$AntigravityHome = (Join-Path $env:USERPROFILE '.gemini\config'),
+    [string]$DshHome         = (Join-Path $env:USERPROFILE '.dsh'),
     [string]$CursorHome      = (Join-Path $env:USERPROFILE '.cursor'),
     [string]$CacheDir        = (Join-Path (Join-Path $env:USERPROFILE '.cache') 'actdim-along\repo')
 )
@@ -221,7 +222,8 @@ $HomeArgs = @(
     '--claude-home', $ClaudeHome,
     '--codex-home', $CodexHome,
     '--opencode-home', $OpencodeHome,
-    '--antigravity-home', $AntigravityHome
+    '--antigravity-home', $AntigravityHome,
+    '--dsh-home', $DshHome
 )
 
 if ($Uninstall) {
@@ -443,8 +445,9 @@ $targets = switch ($Target) {
     'codex'       { @('codex') }
     'opencode'    { @('opencode') }
     'antigravity' { @('antigravity') }
+    'dsh'         { @('dsh') }
     'both'        { @('claude', 'codex') }
-    'all'         { @('claude', 'codex', 'opencode', 'antigravity') }
+    'all'         { @('claude', 'codex', 'opencode', 'antigravity', 'dsh') }
 }
 
 Install-AlongScripts
@@ -465,6 +468,9 @@ foreach ($t in $targets) {
         'antigravity' {
             Install-SkillFolders $AntigravityHome
         }
+        'dsh' {
+            Install-SkillFolders $DshHome
+        }
     }
 }
 
@@ -477,7 +483,8 @@ foreach ($t in $targets) { $mcpArgs += @('--provider', $t) }
 if ($IncludeUnverifiedMcp) { $mcpArgs += '--include-unverified' }
 $mcpArgs += @('--user-home', (Split-Path -Parent $ClaudeHome),
               '--claude-home', $ClaudeHome, '--codex-home', $CodexHome,
-              '--opencode-home', $OpencodeHome, '--antigravity-home', $AntigravityHome)
+              '--opencode-home', $OpencodeHome, '--antigravity-home', $AntigravityHome,
+              '--dsh-home', $DshHome)
 $mcpTool = Get-AlongTool 'configure_mcp.py'
 if ($mcpTool) {
     if ($RegisterMcp) {
@@ -503,6 +510,7 @@ if ($hookTool) {
             'codex'       { $CodexHome }
             'antigravity' { $AntigravityHome }
             'opencode'    { $OpencodeHome }
+            'dsh'         { $DshHome }
             default       { $null }
         }
         if ($homeDir) {

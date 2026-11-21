@@ -67,14 +67,14 @@ MCP_SERVER_ENTRY = {"command": "uvx", "args": [MCP_SERVER_PACKAGE]}
 WEBDEV_MCP_SERVER_NAME = "along-webdev"
 WEBDEV_MCP_SERVER_ENTRY = {"command": "along", "args": ["webdev", "mcp"]}
 
-PROVIDERS: Tuple[str, ...] = ("claude", "codex", "opencode", "antigravity")
+PROVIDERS: Tuple[str, ...] = ("claude", "codex", "opencode", "antigravity", "dsh")
 
 #: Only `along-*` folders are skills; anything else under `skills/` is not installed.
 SKILL_PREFIX = "along-"
 
 #: Providers that take the skill folders verbatim. OpenCode takes flat commands
 #: generated from the same `SKILL.md` bodies and is handled separately.
-FOLDER_PROVIDERS: Tuple[str, ...] = ("claude", "codex", "antigravity")
+FOLDER_PROVIDERS: Tuple[str, ...] = ("claude", "codex", "antigravity", "dsh")
 
 #: Never copied into an install: compiled caches are interpreter-specific.
 EXCLUDED_DIRS = frozenset({"__pycache__"})
@@ -95,6 +95,7 @@ class Homes:
     codex: str
     opencode: str
     antigravity: str
+    dsh: str
 
     @classmethod
     def defaults(cls, user_home: Optional[str] = None, **overrides) -> "Homes":
@@ -106,6 +107,7 @@ class Homes:
             "codex": os.path.join(home, ".codex"),
             "opencode": os.path.join(home, ".config", "opencode"),
             "antigravity": os.path.join(home, ".gemini", "config"),
+            "dsh": os.environ.get("DSH_HOME") or os.path.join(home, ".dsh"),
         }
         for key, value in overrides.items():
             if value:
@@ -183,6 +185,13 @@ def mcp_target(provider: str, homes: Homes) -> McpTarget:
             contract="The Gemini-family settings file carries an `mcpServers` map. "
                      "Which file Antigravity reads is not confirmed, so it is reported "
                      "rather than written.")
+    if provider == "dsh":
+        return McpTarget(
+            provider="dsh",
+            path=os.path.join(homes.dsh, "profiles", "desktop", "cordis.patch.yml"),
+            layout="cordis_yaml",
+            verified=False,
+            contract="DeepSeek Harness reads plugins from cordis.patch.yml in the profile directory.")
     raise ValueError(f"unknown provider: {provider}")
 
 

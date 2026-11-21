@@ -74,7 +74,8 @@ class InstallerCase(unittest.TestCase):
             claude=os.path.join(home, ".claude"),
             codex=os.path.join(home, ".codex"),
             opencode=os.path.join(home, ".config", "opencode"),
-            antigravity=os.path.join(home, ".gemini", "config"))
+            antigravity=os.path.join(home, ".gemini", "config"),
+            dsh=os.path.join(home, ".dsh"))
 
     def home_arguments(self, home, style):
         """The home overrides in the argument style of one installer."""
@@ -83,12 +84,14 @@ class InstallerCase(unittest.TestCase):
                  ("codex-home", os.path.join(home, ".codex")),
                  ("opencode-home", os.path.join(home, ".config", "opencode")),
                  ("antigravity-home", os.path.join(home, ".gemini", "config")),
+                 ("dsh-home", os.path.join(home, ".dsh")),
                  ("cursor-home", os.path.join(home, ".cursor"))]
         if style == "sh":
             return [f"--{name}={value}" for name, value in pairs]
         flags = {"along-home": "-AlongHome", "claude-home": "-ClaudeHome",
                  "codex-home": "-CodexHome", "opencode-home": "-OpencodeHome",
-                 "antigravity-home": "-AntigravityHome", "cursor-home": "-CursorHome"}
+                 "antigravity-home": "-AntigravityHome", "dsh-home": "-DshHome",
+                 "cursor-home": "-CursorHome"}
         arguments = []
         for name, value in pairs:
             arguments.extend([flags[name], value])

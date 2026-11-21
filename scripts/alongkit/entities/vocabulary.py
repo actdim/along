@@ -225,6 +225,9 @@ def detect_agent(explicit: Optional[str] = None) -> str:
     if any(k in env for k in ("OPENCODE_CLI", "OPENCODE_AGENT", "OPENCODE_SESSION_ID")):
         return "opencode"
 
+    if any(k in env for k in ("DSH_CLI", "DSH_AGENT", "DSH_SESSION_ID", "DSH_HOME", "DSH_PERMISSION_MODE")):
+        return "dsh"
+
     if env.get("AGENT"):
         val = env["AGENT"].strip()
         if val and val.lower() not in ("1", "0", "true", "false", "yes", "no"):

@@ -11,6 +11,7 @@ from .antigravity import AntigravityAdapter
 from .base import BaseAdapter
 from .claude import ClaudeCodeAdapter
 from .codex import CodexAdapter
+from .dsh import DeepSeekHarnessAdapter
 from .generic import GenericCliAdapter
 from .opencode import OpenCodeAdapter
 
@@ -31,6 +32,9 @@ ADAPTERS: Dict[str, Type[BaseAdapter]] = {
     "cursor": GenericCliAdapter,
     "opencode": OpenCodeAdapter,
     "open-code": OpenCodeAdapter,
+    "dsh": DeepSeekHarnessAdapter,
+    "deepseek": DeepSeekHarnessAdapter,
+    "deepseek-harness": DeepSeekHarnessAdapter,
 }
 
 

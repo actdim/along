@@ -40,7 +40,7 @@ Commands:
 
 Options:
   --source DIR           the Along checkout that was installed (sync; default: cwd repo)
-  --target NAME          claude | codex | opencode | antigravity (repeatable, sync)
+  --target NAME          claude | codex | opencode | antigravity | dsh (repeatable, sync)
   --version V            version to record (default: the protocol version)
   --no-prune             record only; leave superseded files on disk
   --dry-run              report what would change, change nothing
@@ -50,6 +50,7 @@ Options:
 Homes (each defaults to the standard location under the user home):
   --user-home DIR        --along-home DIR         --claude-home DIR
   --codex-home DIR       --opencode-home DIR      --antigravity-home DIR
+  --dsh-home DIR
 """
 
 
@@ -73,7 +74,7 @@ def main():
     home_flags = {
         "--user-home": "user", "--along-home": "along", "--claude-home": "claude",
         "--codex-home": "codex", "--opencode-home": "opencode",
-        "--antigravity-home": "antigravity",
+        "--antigravity-home": "antigravity", "--dsh-home": "dsh",
     }
 
     index = 1

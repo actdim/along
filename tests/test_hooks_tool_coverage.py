@@ -28,6 +28,7 @@ bootstrap.ensure_deps()
 from alongkit.hooks import GateDecision, evaluate_event
 from alongkit.hooks.adapters import claude as claude_adapter
 from alongkit.hooks.adapters import codex as codex_adapter
+from alongkit.hooks.adapters import dsh as dsh_adapter
 from alongkit.hooks.adapters import generic as generic_adapter
 from alongkit.hooks.adapters import normalize
 
@@ -59,8 +60,8 @@ class TestAdapterMapsAreCanonical(unittest.TestCase):
         self.assertEqual(missing, [], f"Claude Code tools neither mapped nor exempt: {missing}")
 
     def test_adapter_maps_point_at_canonical_names(self):
-        for module in (claude_adapter, codex_adapter, generic_adapter):
-            for raw, canonical in module.TOOL_NAME_MAP.items():
+        for module in (claude_adapter, codex_adapter, generic_adapter, dsh_adapter):
+            for raw, canonical in module.TOOL_NAME_MAP.items() if hasattr(module, "TOOL_NAME_MAP") else module.DSH_TOOL_NAME_MAP.items():
                 self.assertTrue(
                     normalize.is_canonical(canonical),
                     f"{module.__name__}: '{raw}' maps to non-canonical '{canonical}'",

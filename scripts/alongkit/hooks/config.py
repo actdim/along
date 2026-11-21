@@ -816,6 +816,114 @@ def install_opencode_hooks(
         return "failed", f"cannot write {plugin_file}: {exc}"
 
 
+def install_dsh_hooks(
+    repo_root: Optional[str] = None,
+    dry_run: bool = False,
+    is_global: bool = False,
+    target_home: Optional[str] = None,
+) -> Tuple[str, str]:
+    """Scaffold or update cordis.patch.yml for DeepSeek Harness (DSH)."""
+    from .. import bootstrap
+    ruamel = bootstrap.require("ruamel.yaml")
+    yaml = ruamel.YAML()
+    yaml.default_flow_style = False
+
+    if is_global:
+        base_dir = target_home or os.environ.get("DSH_HOME") or os.path.expanduser("~/.dsh")
+        profiles_dir = os.path.join(base_dir, "profiles")
+        candidate_dirs: List[str] = []
+        if os.path.isdir(profiles_dir):
+            for entry in os.listdir(profiles_dir):
+                full_entry = os.path.join(profiles_dir, entry)
+                if os.path.isdir(full_entry):
+                    candidate_dirs.append(full_entry)
+        if not candidate_dirs:
+            candidate_dirs.append(os.path.join(profiles_dir, "desktop"))
+    else:
+        if not repo_root:
+            return "failed", "repo_root is required for local hook install"
+        # Ensure Claude hook settings exist locally since DSH hook bridge mounts them
+        install_claude_hooks(repo_root, dry_run=dry_run, is_global=False)
+        candidate_dirs = [os.path.join(repo_root, ".dsh")]
+
+    expected_patch = {
+        "id": "along-hooks-bridge",
+        "name": "@deepseek-ai/dsh-hooks-claude-code",
+        "config": {
+            "configPath": "./.claude/settings.json",
+        },
+    }
+
+    changed_any = False
+    messages: List[str] = []
+    statuses: List[str] = []
+
+    for cdir in candidate_dirs:
+        patch_file = os.path.join(cdir, "cordis.patch.yml")
+        existing_entries: List[Any] = []
+        if os.path.isfile(patch_file):
+            try:
+                content = textio.read_text(patch_file, strict=False)
+                if content.strip():
+                    loaded = yaml.load(content)
+                    if isinstance(loaded, list):
+                        existing_entries = loaded
+                    elif isinstance(loaded, dict):
+                        existing_entries = [loaded]
+            except (OSError, ValueError, TypeError, KeyError, AttributeError) as exc:
+                messages.append(f"left {patch_file} alone: cannot parse YAML ({exc})")
+                statuses.append("failed")
+                continue
+
+        matched_idx = -1
+        for idx, item in enumerate(existing_entries):
+            if isinstance(item, dict) and item.get("id") == "along-hooks-bridge":
+                matched_idx = idx
+                break
+
+        changed = False
+        if matched_idx >= 0:
+            cur_item = existing_entries[matched_idx]
+            cur_config = cur_item.get("config") if isinstance(cur_item, dict) else None
+            if cur_item.get("name") != expected_patch["name"] or cur_config != expected_patch["config"]:
+                existing_entries[matched_idx] = dict(expected_patch)
+                changed = True
+        else:
+            existing_entries.append(dict(expected_patch))
+            changed = True
+
+        if not changed:
+            messages.append(f"{patch_file}: already up to date")
+            statuses.append("present")
+            continue
+
+        changed_any = True
+        if dry_run:
+            messages.append(f"would update {patch_file} with Along DSH hook bridge")
+            statuses.append("dry-run")
+            continue
+
+        try:
+            os.makedirs(cdir, exist_ok=True)
+            import io
+            buf = io.StringIO()
+            yaml.dump(existing_entries, buf)
+            textio.write_text(patch_file, buf.getvalue(), newline="\n")
+            messages.append(f"updated {patch_file} with Along DSH hook bridge")
+            statuses.append("installed")
+        except OSError as exc:
+            messages.append(f"cannot write {patch_file}: {exc}")
+            statuses.append("failed")
+
+    if any(s == "failed" for s in statuses):
+        return "failed", "; ".join(messages)
+    if any(s == "installed" for s in statuses):
+        return "installed", "; ".join(messages)
+    if any(s == "dry-run" for s in statuses):
+        return "dry-run", "; ".join(messages)
+    return "present", "; ".join(messages) if messages else "no DSH profiles configured"
+
+
 
 def _apply_json_settings(
     config_file: str,

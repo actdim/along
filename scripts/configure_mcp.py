@@ -47,7 +47,7 @@ Behaviour:
 
 Homes (each defaults to the standard location under the user home):
   --user-home DIR        --claude-home DIR        --codex-home DIR
-  --opencode-home DIR    --antigravity-home DIR
+  --opencode-home DIR    --antigravity-home DIR   --dsh-home DIR
 """
 
 
@@ -63,6 +63,7 @@ def main():
     home_flags = {
         "--user-home": "user", "--claude-home": "claude", "--codex-home": "codex",
         "--opencode-home": "opencode", "--antigravity-home": "antigravity",
+        "--dsh-home": "dsh",
     }
 
     index = 0

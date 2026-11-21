@@ -34,6 +34,7 @@ RUNTIME_MATRIX: Dict[str, Dict[str, Any]] = {
     "codex": {"skills": "auto (~/.codex)", "runtime_hooks": True},
     "cowork": {"skills": "not loaded (account plugins only)", "runtime_hooks": False},
     "opencode": {"skills": "auto (~/.config/opencode)", "runtime_hooks": True},
+    "dsh": {"skills": "auto (~/.dsh/skills)", "runtime_hooks": True},
     "cursor": {"skills": "rules only", "runtime_hooks": False},
     "unknown": {"skills": "unknown", "runtime_hooks": False},
 }
@@ -62,7 +63,11 @@ def is_cowork_env(env: Optional[Mapping[str, str]] = None) -> bool:
 CLAUDE_REQUIRED_EVENTS: Tuple[str, ...] = ("PreToolUse", "Stop")
 
 #: Hook adapter runtime name for each `detect_agent` name, where they differ.
-HOOK_RUNTIME_NAMES: Dict[str, str] = {"claude-code": "claude"}
+HOOK_RUNTIME_NAMES: Dict[str, str] = {
+    "claude-code": "claude",
+    "deepseek": "dsh",
+    "deepseek-harness": "dsh",
+}
 
 
 def _claude_settings_files(repo_root: Optional[str]) -> List[str]:
@@ -171,12 +176,25 @@ def along_hooks_registered(runtime: str, repo_root: Optional[str] = None) -> boo
         ]
         if repo_root:
             candidates.append(os.path.join(repo_root, ".opencode", "plugins", "along-gates.js"))
+    elif runtime in ("dsh", "deepseek", "deepseek-harness"):
+        base_dsh = os.environ.get("DSH_HOME") or os.path.join(home, ".dsh")
+        candidates = [
+            os.path.join(base_dsh, "profiles", "desktop", "cordis.patch.yml"),
+            os.path.join(base_dsh, "profiles", "headless", "cordis.patch.yml"),
+        ]
+        if repo_root:
+            candidates.append(os.path.join(repo_root, ".dsh", "cordis.patch.yml"))
+            candidates.append(os.path.join(repo_root, "cordis.patch.yml"))
     for path in candidates:
         try:
             with open(path, "r", encoding="utf-8") as handle:
                 content = handle.read()
                 if runtime == "opencode":
                     if ("along-gates" in content or "along_hook" in content) and "setup" in content:
+                        return True
+                    continue
+                if runtime in ("dsh", "deepseek", "deepseek-harness"):
+                    if "along-hooks-bridge" in content or "dsh-hooks-claude-code" in content:
                         return True
                     continue
                 if "along_hook" in content:
