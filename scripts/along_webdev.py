@@ -140,8 +140,12 @@ def main(argv: Optional[List[str]] = None) -> int:
     p_session.add_argument("--issue", default=None, help="Issue key to attribute session")
     p_session.add_argument("--headed", action="store_true", help="Launch browser in headed mode")
     p_session.add_argument("--as", dest="save_as", default=None, help="Output scenario path for save")
-    p_session.add_argument("--step", default=None, help="JSON or YAML step payload for step")
-    p_session.add_argument("--batch", default=None, help="JSON or YAML array of steps for batch")
+    p_session.add_argument("--step", nargs="+", default=None, help="JSON or YAML step payload, or key=value, or @file")
+    p_session.add_argument("--batch", nargs="+", default=None, help="JSON or YAML array of steps, or @file")
+    p_session.add_argument("--goto", default=None, help="Direct navigation step shortcut")
+    p_session.add_argument("--click", default=None, help="Direct click selector shortcut")
+    p_session.add_argument("--fill", nargs=2, metavar=("LOCATOR", "TEXT"), help="Direct fill shortcut (LOCATOR TEXT)")
+    p_session.add_argument("--screenshot", nargs="?", const="", default=None, help="Direct screenshot step shortcut")
     p_session.add_argument("--json", action="store_true", help="Emit JSON output")
 
     # run
@@ -223,4 +227,7 @@ def main(argv: Optional[List[str]] = None) -> int:
 
 
 if __name__ == "__main__":
-    sys.exit(main())
+    try:
+        sys.exit(main())
+    except KeyboardInterrupt:
+        sys.exit(130)

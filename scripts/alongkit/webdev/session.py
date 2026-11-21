@@ -147,7 +147,11 @@ def create_browser_session(
 
     bp = browser.launch_cft(headless=not headed, repo_root=repo_root)
     pw, b_inst = browser.connect_playwright(bp)
-    page = b_inst.new_page()
+    contexts = getattr(b_inst, "contexts", [])
+    if contexts and contexts[0].pages:
+        page = contexts[0].pages[0]
+    else:
+        page = b_inst.new_page()
     if allowed_origins:
         setup_origin_guard(page, allowed_origins)
     return bp, (pw, page)

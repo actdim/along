@@ -164,6 +164,8 @@ def _reexec(command: List[str], missing_exit_code: int, guard: str = GUARD_ENV,
             completed = subprocess.run(command, env=env)
         else:
             completed = subprocess.run(command, env=env, input=stdin_data)
+    except KeyboardInterrupt:
+        sys.exit(130)
     except OSError as exc:
         print(f"[Error] could not start {command[0]}: {exc}\n{_INSTALL_HINT}", file=sys.stderr)
         sys.exit(missing_exit_code)

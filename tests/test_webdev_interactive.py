@@ -168,24 +168,81 @@ class TestInteractiveSessionDaemon(unittest.TestCase):
         self.assertTrue(stop_res["ok"])
         self.assertIsNone(daemon.read_session_info(self.temp_repo))
 
-    def test_create_browser_session_interface(self):
+    def test_create_browser_session_reuses_existing_page(self):
         from unittest.mock import MagicMock, patch
         from alongkit.webdev import session
 
         mock_bp = MagicMock()
         mock_pw = MagicMock()
         mock_b_inst = MagicMock()
-        mock_page = MagicMock()
-        mock_b_inst.new_page.return_value = mock_page
+        mock_ctx = MagicMock()
+        mock_existing_page = MagicMock()
+        mock_ctx.pages = [mock_existing_page]
+        mock_b_inst.contexts = [mock_ctx]
 
         with patch("alongkit.webdev.browser.launch_cft", return_value=mock_bp) as p_launch, \
              patch("alongkit.webdev.browser.connect_playwright", return_value=(mock_pw, mock_b_inst)) as p_conn:
             bp, (pw, page) = session.create_browser_session(self.temp_repo, headed=True, allowed_origins=["http://localhost:3000"])
             self.assertEqual(bp, mock_bp)
             self.assertEqual(pw, mock_pw)
-            self.assertEqual(page, mock_page)
+            self.assertEqual(page, mock_existing_page)
+            mock_b_inst.new_page.assert_not_called()
             p_launch.assert_called_once_with(headless=False, repo_root=self.temp_repo)
             p_conn.assert_called_once_with(mock_bp)
+
+    def test_create_browser_session_fallback_new_page(self):
+        from unittest.mock import MagicMock, patch
+        from alongkit.webdev import session
+
+        mock_bp = MagicMock()
+        mock_pw = MagicMock()
+        mock_b_inst = MagicMock()
+        mock_b_inst.contexts = []
+        mock_fallback_page = MagicMock()
+        mock_b_inst.new_page.return_value = mock_fallback_page
+
+        with patch("alongkit.webdev.browser.launch_cft", return_value=mock_bp), \
+             patch("alongkit.webdev.browser.connect_playwright", return_value=(mock_pw, mock_b_inst)):
+            bp, (pw, page) = session.create_browser_session(self.temp_repo, headed=False)
+            self.assertEqual(page, mock_fallback_page)
+            mock_b_inst.new_page.assert_called_once()
+
+    def test_normalize_step_payload(self):
+        # 1. Standard dict
+        self.assertEqual(daemon.normalize_step_payload({"goto": "/home"}), {"goto": "/home"})
+
+        # 2. cmd.exe split args with single quotes
+        cmd_tokens = ["'{\"goto\":", "https://www.google.com}'"]
+        parsed = daemon.normalize_step_payload(cmd_tokens)
+        self.assertEqual(parsed, {"goto": "https://www.google.com"})
+
+        # 3. Outer quotes wrapped string
+        self.assertEqual(daemon.normalize_step_payload("'{\"click\": \"button\"}'"), {"click": "button"})
+
+        # 4. Key=value shorthand
+        self.assertEqual(daemon.normalize_step_payload("goto=https://example.com"), {"goto": "https://example.com"})
+
+        # 5. File reference
+        step_file = os.path.join(self.temp_repo, "step.json")
+        with open(step_file, "w", encoding="utf-8") as f:
+            f.write('{"fill": {"locator": "input", "text": "hello"}}')
+        self.assertEqual(
+            daemon.normalize_step_payload(f"@{step_file}"),
+            {"fill": {"locator": "input", "text": "hello"}}
+        )
+
+    def test_normalize_batch_payload(self):
+        # 1. Pre-parsed dict list
+        self.assertEqual(daemon.normalize_batch_payload([{"goto": "/a"}, {"click": "#b"}]), [{"goto": "/a"}, {"click": "#b"}])
+
+        # 2. JSON array string
+        self.assertEqual(daemon.normalize_batch_payload('[{"goto": "/a"}, {"click": "#b"}]'), [{"goto": "/a"}, {"click": "#b"}])
+
+        # 3. File reference
+        batch_file = os.path.join(self.temp_repo, "batch.json")
+        with open(batch_file, "w", encoding="utf-8") as f:
+            f.write('[{"goto": "/test"}]')
+        self.assertEqual(daemon.normalize_batch_payload(f"@{batch_file}"), [{"goto": "/test"}])
 
 
 

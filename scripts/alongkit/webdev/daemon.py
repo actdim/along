@@ -383,6 +383,7 @@ def run_daemon_worker(
             time.sleep(0.5)
     except (KeyboardInterrupt, SystemExit):
         server.shutdown()
+        print("\n[Along WebDev] Session worker terminated.")
     return 0
 
 
@@ -397,7 +398,15 @@ def session_start(
     """Start interactive session daemon."""
     existing = read_session_info(repo_root)
     if existing:
-        return {"ok": True, "already_running": True, "session": existing}
+        pid = existing.get("pid")
+        from .services import is_pid_alive
+        if pid and is_pid_alive(pid):
+            try:
+                _dispatch_request(repo_root, "/status", method="GET")
+                return {"ok": True, "already_running": True, "session": existing}
+            except (RuntimeError, OSError):
+                pass
+        session_stop(repo_root)
 
     if spawn_process:
         script_path = os.path.join(repo_root, "scripts", "along_webdev.py")
@@ -484,7 +493,14 @@ def session_save(
 
 def session_status(repo_root: str) -> Dict[str, Any]:
     """Check status of active session."""
-    return _dispatch_request(repo_root, "/status", method="GET")
+    info = read_session_info(repo_root)
+    if not info:
+        return {"ok": True, "alive": False, "steps_count": 0}
+    try:
+        return _dispatch_request(repo_root, "/status", method="GET")
+    except (RuntimeError, OSError):
+        session_stop(repo_root)
+        return {"ok": True, "alive": False, "steps_count": 0}
 
 
 def session_stop(repo_root: str) -> Dict[str, Any]:
@@ -513,6 +529,89 @@ def session_stop(repo_root: str) -> Dict[str, Any]:
             pass
 
     return {"ok": True, "stopped": True, "dispatch_result": res}
+
+
+def normalize_step_payload(raw: Any) -> Dict[str, Any]:
+    """Parse step payload from string, list of tokens, @file reference, or shorthand."""
+    if isinstance(raw, list):
+        raw = " ".join(raw)
+    if not isinstance(raw, str):
+        if isinstance(raw, dict):
+            return raw
+        raise ValueError(f"Invalid step payload type: {type(raw)}")
+
+    raw = raw.strip()
+    if (raw.startswith("'") and raw.endswith("'")) or (raw.startswith('"') and raw.endswith('"')):
+        raw = raw[1:-1].strip()
+
+    target_file = raw[1:] if raw.startswith("@") else raw
+    if os.path.isfile(target_file):
+        with open(target_file, "r", encoding="utf-8") as f:
+            raw = f.read().strip()
+        if (raw.startswith("'") and raw.endswith("'")) or (raw.startswith('"') and raw.endswith('"')):
+            raw = raw[1:-1].strip()
+
+    try:
+        parsed = json.loads(raw)
+        if isinstance(parsed, dict):
+            return parsed
+    except ValueError:
+        pass
+
+    try:
+        yaml = ruamel.yaml.YAML(typ="safe")
+        parsed = yaml.load(raw)
+        if isinstance(parsed, dict):
+            return parsed
+    except (ruamel.yaml.YAMLError, ValueError, TypeError):
+        pass
+
+    if "=" in raw and "{" not in raw and "\n" not in raw:
+        k, v = raw.split("=", 1)
+        k, v = k.strip(), v.strip()
+        if (v.startswith("'") and v.endswith("'")) or (v.startswith('"') and v.endswith('"')):
+            v = v[1:-1]
+        return {k: v}
+
+    raise ValueError(f"Could not parse step payload as JSON, YAML, or key=value: {raw}")
+
+
+def normalize_batch_payload(raw: Any) -> List[Dict[str, Any]]:
+    """Parse batch steps payload from string, list of tokens, @file reference, or list."""
+    if isinstance(raw, list):
+        if all(isinstance(item, dict) for item in raw):
+            return raw
+        raw = " ".join(raw)
+    if not isinstance(raw, str):
+        raise ValueError(f"Invalid batch payload type: {type(raw)}")
+
+    raw = raw.strip()
+    if (raw.startswith("'") and raw.endswith("'")) or (raw.startswith('"') and raw.endswith('"')):
+        raw = raw[1:-1].strip()
+
+    target_file = raw[1:] if raw.startswith("@") else raw
+    if os.path.isfile(target_file):
+        with open(target_file, "r", encoding="utf-8") as f:
+            raw = f.read().strip()
+        if (raw.startswith("'") and raw.endswith("'")) or (raw.startswith('"') and raw.endswith('"')):
+            raw = raw[1:-1].strip()
+
+    try:
+        parsed = json.loads(raw)
+        if isinstance(parsed, list):
+            return parsed
+    except ValueError:
+        pass
+
+    try:
+        yaml = ruamel.yaml.YAML(typ="safe")
+        parsed = yaml.load(raw)
+        if isinstance(parsed, list):
+            return parsed
+    except (ruamel.yaml.YAMLError, ValueError, TypeError):
+        pass
+
+    raise ValueError(f"Could not parse batch payload as JSON or YAML array: {raw}")
 
 
 def handle_session_cli(args: Any) -> int:
@@ -549,14 +648,26 @@ def handle_session_cli(args: Any) -> int:
             return 1
 
     elif action == "step":
-        if not args.step:
-            print("[Error] --step argument required for 'session step'.", file=sys.stderr)
+        step_data = None
+        if getattr(args, "goto", None):
+            step_data = {"goto": args.goto}
+        elif getattr(args, "click", None):
+            step_data = {"click": args.click}
+        elif getattr(args, "fill", None):
+            step_data = {"fill": {"locator": args.fill[0], "text": args.fill[1]}}
+        elif getattr(args, "screenshot", None) is not None:
+            shot_path = args.screenshot.strip()
+            step_data = {"screenshot": {"path": shot_path}} if shot_path else {"screenshot": True}
+        elif getattr(args, "step", None):
+            try:
+                step_data = normalize_step_payload(args.step)
+            except ValueError as err:
+                print(f"[Error] {err}", file=sys.stderr)
+                return 2
+        else:
+            print("[Error] Step specification required. Pass --goto, --click, --fill, --screenshot, or --step.", file=sys.stderr)
             return 2
-        try:
-            step_data = json.loads(args.step)
-        except ValueError:
-            yaml = ruamel.yaml.YAML(typ="safe")
-            step_data = yaml.load(args.step)
+
         try:
             res = session_step(repo_root, step_data)
             if getattr(args, "json", False):
@@ -569,14 +680,14 @@ def handle_session_cli(args: Any) -> int:
             return 1
 
     elif action == "batch":
-        if not args.batch:
+        if not getattr(args, "batch", None):
             print("[Error] --batch argument required for 'session batch'.", file=sys.stderr)
             return 2
         try:
-            batch_data = json.loads(args.batch)
-        except ValueError:
-            yaml = ruamel.yaml.YAML(typ="safe")
-            batch_data = yaml.load(args.batch)
+            batch_data = normalize_batch_payload(args.batch)
+        except ValueError as err:
+            print(f"[Error] {err}", file=sys.stderr)
+            return 2
         try:
             res = session_batch(repo_root, batch_data)
             if getattr(args, "json", False):

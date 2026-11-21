@@ -1,7 +1,7 @@
 # Active Issues
 
 ## Active
-<!-- No active issues -->
+- [ ] `(bug)` [webdev-session-ux-improvements](ISSUES/bug--webdev-session-ux-improvements.md) - plan approved
 
 ## Backlog
 - [ ] `(debt)` [autonomous-non-elevation-invariants](ISSUES/debt--autonomous-non-elevation-invariants.md)
