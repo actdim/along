@@ -3,7 +3,8 @@ protocol: along
 protocol_version: "4.9.1"
 slug: opencode-deepseek-cache-configuration-audit
 type: task
-status: in-progress
+status: done
+completed: 2026-11-22
 priority: medium
 created: 2026-11-22
 updated: 2026-11-22
