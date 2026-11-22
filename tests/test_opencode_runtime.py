@@ -220,11 +220,11 @@ class TestOpenCodeNodePluginContract(unittest.TestCase):
             "// Invoke shell.env with V1 contract (input, output)\n"
             "const v1Output = { env: {} };\n"
             "await handlers['shell.env']({ cwd: process.cwd() }, v1Output);\n\n"
-            "// Invoke session lifecycle handlers defensively\n"
-            "try { await handlers['session.idle']({ sessionID: 'ses-1' }); } catch (e) { assert.ok(!String(e).includes('TypeError')); }\n"
-            "try { await handlers['session.stop']({ sessionID: 'ses-1' }); } catch (e) { assert.ok(!String(e).includes('TypeError')); }\n"
-            "try { await handlers['session.prompt']({ prompt: 'test prompt' }); } catch (e) { assert.ok(!String(e).includes('TypeError')); }\n"
-            "try { await handlers['event.subscribe']({ type: 'session.idle' }); } catch (e) { assert.ok(!String(e).includes('TypeError')); }\n\n"
+            "// Invoke session lifecycle handlers defensively without throwing\n"
+            "await handlers['session.idle']({ sessionID: 'ses-1' });\n"
+            "await handlers['session.stop']({ sessionID: 'ses-1' });\n"
+            "await handlers['session.prompt']({ prompt: 'test prompt' });\n"
+            "await handlers['event.subscribe']({ type: 'session.idle' });\n\n"
             "console.log('NODE_CONTRACT_OK');\n"
         )
 
@@ -236,6 +236,19 @@ class TestOpenCodeNodePluginContract(unittest.TestCase):
         )
         self.assertEqual(res.returncode, 0, f"Node contract failed:\nSTDOUT: {res.stdout}\nSTDERR: {res.stderr}")
         self.assertIn("NODE_CONTRACT_OK", res.stdout)
+
+
+    def test_opencode_plugin_windows_hide(self):
+        plugin_src = os.path.join(REPO_ROOT, "scripts", "alongkit", "hooks", "opencode_plugin.js")
+        content = textio.read_text(plugin_src, strict=False)
+        self.assertIn("windowsHide: true", content, "opencode_plugin.js MUST specify windowsHide: true for spawnSync")
+
+    def test_proc_windows_no_window_flag(self):
+        from alongkit import proc
+        if os.name == "nt":
+            kw = proc.spawn_group_kwargs()
+            flag = getattr(subprocess, "CREATE_NO_WINDOW", 0x08000000)
+            self.assertTrue(bool(kw.get("creationflags", 0) & flag), "spawn_group_kwargs MUST include CREATE_NO_WINDOW on Windows")
 
 
 if __name__ == "__main__":

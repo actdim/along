@@ -115,6 +115,9 @@ class DeepSeekHarnessRunner(BaseRunner):
         messages: List[str] = []
         total_input_tokens = 0
         total_output_tokens = 0
+        total_cache_read_tokens = 0
+        total_cache_write_tokens = 0
+        total_reasoning_tokens = 0
         failed = False
         handoff_note: Optional[str] = None
 
@@ -131,8 +134,11 @@ class DeepSeekHarnessRunner(BaseRunner):
                         failed = True
                     raw_usage = single_data.get("usage")
                     if isinstance(raw_usage, dict):
-                        total_input_tokens = int(raw_usage.get("input_tokens") or 0)
-                        total_output_tokens = int(raw_usage.get("output_tokens") or 0)
+                        total_input_tokens = int(raw_usage.get("input_tokens") or raw_usage.get("prompt_tokens") or 0)
+                        total_output_tokens = int(raw_usage.get("output_tokens") or raw_usage.get("completion_tokens") or 0)
+                        total_cache_read_tokens = int(raw_usage.get("cache_read_tokens") or raw_usage.get("prompt_cache_hit_tokens") or 0)
+                        total_cache_write_tokens = int(raw_usage.get("cache_write_tokens") or raw_usage.get("prompt_cache_miss_tokens") or 0)
+                        total_reasoning_tokens = int(raw_usage.get("reasoning_tokens") or 0)
                     if single_data.get("text"):
                         messages.append(str(single_data["text"]))
                     if single_data.get("handoff_note"):
@@ -179,9 +185,15 @@ class DeepSeekHarnessRunner(BaseRunner):
                         if isinstance(toks, dict):
                             in_tok = toks.get("input") or 0
                             out_tok = toks.get("output") or 0
+                            c_read = toks.get("cache_read") or (toks.get("cache") or {}).get("read") or toks.get("prompt_cache_hit_tokens") or 0
+                            c_write = toks.get("cache_write") or (toks.get("cache") or {}).get("write") or toks.get("prompt_cache_miss_tokens") or 0
+                            reas = toks.get("reasoning") or toks.get("reasoning_tokens") or 0
                             try:
                                 total_input_tokens += int(in_tok)
                                 total_output_tokens += int(out_tok)
+                                total_cache_read_tokens += int(c_read)
+                                total_cache_write_tokens += int(c_write)
+                                total_reasoning_tokens += int(reas)
                             except (ValueError, TypeError):
                                 pass
 
@@ -193,8 +205,14 @@ class DeepSeekHarnessRunner(BaseRunner):
                 if "usage" in data and isinstance(data["usage"], dict):
                     u = data["usage"]
                     try:
-                        total_input_tokens += int(u.get("input_tokens") or 0)
-                        total_output_tokens += int(u.get("output_tokens") or 0)
+                        total_input_tokens += int(u.get("input_tokens") or u.get("prompt_tokens") or 0)
+                        total_output_tokens += int(u.get("output_tokens") or u.get("completion_tokens") or 0)
+                        c_read = u.get("cache_read_tokens") or u.get("prompt_cache_hit_tokens") or 0
+                        c_write = u.get("cache_write_tokens") or u.get("prompt_cache_miss_tokens") or 0
+                        reas = u.get("reasoning_tokens") or 0
+                        total_cache_read_tokens += int(c_read)
+                        total_cache_write_tokens += int(c_write)
+                        total_reasoning_tokens += int(reas)
                     except (ValueError, TypeError):
                         pass
 
@@ -203,6 +221,9 @@ class DeepSeekHarnessRunner(BaseRunner):
             usage = {
                 "input_tokens": total_input_tokens,
                 "output_tokens": total_output_tokens,
+                "cache_read_tokens": total_cache_read_tokens,
+                "cache_write_tokens": total_cache_write_tokens,
+                "reasoning_tokens": total_reasoning_tokens,
             }
 
         if exit_code == 0 and not failed:

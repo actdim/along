@@ -444,7 +444,7 @@ class TestOutputParsing(unittest.TestCase):
             json.dumps({"type": "session", "id": "sess-1"}),
             json.dumps({"type": "text", "part": {"type": "text", "text": "Analyzing repo structure..."}}),
             json.dumps({"type": "tool_call", "part": {"type": "tool", "input": {"path": "src/module.py"}}}),
-            json.dumps({"type": "step_finish", "part": {"tokens": {"input": 1500, "output": 250}}}),
+            json.dumps({"type": "step_finish", "part": {"tokens": {"input": 1500, "output": 250, "cache_read": 12000, "reasoning": 400}}}),
             json.dumps({"type": "text", "part": {"type": "text", "text": " Done."}}),
             json.dumps({"handoff_note": "Refactored module."}),
         ])
@@ -454,6 +454,8 @@ class TestOutputParsing(unittest.TestCase):
         self.assertIn("src/module.py", parsed["changed_files"])
         self.assertEqual(parsed["usage"]["input_tokens"], 1500)
         self.assertEqual(parsed["usage"]["output_tokens"], 250)
+        self.assertEqual(parsed["usage"]["cache_read_tokens"], 12000)
+        self.assertEqual(parsed["usage"]["reasoning_tokens"], 400)
         self.assertEqual(parsed["handoff_note"], "Refactored module.")
 
     def test_deepseek_is_error_parsing(self) -> None:

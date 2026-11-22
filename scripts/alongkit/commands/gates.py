@@ -149,10 +149,10 @@ def handle_gates_command(repo_root: str, args: List[str]):
         print()
         print(gatestats.format_loops(gatestats.loops(repo_root, since)))
         return 0
-    if subcmd in ("denials", "ack"):
+    if subcmd in ("denials", "ack", "approve"):
         return _handle_denials(repo_root, subcmd, args[1:])
     if subcmd != "check":
-        raise ValidationError(f"Unknown gates subcommand: {subcmd}. Use check, stats, denials or ack.")
+        raise ValidationError(f"Unknown gates subcommand: {subcmd}. Use check, stats, denials, ack or approve.")
 
     check_args = args[1:]
     parser = argparse.ArgumentParser(
@@ -237,14 +237,18 @@ def _denials_target(repo_root: str, slug: Optional[str]) -> Tuple[Optional[str],
 
 
 def _handle_denials(repo_root: str, subcmd: str, args: List[str]) -> int:
-    """`along gates denials` / `along gates ack`. [feat--anti-silent-fallback-gate]"""
+    """`along gates denials` / `along gates ack` / `along gates approve`. [feat--anti-silent-fallback-gate]"""
     from .. import session
     parser = argparse.ArgumentParser(prog=f"along gates {subcmd}", allow_abbrev=False)
-    parser.add_argument("--slug", default=None, help="Issue slug (default: the issue this session is bound to)")
+    parser.add_argument("--slug", "--issue", dest="slug", default=None, help="Issue slug (default: the issue this session is bound to)")
     if subcmd == "ack":
         parser.add_argument("ids", nargs="*", help="Denial ids (see 'along gates denials')")
         parser.add_argument("--all", action="store_true", help="Acknowledge every open denial")
         parser.add_argument("--note", default=None, help="What the user was told was not done, and why")
+    elif subcmd == "approve":
+        parser.add_argument("ids", nargs="*", help="Denial ids (see 'along gates denials')")
+        parser.add_argument("--all", action="store_true", help="Approve every pending denial")
+        parser.add_argument("--reason", default=None, help="Approval rationale (defaults to 'User approved')")
     else:
         parser.add_argument("--json", action="store_true", help="Emit the denials as JSON")
     opts = parser.parse_args(args)
@@ -295,6 +299,63 @@ def _handle_denials(repo_root: str, subcmd: str, args: List[str]) -> int:
             print(f"    {d.get('target') or d.get('tool') or ''}")
             if d.get("note"):
                 print(f"    note: {d['note']}")
+        return 0
+
+    if subcmd == "approve":
+        reason = (opts.reason or "").strip() or "User approved"
+        if opts.slug:
+            ctx, slug = _denials_target(repo_root, opts.slug)
+            if not ctx or not slug:
+                what = f"issue '{slug}' has no blackboard" if slug else "this session is not bound to an issue"
+                print(f"[Error] No gate denials to read: {what} (along start <slug>, or --slug).", file=sys.stderr)
+                return 2
+            items = session.denial_status(ctx, slug)
+            for d in items:
+                d["ctx"], d["slug"] = ctx, slug
+        else:
+            items = predicates.session_denials(repo_root, key)
+            stop_items = predicates.stop_denials(repo_root, key)
+            known_ids = {d["id"] for d in items}
+            for sd in stop_items:
+                if sd["id"] not in known_ids:
+                    items.append(sd)
+            cur_ctx, cur_slug = session.bound_blackboard(repo_root, key)
+            if not cur_slug and not items:
+                print("[Error] No gate denials to read: this session is not bound to an issue (along start <slug>, or --slug).", file=sys.stderr)
+                return 2
+
+        if opts.all:
+            chosen = [d for d in items if d.get("state") != session.DENIAL_RESOLVED]
+        else:
+            known = {d["id"]: d for d in items}
+            missing = [i for i in opts.ids if i not in known]
+            if not opts.ids or missing:
+                print(f"[Error] Name denial ids or pass --all; unknown: {', '.join(missing) or '(none given)'}. "
+                      "See 'along gates denials'.", file=sys.stderr)
+                return 2
+            chosen = [known[i] for i in opts.ids if known[i].get("state") != session.DENIAL_RESOLVED]
+
+        if not chosen:
+            target_name = opts.slug or (cur_slug if 'cur_slug' in locals() and cur_slug else "current session")
+            print(f"-> No pending gate denials to approve for '{target_name}'.")
+            return 0
+
+        from collections import defaultdict
+        by_slug = defaultdict(list)
+        stop_ids = {d["id"] for d in predicates.stop_denials(repo_root, key)}
+        for d in chosen:
+            if d["id"] in stop_ids:
+                predicates.approve_stop_denials(repo_root, key, [d["id"]], reason)
+            else:
+                d_ctx = d.get("ctx") or (ctx if 'ctx' in locals() else repo_root)
+                d_slug = d.get("slug") or (slug if 'slug' in locals() else "")
+                session.append_event(d_ctx, d_slug, key, "resolve", extra={"id": d["id"], "via": "user-approval", "note": reason})
+            session.trace_event(repo_root, key, f"approved denial {d['id']} [{d['gate']}]: {reason}")
+            d_slug = d.get("slug") or (slug if 'slug' in locals() else "") or "current session"
+            by_slug[d_slug].append(d)
+
+        for s, s_items in by_slug.items():
+            print(f"-> Approved {len(s_items)} gate denial(s) of '{s}': {session.format_denials(s_items)}")
         return 0
 
     note = (opts.note or "").strip()

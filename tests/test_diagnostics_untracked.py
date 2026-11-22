@@ -182,8 +182,8 @@ class TestDoctorReport(GitRepoCase):
         with contextlib.redirect_stdout(out), contextlib.redirect_stderr(io.StringIO()):
             try:
                 along_exec.handle_doctor_command(self.root, [])
-            except SystemExit:
-                pass
+            except SystemExit as exc:
+                self.assertIn(exc.code, (None, 0, 1), f"Unexpected doctor exit code: {exc.code}")
         return out.getvalue()
 
     def test_doctor_warns_about_tracked_diagnostics(self):

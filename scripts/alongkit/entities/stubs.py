@@ -108,42 +108,46 @@ def validate_issue_completion(content: str, status: str = "done") -> Tuple[bool,
     if unchecked:
         reasons.append(
             f"Found {len(unchecked)} uncompleted checklist item(s) (- [ ]): "
-            + "; ".join(f"'- [ ] {item}'" for item in unchecked[:3])
-            + (f" and {len(unchecked) - 3} more" if len(unchecked) > 3 else "")
+            + "; ".join(f"'- [ ] {item}'" for item in unchecked)
         )
 
     return (len(reasons) == 0, reasons)
 
 
 def audit_stub_issues(repo_root: str) -> List[Dict[str, Any]]:
-    """Audit all active and completed issues in the repository for stubs or incomplete criteria."""
+    """Audit all active and completed issues in the repository and subprojects for stubs or incomplete criteria."""
     from .. import repo, textio
     from .query import scan_issues
 
-    issues = scan_issues(repo_root, include_done=True)
+    contexts = repo.find_agent_contexts(repo_root)
+    if not contexts:
+        contexts = [repo_root]
+
     findings: List[Dict[str, Any]] = []
-    for iss in issues:
-        fpath = iss.get("file_path")
-        if not fpath or not os.path.isfile(fpath):
-            continue
-        try:
-            content = textio.read_text(fpath, strict=False)
-        except OSError:
-            continue
-        is_stub, stub_reasons = is_issue_stub(content)
-        is_done = iss.get("done") or iss.get("status") in DELIVERED_ISSUE_STATUSES
-        comp_ok, comp_reasons = validate_issue_completion(content, iss.get("status", "open")) if is_done else (True, [])
-        all_reasons = list(dict.fromkeys(stub_reasons + comp_reasons))
-        if all_reasons:
-            rel = repo.safe_relpath(fpath, repo_root).replace("\\", "/")
-            findings.append({
-                "slug": iss["slug"],
-                "type": iss.get("type", "task"),
-                "status": iss.get("status", "open"),
-                "path": rel,
-                "is_done": is_done,
-                "reasons": all_reasons,
-            })
+    for ctx in contexts:
+        issues = scan_issues(ctx, include_done=True)
+        for iss in issues:
+            fpath = iss.get("file_path")
+            if not fpath or not os.path.isfile(fpath):
+                continue
+            try:
+                content = textio.read_text(fpath, strict=False)
+            except OSError:
+                continue
+            is_stub, stub_reasons = is_issue_stub(content)
+            is_done = iss.get("done") or iss.get("status") in DELIVERED_ISSUE_STATUSES
+            comp_ok, comp_reasons = validate_issue_completion(content, iss.get("status", "open")) if is_done else (True, [])
+            all_reasons = list(dict.fromkeys(stub_reasons + comp_reasons))
+            if all_reasons:
+                rel = repo.safe_relpath(fpath, repo_root).replace("\\", "/")
+                findings.append({
+                    "slug": iss["slug"],
+                    "type": iss.get("type", "task"),
+                    "status": iss.get("status", "open"),
+                    "path": rel,
+                    "is_done": is_done,
+                    "reasons": all_reasons,
+                })
     return findings
 
 

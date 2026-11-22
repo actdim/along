@@ -1369,6 +1369,29 @@ def format_denials(items: List[Dict[str, Any]], limit: int = 5, include_slug: bo
     return "; ".join(parts)
 
 
+def settle_projection_denials(repo_root: str, slug: Optional[str] = None) -> List[str]:
+    """Auto-settle projection_protection denials when projections are regenerated via canonical tools."""
+    key = current_session_key()
+    if not slug:
+        ctx, slug = bound_blackboard(repo_root, key)
+    else:
+        ctx = repo_root
+    if not ctx or not slug:
+        return []
+    denials = denial_status(ctx, slug)
+    settled = []
+    for d in denials:
+        if d.get("state") != DENIAL_RESOLVED and d.get("gate") == "projection_protection":
+            append_event(ctx, slug, key, "resolve", extra={
+                "id": d["id"],
+                "via": "superseded",
+                "note": "Projections regenerated via canonical tool",
+            })
+            trace_event(repo_root, key, f"auto-settled denial {d['id']} [projection_protection]: superseded by canonical tool")
+            settled.append(d["id"])
+    return settled
+
+
 # ---------------------------------------------------------------------------
 # Recorded plan [bug--session-records-not-captured] REQ-1
 # ---------------------------------------------------------------------------

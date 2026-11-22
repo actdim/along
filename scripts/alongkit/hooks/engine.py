@@ -7,10 +7,11 @@ Coordinates gate evaluation, respects shadow vs enforce modes, and logs telemetr
 
 from __future__ import annotations
 
+import os
 import sys
 from typing import List, Optional
 
-from .. import profiles
+from .. import profiles, repo
 from .config import HooksConfig, load_config, record_audit_entry
 from .containment import is_autonomous as check_is_autonomous
 from .declarative import get_all_declarative_gates
@@ -59,6 +60,10 @@ class HookEngine:
     def evaluate(self, event: HookEvent, repo_root: Optional[str] = None) -> GateResult:
         """Run all registered gates against the event."""
         effective_root = repo_root or self.repo_root or event.workspace_root
+        if effective_root and os.path.isdir(effective_root):
+            enclosing = repo.find_hook_root(cwd=effective_root)
+            if enclosing:
+                effective_root = enclosing
         is_auto = (self.config.profile == profiles.PROFILE_AUTONOMOUS
                    or check_is_autonomous(event, repo_root=effective_root))
 

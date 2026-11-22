@@ -210,6 +210,24 @@ class TestScenarioExecutionExitCodes(unittest.TestCase):
         self.assertEqual(code, 0)
         self.assertEqual(rep["summary"]["passed"], 1)
 
+    def test_failing_step_returns_one(self):
+        scenario = {
+            "meta": {"issue": "feat--test", "title": "Test Fail"},
+            "checks": [
+                {
+                    "id": "C1",
+                    "title": "Check 1",
+                    "steps": [
+                        {"action": "click", "selector": "#btn", "at": {"x": 50, "y": 50}}
+                    ],
+                }
+            ],
+        }
+        code, rep = runner.run_scenario(self.temp_repo, scenario)
+        self.assertEqual(code, 1)
+        self.assertEqual(rep["summary"]["failed"], 1)
+        self.assertIn("Coordinate targeting", rep["results"][0]["reason"])
+
     def test_schema_error_returns_two(self):
         code, _ = runner.run_scenario(self.temp_repo, "not a valid scenario text")
         self.assertEqual(code, 2)

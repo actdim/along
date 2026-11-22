@@ -345,6 +345,9 @@ def _run_lifecycle_command(action: str, cmd: Sequence[str], repo_root: str, mode
             return proc.run_passthrough(list(cmd), cwd=repo_root)
         code, output = _run_tee(cmd, repo_root, env=env)
         if code == 0 and tests_ran(cmd, output, repo_root) == 0:
+            if repo.is_intentional_subproject(repo_root) or entities.ancestor_contexts(repo_root):
+                print("-> tests: none (subproject has no tests)")
+                return 0
             print(_no_tests_message(cmd))
             return NO_TESTS_EXIT_CODE
         _print_misconfiguration(output, code)
@@ -364,8 +367,12 @@ def _run_lifecycle_command(action: str, cmd: Sequence[str], repo_root: str, mode
         saved = False
     code = result.returncode
     if action == "test" and code == 0 and tests_ran(cmd, raw, repo_root) == 0:
-        print(_no_tests_message(cmd))
-        code = NO_TESTS_EXIT_CODE
+        if repo.is_intentional_subproject(repo_root) or entities.ancestor_contexts(repo_root):
+            print("-> tests: none (subproject has no tests)")
+            code = 0
+        else:
+            print(_no_tests_message(cmd))
+            code = NO_TESTS_EXIT_CODE
     else:
         print(result.observation or "")
         if action == "test":
@@ -932,6 +939,7 @@ def _auto_commit_wrapped_work(
     script = repo.resolve_tool_script("along_commit.py", repo_root)
     if not script:
         print("[Error] along_commit.py not found; cannot auto-commit.", file=sys.stderr)
+        print(f"wrap: failed to commit (along_commit.py not found); next: along commit -i {slug}", file=sys.stderr)
         return 1
 
     abs_paths = [os.path.join(top, *p.split("/")) for p in commit_paths]
@@ -947,9 +955,20 @@ def _auto_commit_wrapped_work(
         if result.stderr:
             print(result.stderr.rstrip(), file=sys.stderr)
         print(f"[Error] Auto-commit failed for '{slug}'.", file=sys.stderr)
+        # Unstage only the paths that were staged for this commit to prevent leaving them in the index,
+        # without affecting any unrelated files already in the index.
+        proc.git(["reset", "HEAD", "--", *abs_paths], cwd=top)
+        err_line = result.stderr.strip() if result.stderr else (result.stdout.strip().splitlines()[-1] if result.stdout else "pre-commit gate failed")
+        paths_str = " ".join(commit_paths)
+        print(f"wrap: failed to commit ({err_line}); next: along commit -i {slug} --paths {paths_str}", file=sys.stderr)
         return result.returncode
 
+    sha = ""
+    rev = proc.git(["rev-parse", "--short", "HEAD"], cwd=repo_root)
+    if rev.ok and rev.stdout.strip():
+        sha = f" {rev.stdout.strip()}"
     print(f"-> [OK] Automatically committed {len(commit_paths)} file(s) for '{slug}'.")
+    print(f"wrap: committed{sha}")
     return 0
 
 
@@ -1297,7 +1316,7 @@ def execute_wrap(
             _check_failed()
             print(f"[Error] Wrap aborted: gate denials of '{clean_slug}' are not settled:\n"
                   + "\n".join(f"  - {r}" for r in denial_reasons)
-                  + "\n  See 'along gates denials', or pass --force-reason \"...\".", file=sys.stderr)
+                  + f"\n  See 'along gates denials', run 'along gates approve --issue {clean_slug} --all', or pass --force-reason \"...\".", file=sys.stderr)
             return 2
         if not _force_allowed():
             return 2
@@ -1379,7 +1398,7 @@ def execute_wrap(
             skip_tests = True
 
         if skip_tests:
-            print("-> [Wrap Quality Gate] Only documentation / Along state changes: tests skipped.")
+            print("-> [Wrap Quality Gate] Only documentation / Along state changes: tests skipped. tests: skipped (docs-only change)")
         else:
             wt_before = set(repo.working_tree_changes(repo_root) or [])
             tree_before = testruns.tree_hash(repo_root)

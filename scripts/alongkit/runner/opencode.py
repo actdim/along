@@ -107,6 +107,9 @@ class OpenCodeRunner(BaseRunner):
         messages: List[str] = []
         total_input_tokens = 0
         total_output_tokens = 0
+        total_cache_read_tokens = 0
+        total_cache_write_tokens = 0
+        total_reasoning_tokens = 0
         total_cost: Optional[float] = None
         failed = False
         handoff_note: Optional[str] = None
@@ -150,9 +153,15 @@ class OpenCodeRunner(BaseRunner):
                     if isinstance(toks, dict):
                         in_tok = toks.get("input") or 0
                         out_tok = toks.get("output") or 0
+                        c_read = toks.get("cache_read") or (toks.get("cache") or {}).get("read") or 0
+                        c_write = toks.get("cache_write") or (toks.get("cache") or {}).get("write") or 0
+                        reas = toks.get("reasoning") or 0
                         try:
                             total_input_tokens += int(in_tok)
                             total_output_tokens += int(out_tok)
+                            total_cache_read_tokens += int(c_read)
+                            total_cache_write_tokens += int(c_write)
+                            total_reasoning_tokens += int(reas)
                         except (ValueError, TypeError):
                             pass
                     if "cost" in part and part["cost"] is not None:
@@ -170,6 +179,9 @@ class OpenCodeRunner(BaseRunner):
             usage = {
                 "input_tokens": total_input_tokens,
                 "output_tokens": total_output_tokens,
+                "cache_read_tokens": total_cache_read_tokens,
+                "cache_write_tokens": total_cache_write_tokens,
+                "reasoning_tokens": total_reasoning_tokens,
             }
             if total_cost is not None:
                 usage["cost"] = total_cost
@@ -188,3 +200,40 @@ class OpenCodeRunner(BaseRunner):
             "handoff_note": handoff_note,
             "text": final_text,
         }
+
+
+def get_opencode_session_tokens(session_id: str) -> Optional[Dict[str, Any]]:
+    """Read tokens directly from OpenCode's SQLite database (~/.local/share/opencode/opencode.db)."""
+    import sqlite3
+    db_path = os.path.expanduser("~/.local/share/opencode/opencode.db")
+    if not os.path.isfile(db_path):
+        return None
+    try:
+        conn = sqlite3.connect(db_path, timeout=2.0)
+        cur = conn.cursor()
+        cur.execute(
+            "SELECT tokens_input, tokens_output, tokens_reasoning, tokens_cache_read, tokens_cache_write, cost "
+            "FROM session_v2 WHERE id = ?",
+            (session_id,)
+        )
+        row = cur.fetchone()
+        if not row:
+            cur.execute(
+                "SELECT tokens_input, tokens_output, tokens_reasoning, tokens_cache_read, tokens_cache_write, cost "
+                "FROM session WHERE id = ?",
+                (session_id,)
+            )
+            row = cur.fetchone()
+        conn.close()
+        if row:
+            return {
+                "tokens_input": row[0] or 0,
+                "tokens_output": row[1] or 0,
+                "tokens_reasoning": row[2] or 0,
+                "tokens_cache_read": row[3] or 0,
+                "tokens_cache_write": row[4] or 0,
+                "cost": row[5] or 0.0,
+            }
+    except (sqlite3.Error, OSError):
+        pass
+    return None

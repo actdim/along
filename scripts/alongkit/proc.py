@@ -113,7 +113,8 @@ def run_capture(cmd: Command,
                 tracer: Optional[Any] = None,
                 distill: bool = False,
                 distill_max_lines: Optional[int] = None,
-                distill_max_bytes: Optional[int] = None) -> Result:
+                distill_max_bytes: Optional[int] = None,
+                creationflags: Optional[int] = None) -> Result:
     """Run `cmd`, capture stdout and stderr as UTF-8 text, never raise on decode.
 
     Decoding uses `errors="replace"`, so undecodable bytes surface as replacement
@@ -140,6 +141,15 @@ def run_capture(cmd: Command,
 
     target_cmd = _resolve_cmd(cmd, shell)
 
+    popen_kwargs: Dict[str, Any] = {}
+    if os.name == "nt":
+        popen_flags = creationflags
+        if popen_flags is None:
+            popen_flags = getattr(subprocess, "CREATE_NO_WINDOW", 0x08000000)
+        popen_kwargs["creationflags"] = popen_flags
+    elif creationflags is not None:
+        popen_kwargs["creationflags"] = creationflags
+
     pid: Optional[int] = None
     try:
         proc = subprocess.Popen(
@@ -153,6 +163,7 @@ def run_capture(cmd: Command,
             encoding="utf-8",
             errors="replace",
             env=child_env(base=env) if env is not None else child_env(),
+            **popen_kwargs,
         )
         pid = proc.pid
         stdout_data, stderr_data = proc.communicate(input=stdin_text, timeout=timeout)
@@ -319,10 +330,13 @@ def _as_text(value) -> str:
     return str(value)
 
 
-def spawn_group_kwargs() -> Dict[str, Any]:
+def spawn_group_kwargs(hide_window: bool = True) -> Dict[str, Any]:
     """Return subprocess.Popen keyword arguments to start the child in a new process group."""
     if os.name == "nt":
-        return {"creationflags": subprocess.CREATE_NEW_PROCESS_GROUP}
+        flags = subprocess.CREATE_NEW_PROCESS_GROUP
+        if hide_window:
+            flags |= getattr(subprocess, "CREATE_NO_WINDOW", 0x08000000)
+        return {"creationflags": flags}
     return {"start_new_session": True}
 
 
@@ -345,10 +359,14 @@ def kill_process_tree(popen: Any, grace: float = 5.0) -> None:
 
     if os.name == "nt":
         try:
+            extra_taskkill: Dict[str, Any] = {}
+            if getattr(subprocess, "CREATE_NO_WINDOW", None) is not None:
+                extra_taskkill["creationflags"] = subprocess.CREATE_NO_WINDOW
             subprocess.run(
                 ["taskkill", "/PID", str(pid), "/T", "/F"],
                 capture_output=True,
                 timeout=30,
+                **extra_taskkill,
             )
         except (subprocess.SubprocessError, OSError):
             try:

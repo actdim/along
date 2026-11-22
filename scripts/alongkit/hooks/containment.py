@@ -112,6 +112,7 @@ class ContainmentPolicy:
     on_violation: str = "auto"
 
     def can_write(self, path: str) -> bool:
+        path = canonical(path)
         if any(is_within(path, d) for d in self.denied_roots):
             return False
         if is_within(path, self.root):
@@ -121,6 +122,7 @@ class ContainmentPolicy:
         return any(is_within(path, w) for w in self.write_roots)
 
     def can_read(self, path: str) -> bool:
+        path = canonical(path)
         if any(is_within(path, d) for d in self.denied_roots):
             return False
         if is_within(path, self.root):
@@ -159,15 +161,36 @@ def issue_scope(repo_root: str, session_key: Optional[str] = None) -> Tuple[List
     the issue's own context writable. [bug--subproject-model-overdetection] REQ-8
     """
     ctx, active = session.resolve_bound(repo_root, session_key)
-    issues_dir = os.path.join(repo.state_dir(ctx), "ISSUES")
-    if not os.path.isdir(issues_dir):
-        return [], []
     roots: List[str] = []
     scope: List[str] = []
+
+    # Extra working directories registered in host session binding or blackboard state
+    # [bug--engine-atomicity-and-gate-resilience] REQ-7
+    if session_key:
+        binding = session.load_binding(repo_root, session_key)
+        if binding:
+            extra_dirs = _as_list(binding.get("extra_working_dirs") or binding.get("working_directories") or binding.get("allowed_roots"))
+            roots += [canonical(p, ctx) for p in extra_dirs]
+
+    if active:
+        state = session.load_state(ctx, active)
+        if state:
+            extra_dirs = _as_list(state.get("extra_working_dirs") or state.get("allowed_roots") or state.get("working_directories"))
+            roots += [canonical(p, ctx) for p in extra_dirs]
+            extra_writes = _as_list(state.get("extra_write_scope") or state.get("write_scope"))
+            scope += [canonical(p, ctx) for p in extra_writes]
+
+    env_roots = os.environ.get("ALONG_EXTRA_WORKING_DIRS") or os.environ.get("ALONG_ALLOWED_ROOTS")
+    if env_roots:
+        roots += [canonical(p.strip(), ctx) for p in env_roots.split(os.pathsep) if p.strip()]
+
+    issues_dir = os.path.join(repo.state_dir(ctx), "ISSUES")
+    if not os.path.isdir(issues_dir):
+        return roots, scope
     try:
         entries = sorted(e for e in os.listdir(issues_dir) if e.endswith(".md"))
     except OSError:
-        return [], []
+        return roots, scope
     for name in entries:
         stem = name[:-3]
         if active and stem != active and stem.split("--", 1)[-1] != active:

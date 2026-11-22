@@ -244,21 +244,25 @@ def find_repo_root(start_dir: Optional[str] = None,
     """Walk upwards from `start_dir` to the nearest Along installation or root marker (`.git`).
 
     A folder with only an `AGENTS.md`, or with a `.along/` that holds no Along state, is
-    passed by. Falls back to `start_dir` itself (absolute) when nothing is found, so callers
-    always receive a usable path instead of None. [bug--along-install-marker-ambiguous]
+    passed by. Resolves enclosing Along installation when inside a submodule without its
+    own Along state. Falls back to `start_dir` itself (absolute) when nothing is found.
+    [bug--along-install-marker-ambiguous] [bug--engine-atomicity-and-gate-resilience] REQ-6
     """
     origin = os.path.abspath(start_dir or os.getcwd())
     cur = origin
     markers = tuple(markers)
+    first_marker_root = None
     while True:
         if is_installed(cur):
             return cur
-        for marker in markers:
-            if os.path.exists(os.path.join(cur, marker)):
-                return cur
+        if first_marker_root is None:
+            for marker in markers:
+                if os.path.exists(os.path.join(cur, marker)):
+                    first_marker_root = cur
+                    break
         parent = os.path.dirname(cur)
         if parent == cur:
-            return origin
+            return first_marker_root or origin
         cur = parent
 
 

@@ -26,20 +26,18 @@ sys.modules["along_test_runner"] = test_runner
 spec.loader.exec_module(test_runner)
 
 
-class DummyTestOne(unittest.TestCase):
-    def test_alpha(self):
-        pass
-
-    def test_beta(self):
-        pass
-
-
-class DummyTestTwo(unittest.TestCase):
-    def test_gamma(self):
-        pass
-
-
 class TestTestRunnerHelpers(unittest.TestCase):
+    class _DummyTestOne(unittest.TestCase):
+        def test_alpha(self):
+            pass
+
+        def test_beta(self):
+            pass
+
+    class _DummyTestTwo(unittest.TestCase):
+        def test_gamma(self):
+            pass
+
     def test_normalize_target_pytest_double_colon(self):
         target = "tests/test_foo.py::TestClass::test_method"
         self.assertEqual(
@@ -84,7 +82,7 @@ class TestTestRunnerHelpers(unittest.TestCase):
 
     def test_filter_suite_by_pattern_exact_and_case_insensitive(self):
         loader = unittest.TestLoader()
-        suite = loader.loadTestsFromTestCase(DummyTestOne)
+        suite = loader.loadTestsFromTestCase(self._DummyTestOne)
         self.assertEqual(suite.countTestCases(), 2)
 
         # Filter for alpha
@@ -102,8 +100,8 @@ class TestTestRunnerHelpers(unittest.TestCase):
     def test_filter_nested_suite(self):
         loader = unittest.TestLoader()
         suite = unittest.TestSuite([
-            loader.loadTestsFromTestCase(DummyTestOne),
-            loader.loadTestsFromTestCase(DummyTestTwo),
+            loader.loadTestsFromTestCase(self._DummyTestOne),
+            loader.loadTestsFromTestCase(self._DummyTestTwo),
         ])
         self.assertEqual(suite.countTestCases(), 3)
 

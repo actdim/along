@@ -168,10 +168,10 @@ class TestDocsOnlyChange(unittest.TestCase):
         self.assertTrue(verify.docs_only_change(".", ["apps/server/.along/config.json", "docs/guide.md"]))
         self.assertFalse(verify.docs_only_change(".", ["apps/server/.along/scripts/test.py"]))
 
-        # Exclusions: skills, protocol, AGENTS.md, package code are NOT doc-only
+        # Exclusions: skills, protocol code, package code are NOT doc-only
         self.assertFalse(verify.is_doc_only_path("skills/along-team/SKILL.md"))
-        self.assertFalse(verify.is_doc_only_path("AGENTS.md"))
-        self.assertFalse(verify.is_doc_only_path("CLAUDE.md"))
+        self.assertTrue(verify.is_doc_only_path("AGENTS.md"))
+        self.assertTrue(verify.is_doc_only_path("CLAUDE.md"))
         self.assertFalse(verify.is_doc_only_path("skills/along-init/protocol.md"))
         self.assertFalse(verify.is_doc_only_path("packages/dashboard-ui/README.md"))
         self.assertFalse(verify.is_doc_only_path("scripts/README.md"))

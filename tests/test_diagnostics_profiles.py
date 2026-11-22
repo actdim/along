@@ -76,9 +76,12 @@ class TestDoctorProfileOutput(unittest.TestCase):
         buf = io.StringIO()
         with mock.patch("sys.stdout", buf):
             try:
-                handle_doctor_command(self.root, args or [])
-            except SystemExit:
-                pass
+                ret = handle_doctor_command(self.root, args or [])
+                if ret not in (None, 0):
+                    self.fail(f"handle_doctor_command returned non-zero code {ret}: {buf.getvalue()}")
+            except SystemExit as exc:
+                if exc.code not in (None, 0):
+                    self.fail(f"handle_doctor_command exited with non-zero code {exc.code}: {buf.getvalue()}")
         return buf.getvalue()
 
     def test_doctor_prints_default_profile_and_matrix(self):

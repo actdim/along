@@ -1745,6 +1745,13 @@ def sync_kb(
 
     total_articles = len(articles) + (1 if os.path.exists(index_path) else 0)
 
+    if not check_only:
+        try:
+            from alongkit import session
+            session.settle_projection_denials(repo_root)
+        except (OSError, ValueError, KeyError):
+            pass
+
     _kb_format_report_and_exit(
         total_articles,
         broken_links,

@@ -163,7 +163,7 @@ def main(argv=None):
     if not parsed.skip_tests:
         planned = _planned_commit_paths(repo_root, parsed)
         if planned and verify.docs_only_change(repo_root, planned, lambda p: _staged_or_worktree_diff(repo_root, p)):
-            print("-> [Pre-Commit Quality Gate] Only documentation / Along state changes: tests skipped.")
+            print("-> [Pre-Commit Quality Gate] Only documentation / Along state changes: tests skipped. tests: skipped (docs-only change)")
         else:
             outcome = gates.run_test_gate(repo_root, "Pre-Commit Quality Gate", slug=parsed.issue, files=planned)
             if outcome not in (gates.TESTS_PASSED, gates.TESTS_SKIPPED):

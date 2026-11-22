@@ -730,10 +730,8 @@ def run_update(repo_root, check_only=False, dry_run=False, force=False, local_on
         stub_issues = entities.audit_stub_issues(repo_root)
         if stub_issues:
             print(f"\n-> [Notice] Detected {len(stub_issues)} stub or incomplete issue(s) across .along/ISSUES/:")
-            for si in stub_issues[:5]:
+            for si in stub_issues:
                 print(f"     - {si['path']} ({si['status']}): {si['reasons'][0]}")
-            if len(stub_issues) > 5:
-                print(f"     ... and {len(stub_issues) - 5} more.")
             print("   Remediation advice:")
             print("     - Reopen and populate: along issue reopen <slug>")
             print("     - Cancel unneeded stubs: along issue done <slug> --status cancelled")

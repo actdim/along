@@ -250,6 +250,53 @@ def _print_router_help(cmd: str, handler, repo_root: str, args: List[str]) -> No
     sys.exit(0)
 
 
+def _print_lifecycle_help(cmd: str) -> None:
+    """Print usage help for lifecycle commands without executing hook scripts."""
+    if cmd == "test":
+        print("""Usage: along test [options] [-- <test-args...>]
+
+Run repository automated tests via .along/scripts/test.py or auto-detected test runner.
+
+Options:
+  --full         Run complete test suite (disables fast/affected filtering)
+  --affected     Run tests affected by current git diff
+  --scope <path> Run tests scoped to a subproject or test path
+  --raw          Force raw unbuffered output stream
+  --distill      Force distilled summary output
+  -h, --help     Show this help message
+""")
+    elif cmd == "build":
+        print("""Usage: along build [options] [-- <build-args...>]
+
+Build the target repository via .along/scripts/build.py or auto-detected build tool.
+
+Options:
+  --raw          Force raw unbuffered output stream
+  --distill      Force distilled summary output
+  -h, --help     Show this help message
+""")
+    elif cmd == "dev":
+        print("""Usage: along dev [options] [-- <dev-args...>]
+
+Run repository development or local debugging server via .along/scripts/dev.py.
+
+Options:
+  --raw          Force raw unbuffered output stream
+  -h, --help     Show this help message
+""")
+    elif cmd == "debug":
+        print("""Usage: along debug [options] [-- <debug-args...>]
+
+Run debugging runner via .along/scripts/debug.py.
+
+Options:
+  --raw          Force raw unbuffered output stream
+  -h, --help     Show this help message
+""")
+    else:
+        print(f"Usage: along {cmd} [options] [-- <args...>]\n")
+
+
 def main():
     target_dir, remaining = _handle_chdir_options(sys.argv[1:])
     if target_dir is not None:
@@ -360,6 +407,10 @@ def main():
 
     # 3. Check if command is a Lifecycle Hook (build / test / dev / debug)
     if cmd in LIFECYCLE_ACTIONS:
+        if _wants_help(extra_args):
+            _print_lifecycle_help(cmd)
+            sys.exit(0)
+
         output_mode, extra_args = resolve_output_mode(cmd, extra_args)
         test_mode = None
         test_scope = ""

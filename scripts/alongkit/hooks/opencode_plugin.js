@@ -93,7 +93,7 @@ function resolvePythonCommand(projectDir) {
 
   if (isWin) {
     try {
-      const check = spawnSync("py", ["-3", "-V"], { timeout: 2000 });
+      const check = spawnSync("py", ["-3", "-V"], { timeout: 2000, windowsHide: true });
       if (check.status === 0) {
         return (cachedPython = { cmd: "py", extraArgs: ["-3"] });
       }
@@ -129,6 +129,7 @@ function runAlongHook(hookScript, eventName, payload, projectDir) {
       encoding: "utf-8",
       maxBuffer: 10 * 1024 * 1024,
       timeout: 10000,
+      windowsHide: true,
       env: { ...process.env, OPENCODE_AGENT: "1", OPENCODE_CLI: "1" }
     });
   } catch (err) {
@@ -325,7 +326,9 @@ const pluginDefinition = {
       ctx.event.subscribe(async (evt) => {
         const type = String(evt?.type || "");
         if (type === "session.idle" || type === "session.stop") {
-          handleStop(evt, projectDir);
+          if (!ctx?.session?.hook) {
+            handleStop(evt, projectDir);
+          }
         } else if (type === "session.created" || type === "session.updated") {
           const sid = evt?.sessionID || evt?.data?.sessionID;
           if (sid) updateSessionId(sid);

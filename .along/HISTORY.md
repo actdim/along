@@ -290,3 +290,4 @@ _Index of sessions (newest last). One line per session:_
 2026-11-21 - deepseek-harness-bridge - antigravity - Implement DeepSeek Harness hooks bridge and provider integration - [Session Log](./SESSIONS/2026/2026-11-21--deepseek-harness-bridge.md)
 2026-11-21 - deepseek-runtime-adapter - antigravity - Implement DeepSeek Harness headless runner and orchestration adapter - [Session Log](./SESSIONS/2026/2026-11-21--deepseek-runtime-adapter.md)
 2026-11-22 - webdev-local-llm-engine - antigravity - Implement self-contained offline NL-to-WebDev step compiler and runner - [Session Log](./SESSIONS/2026/2026-11-22--webdev-local-llm-engine.md)
+2026-11-22 - engine-atomicity-and-gate-resilience - antigravity - Fix engine wrap atomicity, gate reference integrity, and multi-subproject session friction across lifecycle, gates, and repo engines - [Session Log](./SESSIONS/2026/2026-11-22--engine-atomicity-and-gate-resilience.md)

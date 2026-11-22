@@ -619,6 +619,35 @@ def ack_stop_denials(repo_root: str, key: Optional[str], ids: List[str], note: s
     return acked_items
 
 
+def approve_stop_denials(repo_root: str, key: Optional[str], ids: List[str], reason: str = "") -> List[Dict[str, Any]]:
+    """Approve/resolve Stop denials in the activity trace and append ledger resolve events when blackboard exists."""
+    id_set = set(ids)
+    roots = [repo_root] if repo_root else []
+    broot = session.binding_root(repo_root) if repo_root else None
+    if broot and os.path.realpath(broot) != os.path.realpath(repo_root):
+        roots.append(broot)
+    resolved_items = []
+    now = session._utc_now_iso()
+    for r in roots:
+        trace = load_activity_trace(r, key)
+        changed = False
+        for d in trace.get("stop_denials") or []:
+            if isinstance(d, dict) and d.get("id") in id_set and d.get("state") != "resolved":
+                d["state"] = "resolved"
+                d["via"] = "user-approval"
+                d["note"] = reason or "User approved"
+                d["resolve_ts"] = now
+                changed = True
+                resolved_items.append(d)
+                ctx = d.get("ctx")
+                slug = d.get("slug")
+                if ctx and slug and session.load_state(ctx, slug):
+                    session.append_event(ctx, slug, key, "resolve", extra={"id": d["id"], "via": "user-approval", "note": reason or "User approved"})
+        if changed:
+            save_activity_trace(r, trace, key)
+    return resolved_items
+
+
 def _exit_plan_mode_text(event: HookEvent) -> Optional[str]:
     """The plan the user accepted through ExitPlanMode, wherever the payload carries it.
 

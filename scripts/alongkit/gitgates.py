@@ -553,6 +553,45 @@ def baseline_entity_problems(repo_root: str, base: str = "HEAD") -> Optional[set
         shutil.rmtree(tmp, ignore_errors=True)
 
 
+def _entity_exists_on_disk(repo_root: str, ref: str) -> bool:
+    """Check if an entity referenced by `ref` exists as a file on physical disk."""
+    if not ref:
+        return False
+    from . import entities, repo
+    qualifier, clean = entities._ref_key(ref)
+
+    search_dirs = []
+    if qualifier == entities.ROOT_QUALIFIER:
+        root_dir = repo.find_repo_root(repo_root) or repo_root
+        along_d = os.path.join(root_dir, ".along")
+        if os.path.isdir(along_d):
+            search_dirs.append(along_d)
+    elif qualifier:
+        sub_dir = os.path.join(repo_root, qualifier, ".along")
+        if os.path.isdir(sub_dir):
+            search_dirs.append(sub_dir)
+    else:
+        along_d = os.path.join(repo_root, ".along")
+        if os.path.isdir(along_d):
+            search_dirs.append(along_d)
+        for anc in entities.ancestor_contexts(repo_root):
+            search_dirs.append(os.path.join(anc, ".along"))
+        for desc in repo.find_agent_contexts(repo_root):
+            if os.path.abspath(desc) != os.path.abspath(repo_root):
+                search_dirs.append(os.path.join(desc, ".along"))
+
+    keys: set = set()
+    for ad in search_dirs:
+        entities._context_entity_keys(ad, keys)
+
+    if clean in keys:
+        return True
+    _, slug = entities.parse_key(clean)
+    if slug in keys:
+        return True
+    return False
+
+
 def check_entity_references(repo_root: str, changed: Sequence[str], layer: str, source: str,
                             base: Optional[str]) -> List[Violation]:
     """[gate: entity-reference-integrity] problems the change introduces.
@@ -576,10 +615,26 @@ def check_entity_references(repo_root: str, changed: Sequence[str], layer: str, 
               "not blocking:", file=sys.stderr)
         for location, message in old[:10]:
             print(f"  {location}: {message}", file=sys.stderr)
-    return [Violation(ENTITY_GATE, location,
-                      message + " (fix it, or use `along issue rename` / `along issue supersede` "
-                                "instead of deleting a referenced entity)")
-            for location, message in sorted(after - before)]
+
+    violations = []
+    for location, message in sorted(after - before):
+        m = re.search(r"dangling (?:[a-zA-Z0-9_.]+\s+)?reference:\s*'([^']+)'", message)
+        if m:
+            ref = m.group(1)
+            if _entity_exists_on_disk(repo_root, ref):
+                violations.append(Violation(
+                    ENTITY_GATE,
+                    location,
+                    f"Entity '{ref}' exists on disk but is not staged/tracked in git. Stage it via 'git add' in this commit.",
+                ))
+                continue
+        violations.append(Violation(
+            ENTITY_GATE,
+            location,
+            message + " (fix it, or use `along issue rename` / `along issue supersede` "
+                      "instead of deleting a referenced entity)",
+        ))
+    return violations
 
 
 SESSION_RECORD_GATE = "session_record_append_only"

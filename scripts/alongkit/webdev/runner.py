@@ -15,6 +15,85 @@ from .. import repo
 from . import browser, capture, config, evidence, failures, locators, redact, results, schema, session, steps
 
 
+class SimulatedLocator:
+    """Lightweight Playwright Locator mock for hermetic scenario testing."""
+    def __init__(self, spec: Any) -> None:
+        self.spec = spec
+
+    def click(self, **kw) -> None:
+        pass
+
+    def dblclick(self, **kw) -> None:
+        pass
+
+    def hover(self, **kw) -> None:
+        pass
+
+    def fill(self, val: str, **kw) -> None:
+        pass
+
+    def type(self, val: str, **kw) -> None:
+        pass
+
+    def press(self, key: str, **kw) -> None:
+        pass
+
+    def set_input_files(self, file_path: str, **kw) -> None:
+        pass
+
+    def is_visible(self) -> bool:
+        return True
+
+    def inner_text(self) -> str:
+        return "sample text"
+
+    def evaluate(self, expr: str, **kw) -> Any:
+        return "text"
+
+
+class SimulatedPage:
+    """Lightweight Playwright Page mock that validates real step execution in hermetic mode."""
+    def __init__(self) -> None:
+        self.keyboard = self
+        self._url = "about:blank"
+
+    def goto(self, url: str, **kw) -> None:
+        self._url = url
+
+    def evaluate(self, expr: str, **kw) -> Any:
+        try:
+            return eval(expr, {"__builtins__": {}}, {})
+        except (ArithmeticError, SyntaxError, ValueError, TypeError, NameError):
+            return None
+
+    def locator(self, spec: Any, **kw) -> SimulatedLocator:
+        return SimulatedLocator(spec)
+
+    def get_by_text(self, text: str, **kw) -> SimulatedLocator:
+        return SimulatedLocator(f"text={text}")
+
+    def get_by_label(self, label: str, **kw) -> SimulatedLocator:
+        return SimulatedLocator(f"label={label}")
+
+    def get_by_placeholder(self, ph: str, **kw) -> SimulatedLocator:
+        return SimulatedLocator(f"placeholder={ph}")
+
+    def get_by_test_id(self, tid: str, **kw) -> SimulatedLocator:
+        return SimulatedLocator(f"test_id={tid}")
+
+    def route(self, pat: str, handler: Any, **kw) -> None:
+        pass
+
+    def screenshot(self, path: Optional[str] = None, **kw) -> bytes:
+        if path:
+            with open(path, "wb") as f:
+                f.write(b"simulated-screenshot")
+        return b""
+
+    def press(self, key: str, **kw) -> None:
+        pass
+
+
 def expand_check_matrix(chk: Dict[str, Any], defaults: Dict[str, Any]) -> List[Tuple[str, str]]:
     """Return list of (viewport, theme) cells for a check."""
     matrix = chk.get("matrix") or {}
@@ -117,9 +196,22 @@ def run_scenario(
             failure_reason = ""
             cell_evidence: List[str] = []
 
-            # In hermetic test mode without real browser, simulate step execution
+            # In hermetic test mode without real browser, execute steps against SimulatedPage
             is_hermetic = os.environ.get("ALONG_WEBDEV_HERMETIC") == "1"
             if is_hermetic:
+                page = SimulatedPage()
+                try:
+                    for s_idx, step_obj in enumerate(step_list):
+                        steps.execute_step(page, step_obj, harvester=harvester, redactor=redactor)
+                        if "screenshot" in step_obj:
+                            ev_name = evidence.evidence_filename(cid, vp, theme, f"step_{s_idx}")
+                            ev_path = os.path.join(run_dir, ev_name)
+                            evidence.capture_screenshot(page, ev_path)
+                            cell_evidence.append(ev_path)
+                except (RuntimeError, AssertionError, ValueError, TypeError, KeyError, OSError, TimeoutError) as exc:
+                    status = "FAIL"
+                    failure_reason = str(exc)
+
                 duration_ms = (time.monotonic() - start_t) * 1000
                 check_results.append({
                     "check_id": cid,
@@ -131,6 +223,7 @@ def run_scenario(
                     "reason": failure_reason,
                     "evidence": cell_evidence,
                     "duration_ms": round(duration_ms, 1),
+                    "steps": step_list,
                 })
                 continue
 

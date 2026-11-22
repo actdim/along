@@ -53,8 +53,14 @@ def detect_test_command(repo_root: str) -> Optional[List[str]]:
     if os.path.exists(hook):
         return [sys.executable, hook]
 
-    if os.path.isdir(os.path.join(repo_root, "tests")):
-        return [sys.executable, "-m", "unittest", "discover", "-s", "tests", "-p", "test_*.py"]
+    tests_dir = os.path.join(repo_root, "tests")
+    if os.path.isdir(tests_dir):
+        try:
+            test_files = [f for f in os.listdir(tests_dir) if f.startswith("test_") and f.endswith(".py")]
+        except OSError:
+            test_files = []
+        if test_files:
+            return [sys.executable, "-m", "unittest", "discover", "-s", "tests", "-p", "test_*.py"]
 
     manifest = os.path.join(repo_root, "package.json")
     if os.path.exists(manifest):
@@ -120,7 +126,7 @@ def run_test_gate(repo_root: str, label: str = "Quality Gate",
     run that exits 0 without executing tests fails, and a hook that cannot run at all is
     reported as misconfigured, not as failing tests. [bug--test-gate-no-tests-policy]
     """
-    from . import lifecycle, verify
+    from . import entities, lifecycle, verify
 
     policy = verify.load_effective_policy(repo_root, slug)
     issue_type = None
@@ -139,6 +145,10 @@ def run_test_gate(repo_root: str, label: str = "Quality Gate",
         print(f"-> [{label}] {policy.describe()}")
         return TESTS_PASSED if verify.run_checks(repo_root, policy.checks, label) else TESTS_FAILED
 
+    if files and verify.docs_only_change(repo_root, files):
+        print(f"-> [{label}] Only documentation / Along state changes: tests skipped. tests: skipped (docs-only change)")
+        return TESTS_SKIPPED
+
     print(f"-> [{label}] {policy.describe()}")
     mode = policy.hook_mode()
     scope = policy.scope if mode == "scoped" else ""
@@ -149,6 +159,9 @@ def run_test_gate(repo_root: str, label: str = "Quality Gate",
     cmd = detect_test_command(repo_root)
     if not cmd:
         if policy.declared:
+            if repo.is_intentional_subproject(repo_root) or entities.ancestor_contexts(repo_root):
+                print(f"-> [{label}] tests: none (subproject has no tests)")
+                return TESTS_SKIPPED
             print(f"[Error] {label}: verify.tests is \"required\" but no test command was found. "
                   "Add .along/scripts/test.py, or set verify.tests = \"none\".", file=sys.stderr)
             return TESTS_MISCONFIGURED
@@ -204,6 +217,9 @@ def run_test_gate(repo_root: str, label: str = "Quality Gate",
             return TESTS_PASSED
 
         if res.ok:
+            if repo.is_intentional_subproject(repo_root) or entities.ancestor_contexts(repo_root):
+                print(f"-> [{label}] tests: none (subproject has no tests)")
+                return TESTS_SKIPPED
             print(f"[Error] {label}: {' '.join(cmd)} exited 0 but executed no tests: nothing is verified. "
                   "Point .along/scripts/test.py at the tests, or set verify.tests = \"none\".", file=sys.stderr)
             return TESTS_NONE_EXECUTED

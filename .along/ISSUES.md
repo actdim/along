@@ -1,13 +1,14 @@
 # Active Issues
 
 ## Active
-- [ ] `(bug)` [engine-atomicity-and-gate-resilience](ISSUES/bug--engine-atomicity-and-gate-resilience.md) - plan approved
+<!-- No active issues -->
 
 ## Backlog
 - [ ] `(debt)` [autonomous-non-elevation-invariants](ISSUES/debt--autonomous-non-elevation-invariants.md)
 - [ ] `(debt)` [canonical-path-gate-expansion](ISSUES/debt--canonical-path-gate-expansion.md)
 - [ ] `(debt)` [dashboard-retire-risk-spike-views](ISSUES/debt--dashboard-retire-risk-spike-views.md)
 - [ ] `(debt)` [gate-config-layers](ISSUES/debt--gate-config-layers.md)
+- [ ] `(debt)` [test-suite-paper-compliance-cleanup](ISSUES/debt--test-suite-paper-compliance-cleanup.md)
 - [ ] `(debt)` [triage-silent-exception-handlers](ISSUES/debt--triage-silent-exception-handlers.md)
 - [ ] `(docs)` [arxiv-academic-paper-preprint](ISSUES/docs--arxiv-academic-paper-preprint.md)
 - [ ] `(docs)` [dita-topics-and-drift](ISSUES/docs--dita-topics-and-drift.md)
@@ -63,12 +64,13 @@
 - [ ] `(feat)` [workspace-activity-tracking](ISSUES/feat--workspace-activity-tracking.md)
 - [ ] `(feat)` [zero-step-state-recovery-and-drift-detection](ISSUES/feat--zero-step-state-recovery-and-drift-detection.md)
 - [ ] `(task)` [gate-event-remeasure](ISSUES/task--gate-event-remeasure.md)
+- [ ] `(task)` [opencode-deepseek-cache-configuration-audit](ISSUES/task--opencode-deepseek-cache-configuration-audit.md)
 - [ ] `(task)` [reconcile-dashboard-ui-core-conventions](ISSUES/task--reconcile-dashboard-ui-core-conventions.md)
 
 ## Done (recent)
 - [x] `(feat)` [webdev-local-llm-engine](ISSUES/done/feat--webdev-local-llm-engine.md)
+- [x] `(bug)` [engine-atomicity-and-gate-resilience](ISSUES/done/bug--engine-atomicity-and-gate-resilience.md)
 - [x] `(feat)` [provenance-drift-gate](ISSUES/done/feat--provenance-drift-gate.md)
 - [x] `(feat)` [deepseek-runtime-adapter](ISSUES/done/feat--deepseek-runtime-adapter.md)
 - [x] `(feat)` [deepseek-harness-bridge](ISSUES/done/feat--deepseek-harness-bridge.md)
-- [x] `(feat)` [along-webdev-runner](ISSUES/done/feat--along-webdev-runner.md)
-<!-- 352 older completed issue(s) archived in .along/ISSUES/done/ -->
+<!-- 353 older completed issue(s) archived in .along/ISSUES/done/ -->

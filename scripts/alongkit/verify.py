@@ -309,9 +309,7 @@ def is_doc_only_path(rel: str) -> bool:
     norm = path.lower()
     base = parts[-1].lower()
 
-    # Product code, protocol instructions and skills are NOT documentation:
-    if norm in ("agents.md", "claude.md", "gemini.md") or base in ("agents.md", "claude.md", "gemini.md"):
-        return False
+    # Skills and protocol core specifications under skills/ are code/governance, not documentation:
     if "skills" in parts or norm.startswith("skills/") or base == "protocol.md":
         return False
 
@@ -334,7 +332,7 @@ def is_doc_only_path(rel: str) -> bool:
     if any(p in ("packages", "src", "scripts", "skills", "tests") for p in parts[:-1]):
         return False
 
-    if base in _DOC_FILES:
+    if base in _DOC_FILES or (base.startswith("llms") and base.endswith(".txt")):
         return True
 
     if any(norm.endswith(sfx) for sfx in _DOC_SUFFIXES):
