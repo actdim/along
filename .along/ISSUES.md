@@ -1,7 +1,7 @@
 # Active Issues
 
 ## Active
-- [ ] `(feat)` [session-hierarchy-and-submodule-automation](ISSUES/feat--session-hierarchy-and-submodule-automation.md) - plan approved
+<!-- No active issues -->
 
 ## Backlog
 - [ ] `(bug)` [opencode-plugin-test-hermeticity](ISSUES/bug--opencode-plugin-test-hermeticity.md)
@@ -69,8 +69,8 @@
 
 ## Done (recent)
 - [x] `(feat)` [webdev-local-llm-engine](ISSUES/done/feat--webdev-local-llm-engine.md)
+- [x] `(feat)` [session-hierarchy-and-submodule-automation](ISSUES/done/feat--session-hierarchy-and-submodule-automation.md)
 - [x] `(bug)` [engine-atomicity-and-gate-resilience](ISSUES/done/bug--engine-atomicity-and-gate-resilience.md)
 - [x] `(feat)` [provenance-drift-gate](ISSUES/done/feat--provenance-drift-gate.md)
 - [x] `(feat)` [deepseek-runtime-adapter](ISSUES/done/feat--deepseek-runtime-adapter.md)
-- [x] `(feat)` [deepseek-harness-bridge](ISSUES/done/feat--deepseek-harness-bridge.md)
-<!-- 353 older completed issue(s) archived in .along/ISSUES/done/ -->
+<!-- 354 older completed issue(s) archived in .along/ISSUES/done/ -->
