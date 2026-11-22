@@ -3,7 +3,8 @@ protocol: along
 protocol_version: "4.9.1"
 slug: opencode-plugin-test-hermeticity
 type: bug
-status: in-progress
+status: done
+completed: 2026-11-22
 priority: high
 created: 2026-11-22
 updated: 2026-11-22
