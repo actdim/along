@@ -1,7 +1,7 @@
 # Active Issues
 
 ## Active
-<!-- No active issues -->
+- [ ] `(task)` [opencode-deepseek-cache-configuration-audit](ISSUES/task--opencode-deepseek-cache-configuration-audit.md) - plan approved
 
 ## Backlog
 - [ ] `(debt)` [autonomous-non-elevation-invariants](ISSUES/debt--autonomous-non-elevation-invariants.md)
@@ -62,7 +62,6 @@
 - [ ] `(feat)` [workspace-activity-tracking](ISSUES/feat--workspace-activity-tracking.md)
 - [ ] `(feat)` [zero-step-state-recovery-and-drift-detection](ISSUES/feat--zero-step-state-recovery-and-drift-detection.md)
 - [ ] `(task)` [gate-event-remeasure](ISSUES/task--gate-event-remeasure.md)
-- [ ] `(task)` [opencode-deepseek-cache-configuration-audit](ISSUES/task--opencode-deepseek-cache-configuration-audit.md)
 - [ ] `(task)` [reconcile-dashboard-ui-core-conventions](ISSUES/task--reconcile-dashboard-ui-core-conventions.md)
 
 ## Done (recent)

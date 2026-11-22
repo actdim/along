@@ -28,6 +28,7 @@ from alongkit.runner import (
     GenericCliRunner,
     OpenCodeRunner,
     RunResult,
+    format_usage_summary,
     get_runner,
 )
 
@@ -133,6 +134,26 @@ class TestCommandLineAndFlagMapping(unittest.TestCase):
             "--session-id",
             "session-xyz",
             "-",
+        ]
+        self.assertEqual(cmd, expected)
+
+    def test_deepseek_command_line_prompt_arg_when_stdin_disabled(self) -> None:
+        runner = DeepSeekHarnessRunner(
+            repo_root=self.repo,
+            binary_path="custom-dsh",
+            model="deepseek-chat",
+            brief_via_stdin=False,
+        )
+        self.assertFalse(runner.brief_via_stdin)
+        cmd = runner.build_command("Run audit task")
+        expected = [
+            "custom-dsh",
+            "--profile",
+            "headless",
+            "--json",
+            "--model",
+            "deepseek-chat",
+            "Run audit task",
         ]
         self.assertEqual(cmd, expected)
 
@@ -456,6 +477,10 @@ class TestOutputParsing(unittest.TestCase):
         self.assertEqual(parsed["usage"]["output_tokens"], 250)
         self.assertEqual(parsed["usage"]["cache_read_tokens"], 12000)
         self.assertEqual(parsed["usage"]["reasoning_tokens"], 400)
+        self.assertEqual(parsed["usage"]["cache_hit_ratio_pct"], 88.9)
+        summary = format_usage_summary(parsed["usage"])
+        self.assertIn("cache hit: 88.9%", summary)
+        self.assertIn("reasoning: 400", summary)
         self.assertEqual(parsed["handoff_note"], "Refactored module.")
 
     def test_deepseek_is_error_parsing(self) -> None:

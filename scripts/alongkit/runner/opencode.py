@@ -175,13 +175,17 @@ class OpenCodeRunner(BaseRunner):
                 handoff_note = str(data["handoff_note"])
 
         usage = None
-        if total_input_tokens > 0 or total_output_tokens > 0 or total_cost is not None:
+        if total_input_tokens > 0 or total_output_tokens > 0 or total_cache_read_tokens > 0 or total_cost is not None:
+            prompt_total = total_input_tokens + total_cache_read_tokens
+            cache_hit_pct = round((total_cache_read_tokens / prompt_total) * 100, 1) if prompt_total > 0 else 0.0
             usage = {
                 "input_tokens": total_input_tokens,
                 "output_tokens": total_output_tokens,
                 "cache_read_tokens": total_cache_read_tokens,
                 "cache_write_tokens": total_cache_write_tokens,
                 "reasoning_tokens": total_reasoning_tokens,
+                "total_tokens": total_input_tokens + total_output_tokens,
+                "cache_hit_ratio_pct": cache_hit_pct,
             }
             if total_cost is not None:
                 usage["cost"] = total_cost

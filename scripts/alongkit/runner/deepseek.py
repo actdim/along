@@ -46,6 +46,15 @@ class DeepSeekHarnessRunner(BaseRunner):
         "-m",
     }
 
+    def __init__(
+        self,
+        *args: Any,
+        brief_via_stdin: bool = True,
+        **kwargs: Any,
+    ) -> None:
+        super().__init__(*args, **kwargs)
+        self.brief_via_stdin = bool(brief_via_stdin)
+
     @classmethod
     def role_args(cls, role: str) -> List[str]:
         """Return runtime-specific default arguments for DSH."""
@@ -217,13 +226,17 @@ class DeepSeekHarnessRunner(BaseRunner):
                         pass
 
         usage = None
-        if total_input_tokens > 0 or total_output_tokens > 0:
+        if total_input_tokens > 0 or total_output_tokens > 0 or total_cache_read_tokens > 0:
+            prompt_total = total_input_tokens + total_cache_read_tokens
+            cache_hit_pct = round((total_cache_read_tokens / prompt_total) * 100, 1) if prompt_total > 0 else 0.0
             usage = {
                 "input_tokens": total_input_tokens,
                 "output_tokens": total_output_tokens,
                 "cache_read_tokens": total_cache_read_tokens,
                 "cache_write_tokens": total_cache_write_tokens,
                 "reasoning_tokens": total_reasoning_tokens,
+                "total_tokens": total_input_tokens + total_output_tokens,
+                "cache_hit_ratio_pct": cache_hit_pct,
             }
 
         if exit_code == 0 and not failed:
@@ -240,3 +253,25 @@ class DeepSeekHarnessRunner(BaseRunner):
             "handoff_note": handoff_note,
             "text": final_text,
         }
+
+
+def format_usage_summary(usage: Optional[Dict[str, Any]]) -> str:
+    """Format token and cache usage dictionary into human-readable summary."""
+    if not usage:
+        return "No token usage recorded."
+    in_tok = usage.get("input_tokens", 0)
+    out_tok = usage.get("output_tokens", 0)
+    c_read = usage.get("cache_read_tokens", 0)
+    c_write = usage.get("cache_write_tokens", 0)
+    ratio = usage.get("cache_hit_ratio_pct", 0.0)
+    reasoning = usage.get("reasoning_tokens", 0)
+    parts = [
+        f"input: {in_tok}",
+        f"output: {out_tok}",
+        f"cache read: {c_read}",
+        f"cache write: {c_write}",
+        f"cache hit: {ratio}%",
+    ]
+    if reasoning:
+        parts.append(f"reasoning: {reasoning}")
+    return ", ".join(parts)

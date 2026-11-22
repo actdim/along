@@ -3,7 +3,7 @@ protocol: along
 protocol_version: "4.9.1"
 slug: opencode-deepseek-cache-configuration-audit
 type: task
-status: open
+status: in-progress
 priority: medium
 created: 2026-11-22
 updated: 2026-11-22
@@ -12,6 +12,7 @@ tags: [opencode, deepseek, caching, telemetry, runner]
 milestone: v5.0.0-agent-run-protocol-and-observability
 blocked_by: []
 related: [bug--engine-atomicity-and-gate-resilience]
+plan_status: approved
 ---
 
 # Audit OpenCode DeepSeek-A caching efficiency and runner prompt delivery resilience
@@ -28,8 +29,8 @@ Diagnostics performed during session `ses_dfc310340ffepAqPS7atpNzg8z` revealed c
 - REQ-3: Token and cache observability: Add automated extraction and reporting of token breakdown (`input_tokens`, `output_tokens`, `cache_read_tokens`, `cache_write_tokens`, and cache hit ratio percentage) into session wrap summaries and `along doctor` diagnostics.
 
 ## Acceptance Criteria
-- [ ] Audit and document `~/.config/opencode/` provider configuration for `DeepSeek-A` cache behavior
-- [ ] Verify `DeepSeekHarnessRunner` prompt delivery mechanism (CLI argument vs stdin) with headless execution test
-- [ ] Implement token cache metrics summary in Along session reporting and diagnostics
-- [ ] Unit tests in `tests/test_runtime_adapters.py` covering prompt delivery and cache metrics parsing
-- [ ] Full test pass passes with zero regressions and clean typography
+- [x] Audit and document `~/.config/opencode/` provider configuration for `DeepSeek-A` cache behavior
+- [x] Verify `DeepSeekHarnessRunner` prompt delivery mechanism (CLI argument vs stdin) with headless execution test
+- [x] Implement token cache metrics summary in Along session reporting and diagnostics
+- [x] Unit tests in `tests/test_runtime_adapters.py` covering prompt delivery and cache metrics parsing
+- [x] Full test pass passes with zero regressions and clean typography

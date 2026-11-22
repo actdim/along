@@ -16,7 +16,7 @@ from .antigravity import AntigravityRunner
 from .base import BaseRunner, RunResult
 from .claude import ClaudeCodeRunner
 from .codex import CodexRunner
-from .deepseek import DeepSeekHarnessRunner
+from .deepseek import DeepSeekHarnessRunner, format_usage_summary
 from .generic import GenericCliRunner
 from .opencode import OpenCodeRunner
 from .stream import ChunkedStreamSupervisor
@@ -53,5 +53,6 @@ __all__ = [
     "GenericCliRunner",
     "OpenCodeRunner",
     "RunResult",
+    "format_usage_summary",
     "get_runner",
 ]
