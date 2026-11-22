@@ -1,7 +1,7 @@
 # Active Issues
 
 ## Active
-<!-- No active issues -->
+- [ ] `(bug)` [engine-atomicity-and-gate-resilience](ISSUES/bug--engine-atomicity-and-gate-resilience.md) - plan approved
 
 ## Backlog
 - [ ] `(debt)` [autonomous-non-elevation-invariants](ISSUES/debt--autonomous-non-elevation-invariants.md)
@@ -39,6 +39,9 @@
 - [ ] `(feat)` [golang-ecosystem-support](ISSUES/feat--golang-ecosystem-support.md)
 - [ ] `(feat)` [jvm-ecosystem-support](ISSUES/feat--jvm-ecosystem-support.md)
 - [ ] `(feat)` [kb-search-hybrid-retrieval](ISSUES/feat--kb-search-hybrid-retrieval.md)
+- [ ] `(feat)` [local-llm-micro-orchestrator](ISSUES/feat--local-llm-micro-orchestrator.md)
+- [ ] `(feat)` [local-llm-runtime-harness](ISSUES/feat--local-llm-runtime-harness.md)
+- [ ] `(feat)` [local-llm-substrate-env-config](ISSUES/feat--local-llm-substrate-env-config.md)
 - [ ] `(feat)` [multi-runtime-and-omnichannel-expansion](ISSUES/feat--multi-runtime-and-omnichannel-expansion.md)
 - [ ] `(feat)` [native-ast-blast-radius-analyzer](ISSUES/feat--native-ast-blast-radius-analyzer.md)
 - [ ] `(feat)` [openclaw-and-hermes-agent-integration](ISSUES/feat--openclaw-and-hermes-agent-integration.md)
@@ -46,7 +49,9 @@
 - [ ] `(feat)` [per-model-rework-metrics](ISSUES/feat--per-model-rework-metrics.md)
 - [ ] `(feat)` [pi-harness-support](ISSUES/feat--pi-harness-support.md)
 - [ ] `(feat)` [planning-fields-and-ordering-gates](ISSUES/feat--planning-fields-and-ordering-gates.md)
+- [ ] `(feat)` [runtime-integration-tests-local-llm](ISSUES/feat--runtime-integration-tests-local-llm.md)
 - [ ] `(feat)` [session-commit-binding](ISSUES/feat--session-commit-binding.md)
+- [ ] `(feat)` [session-hierarchy-and-submodule-automation](ISSUES/feat--session-hierarchy-and-submodule-automation.md) - plan approved
 - [ ] `(feat)` [subagent-execution-discipline](ISSUES/feat--subagent-execution-discipline.md)
 - [ ] `(feat)` [system-invariants-and-health-probes](ISSUES/feat--system-invariants-and-health-probes.md)
 - [ ] `(feat)` [team-idle-auto-claim](ISSUES/feat--team-idle-auto-claim.md)
@@ -54,6 +59,7 @@
 - [ ] `(feat)` [team-worktree-concurrency-rules](ISSUES/feat--team-worktree-concurrency-rules.md)
 - [ ] `(feat)` [team-worktree-lifecycle](ISSUES/feat--team-worktree-lifecycle.md)
 - [ ] `(feat)` [trivial-fix-lifecycle](ISSUES/feat--trivial-fix-lifecycle.md)
+- [ ] `(feat)` [webdev-nl-local-runner](ISSUES/feat--webdev-nl-local-runner.md)
 - [ ] `(feat)` [workspace-activity-tracking](ISSUES/feat--workspace-activity-tracking.md)
 - [ ] `(feat)` [zero-step-state-recovery-and-drift-detection](ISSUES/feat--zero-step-state-recovery-and-drift-detection.md)
 - [ ] `(task)` [gate-event-remeasure](ISSUES/task--gate-event-remeasure.md)
