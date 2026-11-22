@@ -1,10 +1,9 @@
 # Active Issues
 
 ## Active
-<!-- No active issues -->
+- [ ] `(bug)` [opencode-plugin-test-hermeticity](ISSUES/bug--opencode-plugin-test-hermeticity.md) - plan approved
 
 ## Backlog
-- [ ] `(bug)` [opencode-plugin-test-hermeticity](ISSUES/bug--opencode-plugin-test-hermeticity.md)
 - [ ] `(debt)` [autonomous-non-elevation-invariants](ISSUES/debt--autonomous-non-elevation-invariants.md)
 - [ ] `(debt)` [canonical-path-gate-expansion](ISSUES/debt--canonical-path-gate-expansion.md)
 - [ ] `(debt)` [dashboard-retire-risk-spike-views](ISSUES/debt--dashboard-retire-risk-spike-views.md)

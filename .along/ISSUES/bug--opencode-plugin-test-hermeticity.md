@@ -3,7 +3,7 @@ protocol: along
 protocol_version: "4.9.1"
 slug: opencode-plugin-test-hermeticity
 type: bug
-status: open
+status: in-progress
 priority: high
 created: 2026-11-22
 updated: 2026-11-22
@@ -12,6 +12,7 @@ tags: [opencode, tests, hermeticity, gates]
 milestone: v5.0.0-agent-run-protocol-and-observability
 blocked_by: []
 related: [feat--session-hierarchy-and-submodule-automation]
+plan_status: approved
 ---
 
 # Fix OpenCode Node plugin contract test hermeticity on dirty working tree
@@ -27,5 +28,5 @@ Because `along commit` and `along wrap` run the automated test suite before comm
 - REQ-2: Defensive Failure Handling: The test must assert that `opencode_plugin.js` lifecycle hooks handle non-Along directories gracefully without throwing errors.
 
 ## Acceptance Criteria
-- [ ] `test_node_plugin_module_contract` passes cleanly regardless of whether the git working tree is clean or dirty
-- [ ] Automated tests in `tests/test_opencode_runtime.py` pass without evaluating gates against `process.cwd()`
+- [x] `test_node_plugin_module_contract` passes cleanly regardless of whether the git working tree is clean or dirty
+- [x] Automated tests in `tests/test_opencode_runtime.py` pass without evaluating gates against `process.cwd()`
