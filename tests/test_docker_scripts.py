@@ -150,9 +150,14 @@ class TestDockerScriptsStructural(unittest.TestCase):
         self.assertIn("api.telegram.org", shell_hosts)
 
     def test_git_credential_along_structural(self):
-        """git-credential-along exists and is configured in Dockerfile."""
+        """git-credential-along exists, has a valid shebang, and is configured in Dockerfile."""
         cred_path = os.path.join(REPO_ROOT, "docker", "git-credential-along")
         self.assertTrue(os.path.isfile(cred_path))
+        with open(cred_path, "r", encoding="utf-8") as f:
+            lines = f.readlines()
+        self.assertTrue(lines, "git-credential-along must not be empty")
+        self.assertTrue(lines[0].startswith("#!"), "git-credential-along must declare a valid shebang")
+        self.assertIn("github.com", "".join(lines))
 
         dockerfile_path = os.path.join(REPO_ROOT, "docker", "Dockerfile")
         with open(dockerfile_path, "r", encoding="utf-8") as f:

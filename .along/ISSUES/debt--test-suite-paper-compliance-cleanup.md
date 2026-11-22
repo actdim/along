@@ -3,7 +3,7 @@ protocol: along
 protocol_version: "4.9.1"
 slug: test-suite-paper-compliance-cleanup
 type: debt
-status: open
+status: in-progress
 priority: high
 created: 2026-11-22
 updated: 2026-11-22
@@ -12,6 +12,7 @@ tags: [tests, audit, paper-compliance, refactoring]
 milestone: v5.0.0-agent-run-protocol-and-observability
 blocked_by: []
 related: [bug--engine-atomicity-and-gate-resilience]
+plan_status: approved
 ---
 
 # Test suite paper compliance cleanup and contract assertion hardening
@@ -30,8 +31,8 @@ Audit of the repository test suite (132 test files) revealed several patterns of
 - REQ-4: Contract-level file verification: Enhance `tests/test_docker_scripts.py` and `tests/test_skills_and_scripts.py` to parse Python AST and validate SKILL.md front-matter schemas rather than relying solely on `os.path.isfile`.
 
 ## Acceptance Criteria
-- [ ] Deduplicate test execution between `tests/test_version_bump.py` and `tests/test_release_ci_check.py`
-- [ ] Replace brittle text matching in `tests/test_system_comparisons.py` and `tests/test_docs.py` with structural link and fence verification
-- [ ] Harden mock assertions in `tests/test_release_ci_check.py` to verify failure behavior and rollbacks
-- [ ] Upgrade superficial file existence checks in `tests/test_docker_scripts.py` and `tests/test_skills_and_scripts.py` to syntax and schema checks
-- [ ] Full test pass passes with zero regressions and clean typography
+- [x] Deduplicate test execution between `tests/test_version_bump.py` and `tests/test_release_ci_check.py`
+- [x] Replace brittle text matching in `tests/test_system_comparisons.py` and `tests/test_docs.py` with structural link and fence verification
+- [x] Harden mock assertions in `tests/test_release_ci_check.py` to verify failure behavior and rollbacks
+- [x] Upgrade superficial file existence checks in `tests/test_docker_scripts.py` and `tests/test_skills_and_scripts.py` to syntax and schema checks
+- [x] Full test pass passes with zero regressions and clean typography

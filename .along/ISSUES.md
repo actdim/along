@@ -1,14 +1,13 @@
 # Active Issues
 
 ## Active
-<!-- No active issues -->
+- [ ] `(debt)` [test-suite-paper-compliance-cleanup](ISSUES/debt--test-suite-paper-compliance-cleanup.md) - plan approved
 
 ## Backlog
 - [ ] `(debt)` [autonomous-non-elevation-invariants](ISSUES/debt--autonomous-non-elevation-invariants.md)
 - [ ] `(debt)` [canonical-path-gate-expansion](ISSUES/debt--canonical-path-gate-expansion.md)
 - [ ] `(debt)` [dashboard-retire-risk-spike-views](ISSUES/debt--dashboard-retire-risk-spike-views.md)
 - [ ] `(debt)` [gate-config-layers](ISSUES/debt--gate-config-layers.md)
-- [ ] `(debt)` [test-suite-paper-compliance-cleanup](ISSUES/debt--test-suite-paper-compliance-cleanup.md)
 - [ ] `(debt)` [triage-silent-exception-handlers](ISSUES/debt--triage-silent-exception-handlers.md)
 - [ ] `(docs)` [arxiv-academic-paper-preprint](ISSUES/docs--arxiv-academic-paper-preprint.md)
 - [ ] `(docs)` [dita-topics-and-drift](ISSUES/docs--dita-topics-and-drift.md)

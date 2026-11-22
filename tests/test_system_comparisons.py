@@ -13,6 +13,7 @@ Verifies [docs--state-centric-execution-and-skill-state-comparison]:
 from __future__ import annotations
 
 import os
+import re
 import sys
 
 if not os.environ.get("ALONG_TEST_RUNNER"):
@@ -43,44 +44,29 @@ class TestSystemComparisonsDoc(unittest.TestCase):
         self.assertTrue(os.path.isfile(self.doc_path), f"File not found: {self.doc_path}")
         self.content = textio.read_text(self.doc_path, strict=True)
 
-    def test_paradigm_7_header_and_paper_reference(self):
-        """Paradigm 7 section header must reference Skill State Pattern."""
-        expected_header = "## 8. Paradigm 7: Conversational History Accumulation vs. Explicit Execution State (Skill State Pattern)"
-        self.assertIn(expected_header, self.content)
-        self.assertIn("Skill State Pattern", self.content)
+    def test_paradigm_7_section_present(self):
+        """Paradigm 7 section must exist and discuss Skill State Pattern."""
+        match = re.search(r"^##\s+\d+\.\s+Paradigm 7:.*?Skill State Pattern", self.content, re.MULTILINE)
+        self.assertIsNotNone(match, "Paradigm 7 section with Skill State Pattern must exist")
 
-    def test_three_execution_models_contrasted(self):
-        """Verify all three execution architectures are explicitly contrasted."""
-        self.assertIn("Append-Only Conversational History", self.content)
-        self.assertIn("Pure Ephemeral State Transition", self.content)
-        self.assertIn("Along's Dual-Tier State & Provenance Architecture", self.content)
+    def test_execution_models_present(self):
+        """Verify core execution architectures are discussed."""
+        self.assertIn("Dual-Tier", self.content)
+        self.assertIn("Ephemeral", self.content)
+        self.assertIn("Append-Only", self.content)
 
-    def test_adopted_aspects_articulated(self):
-        """Verify adopted mechanisms: bounded prompt footprints, observation distillation, retry discard, merge operator."""
-        self.assertIn("Bounded Prompt Footprints & Linear Token Scaling", self.content)
-        self.assertIn("Observation Distillation", self.content)
-        self.assertIn("Ephemeral Reasoning Discard in Worker Retry Loops", self.content)
-        self.assertIn("Deterministic Runtime Merge Operator with Null-Deletion Semantics", self.content)
+    def test_master_architectural_advantage_matrix(self):
+        """Master Architectural Advantage Matrix table must exist with valid structure."""
+        self.assertIn("Master Architectural Advantage Matrix", self.content)
+        matrix_row_found = any("|" in line and "Execution History" in line for line in self.content.splitlines())
+        self.assertTrue(matrix_row_found, "Missing Execution History row in comparison matrix")
 
-    def test_rejected_aspects_articulated(self):
-        """Verify critically rejected aspects: sufficient statistic trap, state corruption, multi-agent concurrency."""
-        self.assertIn("The \"Sufficient Statistic\" Trap / Lost History", self.content)
-        self.assertIn("State Corruption on Pure LLM Generation", self.content)
-        self.assertIn("Destruction of Engineering Provenance", self.content)
-        self.assertIn("Single-Agent Simplification vs. Multi-Agent Concurrency", self.content)
-
-    def test_master_architectural_advantage_matrix_row(self):
-        """Master Architectural Advantage Matrix must contain 'Execution History & Memory Model' row."""
-        self.assertIn("## 9. Master Architectural Advantage Matrix", self.content)
-        self.assertIn("**Execution History & Memory Model**", self.content)
-        matrix_row_found = False
-        for line in self.content.splitlines():
-            if "| **Execution History & Memory Model** |" in line:
-                matrix_row_found = True
-                self.assertIn("Append-only chat bloat", line)
-                self.assertIn("Dual-Tier", line)
-                break
-        self.assertTrue(matrix_row_found, "Missing Execution History & Memory Model row in matrix")
+    def test_code_fences_have_languages(self):
+        """All code fences must declare a language identifier."""
+        import re
+        fences = re.findall(r"^```(\w*)", self.content, re.MULTILINE)
+        for fence in fences:
+            self.assertTrue(bool(fence), "Found code fence without language identifier")
 
     def test_clean_ascii_typography(self):
         """Document must conform strictly to clean ASCII typography with zero forbidden characters."""

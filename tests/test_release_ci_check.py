@@ -279,6 +279,29 @@ class TestReleaseCiCheck(ReleaseCiCheckFixtureCase):
             self.root, head_sha=None, skip_ci=True, skip_reason="hotfix"
         )
 
+    @patch("along_version_bump.check_ci_precondition")
+    @patch("alongkit.gates.run_test_gate", return_value=gates.TESTS_FAILED)
+    def test_release_preflight_aborts_on_test_failure(self, mock_test_gate, mock_check_ci):
+        with self.assertRaises(ReleaseAborted):
+            release_preflight(self.root)
+
+    @patch("along_version_bump.check_ci_precondition")
+    @patch("alongkit.gates.run_test_gate", return_value=gates.TESTS_PASSED)
+    @patch("alongkit.gates.run_sanitizer")
+    @patch("alongkit.gates.link_integrity_gate", return_value=False)
+    def test_release_preflight_aborts_on_broken_links(
+        self, mock_link, mock_sanitizer, mock_test_gate, mock_check_ci
+    ):
+        mock_report = MagicMock()
+        mock_report.clean = True
+        mock_report.skipped = []
+        mock_report.files_scanned = 1
+        mock_sanitizer.return_value = mock_report
+
+        with self.assertRaises(ReleaseAborted) as ctx:
+            release_preflight(self.root)
+        self.assertIn("broken relative Markdown links", str(ctx.exception))
+
 
 if __name__ == "__main__":
     unittest.main()
