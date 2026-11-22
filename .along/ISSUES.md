@@ -1,9 +1,10 @@
 # Active Issues
 
 ## Active
-<!-- No active issues -->
+- [ ] `(feat)` [session-hierarchy-and-submodule-automation](ISSUES/feat--session-hierarchy-and-submodule-automation.md) - plan approved
 
 ## Backlog
+- [ ] `(bug)` [opencode-plugin-test-hermeticity](ISSUES/bug--opencode-plugin-test-hermeticity.md)
 - [ ] `(debt)` [autonomous-non-elevation-invariants](ISSUES/debt--autonomous-non-elevation-invariants.md)
 - [ ] `(debt)` [canonical-path-gate-expansion](ISSUES/debt--canonical-path-gate-expansion.md)
 - [ ] `(debt)` [dashboard-retire-risk-spike-views](ISSUES/debt--dashboard-retire-risk-spike-views.md)
@@ -52,7 +53,6 @@
 - [ ] `(feat)` [planning-fields-and-ordering-gates](ISSUES/feat--planning-fields-and-ordering-gates.md)
 - [ ] `(feat)` [runtime-integration-tests-local-llm](ISSUES/feat--runtime-integration-tests-local-llm.md)
 - [ ] `(feat)` [session-commit-binding](ISSUES/feat--session-commit-binding.md)
-- [ ] `(feat)` [session-hierarchy-and-submodule-automation](ISSUES/feat--session-hierarchy-and-submodule-automation.md) - plan approved
 - [ ] `(feat)` [subagent-execution-discipline](ISSUES/feat--subagent-execution-discipline.md)
 - [ ] `(feat)` [system-invariants-and-health-probes](ISSUES/feat--system-invariants-and-health-probes.md)
 - [ ] `(feat)` [team-idle-auto-claim](ISSUES/feat--team-idle-auto-claim.md)

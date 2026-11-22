@@ -2232,8 +2232,22 @@ def _children_in_context(repo_root: str, fm: Optional[Dict[str, Any]], context_r
     out = []
     for c in (fm or {}).get("children") or []:
         q, k = entities._ref_key(c)
-        if q and q != "root" and repo._same_path(os.path.normpath(os.path.join(repo_root, q)), context_root):
-            out.append(entities.parse_key(k)[1])
+        if q and q != "root":
+            matches = False
+            target_path = os.path.normpath(os.path.join(repo_root, q))
+            if repo._same_path(target_path, context_root):
+                matches = True
+            elif q == os.path.basename(context_root):
+                matches = True
+            elif repo.canonical_relpath(context_root, repo_root).endswith("/" + q.strip("/")):
+                matches = True
+            elif repo.canonical_relpath(context_root, repo_root) == q.strip("/"):
+                matches = True
+            if matches:
+                out.append(entities.parse_key(k)[1])
+        elif not q or q == "root":
+            if repo._same_path(repo_root, context_root):
+                out.append(entities.parse_key(k)[1])
     return out
 
 

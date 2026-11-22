@@ -149,6 +149,26 @@ def handle_start_command(repo_root: str, args: List[str]):
         if top:
             changes = closeout.git_changes(repo_root)
             if changes:
+                target_fm = issue.get("frontmatter") or {}
+                target_children = [entities.parse_key(entities._ref_key(c)[1])[1] for c in (target_fm.get("children") or [])]
+                target_parent = entities.parse_key(entities._ref_key(target_fm.get("parent") or "")[1])[1] if target_fm.get("parent") else None
+
+                def _is_hierarchy_member(c_slug: str, c_fm: Optional[Dict[str, Any]] = None) -> bool:
+                    if c_slug == issue["slug"]:
+                        return True
+                    if c_slug in target_children:
+                        return True
+                    if target_parent and c_slug == target_parent:
+                        return True
+                    if c_fm:
+                        c_ch = [entities.parse_key(entities._ref_key(c)[1])[1] for c in (c_fm.get("children") or [])]
+                        if issue["slug"] in c_ch:
+                            return True
+                        c_p = entities.parse_key(entities._ref_key(c_fm.get("parent") or "")[1])[1] if c_fm.get("parent") else None
+                        if c_p and c_p == issue["slug"]:
+                            return True
+                    return False
+
                 in_progress = [i for i in entities.scan_issues(repo_root) if i.get("status") == "in-progress"]
                 if issue.get("status") != "in-progress":
                     in_progress.append(issue)  # the issue being started may hold earlier edit events
@@ -158,15 +178,34 @@ def handle_start_command(repo_root: str, args: List[str]):
                         claimed.add(closeout.path_key(repo.canonical_relpath(os.path.join(repo_root, p), top)))
                 unattributed_candidates = [p for p in changes if closeout.path_key(p) not in claimed]
 
+                # Check if all modifications in the working tree belong to the issue or its umbrella hierarchy [REQ-2]
+                hierarchy_slugs = {issue["slug"]} | set(target_children)
+                if target_parent:
+                    hierarchy_slugs.add(target_parent)
+                hierarchy_claimed = set()
+                for h_slug in hierarchy_slugs:
+                    for p in session.attributed_files(repo_root, h_slug):
+                        hierarchy_claimed.add(closeout.path_key(repo.canonical_relpath(os.path.join(repo_root, p), top)))
+                    for p in changes:
+                        pk = closeout.path_key(p)
+                        if f"/{h_slug}" in pk or f"--{h_slug}" in pk or pk.startswith(f".along/issues/{h_slug}"):
+                            hierarchy_claimed.add(pk)
+                for proj in closeout.PROJECTION_FILES:
+                    hierarchy_claimed.add(closeout.path_key(proj))
+
+                all_belong_to_issue = all(closeout.path_key(p) in hierarchy_claimed for p in changes)
+
                 # 1. Hard block if uncommitted files from previously completed (wrapped) issues exist
                 done_attr = closeout.done_issues_attribution(repo_root)
                 wrapped_groups: Dict[str, List[str]] = {}
                 for dkey, dinfo in done_attr.items():
+                    if _is_hierarchy_member(dkey):
+                        continue
                     all_dpaths = {closeout.path_key(p) for p in list(dinfo["files"].keys()) + dinfo["entity_files"]}
                     matched = [p for p in unattributed_candidates if closeout.path_key(p) in all_dpaths]
                     if matched:
                         wrapped_groups[dkey] = sorted(matched)
-                if wrapped_groups and not allow_dirty:
+                if wrapped_groups and not allow_dirty and not all_belong_to_issue:
                     msg_lines = ["Working tree has uncommitted changes from completed (wrapped) issue(s):"]
                     for dkey, wpaths in sorted(wrapped_groups.items()):
                         msg_lines.append(f"  - {dkey}:")
@@ -175,12 +214,12 @@ def handle_start_command(repo_root: str, args: List[str]):
                         if len(wpaths) > 5:
                             msg_lines.append(f"      ... and {len(wpaths) - 5} more")
                     msg_lines.append("Commit them first ('along commit -i <slug> --paths ...' or 'along session close'),")
-                    msg_lines.append("or pass --allow-dirty to override.")
+                    msg_lines.append(f"or pass --allow-dirty to override: along start {issue['slug']} --allow-dirty")
                     raise CommandError("\n".join(msg_lines), exit_code=1)
 
                 # 2. Block if active in-progress issue exists with uncommitted working tree changes
-                active_others = [i for i in in_progress if i.get("slug") != issue["slug"]]
-                if active_others and not allow_dirty:
+                active_others = [i for i in in_progress if not _is_hierarchy_member(i.get("slug", ""), i.get("frontmatter"))]
+                if active_others and not allow_dirty and not all_belong_to_issue:
                     changed_keys = {closeout.path_key(p): p for p in changes}
                     active_with_changes = []
                     for other in active_others:
@@ -201,7 +240,7 @@ def handle_start_command(repo_root: str, args: List[str]):
                                 msg_lines.append(f"      ... and {len(os_paths) - 5} more")
                         msg_lines.append(f"To work on '{issue['slug']}' in parallel without dirtying this tree, use:")
                         msg_lines.append(f"  along start {issue['slug']} --worktree")
-                        msg_lines.append("Or commit the current changes first, or pass --allow-dirty to proceed anyway.")
+                        msg_lines.append(f"Or commit the current changes first, or pass --allow-dirty to proceed anyway: along start {issue['slug']} --allow-dirty")
                         raise CommandError("\n".join(msg_lines), exit_code=1)
 
     updates: Dict[str, Any] = {"status": "in-progress", "updated": today}

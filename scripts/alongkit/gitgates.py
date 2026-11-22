@@ -50,7 +50,7 @@ HOOK_MARKER = "# along-git-hook:"
 CHAINED_SUFFIX = ".pre-along"
 
 #: Commit subjects that never carry an issue binding.
-EXEMPT_SUBJECT_RE = re.compile(r"^(release: |Merge |Revert \"|fixup! |squash! |amend! )")
+EXEMPT_SUBJECT_RE = re.compile(r"^(release: |Merge |Revert \"|fixup! |squash! |amend! |chore\(along\):)")
 
 _HUNK_RE = re.compile(r"^@@ -\d+(?:,\d+)? \+(\d+)(?:,\d+)? @@")
 

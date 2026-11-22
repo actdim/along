@@ -25,6 +25,7 @@ Usage:
       --all-sync        Run all post-update sync operations (kb-sync, dep-scan, history-sync, graph-sync).
       --recursive, -r   Recursively align all nested subprojects and submodules.
       --no-hooks        Skip automatic installation of runtime lifecycle hooks.
+      --commit          Auto-commit protocol updates in dirty submodules with chore(along): protocol vX.Y.Z.
 """
 
 import os
@@ -43,7 +44,7 @@ from alongkit import bootstrap
 bootstrap.ensure_deps()
 
 
-from alongkit import entities, proc, repo, scaffold, semver
+from alongkit import entities, lifecycle, proc, repo, scaffold, semver
 
 REMOTE_GIT_URL = "https://github.com/actdim/along.git"
 REMOTE_RAW_URL = "https://raw.githubusercontent.com/actdim/along/main/AGENTS.md"
@@ -433,12 +434,24 @@ def apply_migration_to_context(ctx_dir, protocol_text, migrate_script, is_root=T
     # `**/` patterns in the root .gitattributes already cover subproject .along/ folders.
     if is_root and not dry_run:
         try:
-            from alongkit import merge as along_merge
+            from alongkit import merge as along_merge, textio
+            attr_path = os.path.join(ctx_dir, ".gitattributes")
+            before_attrs = textio.read_text(attr_path, strict=False) if os.path.isfile(attr_path) else ""
             report = along_merge.setup(ctx_dir)
             if report["git"] and (report["config_changed"] or report["gitattributes_changed"]
                                   or report.get("info_attributes_changed")):
                 print("   [OK] Refreshed Git auto-merge protection (.gitattributes -merge) "
                       "and merge driver bindings (along git setup)")
+                if report.get("gitattributes_changed"):
+                    after_attrs = textio.read_text(attr_path, strict=False) if os.path.isfile(attr_path) else ""
+                    if "along-projection" in before_attrs or "along-frontmatter" in before_attrs:
+                        print("   [Notice] Updated .gitattributes merge drivers from custom merge driver (merge=along-*) "
+                              "to -merge (fail-closed protection). Rationale: Projections and structured state must "
+                              "be regenerated via Along CLI sync engines (e.g. 'along kb sync') rather than Git "
+                              "auto-merges to prevent syntax corruption.")
+                    else:
+                        print("   [Notice] Configured -merge protection in .gitattributes for .along/ state and "
+                              "projections to guarantee file integrity across branches.")
         except (OSError, ValueError) as e:
             print(f"   [WARN] Could not register Along merge drivers: {e}")
 
@@ -515,10 +528,11 @@ def execute_post_update_syncs(contexts: list, repo_root: str, do_kb: bool, do_de
                 all_ok = False
     return all_ok
 
+
 def run_update(repo_root, check_only=False, dry_run=False, force=False, local_only=False,
                sync_global=False,
                do_kb_sync=False, do_dep_scan=False, do_history_sync=False, do_graph_sync=False,
-               verbose=False, no_hooks=False, recursive=False):
+               verbose=False, no_hooks=False, recursive=False, auto_commit=False):
     repo_root = os.path.abspath(repo_root)
     print("==================================================")
     print("-> ALONG One-Liner Updater (/along-update)")
@@ -749,6 +763,15 @@ def run_update(repo_root, check_only=False, dry_run=False, force=False, local_on
                 except OSError:
                     pass
 
+    if auto_commit and not dry_run:
+        from alongkit import version
+        print("\n-> Auto-committing protocol updates across submodules...")
+        committed = lifecycle.auto_commit_submodule_protocol_updates(repo_root, contexts, version.CURRENT_PROTOCOL_VERSION)
+        if committed:
+            print(f"-> [OK] Successfully auto-committed protocol updates across {len(committed)} submodule(s).")
+        else:
+            print("-> [Notice] No dirty submodules required protocol auto-commit.")
+
     if not all_contexts_ok or not sync_ok:
         print("\n[Error] Update completed with errors.\n", file=sys.stderr)
         return False
@@ -769,6 +792,7 @@ if __name__ == "__main__":
     global_flag = "--global" in sys.argv or "--sync-global" in sys.argv
     verbose_flag = any(a in sys.argv for a in ("-v", "--verbose", "--debug"))
     recursive_flag = "--recursive" in sys.argv or "-r" in sys.argv
+    commit_flag = "--commit" in sys.argv
     
     all_sync_flag = "--all-sync" in sys.argv
     kb_sync_flag = "--kb-sync" in sys.argv or all_sync_flag
@@ -795,6 +819,7 @@ if __name__ == "__main__":
         verbose=verbose_flag,
         no_hooks=no_hooks_flag,
         recursive=recursive_flag,
+        auto_commit=commit_flag,
     )
     if check_only_flag:
         sys.exit(0)

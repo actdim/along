@@ -972,6 +972,50 @@ def _auto_commit_wrapped_work(
     return 0
 
 
+def auto_commit_submodule_protocol_updates(repo_root: str, contexts: List[str], version_str: str) -> List[str]:
+    """Commit protocol-managed files in each dirty submodule [feat--session-hierarchy-and-submodule-automation] REQ-3."""
+    from . import proc, repo
+    committed = []
+    protocol_patterns = (
+        "AGENTS.md", "CLAUDE.md", ".along", ".protocol-version",
+        ".gitattributes", "llms.txt", "llms-full.txt"
+    )
+    for ctx in contexts:
+        if repo._same_path(ctx, repo_root):
+            continue
+        if not os.path.exists(os.path.join(ctx, ".git")):
+            continue
+
+        res = proc.run_capture(["git", "status", "--porcelain"], cwd=ctx, check=False)
+        if not res.ok or not res.stdout.strip():
+            continue
+
+        dirty_lines = res.stdout.strip().splitlines()
+        to_stage = []
+        for line in dirty_lines:
+            if len(line) < 4:
+                continue
+            path = line[3:].strip().strip('"')
+            parts = path.replace("\\", "/").split("/")
+            if any(parts[0] == p or path.startswith(p) for p in protocol_patterns):
+                to_stage.append(path)
+
+        if not to_stage:
+            continue
+
+        proc.run_capture(["git", "add", "--"] + to_stage, cwd=ctx, check=False)
+        msg = f"chore(along): protocol v{version_str}"
+        cres = proc.run_capture(["git", "commit", "-m", msg], cwd=ctx, check=False)
+        rel = repo.canonical_relpath(ctx, repo_root)
+        if cres.ok:
+            committed.append(rel)
+            print(f"   [OK] Committed protocol update in submodule '{rel}': {msg}")
+        else:
+            print(f"   [WARN] Failed to auto-commit in submodule '{rel}': {cres.stderr.strip()}", file=sys.stderr)
+
+    return committed
+
+
 
 def extract_issue_title(content: str, issue: Optional[Dict[str, Any]], slug: str) -> str:
     """Extract human-readable title from issue frontmatter or Markdown H1."""

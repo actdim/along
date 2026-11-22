@@ -18,7 +18,7 @@ gates:
     rule:
       type: regex_match
       field: CommandLine
-      pattern: '\[[a-z]+--[a-z0-9-]+\]|\(refs #[a-z0-9-]+\)'
+      pattern: '\[[a-z]+--[a-z0-9-]+\]|\(refs #[a-z0-9-]+\)|chore\(along\):'
       error: "Git commit rejected by [gate: commit-issue-binding]: Commit message must bind an issue slug, '[feat--my-feature]' or '(refs #my-feature)'. Use /along-commit."
 
   - id: commit_no_conflict_markers
