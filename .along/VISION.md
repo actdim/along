@@ -1,6 +1,6 @@
 ---
 protocol: along
-protocol_version: "4.4.11"
+protocol_version: "4.9.1"
 doc_type: vision
 sources:
   - AGENTS.md

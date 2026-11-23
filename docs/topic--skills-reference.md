@@ -17,7 +17,7 @@ sources:
 
 # Skills & Slash Commands Technical Reference
 
-Along provides an integrated suite of **21 singular automation skills** operating across Claude Code, OpenAI Codex, OpenCode, and Google Antigravity.
+Along provides an integrated suite of **22 singular automation skills** operating across Claude Code, OpenAI Codex, OpenCode, and Google Antigravity.
 
 Each skill is built on a domain-first naming pattern (`along-<entity>-<action>`), guarantees clean ASCII output, operates on strongly typed repository entities, and can be invoked either explicitly via slash commands/CLI or automatically via semantic intent recognition.
 

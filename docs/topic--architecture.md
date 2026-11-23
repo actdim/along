@@ -8,7 +8,7 @@ updated: 2026-09-22
 tags: [architecture, boundaries, multi-agent, blackboard, concurrency, ast, flow]
 sources:
   - path: README.md
-    hash: "a6d41a4f4316fe41108c7eefe0d327e7e607849d9b5478c5912127ed0f6cf62e"
+    hash: "9d664248427904d66636b0db75941cd184ad9079c7ebc376caf0f978a530d28f"
   - path: dashboard/app.py
     hash: "1a0b0c9e4b40adf717712a6c3c14bebb72728d579ae37ca844bf39eecc287fd7"
   - path: skills/along-dash/SKILL.md

@@ -33,7 +33,10 @@ pip install actdim-along
 # Web Dashboard: FastAPI, Uvicorn, Pydantic, and Rich
 pip install actdim-along[dash]
 
-# Full suite: install all optional extras
+# WebDev: Playwright browser verification and automated exploratory testing
+pip install actdim-along[webdev]
+
+# Full suite: install all optional extras (dash + webdev)
 pip install actdim-along[all]
 ```
 
@@ -83,7 +86,7 @@ Along addresses these challenges through a dual-tier structure: an evergreen arc
 | **Zero-Conflict Git Concurrency** | Single Source of Truth (SSOT) atomic files vs compiled projections (`ISSUES.md`, `INDEX.md`), union merges (`merge=union`), and decentralized date-slug ADRs that avoid collisions in parallel branches. |
 | **Engineering Provenance & Dual-Track UI** | Living plans, fix loops, and verification gates are permanently recorded in session logs while projecting interactive visual review cards in IDEs (Antigravity). |
 | **Strict Data Safety & Verification Gates** | Hermetic engines (`alongkit`) with transactional byte-exact rollbacks, strict front-matter preservation (`ruamel.yaml`), and zero-unintended-deletions invariant. |
-| **Declarative Runtime Gates & Traceability** | Mechanical agent lifecycle interception (`PreToolUse`, `Stop`) enforcing declarative runtime gates in `default_gates.yaml` (32 protocol invariants enforced across runtime hooks, git hooks, and CI), backed by machine-checked bi-directional traceability (`along hook verify`). In runtimes with Along hooks installed, violations trigger immediate tool-level interception; git and CI gates provide universal baseline enforcement everywhere. |
+| **Declarative Runtime Gates & Traceability** | Mechanical agent lifecycle interception (`PreToolUse`, `Stop`) enforcing declarative runtime gates in `default_gates.yaml` (35 protocol invariants enforced across runtime hooks, git hooks, and CI), backed by machine-checked bi-directional traceability (`along hook verify`). In runtimes with Along hooks installed, violations trigger immediate tool-level interception; git and CI gates provide universal baseline enforcement everywhere. |
 | **Nearest Context Boundary** | Monorepos, microservices, and Git submodules maintain isolated localized memory, preventing root workspace pollution. |
 
 ---
@@ -139,7 +142,8 @@ Along enforces a strict minimal-core architecture:
 - **Along Core (`actdim-along`)**: In-repo memory (`.along/`), entity lifecycle (`ISSUES/`, `DECISIONS/`, `MILESTONES/`), projections (`ISSUES.md`, `CONSTRAINTS.md`, `docs/INDEX.md`), bounded snippet retrieval (`along kb-search`), standard lifecycle contracts (`build`, `test`, `dev`, `commit`, `wrap`), mechanical safety gates, and stdlib telemetry (tracer, redactor, spool, OTLP/HTTP JSON exporter). Core runtime dependencies remain strictly minimal (`ruamel.yaml>=0.18`).
 - **Modular Extras**:
   - `actdim-along[dash]`: Web dashboard UI, Cytoscape DAG visualization, and OpenAPI analytics server.
-  - `actdim-along[all]`: Stable alias for optional extras (`[dash]`).
+  - `actdim-along[webdev]`: WebDev browser verification and Playwright runner.
+  - `actdim-along[all]`: Full bundle installing all optional extras (`[dash]`, `[webdev]`).
   - Optional protocol modules (`along-team`, git worktree sandboxing, `code-review-graph` AST tools, `along-dep-scan`) operate on-demand with zero extra package dependencies.
 - **Protocol Versioning**: Protocol specification version (`ALONG-PROTOCOL vX.Y.Z`) changes strictly on format or schema updates. Tooling enhancements release as minors; breaking format changes are batched into rare majors with migration automation (`along migrate`).
 
