@@ -1,7 +1,7 @@
 # Active Issues
 
 ## Active
-- [ ] `(docs)` [reconcile-protocol-counts-and-extras](ISSUES/docs--reconcile-protocol-counts-and-extras.md)
+<!-- No active issues -->
 
 ## Backlog
 - [ ] `(debt)` [autonomous-non-elevation-invariants](ISSUES/debt--autonomous-non-elevation-invariants.md)
@@ -65,9 +65,9 @@
 - [ ] `(task)` [reconcile-dashboard-ui-core-conventions](ISSUES/task--reconcile-dashboard-ui-core-conventions.md)
 
 ## Done (recent)
+- [x] `(docs)` [reconcile-protocol-counts-and-extras](ISSUES/done/docs--reconcile-protocol-counts-and-extras.md)
 - [x] `(task)` [opencode-deepseek-cache-configuration-audit](ISSUES/done/task--opencode-deepseek-cache-configuration-audit.md)
 - [x] `(feat)` [webdev-local-llm-engine](ISSUES/done/feat--webdev-local-llm-engine.md)
 - [x] `(feat)` [session-hierarchy-and-submodule-automation](ISSUES/done/feat--session-hierarchy-and-submodule-automation.md)
 - [x] `(debt)` [test-suite-paper-compliance-cleanup](ISSUES/done/debt--test-suite-paper-compliance-cleanup.md)
-- [x] `(bug)` [opencode-plugin-test-hermeticity](ISSUES/done/bug--opencode-plugin-test-hermeticity.md)
-<!-- 357 older completed issue(s) archived in .along/ISSUES/done/ -->
+<!-- 358 older completed issue(s) archived in .along/ISSUES/done/ -->

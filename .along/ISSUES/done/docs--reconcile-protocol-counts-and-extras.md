@@ -3,7 +3,8 @@ protocol: along
 protocol_version: "4.9.1"
 slug: reconcile-protocol-counts-and-extras
 type: docs
-status: in-progress
+status: done
+completed: 2026-11-23
 priority: medium
 created: 2026-11-23
 updated: 2026-11-23
@@ -32,11 +33,11 @@ During repository quality analysis, several factual drift issues and out-of-sync
 - REQ-6: Knowledge Base provenance hashes MUST be synchronized via `along kb-sync` for modified topic files.
 
 ## Acceptance Criteria
-- [ ] `README.md` runtime gate description specifies 35 protocol invariants.
-- [ ] `README.md` extras section lists `pip install actdim-along[webdev]` and correctly defines `[all]`.
-- [ ] `docs/topic--skills-reference.md` specifies 22 singular automation skills.
-- [ ] `scripts/alongkit/cli.py` has no obsolete nineteen skills comment.
-- [ ] `.along/VISION.md` frontmatter has `protocol_version: "4.9.1"`.
-- [ ] `along hook verify` passes with 35 defined gates.
-- [ ] `python scripts/along_kb_sync.py --strict` passes.
-- [ ] `python .along/scripts/test.py` passes without regressions.
+- [x] `README.md` runtime gate description specifies 35 protocol invariants.
+- [x] `README.md` extras section lists `pip install actdim-along[webdev]` and correctly defines `[all]`.
+- [x] `docs/topic--skills-reference.md` specifies 22 singular automation skills.
+- [x] `scripts/alongkit/cli.py` has no obsolete nineteen skills comment.
+- [x] `.along/VISION.md` frontmatter has `protocol_version: "4.9.1"`.
+- [x] `along hook verify` passes with 35 defined gates.
+- [x] `python scripts/along_kb_sync.py --strict` passes.
+- [x] `python .along/scripts/test.py` passes without regressions.
