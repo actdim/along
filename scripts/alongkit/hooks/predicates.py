@@ -1617,10 +1617,10 @@ def check_mutation_authorization(event: HookEvent, repo_root: str, options: Opti
     from . import containment
     if profiles.resolve_active_profile(repo_root) == profiles.PROFILE_AUTONOMOUS or containment.is_autonomous(event):
         return GateResult(decision=GateDecision.DENY, reason=reason, gate_name="require_plan_approval", exit_code=2)
-    if event.runtime == "antigravity":
+    from .adapters import can_ask
+    if can_ask(event.runtime):
         return GateResult(decision=GateDecision.ASK, reason=reason, gate_name="require_plan_approval")
     return reason
-
 
 def _is_ticket(rel: str, repo_root: str) -> bool:
     """An issue ticket (`.along/ISSUES/<key>.md`, or in `done/`), not a file in an issue folder."""

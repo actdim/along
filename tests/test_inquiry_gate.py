@@ -139,7 +139,7 @@ class TestInquiryGatePredicate(unittest.TestCase):
     def test_repository_source_mutation_denied_in_claude_and_codex(self):
         session.set_session_phase(self.temp_dir, "inquiry", plan_approved=False)
         target = os.path.join(self.temp_dir, "src", "engine.py")
-        for r_name in ("claude", "codex", "generic"):
+        for r_name in ("codex", "generic"):
             event = HookEvent(
                 event_type=HookEventType.PRE_TOOL_USE,
                 tool_name="write_to_file",
@@ -150,6 +150,17 @@ class TestInquiryGatePredicate(unittest.TestCase):
             result = check_mutation_authorization(event, self.temp_dir, options=ENFORCE_UNBOUND)
             self.assertIsInstance(result, str)
             self.assertIn("require-plan-approval", result)
+        for r_name in ("claude", "antigravity", "dsh"):
+            event = HookEvent(
+                event_type=HookEventType.PRE_TOOL_USE,
+                tool_name="write_to_file",
+                tool_args={"TargetFile": target, "CodeContent": "x = 1\n"},
+                workspace_root=self.temp_dir,
+                runtime=r_name,
+            )
+            result = check_mutation_authorization(event, self.temp_dir, options=ENFORCE_UNBOUND)
+            self.assertEqual(result.decision, GateDecision.ASK)
+            self.assertIn("require-plan-approval", result.reason)
 
     def test_shell_command_is_not_held_before_it_runs(self):
         # [debt--gate-simplification]: shell results are judged at Stop (turnstate).
@@ -220,17 +231,26 @@ class TestHookEngineInquiryIntegration(unittest.TestCase):
         ag_res = engine.evaluate(ag_event, repo_root=self.temp_dir)
         self.assertEqual(ag_res.decision, GateDecision.ASK)
 
-        # Claude Code receives DENY with exit code 2
-        claude_event = HookEvent(
+        # ASK-capable runtimes receive ASK; non-ASK runtimes receive DENY with exit code 2
+        for r_name in ("antigravity", "claude", "dsh"):
+            res = engine.evaluate(HookEvent(
+                event_type=HookEventType.PRE_TOOL_USE,
+                tool_name="write_to_file",
+                tool_args={"TargetFile": target, "CodeContent": "val = 42\n"},
+                workspace_root=self.temp_dir,
+                runtime=r_name,
+            ), repo_root=self.temp_dir)
+            self.assertEqual(res.decision, GateDecision.ASK)
+
+        codex_res = engine.evaluate(HookEvent(
             event_type=HookEventType.PRE_TOOL_USE,
             tool_name="write_to_file",
             tool_args={"TargetFile": target, "CodeContent": "val = 42\n"},
             workspace_root=self.temp_dir,
-            runtime="claude",
-        )
-        claude_res = engine.evaluate(claude_event, repo_root=self.temp_dir)
-        self.assertEqual(claude_res.decision, GateDecision.DENY)
-        self.assertEqual(claude_res.exit_code, 2)
+            runtime="codex",
+        ), repo_root=self.temp_dir)
+        self.assertEqual(codex_res.decision, GateDecision.DENY)
+        self.assertEqual(codex_res.exit_code, 2)
 
 
 

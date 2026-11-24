@@ -1,15 +1,21 @@
 # Active Issues
 
 ## Active
-<!-- No active issues -->
+- [ ] `(bug)` [opencode-runtime-integration-defects](ISSUES/bug--opencode-runtime-integration-defects.md) - plan approved
+- [ ] `(debt)` [decouple-protocol-and-toolchain-versioning](ISSUES/debt--decouple-protocol-and-toolchain-versioning.md) - plan approved
 
 ## Backlog
+- [ ] `(bug)` [antigravity-manifest-matcher-unenforceable-invariants](ISSUES/bug--antigravity-manifest-matcher-unenforceable-invariants.md)
+- [ ] `(bug)` [commit-gates-skip-chained-and-dash-c-commits](ISSUES/bug--commit-gates-skip-chained-and-dash-c-commits.md)
+- [ ] `(bug)` [traceability-blind-to-protocol-md-and-unbadged-gates](ISSUES/bug--traceability-blind-to-protocol-md-and-unbadged-gates.md)
 - [ ] `(debt)` [autonomous-non-elevation-invariants](ISSUES/debt--autonomous-non-elevation-invariants.md)
 - [ ] `(debt)` [canonical-path-gate-expansion](ISSUES/debt--canonical-path-gate-expansion.md)
 - [ ] `(debt)` [dashboard-retire-risk-spike-views](ISSUES/debt--dashboard-retire-risk-spike-views.md)
+- [ ] `(debt)` [docs-and-skills-test-hardening](ISSUES/debt--docs-and-skills-test-hardening.md)
 - [ ] `(debt)` [gate-config-layers](ISSUES/debt--gate-config-layers.md)
 - [ ] `(debt)` [triage-silent-exception-handlers](ISSUES/debt--triage-silent-exception-handlers.md)
 - [ ] `(docs)` [arxiv-academic-paper-preprint](ISSUES/docs--arxiv-academic-paper-preprint.md)
+- [ ] `(docs)` [count-claim-and-plan-approval-drift](ISSUES/docs--count-claim-and-plan-approval-drift.md)
 - [ ] `(docs)` [dita-topics-and-drift](ISSUES/docs--dita-topics-and-drift.md)
 - [ ] `(docs)` [engineering-deepdive-medium-devto](ISSUES/docs--engineering-deepdive-medium-devto.md)
 - [ ] `(docs)` [operations-and-autonomous-systems-paradigm](ISSUES/docs--operations-and-autonomous-systems-paradigm.md)
@@ -27,7 +33,7 @@
 - [ ] `(feat)` [clean-turn-context-isolation-in-along-team](ISSUES/feat--clean-turn-context-isolation-in-along-team.md)
 - [ ] `(feat)` [cowork-plugin-skill-packaging](ISSUES/feat--cowork-plugin-skill-packaging.md)
 - [ ] `(feat)` [cpp-ecosystem-support](ISSUES/feat--cpp-ecosystem-support.md)
-- [ ] `(feat)` [cursor-agent-and-rules-integration](ISSUES/feat--cursor-agent-and-rules-integration.md)
+- [ ] `(feat)` [cursor-agent-and-rules-integration](ISSUES/feat--cursor-agent-and-rules-integration.md) - plan: needs approval
 - [ ] `(feat)` [dart-flutter-ecosystem-support](ISSUES/feat--dart-flutter-ecosystem-support.md)
 - [ ] `(feat)` [doctor-detect-protocol-leak](ISSUES/feat--doctor-detect-protocol-leak.md)
 - [ ] `(feat)` [doctor-granular-diagnostics](ISSUES/feat--doctor-granular-diagnostics.md)
@@ -37,6 +43,7 @@
 - [ ] `(feat)` [external-issue-trackers-sync-and-import](ISSUES/feat--external-issue-trackers-sync-and-import.md)
 - [ ] `(feat)` [feedback-maintainer-telegram-email-channels](ISSUES/feat--feedback-maintainer-telegram-email-channels.md)
 - [ ] `(feat)` [golang-ecosystem-support](ISSUES/feat--golang-ecosystem-support.md)
+- [ ] `(feat)` [issue-bound-draft-plans](ISSUES/feat--issue-bound-draft-plans.md)
 - [ ] `(feat)` [jvm-ecosystem-support](ISSUES/feat--jvm-ecosystem-support.md)
 - [ ] `(feat)` [kb-search-hybrid-retrieval](ISSUES/feat--kb-search-hybrid-retrieval.md)
 - [ ] `(feat)` [local-llm-micro-orchestrator](ISSUES/feat--local-llm-micro-orchestrator.md)
@@ -61,13 +68,14 @@
 - [ ] `(feat)` [webdev-nl-local-runner](ISSUES/feat--webdev-nl-local-runner.md)
 - [ ] `(feat)` [workspace-activity-tracking](ISSUES/feat--workspace-activity-tracking.md)
 - [ ] `(feat)` [zero-step-state-recovery-and-drift-detection](ISSUES/feat--zero-step-state-recovery-and-drift-detection.md)
+- [ ] `(task)` [deepseek-telemetry-and-timeout](ISSUES/task--deepseek-telemetry-and-timeout.md)
 - [ ] `(task)` [gate-event-remeasure](ISSUES/task--gate-event-remeasure.md)
 - [ ] `(task)` [reconcile-dashboard-ui-core-conventions](ISSUES/task--reconcile-dashboard-ui-core-conventions.md)
 
 ## Done (recent)
 - [x] `(docs)` [changelog-deduplication](ISSUES/done/docs--changelog-deduplication.md)
+- [x] `(bug)` [dsh-tool-name-map-and-ask-capability](ISSUES/done/bug--dsh-tool-name-map-and-ask-capability.md)
 - [x] `(docs)` [reconcile-protocol-counts-and-extras](ISSUES/done/docs--reconcile-protocol-counts-and-extras.md)
 - [x] `(task)` [opencode-deepseek-cache-configuration-audit](ISSUES/done/task--opencode-deepseek-cache-configuration-audit.md)
 - [x] `(feat)` [webdev-local-llm-engine](ISSUES/done/feat--webdev-local-llm-engine.md)
-- [x] `(feat)` [session-hierarchy-and-submodule-automation](ISSUES/done/feat--session-hierarchy-and-submodule-automation.md)
-<!-- 359 older completed issue(s) archived in .along/ISSUES/done/ -->
+<!-- 360 older completed issue(s) archived in .along/ISSUES/done/ -->

@@ -816,6 +816,72 @@ def install_opencode_hooks(
         return "failed", f"cannot write {plugin_file}: {exc}"
 
 
+#: DeepSeek Harness tool names the PreToolUse gates inspect. The bridge reads a
+#: pipe-separated pattern as literal alternatives matched against the harness tool name, so
+#: these must be the model-facing names (`read`, `write`, `pwsh`, ...), never the Claude Code
+#: ones (`Read`, `Write`, `Bash`), which match nothing there.
+DSH_PRE_TOOL_MATCHER: str = (
+    "read|write|edit|glob|grep|pwsh|bash|read_image|web_fetch|web_search|todo_write|subagent|"
+    "subagent_fork|send_message|ask_user_question|exit_plan_mode"
+)
+
+#: PostToolUse: mutations plus the plan-exit signal.
+DSH_POST_TOOL_MATCHER: str = "write|edit|pwsh|bash|exit_plan_mode"
+
+#: File the bridge mounts: inside the profile for a global install, `<repo>/.dsh` locally.
+DSH_HOOKS_FILE_NAME: str = "along-hooks.json"
+
+
+def _dsh_entry(event: str, matcher: Optional[str], is_global: bool) -> Dict[str, Any]:
+    entry: Dict[str, Any] = {}
+    if matcher:
+        entry["matcher"] = matcher
+    entry["hooks"] = [{
+        "type": "command",
+        "command": get_hook_command("dsh", event, is_global=is_global),
+        "timeout": CLAUDE_HOOK_TIMEOUT,
+    }]
+    return entry
+
+
+def get_dsh_hook_manifest(is_global: bool = False) -> Dict[str, Any]:
+    """Hooks file mounted into DeepSeek Harness by the Claude-dialect bridge.
+
+    A DSH-specific matcher list, not the Claude one: the harness matches the pattern against
+    its own tool names, so a Claude Code manifest admits nothing.
+    See [bug--dsh-tool-name-map-and-ask-capability].
+    """
+    return {
+        "hooks": {
+            "PreToolUse": [_dsh_entry("PreToolUse", DSH_PRE_TOOL_MATCHER, is_global)],
+            "PostToolUse": [_dsh_entry("PostToolUse", DSH_POST_TOOL_MATCHER, is_global)],
+            "Stop": [_dsh_entry("Stop", None, is_global)],
+            "UserPromptSubmit": [_dsh_entry("UserPromptSubmit", None, is_global)],
+        }
+    }
+
+
+def _write_dsh_hooks_file(path: str, is_global: bool = False,
+                          dry_run: bool = False) -> Tuple[str, str]:
+    """Write the hooks file the bridge mounts, idempotently."""
+    payload = json.dumps(get_dsh_hook_manifest(is_global=is_global), indent=2) + "\n"
+    if os.path.isfile(path):
+        try:
+            existing = textio.read_text(path, strict=False)
+        except OSError:
+            existing = ""
+        if existing.replace("\r\n", "\n") == payload:
+            return "present", f"{path}: already up to date"
+    if dry_run:
+        return "dry-run", f"would write {path}"
+    try:
+        os.makedirs(os.path.dirname(path), exist_ok=True)
+        textio.write_text(path, payload, newline="\n")
+    except OSError as exc:
+        return "failed", f"cannot write {path}: {exc}"
+    return "installed", f"updated {path}"
+
+
 def install_dsh_hooks(
     repo_root: Optional[str] = None,
     dry_run: bool = False,
@@ -842,23 +908,27 @@ def install_dsh_hooks(
     else:
         if not repo_root:
             return "failed", "repo_root is required for local hook install"
-        # Ensure Claude hook settings exist locally since DSH hook bridge mounts them
-        install_claude_hooks(repo_root, dry_run=dry_run, is_global=False)
         candidate_dirs = [os.path.join(repo_root, ".dsh")]
-
-    expected_patch = {
-        "id": "along-hooks-bridge",
-        "name": "@deepseek-ai/dsh-hooks-claude-code",
-        "config": {
-            "configPath": "./.claude/settings.json",
-        },
-    }
 
     changed_any = False
     messages: List[str] = []
     statuses: List[str] = []
 
     for cdir in candidate_dirs:
+        # The bridge mounts this file, so it must exist and carry the DSH matcher; pointing
+        # the bridge at the Claude manifest admitted no harness tool name at all.
+        hooks_file = os.path.join(cdir, DSH_HOOKS_FILE_NAME)
+        config_path = os.path.abspath(hooks_file).replace("\\", "/") if is_global else ("./.dsh/" + DSH_HOOKS_FILE_NAME)
+        expected_patch = {
+            "id": "along-hooks-bridge",
+            "name": "@deepseek-ai/dsh-hooks-claude-code",
+            "config": {
+                "configPath": config_path,
+            },
+        }
+        hooks_status, hooks_message = _write_dsh_hooks_file(hooks_file, is_global=is_global, dry_run=dry_run)
+        messages.append(hooks_message)
+        statuses.append(hooks_status)
         patch_file = os.path.join(cdir, "cordis.patch.yml")
         existing_entries: List[Any] = []
         if os.path.isfile(patch_file):

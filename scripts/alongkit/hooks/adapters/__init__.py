@@ -43,3 +43,13 @@ def get_adapter(runtime: str = "antigravity") -> BaseAdapter:
     key = runtime.strip().lower()
     adapter_cls = ADAPTERS.get(key, AntigravityAdapter)
     return adapter_cls()
+
+
+def can_ask(runtime: str) -> bool:
+    """True when this runtime's adapter can hand an ASK decision to the user.
+
+    The single source of truth for the engine and the predicates: capability is a property of
+    the adapter, not a list of runtime names kept somewhere else. See
+    [bug--dsh-tool-name-map-and-ask-capability].
+    """
+    return bool(getattr(get_adapter(runtime), "ask_capable", False))

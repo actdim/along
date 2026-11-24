@@ -15,6 +15,10 @@ class BaseAdapter:
 
     runtime_name: str = "generic"
 
+    #: True when the runtime's hook protocol can surface an ASK decision to the user
+    #: instead of blocking outright. The adapter owns this fact; the engine only reads it.
+    ask_capable: bool = False
+
     def parse(self, raw_input: str, event_type: HookEventType = HookEventType.PRE_TOOL_USE) -> HookEvent:
         """Parse raw input from runtime (stdin) into a canonical HookEvent."""
         raise NotImplementedError

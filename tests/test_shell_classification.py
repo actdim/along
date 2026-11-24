@@ -142,7 +142,7 @@ class TestShellNeverHeldUpFront(_GitFixture):
         result = self._hook({"hook_event_name": "PreToolUse", "tool_name": "Write",
                              "tool_input": {"file_path": os.path.join(self.root, "src", "b.py"),
                                             "content": "y = 2\n"}})
-        self.assertEqual(result.decision, GateDecision.DENY)
+        self.assertEqual(result.decision, GateDecision.ASK)
         self.assertIn("PLAN_REQUIRED", result.reason)
 
 

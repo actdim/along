@@ -221,14 +221,16 @@ class TestPlanGate(_TempRoot):
         self.assertIsNone(check_mutation_authorization(_edit_tool_event(self.src, self.root), self.root))
 
     def test_unbound_session_is_held_when_the_repository_opts_in(self):
-        reason = check_mutation_authorization(_edit_tool_event(self.src, self.root), self.root,
-                                              options={"enforce_unbound": True})
-        self.assertIn("require-plan-approval", reason or "")
+        res = check_mutation_authorization(_edit_tool_event(self.src, self.root), self.root,
+                                           options={"enforce_unbound": True})
+        reason = res.reason if hasattr(res, "reason") else (res or "")
+        self.assertIn("require-plan-approval", reason)
 
     def test_bound_session_without_approval_is_held(self):
         session.bind_session(self.root, "work", key=session.session_key("claude", "sess-1"))
-        self.assertIn("require-plan-approval",
-                      check_mutation_authorization(_edit_tool_event(self.src, self.root), self.root) or "")
+        res = check_mutation_authorization(_edit_tool_event(self.src, self.root), self.root)
+        reason = res.reason if hasattr(res, "reason") else (res or "")
+        self.assertIn("require-plan-approval", reason)
 
     def test_shell_is_never_held_before_it_runs(self):
         # [debt--gate-simplification]: shell results are judged at Stop by git status.
@@ -305,8 +307,9 @@ class TestCommitAfterWrap(_TempRoot):
         session.init_session(self.root, "orphan")
         session.update_state(self.root, "orphan", phase="execution", plan_approved=True)
         edit = _edit_tool_event(self.src, self.root, key="fresh")
-        self.assertIn("require-plan-approval",
-                      check_mutation_authorization(edit, self.root, options=self.ENFORCE) or "")
+        res = check_mutation_authorization(edit, self.root, options=self.ENFORCE)
+        reason = res.reason if hasattr(res, "reason") else (res or "")
+        self.assertIn("require-plan-approval", reason)
         session.bind_session(self.root, "orphan", key=session.session_key("claude", "fresh"))
         self.assertIsNone(check_mutation_authorization(edit, self.root, options=self.ENFORCE),
                           "the bound session uses its blackboard")

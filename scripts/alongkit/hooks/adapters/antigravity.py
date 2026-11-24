@@ -19,6 +19,8 @@ class AntigravityAdapter(BaseAdapter):
     """Adapter for Google Antigravity lifecycle hooks (.agents/hooks.json)."""
 
     runtime_name: str = "antigravity"
+    #: Antigravity answers `{decision: "ask"}` in-process, so a gate may defer to the user.
+    ask_capable: bool = True
 
     def parse_post_tool_use(self, payload: Dict[str, Any]) -> Dict[str, Any]:
         """Extract tool execution result data from PostToolUse payloads."""

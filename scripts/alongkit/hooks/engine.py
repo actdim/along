@@ -17,14 +17,10 @@ from .containment import is_autonomous as check_is_autonomous
 from .declarative import get_all_declarative_gates
 from .escalation import classify_escalation, route_escalation
 from .gates import BaseGate, ProjectionProtectionGate
-from .adapters import normalize
+from .adapters import can_ask, normalize
 from .models import GateDecision, GateResult, HookEvent, HookEventType
 from .predicates import record_gate_denial, record_tool_activity
 
-
-#: Runtimes whose hook protocol can hand an ASK decision to the user
-#: (Claude Code: `permissionDecision: "ask"`). See [bug--claude-stop-loop-ask-mapping].
-ASK_CAPABLE_RUNTIMES = ("antigravity", "claude")
 
 #: Used only when the declarative catalogue cannot be loaded.
 FALLBACK_GATES: List[BaseGate] = [
@@ -109,7 +105,7 @@ class HookEngine:
                                 exit_code=2,
                             )
                         # Runtimes with a native ask keep it; the rest cannot prompt.
-                        if event.runtime not in ASK_CAPABLE_RUNTIMES:
+                        if not can_ask(event.runtime):
                             return GateResult(
                                 decision=GateDecision.DENY,
                                 reason=result.reason or "Operation rejected: plan approval required before code mutations.",

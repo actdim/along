@@ -97,10 +97,12 @@ def get_source_protocol_paths():
 
 def get_global_skill_paths():
     user_home = os.path.expanduser("~")
+    dsh_home = os.environ.get("DSH_HOME") or os.path.join(user_home, ".dsh")
     paths = [
         os.path.join(user_home, ".gemini", "config", "skills", "along-init", "protocol.md"),
         os.path.join(user_home, ".claude", "skills", "along-init", "protocol.md"),
         os.path.join(user_home, ".codex", "skills", "along-init", "protocol.md"),
+        os.path.join(dsh_home, "skills", "along-init", "protocol.md"),
         os.path.join(user_home, ".config", "opencode", "actdim-along", "protocol.md"),
         # Legacy fallbacks
         os.path.join(user_home, ".gemini", "config", "skills", "init-agents", "protocol.md"),
@@ -155,11 +157,13 @@ is_dev_repo = repo.is_dev_repo
 
 def purge_legacy_global_skills():
     user_home = os.path.expanduser("~")
+    dsh_home = os.environ.get("DSH_HOME") or os.path.join(user_home, ".dsh")
     skill_roots = [
         os.path.join(user_home, ".gemini", "config", "skills"),
         os.path.join(user_home, ".gemini", "antigravity", "skills"),
         os.path.join(user_home, ".claude", "skills"),
         os.path.join(user_home, ".codex", "skills"),
+        os.path.join(dsh_home, "skills"),
         os.path.join(user_home, ".config", "opencode", "skills"),
     ]
     purged = 0

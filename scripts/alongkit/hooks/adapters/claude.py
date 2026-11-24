@@ -62,6 +62,8 @@ class ClaudeCodeAdapter(BaseAdapter):
     """Adapter for Anthropic Claude Code CLI lifecycle hooks."""
 
     runtime_name: str = "claude"
+    #: Claude Code honours `hookSpecificOutput.permissionDecision: "ask"`.
+    ask_capable: bool = True
 
     def __init__(self) -> None:
         self._event_type: Optional[HookEventType] = None

@@ -18,19 +18,49 @@ from ..models import GateDecision, GateResult, HookEvent, HookEventType
 
 
 DSH_TOOL_NAME_MAP: Dict[str, str] = {
-    # Shell execution tools
-    "tool-pwsh": "run_command",
-    "tool_pwsh": "run_command",
+    # Model-facing names: what a DeepSeek Harness payload actually carries. The shipped
+    # @deepseek-ai/dsh-tool-fs package publishes `read`/`write`/`edit`, dsh-tool-fs-search
+    # publishes `glob`/`grep`, dsh-tool-pwsh publishes `pwsh`, dsh-tool-bash publishes `bash`
+    # and dsh-tool-todo publishes `todo_write`.
+    "read": "view_file",
+    "write": "write_to_file",
+    "edit": "replace_file_content",
+    "glob": "find_by_name",
+    "grep": "grep_search",
     "pwsh": "run_command",
     "PowerShell": "run_command",
     "powershell": "run_command",
-    "tool-bash": "run_command",
-    "tool_bash": "run_command",
     "bash": "run_command",
     "Bash": "run_command",
     "run_command": "run_command",
+    "read_image": "view_image",
+    "web_fetch": "read_url_content",
+    "web_search": "search_web",
+    "todo_write": "manage_task",
+    "skill": "manage_task",
+    "workflow": "manage_task",
+    "list_agents": "manage_task",
+    "interrupt_agent": "manage_task",
+    "job_output": "manage_task",
+    "job_list": "manage_task",
+    "job_kill": "manage_task",
+    "create_goal": "manage_task",
+    "get_goal": "manage_task",
+    "update_goal": "manage_task",
+    "load_workspace_dependencies": "manage_task",
+    "present": "manage_task",
+    "send_message": "send_message",
+    "ask_user_question": "ask_question",
+    "exit_plan_mode": "ask_question",
+    "subagent": "invoke_subagent",
+    "subagent_fork": "invoke_subagent",
 
-    # File mutation and access tools
+    # Composition entry ids: a cordis.patch.yml row (`- id: tool-fs`). Kept as aliases so an
+    # unusual mount still resolves, and because these are what a misconfigured bridge sends.
+    "tool-pwsh": "run_command",
+    "tool_pwsh": "run_command",
+    "tool-bash": "run_command",
+    "tool_bash": "run_command",
     "tool-fs": "replace_file_content",
     "tool_fs": "replace_file_content",
     "tool-fs/write": "write_to_file",
@@ -39,6 +69,15 @@ DSH_TOOL_NAME_MAP: Dict[str, str] = {
     "fs": "replace_file_content",
     "fs_write": "write_to_file",
     "fs_edit": "replace_file_content",
+    "tool-fs-search": "find_by_name",
+    "tool_fs_search": "find_by_name",
+    "fs_search": "find_by_name",
+    "tool-web": "read_url_content",
+    "tool_web": "read_url_content",
+    "tool-subagent": "invoke_subagent",
+    "tool_subagent": "invoke_subagent",
+
+    # Claude Code names: the bridge speaks that dialect, so a payload may arrive with them.
     "Write": "write_to_file",
     "WriteFile": "write_to_file",
     "write_file": "write_to_file",
@@ -47,31 +86,16 @@ DSH_TOOL_NAME_MAP: Dict[str, str] = {
     "edit_file": "replace_file_content",
     "MultiEdit": "replace_file_content",
     "NotebookEdit": "replace_file_content",
-
-    # Search and discovery
-    "tool-fs-search": "find_by_name",
-    "tool_fs_search": "find_by_name",
-    "fs_search": "find_by_name",
-    "Grep": "grep_search",
-    "grep_search": "grep_search",
-    "Glob": "find_by_name",
-    "find_by_name": "find_by_name",
-
-    # Read-only and navigation
     "Read": "view_file",
     "view_file": "view_file",
     "LS": "list_dir",
     "list_dir": "list_dir",
+    "Grep": "grep_search",
+    "grep_search": "grep_search",
+    "Glob": "find_by_name",
+    "find_by_name": "find_by_name",
     "WebFetch": "read_url_content",
     "WebSearch": "search_web",
-    "tool-web": "read_url_content",
-    "tool_web": "read_url_content",
-
-    # Agent tasks and subagents
-    "tool-subagent": "invoke_subagent",
-    "tool_subagent": "invoke_subagent",
-    "subagent": "invoke_subagent",
-    "subagent_fork": "invoke_subagent",
     "TodoWrite": "manage_task",
     "Task": "manage_task",
     "Agent": "manage_task",
@@ -164,7 +188,9 @@ class DeepSeekHarnessAdapter(ClaudeCodeAdapter):
             tool_args.setdefault("CommandLine", cmd)
             tool_args.setdefault("command", cmd)
 
-        # Normalize file path for filesystem mutations
+        # Normalize file path and content for filesystem mutations. The gates read
+        # TargetFile/CodeContent/ReplacementContent/content; a payload that carried only
+        # `new_string` would otherwise reach no content gate at all.
         if tool_name in ("write_to_file", "replace_file_content"):
             path = (
                 tool_args.get("Path")
@@ -174,6 +200,18 @@ class DeepSeekHarnessAdapter(ClaudeCodeAdapter):
             )
             tool_args.setdefault("Path", path)
             tool_args.setdefault("file_path", path)
+            if path:
+                tool_args.setdefault("TargetFile", path)
+
+        if tool_name == "write_to_file" and tool_args.get("content"):
+            tool_args.setdefault("CodeContent", tool_args["content"])
+
+        if tool_name == "replace_file_content":
+            for key in ("new_string", "new_content", "new_source", "content"):
+                if tool_args.get(key):
+                    tool_args.setdefault("ReplacementContent", tool_args[key])
+                    tool_args.setdefault("content", tool_args[key])
+                    break
 
         workspace_root = str(payload.get("cwd") or payload.get("workspace_root") or "")
         session_id = payload.get("session_id") or payload.get("sessionId")
