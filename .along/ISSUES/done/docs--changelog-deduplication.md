@@ -3,7 +3,8 @@ protocol: along
 protocol_version: "4.9.1"
 slug: changelog-deduplication
 type: docs
-status: in-progress
+status: done
+completed: 2026-11-24
 priority: medium
 created: 2026-11-24
 updated: 2026-11-24

@@ -1,7 +1,7 @@
 # Active Issues
 
 ## Active
-- [ ] `(docs)` [changelog-deduplication](ISSUES/docs--changelog-deduplication.md)
+<!-- No active issues -->
 
 ## Backlog
 - [ ] `(debt)` [autonomous-non-elevation-invariants](ISSUES/debt--autonomous-non-elevation-invariants.md)
@@ -65,9 +65,9 @@
 - [ ] `(task)` [reconcile-dashboard-ui-core-conventions](ISSUES/task--reconcile-dashboard-ui-core-conventions.md)
 
 ## Done (recent)
+- [x] `(docs)` [changelog-deduplication](ISSUES/done/docs--changelog-deduplication.md)
 - [x] `(docs)` [reconcile-protocol-counts-and-extras](ISSUES/done/docs--reconcile-protocol-counts-and-extras.md)
 - [x] `(task)` [opencode-deepseek-cache-configuration-audit](ISSUES/done/task--opencode-deepseek-cache-configuration-audit.md)
 - [x] `(feat)` [webdev-local-llm-engine](ISSUES/done/feat--webdev-local-llm-engine.md)
 - [x] `(feat)` [session-hierarchy-and-submodule-automation](ISSUES/done/feat--session-hierarchy-and-submodule-automation.md)
-- [x] `(debt)` [test-suite-paper-compliance-cleanup](ISSUES/done/debt--test-suite-paper-compliance-cleanup.md)
-<!-- 358 older completed issue(s) archived in .along/ISSUES/done/ -->
+<!-- 359 older completed issue(s) archived in .along/ISSUES/done/ -->
