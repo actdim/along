@@ -6,7 +6,8 @@ type: feat
 status: open
 priority: medium
 created: 2026-09-07
-updated: 2026-09-09
+updated: 2026-11-24
+plan_status: needs-approval
 agent: antigravity
 tags: [cursor, ide, rules, mcp, provider]
 milestone: v3.1.0-native-ast-and-cursor-parity

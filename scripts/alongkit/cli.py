@@ -29,11 +29,11 @@ if __name__ == "__main__" and not __package__:
         sys.path.insert(0, _parent)
     from alongkit import repo
     from alongkit.cliargs import _handle_chdir_options
-    from alongkit.version import CURRENT_PROTOCOL_VERSION
+    from alongkit.version import CURRENT_PROTOCOL_VERSION, CURRENT_VERSION
 else:
     from . import repo
     from .cliargs import _handle_chdir_options
-    from .version import CURRENT_PROTOCOL_VERSION
+    from .version import CURRENT_PROTOCOL_VERSION, CURRENT_VERSION
 
 ROUTER = "along_exec.py"
 
@@ -55,7 +55,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         args = remaining
 
     if args and args[0] in ("--version", "-V"):
-        print(f"along {CURRENT_PROTOCOL_VERSION}")
+        print(f"along {CURRENT_VERSION} (protocol v{CURRENT_PROTOCOL_VERSION})")
         return 0
 
     router = repo.resolve_tool_script(ROUTER, repo.find_repo_root())

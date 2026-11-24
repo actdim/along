@@ -169,6 +169,7 @@ def audit_subproject_protocol_versions(repo_root: str) -> List[dict]:
             "root_version": root_ver,
             "is_root": str(is_root),
             "mismatch": str(not is_root and ver != root_ver),
+            "supported": str(version.is_protocol_supported(ver)),
         })
     return results
 
@@ -496,10 +497,19 @@ def handle_doctor_command(repo_root: str, args: List[str]):
         warnings += 1
 
     # Audit protocol version across root and nested subprojects
+    from .. import version as _version
     sub_contexts = audit_subproject_protocol_versions(repo_root)
+    root_info = next((c for c in sub_contexts if c["is_root"] == "True"), None)
+    root_v = root_info["version"] if root_info else "unknown"
+    if root_info and not _version.is_protocol_supported(root_v):
+        print(
+            f"[WARN] Root protocol v{root_v} is outside supported range "
+            f"[{_version.MIN_SUPPORTED_PROTOCOL_VERSION}, {_version.CURRENT_PROTOCOL_VERSION}]; "
+            "run 'along update' or 'along migrate'."
+        )
+        warnings += 1
+
     if len(sub_contexts) > 1:
-        root_info = next((c for c in sub_contexts if c["is_root"] == "True"), None)
-        root_v = root_info["version"] if root_info else "unknown"
         mismatches = [c for c in sub_contexts if c["mismatch"] == "True"]
         print("\n--- Subproject Protocol Versions ---")
         print(f"[OK] . (root): v{root_v}")

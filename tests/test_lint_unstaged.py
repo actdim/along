@@ -131,6 +131,18 @@ class TestLintUnstagedAndDoctorSubprojects(unittest.TestCase):
         self.assertIn("mismatch with root", output)
         self.assertIn("along update --recursive", output)
 
+    def test_along_doctor_warns_on_unsupported_root_protocol(self):
+        _tlu_write(self.tmp, ".along/.protocol-version", "4.0.0\n")
+        res = subprocess.run(
+            [sys.executable, EXEC, "doctor"],
+            cwd=self.tmp,
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+        )
+        output = res.stdout + res.stderr
+        self.assertIn("Root protocol v4.0.0 is outside supported range", output)
+
     def test_lint_reports_non_ascii_in_unstaged_issue_plan(self):
         plan_rel = ".along/ISSUES/x/plans/01--y.md"
         _tlu_write(self.tmp, plan_rel, f"# Plan {chr(0x2014)} with em dash\n")

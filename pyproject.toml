@@ -116,7 +116,7 @@ packages = ["scripts/alongkit"]
 
 [tool.hatch.version]
 path = "scripts/alongkit/version.py"
-pattern = 'CURRENT_PROTOCOL_VERSION = "(?P<version>[^"]+)"'
+pattern = 'CURRENT_VERSION = "(?P<version>[^"]+)"'
 
 [tool.hatch.build.targets.sdist]
 include = [

@@ -1,14 +1,13 @@
 #!/usr/bin/env python3
 """
-alongkit.version - The single protocol and toolchain version constant.
+alongkit.version - Canonical protocol and toolchain version constants.
 
-The version string used to be declared independently in `migrate_protocol.py`,
-`along_kb_sync.py`, `along_update.py`, and `along_feedback.py`. Three of them were
-kept in step by regex rewrites in `along_version_bump.py`; the fourth was missed and
-had drifted to 2.1.6, so every bug report submitted through `along-feedback` carried
-a version that had not existed for three releases.
+`CURRENT_VERSION` tracks the toolchain package SemVer (PyPI package, CLI, skills
+distribution, and dashboard). `CURRENT_PROTOCOL_VERSION` tracks the repository
+protocol specification SemVer (`ALONG-PROTOCOL vX.Y.Z`). They are decoupled so
+toolchain releases do not churn protocol headers across the repository.
 
-`along_version_bump.py` rewrites the constant below. Nothing else declares it.
+`along_version_bump.py` rewrites the constants below. Nothing else declares them.
 """
 
 
@@ -20,18 +19,33 @@ if __name__ == "__main__":
         "Run: along version-bump   (or: python scripts/along_version_bump.py)"
     )
 
+from . import semver
 
+
+#: Protocol specification SemVer (`ALONG-PROTOCOL vX.Y.Z`).
 CURRENT_PROTOCOL_VERSION = "4.9.1"
 
-#: Alias for readers that care about the toolchain rather than the protocol. They move
-#: together: the engines and the protocol ship as one artifact.
-CURRENT_VERSION = CURRENT_PROTOCOL_VERSION
+#: Minimum protocol specification version supported by this toolchain.
+MIN_SUPPORTED_PROTOCOL_VERSION = "4.8.0"
+
+#: Toolchain package SemVer (`actdim-along` distribution, CLI, and engines).
+CURRENT_VERSION = "4.9.1"
 __version__ = CURRENT_VERSION
 
 
 def protocol_version() -> str:
     """The protocol version this toolchain implements."""
     return CURRENT_PROTOCOL_VERSION
+
+
+def is_protocol_supported(ver_str: str) -> bool:
+    """Return True when `ver_str` is within [MIN_SUPPORTED_PROTOCOL_VERSION, CURRENT_PROTOCOL_VERSION]."""
+    if not ver_str or not isinstance(ver_str, str):
+        return False
+    parsed = semver.parse(ver_str)
+    if parsed == (0, 0, 0):
+        return False
+    return semver.parse(MIN_SUPPORTED_PROTOCOL_VERSION) <= parsed <= semver.parse(CURRENT_PROTOCOL_VERSION)
 
 
 #: Milestone version threshold tuples for migrations and compatibility checks

@@ -385,37 +385,44 @@ class TestAlongSkillsAndScripts(unittest.TestCase):
         self.assertIn("retry_limit", team_content)
 
     def test_04_protocol_version_consistency(self):
-        """Verify that protocol version is identical across protocol.md, AGENTS.md, README.md, and scripts."""
+        """Verify protocol version and toolchain version consistency across governed files."""
+        from alongkit.version import CURRENT_PROTOCOL_VERSION, CURRENT_VERSION
+
         proto_file = os.path.join(REPO_ROOT, "skills", "along-init", "protocol.md")
         with open(proto_file, "r", encoding="utf-8") as f:
             proto_text = f.read()
-        
+
         m = re.search(r'# ALONG-PROTOCOL v(\d+\.\d+\.\d+)', proto_text)
         self.assertIsNotNone(m, "protocol.md must declare '# ALONG-PROTOCOL vX.Y.Z'")
-        version = m.group(1)
+        proto_version = m.group(1)
+        self.assertEqual(proto_version, CURRENT_PROTOCOL_VERSION,
+                         "protocol.md must match alongkit.version.CURRENT_PROTOCOL_VERSION")
 
-        # Check AGENTS.md
+        # Check AGENTS.md (protocol version)
         agents_md = os.path.join(REPO_ROOT, "AGENTS.md")
         with open(agents_md, "r", encoding="utf-8") as f:
-            self.assertIn(f"# ALONG-PROTOCOL v{version}", f.read(), "AGENTS.md must match protocol.md version")
+            self.assertIn(f"# ALONG-PROTOCOL v{CURRENT_PROTOCOL_VERSION}", f.read(),
+                          "AGENTS.md must match CURRENT_PROTOCOL_VERSION")
 
-        # Check README.md
+        # Check README.md (header = toolchain version, protocol mention = protocol version)
         readme_md = os.path.join(REPO_ROOT, "README.md")
         with open(readme_md, "r", encoding="utf-8") as f:
             readme_text = f.read()
             self.assertTrue(
-                f"# ActDim Along (v{version})" in readme_text or f"# Along (v{version})" in readme_text,
-                "README.md header must match protocol version (ActDim Along or Along)",
+                f"# ActDim Along (v{CURRENT_VERSION})" in readme_text or f"# Along (v{CURRENT_VERSION})" in readme_text,
+                "README.md header must match CURRENT_VERSION (ActDim Along or Along)",
             )
-            self.assertIn(f"ALONG-PROTOCOL v{version}", readme_text, "README.md text must match protocol version")
+            self.assertIn(f"ALONG-PROTOCOL v{CURRENT_PROTOCOL_VERSION}", readme_text,
+                          "README.md text must match CURRENT_PROTOCOL_VERSION")
 
-        # Check the single protocol version constant. It used to be declared
-        # independently in four engines; three were kept in step by regex rewrites and
-        # the fourth (along_feedback.py) had drifted to 2.1.6.
+        # Check the single version constants module.
         version_module = os.path.join(REPO_ROOT, "scripts", "alongkit", "version.py")
         with open(version_module, "r", encoding="utf-8") as f:
-            self.assertIn(f'CURRENT_PROTOCOL_VERSION = "{version}"', f.read(),
-                          f"alongkit/version.py must match {version}")
+            version_src = f.read()
+            self.assertIn(f'CURRENT_PROTOCOL_VERSION = "{CURRENT_PROTOCOL_VERSION}"', version_src,
+                          f"alongkit/version.py must match {CURRENT_PROTOCOL_VERSION}")
+            self.assertIn(f'CURRENT_VERSION = "{CURRENT_VERSION}"', version_src,
+                          f"alongkit/version.py must declare CURRENT_VERSION = {CURRENT_VERSION}")
 
         # No engine may declare its own copy.
         offenders = []
@@ -432,16 +439,18 @@ class TestAlongSkillsAndScripts(unittest.TestCase):
         proto_state = os.path.join(REPO_ROOT, ".along", ".protocol-version")
         if os.path.exists(proto_state):
             with open(proto_state, "r", encoding="utf-8") as f:
-                self.assertEqual(f.read().strip(), version,
-                                 f".along/.protocol-version must match {version}")
+                self.assertEqual(f.read().strip(), CURRENT_PROTOCOL_VERSION,
+                                 f".along/.protocol-version must match {CURRENT_PROTOCOL_VERSION}")
 
-        # Check pyproject.toml dynamic versioning
+        # Check pyproject.toml dynamic versioning resolves CURRENT_VERSION
         pyproject_path = os.path.join(REPO_ROOT, "pyproject.toml")
         with open(pyproject_path, "r", encoding="utf-8") as f:
             pyproject_content = f.read()
         self.assertIn('dynamic = ["version"]', pyproject_content,
                       "pyproject.toml must declare dynamic versioning")
-        self.assertNotIn(f'version = "{version}"', pyproject_content,
+        self.assertIn('pattern = \'CURRENT_VERSION = "(?P<version>[^"]+)"\'', pyproject_content,
+                      "pyproject.toml [tool.hatch.version] must extract CURRENT_VERSION")
+        self.assertNotIn(f'version = "{CURRENT_VERSION}"', pyproject_content,
                          "pyproject.toml must not hardcode static version string")
 
         # Check dashboard/app.py imports CURRENT_VERSION instead of literal

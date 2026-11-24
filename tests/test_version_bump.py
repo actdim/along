@@ -9,6 +9,7 @@ import io
 import os
 import subprocess
 import sys
+import tempfile
 import unittest
 from unittest.mock import MagicMock, patch
 
@@ -17,7 +18,15 @@ SCRIPTS_DIR = os.path.join(REPO_ROOT, "scripts")
 if SCRIPTS_DIR not in sys.path:
     sys.path.insert(0, SCRIPTS_DIR)
 
-from along_version_bump import report_rollback, ReleaseAborted, deduplicate_log_entries
+from along_version_bump import (
+    ReleaseAborted,
+    _build_parser,
+    _normalize_argv,
+    deduplicate_log_entries,
+    detect_and_bump_project,
+    report_rollback,
+)
+from alongkit import transaction, version as along_version
 
 
 class TestVersionBumpCli(unittest.TestCase):
@@ -84,6 +93,113 @@ class TestDeduplicateLogEntries(unittest.TestCase):
             deduped[2],
             "fix(opencode): guard undefined output in shell hooks and align runner CLI contract (refs #opencode-shell-env-runner-fix)",
         )
+
+
+def _write_fixture_file(root, rel_path, content):
+    full = os.path.join(root, rel_path)
+    os.makedirs(os.path.dirname(full), exist_ok=True)
+    with open(full, "w", encoding="utf-8", newline="\n") as f:
+        f.write(content)
+    return full
+
+
+def _read_fixture_file(root, rel_path):
+    with open(os.path.join(root, rel_path), "r", encoding="utf-8") as f:
+        return f.read()
+
+
+class TestDecoupledDevRepoBump(unittest.TestCase):
+    """Hermetic tests for decoupled toolchain vs protocol bumps in Along dev repos."""
+
+    def _make_dev_repo(self, root, toolchain_v="5.1.0", protocol_v="4.9.1"):
+        _write_fixture_file(root, "scripts/along_update.py", "# stub\n")
+        _write_fixture_file(
+            root,
+            "scripts/alongkit/version.py",
+            f'CURRENT_PROTOCOL_VERSION = "{protocol_v}"\nCURRENT_VERSION = "{toolchain_v}"\n',
+        )
+        _write_fixture_file(root, "skills/along-init/protocol.md", f"# ALONG-PROTOCOL v{protocol_v}\n")
+        _write_fixture_file(root, "AGENTS.md", f"# ALONG-PROTOCOL v{protocol_v}\n")
+        _write_fixture_file(
+            root,
+            "README.md",
+            f"# ActDim Along (v{toolchain_v})\n\nUses `ALONG-PROTOCOL v{protocol_v}`.\n",
+        )
+        _write_fixture_file(
+            root,
+            "llms-full.txt",
+            f"# ActDim Along (v{toolchain_v}) - Full\nALONG-PROTOCOL v{protocol_v}\n",
+        )
+        _write_fixture_file(root, "package.json", f'{{\n  "version": "{toolchain_v}"\n}}\n')
+        _write_fixture_file(root, "packages/dashboard-ui/package.json", f'{{\n  "version": "{toolchain_v}"\n}}\n')
+        _write_fixture_file(root, ".along/.protocol-version", f"{protocol_v}\n")
+        _write_fixture_file(root, ".along/VISION.md", f'---\nprotocol_version: "{protocol_v}"\n---\n# Vision\n')
+        _write_fixture_file(root, "docs/topic--workflow.md", f"# Workflow\nALONG-PROTOCOL v{protocol_v}\n")
+
+    def test_toolchain_bump_does_not_mutate_protocol_files(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            self._make_dev_repo(tmp, toolchain_v="5.1.0", protocol_v="4.9.1")
+            tx = transaction.FileTransaction(tmp, "test-toolchain")
+            new_v = detect_and_bump_project(tmp, "patch", tx)
+            tx.commit()
+
+            self.assertEqual(new_v, "5.1.1")
+            version_py = _read_fixture_file(tmp, "scripts/alongkit/version.py")
+            self.assertIn('CURRENT_VERSION = "5.1.1"', version_py)
+            self.assertIn('CURRENT_PROTOCOL_VERSION = "4.9.1"', version_py)
+            self.assertIn('"version": "5.1.1"', _read_fixture_file(tmp, "package.json"))
+            self.assertIn('"version": "5.1.1"', _read_fixture_file(tmp, "packages/dashboard-ui/package.json"))
+            readme = _read_fixture_file(tmp, "README.md")
+            self.assertIn("# ActDim Along (v5.1.1)", readme)
+            self.assertIn("ALONG-PROTOCOL v4.9.1", readme)
+            llms_full = _read_fixture_file(tmp, "llms-full.txt")
+            self.assertIn("# ActDim Along (v5.1.1)", llms_full)
+            self.assertIn("ALONG-PROTOCOL v4.9.1", llms_full)
+            self.assertEqual(_read_fixture_file(tmp, ".along/.protocol-version").strip(), "4.9.1")
+            self.assertIn("# ALONG-PROTOCOL v4.9.1", _read_fixture_file(tmp, "AGENTS.md"))
+            self.assertIn('protocol_version: "4.9.1"', _read_fixture_file(tmp, ".along/VISION.md"))
+            self.assertIn("ALONG-PROTOCOL v4.9.1", _read_fixture_file(tmp, "docs/topic--workflow.md"))
+
+    def test_protocol_bump_does_not_mutate_toolchain_files(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            self._make_dev_repo(tmp, toolchain_v="5.1.0", protocol_v="4.9.1")
+            tx = transaction.FileTransaction(tmp, "test-protocol")
+            new_pv = detect_and_bump_project(tmp, None, tx, protocol_bump="minor")
+            tx.commit()
+
+            self.assertEqual(new_pv, "4.10.0")
+            version_py = _read_fixture_file(tmp, "scripts/alongkit/version.py")
+            self.assertIn('CURRENT_PROTOCOL_VERSION = "4.10.0"', version_py)
+            self.assertIn('CURRENT_VERSION = "5.1.0"', version_py)
+            self.assertIn('"version": "5.1.0"', _read_fixture_file(tmp, "package.json"))
+            readme = _read_fixture_file(tmp, "README.md")
+            self.assertIn("# ActDim Along (v5.1.0)", readme)
+            self.assertIn("ALONG-PROTOCOL v4.10.0", readme)
+            llms_full = _read_fixture_file(tmp, "llms-full.txt")
+            self.assertIn("# ActDim Along (v5.1.0)", llms_full)
+            self.assertIn("ALONG-PROTOCOL v4.10.0", llms_full)
+            self.assertEqual(_read_fixture_file(tmp, ".along/.protocol-version").strip(), "4.10.0")
+            self.assertIn("# ALONG-PROTOCOL v4.10.0", _read_fixture_file(tmp, "AGENTS.md"))
+            self.assertIn("# ALONG-PROTOCOL v4.10.0", _read_fixture_file(tmp, "skills/along-init/protocol.md"))
+            self.assertIn('protocol_version: "4.10.0"', _read_fixture_file(tmp, ".along/VISION.md"))
+            self.assertIn("ALONG-PROTOCOL v4.10.0", _read_fixture_file(tmp, "docs/topic--workflow.md"))
+
+    def test_argparse_preserves_combined_flags_and_protocol(self):
+        parser = _build_parser()
+        args = parser.parse_args(_normalize_argv(["minor", "--protocol", "patch", "-cp", "--carry-over", "m1"]))
+        self.assertEqual(args.bump_arg, "minor")
+        self.assertEqual(args.protocol_bump, "patch")
+        self.assertTrue(args.commit)
+        self.assertTrue(args.push)
+        self.assertEqual(args.carry_over, "m1")
+
+    def test_is_protocol_supported_range(self):
+        self.assertTrue(along_version.is_protocol_supported(along_version.MIN_SUPPORTED_PROTOCOL_VERSION))
+        self.assertTrue(along_version.is_protocol_supported(along_version.CURRENT_PROTOCOL_VERSION))
+        self.assertFalse(along_version.is_protocol_supported("4.7.9"))
+        self.assertFalse(along_version.is_protocol_supported("99.0.0"))
+        self.assertFalse(along_version.is_protocol_supported(""))
+        self.assertFalse(along_version.is_protocol_supported("invalid"))
 
 
 if __name__ == "__main__":

@@ -37,7 +37,7 @@ from .repo import (canonical_path, canonical_relpath, find_agent_contexts, find_
                    find_state_dir, resolve_llm_targets, resolve_tool_script,
                    safe_relpath, state_dir)
 from .textio import read_text, write_text
-from .version import CURRENT_PROTOCOL_VERSION
+from .version import CURRENT_PROTOCOL_VERSION, CURRENT_VERSION, __version__
 
 __all__ = [
     "bootstrap",
@@ -67,6 +67,8 @@ __all__ = [
     "CommandError",
     "ValidationError",
     "CURRENT_PROTOCOL_VERSION",
+    "CURRENT_VERSION",
+    "__version__",
     "Result",
     "canonical_path",
     "canonical_relpath",

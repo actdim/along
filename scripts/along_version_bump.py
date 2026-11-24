@@ -42,6 +42,7 @@ import re
 import json
 import glob
 import shutil
+import argparse
 from datetime import datetime
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
@@ -51,7 +52,7 @@ bootstrap.ensure_deps()
 
 
 from alongkit import (bypass, entities, frontmatter, gates, proc, repo, sanitizer, semver, testruns,
-                      textio, transaction)
+                      textio, transaction, version)
 
 #: Label every gate and abort message carries, so the source of a failure is unambiguous.
 GATE_LABEL = "Release Quality Gate"
@@ -104,71 +105,70 @@ def rewrite_version_in_file(tx, path, substitutions):
     return True
 
 
-def bump_along_dev_repo(repo_root, new_version, tx):
-    """Bumps version across actdim/along internal files."""
+def _read_version_constant(repo_root, const_name, fallback):
+    """Read a version constant from `<repo_root>/scripts/alongkit/version.py`."""
+    version_file = os.path.join(repo_root, "scripts", "alongkit", "version.py")
+    if os.path.exists(version_file):
+        content = textio.read_text(version_file, strict=True)
+        m = re.search(rf'^{const_name}\s*=\s*"(\d+\.\d+\.\d+)"', content, re.MULTILINE)
+        if m:
+            return m.group(1)
+    return fallback
+
+
+def bump_along_dev_repo(repo_root, new_toolchain_version, tx, new_protocol_version=None):
+    """Bump toolchain and/or protocol versions across actdim/along internal files."""
     modified_files = []
 
     def apply(path, substitutions):
         if rewrite_version_in_file(tx, path, substitutions):
             modified_files.append(path)
 
-    protocol_line = (r'# ALONG-PROTOCOL v\d+\.\d+\.\d+', f'# ALONG-PROTOCOL v{new_version}')
-    protocol_mention = (r'ALONG-PROTOCOL v\d+\.\d+\.\d+', f'ALONG-PROTOCOL v{new_version}')
+    version_py = os.path.join(repo_root, "scripts", "alongkit", "version.py")
 
-    # 1. Update skills/along-init/protocol.md and skills/along-init/SKILL.md
-    apply(os.path.join(repo_root, "skills", "along-init", "protocol.md"), [protocol_line])
-    apply(os.path.join(repo_root, "skills", "along-init", "SKILL.md"), [protocol_mention])
+    if new_toolchain_version:
+        apply(version_py, [
+            (r'CURRENT_VERSION = "\d+\.\d+\.\d+"', f'CURRENT_VERSION = "{new_toolchain_version}"'),
+        ])
+        apply(os.path.join(repo_root, "README.md"), [
+            (r'# (?:ActDim )?Along \(v\d+\.\d+\.\d+\)', f'# ActDim Along (v{new_toolchain_version})'),
+        ])
+        apply(os.path.join(repo_root, "llms-full.txt"), [
+            (r'(?:ActDim )?Along \(v\d+\.\d+\.\d+\)', f'ActDim Along (v{new_toolchain_version})'),
+        ])
+        for pkg_file in ["package.json", os.path.join("packages", "dashboard-ui", "package.json")]:
+            apply(os.path.join(repo_root, pkg_file),
+                  [(r'"version":\s*"\d+\.\d+\.\d+"', f'"version": "{new_toolchain_version}"')])
 
-    # 2. Update root AGENTS.md
-    apply(os.path.join(repo_root, "AGENTS.md"), [protocol_line])
+    if new_protocol_version:
+        protocol_line = (r'# ALONG-PROTOCOL v\d+\.\d+\.\d+', f'# ALONG-PROTOCOL v{new_protocol_version}')
+        protocol_mention = (r'ALONG-PROTOCOL v\d+\.\d+\.\d+', f'ALONG-PROTOCOL v{new_protocol_version}')
 
-    # 3. Update README.md
-    apply(os.path.join(repo_root, "README.md"), [
-        (r'# (?:ActDim )?Along \(v\d+\.\d+\.\d+\)', f'# ActDim Along (v{new_version})'),
-        protocol_mention,
-        (r'Skills & Slash Commands \(v\d+\.\d+\.\d+\)',
-         f'Skills & Slash Commands (v{new_version})'),
-    ])
-
-    # 4. Update the protocol version constant (SSOT).
-    for const_path in [os.path.join(repo_root, "scripts", "alongkit", "version.py"),
-                       os.path.join(repo_root, "scripts", "migrate_protocol.py"),
-                       os.path.join(repo_root, "skills", "along-init", "migrate_protocol.py"),
-                       os.path.join(repo_root, "scripts", "along_kb_sync.py"),
-                       os.path.join(repo_root, "skills", "along-kb-sync", "along_kb_sync.py"),
-                       os.path.join(repo_root, "scripts", "along_update.py"),
-                       os.path.join(repo_root, "skills", "along-update", "along_update.py")]:
-        apply(const_path, [(r'CURRENT_PROTOCOL_VERSION = "\d+\.\d+\.\d+"',
-                            f'CURRENT_PROTOCOL_VERSION = "{new_version}"')])
-
-    # 5. Update .along/.protocol-version state marker
-    along_state_dir = os.path.join(repo_root, ".along")
-    if os.path.isdir(along_state_dir):
-        proto_state_file = os.path.join(along_state_dir, ".protocol-version")
-        tx.write(proto_state_file, f"{new_version}\n")
-        modified_files.append(proto_state_file)
-
-    # 6. Update llms.txt and llms-full.txt (both root and .well-known/)
-    for llm_file in [
-        "llms.txt", "llms-full.txt",
-        os.path.join(".well-known", "llms.txt"),
-        os.path.join(".well-known", "llms-full.txt"),
-    ]:
-        apply(os.path.join(repo_root, llm_file), [
-            protocol_mention,
-            (r'(?:ActDim )?Along \(v\d+\.\d+\.\d+\)', f'ActDim Along (v{new_version})'),
+        apply(os.path.join(repo_root, "skills", "along-init", "protocol.md"), [protocol_line])
+        apply(os.path.join(repo_root, "AGENTS.md"), [protocol_line])
+        apply(os.path.join(repo_root, "README.md"), [protocol_mention])
+        apply(version_py, [
+            (r'CURRENT_PROTOCOL_VERSION = "\d+\.\d+\.\d+"',
+             f'CURRENT_PROTOCOL_VERSION = "{new_protocol_version}"'),
         ])
 
-    # 7. Update package.json and packages/dashboard-ui/package.json
-    for pkg_file in ["package.json", os.path.join("packages", "dashboard-ui", "package.json")]:
-        apply(os.path.join(repo_root, pkg_file),
-              [(r'"version":\s*"\d+\.\d+\.\d+"', f'"version": "{new_version}"')])
+        along_state_dir = os.path.join(repo_root, ".along")
+        if os.path.isdir(along_state_dir):
+            proto_state_file = os.path.join(along_state_dir, ".protocol-version")
+            tx.write(proto_state_file, f"{new_protocol_version}\n")
+            modified_files.append(proto_state_file)
+            vision_file = os.path.join(along_state_dir, "VISION.md")
+            apply(vision_file, [
+                (r'(?m)^protocol_version:\s*"?\d+\.\d+\.\d+"?',
+                 f'protocol_version: "{new_protocol_version}"'),
+            ])
 
-    # 8. Update topic articles in docs/ (e.g. topic--setup-and-workflow.md)
-    docs_dir = os.path.join(repo_root, "docs")
-    if os.path.isdir(docs_dir):
-        for doc_file in glob.glob(os.path.join(docs_dir, "topic--*.md")):
-            apply(doc_file, [protocol_mention])
+        apply(os.path.join(repo_root, "llms-full.txt"), [protocol_mention])
+
+        docs_dir = os.path.join(repo_root, "docs")
+        if os.path.isdir(docs_dir):
+            for doc_file in glob.glob(os.path.join(docs_dir, "topic--*.md")):
+                apply(doc_file, [protocol_mention])
 
     return modified_files
 
@@ -183,7 +183,7 @@ def synthesize_script(script_path, content, tx=None):
         pass
     print(f"-> Generated project-specific version bumper in: {script_path}")
 
-def detect_and_bump_project(repo_root, bump_arg, tx):
+def detect_and_bump_project(repo_root, bump_arg, tx, protocol_bump=None):
     """Write the new version into this project's manifests. Returns the new version.
 
     Every write goes through `tx`, so a failure in a later release step restores the
@@ -193,6 +193,8 @@ def detect_and_bump_project(repo_root, bump_arg, tx):
     """
     custom_script = os.path.join(repo.state_dir(repo_root), "scripts", "bump_version.py")
     if os.path.exists(custom_script):
+        if protocol_bump is not None:
+            raise ReleaseAborted("--protocol is only supported in the Along development repository.")
         print(f"-> Executing custom project script: {custom_script} {bump_arg}")
         tx.mark_unrestorable(
             f"{repo.safe_relpath(custom_script, repo_root)} wrote paths this engine "
@@ -207,14 +209,22 @@ def detect_and_bump_project(repo_root, bump_arg, tx):
 
     # Check Along Dev Repo
     if is_along_dev_repo(repo_root):
-        proto_path = os.path.join(repo_root, "skills", "along-init", "protocol.md")
-        with open(proto_path, "r", encoding="utf-8") as f:
-            m = re.search(r'# ALONG-PROTOCOL v(\d+\.\d+\.\d+)', f.read())
-        cur_v = m.group(1) if m else "2.0.0"
-        new_v = calculate_next_version(cur_v, bump_arg)
-        files = bump_along_dev_repo(repo_root, new_v, tx)
-        print(f"-> [Along Dev Mode] Bumped v{cur_v} -> v{new_v} across {len(files)} internal files.")
-        return new_v
+        new_toolchain_v = None
+        new_protocol_v = None
+        if bump_arg is not None:
+            cur_v = _read_version_constant(repo_root, "CURRENT_VERSION", version.CURRENT_VERSION)
+            new_toolchain_v = calculate_next_version(cur_v, bump_arg)
+            print(f"-> [Along Dev Mode] Toolchain: v{cur_v} -> v{new_toolchain_v}")
+        if protocol_bump is not None:
+            cur_pv = _read_version_constant(repo_root, "CURRENT_PROTOCOL_VERSION", version.CURRENT_PROTOCOL_VERSION)
+            new_protocol_v = calculate_next_version(cur_pv, protocol_bump)
+            print(f"-> [Along Dev Mode] Protocol:  v{cur_pv} -> v{new_protocol_v}")
+        files = bump_along_dev_repo(repo_root, new_toolchain_v, tx, new_protocol_version=new_protocol_v)
+        print(f"-> [Along Dev Mode] Updated {len(files)} internal file(s).")
+        return new_toolchain_v or new_protocol_v
+
+    if protocol_bump is not None:
+        raise ReleaseAborted("--protocol is only supported in the Along development repository.")
 
     # Node.js Project (package.json)
     pkg_json = os.path.join(repo_root, "package.json")
@@ -766,8 +776,9 @@ def update_changelog(repo_root, new_version, tx):
     return True
 
 
-def create_release_commit(repo_root, new_version, paths, tx, do_push=False):
-    """Stage exactly `paths`, commit, and create the annotated tag `v<version>`.
+def create_release_commit(repo_root, new_version, paths, tx, do_push=False,
+                          commit_msg=None, create_tag=True):
+    """Stage exactly `paths`, commit, and optionally create the annotated tag `v<version>`.
 
     Staging used to be `git add -A`, which swept the entire working tree into the release
     commit: every unrelated edit a developer happened to have open shipped inside it.
@@ -788,7 +799,7 @@ def create_release_commit(repo_root, new_version, paths, tx, do_push=False):
     if not staged.ok:
         raise ReleaseAborted(f"git staging failed: {staged.stderr.strip()}")
 
-    commit_msg = f"release: v{new_version} - bump version and release reconciliation"
+    commit_msg = commit_msg or f"release: v{new_version} - bump version and release reconciliation"
     committed = proc.git(["commit", "-m", commit_msg], cwd=repo_root)
     if not committed.ok:
         detail = (committed.stderr or committed.stdout).strip()
@@ -801,14 +812,15 @@ def create_release_commit(repo_root, new_version, paths, tx, do_push=False):
     print(f"-> Git commit created: {commit_msg}")
 
     complete = True
-    tag = f"v{new_version}"
-    tagged = proc.git(["tag", "-a", tag, "-m", f"release: {tag}"], cwd=repo_root)
-    if tagged.ok:
-        print(f"-> Annotated tag created: {tag}")
-    else:
-        print(f"[Error] Could not create the annotated tag {tag}: "
-              f"{(tagged.stderr or tagged.stdout).strip()}", file=sys.stderr)
-        complete = False
+    if create_tag:
+        tag = f"v{new_version}"
+        tagged = proc.git(["tag", "-a", tag, "-m", f"release: {tag}"], cwd=repo_root)
+        if tagged.ok:
+            print(f"-> Annotated tag created: {tag}")
+        else:
+            print(f"[Error] Could not create the annotated tag {tag}: "
+                  f"{(tagged.stderr or tagged.stdout).strip()}", file=sys.stderr)
+            complete = False
 
     if do_push:
         print("-> Pushing release commit and tags to remote...")
@@ -825,48 +837,71 @@ def create_release_commit(repo_root, new_version, paths, tx, do_push=False):
     return complete
 
 
+def _build_parser():
+    parser = argparse.ArgumentParser(
+        prog="python along_version_bump.py",
+        description="Along Universal Release & Version Bumper",
+    )
+    parser.add_argument(
+        "bump_arg",
+        nargs="?",
+        default=None,
+        help="Toolchain version bump: patch, minor, major, or explicit X.Y.Z (default: patch when --protocol is omitted)",
+    )
+    parser.add_argument(
+        "--protocol",
+        dest="protocol_bump",
+        metavar="TYPE_OR_VER",
+        default=None,
+        help="Bump protocol specification version (patch, minor, major, or explicit X.Y.Z)",
+    )
+    parser.add_argument("-c", "--commit", action="store_true", help="Create release commit and tag")
+    parser.add_argument("-p", "--push", action="store_true", help="Commit and push with tags")
+    parser.add_argument("--fix-typography", action="store_true", help="Repair non-ASCII typography before release")
+    parser.add_argument("-n", "--no-verify", action="store_true", help="Skip pre-flight gates (requires --reason)")
+    parser.add_argument("--skip-ci", action="store_true", help="Skip CI status check (requires --reason)")
+    parser.add_argument("--reason", default=None, help="Audit reason for --no-verify or --skip-ci")
+    parser.add_argument("--carry-over", default=None, metavar="MILESTONE",
+                        help="Carry over open issues to target milestone slug")
+    return parser
+
+
+def _normalize_argv(argv):
+    normalized = []
+    for arg in argv:
+        if arg in ("-cp", "-pc"):
+            normalized.extend(["-c", "-p"])
+        else:
+            normalized.append(arg)
+    return normalized
+
+
 def main():
     repo_root = repo.find_repo_root()
-    bump_arg = sys.argv[1] if len(sys.argv) > 1 else "patch"
+    parser = _build_parser()
+    args = parser.parse_args(_normalize_argv(sys.argv[1:]))
 
-    if bump_arg in ["-h", "--help"]:
-        print("Usage: python along_version_bump.py [patch|minor|major|<version>] "
-              "[-c|--commit] [-p|--push] [--fix-typography] [-n|--no-verify --reason \"...\"] "
-              "[--skip-ci --reason \"...\"] [--carry-over <milestone>]")
-        sys.exit(0)
+    carry_over = args.carry_over
+    bypass_reason = args.reason
+    fix_typography = args.fix_typography
+    skip_verify = args.no_verify
+    skip_ci = args.skip_ci
+    do_push = args.push
+    do_commit = args.commit or do_push
+    protocol_bump = args.protocol_bump
+    bump_toolchain = (args.bump_arg is not None) or (protocol_bump is None)
+    bump_arg_clean = args.bump_arg if args.bump_arg is not None else ("patch" if bump_toolchain else None)
 
-    argv = list(sys.argv[1:])
-    carry_over = None
-    if "--carry-over" in argv:
-        idx = argv.index("--carry-over")
-        if idx + 1 >= len(argv) or argv[idx + 1].startswith("-"):
-            print("[Error] --carry-over needs a milestone slug.", file=sys.stderr)
-            sys.exit(2)
-        carry_over = argv[idx + 1]
-        del argv[idx:idx + 2]
-    bypass_reason = None
-    if "--reason" in argv:
-        idx = argv.index("--reason")
-        if idx + 1 >= len(argv):
-            print("[Error] --reason needs a text.", file=sys.stderr)
-            sys.exit(2)
-        bypass_reason = argv[idx + 1]
-        del argv[idx:idx + 2]
-    sys.argv[1:] = argv
-    bump_arg = sys.argv[1] if len(sys.argv) > 1 else "patch"
-
-    flags = [a for a in sys.argv[1:] if a.startswith("-")]
-    fix_typography = "--fix-typography" in flags
-    skip_verify = "--no-verify" in flags or "-n" in flags
-    skip_ci = "--skip-ci" in flags
-    do_commit = "--commit" in flags or "-c" in flags or "-cp" in flags or "-pc" in flags or "--push" in flags or "-p" in flags
-    do_push = "--push" in flags or "-p" in flags or "-cp" in flags or "-pc" in flags
-    bump_arg_clean = [a for a in sys.argv[1:] if not a.startswith("-")][0] if any(not a.startswith("-") for a in sys.argv[1:]) else "patch"
+    requested_parts = []
+    if bump_arg_clean is not None:
+        requested_parts.append(f"toolchain={bump_arg_clean}")
+    if protocol_bump is not None:
+        requested_parts.append(f"protocol={protocol_bump}")
 
     print("==================================================")
-    print(f"-> Along Universal Release & Version Bumper")
+    print("-> Along Universal Release & Version Bumper")
     print(f"   Target Repository: {repo_root}")
-    print(f"   Requested Bump:    {bump_arg_clean}")
+    print(f"   Requested Bump:    {', '.join(requested_parts)}")
     print("==================================================")
 
     # A skipped release gate is the user's decision, with a reason, and it is recorded
@@ -891,19 +926,29 @@ def main():
         if pending_typography and not typography_gate(repo_root, GATE_LABEL, allow_fix=True):
             raise ReleaseAborted("the typography findings could not be repaired")
 
-        new_version = detect_and_bump_project(repo_root, bump_arg_clean, tx)
+        new_version = detect_and_bump_project(
+            repo_root, bump_arg_clean, tx, protocol_bump=protocol_bump
+        )
         if not new_version:
             raise ReleaseAborted("no version change recorded")
 
-        print("-> Reconciling .along/ milestones...")
-        update_along_milestones(repo_root, new_version, tx, carry_over=carry_over)
-        update_changelog(repo_root, new_version, tx)
+        if bump_toolchain:
+            print("-> Reconciling .along/ milestones...")
+            update_along_milestones(repo_root, new_version, tx, carry_over=carry_over)
+            update_changelog(repo_root, new_version, tx)
 
         written = [repo.normalize_posix(p) for p in tx.changed()]
         complete = True
         if do_commit:
-            complete = create_release_commit(repo_root, new_version, written, tx,
-                                             do_push=do_push)
+            if bump_toolchain:
+                complete = create_release_commit(repo_root, new_version, written, tx,
+                                                 do_push=do_push)
+            else:
+                complete = create_release_commit(
+                    repo_root, new_version, written, tx, do_push=do_push,
+                    commit_msg=f"chore(protocol): ALONG-PROTOCOL v{new_version}",
+                    create_tag=False,
+                )
         else:
             print(f"-> Version updated on disk across {len(written)} file(s):")
             for rel in written:
