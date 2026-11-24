@@ -33,6 +33,14 @@ def _doctor_runtime_checks(repo_root: str, errors: int, warnings: int) -> Tuple[
     print(f"\n--- Runtime: {agent} ---")
     tag = "[OK]" if report["enforcement"] == runtime.MECHANICAL else "[WARN]"
     print(f"{tag} Gate enforcement: {report['enforcement']}. {report['explanation']}")
+    if agent == "opencode":
+        oc_audit = runtime.opencode_plugin_audit(repo_root)
+        if oc_audit["duplicate_paths"]:
+            print(f"[WARN] Duplicate OpenCode along-gates plugin copies detected: {', '.join(oc_audit['duplicate_paths'])}")
+            warnings += 1
+        if oc_audit["stale_paths"]:
+            print(f"[WARN] Stale OpenCode along-gates plugin copy differs from template: {', '.join(oc_audit['stale_paths'])}")
+            warnings += 1
     if report["enforcement"] != runtime.MECHANICAL:
         warnings += 1
     else:

@@ -417,15 +417,19 @@ def validate_entities(repo_root: str, ancestors: bool = True,
                 fm = iss.get("frontmatter") or {}
                 plan_st = str(fm.get("plan_status") or "").strip().lower()
                 expected_note = _PLAN_STATUS_NOTES.get(plan_st, "")
-                if expected_note:
-                    islug = iss["slug"]
-                    for line in b_text.splitlines():
-                        if f"[{islug}](" in line and not line.strip().startswith("<!--"):
-                            if expected_note not in line:
-                                warnings.append((
-                                    repo.canonical_relpath(board_path, repo_root),
-                                    f"projection plan note mismatch for '{islug}': expected '{expected_note.strip()}' for plan_status '{plan_st}', but line is '{line.strip()}' (run 'along issue sync')",
-                                ))
+                islug = iss["slug"]
+                for line in b_text.splitlines():
+                    if f"[{islug}](" in line and not line.strip().startswith("<!--"):
+                        if expected_note and expected_note not in line:
+                            warnings.append((
+                                repo.canonical_relpath(board_path, repo_root),
+                                f"projection plan note mismatch for '{islug}': expected '{expected_note.strip()}' for plan_status '{plan_st}', but line is '{line.strip()}' (run 'along issue sync')",
+                            ))
+                        elif not expected_note and " - plan " in line:
+                            warnings.append((
+                                repo.canonical_relpath(board_path, repo_root),
+                                f"projection plan note mismatch for '{islug}': front matter plan_status is '{plan_st or 'none'}', but line has plan annotation '{line.strip()}' (run 'along issue sync')",
+                            ))
         except (OSError, ValueError):
             pass
 

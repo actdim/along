@@ -12,9 +12,20 @@ if __name__ == "__main__":
 
 import json
 import os
+import re
+import shutil
+import subprocess
 from typing import Any, Dict, List, Optional, Set, Tuple
 
+from .. import proc, runtime as along_runtime
 from .base import BaseRunner, merge_args
+
+
+def _parse_semver(raw: str) -> Optional[Tuple[int, int, int]]:
+    m = re.search(r"(\d+)\.(\d+)\.(\d+)", raw or "")
+    if not m:
+        return None
+    return int(m.group(1)), int(m.group(2)), int(m.group(3))
 
 
 class OpenCodeRunner(BaseRunner):
@@ -23,8 +34,9 @@ class OpenCodeRunner(BaseRunner):
     runtime: str = "opencode"
     runtime_label: str = "OpenCode"
     default_binary: str = "opencode"
-    cli_version: str = "1.18.32"
+    cli_version: str = along_runtime.OPENCODE_MIN_VERSION
     brief_via_stdin: bool = False
+    supports_base_url: bool = True
 
     RUNTIME_ENV_ALLOW: Set[str] = {
         "OPENAI_API_KEY",
@@ -32,9 +44,9 @@ class OpenCodeRunner(BaseRunner):
     }
     RUNTIME_ENV_ALLOW_PREFIXES: Tuple[str, ...] = ("OPENCODE_",)
     VALUE_FLAGS: Set[str] = {
-        "-m", "--model", "--format", "--dir", "-s", "--session",
-        "-f", "--file", "--title", "--attach", "-p", "--password",
-        "-u", "--username", "--port", "--variant", "--command", "--log-level",
+        "-m", "--model", "--format", "-s", "--session",
+        "-f", "--file", "--title", "-w", "--worktree",
+        "--agent", "--log-level", "--server",
     }
 
     def __init__(
@@ -66,22 +78,54 @@ class OpenCodeRunner(BaseRunner):
             env_passthrough=env_passthrough,
         )
         self.base_url = base_url or os.environ.get("OPENAI_BASE_URL")
+        self._checked_version: Optional[str] = None
 
     @classmethod
     def role_args(cls, role: str) -> List[str]:
         """Return runtime-specific default arguments for OpenCode."""
         return ["--auto"]
 
+    def validate_runtime_version(self, binary: str) -> Optional[str]:
+        """Validate installed opencode CLI version once per runner instance."""
+        if self._checked_version is not None:
+            return self._checked_version
+        exe = shutil.which(binary) or (binary if os.path.isfile(binary) else None)
+        if not exe:
+            return None
+        try:
+            res = subprocess.run(
+                [exe, "--version"],
+                capture_output=True,
+                text=True,
+                timeout=5,
+                check=False,
+                **proc.spawn_group_kwargs(),
+            )
+        except (OSError, subprocess.SubprocessError):
+            return None
+        raw = f"{res.stdout or ''} {res.stderr or ''}".strip()
+        parsed = _parse_semver(raw)
+        if parsed is None:
+            return None
+        min_ver = _parse_semver(along_runtime.OPENCODE_MIN_VERSION) or (2, 3, 2)
+        if parsed < min_ver:
+            ver_str = ".".join(str(x) for x in parsed)
+            raise RuntimeError(
+                f"OpenCode version {ver_str} is unsupported; minimum supported version is "
+                f"{along_runtime.OPENCODE_MIN_VERSION}."
+            )
+        self._checked_version = ".".join(str(x) for x in parsed)
+        return self._checked_version
+
     def build_command(self, prompt: Optional[str] = None) -> List[str]:
-        """Construct command line arguments for OpenCode headless execution."""
+        """Construct command line arguments for OpenCode 2.3.2+ headless execution (uses cwd, not --dir)."""
         binary = self.resolve_binary()
+        self.validate_runtime_version(binary)
         cmd = [
             binary,
             "run",
             "--format",
             "json",
-            "--dir",
-            self.repo_root,
         ]
         if self.model:
             cmd.extend(["-m", self.model])
@@ -204,40 +248,3 @@ class OpenCodeRunner(BaseRunner):
             "handoff_note": handoff_note,
             "text": final_text,
         }
-
-
-def get_opencode_session_tokens(session_id: str) -> Optional[Dict[str, Any]]:
-    """Read tokens directly from OpenCode's SQLite database (~/.local/share/opencode/opencode.db)."""
-    import sqlite3
-    db_path = os.path.expanduser("~/.local/share/opencode/opencode.db")
-    if not os.path.isfile(db_path):
-        return None
-    try:
-        conn = sqlite3.connect(db_path, timeout=2.0)
-        cur = conn.cursor()
-        cur.execute(
-            "SELECT tokens_input, tokens_output, tokens_reasoning, tokens_cache_read, tokens_cache_write, cost "
-            "FROM session_v2 WHERE id = ?",
-            (session_id,)
-        )
-        row = cur.fetchone()
-        if not row:
-            cur.execute(
-                "SELECT tokens_input, tokens_output, tokens_reasoning, tokens_cache_read, tokens_cache_write, cost "
-                "FROM session WHERE id = ?",
-                (session_id,)
-            )
-            row = cur.fetchone()
-        conn.close()
-        if row:
-            return {
-                "tokens_input": row[0] or 0,
-                "tokens_output": row[1] or 0,
-                "tokens_reasoning": row[2] or 0,
-                "tokens_cache_read": row[3] or 0,
-                "tokens_cache_write": row[4] or 0,
-                "cost": row[5] or 0.0,
-            }
-    except (sqlite3.Error, OSError):
-        pass
-    return None

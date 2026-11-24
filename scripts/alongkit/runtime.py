@@ -42,6 +42,80 @@ RUNTIME_MATRIX: Dict[str, Dict[str, Any]] = {
 MECHANICAL = "mechanical"
 ADVISORY = "advisory"
 
+OPENCODE_MIN_VERSION = "2.3.2"
+
+#: Canonical OpenCode 2.3.2 runtime contract (mirrors tests/fixtures/runtimes/opencode/2.3.2/contract.json).
+OPENCODE_CONTRACT: Dict[str, Any] = {
+    "runtime": "opencode",
+    "version": "2.3.2",
+    "min_supported_version": OPENCODE_MIN_VERSION,
+    "run_flags": [
+        "--continue", "-c",
+        "--session", "-s",
+        "--fork",
+        "--worktree", "-w",
+        "--model", "-m",
+        "--agent",
+        "--format",
+        "--file", "-f",
+        "--title",
+        "--archived",
+        "--thinking",
+        "--auto",
+        "--help", "-h",
+        "--version", "-v",
+        "--wizard",
+        "--completions",
+        "--log-level",
+        "--print-logs",
+        "--standalone",
+        "--server",
+    ],
+    "tool_hooks": ["execute.before", "execute.after"],
+    "session_hooks": [
+        "experimental.idle",
+        "experimental.model.resolve",
+        "experimental.ws.handshake",
+        "experimental.ws.receive",
+        "experimental.ws.send",
+        "fork",
+        "http.request",
+        "http.response",
+        "model.request",
+        "prompt",
+        "retry",
+        "title",
+    ],
+    "shell_hooks": ["create.before"],
+    "required_plugin_hooks": {
+        "tool": ["execute.before", "execute.after"],
+        "session": ["experimental.idle", "prompt"],
+        "shell": ["create.before"],
+    },
+}
+
+
+def load_opencode_contract(repo_root: Optional[str] = None) -> Dict[str, Any]:
+    """Load the OpenCode runtime contract from fixture if available, else OPENCODE_CONTRACT."""
+    candidates: List[str] = []
+    if repo_root:
+        candidates.append(
+            os.path.join(repo_root, "tests", "fixtures", "runtimes", "opencode", OPENCODE_MIN_VERSION, "contract.json")
+        )
+    here = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+    candidates.append(
+        os.path.join(here, "tests", "fixtures", "runtimes", "opencode", OPENCODE_MIN_VERSION, "contract.json")
+    )
+    for path in candidates:
+        try:
+            with open(path, "r", encoding="utf-8") as handle:
+                data = json.load(handle)
+                if isinstance(data, dict) and data.get("runtime") == "opencode":
+                    return data
+        except (OSError, ValueError):
+            continue
+    return dict(OPENCODE_CONTRACT)
+
 #: Filesystem types that indicate a folder mounted from another OS or a VM host.
 _CROSS_OS_FS_TYPES = ("9p", "drvfs", "virtiofs", "fuse", "fuse.sshfs", "vboxsf", "cifs", "smbfs")
 
@@ -120,7 +194,15 @@ def heartbeat_path(repo_root: str) -> str:
     return os.path.join(repo.diagnostics_dir(repo_root), "hook_heartbeat.json")
 
 
-def record_heartbeat(repo_root: Optional[str], runtime: str, now_iso: str) -> None:
+LIFECYCLE_HEARTBEAT_EVENTS = frozenset({"Stop", "experimental.idle", "UserPromptSubmit"})
+
+
+def record_heartbeat(
+    repo_root: Optional[str],
+    runtime: str,
+    now_iso: str,
+    event_name: Optional[str] = None,
+) -> None:
     """Remember when a hook of `runtime` last ran in this repository (best effort)."""
     if not repo_root or not runtime:
         return
@@ -133,9 +215,18 @@ def record_heartbeat(repo_root: Optional[str], runtime: str, now_iso: str) -> No
                 data = loaded
     except (OSError, ValueError):
         pass
-    if data.get(runtime) == now_iso:
+    changed = False
+    if data.get(runtime) != now_iso:
+        data[runtime] = now_iso
+        changed = True
+    if event_name in LIFECYCLE_HEARTBEAT_EVENTS:
+        lc_key = f"{runtime}_lifecycle"
+        if data.get(lc_key) != now_iso:
+            data[lc_key] = now_iso
+            data[f"{runtime}_lifecycle_event"] = event_name
+            changed = True
+    if not changed:
         return
-    data[runtime] = now_iso
     try:
         from . import repo
         repo.ensure_diagnostics_dir(repo_root)
@@ -157,10 +248,99 @@ def last_heartbeat(repo_root: str, agent: str) -> Optional[str]:
     return str(value) if value else None
 
 
+def last_lifecycle_heartbeat(repo_root: str, agent: str) -> Optional[str]:
+    """ISO timestamp of the last lifecycle hook run (Stop/experimental.idle/UserPromptSubmit) for `agent`."""
+    name = HOOK_RUNTIME_NAMES.get(agent, agent)
+    try:
+        with open(heartbeat_path(repo_root), "r", encoding="utf-8") as handle:
+            data = json.loads(handle.read() or "{}")
+    except (OSError, ValueError):
+        return None
+    value = data.get(f"{name}_lifecycle") if isinstance(data, dict) else None
+    return str(value) if value else None
+
+
+def _opencode_plugin_candidates(repo_root: Optional[str] = None) -> List[str]:
+    home = os.path.expanduser("~")
+    candidates = [
+        os.path.join(home, ".config", "opencode", "plugins", "along-gates.js"),
+        os.path.join(home, ".config", "opencode", "plugins", "along-opencode-plugin.js"),
+    ]
+    if repo_root:
+        candidates.append(os.path.join(repo_root, ".opencode", "plugins", "along-gates.js"))
+    return candidates
+
+
+def opencode_plugin_audit(repo_root: Optional[str] = None) -> Dict[str, Any]:
+    """Validate installed OpenCode plugin files against the 2.3.2 contract and template."""
+    contract = load_opencode_contract(repo_root)
+    req = contract.get("required_plugin_hooks") or {}
+    required_hooks = [
+        ("tool", h) for h in req.get("tool", ["execute.before", "execute.after"])
+    ] + [
+        ("session", h) for h in req.get("session", ["experimental.idle", "prompt"])
+    ] + [
+        ("shell", h) for h in req.get("shell", ["create.before"])
+    ]
+
+    template_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "hooks", "opencode_plugin.js")
+    template_norm: Optional[str] = None
+    try:
+        with open(template_path, "r", encoding="utf-8") as handle:
+            template_norm = handle.read().replace("\r\n", "\n")
+    except OSError:
+        pass
+
+    found_paths: List[str] = []
+    along_id_paths: List[str] = []
+    stale_paths: List[str] = []
+    first_content: Optional[str] = None
+
+    for path in _opencode_plugin_candidates(repo_root):
+        try:
+            with open(path, "r", encoding="utf-8") as handle:
+                content = handle.read()
+        except OSError:
+            continue
+        found_paths.append(path)
+        if "along-gates" in content and "setup" in content:
+            along_id_paths.append(path)
+            if first_content is None:
+                first_content = content
+            if template_norm is not None and content.replace("\r\n", "\n") != template_norm:
+                stale_paths.append(path)
+
+    missing_hooks: List[str] = []
+    dead_hooks: List[str] = []
+    if first_content is not None:
+        for domain, hook_name in required_hooks:
+            pat = rf'{domain}\.hook\(\s*["\']{re.escape(hook_name)}["\']'
+            if not re.search(pat, first_content):
+                missing_hooks.append(f"{domain}.{hook_name}")
+        for domain, dead_name in (("session", "idle"), ("session", "stop"), ("shell", "env")):
+            pat = rf'{domain}\.hook\(\s*["\']{re.escape(dead_name)}["\']'
+            if re.search(pat, first_content):
+                dead_hooks.append(f"{domain}.{dead_name}")
+        if re.search(r"ctx\s*\?\.\s*event\s*\?\.\s*subscribe|event\.subscribe\s*\(", first_content):
+            dead_hooks.append("event.subscribe")
+
+    valid = bool(along_id_paths) and not missing_hooks and not dead_hooks
+    return {
+        "found_paths": found_paths,
+        "duplicate_paths": along_id_paths if len(along_id_paths) > 1 else [],
+        "stale_paths": stale_paths,
+        "missing_hooks": missing_hooks,
+        "dead_hooks": dead_hooks,
+        "valid": valid,
+    }
+
+
 def along_hooks_registered(runtime: str, repo_root: Optional[str] = None) -> bool:
     """True when Along's hook entry point is registered for `runtime` (user or project)."""
     if runtime == "claude-code":
         return claude_hook_status(repo_root)[0] == "ok"
+    if runtime == "opencode":
+        return bool(opencode_plugin_audit(repo_root)["valid"])
     home = os.path.expanduser("~")
     candidates: List[str] = []
     if runtime == "codex":
@@ -169,13 +349,6 @@ def along_hooks_registered(runtime: str, repo_root: Optional[str] = None) -> boo
         candidates = [os.path.join(home, ".gemini", "config", "hooks.json")]
         if repo_root:
             candidates.append(os.path.join(repo_root, ".agents", "hooks.json"))
-    elif runtime == "opencode":
-        candidates = [
-            os.path.join(home, ".config", "opencode", "plugins", "along-gates.js"),
-            os.path.join(home, ".config", "opencode", "plugins", "along-opencode-plugin.js"),
-        ]
-        if repo_root:
-            candidates.append(os.path.join(repo_root, ".opencode", "plugins", "along-gates.js"))
     elif runtime in ("dsh", "deepseek", "deepseek-harness"):
         base_dsh = os.environ.get("DSH_HOME") or os.path.join(home, ".dsh")
         candidates = [
@@ -189,10 +362,6 @@ def along_hooks_registered(runtime: str, repo_root: Optional[str] = None) -> boo
         try:
             with open(path, "r", encoding="utf-8") as handle:
                 content = handle.read()
-                if runtime == "opencode":
-                    if ("along-gates" in content or "along_hook" in content) and "setup" in content:
-                        return True
-                    continue
                 if runtime in ("dsh", "deepseek", "deepseek-harness"):
                     if "along-hooks-bridge" in content or "dsh-hooks-claude-code" in content:
                         return True
@@ -207,6 +376,28 @@ def along_hooks_registered(runtime: str, repo_root: Optional[str] = None) -> boo
 def enforcement_level(runtime: str, repo_root: Optional[str] = None) -> Tuple[str, str]:
     """(level, explanation) for the runtime executing now."""
     caps = RUNTIME_MATRIX.get(runtime, RUNTIME_MATRIX["unknown"])
+    if runtime == "opencode":
+        audit = opencode_plugin_audit(repo_root)
+        if not audit["found_paths"]:
+            return ADVISORY, "opencode supports hooks, but Along hooks are not registered (run 'along hook install')."
+        if not audit["valid"]:
+            reasons: List[str] = []
+            if audit["dead_hooks"]:
+                reasons.append(f"dead hooks: {', '.join(audit['dead_hooks'])}")
+            if audit["missing_hooks"]:
+                reasons.append(f"missing hooks: {', '.join(audit['missing_hooks'])}")
+            if not reasons:
+                reasons.append("plugin does not export valid along-gates setup")
+            return ADVISORY, (
+                f"opencode plugin failed contract validation ({'; '.join(reasons)}). "
+                "Run 'along hook install --runtime opencode --global'."
+            )
+        if repo_root and not last_lifecycle_heartbeat(repo_root, runtime):
+            return ADVISORY, (
+                "opencode plugin has valid hook names, but no lifecycle heartbeat "
+                "(Stop/experimental.idle/UserPromptSubmit) has been recorded in this repository yet."
+            )
+        return MECHANICAL, "Along hooks are registered for opencode; gates block violations."
     if caps["runtime_hooks"] and along_hooks_registered(runtime, repo_root):
         return MECHANICAL, f"Along hooks are registered for {runtime}; gates block violations."
     if runtime == "claude-code":

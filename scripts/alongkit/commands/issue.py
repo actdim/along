@@ -782,12 +782,24 @@ def _issue_find(repo_root: str, args: List[str]) -> int:
             if matched:
                 fm = iss.get("frontmatter") or {}
                 plan_st = str(fm.get("plan_status") or "none").strip()
+                title = str(fm.get("title") or iss.get("title") or "").strip()
+                if not title and iss.get("file_path"):
+                    try:
+                        raw_issue = textio.read_text(iss["file_path"], strict=False)
+                        _, body_text, _ = frontmatter.try_parse(raw_issue)
+                        for b_line in (body_text or raw_issue).splitlines():
+                            s_line = b_line.strip()
+                            if s_line.startswith("# "):
+                                title = s_line[2:].strip()
+                                break
+                    except OSError:
+                        pass
                 matches.append({
                     "context": rel_ctx,
                     "key": ckey,
                     "type": itype,
                     "slug": islug,
-                    "title": iss.get("title") or "",
+                    "title": title,
                     "status": iss.get("status") or "open",
                     "plan_status": plan_st,
                     "file_path": repo.canonical_relpath(iss["file_path"], repo_root),

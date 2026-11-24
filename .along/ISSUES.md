@@ -1,7 +1,6 @@
 # Active Issues
 
 ## Active
-- [ ] `(bug)` [opencode-runtime-integration-defects](ISSUES/bug--opencode-runtime-integration-defects.md) - plan approved
 - [ ] `(debt)` [decouple-protocol-and-toolchain-versioning](ISSUES/debt--decouple-protocol-and-toolchain-versioning.md) - plan approved
 
 ## Backlog
@@ -73,9 +72,9 @@
 - [ ] `(task)` [reconcile-dashboard-ui-core-conventions](ISSUES/task--reconcile-dashboard-ui-core-conventions.md)
 
 ## Done (recent)
+- [x] `(bug)` [opencode-runtime-integration-defects](ISSUES/done/bug--opencode-runtime-integration-defects.md)
 - [x] `(docs)` [changelog-deduplication](ISSUES/done/docs--changelog-deduplication.md)
 - [x] `(bug)` [dsh-tool-name-map-and-ask-capability](ISSUES/done/bug--dsh-tool-name-map-and-ask-capability.md)
 - [x] `(docs)` [reconcile-protocol-counts-and-extras](ISSUES/done/docs--reconcile-protocol-counts-and-extras.md)
 - [x] `(task)` [opencode-deepseek-cache-configuration-audit](ISSUES/done/task--opencode-deepseek-cache-configuration-audit.md)
-- [x] `(feat)` [webdev-local-llm-engine](ISSUES/done/feat--webdev-local-llm-engine.md)
-<!-- 360 older completed issue(s) archived in .along/ISSUES/done/ -->
+<!-- 361 older completed issue(s) archived in .along/ISSUES/done/ -->

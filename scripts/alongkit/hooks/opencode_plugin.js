@@ -1,8 +1,8 @@
 /**
  * along-gates.js - Along runtime lifecycle hook plugin for OpenCode.
  *
- * Supports OpenCode V2 plugin architecture (export default { id, setup }) with
- * fallback compatibility for legacy V1 loaders.
+ * Supports OpenCode V2 plugin architecture (export default { id, setup }) for
+ * OpenCode 2.3.2+.
  *
  * Intercepts tool calls before execution (PreToolUse) to enforce Along gates,
  * logs execution after tool completion (PostToolUse), evaluates Stop gates on
@@ -17,6 +17,18 @@ import path from "node:path";
 
 let activeSessionId = process.env.OPENCODE_SESSION_ID || null;
 let cachedPython = null;
+const idleEvaluatedSessions = new Set();
+
+const GUARD_SYMBOL = Symbol.for("along.gates.setupGuard");
+function getSetupGuard() {
+  if (!globalThis[GUARD_SYMBOL]) {
+    globalThis[GUARD_SYMBOL] = {
+      contexts: new WeakSet(),
+      byProjectUrl: new Map(),
+    };
+  }
+  return globalThis[GUARD_SYMBOL];
+}
 
 function updateSessionId(id) {
   if (id && typeof id === "string" && id.trim()) {
@@ -201,6 +213,7 @@ function handlePreTool(input, output, projectDir) {
   if (!hookScript) return;
 
   const payload = buildPreToolPayload(input, output, projectDir);
+  idleEvaluatedSessions.delete(payload.session_id || "__default__");
   const result = runAlongHook(hookScript, "PreToolUse", payload, projectDir);
   if (result.status !== 0) {
     const errorMsg = (result.stderr || result.stdout || "Operation denied by Along protocol gate.").trim();
@@ -213,17 +226,28 @@ function handlePostTool(input, output, projectDir) {
   if (!hookScript) return;
 
   const payload = buildPostToolPayload(input, output, projectDir);
+  idleEvaluatedSessions.delete(payload.session_id || "__default__");
   const result = runAlongHook(hookScript, "PostToolUse", payload, projectDir);
   if (result.status !== 0 && result.stderr) {
     logDiagnostic(`PostToolUse warning for ${payload.tool_name}: ${result.stderr.trim()}`);
   }
 }
 
-function handleStop(event, projectDir) {
+function handleIdle(event, projectDir) {
+  if (event?.background === true) {
+    return;
+  }
+
   const hookScript = findAlongHook(projectDir);
   if (!hookScript) return;
 
   const sid = extractSessionId(event, null, null);
+  const dedupeKey = sid || "__default__";
+  if (idleEvaluatedSessions.has(dedupeKey)) {
+    return;
+  }
+  idleEvaluatedSessions.add(dedupeKey);
+
   const payload = {
     hook_event_name: "Stop",
     tool_name: "Stop",
@@ -235,6 +259,7 @@ function handleStop(event, projectDir) {
 
   const result = runAlongHook(hookScript, "Stop", payload, projectDir);
   if (result.status !== 0) {
+    idleEvaluatedSessions.delete(dedupeKey);
     const errorMsg = (result.stderr || result.stdout || "Session stop denied by Along protocol gate.").trim();
     logDiagnostic(`Stop gate denial: ${errorMsg}`);
     throw new Error(errorMsg);
@@ -246,6 +271,7 @@ function handlePrompt(event, projectDir) {
   if (!hookScript) return;
 
   const sid = extractSessionId(event, null, null);
+  idleEvaluatedSessions.delete(sid || "__default__");
   const promptText = event?.prompt || event?.text || event?.message || "";
   const payload = {
     hook_event_name: "UserPromptSubmit",
@@ -274,29 +300,25 @@ function handleShellEnv(input, output) {
 }
 
 /**
- * OpenCode V1 plugin implementation for backwards compatibility.
- */
-export const AlongPlugin = async (ctx) => {
-  const projectDir = ctx?.location?.directory || ctx?.directory || ctx?.worktree || process.cwd();
-
-  return {
-    "tool.execute.before": async (input, output) => handlePreTool(input, output, projectDir),
-    "tool.execute.after": async (input, output) => handlePostTool(input, output, projectDir),
-    "session.idle": async (event) => handleStop(event, projectDir),
-    "session.stop": async (event) => handleStop(event, projectDir),
-    "session.prompt": async (event) => handlePrompt(event, projectDir),
-    "shell.env": async (input, output) => handleShellEnv(input, output),
-    "shell.create.before": async (input, output) => handleShellEnv(input, output)
-  };
-};
-
-/**
- * OpenCode V2 plugin definition (standard).
+ * OpenCode V2 plugin definition (OpenCode 2.3.2+).
  */
 const pluginDefinition = {
   id: "along-gates",
   async setup(ctx) {
     const projectDir = ctx?.location?.directory || ctx?.directory || ctx?.worktree || process.cwd();
+    const guard = getSetupGuard();
+    if (ctx && typeof ctx === "object") {
+      if (guard.contexts.has(ctx)) {
+        return;
+      }
+      const existingUrl = guard.byProjectUrl.get(projectDir);
+      if (existingUrl && existingUrl !== import.meta.url) {
+        logDiagnostic(`Skipping duplicate along-gates plugin at ${import.meta.url} (already registered from ${existingUrl})`);
+        return;
+      }
+      guard.contexts.add(ctx);
+      guard.byProjectUrl.set(projectDir, import.meta.url);
+    }
 
     // 1. Tool execution interception
     if (ctx?.tool?.hook) {
@@ -308,39 +330,18 @@ const pluginDefinition = {
       });
     }
 
-    // 2. Session lifecycle hooks
+    // 2. Session lifecycle hooks (OpenCode 2.3.2+ uses experimental.idle as the idle/Stop signal)
     if (ctx?.session?.hook) {
-      await ctx.session.hook("idle", async (event) => {
-        handleStop(event, projectDir);
-      });
-      await ctx.session.hook("stop", async (event) => {
-        handleStop(event, projectDir);
+      await ctx.session.hook("experimental.idle", async (event) => {
+        handleIdle(event, projectDir);
       });
       await ctx.session.hook("prompt", async (event) => {
         handlePrompt(event, projectDir);
       });
     }
 
-    // 3. Bus event subscription fallback for stop/idle
-    if (ctx?.event?.subscribe) {
-      ctx.event.subscribe(async (evt) => {
-        const type = String(evt?.type || "");
-        if (type === "session.idle" || type === "session.stop") {
-          if (!ctx?.session?.hook) {
-            handleStop(evt, projectDir);
-          }
-        } else if (type === "session.created" || type === "session.updated") {
-          const sid = evt?.sessionID || evt?.data?.sessionID;
-          if (sid) updateSessionId(sid);
-        }
-      });
-    }
-
-    // 4. Shell environment hooks
+    // 3. Shell environment hooks
     if (ctx?.shell?.hook) {
-      await ctx.shell.hook("env", async (input, output) => {
-        handleShellEnv(input, output);
-      });
       await ctx.shell.hook("create.before", async (input, output) => {
         handleShellEnv(input, output);
       });

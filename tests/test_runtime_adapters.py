@@ -10,6 +10,9 @@ import subprocess
 import sys
 import tempfile
 import unittest
+from unittest import mock
+
+REPO_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
 if not os.environ.get("ALONG_TEST_RUNNER"):
     raise SystemExit(
@@ -95,7 +98,7 @@ class TestCommandLineAndFlagMapping(unittest.TestCase):
             repo_root=self.repo,
             binary_path="custom-opencode",
             model="ollama/qwen2.5-coder:32b",
-            extra_args=["--port", "8080"],
+            extra_args=["--title", "Audit"],
         )
         self.assertFalse(runner.brief_via_stdin)
         cmd = runner.build_command("Review security policy")
@@ -104,16 +107,63 @@ class TestCommandLineAndFlagMapping(unittest.TestCase):
             "run",
             "--format",
             "json",
-            "--dir",
-            self.repo,
             "-m",
             "ollama/qwen2.5-coder:32b",
             "--auto",
-            "--port",
-            "8080",
+            "--title",
+            "Audit",
             "Review security policy",
         ]
         self.assertEqual(cmd, expected)
+        self.assertNotIn("--dir", cmd)
+
+    def test_opencode_flags_match_recorded_2_3_2_help_and_contract(self) -> None:
+        from alongkit import runtime as along_runtime
+        contract = along_runtime.load_opencode_contract(REPO_ROOT)
+        help_path = os.path.join(REPO_ROOT, "tests", "fixtures", "runtimes", "opencode", "2.3.2", "help.txt")
+        with open(help_path, "r", encoding="utf-8") as handle:
+            help_text = handle.read()
+        runner = OpenCodeRunner(
+            repo_root=self.repo,
+            binary_path="custom-opencode",
+            model="ollama/qwen2.5-coder:32b",
+        )
+        cmd = runner.build_command("Check flags")
+        used_flags = [tok for tok in cmd[2:-1] if tok.startswith("-")]
+        for flag in used_flags:
+            self.assertIn(flag, contract["run_flags"], f"Flag {flag} missing from 2.3.2 contract.json")
+            self.assertIn(flag, help_text, f"Flag {flag} missing from recorded 2.3.2 help.txt")
+
+    def test_opencode_version_validation_rejects_1_x(self) -> None:
+        runner = OpenCodeRunner(repo_root=self.repo, binary_path="custom-opencode")
+        fake_res = mock.MagicMock(returncode=0, stdout="1.18.32\n", stderr="")
+        with mock.patch("alongkit.runner.opencode.shutil.which", return_value="C:/fake/opencode.exe"):
+            with mock.patch("alongkit.runner.opencode.subprocess.run", return_value=fake_res):
+                with self.assertRaises(RuntimeError) as ctx:
+                    runner.build_command("hello")
+                self.assertIn("2.3.2", str(ctx.exception))
+
+    def test_cli_run_reachability_for_all_runner_map_keys(self) -> None:
+        from alongkit.commands.ops import handle_run_command
+        from alongkit.runner import RUNNER_MAP
+        import io
+        from contextlib import redirect_stdout, redirect_stderr
+
+        for key in sorted(RUNNER_MAP.keys()):
+            buf = io.StringIO()
+            err = io.StringIO()
+            with redirect_stdout(buf), redirect_stderr(err):
+                code = handle_run_command(self.repo, [key, "--dry-run", "--binary", f"fake-{key}"])
+            self.assertEqual(code, 0, f"along run {key} --dry-run failed: {err.getvalue()}")
+            payload = json.loads(buf.getvalue())
+            self.assertTrue(payload.get("dry_run"), f"Expected dry_run payload for {key}")
+
+        # --base-url rejected for adapters that do not support it
+        err_buf = io.StringIO()
+        with redirect_stderr(err_buf):
+            code = handle_run_command(self.repo, ["deepseek", "--dry-run", "--base-url", "http://localhost:11434"])
+        self.assertEqual(code, 1)
+        self.assertIn("--base-url is not supported", err_buf.getvalue())
 
     def test_deepseek_command_line_and_flags(self) -> None:
         runner = DeepSeekHarnessRunner(

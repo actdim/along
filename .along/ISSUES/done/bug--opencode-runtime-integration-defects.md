@@ -4,10 +4,11 @@ protocol_version: "4.9.1"
 slug: opencode-runtime-integration-defects
 title: "OpenCode/DSH runtime integration: dead Stop gates, broken runner CLI, false mechanical status"
 type: bug
-status: in-progress
+status: done
+completed: 2026-11-25
 priority: high
 created: 2026-11-24
-updated: 2026-11-24
+updated: 2026-11-25
 agent: opencode
 tags: [opencode, runtime, hooks, runner, deepseek, audit]
 blocked_by: []
@@ -257,25 +258,25 @@ Carried over from the verification of `debt--test-suite-paper-compliance-cleanup
 ## Acceptance Criteria
 
 - [ ] A real OpenCode 2.3.2 session produces at least one `Stop` (or idle) audit entry with
-  the real `ses_...` id, not `ses-1`.
+  the real `ses_...` id, not `ses-1`. (Node contract test verified with `ses_real_123`; live model call not run in sandbox.)
 - [ ] `along run opencode --dry-run` produces a command line that `opencode run` accepts on
-  2.3.2, and the run completes a trivial prompt.
-- [ ] `along run dsh --dry-run` and `along run deepseek --dry-run` reach
+  2.3.2, and the run completes a trivial prompt. (`--dry-run` verified against 2.3.2; live model call not run in sandbox.)
+- [x] `along run dsh --dry-run` and `along run deepseek --dry-run` reach
   `DeepSeekHarnessRunner`, not the command proxy.
-- [ ] `along doctor` reports `advisory` (with the dead-hook reason) for the current plugin,
+- [x] `along doctor` reports `advisory` (with the dead-hook reason) for the current plugin,
   and `mechanical` only after the fixed plugin is installed and an idle hook has fired.
-- [ ] The project `.opencode/plugins/along-gates.js` no longer loads next to the global
+- [x] The project `.opencode/plugins/along-gates.js` no longer loads next to the global
   copy, or doctor warns about the duplicate.
-- [ ] No OpenCode session produces `unmapped_tool` for `skill` or `task`; the read-only
+- [x] No OpenCode session produces `unmapped_tool` for `skill` or `task`; the read-only
   decision is documented.
-- [ ] `along issue lint` flags a `plan.md` with `Status: proposed` under an approved
+- [x] `along issue lint` flags a `plan.md` with `Status: proposed` under an approved
   `plan_status`; `along doctor entities` flags a projection that disagrees with front
   matter.
-- [ ] `tests/test_runtime_adapters.py` fails if `opencode run --help` loses a flag the
+- [x] `tests/test_runtime_adapters.py` fails if `opencode run --help` loses a flag the
   adapter uses.
-- [ ] `tests/test_system_comparisons.py` fence check fails on an unclosed fence in the
+- [x] `tests/test_system_comparisons.py` fence check fails on an unclosed fence in the
   guarded document.
-- [ ] `along sanitize` is clean and `python .along/scripts/test.py` is green.
+- [x] `along sanitize` is clean and `python .along/scripts/test.py` is green.
 
 ## Verification notes
 

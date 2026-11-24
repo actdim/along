@@ -199,13 +199,18 @@ def handle_devenv_command(repo_root: str, args: List[str]):
 
 
 def handle_run_command(repo_root: Optional[str], args: List[str]):
+    from alongkit.runner import RUNNER_MAP, format_usage_summary, get_runner
+
+    runner_choices = "|".join(["antigravity", "agy"] + sorted(RUNNER_MAP.keys()))
+    adapter_choices = "|".join(sorted(RUNNER_MAP.keys()))
+
     if not args or args[0] in ("-h", "--help", "help"):
-        print("Usage: along run [antigravity|agy|claude|codex|opencode|generic] [options] | along run <command...>")
-        print("       python scripts/along_exec.py run [antigravity|agy|claude|codex|opencode|generic] [options] | run <command...>")
+        print(f"Usage: along run [{runner_choices}] [options] | along run <command...>")
+        print(f"       python scripts/along_exec.py run [{runner_choices}] [options] | run <command...>")
         print("")
         print("Agent Runtime Runner:")
         print("  along run antigravity [--dry-run] [-i|--issue <slug>] [--run-id <id>] [--endpoint <url>] [--binary <path>]")
-        print("  along run [claude|codex|opencode|generic] [--dry-run] [-i|--issue <slug>] [--model <model>] [--timeout <sec>]")
+        print(f"  along run [{adapter_choices}] [--dry-run] [-i|--issue <slug>] [--model <model>] [--timeout <sec>]")
         print("  Supervise agent process, enforce workspace containment, and capture telemetry/handoff records.")
         print("")
         print("Lifecycle Command Proxy:")
@@ -275,7 +280,9 @@ def handle_run_command(repo_root: Optional[str], args: List[str]):
             return 1
         return code
 
-    if target_subcmd in ("claude", "claude-code", "codex", "opencode", "generic"):
+    if target_subcmd in RUNNER_MAP:
+        runner_cls = RUNNER_MAP[target_subcmd]
+        supports_base_url = bool(getattr(runner_cls, "supports_base_url", False))
         sub_args = args[1:]
         dry_run = False
         issue_slug = None
@@ -333,7 +340,7 @@ def handle_run_command(repo_root: Optional[str], args: List[str]):
                 print("  -b, --binary <path>    Explicit path to CLI binary")
                 print("  -p, --brief <text>     Brief or prompt text for headless execution")
                 print("  -r, --role <name>      Role profile (scout, architect, implementer, reviewer)")
-                if target_subcmd == "opencode":
+                if supports_base_url:
                     print("  --base-url <url>       Local Ollama/vLLM base URL endpoint (OPENAI_BASE_URL)")
                 return 0
             elif arg == "--":
@@ -343,7 +350,6 @@ def handle_run_command(repo_root: Optional[str], args: List[str]):
                 pass_args.append(arg)
                 i += 1
 
-        from alongkit.runner import get_runner
         runner_kwargs: Dict[str, Any] = {
             "repo_root": repo_root,
             "issue_slug": issue_slug,
@@ -354,7 +360,10 @@ def handle_run_command(repo_root: Optional[str], args: List[str]):
             "dry_run": dry_run,
             "extra_args": pass_args,
         }
-        if target_subcmd == "opencode" and base_url:
+        if base_url:
+            if not supports_base_url:
+                sys.stderr.write(f"[Along Error] --base-url is not supported by runtime '{target_subcmd}'.\n")
+                return 1
             runner_kwargs["base_url"] = base_url
 
         try:
@@ -363,6 +372,8 @@ def handle_run_command(repo_root: Optional[str], args: List[str]):
         except RuntimeError as exc:
             sys.stderr.write(f"[Along Runner Error] {exc}\n")
             return 1
+        if isinstance(record, dict) and record.get("usage"):
+            record["usage_summary"] = format_usage_summary(record["usage"])
         print(json.dumps(record, indent=2))
         ret = record.get("exit_code")
         return ret if ret is not None else 1

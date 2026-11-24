@@ -31,7 +31,20 @@ EVENT_TYPE_MAP: Dict[str, HookEventType] = {
     "stop": HookEventType.STOP,
 }
 
+#: Explicit read-only OpenCode/generic tool allowlist (intentionally ungated by write/shell gates).
+READ_ONLY_TOOLS = frozenset({"read", "glob", "grep", "webfetch", "list"})
+
 TOOL_NAME_MAP: Dict[str, str] = {
+    # Explicit read-only allowlist -> canonical read/search tools (no unmapped_tool audit noise)
+    "read": "read_file",
+    "glob": "find_by_name",
+    "grep": "grep_search",
+    "webfetch": "read_url_content",
+    "list": "list_dir",
+    # Non-read-only OpenCode/generic tools -> canonical gated tools
+    "task": "Task",
+    "skill": "invoke_subagent",
+    "todowrite": "write_to_file",
     "write_file": "write_to_file",
     "WriteFile": "write_to_file",
     "Write": "write_to_file",

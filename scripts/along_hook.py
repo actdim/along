@@ -418,6 +418,7 @@ def _evaluate_and_respond(
     runtime_info.record_heartbeat(
         effective_root, adapter.runtime_name or runtime,
         datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
+        event_name=event.event_type.value,
     )
 
     config: HooksConfig = load_config(effective_root)

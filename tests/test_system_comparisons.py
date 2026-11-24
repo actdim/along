@@ -62,11 +62,24 @@ class TestSystemComparisonsDoc(unittest.TestCase):
         self.assertTrue(matrix_row_found, "Missing Execution History row in comparison matrix")
 
     def test_code_fences_have_languages(self):
-        """All code fences must declare a language identifier."""
-        import re
-        fences = re.findall(r"^```(\w*)", self.content, re.MULTILINE)
-        for fence in fences:
-            self.assertTrue(bool(fence), "Found code fence without language identifier")
+        """All opening code fences must declare a language identifier and be properly closed."""
+        in_fence = False
+        fence_char = ""
+        fence_len = 0
+        for lineno, line in enumerate(self.content.splitlines(), start=1):
+            stripped = line.lstrip()
+            m = re.match(r"^(`{3,}|~{3,})(.*)$", stripped)
+            if not m:
+                continue
+            ticks, rest = m.group(1), m.group(2).strip()
+            if not in_fence:
+                self.assertTrue(bool(rest), f"Line {lineno}: opening code fence without language identifier")
+                in_fence = True
+                fence_char = ticks[0]
+                fence_len = len(ticks)
+            elif ticks[0] == fence_char and len(ticks) >= fence_len and not rest:
+                in_fence = False
+        self.assertFalse(in_fence, "Unclosed code fence detected in docs/topic--system-comparisons.md")
 
     def test_clean_ascii_typography(self):
         """Document must conform strictly to clean ASCII typography with zero forbidden characters."""

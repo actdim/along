@@ -13,19 +13,23 @@ if __name__ == "__main__":
 import json
 import os
 import shutil
+import subprocess
 from typing import Any, Dict, List, Optional, Set, Tuple
 
+from .. import proc
 from .base import BaseRunner, merge_args
 
 
 class DeepSeekHarnessRunner(BaseRunner):
-    """DeepSeek Harness (DSH) headless runtime adapter for autonomous loops and multi-agent teams."""
+    """DeepSeek Harness (DSH) headless runtime adapter (DSH CLI only, not DeepSeek HTTP API)."""
 
     runtime: str = "deepseek"
-    runtime_label: str = "DeepSeek Harness"
+    runtime_label: str = "DeepSeek Harness (DSH)"
     default_binary: str = "dsh"
-    cli_version: str = "0.2.0"
+    cli_version: str = "unverified"
+    version_verified: bool = False
     brief_via_stdin: bool = True
+    supports_base_url: bool = False
 
     RUNTIME_ENV_ALLOW: Set[str] = {
         "DEEPSEEK_API_KEY",
@@ -85,6 +89,28 @@ class DeepSeekHarnessRunner(BaseRunner):
                 return candidate
 
         return self.default_binary
+
+    def resolve_version(self) -> Tuple[str, bool]:
+        """Probe `dsh --version` when the binary exists; otherwise mark as unverified."""
+        binary = self.resolve_binary()
+        exe = shutil.which(binary) or (binary if os.path.isfile(binary) else None)
+        if not exe:
+            return "unverified", False
+        try:
+            res = subprocess.run(
+                [exe, "--version"],
+                capture_output=True,
+                text=True,
+                timeout=5,
+                check=False,
+                **proc.spawn_group_kwargs(),
+            )
+            raw = (res.stdout or res.stderr or "").strip()
+            if res.returncode == 0 and raw:
+                return raw.splitlines()[0].strip(), True
+        except (OSError, subprocess.SubprocessError):
+            pass
+        return "unverified", False
 
     def build_command(self, prompt: Optional[str] = None) -> List[str]:
         """Construct command line arguments for DSH headless execution."""

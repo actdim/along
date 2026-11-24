@@ -14,6 +14,7 @@ from dataclasses import dataclass, field
 from datetime import datetime, timezone
 import json
 import os
+import re
 import sys
 from typing import Any, Callable, Dict, List, Optional, Tuple
 
@@ -791,11 +792,38 @@ def install_opencode_hooks(
     except OSError as exc:
         return "failed", f"cannot read {src_plugin}: {exc}"
 
+    # REQ-10: validate registered hook names against the OpenCode runtime contract before installing
+    from .. import runtime as along_runtime
+    contract = along_runtime.load_opencode_contract(repo_root)
+    valid_by_domain = {
+        "tool": set(contract.get("tool_hooks") or []),
+        "session": set(contract.get("session_hooks") or []),
+        "shell": set(contract.get("shell_hooks") or []),
+    }
+    invalid_hooks: List[str] = []
+    for domain, hook_name in re.findall(r"(tool|session|shell)\.hook\(\s*[\"']([^\"']+)[\"']", plugin_content):
+        if hook_name not in valid_by_domain.get(domain, set()):
+            invalid_hooks.append(f"{domain}.{hook_name}")
+    if invalid_hooks:
+        return "failed", f"OpenCode plugin registers unsupported hook(s) for {contract.get('version', '2.3.2')}: {', '.join(invalid_hooks)}"
+
+    pruned_msg = ""
+    if is_global and repo_root and not dry_run:
+        proj_plugin = os.path.join(repo_root, ".opencode", "plugins", "along-gates.js")
+        if os.path.isfile(proj_plugin):
+            try:
+                proj_text = textio.read_text(proj_plugin, strict=False)
+                if "along-gates" in proj_text:
+                    os.remove(proj_plugin)
+                    pruned_msg = f" (pruned duplicate project plugin {proj_plugin})"
+            except OSError:
+                pass
+
     if os.path.isfile(plugin_file):
         try:
             existing = textio.read_text(plugin_file, strict=False)
             if existing.replace("\r\n", "\n") == plugin_content.replace("\r\n", "\n"):
-                return "present", f"{plugin_file}: already up to date"
+                return "present", f"{plugin_file}: already up to date{pruned_msg}"
         except OSError:
             pass
 
@@ -811,7 +839,7 @@ def install_opencode_hooks(
             except OSError:
                 pass
         textio.write_text(plugin_file, plugin_content, newline="\n")
-        return "installed", f"{plugin_file}: installed OpenCode Along plugin"
+        return "installed", f"{plugin_file}: installed OpenCode Along plugin{pruned_msg}"
     except OSError as exc:
         return "failed", f"cannot write {plugin_file}: {exc}"
 
