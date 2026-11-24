@@ -2,6 +2,23 @@
 
 All notable changes to this project, newest first.
 
+## v4.9.2 - 2026-11-24
+
+- chore: Commit versioning decoupling and pending issue files (refs #decouple-protocol-and-toolchain-versioning)
+- fix: Fix DSH tool-name map, global configPath/is_global, ASK capability, and DSH skills updater support (refs #dsh-tool-name-map-and-ask-capability)
+- docs: Deduplicate commit entries in CHANGELOG and release engine (refs #changelog-deduplication)
+- docs: Reconcile protocol counts, VISION version, and extras across documentation (refs #reconcile-protocol-counts-and-extras)
+- feat(runner): support positional prompt delivery and token cache ratio observability for deepseek runner (refs #opencode-deepseek-cache-configuration-audit)
+- debt(tests): deduplicate version bump tests and harden contract assertions across suite (refs #test-suite-paper-compliance-cleanup)
+- fix(opencode): isolate node plugin contract test in tempdir to ensure test hermeticity (refs #opencode-plugin-test-hermeticity)
+- feat: implement umbrella session hierarchy, smart dirty tree start handling, and submodule protocol auto-commit (refs #session-hierarchy-and-submodule-automation)
+- fix: Fix engine wrap atomicity, gate reference integrity, and multi-subproject session friction across lifecycle, gates, and repo engines (refs #engine-atomicity-and-gate-resilience)
+- feat(harness): create local LLM runtime harness epic and child work packages (refs #local-llm-runtime-harness)
+- feat: Implement self-contained offline NL-to-WebDev step compiler and runner (refs #webdev-local-llm-engine)
+- feat: Implement DeepSeek Harness headless runner and orchestration adapter (refs #deepseek-runtime-adapter)
+- feat: add DeepSeek Harness adapter, installer target, and cordis bridge (refs #deepseek-harness-bridge)
+- fix(webdev): prevent dual browser windows, handle SIGINT cleanly, and support CMD step shortcuts (refs #webdev-session-ux-improvements)
+
 ## v4.9.1 - 2026-11-21
 
 - fix(webdev): Fix interactive session browser creation, Playwright greenlet thread affinity, tempfile directory helper, and doctor status checks (refs #webdev-session-create-browser-helper)

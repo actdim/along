@@ -1,4 +1,4 @@
-# ActDim Along (v4.9.1) - Full Documentation Context
+# ActDim Along (v4.9.2) - Full Documentation Context
 
 > [![Tests](https://github.com/actdim/along/actions/workflows/tests.yml/badge.svg)](https://github.com/actdim/along/actions/workflows/tests.yml) - Python 3.10-3.13 on Linux and Windows.
 
@@ -6,7 +6,7 @@
 
 ## Document: README.md (Overview)
 
-# ActDim Along (v4.9.1)
+# ActDim Along (v4.9.2)
 
 [![Tests](https://github.com/actdim/along/actions/workflows/tests.yml/badge.svg)](https://github.com/actdim/along/actions/workflows/tests.yml) - Python 3.10-3.13 on Linux and Windows.
 
