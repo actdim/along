@@ -23,10 +23,9 @@
 .along/DECISIONS.md merge=union
 
 # >>> along git setup (managed merge drivers) >>>
-**/.along/ISSUES.md merge=along-projection
-**/.along/CONSTRAINTS.md merge=along-projection
-**/docs/INDEX.md merge=along-projection
-**/.along/DECISIONS.md merge=along-projection
-**/.along/ISSUES/**/*.md merge=along-frontmatter
-**/.along/DECISIONS/**/*.md merge=along-frontmatter
+**/.along/**/*.md -merge
+**/docs/**/*.md -merge
+AGENTS.md -merge
+CLAUDE.md -merge
+**/.along/HISTORY.md merge=union
 # <<< along git setup <<<
