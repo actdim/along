@@ -17,7 +17,7 @@ SCRIPTS_DIR = os.path.join(REPO_ROOT, "scripts")
 if SCRIPTS_DIR not in sys.path:
     sys.path.insert(0, SCRIPTS_DIR)
 
-from along_version_bump import report_rollback, ReleaseAborted
+from along_version_bump import report_rollback, ReleaseAborted, deduplicate_log_entries
 
 
 class TestVersionBumpCli(unittest.TestCase):
@@ -60,6 +60,30 @@ class TestVersionBumpCli(unittest.TestCase):
         self.assertIn("[Abort] Release aborted: gate error", output)
         self.assertIn("Rolled back 2 file(s):", output)
         self.assertIn("package.json", output)
+
+
+class TestDeduplicateLogEntries(unittest.TestCase):
+    """Test changelog log entry deduplication and prefix normalization."""
+
+    def test_deduplicates_by_issue_reference_and_prefers_scope(self):
+        entries = [
+            "fix: Fix webdev session browser creation (refs #webdev-session-create-browser-helper)",
+            "fix(webdev): session browser creation, thread affinity, and doctor checks (refs #webdev-session-create-browser-helper)",
+            "feat: Standalone feature without refs",
+            "fix: fix(opencode): guard undefined output in shell hooks (refs #opencode-shell-env-runner-fix)",
+            "fix(opencode): guard undefined output in shell hooks and align runner CLI contract (refs #opencode-shell-env-runner-fix)",
+        ]
+        deduped = deduplicate_log_entries(entries)
+        self.assertEqual(len(deduped), 3)
+        self.assertEqual(
+            deduped[0],
+            "fix(webdev): session browser creation, thread affinity, and doctor checks (refs #webdev-session-create-browser-helper)",
+        )
+        self.assertEqual(deduped[1], "feat: Standalone feature without refs")
+        self.assertEqual(
+            deduped[2],
+            "fix(opencode): guard undefined output in shell hooks and align runner CLI contract (refs #opencode-shell-env-runner-fix)",
+        )
 
 
 if __name__ == "__main__":

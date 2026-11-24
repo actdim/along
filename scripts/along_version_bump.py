@@ -661,6 +661,48 @@ def update_along_milestones(repo_root, new_version, tx, carry_over=None):
     return updated
 
 
+def deduplicate_log_entries(lines):
+    """Deduplicate commit subjects sharing the same issue reference.
+
+    Normalizes accidental repeated prefixes (e.g. 'fix: fix(scope):') and
+    when multiple commits reference the same issue slug (refs #<slug>),
+    prefers the more specific scoped commit subject.
+    """
+    cleaned_lines = []
+    for line in lines:
+        m_dup = re.match(
+            r'^(feat|fix|docs|debt|chore|refactor|test):\s*(feat|fix|docs|debt|chore|refactor|test)(?:\(([^)]+)\))?:\s*(.*)',
+            line,
+            re.I,
+        )
+        if m_dup:
+            _, p2, scope, rest = m_dup.groups()
+            scope_part = f"({scope})" if scope else ""
+            line = f"{p2.lower()}{scope_part}: {rest}"
+        cleaned_lines.append(line)
+
+    seen_refs = {}
+    deduped = []
+    for line in cleaned_lines:
+        ref_match = re.search(r'\((?:refs\s+)?#([a-z0-9\-]+)\)', line)
+        if not ref_match:
+            deduped.append(line)
+            continue
+        slug = ref_match.group(1).lower()
+        if slug not in seen_refs:
+            seen_refs[slug] = len(deduped)
+            deduped.append(line)
+        else:
+            prev_idx = seen_refs[slug]
+            prev_line = deduped[prev_idx]
+            has_scope = bool(re.match(r'^[a-z]+\([^)]+\):', line))
+            prev_has_scope = bool(re.match(r'^[a-z]+\([^)]+\):', prev_line))
+            if (has_scope and not prev_has_scope) or (has_scope == prev_has_scope and len(line) > len(prev_line)):
+                deduped[prev_idx] = line
+
+    return deduped
+
+
 def release_log_entries(repo_root, limit=200):
     """Commit subjects since the most recent tag, newest first; empty when git cannot say."""
     if not os.path.exists(os.path.join(repo_root, ".git")):
@@ -680,7 +722,7 @@ def release_log_entries(repo_root, limit=200):
         if not re.search(r'^(?:release|bump(?:\(version\))?):', line, re.I)
         and 'bump version and release reconciliation' not in line.lower()
     ]
-    return filtered
+    return deduplicate_log_entries(filtered)
 
 
 def update_changelog(repo_root, new_version, tx):
