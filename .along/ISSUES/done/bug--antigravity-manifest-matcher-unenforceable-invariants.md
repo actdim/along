@@ -4,14 +4,16 @@ protocol_version: "4.9.1"
 slug: antigravity-manifest-matcher-unenforceable-invariants
 title: "Antigravity hook matcher excludes the tools its own invariant gates declare"
 type: bug
-status: open
+status: done
+completed: 2026-11-25
 priority: high
 created: 2026-11-24
-updated: 2026-11-24
+updated: 2026-11-25
 agent: dsh
 tags: [hooks, gates, antigravity, matcher, containment, invariants]
 blocked_by: []
 related: []
+plan_status: approved
 ---
 
 # Antigravity hook matcher excludes the tools its own invariant gates declare
@@ -65,11 +67,11 @@ serves.
 
 ## Acceptance Criteria
 
-- [ ] `get_antigravity_hook_manifest()` matcher is a superset of the runtime gate tool union.
-- [ ] A hermetic test fails if a new gate names a tool absent from an installed matcher.
-- [ ] A `view_file` payload for a credential store is denied under `--runtime antigravity`.
-- [ ] A `delete_file` payload for `.along/ISSUES/*.md` is denied under `--runtime antigravity`.
-- [ ] Cursor's narrowing is either closed or reported by `along doctor`.
+- [x] `get_antigravity_hook_manifest()` matcher is a superset of the runtime gate tool union.
+- [x] A hermetic test fails if a new gate names a tool absent from an installed matcher.
+- [x] A `view_file` payload for a credential store is denied under `--runtime antigravity`.
+- [x] A `delete_file` payload for `.along/ISSUES/*.md` is denied under `--runtime antigravity`.
+- [x] Cursor's narrowing is either closed or reported by `along doctor`.
 
 ## Evidence
 
