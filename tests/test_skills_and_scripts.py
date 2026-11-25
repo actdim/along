@@ -17,6 +17,7 @@ never run a writing engine over it. See `[bug--tests-mutate-working-tree]` and t
 meta-test in `tests/test_zz_hermetic_suite.py`.
 """
 
+import ast
 import os
 import sys
 import glob
@@ -38,7 +39,8 @@ TESTS_DIR = os.path.dirname(os.path.abspath(__file__))
 if TESTS_DIR not in sys.path:
     sys.path.insert(0, TESTS_DIR)
 
-from alongkit import frontmatter, proc, repo, textio, typography
+import along_exec
+from alongkit import frontmatter, markdown, proc, repo, repochecks, textio, typography
 import hermetic
 
 
@@ -151,33 +153,33 @@ class TestAlongSkillsAndScripts(unittest.TestCase):
                          f"Found empty 0-byte files in repository:\n" + "\n".join(zero_byte_files))
 
     def test_00b_readme_referenced_files_exist_and_nonempty(self):
-        """Assert every file referenced from README.md exists and is non-empty (REQ-5)."""
+        """Assert every relative link in README.md resolves to an existing non-empty file without broken links."""
         readme_path = os.path.join(REPO_ROOT, "README.md")
         self.assertTrue(os.path.isfile(readme_path), "README.md must exist")
-        with open(readme_path, "r", encoding="utf-8") as f:
-            content = f.read()
+        content = textio.read_text(readme_path)
 
-        link_pattern = re.compile(r"\[([^\]]+)\]\(([^)]+)\)")
-        referenced_files = []
-        for match in link_pattern.finditer(content):
-            target = match.group(2).strip()
-            if target.startswith(("http://", "https://", "mailto:", "#")):
+        broken = markdown.find_broken_links(content, readme_path, REPO_ROOT)
+        self.assertEqual(broken, [], f"README.md contains broken Markdown links: {broken}")
+
+        referenced_paths = []
+        for link in markdown.find_links(content, skip_external=True):
+            if markdown.is_placeholder(link.target):
                 continue
-            clean_target = target.split("#")[0].strip()
-            if clean_target:
-                referenced_files.append(clean_target)
+            resolved = markdown.resolve_target(link.target, readme_path, REPO_ROOT)
+            if resolved is not None:
+                referenced_paths.append((link.target, resolved))
 
-        self.assertGreater(len(referenced_files), 0, "README.md must contain local links")
-        for rel_target in referenced_files:
-            target_path = os.path.normpath(os.path.join(REPO_ROOT, rel_target))
+        self.assertGreater(len(referenced_paths), 0, "README.md must contain local links")
+        for rel_target, target_path in referenced_paths:
             self.assertTrue(os.path.exists(target_path),
                             f"README.md references missing file: {rel_target}")
-            size = os.path.getsize(target_path)
-            self.assertGreater(size, 0,
-                               f"README.md references empty file: {rel_target} (0 bytes)")
+            if os.path.isfile(target_path):
+                size = os.path.getsize(target_path)
+                self.assertGreater(size, 0,
+                                   f"README.md references empty file: {rel_target} (0 bytes)")
 
     def test_01_all_python_files_compile(self):
-        """Verify that every .py file in scripts/ and skills/ compiles and has non-trivial size."""
+        """Verify every .py file parses cleanly into a non-trivial Python AST and compiles."""
         py_files = (
             glob.glob(os.path.join(REPO_ROOT, "scripts", "**", "*.py"), recursive=True) +
             glob.glob(os.path.join(REPO_ROOT, "skills", "**", "*.py"), recursive=True) +
@@ -190,12 +192,27 @@ class TestAlongSkillsAndScripts(unittest.TestCase):
             rel = os.path.relpath(py_path, REPO_ROOT)
             size = os.path.getsize(py_path)
             self.assertGreater(size, 40, f"Python file {rel} is unexpectedly small ({size} bytes)")
-            with open(py_path, "r", encoding="utf-8") as f:
-                code = f.read()
+            code = textio.read_text(py_path)
             try:
-                compile(code, py_path, "exec")
+                tree = ast.parse(code, filename=py_path)
+                compile(tree, py_path, "exec")
             except Exception as e:
-                self.fail(f"Syntax/compilation error in {rel}: {e}")
+                self.fail(f"AST parse/compilation error in {rel}: {e}")
+
+            self.assertIsInstance(tree, ast.Module)
+            if os.path.basename(py_path) != "__init__.py":
+                non_docstring_stmts = [
+                    node for node in tree.body
+                    if not (
+                        isinstance(node, ast.Expr)
+                        and isinstance(node.value, ast.Constant)
+                        and isinstance(node.value.value, str)
+                    )
+                ]
+                self.assertGreater(
+                    len(non_docstring_stmts), 0,
+                    f"Python file {rel} has no executable or declarative AST statements"
+                )
 
     def test_02_no_markdown_in_python_scripts(self):
         """Guard against accidental overwrite of Python scripts with README/Markdown text."""
@@ -214,21 +231,68 @@ class TestAlongSkillsAndScripts(unittest.TestCase):
                 self.assertNotIn(marker, joined, f"Corrupted Python file detected in {rel}: contains Markdown text '{marker}'")
 
     def test_03_skill_manifests_validity(self):
-        """Verify that every skills/along-* directory contains a valid SKILL.md with frontmatter."""
-        skill_dirs = glob.glob(os.path.join(REPO_ROOT, "skills", "along-*"))
+        """Verify every skills/along-* directory has a schema-valid SKILL.md with valid fences and links."""
+        skills_root = os.path.join(REPO_ROOT, "skills")
+        all_skill_entries = sorted(os.listdir(skills_root))
+        skill_dirs = [
+            os.path.join(skills_root, name)
+            for name in all_skill_entries
+            if os.path.isdir(os.path.join(skills_root, name))
+        ]
         self.assertGreaterEqual(len(skill_dirs), 10, "Should have at least 10 along-* skills")
 
         for sdir in skill_dirs:
             sname = os.path.basename(sdir)
+            self.assertRegex(
+                sname, r"^along-[a-z0-9-]+$",
+                f"Skill directory '{sname}' must follow along-<slug> naming convention"
+            )
             skill_md = os.path.join(sdir, "SKILL.md")
-            self.assertTrue(os.path.exists(skill_md), f"Missing SKILL.md in {sname}")
+            self.assertTrue(os.path.isfile(skill_md), f"Missing SKILL.md in {sname}")
 
-            with open(skill_md, "r", encoding="utf-8") as f:
-                content = f.read()
+            content = textio.read_text(skill_md)
+            self.assertTrue(
+                frontmatter.has_frontmatter(content),
+                f"{sname}/SKILL.md must start with a YAML front-matter block"
+            )
+            lint_errors = frontmatter.lint(content, path=skill_md)
+            self.assertEqual(lint_errors, [], f"{sname}/SKILL.md front-matter failed YAML lint: {lint_errors}")
 
-            self.assertTrue(content.startswith("---"), f"{sname}/SKILL.md must start with YAML front-matter '---'")
-            self.assertIn(f"name: {sname}", content, f"{sname}/SKILL.md front-matter must specify 'name: {sname}'")
-            self.assertIn("description:", content, f"{sname}/SKILL.md front-matter must specify 'description:'")
+            fm, body = frontmatter.parse(content, path=skill_md)
+            self.assertTrue(
+                {"name", "description"}.issubset(fm.keys()),
+                f"{sname}/SKILL.md front-matter missing required keys: {set(fm.keys())}"
+            )
+            self.assertEqual(
+                fm.get("name"), sname,
+                f"{sname}/SKILL.md front-matter 'name' must match directory name '{sname}'"
+            )
+            self.assertIsInstance(
+                fm.get("description"), str,
+                f"{sname}/SKILL.md front-matter 'description' must be a string"
+            )
+            self.assertGreater(
+                len(fm["description"].strip()), 10,
+                f"{sname}/SKILL.md front-matter 'description' must be non-empty"
+            )
+
+            self.assertTrue(body.strip(), f"{sname}/SKILL.md must have a non-empty Markdown body")
+            self.assertGreaterEqual(
+                len(markdown.extract_heading_anchors(body)), 1,
+                f"{sname}/SKILL.md must declare at least one Markdown heading"
+            )
+
+            tracker = markdown.FenceTracker()
+            for line in content.splitlines():
+                tracker.process_line(line)
+            self.assertFalse(tracker.in_fence, f"{sname}/SKILL.md contains an unclosed code fence")
+
+            rel_skill = f"skills/{sname}/SKILL.md"
+            fence_findings = repochecks.check_code_fence_language([rel_skill], lambda _p: content, {})
+            self.assertEqual(fence_findings, [], f"{rel_skill}: unlabeled code fences: {fence_findings}")
+
+            broken_links = markdown.find_broken_links(content, skill_md, REPO_ROOT)
+            self.assertEqual(broken_links, [], f"{rel_skill}: broken relative Markdown links: {broken_links}")
 
     END_MARKER = "<!-- END ALONG-PROTOCOL -->"
 
@@ -359,24 +423,61 @@ class TestAlongSkillsAndScripts(unittest.TestCase):
     def test_03e_skills_document_canonical_along_commands(self):
         """Verify skills document canonical along <command> invocations without broken script paths."""
         skills_dir = os.path.join(REPO_ROOT, "skills")
-        for skill_name in os.listdir(skills_dir):
-            skill_md = os.path.join(skills_dir, skill_name, "SKILL.md")
-            if not os.path.isfile(skill_md):
+        valid_cmds = set(along_exec.TOOL_MAPPINGS.keys()) | set(along_exec.LIFECYCLE_ACTIONS) | {"kb", "graph"}
+        exec_path = os.path.join(SCRIPTS_DIR, "along_exec.py")
+        exec_tree = ast.parse(textio.read_text(exec_path), filename=exec_path)
+        for node in ast.walk(exec_tree):
+            if isinstance(node, ast.Assign):
+                for target in node.targets:
+                    if isinstance(target, ast.Name) and target.id == "native_routers" and isinstance(node.value, ast.Dict):
+                        for key in node.value.keys:
+                            if isinstance(key, ast.Constant) and isinstance(key.value, str):
+                                valid_cmds.add(key.value)
+        for skill_name in sorted(os.listdir(skills_dir)):
+            skill_path = os.path.join(skills_dir, skill_name)
+            if not os.path.isdir(skill_path):
                 continue
-            with open(skill_md, "r", encoding="utf-8") as f:
-                content = f.read()
+            skill_md = os.path.join(skill_path, "SKILL.md")
+            self.assertTrue(os.path.isfile(skill_md), f"{skill_name} directory must contain SKILL.md")
+            content = textio.read_text(skill_md)
+            _fm, body = frontmatter.parse(content, path=skill_md)
 
             # No SKILL.md may document python scripts/<engine>.py as an execution command
             self.assertNotRegex(
-                content,
+                body,
                 r"(?m)^\s*(python\s+scripts/|uv\s+run\s+scripts/)",
                 f"{skill_name}/SKILL.md documents obsolete scripts/ path rather than canonical along CLI"
             )
 
+            # Backticked and shell-fenced `along <subcmd>` references must match real router/tool commands
+            documented_cmds = re.findall(r"`along\s+([a-z][a-z0-9-]*[a-z0-9])(?=[\s`])", body)
+            shell_langs = {"bash", "sh", "shell", "zsh", "powershell", "pwsh", "console"}
+            tracker = markdown.FenceTracker()
+            active_lang = ""
+            for line in body.splitlines():
+                was_in_fence = tracker.in_fence
+                is_boundary = tracker.process_line(line)
+                if is_boundary:
+                    if not was_in_fence and tracker.in_fence:
+                        m = re.match(r"^ {0,3}(?:`{3,}|~{3,})(.*)$", line.rstrip("\r\n"))
+                        active_lang = (m.group(1).strip().split()[0].lower() if m and m.group(1).strip() else "")
+                    else:
+                        active_lang = ""
+                    continue
+                if tracker.in_fence and active_lang in shell_langs:
+                    cm = re.match(r"^\s*(?:\$\s+)?along\s+([a-z][a-z0-9-]*[a-z0-9])(?=\s|$)", line)
+                    if cm:
+                        documented_cmds.append(cm.group(1))
+            unknown_cmds = [c for c in documented_cmds if c not in valid_cmds]
+            self.assertEqual(
+                unknown_cmds,
+                [],
+                f"{skill_name}/SKILL.md references unknown `along` CLI command(s): {unknown_cmds}",
+            )
+
         # along-team must document persistent session blackboard and scratch commands
         team_skill = os.path.join(skills_dir, "along-team", "SKILL.md")
-        with open(team_skill, "r", encoding="utf-8") as f:
-            team_content = f.read()
+        team_content = textio.read_text(team_skill)
         self.assertIn("along scratch init", team_content)
         self.assertIn("along scratch state", team_content)
         self.assertIn("along scratch update", team_content)
@@ -531,6 +632,17 @@ class TestAlongSkillsAndScripts(unittest.TestCase):
         for rel in critical_paths:
             full = os.path.normpath(os.path.join(REPO_ROOT, rel))
             self.assertTrue(os.path.exists(full), f"Documented path does not exist on disk: {rel}")
+            if os.path.isdir(full):
+                self.assertGreater(len(os.listdir(full)), 0, f"Documented directory is empty: {rel}")
+            else:
+                self.assertGreater(os.path.getsize(full), 0, f"Documented file is empty: {rel}")
+                if rel.endswith(".md"):
+                    md_text = textio.read_text(full)
+                    self.assertEqual(
+                        frontmatter.lint(md_text, path=full),
+                        [],
+                        f"Documented markdown file has invalid YAML frontmatter: {rel}",
+                    )
 
         # Ban known phantom paths in AGENTS.md and README.md
         for doc_name in ["AGENTS.md", "README.md"]:
@@ -1431,15 +1543,37 @@ class TestAlongSkillsAndScripts(unittest.TestCase):
             shutil.rmtree(temp_dir, ignore_errors=True)
 
     def test_20_candidate_scripts_resolution(self):
-        """Verify that along_update resolves helper scripts in ~/.along/bin/ and scripts/."""
-        scripts_dir = os.path.join(REPO_ROOT, "scripts")
-        if scripts_dir not in sys.path:
-            sys.path.insert(0, scripts_dir)
+        """Verify that along_update resolves helper scripts and every resolved engine parses cleanly via AST."""
         import along_update
 
         resolved_kb = along_update.locate_skill_script(REPO_ROOT, "along-kb-sync", "along_kb_sync.py")
         self.assertIsNotNone(resolved_kb, "Should resolve along_kb_sync.py in repository scripts/")
-        self.assertTrue(os.path.exists(resolved_kb))
+        self.assertTrue(os.path.isfile(resolved_kb))
+        kb_tree = ast.parse(textio.read_text(resolved_kb), filename=resolved_kb)
+        kb_funcs = {node.name for node in kb_tree.body if isinstance(node, ast.FunctionDef)}
+        self.assertTrue(
+            {"main", "reconcile_sources", "sync_kb", "validate_repo_link_integrity"}.issubset(kb_funcs),
+            f"Resolved along_kb_sync.py missing expected entrypoint functions: {sorted(kb_funcs)}"
+        )
+
+        seen_scripts = set()
+        for cmd, script_name in sorted(along_exec.TOOL_MAPPINGS.items()):
+            if script_name in seen_scripts:
+                continue
+            seen_scripts.add(script_name)
+            skill_name = f"along-{cmd}"
+            resolved = along_update.locate_skill_script(REPO_ROOT, skill_name, script_name)
+            self.assertIsNotNone(resolved, f"Failed to resolve {script_name} for command '{cmd}'")
+            self.assertTrue(os.path.isfile(resolved), f"Resolved path is not a file: {resolved}")
+            src = textio.read_text(resolved)
+            self.assertGreater(len(src.strip()), 0, f"Resolved script is empty: {resolved}")
+            tree = ast.parse(src, filename=resolved)
+            self.assertIsInstance(tree, ast.Module)
+            has_code = any(
+                isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef, ast.Import, ast.ImportFrom))
+                for node in tree.body
+            )
+            self.assertTrue(has_code, f"Resolved script {script_name} lacks imports/definitions in AST")
 
     def test_21_docs_articles_not_empty_placeholders(self):
         """Verify that knowledge base articles in docs/ are rich, substantive, and not empty placeholder stubs."""

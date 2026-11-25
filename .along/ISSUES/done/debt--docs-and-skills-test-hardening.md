@@ -3,15 +3,17 @@ protocol: along
 protocol_version: "4.9.1"
 slug: docs-and-skills-test-hardening
 type: debt
-status: open
+status: done
+completed: 2026-11-25
 priority: high
 created: 2026-11-24
-updated: 2026-11-24
+updated: 2026-11-25
 agent: antigravity
 tags: [tests, audit, paper-compliance, refactoring]
 milestone: v5.0.0-agent-run-protocol-and-observability
 blocked_by: []
 related: [debt--test-suite-paper-compliance-cleanup]
+plan_status: approved
 ---
 
 # Harden test_docs.py and test_skills_and_scripts.py assertions
@@ -24,6 +26,6 @@ Follow-up to `debt--test-suite-paper-compliance-cleanup`. Commit `0171a45` updat
 - REQ-2: `tests/test_skills_and_scripts.py` MUST upgrade superficial `os.path.isfile` checks to Python AST parsing and `SKILL.md` YAML frontmatter schema validation.
 
 ## Acceptance Criteria
-- [ ] `tests/test_docs.py` uses structural link, fence, and schema checks instead of brittle phrase matching
-- [ ] `tests/test_skills_and_scripts.py` validates Python AST syntax and `SKILL.md` frontmatter schemas
-- [ ] Automated tests in `tests/test_docs.py` and `tests/test_skills_and_scripts.py` pass with zero regressions
+- [x] `tests/test_docs.py` uses structural link, fence, and schema checks instead of brittle phrase matching
+- [x] `tests/test_skills_and_scripts.py` validates Python AST syntax and `SKILL.md` frontmatter schemas
+- [x] Automated tests in `tests/test_docs.py` and `tests/test_skills_and_scripts.py` pass with zero regressions

@@ -7,7 +7,6 @@
 - [ ] `(debt)` [autonomous-non-elevation-invariants](ISSUES/debt--autonomous-non-elevation-invariants.md)
 - [ ] `(debt)` [canonical-path-gate-expansion](ISSUES/debt--canonical-path-gate-expansion.md)
 - [ ] `(debt)` [dashboard-retire-risk-spike-views](ISSUES/debt--dashboard-retire-risk-spike-views.md)
-- [ ] `(debt)` [docs-and-skills-test-hardening](ISSUES/debt--docs-and-skills-test-hardening.md)
 - [ ] `(debt)` [gate-config-layers](ISSUES/debt--gate-config-layers.md)
 - [ ] `(debt)` [triage-silent-exception-handlers](ISSUES/debt--triage-silent-exception-handlers.md)
 - [ ] `(docs)` [arxiv-academic-paper-preprint](ISSUES/docs--arxiv-academic-paper-preprint.md)
@@ -69,7 +68,7 @@
 ## Done (recent)
 - [x] `(task)` [deepseek-telemetry-and-timeout](ISSUES/done/task--deepseek-telemetry-and-timeout.md)
 - [x] `(feat)` [cursor-agent-and-rules-integration](ISSUES/done/feat--cursor-agent-and-rules-integration.md)
+- [x] `(debt)` [docs-and-skills-test-hardening](ISSUES/done/debt--docs-and-skills-test-hardening.md)
 - [x] `(bug)` [traceability-blind-to-protocol-md-and-unbadged-gates](ISSUES/done/bug--traceability-blind-to-protocol-md-and-unbadged-gates.md)
 - [x] `(bug)` [opencode-runtime-integration-defects](ISSUES/done/bug--opencode-runtime-integration-defects.md)
-- [x] `(bug)` [commit-gates-skip-chained-and-dash-c-commits](ISSUES/done/bug--commit-gates-skip-chained-and-dash-c-commits.md)
-<!-- 366 older completed issue(s) archived in .along/ISSUES/done/ -->
+<!-- 367 older completed issue(s) archived in .along/ISSUES/done/ -->
