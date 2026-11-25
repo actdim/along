@@ -96,6 +96,17 @@ class TestSystemComparisonsDoc(unittest.TestCase):
             f"Found non-ASCII characters in docs/topic--system-comparisons.md: {non_ascii[:5]}",
         )
 
+    def test_snippet_unit_uses_words_not_tokens(self):
+        """Retrieval snippet bounds must be stated in words (matching along_kb_search.py), not tokens."""
+        self.assertIsNone(
+            re.search(r"\b150\s+tokens?\b", self.content, re.IGNORECASE),
+            "docs/topic--system-comparisons.md must not state '150 tokens'",
+        )
+        self.assertRegex(
+            self.content,
+            re.compile(r"\b150\s+words\b", re.IGNORECASE),
+        )
+
 
 if __name__ == "__main__":
     unittest.main()

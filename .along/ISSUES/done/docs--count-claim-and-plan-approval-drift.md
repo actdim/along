@@ -4,14 +4,16 @@ protocol_version: "4.9.1"
 slug: count-claim-and-plan-approval-drift
 title: "Documentation counts, phase and rubric claims, snippet unit and plan approval drift"
 type: docs
-status: open
+status: done
+completed: 2026-11-25
 priority: medium
 created: 2026-11-24
-updated: 2026-11-24
+updated: 2026-11-25
 agent: dsh
 tags: [documentation, drift, counts, gates, skills, kb]
 blocked_by: []
 related: []
+plan_status: approved
 ---
 
 # Documentation counts, phase and rubric claims, snippet unit and plan approval drift
@@ -59,13 +61,13 @@ exactly the assumption `require_plan_approval` denies.
 
 ## Acceptance Criteria
 
-- [ ] No document states a gate count other than the catalogue total, and a test enforces it.
-- [ ] No document states a skill count other than the `skills/` directory total.
-- [ ] The phase diagram numbers are contiguous and its prose matches the diagram.
-- [ ] The rubric heading matches the number of listed points.
-- [ ] Every snippet-window statement uses one unit consistent with the code.
-- [ ] The `along start` row states the explicit approval requirement.
-- [ ] `along kb-sync --check` and `along lint` pass.
+- [x] No document states a gate count other than the catalogue total, and a test enforces it.
+- [x] No document states a skill count other than the `skills/` directory total.
+- [x] The phase diagram numbers are contiguous and its prose matches the diagram.
+- [x] The rubric heading matches the number of listed points.
+- [x] Every snippet-window statement uses one unit consistent with the code.
+- [x] The `along start` row states the explicit approval requirement.
+- [x] `along kb-sync --check` and `along lint` pass.
 
 ## Evidence
 

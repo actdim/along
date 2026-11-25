@@ -10,7 +10,6 @@
 - [ ] `(debt)` [gate-config-layers](ISSUES/debt--gate-config-layers.md)
 - [ ] `(debt)` [triage-silent-exception-handlers](ISSUES/debt--triage-silent-exception-handlers.md)
 - [ ] `(docs)` [arxiv-academic-paper-preprint](ISSUES/docs--arxiv-academic-paper-preprint.md)
-- [ ] `(docs)` [count-claim-and-plan-approval-drift](ISSUES/docs--count-claim-and-plan-approval-drift.md)
 - [ ] `(docs)` [dita-topics-and-drift](ISSUES/docs--dita-topics-and-drift.md)
 - [ ] `(docs)` [engineering-deepdive-medium-devto](ISSUES/docs--engineering-deepdive-medium-devto.md)
 - [ ] `(docs)` [operations-and-autonomous-systems-paradigm](ISSUES/docs--operations-and-autonomous-systems-paradigm.md)
@@ -68,7 +67,7 @@
 ## Done (recent)
 - [x] `(task)` [deepseek-telemetry-and-timeout](ISSUES/done/task--deepseek-telemetry-and-timeout.md)
 - [x] `(feat)` [cursor-agent-and-rules-integration](ISSUES/done/feat--cursor-agent-and-rules-integration.md)
+- [x] `(docs)` [count-claim-and-plan-approval-drift](ISSUES/done/docs--count-claim-and-plan-approval-drift.md)
 - [x] `(debt)` [docs-and-skills-test-hardening](ISSUES/done/debt--docs-and-skills-test-hardening.md)
 - [x] `(bug)` [traceability-blind-to-protocol-md-and-unbadged-gates](ISSUES/done/bug--traceability-blind-to-protocol-md-and-unbadged-gates.md)
-- [x] `(bug)` [opencode-runtime-integration-defects](ISSUES/done/bug--opencode-runtime-integration-defects.md)
-<!-- 367 older completed issue(s) archived in .along/ISSUES/done/ -->
+<!-- 368 older completed issue(s) archived in .along/ISSUES/done/ -->

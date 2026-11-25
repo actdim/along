@@ -134,7 +134,7 @@ flowchart TD
   - **Lifecycle**: Transactional and stateful. Closed issues and session logs are permanent and immutable.
 - **Unified Retrieval Engine (`along kb-search`)**:
   - Unifies both tiers in a single fast local query without vector embeddings, cloud dependencies, or background daemon processes.
-  - Returns word-boundary aligned snippets (< 150 tokens) directly to agent prompts, avoiding full-file context ingestion (measured in [scripts/bench_kb_search.py](scripts/bench_kb_search.py)).
+  - Returns word-boundary aligned snippets (<= 150 words) directly to agent prompts, avoiding full-file context ingestion (measured in [scripts/bench_kb_search.py](scripts/bench_kb_search.py)).
 
 ### Along Core vs. Modular Extras Architecture
 
@@ -158,7 +158,7 @@ Add this badge and blurb to the `README.md` of any repository powered by Along:
 
 This repository follows the **ActDim Along Protocol** for AI agent context, persistent memory, and autonomous workflows:
 - **Dual-Tier Memory**: Evergreen LLM-Wiki in `docs/` and living governance memory in `.along/` survive across all AI sessions.
-- **Zero-Vector Unified Retrieval**: Fast local snippet search across architecture, decisions, and issues returning bounded snippets (< 150 tokens) without full-file ingestion or external database dependencies.
+- **Zero-Vector Unified Retrieval**: Fast local snippet search across architecture, decisions, and issues returning bounded snippets (<= 150 words) without full-file ingestion or external database dependencies.
 - **Runtime Worktree Isolation**: Autonomous agent tasks execute in isolated Git worktrees with automatic dependency linking, preserving clean developer checkouts.
 - **Mechanical Quality Gates**: Protocol rules, clean typography, and issue bindings are mechanically enforced before tools execute in runtimes where Along's hooks are active (Claude Code, Antigravity, Codex, OpenCode, DeepSeek Harness, and optionally Cursor via `along hook install --runtime cursor`); elsewhere (and in Cursor by default before hooks are installed) they are advisory. The portable baseline for every committer is the CI job `along gates check --ci` plus opt-in git hooks (`along hooks install --git`).
 - **Standardized Lifecycle Contract**: Unified commands for build, test, dev, release, and dependency discovery via pluggable `.along/scripts/` hooks.
@@ -228,7 +228,7 @@ Along provides **22 singular automation skills** structured across 6 core lifecy
 | Skill / Command | Purpose |
 | :--- | :--- |
 | **`along-kb-sync`** (`/along-kb-sync`) | Idempotent LLM-Wiki Knowledge Base compiler, AST symbol grounding, and link integrity gate in `docs/`. |
-| **`along-kb-search`** (`/along-kb-search`) | Zero-vector local multi-scope snippet search across `docs/`, ADRs, issues, and session logs (< 150 tokens/match). |
+| **`along-kb-search`** (`/along-kb-search`) | Zero-vector local multi-scope snippet search across `docs/`, ADRs, issues, and session logs (<= 150 words/match). |
 
 ### 6. Visual Analytics, History & Diagnostics
 | Skill / Command | Purpose |

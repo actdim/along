@@ -5,7 +5,7 @@ title: System Comparisons & Alternative Architectural Paradigms
 type: explanation
 write_policy: manual
 created: 2026-09-27
-updated: 2026-11-13
+updated: 2026-11-25
 tags: [comparisons, architecture, paradigms, memory, zero-vector, mechanical-gates, governance, engineering-decisions]
 sources:
   - path: docs/topic--llm-wiki-architecture.md
@@ -93,8 +93,7 @@ Repository documentation and code are processed through blind token chunkers (e.
 ### The Along Engineering Advantage: Zero-Vector In-Repo Intelligence
 Along implemented **Zero-Vector Retrieval** (`along-kb-search`):
 - Operates on pure standard library Python with smoothed TF-IDF scoring and word-boundary token matching.
-- Delivers bounded snippets (< 150 tokens) directly to agent prompts.
-- Reduces exploration context consumption by extracting bounded snippets (< 150 tokens) rather than loading complete documents, with zero vector DBs, zero cloud dependencies, and zero background daemon processes (benchmarked via [scripts/bench_kb_search.py](../scripts/bench_kb_search.py)).
+- Reduces exploration context consumption by delivering bounded snippets (<= 150 words) directly to agent prompts rather than loading complete documents, with zero vector DBs, zero cloud dependencies, and zero background daemon processes (benchmarked via [scripts/bench_kb_search.py](../scripts/bench_kb_search.py)).
 - Maintains in-place SHA-256 provenance hashes (`sources: [{path, hash}]`) in markdown headers to detect source drift.
 
 ---

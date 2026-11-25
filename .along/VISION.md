@@ -20,16 +20,16 @@ ActDim Along is a provider-agnostic, zero-friction agent memory, documentation, 
    - **Evergreen Knowledge Base (`docs/`)**: Curated Andrej Karpathy-style LLM-Wiki with AST code symbol grounding, in-place source provenance, and SHA-256 drift detection.
    - **Living Project Memory (`.along/`)**: Structured, git-native transactional memory across sessions and tools, tracking DAG issues, decentralized ADRs, milestones, risks, and session blackboards.
 2. **Zero-Vector Unified In-Repo Retrieval (`along-kb-search`)**: Fast local TF-IDF search engine indexing documentation, ADR constraints, active issues, and session logs into bounded snippets (<= 150 words) without external vector databases or cloud daemons.
-3. **Mechanical Runtime Gates**: Interception layer enforcing declarative runtime gates in `default_gates.yaml` (32 protocol invariants enforced across runtime hooks, git hooks, and CI) with bi-directional traceability.
+3. **Mechanical Runtime Gates**: Interception layer enforcing declarative runtime gates in `default_gates.yaml` (35 protocol invariants enforced across runtime hooks, git hooks, and CI) with bi-directional traceability.
 4. **Ephemeral Workspace Isolation**: Git worktree sandboxing with automated dependency junctions (`node_modules`, `.venv`) to prevent dirty working tree contamination during agent execution.
 5. **Zero-Conflict Git Concurrency**: Custom merge drivers (`along git setup`), union merges, and atomic metadata files preventing Git merge conflicts across parallel branches and multi-agent sessions.
-6. **21-Skill Automation Suite (`skills/`)**:
+6. **22-Skill Automation Suite (`skills/`)**:
    - Context and Setup: `along-init`, `along-update`
    - Memory and Lifecycle: `along-wrap`, `along-feedback`, `along-history-sync`
    - Issue and Decision Governance: `along-issue-sync`, `along-decision-sync`
    - Knowledge Base and Retrieval: `along-kb-sync`, `along-kb-search`
    - Code Graph and Blast Radius: `along-graph-sync`, `along-graph-check`, `along-graph-impact`, `along-graph-arch`
-   - Execution and Verification: `along-build`, `along-test`, `along-dev`, `along-commit`, `along-version-bump`
+   - Execution and Verification: `along-build`, `along-test`, `along-dev`, `along-webdev`, `along-commit`, `along-version-bump`
    - Workspace, Dependencies and Teams: `along-dep-scan`, `along-team`, `along-dash`
 
 ## Along Core and Modular Extras Architecture
@@ -45,13 +45,15 @@ To maintain reliability, rapid verification, and zero bloat, Along cleanly separ
 
 ### 2. Modular Extras and Extensions
 - **Web Dashboard and Analytics (`actdim-along[dash]`)**: Executive web dashboard, Cytoscape DAG visualization, and OpenAPI service (FastAPI, Uvicorn, Pydantic, Rich).
-- **Full Suite (`actdim-along[all]`)**: Installs all optional extras (`actdim-along[dash]`).
+- **WebDev Browser Verification (`actdim-along[webdev]`)**: WebDev browser verification and Playwright runner (Playwright).
+- **Full Suite (`actdim-along[all]`)**: Installs all optional extras (`actdim-along[dash]`, `actdim-along[webdev]`).
 - **Telemetry in Core**: Tracer, redactor, WAL spool, and OTLP/HTTP JSON exporter are built directly into Along Core using only the Python standard library.
 - **Modular Protocol Capabilities**: Advanced extensions like `along-team` multi-agent loops, git worktree sandboxing, `along-graph-sync` AST code review graphs, and `along-dep-scan` operate with zero extra runtime package dependencies.
 
 ### 3. Installation Matrix
 - Core only: `pip install actdim-along`
 - Core + Dashboard: `pip install actdim-along[dash]`
+- Core + WebDev: `pip install actdim-along[webdev]`
 - All extensions: `pip install actdim-along[all]`
 
 ### 4. Protocol Versioning Policy

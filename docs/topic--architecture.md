@@ -8,9 +8,9 @@ updated: 2026-11-25
 tags: [architecture, boundaries, multi-agent, blackboard, concurrency, ast, flow, cursor]
 sources:
   - path: README.md
-    hash: "9486b48c8ecfac63f66cfecd0ecd02e67317cee9ae96eb263719db36854989b9"
+    hash: "bf2da460c4e9e1be2ada6b18c53425416b4eb4d6e3767ecee5ccf9aa0e26895a"
   - path: dashboard/app.py
-    hash: "1a0b0c9e4b40adf717712a6c3c14bebb72728d579ae37ca844bf39eecc287fd7"
+    hash: "c8accdcf0ec9842bbbfea5b4c48aa7bc84f896bf7fe61f52b8e8caa70acff211"
   - path: skills/along-dash/SKILL.md
     hash: "bc4e3facc23c5db30bff64974643c48d380e9e1bc77c8101cd1f21090fb9a3c0"
 ---
@@ -148,7 +148,7 @@ flowchart LR
 
 ## 5. Engine Implementation Layer (`scripts/` and `scripts/alongkit/`)
 
-The eighteen skills are thin: every one of them dispatches to a Python engine in `scripts/`.
+The 22 skills are thin: every one of them dispatches to a Python engine in `scripts/`.
 Those engines share one implementation package, `scripts/alongkit/`, introduced in v3.0.0.
 
 Before it existed, the engines were twelve standalone programs with no shared module.
@@ -381,7 +381,7 @@ When a single LLM agent attempts to research, plan, write code, run tests, and r
 
 ### The Multi-Agent Sequential State Machine Solution
 
-Along replaces unstructured chat swarms and single-agent linear loops with a deterministic **5-Phase State Machine**:
+Along replaces unstructured chat swarms and single-agent linear loops with a deterministic **7-Phase State Machine** (Phases 0 through 6):
 
 ```mermaid
 flowchart TD
@@ -403,7 +403,7 @@ flowchart TD
     
     ARCHITECT --> StepLoop
     REASSESS -->|More Steps| StepLoop
-    REASSESS -->|All Steps Complete| WRAP["Phase 7: Wrap-up (/along-wrap)"]
+    REASSESS -->|All Steps Complete| WRAP["Phase 6: Wrap-up (/along-wrap)"]
     FASTPATH --> WRAP
 ```
 
@@ -432,7 +432,7 @@ Along establishes 5 clearly separated functional roles:
 4. **Implementer (Worker)**:
    - *Responsibility*: Executes the specific step in an isolated context (`TypeName: "self"`, `Workspace: "branch"` or `"inherit"`). Focuses exclusively on the assigned step without worrying about global orchestration.
 5. **Reviewer (Gatekeeper: Tester + Critic + Judge)**:
-   - *Responsibility*: Evaluates the implementer's changes in an isolated context against the mandatory **6-Point Verification Rubric**:
+   - *Responsibility*: Evaluates the implementer's changes in an isolated context against the mandatory **7-Point Verification Rubric**:
      1. *Zero-Byte & File Integrity Gate*: `git status -u` check ensuring `size > 0` and zero empty placeholders.
      2. *Automated Test Suite*: Runs `/along-test` ensuring zero failures and increased test coverage.
      3. *Diff & Scope Audit*: Verifies that only requested files were touched without unintended edits.

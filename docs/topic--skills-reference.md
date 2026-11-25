@@ -43,6 +43,7 @@ flowchart TD
         BUILD["along-build"]
         TEST["along-test"]
         DEV["along-dev"]
+        WEBDEV["along-webdev"]
     end
 
     subgraph Phase4["4. Quality & Code Graph"]
@@ -67,7 +68,7 @@ flowchart TD
     end
 
     INIT --> TEAM
-    TEAM --> BUILD & TEST & DEV
+    TEAM --> BUILD & TEST & DEV & WEBDEV
     TEST --> GRAPH & COMMIT
     COMMIT --> KB_SYNC & KB_SEARCH
     KB_SYNC --> DASH & WRAP
@@ -306,7 +307,7 @@ flowchart TD
 ### `along-kb-search`
 - **What it is**: Ultra-fast, token-efficient multi-scope search engine across Knowledge Base (`docs/`) and living project memory (`ISSUES/` including spikes, `DECISIONS.md`, `MILESTONES/`, `SESSIONS/`). Categories: `all`, `kb`, `issue`, `decision`, `milestone`, `session`.
 - **Architectural Rationale**:
-  - *Targeted Snippet Window Extraction*: Instead of reading whole multi-kilobyte documents into prompt context, retrieves concise word-boundary aligned snippet windows (typically under 150 tokens), verifiable via `--stats`.
+  - *Targeted Snippet Window Extraction*: Instead of reading whole multi-kilobyte documents into prompt context, retrieves concise word-boundary aligned snippet windows (capped at <= 150 words), verifiable via `--stats`.
   - *Multi-Tier Relevance Scoring & IDF Weighting*: Ranks results using word-boundary token matching, lightweight stemming, smoothed inverse document frequency (IDF), and exact phrase matching with AND semantics by default (`--any` for OR).
   - *Recommended, Not Enforced*: Agents SHOULD query `along kb-search` before grepping or reading whole files under `docs/` and `.along/` to save tokens. No gate blocks `grep_search` / `find_by_name` there (the former `fast_retrieval` gate was removed in `debt--gate-simplification`).
 - **Invocation Triggers**:

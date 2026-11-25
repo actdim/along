@@ -426,6 +426,229 @@ class TestDocumentationRules(unittest.TestCase):
             "llms.txt must link to docs/topic--troubleshooting.md",
         )
 
+    @staticmethod
+    def _strip_fenced_blocks(content: str) -> str:
+        """Return lines outside Markdown fenced code blocks."""
+        tracker = markdown.FenceTracker()
+        kept: list[str] = []
+        for line in content.splitlines():
+            is_boundary = tracker.process_line(line)
+            if is_boundary or tracker.in_fence:
+                continue
+            kept.append(line)
+        return "\n".join(kept)
+
+    @staticmethod
+    def _living_doc_paths() -> list[str]:
+        """Return living documentation files (README, .along/VISION.md, docs/topic--*.md)."""
+        docs_dir = os.path.join(REPO_ROOT, "docs")
+        topic_paths = [
+            os.path.join(docs_dir, name)
+            for name in sorted(os.listdir(docs_dir))
+            if name.startswith("topic--") and name.endswith(".md")
+        ]
+        return [
+            os.path.join(REPO_ROOT, "README.md"),
+            os.path.join(REPO_ROOT, ".along", "VISION.md"),
+            *topic_paths,
+        ]
+
+    def test_documented_gate_counts_match_catalogue(self):
+        """Gate total and git/CI subset claims in living docs must match default_gates.yaml."""
+        entries = load_gate_entries(DEFAULT_GATES_FILE)
+        total_gates = len(entries)
+        git_ci_only = sum(
+            1 for _defn, raw in entries if set(raw.get("enforcement") or ["runtime"]) == {"git", "ci"}
+        )
+        runtime_gates = total_gates - git_ci_only
+
+        for path in self._living_doc_paths():
+            rel = os.path.relpath(path, REPO_ROOT).replace("\\", "/")
+            prose = self._strip_fenced_blocks(textio.read_text(path))
+            for pattern in (
+                r"\b(\d+)\s+(?:canonical\s+gates|catalogue\s+gates|protocol\s+invariants)\b",
+                r"\bdefines\s+(\d+)\s+gates\b",
+            ):
+                for match in re.finditer(pattern, prose, re.IGNORECASE):
+                    self.assertEqual(
+                        int(match.group(1)),
+                        total_gates,
+                        f"{rel}: stale gate total '{match.group(0)}' (expected {total_gates})",
+                    )
+
+        hooks_doc = textio.read_text(os.path.join(REPO_ROOT, "docs", "topic--runtime-hooks-and-gates.md"))
+        self.assertIn(f"{total_gates} canonical gates", hooks_doc)
+        self.assertIn(f"all {total_gates} catalogue gates", hooks_doc)
+        self.assertIn(f"remaining {runtime_gates} gates", hooks_doc)
+        self.assertIn("provenance drift", hooks_doc)
+        self.assertEqual(git_ci_only, 12)
+
+        decl_doc = textio.read_text(os.path.join(REPO_ROOT, "docs", "topic--declarative-gates-and-traceability.md"))
+        self.assertIn(f"defines {total_gates} gates", decl_doc)
+        self.assertIn(f"{git_ci_only} git/CI-only", decl_doc)
+        self.assertIn(f"{runtime_gates} runtime-enforced", decl_doc)
+        self.assertIn("`provenance_drift`", decl_doc)
+
+        self.assertIn(
+            f"{total_gates} protocol invariants",
+            textio.read_text(os.path.join(REPO_ROOT, "README.md")),
+        )
+        self.assertIn(
+            f"{total_gates} protocol invariants",
+            textio.read_text(os.path.join(REPO_ROOT, ".along", "VISION.md")),
+        )
+
+    def test_documented_skill_counts_match_skills_dir(self):
+        """Skill count claims in living docs must match the skills/along-* directory total."""
+        skills_dir = os.path.join(REPO_ROOT, "skills")
+        skill_dirs = [
+            name
+            for name in sorted(os.listdir(skills_dir))
+            if name.startswith("along-") and os.path.isfile(os.path.join(skills_dir, name, "SKILL.md"))
+        ]
+        skill_count = len(skill_dirs)
+
+        for path in self._living_doc_paths():
+            rel = os.path.relpath(path, REPO_ROOT).replace("\\", "/")
+            prose = self._strip_fenced_blocks(textio.read_text(path))
+            self.assertIsNone(
+                re.search(r"\beighteen\s+skills\b", prose, re.IGNORECASE),
+                f"{rel}: stale 'eighteen skills' phrasing",
+            )
+            for pattern in (
+                r"\b(\d+)\s+(?:singular\s+|automation\s+)?skills\b",
+                r"\b(\d+)-Skill\b",
+            ):
+                for match in re.finditer(pattern, prose):
+                    self.assertEqual(
+                        int(match.group(1)),
+                        skill_count,
+                        f"{rel}: stale skill count '{match.group(0)}' (expected {skill_count})",
+                    )
+
+        readme = textio.read_text(os.path.join(REPO_ROOT, "README.md"))
+        self.assertIn(f"{skill_count} singular automation skills", readme)
+
+        skills_ref = textio.read_text(os.path.join(REPO_ROOT, "docs", "topic--skills-reference.md"))
+        self.assertIn(f"{skill_count} singular automation skills", skills_ref)
+        self.assertIn('WEBDEV["along-webdev"]', skills_ref)
+
+        arch_doc = textio.read_text(os.path.join(REPO_ROOT, "docs", "topic--architecture.md"))
+        self.assertIn(f"The {skill_count} skills are thin", arch_doc)
+
+        wiki_doc = textio.read_text(os.path.join(REPO_ROOT, "docs", "topic--llm-wiki-architecture.md"))
+        self.assertIn(f"all {skill_count} automation skills", wiki_doc)
+
+        vision_doc = textio.read_text(os.path.join(REPO_ROOT, ".along", "VISION.md"))
+        self.assertIn(f"{skill_count}-Skill Automation Suite", vision_doc)
+        self.assertIn("`along-webdev`", vision_doc)
+        self.assertIn("`actdim-along[webdev]`", vision_doc)
+
+    def test_snippet_window_unit_is_words(self):
+        """Snippet-window statements must match along_kb_search.py (150 words, never 150 tokens)."""
+        kb_search_path = os.path.join(SCRIPTS_DIR, "along_kb_search.py")
+        tree = ast.parse(textio.read_text(kb_search_path), filename=kb_search_path)
+        snippet_fn = next(
+            (
+                node
+                for node in ast.walk(tree)
+                if isinstance(node, ast.FunctionDef) and node.name == "extract_passage_location_and_snippet"
+            ),
+            None,
+        )
+        self.assertIsNotNone(snippet_fn, "extract_passage_location_and_snippet missing in along_kb_search.py")
+        arg_defaults = {
+            arg.arg: default
+            for arg, default in zip(
+                reversed(snippet_fn.args.args), reversed(snippet_fn.args.defaults)
+            )
+        }
+        self.assertIn("max_words", arg_defaults)
+        self.assertNotIn("max_tokens", arg_defaults)
+        max_words_node = arg_defaults["max_words"]
+        self.assertIsInstance(max_words_node, ast.Constant)
+        expected_words = max_words_node.value
+        self.assertEqual(expected_words, 150)
+
+        skills_dir = os.path.join(REPO_ROOT, "skills")
+        skill_docs = [
+            os.path.join(skills_dir, name, "SKILL.md")
+            for name in sorted(os.listdir(skills_dir))
+            if os.path.isfile(os.path.join(skills_dir, name, "SKILL.md"))
+        ]
+        for path in [*self._living_doc_paths(), *skill_docs]:
+            rel = os.path.relpath(path, REPO_ROOT).replace("\\", "/")
+            content = textio.read_text(path)
+            self.assertIsNone(
+                re.search(rf"\b{expected_words}\s+tokens?\b", content, re.IGNORECASE),
+                f"{rel}: states '{expected_words} tokens' instead of '{expected_words} words'",
+            )
+
+        for required_rel in (
+            "README.md",
+            ".along/VISION.md",
+            "docs/topic--system-comparisons.md",
+            "docs/topic--skills-reference.md",
+            "docs/topic--llm-wiki-architecture.md",
+            "skills/along-kb-search/SKILL.md",
+        ):
+            content = textio.read_text(os.path.join(REPO_ROOT, *required_rel.split("/")))
+            self.assertRegex(
+                content,
+                re.compile(rf"\b{expected_words}\s+words\b", re.IGNORECASE),
+                f"{required_rel}: must state '{expected_words} words'",
+            )
+
+    def test_architecture_phase_machine_and_rubric_match(self):
+        """topic--architecture.md phase diagram and rubric headings must match their items."""
+        arch_doc = textio.read_text(os.path.join(REPO_ROOT, "docs", "topic--architecture.md"))
+
+        sm_section = _extract_section(arch_doc, "the-multi-agent-sequential-state-machine-solution")
+        self.assertTrue(sm_section.strip(), "State machine section missing in topic--architecture.md")
+        sm_match = re.search(r"\b(\d+)-Phase State Machine\b", sm_section)
+        self.assertIsNotNone(sm_match, "Expected '<N>-Phase State Machine' prose in topic--architecture.md")
+        declared_phases = int(sm_match.group(1))
+        phase_nums = [int(m.group(1)) for m in re.finditer(r"Phase\s+(\d+):", sm_section)]
+        self.assertEqual(
+            phase_nums,
+            list(range(len(phase_nums))),
+            f"Phase diagram numbers must be contiguous from 0, got {phase_nums}",
+        )
+        self.assertEqual(
+            declared_phases,
+            len(phase_nums),
+            f"Prose declares {declared_phases}-Phase State Machine but diagram defines {len(phase_nums)} phases",
+        )
+
+        roles_section = _extract_section(
+            arch_doc, markdown.github_heading_anchor("The 5 Specialized Roles & Strict Contracts")
+        )
+        self.assertTrue(roles_section.strip(), "Specialized roles section missing in topic--architecture.md")
+        rubric_match = re.search(r"\b(\d+)-Point Verification Rubric\b", roles_section)
+        self.assertIsNotNone(rubric_match, "Expected '<N>-Point Verification Rubric' heading")
+        declared_points = int(rubric_match.group(1))
+        rubric_tail = roles_section[rubric_match.end() :]
+        point_nums = [int(n) for n in re.findall(r"^\s{5}(\d+)\.\s+\*", rubric_tail, re.MULTILINE)]
+        self.assertEqual(
+            point_nums,
+            list(range(1, declared_points + 1)),
+            f"Rubric declares {declared_points} points, found {point_nums}",
+        )
+
+    def test_setup_workflow_along_start_requires_plan_approval(self):
+        """topic--setup-and-workflow.md must state along start leaves plan unapproved until explicit yes."""
+        setup_doc = textio.read_text(os.path.join(REPO_ROOT, "docs", "topic--setup-and-workflow.md"))
+        step2 = _extract_section(
+            setup_doc, markdown.github_heading_anchor("Step 2: Task Claiming & Atomic Session Start")
+        )
+        self.assertTrue(step2.strip(), "Step 2 section missing in topic--setup-and-workflow.md")
+        self.assertNotIn("plan_approved: true", step2)
+        self.assertNotIn("phase: execution", step2)
+        self.assertIn("phase: planning", step2)
+        self.assertIn("plan_approved: false", step2)
+        self.assertIn("require-plan-approval", step2)
+        self.assertIn("along plan approve", step2)
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -8,9 +8,9 @@ updated: 2026-11-25
 tags: [setup-workflow, installation, lifecycle, runners, developer-workflow, testing, cursor]
 sources:
   - path: README.md
-    hash: "9486b48c8ecfac63f66cfecd0ecd02e67317cee9ae96eb263719db36854989b9"
+    hash: "bf2da460c4e9e1be2ada6b18c53425416b4eb4d6e3767ecee5ccf9aa0e26895a"
   - path: AGENTS.md
-    hash: "4654f51244fd79c937f0dee1accb5468e28c7fb29ad961af039f17fd3128c9f4"
+    hash: "ffe96701da7fb881e3cce05de5d4cfe4a92bd05487a0c0d1c44cfc5e5d68337d"
 ---
 
 # Setup & Developer Workflow
@@ -489,8 +489,8 @@ sequenceDiagram
 - **Atomic Initialization**:
   - Sets issue `status: in-progress` and updates `updated: YYYY-MM-DD`.
   - Recompiles the active board projection (`.along/ISSUES.md`).
-  - Initializes session blackboard in `.along/.session/<slug>/` (`state.json` and `plan.md`).
-  - Marks the plan as approved (`phase: execution`, `plan_approved: true`) and binds the active issue.
+  - Initializes session blackboard in `.along/.session/<slug>/` (`state.json` and `.along/ISSUES/<type>--<slug>/plan.md` if absent) and binds the active agent session to the issue.
+  - Leaves the session in `phase: planning` (`plan_approved: false`) by default: binding alone does not unlock source edits, which remain blocked by `[gate: require-plan-approval]` until the user explicitly approves the plan (via `ExitPlanMode` or `along plan approve [--plan-file <path>]` after the user's explicit yes; or `--approved` for scripted runs after a user reply, or automatically when `plan_status: approved` was already logged on this machine).
   - If `--worktree` is specified, provisions an isolated Git worktree at `.along/worktrees/<slug>` with linked dependencies.
 - **Mid-Flight Metadata Adjustments**:
   Use `along issue update <slug> [--milestone <m>] [--priority <p>] [--tags <t>]` to adjust issue metadata without manually editing YAML frontmatter.

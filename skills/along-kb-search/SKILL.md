@@ -49,4 +49,4 @@ Explicit category queries (such as `--category session` or `--category issue`) i
 5. **Work Session Logs (`.along/SESSIONS/**/*.md`)**: Historical logs, diff evaluations, and blast radius summaries.
 
 ## Token Hygiene & Agent Decision Making
-Instead of reading entire project documents into prompt context during analysis or blast radius evaluation, agents invoke `along kb-search "<query>"` to retrieve concise, word-boundary aligned context snippets in milliseconds (typically < 150 tokens).
+Instead of reading entire project documents into prompt context during analysis or blast radius evaluation, agents invoke `along kb-search "<query>"` to retrieve concise, word-boundary aligned context snippets in milliseconds (capped at <= 150 words).

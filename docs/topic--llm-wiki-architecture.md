@@ -4,7 +4,7 @@ slug: llm-wiki-architecture
 title: Topic-Based Knowledge Base Architecture & Paradigm
 type: topic
 created: 2026-08-30
-updated: 2026-11-13
+updated: 2026-11-25
 tags: [topic-based-authoring, diataxis, tf-idf, architecture, knowledge-base, token-efficiency, indexing, methodology, search, karpathy, progressive-disclosure, authoring]
 sources:
   - path: scripts/along_kb_search.py
@@ -12,7 +12,7 @@ sources:
   - path: skills/along-kb-sync/SKILL.md
     hash: "de21b4bfb49f9c19ee803123814309bf476f64272aca45dd790e76b13b8407c3"
   - path: scripts/along_kb_sync.py
-    hash: "139ac480563b6a44d7e9735e9ea14c894fb53f94db7c9378eec84d49f0f10005"
+    hash: "ae933457e4e01c2081cd55798203f3b1a7b5928d3b634fcfe4073f1bef441775"
 ---
 
 # Topic-Based Knowledge Base Architecture & Paradigm
@@ -282,7 +282,7 @@ flowchart LR
 1. **AST Blast Radius Discovery**: During task review, agents invoke `along graph-impact` (powered directly by `code-review-graph` CLI) to trace caller hierarchies, caller depth, and affected execution flows.
 2. **Topic Mapping**: Agents query `along-kb-search` with the modified symbol names to pinpoint the exact `docs/topic--*.md` files documenting those interfaces.
 3. **Factual Updating**: Agents update the affected topic articles with concrete code facts (zero placeholders).
-4. **Compilation & Link Gate**: Running `python scripts/along_kb_sync.py --strict` validates relative links across the repository and recompiles `docs/INDEX.md`.
+4. **Compilation & Link Gate**: Running `python scripts/along_kb_sync.py --strict` validates relative links across the repository and recompiles `docs/INDEX.md`. When run outside `--check` mode, `sync_kb` also calls `session.settle_projection_denials` to auto-settle open `projection_protection` denials in the bound issue's event ledger (`via: "superseded"`).
 
 ---
 
@@ -357,5 +357,5 @@ Along adopts the industrial **Diataxis technical writing framework** (standardiz
 - **[System Architecture & Flow](./topic--architecture.md)**: System topology, multi-branch concurrency, and multi-agent state machine.
 - **[System Comparisons & Alternative Memory Architectures](./topic--system-comparisons.md)**: Comparative analysis against jevmem, Laya, vector databases, and prompt stuffing.
 - **[Domain Model & Entity Ecosystem](./topic--domain-model.md)**: Taxonomy of issues, milestones, ADRs, and living memory.
-- **[Skills & Slash Commands Reference](./topic--skills-reference.md)**: Technical breakdown of all 18 automation skills.
+- **[Skills & Slash Commands Reference](./topic--skills-reference.md)**: Technical breakdown of all 22 automation skills.
 - **[Setup & Developer Workflow](./topic--setup-and-workflow.md)**: Installation, runner hooks, and day-in-the-life development flow.

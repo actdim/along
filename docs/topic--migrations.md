@@ -4,11 +4,11 @@ slug: migrations
 title: Protocol & Repository Migrations Guide
 type: guide
 created: 2026-08-30
-updated: 2026-09-22
+updated: 2026-11-25
 tags: [migrations, upgrade, protocol, changelog, versioning, data-safety]
 sources:
   - path: scripts/migrate_protocol.py
-    hash: "aec3f779c8530ff61f4e2d5711a16b191a282b03d98845f337011d477795890e"
+    hash: "af9deaf3a53ad3a2b9dff96fdd7e48d585495ff0473c03c35cd64b9705a35598"
 ---
 
 # Protocol & Repository Migrations Guide
@@ -147,4 +147,9 @@ fails if the engine calls `shutil.move`, `os.remove` or their neighbours directl
   - the scaffolded `pre-commit.md` and `stage-completion.md` are discarded after a backup (the completion checklist lives in `AGENTS.md` / `.along/PROTOCOL.md` and is printed by `along wrap`); any other checklist moves to `docs/topic--<slug>.md`.
 - The emptied folders are removed. A collision is kept and reported, every removal is backed up to `.along/.migration-backup/`.
 - Runs on every migration, including an up-to-date repository (as a heal pass), so `along update` applies it; a second run finds nothing, `--dry-run` only lists the operations.
+
+### `v4.6.1`: Relocate Protocol Reference to `.along/PROTOCOL.md` (Step 17)
+- Relocates the managed protocol reference out of `docs/topic--along-protocol.md` into `.along/PROTOCOL.md` (`step_relocate_protocol_reference`) so internal protocol prose does not leak into `docs/INDEX.md` or static site exports (`bug--protocol-leaks-into-docs`).
+- If `docs/topic--along-protocol.md` carries Along's managed marker, it is discarded and regenerated at `.along/PROTOCOL.md` for the active gate strictness profile; a hand-edited file without the marker is left untouched with a warning.
+- Runs as a standalone heal pass (`legacy_protocol_reference_exists`) even on an up-to-date repository.
 
