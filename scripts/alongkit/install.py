@@ -67,14 +67,14 @@ MCP_SERVER_ENTRY = {"command": "uvx", "args": [MCP_SERVER_PACKAGE]}
 WEBDEV_MCP_SERVER_NAME = "along-webdev"
 WEBDEV_MCP_SERVER_ENTRY = {"command": "along", "args": ["webdev", "mcp"]}
 
-PROVIDERS: Tuple[str, ...] = ("claude", "codex", "opencode", "antigravity", "dsh")
+PROVIDERS: Tuple[str, ...] = ("claude", "codex", "opencode", "antigravity", "dsh", "cursor")
 
 #: Only `along-*` folders are skills; anything else under `skills/` is not installed.
 SKILL_PREFIX = "along-"
 
 #: Providers that take the skill folders verbatim. OpenCode takes flat commands
 #: generated from the same `SKILL.md` bodies and is handled separately.
-FOLDER_PROVIDERS: Tuple[str, ...] = ("claude", "codex", "antigravity", "dsh")
+FOLDER_PROVIDERS: Tuple[str, ...] = ("claude", "codex", "antigravity", "dsh", "cursor")
 
 #: Never copied into an install: compiled caches are interpreter-specific.
 EXCLUDED_DIRS = frozenset({"__pycache__"})
@@ -96,6 +96,7 @@ class Homes:
     opencode: str
     antigravity: str
     dsh: str
+    cursor: str
 
     @classmethod
     def defaults(cls, user_home: Optional[str] = None, **overrides) -> "Homes":
@@ -108,6 +109,7 @@ class Homes:
             "opencode": os.path.join(home, ".config", "opencode"),
             "antigravity": os.path.join(home, ".gemini", "config"),
             "dsh": os.environ.get("DSH_HOME") or os.path.join(home, ".dsh"),
+            "cursor": os.path.join(home, ".cursor"),
         }
         for key, value in overrides.items():
             if value:
@@ -132,7 +134,7 @@ class McpTarget:
 
     provider: str
     path: str
-    #: `mcp_servers_json` - a JSON object with an `mcpServers` map (Claude Code).
+    #: `mcp_servers_json` - a JSON object with an `mcpServers` map (Claude Code, Cursor).
     #: `codex_toml` - a `[mcp_servers.<name>]` table in `~/.codex/config.toml`.
     #: `opencode_json` - an `mcp` map of typed entries in `opencode.json`.
     layout: str
@@ -158,6 +160,14 @@ def mcp_target(provider: str, homes: Homes) -> McpTarget:
             verified=True,
             contract="Claude Code reads user-scope MCP servers from the `mcpServers` "
                      "map in ~/.claude.json.")
+    if provider == "cursor":
+        return McpTarget(
+            provider="cursor",
+            path=os.path.join(homes.cursor, "mcp.json"),
+            layout="mcp_servers_json",
+            verified=True,
+            contract="Cursor reads user-scope MCP servers from the `mcpServers` "
+                     "map in ~/.cursor/mcp.json.")
     if provider == "codex":
         return McpTarget(
             provider="codex",

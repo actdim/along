@@ -52,13 +52,76 @@ class TestCoworkDetection(unittest.TestCase):
             with mock.patch.dict(os.environ, {marker: "1", "HOME": "/home/u"}, clear=True):
                 self.assertEqual(entities.detect_agent(), "claude-code", marker)
 
+    def test_detect_agent_cursor_markers(self):
+        for marker in ("CURSOR_AGENT", "CURSOR_TRACE_ID", "CURSOR_CLI"):
+            with mock.patch.dict(os.environ, {marker: "1", "HOME": "/home/u"}, clear=True):
+                self.assertEqual(entities.detect_agent(), "cursor", marker)
+        with mock.patch.dict(os.environ, {"CLAUDECODE": "1", "CURSOR_TRACE_ID": "t1", "HOME": "/home/u"}, clear=True):
+            self.assertEqual(entities.detect_agent(), "claude-code")
+
 
 class TestEnforcementLevel(unittest.TestCase):
     def test_cowork_and_unknown_are_advisory(self):
-        for name in ("cowork", "cursor", "unknown", "never-heard-of"):
-            level, why = runtime.enforcement_level(name)
-            self.assertEqual(level, runtime.ADVISORY, name)
-            self.assertTrue(why)
+        home = tempfile.mkdtemp(prefix="along-rt-adv-")
+        try:
+            with mock.patch.dict(os.environ, {"HOME": home, "USERPROFILE": home}):
+                for name in ("cowork", "cursor", "unknown", "never-heard-of"):
+                    level, why = runtime.enforcement_level(name)
+                    self.assertEqual(level, runtime.ADVISORY, name)
+                    self.assertTrue(why)
+        finally:
+            shutil.rmtree(home, ignore_errors=True)
+
+    def test_cursor_enforcement_level_depends_on_registered_hooks(self):
+        self.assertEqual(
+            runtime.RUNTIME_MATRIX["cursor"]["skills"],
+            "rules (.cursor/rules/along.mdc) + auto (~/.cursor/skills)",
+        )
+        self.assertIs(runtime.RUNTIME_MATRIX["cursor"]["runtime_hooks"], True)
+        self.assertEqual(
+            runtime.RUNTIME_MATRIX["cursor"]["unexpressible_tools"],
+            ["view_image", "send_message", "spawn_subagent"],
+        )
+
+        home = tempfile.mkdtemp(prefix="along-rt-cursor-home-")
+        repo_dir = tempfile.mkdtemp(prefix="along-rt-cursor-repo-")
+        try:
+            with mock.patch.dict(os.environ, {"HOME": home, "USERPROFILE": home}):
+                self.assertFalse(runtime.along_hooks_registered("cursor", repo_dir))
+                level, why = runtime.enforcement_level("cursor", repo_dir)
+                self.assertEqual(level, runtime.ADVISORY)
+                self.assertIn("along hook install --runtime cursor", why)
+                self.assertIn("advisory", why.lower())
+
+                # Non-Along hooks in .cursor/hooks.json do not claim mechanical enforcement
+                local_cursor = os.path.join(repo_dir, ".cursor")
+                os.makedirs(local_cursor, exist_ok=True)
+                local_hooks = os.path.join(local_cursor, "hooks.json")
+                with open(local_hooks, "w", encoding="utf-8") as f:
+                    f.write('{"version": 1, "hooks": {"preToolUse": [{"command": "echo custom"}]}}')
+                self.assertFalse(runtime.along_hooks_registered("cursor", repo_dir))
+                self.assertEqual(runtime.enforcement_level("cursor", repo_dir)[0], runtime.ADVISORY)
+
+                # Local .cursor/hooks.json with Along hook enables mechanical enforcement
+                with open(local_hooks, "w", encoding="utf-8") as f:
+                    f.write('{"version": 1, "hooks": {"preToolUse": [{"command": "python scripts/along_hook.py --runtime cursor --event PreToolUse"}]}}')
+                self.assertTrue(runtime.along_hooks_registered("cursor", repo_dir))
+                level, why = runtime.enforcement_level("cursor", repo_dir)
+                self.assertEqual(level, runtime.MECHANICAL)
+                self.assertIn("cursor", why)
+
+                # Global ~/.cursor/hooks.json with Along hook also counts when repo has none
+                os.remove(local_hooks)
+                self.assertFalse(runtime.along_hooks_registered("cursor", repo_dir))
+                global_cursor = os.path.join(home, ".cursor")
+                os.makedirs(global_cursor, exist_ok=True)
+                with open(os.path.join(global_cursor, "hooks.json"), "w", encoding="utf-8") as f:
+                    f.write('{"version": 1, "hooks": {"preToolUse": [{"command": "python ~/.along/bin/along_hook.py --runtime cursor --event PreToolUse"}]}}')
+                self.assertTrue(runtime.along_hooks_registered("cursor", repo_dir))
+                self.assertEqual(runtime.enforcement_level("cursor", repo_dir)[0], runtime.MECHANICAL)
+        finally:
+            shutil.rmtree(home, ignore_errors=True)
+            shutil.rmtree(repo_dir, ignore_errors=True)
 
     def test_claude_code_is_mechanical_only_with_registered_hooks(self):
         home = tempfile.mkdtemp(prefix="along-rt-home-")
@@ -164,6 +227,33 @@ class TestDoctorRuntimeSection(unittest.TestCase):
             self.assertIn("--- Runtime: cowork ---", res.stdout)
             self.assertIn("Gate enforcement: advisory", res.stdout)
             self.assertIn("Python", res.stdout)
+
+    def test_doctor_reports_cursor_enforcement_and_narrowing(self):
+        along_exec = os.path.join(SCRIPTS_DIR, "along_exec.py")
+        home = self.make_temp_home()
+        env = hermetic.isolated_home_env()
+        env["HOME"] = home
+        env["USERPROFILE"] = home
+        env["ALONG_AGENT"] = "cursor"
+        with hermetic.repo_fixture(prefix="along-rt-doc-cursor-") as fixture:
+            res_adv = proc.run_capture([sys.executable, along_exec, "doctor"], cwd=fixture, env=env)
+            self.assertIn("--- Runtime: cursor ---", res_adv.stdout)
+            self.assertIn("Gate enforcement: advisory", res_adv.stdout)
+            self.assertIn("along hook install --runtime cursor", res_adv.stdout)
+            self.assertIn("Runtime hook narrowing (cursor)", res_adv.stdout)
+
+            from alongkit.hooks.config import install_cursor_hooks
+            status, _ = install_cursor_hooks(fixture)
+            self.assertEqual(status, "installed")
+            res_mech = proc.run_capture([sys.executable, along_exec, "doctor"], cwd=fixture, env=env)
+            self.assertIn("--- Runtime: cursor ---", res_mech.stdout)
+            self.assertIn("Gate enforcement: mechanical", res_mech.stdout)
+            self.assertIn("Runtime hook narrowing (cursor)", res_mech.stdout)
+
+    def make_temp_home(self):
+        home = tempfile.mkdtemp(prefix="along-rt-doc-home-")
+        self.addCleanup(shutil.rmtree, home, ignore_errors=True)
+        return home
 
 
 if __name__ == "__main__":

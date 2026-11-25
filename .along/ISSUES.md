@@ -29,7 +29,6 @@
 - [ ] `(feat)` [clean-turn-context-isolation-in-along-team](ISSUES/feat--clean-turn-context-isolation-in-along-team.md)
 - [ ] `(feat)` [cowork-plugin-skill-packaging](ISSUES/feat--cowork-plugin-skill-packaging.md)
 - [ ] `(feat)` [cpp-ecosystem-support](ISSUES/feat--cpp-ecosystem-support.md)
-- [ ] `(feat)` [cursor-agent-and-rules-integration](ISSUES/feat--cursor-agent-and-rules-integration.md) - plan: needs approval
 - [ ] `(feat)` [dart-flutter-ecosystem-support](ISSUES/feat--dart-flutter-ecosystem-support.md)
 - [ ] `(feat)` [doctor-detect-protocol-leak](ISSUES/feat--doctor-detect-protocol-leak.md)
 - [ ] `(feat)` [doctor-granular-diagnostics](ISSUES/feat--doctor-granular-diagnostics.md)
@@ -69,9 +68,9 @@
 - [ ] `(task)` [reconcile-dashboard-ui-core-conventions](ISSUES/task--reconcile-dashboard-ui-core-conventions.md)
 
 ## Done (recent)
+- [x] `(feat)` [cursor-agent-and-rules-integration](ISSUES/done/feat--cursor-agent-and-rules-integration.md)
 - [x] `(bug)` [traceability-blind-to-protocol-md-and-unbadged-gates](ISSUES/done/bug--traceability-blind-to-protocol-md-and-unbadged-gates.md)
 - [x] `(bug)` [opencode-runtime-integration-defects](ISSUES/done/bug--opencode-runtime-integration-defects.md)
 - [x] `(bug)` [commit-gates-skip-chained-and-dash-c-commits](ISSUES/done/bug--commit-gates-skip-chained-and-dash-c-commits.md)
 - [x] `(bug)` [antigravity-manifest-matcher-unenforceable-invariants](ISSUES/done/bug--antigravity-manifest-matcher-unenforceable-invariants.md)
-- [x] `(docs)` [changelog-deduplication](ISSUES/done/docs--changelog-deduplication.md)
-<!-- 364 older completed issue(s) archived in .along/ISSUES/done/ -->
+<!-- 365 older completed issue(s) archived in .along/ISSUES/done/ -->

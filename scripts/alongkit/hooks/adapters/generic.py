@@ -30,6 +30,9 @@ EVENT_TYPE_MAP: Dict[str, HookEventType] = {
     "afterFileEdit": HookEventType.POST_TOOL_USE,
     "Stop": HookEventType.STOP,
     "stop": HookEventType.STOP,
+    "UserPromptSubmit": HookEventType.USER_PROMPT_SUBMIT,
+    "user_prompt_submit": HookEventType.USER_PROMPT_SUBMIT,
+    "beforeSubmitPrompt": HookEventType.USER_PROMPT_SUBMIT,
 }
 
 #: Explicit read-only OpenCode/generic tool allowlist (intentionally ungated by write/shell gates).

@@ -4,7 +4,7 @@ slug: INDEX
 title: ActDim Along - Knowledge Base Topic Index
 type: index
 created: 2026-09-10
-updated: 2026-11-21
+updated: 2026-11-25
 tags: [index, kb, topics, map]
 ---
 
@@ -94,9 +94,9 @@ flowchart TD
 ## Articles
 
 - **[Agent Run Protocol (ARP/AEP) & OpenTelemetry Engine](./topic--agent-run-protocol.md)** (architecture) `telemetry`, `opentelemetry`, `openinference`, `tracing`, `arp`, `aep`, `redactor`, `offloader`, `spool`
-- **[System Architecture & Flow](./topic--architecture.md)** (architecture) `architecture`, `boundaries`, `multi-agent`, `blackboard`, `concurrency`, `ast`, `flow`
+- **[System Architecture & Flow](./topic--architecture.md)** (architecture) `architecture`, `boundaries`, `multi-agent`, `blackboard`, `concurrency`, `ast`, `flow`, `cursor`
 - **[Autonomous Environment Architecture & Docker Isolation](./topic--autonomous-environment.md)** (topic) `architecture`, `docker`, `isolation`, `autonomous`, `environment`, `security`, `vps`
-- **[Along CLI Command Reference](./topic--cli-reference.md)** (reference) `cli`, `commands`, `router`, `lifecycle`, `tools`, `reference`
+- **[Along CLI Command Reference](./topic--cli-reference.md)** (reference) `cli`, `commands`, `router`, `lifecycle`, `tools`, `reference`, `cursor`
 - **[Declarative Gate Engine & Protocol Traceability Matrix](./topic--declarative-gates-and-traceability.md)** (architecture) `hooks`, `gates`, `declarative`, `traceability`, `verification`, `protocol`, `predicates`
 - **[Dependencies & Submodules AI Documentation and Rules](./topic--dependencies.md)** (topic) `dependencies`, `ai-context`, `submodules`, `vendor`, `rules`
 - **[Domain Model & Entity Ecosystem](./topic--domain-model.md)** (domain-model) `domain-model`, `entities`, `schemas`, `dag`, `metadata`, `issues`, `milestones`, `spikes`, `sessions`
@@ -106,10 +106,10 @@ flowchart TD
 - **[Multi-Runtime Orchestration, Named Profiles & OpenObserve Observability](./topic--multi-runtime-orchestration.md)** (architecture) `orchestration`, `profiles`, `opencode`, `antigravity`, `claude`, `codex`, `openobserve`, `telemetry`, `worktree`
 - **[Parallel Sessions & Closeout Guide](./topic--parallel-sessions.md)** (guide) `session`, `parallel`, `closeout`, `attribution`, `ledger`, `commit`, `readiness`, `approval`
 - **[Controlled Natural Language (STE-Inspired) Requirement Format](./topic--requirement-format.md)** (guide) `ste`, `cnl`, `requirements`, `specifications`, `convention`, `cross-runtime`
-- **[Runtime Lifecycle Hooks & Mechanical Gates](./topic--runtime-hooks-and-gates.md)** (architecture) `hooks`, `gates`, `runtime`, `enforcement`, `antigravity`, `claude`, `codex`, `typography`, `cli-safety`, `destructive-command`, `attribution`
+- **[Runtime Lifecycle Hooks & Mechanical Gates](./topic--runtime-hooks-and-gates.md)** (architecture) `hooks`, `gates`, `runtime`, `enforcement`, `antigravity`, `claude`, `codex`, `cursor`, `typography`, `cli-safety`, `destructive-command`, `attribution`
 - **[Session & Blackboard Lifecycle Guide](./topic--session-lifecycle.md)** (guide) `session`, `blackboard`, `plan`, `trace`, `wrap`, `purge`, `issue-done`, `session-log`, `gates`
-- **[Setup & Developer Workflow](./topic--setup-and-workflow.md)** (setup-workflow) `setup-workflow`, `installation`, `lifecycle`, `runners`, `developer-workflow`, `testing`
-- **[Skills & Slash Commands Technical Reference](./topic--skills-reference.md)** (reference) `skills`, `commands`, `reference`, `runners`, `lifecycle`, `automation`, `multi-agent`
+- **[Setup & Developer Workflow](./topic--setup-and-workflow.md)** (setup-workflow) `setup-workflow`, `installation`, `lifecycle`, `runners`, `developer-workflow`, `testing`, `cursor`
+- **[Skills & Slash Commands Technical Reference](./topic--skills-reference.md)** (reference) `skills`, `commands`, `reference`, `runners`, `lifecycle`, `automation`, `multi-agent`, `cursor`
 - **[System Comparisons & Alternative Architectural Paradigms](./topic--system-comparisons.md)** (explanation) `comparisons`, `architecture`, `paradigms`, `memory`, `zero-vector`, `mechanical-gates`, `governance`, `engineering-decisions`
 - **[Troubleshooting & Developer Diagnostics Guide](./topic--troubleshooting.md)** (guide) `troubleshooting`, `diagnostics`, `packaging`, `alongkit`, `uv`, `pep-723`, `api-discovery`, `anti-patterns`
 - **[WebDev & Browser Execution Substrate](./topic--webdev-verification.md)** (reference) `webdev`, `browser`, `playwright`, `cft`, `verification`, `testing`, `runner`

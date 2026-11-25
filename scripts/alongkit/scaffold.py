@@ -31,7 +31,7 @@ import os
 import re
 import shutil
 from datetime import date
-from typing import Dict, List, Optional
+from typing import Dict, List, Optional, Tuple
 
 from alongkit import frontmatter, markdown, repo, textio
 
@@ -63,6 +63,7 @@ REFERENCE_DOC_RELPATH = (".along", "PROTOCOL.md")
 REFERENCE_MARKER = "<!-- ALONG-PROTOCOL-REFERENCE (managed by along-init"
 
 CLAUDE_IMPORT_LINE = "See @AGENTS.md for project instructions and guidance."
+CURSOR_RULE_RELPATH: Tuple[str, ...] = (".cursor", "rules", "along.mdc")
 
 VISION_FILENAME = "VISION.md"
 IMPORTED_VISION_BEGIN = "<!-- along:imported-vision needs-restructure"
@@ -239,6 +240,27 @@ def ensure_claude_import(existing: Optional[str]) -> str:
     if "@AGENTS.md" in existing:
         return existing
     return CLAUDE_IMPORT_LINE + "\n\n" + existing
+
+
+def cursor_rule_template() -> str:
+    """Thin Cursor project rule (`.cursor/rules/along.mdc`) pointing to canonical Along guidance."""
+    return (
+        "---\n"
+        'description: "Along protocol entry point, living memory, and lifecycle CLI workflow"\n'
+        'globs: "*"\n'
+        "alwaysApply: true\n"
+        "---\n\n"
+        "# Along Project Protocol\n\n"
+        "- Follow [AGENTS.md](../../AGENTS.md) as the single source of truth for repository rules, "
+        "gates, and project specifics (do not duplicate protocol rules here).\n"
+        "- Use the nearest `.along/` context for living state: check `.along/ISSUES.md` for active "
+        "issues and `.along/CONSTRAINTS.md` for architectural constraints (plus `.along/PROTOCOL.md` "
+        "for full gate details).\n"
+        "- Consult [docs/INDEX.md](../../docs/INDEX.md) or run `along kb-search` before reading "
+        "full documentation files.\n"
+        "- Use canonical `along` CLI commands for lifecycle operations: `along start`, `along test`, "
+        "`along build`, `along commit`, and `along wrap`.\n"
+    )
 
 
 # ---------------------------------------------------------------------------

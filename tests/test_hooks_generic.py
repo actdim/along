@@ -31,6 +31,7 @@ from alongkit.hooks.adapters.generic import GenericCliAdapter
 from alongkit.hooks.config import (
     get_cursor_hook_manifest,
     install_cursor_hooks,
+    purge_local_along_hooks,
 )
 
 EM_DASH = chr(0x2014)
@@ -163,6 +164,34 @@ class TestAlongRunCliProxy(unittest.TestCase):
 
 
 class TestInstallCursorHooks(unittest.TestCase):
+    def test_cursor_manifest_includes_before_submit_prompt(self):
+        local_manifest = get_cursor_hook_manifest(is_global=False)
+        self.assertIn("beforeSubmitPrompt", local_manifest["hooks"])
+        local_cmd = local_manifest["hooks"]["beforeSubmitPrompt"][0]["command"]
+        self.assertIn("--runtime cursor", local_cmd)
+        self.assertIn("--event UserPromptSubmit", local_cmd)
+
+        global_manifest = get_cursor_hook_manifest(is_global=True)
+        self.assertIn("beforeSubmitPrompt", global_manifest["hooks"])
+        global_cmd = global_manifest["hooks"]["beforeSubmitPrompt"][0]["command"]
+        self.assertIn("along_hook.py", global_cmd)
+        self.assertIn("--runtime cursor", global_cmd)
+        self.assertIn("--event UserPromptSubmit", global_cmd)
+        self.assertNotIn("\\", global_cmd)
+
+    def test_generic_adapter_parses_before_submit_prompt(self):
+        adapter = get_adapter("cursor")
+        raw = json.dumps({
+            "hook_event_name": "beforeSubmitPrompt",
+            "prompt": "proceed",
+            "workspace_roots": ["/workspace/cursor-test"],
+            "conversation_id": "conv-cur-1",
+        })
+        ev = adapter.parse(raw)
+        self.assertEqual(ev.event_type, HookEventType.USER_PROMPT_SUBMIT)
+        self.assertEqual(ev.workspace_root, "/workspace/cursor-test")
+        self.assertEqual(ev.conversation_id, "conv-cur-1")
+
     def test_install_cursor_hooks_creates_valid_manifest(self):
         with tempfile.TemporaryDirectory() as tmp:
             status, msg = install_cursor_hooks(tmp)
@@ -179,9 +208,12 @@ class TestInstallCursorHooks(unittest.TestCase):
             self.assertIn("preToolUse", hooks)
             self.assertIn("postToolUse", hooks)
             self.assertIn("stop", hooks)
+            self.assertIn("beforeSubmitPrompt", hooks)
 
             pre_hooks = hooks["preToolUse"]
             self.assertTrue(any("along_hook.py" in str(h.get("command")) for h in pre_hooks))
+            prompt_hooks = hooks["beforeSubmitPrompt"]
+            self.assertTrue(any("--event UserPromptSubmit" in str(h.get("command")) for h in prompt_hooks))
 
     def test_install_cursor_hooks_idempotent(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -190,6 +222,11 @@ class TestInstallCursorHooks(unittest.TestCase):
 
             status2, _ = install_cursor_hooks(tmp)
             self.assertEqual(status2, "present")
+
+            hooks_path = os.path.join(tmp, ".cursor", "hooks.json")
+            with open(hooks_path, "r", encoding="utf-8") as f:
+                data = json.load(f)
+            self.assertEqual(len(data["hooks"]["beforeSubmitPrompt"]), 1)
 
     def test_install_cursor_hooks_preserves_custom_entries(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -202,7 +239,10 @@ class TestInstallCursorHooks(unittest.TestCase):
                 "hooks": {
                     "preToolUse": [
                         {"command": "echo custom-hook"}
-                    ]
+                    ],
+                    "beforeSubmitPrompt": [
+                        {"command": "echo custom-prompt-hook"}
+                    ],
                 }
             }
             with open(hooks_path, "w", encoding="utf-8") as f:
@@ -219,6 +259,19 @@ class TestInstallCursorHooks(unittest.TestCase):
             # Both custom-hook and along_hook should exist
             self.assertTrue(any("custom-hook" in str(h.get("command")) for h in pre_hooks))
             self.assertTrue(any("along_hook.py" in str(h.get("command")) for h in pre_hooks))
+            prompt_hooks = data["hooks"]["beforeSubmitPrompt"]
+            self.assertTrue(any("custom-prompt-hook" in str(h.get("command")) for h in prompt_hooks))
+            self.assertTrue(any("--event UserPromptSubmit" in str(h.get("command")) for h in prompt_hooks))
+
+            # Purging Along hooks removes all Along events including beforeSubmitPrompt, keeping foreign hooks
+            actions = purge_local_along_hooks(tmp, dry_run=False)
+            self.assertTrue(actions)
+            with open(hooks_path, "r", encoding="utf-8") as f:
+                purged = json.load(f)
+            self.assertEqual(purged["hooks"]["preToolUse"], [{"command": "echo custom-hook"}])
+            self.assertEqual(purged["hooks"]["beforeSubmitPrompt"], [{"command": "echo custom-prompt-hook"}])
+            self.assertNotIn("postToolUse", purged["hooks"])
+            self.assertNotIn("stop", purged["hooks"])
 
     def test_install_cursor_hooks_dry_run(self):
         with tempfile.TemporaryDirectory() as tmp:

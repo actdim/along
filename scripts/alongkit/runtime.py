@@ -36,8 +36,8 @@ RUNTIME_MATRIX: Dict[str, Dict[str, Any]] = {
     "opencode": {"skills": "auto (~/.config/opencode)", "runtime_hooks": True},
     "dsh": {"skills": "auto (~/.dsh/skills)", "runtime_hooks": True},
     "cursor": {
-        "skills": "rules only",
-        "runtime_hooks": False,
+        "skills": "rules (.cursor/rules/along.mdc) + auto (~/.cursor/skills)",
+        "runtime_hooks": True,
         "unexpressible_tools": ["view_image", "send_message", "spawn_subagent"],
     },
     "unknown": {"skills": "unknown", "runtime_hooks": False},
@@ -353,6 +353,10 @@ def along_hooks_registered(runtime: str, repo_root: Optional[str] = None) -> boo
         candidates = [os.path.join(home, ".gemini", "config", "hooks.json")]
         if repo_root:
             candidates.append(os.path.join(repo_root, ".agents", "hooks.json"))
+    elif runtime == "cursor":
+        candidates = [os.path.join(home, ".cursor", "hooks.json")]
+        if repo_root:
+            candidates.append(os.path.join(repo_root, ".cursor", "hooks.json"))
     elif runtime in ("dsh", "deepseek", "deepseek-harness"):
         base_dsh = os.environ.get("DSH_HOME") or os.path.join(home, ".dsh")
         candidates = [
@@ -403,12 +407,19 @@ def enforcement_level(runtime: str, repo_root: Optional[str] = None) -> Tuple[st
             )
         return MECHANICAL, "Along hooks are registered for opencode; gates block violations."
     if caps["runtime_hooks"] and along_hooks_registered(runtime, repo_root):
+        if runtime == "cursor":
+            return MECHANICAL, "Along hooks are registered for cursor; gates block violations on hooked tools."
         return MECHANICAL, f"Along hooks are registered for {runtime}; gates block violations."
     if runtime == "claude-code":
         status, files = claude_hook_status(repo_root)
         if status == "flat":
             return ADVISORY, ("Along hooks for claude-code use the legacy flat schema, which Claude Code "
                               f"ignores ({', '.join(files)}). Run 'along hook install --runtime claude --global'.")
+    if runtime == "cursor":
+        return ADVISORY, (
+            "cursor supports optional hooks (run 'along hook install --runtime cursor'); "
+            "project rules (.cursor/rules/along.mdc, AGENTS.md) remain advisory."
+        )
     if caps["runtime_hooks"]:
         return ADVISORY, f"{runtime} supports hooks, but Along hooks are not registered (run 'along hook install')."
     return ADVISORY, (f"{runtime} does not load Along hooks; the agent must self-apply the gates and use "

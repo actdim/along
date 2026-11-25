@@ -225,6 +225,7 @@ SKILL_TOOL_DIRS: tuple = (
     "~/.gemini/antigravity/skills/{skill}",
     "~/.claude/skills/{skill}",
     "~/.codex/skills/{skill}",
+    "~/.cursor/skills/{skill}",
     "~/.config/opencode/skills/{skill}",
 )
 

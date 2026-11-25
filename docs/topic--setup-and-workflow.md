@@ -4,11 +4,11 @@ slug: setup-and-workflow
 title: Setup & Developer Workflow
 type: setup-workflow
 created: 2026-08-30
-updated: 2026-09-27
-tags: [setup-workflow, installation, lifecycle, runners, developer-workflow, testing]
+updated: 2026-11-25
+tags: [setup-workflow, installation, lifecycle, runners, developer-workflow, testing, cursor]
 sources:
   - path: README.md
-    hash: "9d664248427904d66636b0db75941cd184ad9079c7ebc376caf0f978a530d28f"
+    hash: "9486b48c8ecfac63f66cfecd0ecd02e67317cee9ae96eb263719db36854989b9"
   - path: AGENTS.md
     hash: "4654f51244fd79c937f0dee1accb5468e28c7fb29ad961af039f17fd3128c9f4"
 ---
@@ -21,7 +21,7 @@ Complete guide for installing Along, configuring repository lifecycle runners, a
 
 ## 1. Installation & Multi-Platform Setup
 
-Along installs globally and configures provider-agnostic agent discoverability across Claude Code, OpenAI Codex, OpenCode, and Google Antigravity.
+Along installs globally and configures provider-agnostic agent discoverability across Claude Code, OpenAI Codex, OpenCode, Google Antigravity, DeepSeek Harness, and Cursor.
 
 ### One-Liner Installation (Recommended)
 
@@ -45,7 +45,7 @@ When working from a local clone of the repository:
 
 **Windows**:
 ```powershell
-# Install for all supported agent runtimes (Claude, Codex, Antigravity, OpenCode)
+# Install for all supported agent runtimes (Claude, Codex, Antigravity, OpenCode, DSH, Cursor)
 powershell -NoProfile -ExecutionPolicy Bypass -File install.ps1 -Target all
 
 # Or run the batch installer, which forwards its arguments to install.ps1
@@ -60,11 +60,13 @@ chmod +x install.sh
 ```
 
 ### Supported Installation Targets
-- `-Target all`: Deploys skills to `~/.claude/skills/`, `~/.codex/skills/`, `~/.gemini/config/skills/`, and `~/.config/opencode/commands/`.
-- `-Target claude`: Deploys only to Claude Code.
-- `-Target codex`: Deploys only to OpenAI Codex.
-- `-Target antigravity`: Deploys only to Google Antigravity.
-- `-Target opencode`: Deploys only to OpenCode.
+- `-Target all` / `--target=all`: Deploys skills to `~/.claude/skills/`, `~/.codex/skills/`, `~/.gemini/config/skills/`, `~/.dsh/skills/`, `~/.cursor/skills/`, and `~/.config/opencode/commands/`.
+- `-Target claude` / `--target=claude`: Deploys only to Claude Code.
+- `-Target codex` / `--target=codex`: Deploys only to OpenAI Codex.
+- `-Target antigravity` / `--target=antigravity`: Deploys only to Google Antigravity.
+- `-Target dsh` / `--target=dsh`: Deploys only to DeepSeek Harness.
+- `-Target cursor` / `--target=cursor`: Deploys skills to `~/.cursor/skills/` and reconciles Cursor commit attribution (`~/.cursor/cli-config.json` when present). Global Cursor hooks (`~/.cursor/hooks.json`) remain opt-in via `along hook install --runtime cursor --global`.
+- `-Target opencode` / `--target=opencode`: Deploys only to OpenCode.
 
 ### What an Install Writes
 
@@ -83,12 +85,16 @@ in `alongkit.install.planned_files`.
 
 Every root is overridable, which is how the tests run a real installer without touching
 your own home: `--along-home=DIR --claude-home=DIR --codex-home=DIR --opencode-home=DIR
---antigravity-home=DIR --cursor-home=DIR` (`-AlongHome DIR`, `-ClaudeHome DIR`, ... in PowerShell).
+--antigravity-home=DIR --dsh-home=DIR --cursor-home=DIR` (`-AlongHome DIR`, `-ClaudeHome DIR`,
+..., `-CursorHome DIR` in PowerShell).
 
 The install also turns off AI commit attribution (`Co-Authored-By:` trailers) in Claude Code
-`settings.json` and, when a Cursor home exists, in Cursor `cli-config.json`.
-`/along-update` repeats this on every run, including when the install is already up to date;
-`python ~/.along/bin/along_hook.py attribution` does it on demand. See
+`settings.json` and, when a Cursor home exists, in Cursor `cli-config.json`. Global hooks are
+registered for Claude Code, Codex, OpenCode, Antigravity, and DeepSeek Harness; global Cursor
+hooks (`~/.cursor/hooks.json`) remain opt-in via `along hook install --runtime cursor --global`,
+so Cursor remains advisory by default unless hooks are explicitly installed.
+`/along-update` repeats attribution reconciliation on every run, including when the install is
+already up to date; `python ~/.along/bin/along_hook.py attribution` does it on demand. See
 [Runtime Hooks & Gates](./topic--runtime-hooks-and-gates.md).
 
 ### Removing an Install
@@ -108,15 +114,19 @@ to ship without deleting the directory that holds it. See
 
 Code intelligence capabilities (`code-review-graph`) run on-demand directly via command-line execution (`along graph-impact`, `along graph-arch`, `along graph-sync`, `along graph-check`), eliminating background daemon requirements, JSON-RPC stdio pipe stalls, and IDE security approval dialogs.
 
-Historically, `code-review-graph` was registered as an MCP server. This registration is decoupled and deprecated. To remove legacy `code-review-graph` entries from existing provider configuration files (`~/.claude.json`, `~/.codex/config.toml`, `opencode.json`, `mcp_config.json`), run:
+Historically, `code-review-graph` was registered as an MCP server. By default the installers remove stale `code-review-graph` entries from verified provider configuration files (`~/.claude.json`, `~/.cursor/mcp.json`) and clean any legacy entries from `~/.codex/config.toml` and `opencode.json`. To clean them on demand, run:
 ```bash
 python scripts/configure_mcp.py --clean
+```
+When opting into MCP registration for existing servers (`code-review-graph` via `-RegisterMcp` / `--register-mcp`, or `along-webdev` via `--server along-webdev`), only verified targets (`claude` at `~/.claude.json` and `cursor` at `~/.cursor/mcp.json`, both `verified: True` using the `mcpServers` JSON layout) are written by default; unverified targets (`codex`, `opencode`, `antigravity`, `dsh`) are printed unless `--include-unverified` is passed:
+```bash
+python scripts/configure_mcp.py --provider cursor --cursor-home ~/.cursor --server along-webdev
 ```
 If legacy configuration entries are present, they are inert and can be cleaned without impacting CLI code-intelligence workflows.
 
 ### Windows Git Concurrency & Index Handling
 
-When running rapid AI coding agents (such as Google Antigravity, Claude Code, or Codex) on Windows, tools generate multiple file modifications in quick succession (< 500ms).
+When running rapid AI coding agents (such as Google Antigravity, Claude Code, Codex, or Cursor) on Windows, tools generate multiple file modifications in quick succession (< 500ms).
 
 #### The Problem on Windows NTFS
 By default, Git commands attempt to replace `.git/index` by writing to `.git/index.lock` and atomically replacing `.git/index` via Windows `ReplaceFileW`. If another process (such as Windows Defender, Search Indexer, or an IDE file watcher) has `.git/index` open for reading, NTFS sharing constraints cause `ReplaceFileW` to fail or get interrupted, leaving `.git/index` truncated to 0 bytes:
@@ -200,10 +210,11 @@ along init
 1. `AGENTS.md`: Generates the root protocol context with the managed `ALONG-PROTOCOL v4.9.1` block (a short REF block in a nested folder of the same git repository; a hand-written file keeps its text under `## Project specifics`). The block is a small core (state locations, issue anchoring, gates) rendered for the active gate strictness profile.
    - `.along/PROTOCOL.md`: the managed on-demand protocol reference (completion checklist, documentation routing tree, merge rules, along-team routing, full rule wording) the core points to; refreshed on every `along init` / `along update`, written only at a FULL root.
 2. `CLAUDE.md`: Scaffolds the standard `@AGENTS.md` import line.
-3. `.gitattributes`: Configures `merge=union` for `.along/HISTORY.md` and `.along/DECISIONS.md` to prevent merge collisions across branches.
-4. `.along/`: Creates the persistent repository memory skeleton (`ISSUES/`, `DECISIONS/`, `MILESTONES/`, `SESSIONS/`, `docs/`; `GLOSSARY.md` and the `VISION.md` skeleton at the repository root - a nested context under a FULL ancestor creates them on first use).
-5. `VISION.md`: A root `VISION.md` is moved into `.along/VISION.md` (or merged under a `needs-restructure` marker the agent resolves); there is never a second copy.
-6. Pipeline: rule packs, git merge drivers, runtime hooks, migration.
+3. `.cursor/rules/along.mdc` (at non-nested architecture roots; skipped in nested `REF` contexts): Scaffolds a create-only Cursor MDC pointer rule (`description`, `globs: "*"`, `alwaysApply: true`) pointing to `AGENTS.md`, `.along/ISSUES.md`, `.along/CONSTRAINTS.md`, `.along/PROTOCOL.md`, `docs/INDEX.md` / `along kb-search`, and canonical `along` CLI workflows. Re-running `along init` never overwrites an existing `.cursor/rules/along.mdc` or unrelated files under `.cursor/`.
+4. `.gitattributes`: Configures `merge=union` for `.along/HISTORY.md` and `.along/DECISIONS.md` to prevent merge collisions across branches.
+5. `.along/`: Creates the persistent repository memory skeleton (`ISSUES/`, `DECISIONS/`, `MILESTONES/`, `SESSIONS/`, `docs/`; `GLOSSARY.md` and the `VISION.md` skeleton at the repository root - a nested context under a FULL ancestor creates them on first use).
+6. `VISION.md`: A root `VISION.md` is moved into `.along/VISION.md` (or merged under a `needs-restructure` marker the agent resolves); there is never a second copy.
+7. Pipeline: rule packs (`along rules attach`), git merge drivers (`along git setup`), runtime hooks (`along hook install --runtime all`, which writes local `.cursor/hooks.json` alongside the other runtimes unless `--no-hooks` is passed), and migration (`along migrate --apply`).
 
 The agent then works through the report's `AGENT ACTIONS` (imported VISION section, root notes such as `ROADMAP.md`, `## Project specifics`) and, on a re-run, asks the `RE-RUN QUESTIONS`. See [Along CLI Command Reference](./topic--cli-reference.md).
 

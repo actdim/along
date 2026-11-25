@@ -35,7 +35,7 @@ from alongkit import install
 USAGE = """Usage: python configure_mcp.py [options]
 
 Targets (default: every provider):
-  --provider NAME        claude | codex | opencode | antigravity (repeatable)
+  --provider NAME        claude | codex | opencode | antigravity | dsh | cursor (repeatable)
   --server NAME          code-review-graph (default) | along-webdev
 
 Behaviour:
@@ -48,6 +48,7 @@ Behaviour:
 Homes (each defaults to the standard location under the user home):
   --user-home DIR        --claude-home DIR        --codex-home DIR
   --opencode-home DIR    --antigravity-home DIR   --dsh-home DIR
+  --cursor-home DIR
 """
 
 
@@ -63,7 +64,7 @@ def main():
     home_flags = {
         "--user-home": "user", "--claude-home": "claude", "--codex-home": "codex",
         "--opencode-home": "opencode", "--antigravity-home": "antigravity",
-        "--dsh-home": "dsh",
+        "--dsh-home": "dsh", "--cursor-home": "cursor",
     }
 
     index = 0

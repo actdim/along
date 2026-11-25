@@ -1,20 +1,20 @@
-# install.ps1 - install the ALONG skills into Claude Code, Codex, OpenCode and/or Antigravity.
+# install.ps1 - install the ALONG skills into Claude Code, Codex, OpenCode, Antigravity, DSH and/or Cursor.
 #
-# Claude, Codex & Antigravity use the same ~/.<tool>/skills/<name>/SKILL.md format -> the skill folders are copied verbatim.
+# Claude, Codex, Antigravity, DSH & Cursor use the same ~/.<tool>/skills/<name>/SKILL.md format -> the skill folders are copied verbatim.
 # OpenCode uses flat ~/.config/opencode/commands/<name>.md commands -> generated from the same SKILL.md bodies;
 #   along-init's helper files (protocol.md, along_update.py, migrate_protocol.py) go to ~/.config/opencode/actdim-along/.
-# The ALONG-PROTOCOL itself is picked up by all four natively via each repo's AGENTS.md.
+# The ALONG-PROTOCOL itself is picked up natively via each repo's AGENTS.md (and .cursor/rules/along.mdc for Cursor).
 #
 # Usage:
 #   powershell -NoProfile -ExecutionPolicy Bypass -File install.ps1                  # all (default), copy
-#   powershell ... -File install.ps1 -Target claude    # claude | codex | opencode | antigravity | both | all
-#   powershell ... -File install.ps1 -Symlink          # symlink skill folders (claude/codex/antigravity)
+#   powershell ... -File install.ps1 -Target claude    # claude | codex | opencode | antigravity | dsh | cursor | both | all
+#   powershell ... -File install.ps1 -Symlink          # symlink skill folders (claude/codex/antigravity/dsh/cursor)
 #   powershell ... -File install.ps1 -Migrate          # also migrate this repository's .along/ structure
 #   powershell ... -File install.ps1 -RegisterMcp      # opt in to code-review-graph MCP registration (default: CLI only)
 #   powershell ... -File install.ps1 -Uninstall        # remove exactly what the install manifest records
 
 param(
-    [ValidateSet('claude', 'codex', 'opencode', 'antigravity', 'dsh', 'both', 'all')][string]$Target = 'all',
+    [ValidateSet('claude', 'codex', 'opencode', 'antigravity', 'dsh', 'cursor', 'both', 'all')][string]$Target = 'all',
     [switch]$Symlink,
     [switch]$InstallDeps,
     [switch]$Migrate,
@@ -223,7 +223,8 @@ $HomeArgs = @(
     '--codex-home', $CodexHome,
     '--opencode-home', $OpencodeHome,
     '--antigravity-home', $AntigravityHome,
-    '--dsh-home', $DshHome
+    '--dsh-home', $DshHome,
+    '--cursor-home', $CursorHome
 )
 
 if ($Uninstall) {
@@ -446,8 +447,9 @@ $targets = switch ($Target) {
     'opencode'    { @('opencode') }
     'antigravity' { @('antigravity') }
     'dsh'         { @('dsh') }
+    'cursor'      { @('cursor') }
     'both'        { @('claude', 'codex') }
-    'all'         { @('claude', 'codex', 'opencode', 'antigravity', 'dsh') }
+    'all'         { @('claude', 'codex', 'opencode', 'antigravity', 'dsh', 'cursor') }
 }
 
 Install-AlongScripts
@@ -471,6 +473,9 @@ foreach ($t in $targets) {
         'dsh' {
             Install-SkillFolders $DshHome
         }
+        'cursor' {
+            Install-SkillFolders $CursorHome
+        }
     }
 }
 
@@ -484,7 +489,7 @@ if ($IncludeUnverifiedMcp) { $mcpArgs += '--include-unverified' }
 $mcpArgs += @('--user-home', (Split-Path -Parent $ClaudeHome),
               '--claude-home', $ClaudeHome, '--codex-home', $CodexHome,
               '--opencode-home', $OpencodeHome, '--antigravity-home', $AntigravityHome,
-              '--dsh-home', $DshHome)
+              '--dsh-home', $DshHome, '--cursor-home', $CursorHome)
 $mcpTool = Get-AlongTool 'configure_mcp.py'
 if ($mcpTool) {
     if ($RegisterMcp) {
@@ -517,8 +522,8 @@ if ($hookTool) {
             & (Get-PythonExe) $hookTool install --runtime $t --global --target-home $homeDir
         }
     }
-    # Cursor is not a skill target, but it adds its own commit attribution. Only an
-    # existing Cursor home is touched, and only the attribution key is written.
+    # Global Cursor hooks stay opt-in (`along hook install --runtime cursor --global`).
+    # Only an existing Cursor home is touched here, and only commit attribution is written.
     & (Get-PythonExe) $hookTool attribution --runtime cursor --cursor-home $CursorHome
 }
 
@@ -559,6 +564,6 @@ if ($hasState) {
 }
 
 
-Write-Host "Done. Claude/Codex/Antigravity skills register next session as /along-* (/along-init, /along-update, /along-dash, etc.); OpenCode picks up /commands, and all read AGENTS.md natively."
+Write-Host "Done. Claude/Codex/Antigravity/DSH/Cursor skills register next session as /along-* (/along-init, /along-update, /along-dash, etc.); OpenCode picks up /commands, and all read AGENTS.md natively."
 Write-Host "     MCP cleanup is reported per provider above (CLI execution via uvx is default; -RegisterMcp to opt in)."
 Write-Host "     To remove Along again: install.ps1 -Uninstall  (removes only what the manifest records)."

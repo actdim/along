@@ -14,7 +14,7 @@ escape, and compared case-insensitively where the filesystem is):
   (`~/.claude/projects/`) and Claude Code plan files (`~/.claude/plans/`).
 - read: everything writable, plus declared `allowed_roots`, the main checkout of a git
   worktree, and the global skill/config dirs (`~/.gemini`, `~/.claude`, `~/.codex`,
-  `~/.along`), which are read-only.
+  `~/.cursor`, `~/.along`), which are read-only.
 - never: credential stores in the home directory (`~/.ssh`, `~/.aws`, ...), for reads too.
 
 Configuration sources, merged: the gate entry in `.along/rules/gates.yaml`
@@ -62,7 +62,7 @@ PATH_ARG_KEYS: Tuple[str, ...] = (
 CWD_ARG_KEYS: Tuple[str, ...] = ("Cwd", "cwd", "working_directory", "WorkingDirectory")
 
 #: Home-relative global dirs readable by default (skills, rules, installed engines).
-GLOBAL_READ_DIRS: Tuple[str, ...] = (".gemini", ".claude", ".codex", ".along")
+GLOBAL_READ_DIRS: Tuple[str, ...] = (".gemini", ".claude", ".codex", ".cursor", ".along")
 #: Home-relative credential stores that are never readable.
 SECRET_DIRS: Tuple[str, ...] = (
     ".ssh", ".aws", ".gnupg", ".azure", ".kube", ".docker", ".config/gcloud",

@@ -3,11 +3,12 @@ protocol: along
 protocol_version: "2.2.26"
 slug: cursor-agent-and-rules-integration
 type: feat
-status: open
+status: done
+completed: 2026-11-25
 priority: medium
 created: 2026-09-07
-updated: 2026-11-24
-plan_status: needs-approval
+updated: 2026-11-25
+plan_status: approved
 agent: antigravity
 tags: [cursor, ide, rules, mcp, provider]
 milestone: v3.1.0-native-ast-and-cursor-parity
@@ -46,8 +47,14 @@ To maintain the Single Source of Truth (SSOT) and prevent documentation drift ac
 - Clarify workflow differences between CLI agents (Claude Code, OpenCode) and IDE-native agents (Cursor, Antigravity).
 
 ## Acceptance Criteria
-- [ ] `along-init` scaffolds `.cursor/rules/along.mdc` pointing to `AGENTS.md` and `docs/INDEX.md`.
-- [ ] Scaffolding is non-destructive and preserves existing user-defined Cursor rules.
-- [ ] `configure_mcp.py` and installers support Cursor MCP configuration.
-- [ ] Automated tests verify `.cursor/rules/along.mdc` creation and link integrity.
-- [ ] Provider support matrix updated across public documentation.
+- [x] `along-init` scaffolds `.cursor/rules/along.mdc` pointing to `AGENTS.md` and `docs/INDEX.md`.
+- [x] Scaffolding is non-destructive and preserves existing user-defined Cursor rules.
+- [x] `configure_mcp.py` and installers support Cursor MCP configuration (`~/.cursor/mcp.json` for existing servers `code-review-graph` and `along-webdev`; `along-kb-search` remains CLI-only per approved plan).
+- [x] Automated tests verify `.cursor/rules/along.mdc` creation, link integrity, installer parity, MCP registration, and runtime/hook alignment.
+- [x] Provider support matrix updated across public documentation.
+
+## Implementation Summary
+- **Rule scaffolding**: `scripts/alongkit/scaffold.py` (`CURSOR_RULE_RELPATH`, `cursor_rule_template`) and `scripts/along_init.py` (`scaffold_cursor_rule`) create `.cursor/rules/along.mdc` via `write_if_missing` at non-nested architecture roots, preserving customized/unrelated `.cursor/` files and respecting `--dry-run`.
+- **Installers & MCP**: Added `cursor` to `alongkit.install` (`PROVIDERS`, `FOLDER_PROVIDERS`, `Homes`, verified `mcp_target` at `~/.cursor/mcp.json`), `scripts/install_manifest.py`, `scripts/configure_mcp.py`, `scripts/along_update.py`, `install.ps1`, `install.sh`, and `install.bat`, deploying `along-*` skills to `~/.cursor/skills/` while keeping global Cursor hooks opt-in (`along hook attribution --runtime cursor` remains default).
+- **Hooks & runtime reporting**: Added `beforeSubmitPrompt` (`UserPromptSubmit`) to `get_cursor_hook_manifest()` and `GenericCliAdapter`, added `along_hooks_registered("cursor", ...)` and updated `RUNTIME_MATRIX["cursor"]` / `enforcement_level` in `scripts/alongkit/runtime.py`, added `CURSOR_AGENT`/`CURSOR_TRACE_ID`/`CURSOR_CLI` detection in `scripts/alongkit/entities/vocabulary.py`, and preserved `RUNTIME_HOOK_NARROWINGS["cursor"]` in `along doctor`.
+- **Documentation**: Updated `README.md`, `docs/topic--setup-and-workflow.md`, `docs/topic--runtime-hooks-and-gates.md`, `docs/topic--architecture.md`, `docs/topic--cli-reference.md`, `docs/topic--skills-reference.md`, `skills/along-init/SKILL.md`, and `skills/along-update/SKILL.md` (leaving `write_policy: manual` `docs/topic--system-comparisons.md` untouched).

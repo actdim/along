@@ -4,11 +4,11 @@ slug: architecture
 title: System Architecture & Flow
 type: architecture
 created: 2026-08-30
-updated: 2026-09-22
-tags: [architecture, boundaries, multi-agent, blackboard, concurrency, ast, flow]
+updated: 2026-11-25
+tags: [architecture, boundaries, multi-agent, blackboard, concurrency, ast, flow, cursor]
 sources:
   - path: README.md
-    hash: "9d664248427904d66636b0db75941cd184ad9079c7ebc376caf0f978a530d28f"
+    hash: "9486b48c8ecfac63f66cfecd0ecd02e67317cee9ae96eb263719db36854989b9"
   - path: dashboard/app.py
     hash: "1a0b0c9e4b40adf717712a6c3c14bebb72728d579ae37ca844bf39eecc287fd7"
   - path: skills/along-dash/SKILL.md
@@ -32,6 +32,7 @@ flowchart TD
         CX["Codex (~/.codex)"]
         OC["OpenCode (~/.config/opencode)"]
         AG["Antigravity (~/.gemini/config)"]
+        CR["Cursor (~/.cursor)"]
     end
 
     subgraph MemoryLayer["Repository Persistent Memory (.along/ & docs/)"]
@@ -57,6 +58,7 @@ flowchart TD
     CX --> AGENTS
     OC --> AGENTS
     AG --> AGENTS
+    CR --> AGENTS
 
     AGENTS --> ALONG_DIR
     AGENTS --> DOCS
@@ -81,6 +83,7 @@ Along avoids vendor lock-in by utilizing standard agent discovery paths without 
 | **Codex** | Reads `AGENTS.md` natively on session initialization. | `~/.codex/skills/along-*/` | Native skill execution and prompt injection. |
 | **OpenCode** | Reads `AGENTS.md` and `CLAUDE.md` natively. | `~/.config/opencode/commands/along-*.md` | Flat markdown command declarations. |
 | **Google Antigravity** | Reads `AGENTS.md` (or `GEMINI.md`) natively. | `~/.gemini/config/skills/along-*/` | Slash commands, `/goal` autonomy, and CLI tools. |
+| **Cursor** | Reads `.cursor/rules/along.mdc` (`alwaysApply: true`, pointing to `AGENTS.md`, `.along/`, and `docs/INDEX.md`) and `AGENTS.md`. | `~/.cursor/skills/along-*/` | Skills, `along` CLI workflows, optional `~/.cursor/mcp.json` (`mcpServers` for `code-review-graph` / `along-webdev`), and optional `.cursor/hooks.json` / `~/.cursor/hooks.json` via `GenericCliAdapter` (advisory by default until hooks are installed). |
 
 ---
 
@@ -246,7 +249,11 @@ installers are measured against it end to end, so `install.sh` cannot again ship
 the rule packs the way it did for months. Code intelligence tools (`code-review-graph`)
 execute directly via CLI (`along graph-*`), bypassing stdio IPC serialization overhead
 and IDE authorization dialogs, while legacy MCP registration is decoupled and managed
-via `configure_mcp.py --clean`.
+via `configure_mcp.py --clean`. When opting into MCP registration for existing servers
+(`code-review-graph` via `--register-mcp` or `along-webdev` via `--server along-webdev`),
+Claude Code (`~/.claude.json`) and Cursor (`~/.cursor/mcp.json`) are the verified
+`mcpServers` JSON targets; unverified provider configs are reported unless
+`--include-unverified` is supplied.
 
 ### A migration merges; it does not choose a winner
 

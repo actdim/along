@@ -4,20 +4,20 @@ slug: skills-reference
 title: Skills & Slash Commands Technical Reference
 type: reference
 created: 2026-08-30
-updated: 2026-09-19
-tags: [skills, commands, reference, runners, lifecycle, automation, multi-agent]
+updated: 2026-11-25
+tags: [skills, commands, reference, runners, lifecycle, automation, multi-agent, cursor]
 sources:
   - path: skills/along-init/SKILL.md
-    hash: "9e3c3052d051eb87f3d590aedc06550b963996dc86da0e1e22485a710c17e5a6"
+    hash: "cf622144202aa3911359e5f1a7ea866003073f4441f272426298d61201c346bd"
   - path: skills/along-kb-sync/SKILL.md
     hash: "de21b4bfb49f9c19ee803123814309bf476f64272aca45dd790e76b13b8407c3"
   - path: skills/along-update/SKILL.md
-    hash: "4630138bdeafa292c59e0efc9a6b4b960fd48b0a6f2ecd5db0f8dfefeae62645"
+    hash: "a398c5def4199b0f09c3dd2355bd81297c2fc30170760fb7387c59f3ecaa9d0d"
 ---
 
 # Skills & Slash Commands Technical Reference
 
-Along provides an integrated suite of **22 singular automation skills** operating across Claude Code, OpenAI Codex, OpenCode, and Google Antigravity.
+Along provides an integrated suite of **22 singular automation skills** operating across Claude Code, OpenAI Codex, OpenCode, Google Antigravity, DeepSeek Harness, and Cursor.
 
 Each skill is built on a domain-first naming pattern (`along-<entity>-<action>`), guarantees clean ASCII output, operates on strongly typed repository entities, and can be invoked either explicitly via slash commands/CLI or automatically via semantic intent recognition.
 
@@ -78,30 +78,30 @@ flowchart TD
 ## 1. Bootstrap & Repository Protocol Management
 
 ### `along-init`
-- **What it is**: The foundation bootstrapping engine for Along in any repository. Scaffolds or refreshes root `AGENTS.md` (carrying the managed protocol block), `CLAUDE.md`, `.gitattributes` (with `merge=union`), and the `.along/` directory skeleton (`ISSUES/`, `DECISIONS.md`, `MILESTONES/`, `SESSIONS/`, `docs/`; `GLOSSARY.md` and the `VISION.md` skeleton only where the context is not nested under a FULL ancestor).
+- **What it is**: The foundation bootstrapping engine for Along in any repository. Scaffolds or refreshes root `AGENTS.md` (carrying the managed protocol block), `CLAUDE.md`, a create-only `.cursor/rules/along.mdc` pointer rule at non-nested architecture roots, `.gitattributes` (with `merge=union`), and the `.along/` directory skeleton (`ISSUES/`, `DECISIONS.md`, `MILESTONES/`, `SESSIONS/`, `docs/`; `GLOSSARY.md` and the `VISION.md` skeleton only where the context is not nested under a FULL ancestor).
 - **Architectural Rationale**:
   - *Idempotent Managed Block*: Never overwrites custom human developer instructions in `AGENTS.md`; only refreshes the block between `<!-- BEGIN ALONG-PROTOCOL ... -->` and `<!-- END ALONG-PROTOCOL -->`.
   - *Core + On-Demand Reference*: the block is a small always-loaded core; situational procedure lives in the managed `.along/PROTOCOL.md` (rendered from `skills/along-init/protocol-reference.md` at FULL roots, refreshed only while it carries the managed marker), pulled via `/along-kb-search`. Both are rendered for the active gate strictness profile.
-  - *Non-Destructive Initialization*: Creates directories and template files only if missing, preserving existing project history.
-  - *Deterministic Engine, Judgment by the Agent*: `along init` performs every mechanical step (FULL/REF protocol block bounded by the git working tree, hand-written `AGENTS.md` adoption under `## Project specifics`, root `VISION.md` moved into `.along/VISION.md`, rule packs, merge drivers, hooks, migration). The agent then decomposes an imported VISION section, routes root notes (`ROADMAP.md`, `ARCHITECTURE.md`, ...) and runs the re-run dialog.
+  - *Non-Destructive Initialization*: Creates directories and template files only if missing, preserving existing project history as well as existing `.cursor/rules/along.mdc` edits and unrelated files under `.cursor/`.
+  - *Deterministic Engine, Judgment by the Agent*: `along init` performs every mechanical step (FULL/REF protocol block bounded by the git working tree, hand-written `AGENTS.md` adoption under `## Project specifics`, create-only `.cursor/rules/along.mdc` at architecture roots, root `VISION.md` moved into `.along/VISION.md`, rule packs, merge drivers, hooks, migration). The agent then decomposes an imported VISION section, routes root notes (`ROADMAP.md`, `ARCHITECTURE.md`, ...) and runs the re-run dialog.
 - **Invocation Triggers**:
   - *Explicit*: `/along-init`, `install.ps1`, `install.sh`.
   - *Semantic / Automatic*: Triggered when an agent detects an uninitialized repository, missing `AGENTS.md`, or a user prompt like *"Set up Along in this repo"*, *"Initialize agent instructions"*.
-- **Entities Operated On**: `AGENTS.md`, `CLAUDE.md`, `.gitattributes`, `.along/ISSUES/`, `.along/DECISIONS.md`, `docs/`.
+- **Entities Operated On**: `AGENTS.md`, `CLAUDE.md`, `.cursor/rules/along.mdc`, `.gitattributes`, `.along/ISSUES/`, `.along/DECISIONS.md`, `docs/`.
 - **Ecosystem Chaining**: Followed immediately by `/along-kb-sync` (to ingest `README.md`) and `/along-dep-scan`.
 
 ---
 
 ### `along-update`
-- **What it is**: Automated protocol, skill, and runtime hook synchronizer. Checks and pulls latest Along skills, migrations, and protocol definitions across user home directories (`~/.claude`, `~/.codex`, `~/.gemini`) and local repositories, and automatically reconciles runtime lifecycle hooks across supported agent environments.
+- **What it is**: Automated protocol, skill, and runtime hook synchronizer. Checks and pulls latest Along skills, migrations, and protocol definitions across user home directories (`~/.claude`, `~/.codex`, `~/.gemini`, `~/.dsh`, `~/.cursor`, `~/.config/opencode`) and local repositories, reconciles commit attribution (`~/.claude/settings.json`, `~/.cursor/cli-config.json`), and reconciles global runtime lifecycle hooks across supported agent environments (keeping global Cursor hooks opt-in via `along hook install --runtime cursor --global`).
 - **Architectural Rationale**:
   - Eliminates skill drift across multiple developer machines while isolating updates to the target repository by default (global machine skills update requires an explicit `--global` flag).
   - Automatically executes retroactive migration scripts (`scripts/migrate_protocol.py`) to upgrade legacy front-matter schemas and directory layouts without data loss.
-  - Automatically scaffolds and updates runtime lifecycle hooks (`.agents/hooks.json`, `.claude/settings.json`, `.codex/hooks.json`), guaranteeing that mechanical quality gates and typography invariants are enforced across all active agent tools without manual setup.
+  - Reconciles global runtime lifecycle hooks (`~/.gemini/config/hooks.json`, `~/.claude/settings.json`, `~/.codex/hooks.json`, `~/.config/opencode/plugins/along-gates.js`, `~/.dsh/profiles/*/cordis.patch.yml`), reconciles Claude and Cursor commit attribution (`cli-config.json`), and purges legacy local hooks (including `.cursor/hooks.json`) from consumer repositories while preserving user rules and unrelated keys.
 - **Invocation Triggers**:
   - *Explicit*: `/along-update`, `along update` (fallback: `python ~/.along/bin/along_exec.py update`).
   - *Semantic / Automatic*: Triggered on protocol version mismatch, outdated skills warnings, or prompts like *"Upgrade Along protocol"*, *"Update agents"*.
-- **Entities Operated On**: Global skill folders (`~/.gemini/config/skills/along-*`), target repository `AGENTS.md`, `scripts/`, and runtime hook configurations (`.claude/`, `.codex/`, `.agents/`).
+- **Entities Operated On**: Global skill folders (`~/.gemini/config/skills/along-*`, `~/.claude/skills/along-*`, `~/.codex/skills/along-*`, `~/.dsh/skills/along-*`, `~/.cursor/skills/along-*`, `~/.config/opencode/commands/along-*.md`), target repository `AGENTS.md`, `scripts/`, and runtime hook/attribution configurations (`.claude/`, `.codex/`, `.agents/`, `.cursor/`).
 - **Ecosystem Chaining**: Runs `migrate_protocol.py`, reconciles runtime hooks, and triggers `/along-kb-sync --strict` to validate repository link integrity after updates.
 
 ---

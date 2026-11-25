@@ -10,7 +10,7 @@
 
 [![Tests](https://github.com/actdim/along/actions/workflows/tests.yml/badge.svg)](https://github.com/actdim/along/actions/workflows/tests.yml) - Python 3.10-3.13 on Linux and Windows.
 
-ActDim Along is a provider-agnostic context and memory protocol for AI coding agents (`ALONG-PROTOCOL v4.9.1`) that provides persistent in-repo task tracking, an evergreen architecture wiki, and mechanical quality gates across Claude Code, Google Antigravity, OpenAI Codex, and OpenCode.
+ActDim Along is a provider-agnostic context and memory protocol for AI coding agents (`ALONG-PROTOCOL v4.9.1`) that provides persistent in-repo task tracking, an evergreen architecture wiki, and quality gates across Claude Code, Google Antigravity, OpenAI Codex, OpenCode, DeepSeek Harness, and Cursor.
 
 ---
 
@@ -28,7 +28,7 @@ powershell -NoProfile -ExecutionPolicy Bypass -Command "irm https://raw.githubus
 curl -fsSL https://raw.githubusercontent.com/actdim/along/main/install.sh | bash
 ```
 
-The installer bootstraps the repository into `~/.cache/actdim-along/repo` (via shallow `git clone` or archive fallback) and configures skills across Claude Code, OpenAI Codex, Google Antigravity, and OpenCode.
+The installer bootstraps the repository into `~/.cache/actdim-along/repo` (via shallow `git clone` or archive fallback) and configures skills across Claude Code, OpenAI Codex, Google Antigravity, OpenCode, DeepSeek Harness, and Cursor (`~/.cursor/skills/`). Global Cursor hooks remain opt-in (`along hook install --runtime cursor --global`), while `along init` scaffolds a create-only `.cursor/rules/along.mdc` pointer rule at architecture roots.
 
 ### Python Package Installation (Core vs. Extras)
 
@@ -88,7 +88,7 @@ Along addresses these challenges through a dual-tier structure: an evergreen arc
 | **Persistent In-Repo Memory** | Durable, git-tracked memory (`.along/`): DAG issues (spikes and `risk`-tagged blockers included), append-only ADR logs, milestones, and session records that travel with the codebase. |
 | **Autonomous Multi-Agent Teams** | Sequential living-plan state machine (`along-team`): Supervisor -> Scout -> Architect -> Implementer -> Reviewer with session blackboards, retry limits, and single-agent degradation. |
 | **Runtime Worktree Workspace Isolation** | Ephemeral Git worktree isolation (`along worktree`, `/along-team --worktree`) satisfying the 3-part Environment Readiness Contract: NTFS junctions / symlinks for dependencies (`node_modules`, `.venv`), `.env` configuration copying, real-time session blackboard sharing, and Windows file lock resilient teardown. |
-| **Runtime Mechanical Prose Enforcement** | Active agent lifecycle interception (`PreToolUse`, `Stop`) turning markdown guidelines into hard runtime errors across Claude Code, Antigravity, and Codex, with machine-checked bi-directional traceability (`along hook verify`). |
+| **Runtime Mechanical Prose Enforcement** | Active agent lifecycle interception (`PreToolUse`, `Stop`) turning markdown guidelines into hard runtime errors across Claude Code, Antigravity, Codex, OpenCode, DeepSeek Harness, and optionally Cursor (`along hook install --runtime cursor`), with machine-checked bi-directional traceability (`along hook verify`). |
 | **Token-Efficient LLM-Wiki (`docs/`)** | Modular knowledge base with in-place source provenance, SHA-256 drift detection, deterministic `llms.txt` compilation, and targeted snippet search (`along-kb-search`) avoiding full-file context ingestion. |
 | **Stack-Agnostic Lifecycle & Polyglot Hooks** | Unified agent execution contract (`/along-build`, `/along-test`, `/along-dev`, `/along-version-bump`, `/along-dep-scan`) with zero-config stack auto-detection and polyglot repository hooks (`.along/scripts/` in Python, Bash, PowerShell, Batch). |
 | **Zero-Conflict Git Concurrency** | Single Source of Truth (SSOT) atomic files vs compiled projections (`ISSUES.md`, `INDEX.md`), union merges (`merge=union`), and decentralized date-slug ADRs that avoid collisions in parallel branches. |
@@ -168,9 +168,9 @@ This repository follows the **ActDim Along Protocol** for AI agent context, pers
 - **Dual-Tier Memory**: Evergreen LLM-Wiki in `docs/` and living governance memory in `.along/` survive across all AI sessions.
 - **Zero-Vector Unified Retrieval**: Fast local snippet search across architecture, decisions, and issues returning bounded snippets (< 150 tokens) without full-file ingestion or external database dependencies.
 - **Runtime Worktree Isolation**: Autonomous agent tasks execute in isolated Git worktrees with automatic dependency linking, preserving clean developer checkouts.
-- **Mechanical Quality Gates**: Protocol rules, clean typography, and issue bindings are mechanically enforced before tools execute in runtimes that load Along's hooks (Claude Code, Antigravity, Codex); elsewhere they are advisory. The portable baseline for every committer is the CI job `along gates check --ci` plus opt-in git hooks (`along hooks install --git`).
+- **Mechanical Quality Gates**: Protocol rules, clean typography, and issue bindings are mechanically enforced before tools execute in runtimes where Along's hooks are active (Claude Code, Antigravity, Codex, OpenCode, DeepSeek Harness, and optionally Cursor via `along hook install --runtime cursor`); elsewhere (and in Cursor by default before hooks are installed) they are advisory. The portable baseline for every committer is the CI job `along gates check --ci` plus opt-in git hooks (`along hooks install --git`).
 - **Standardized Lifecycle Contract**: Unified commands for build, test, dev, release, and dependency discovery via pluggable `.along/scripts/` hooks.
-- **Provider-Agnostic**: Compatible out of the box with **Claude Code**, **Google Antigravity**, **OpenAI Codex**, and **OpenCode**.
+- **Provider-Agnostic**: Compatible out of the box with **Claude Code**, **Google Antigravity**, **OpenAI Codex**, **OpenCode**, **DeepSeek Harness**, and **Cursor** (`.cursor/rules/along.mdc` + `~/.cursor/skills/`).
 ````
 
 ---
@@ -186,7 +186,7 @@ The repository's complete technical specification is maintained as a living LLM-
 | **Domain Model & Entities** | Machine-parseable schemas for Issues, ADRs, Milestones, and Sessions. | [Domain Model & Entity Ecosystem](./docs/topic--domain-model.md) |
 | **Setup & Workflows** | Installation matrix, repository onboarding, and session lifecycle. | [Setup, Installation & Workflows](./docs/topic--setup-and-workflow.md) |
 | **LLM-Wiki Architecture** | Andrej Karpathy paradigm, source isolation, and token efficiency. | [LLM-Wiki Architecture & Paradigm](./docs/topic--llm-wiki-architecture.md) |
-| **Runtime Hooks & Gates** | Agent lifecycle interception harness across Antigravity, Claude, and Codex, plus the runtime capability matrix: where gates are mechanical and where (Claude Cowork, Cursor, OpenCode) they are advisory. | [Runtime Lifecycle Hooks & Mechanical Gates](./docs/topic--runtime-hooks-and-gates.md) |
+| **Runtime Hooks & Gates** | Agent lifecycle interception harness across Antigravity, Claude, Codex, OpenCode, DeepSeek Harness, and optional Cursor hooks, plus the runtime capability matrix: where gates are mechanical and where (Claude Cowork, Cursor by default) they are advisory. | [Runtime Lifecycle Hooks & Mechanical Gates](./docs/topic--runtime-hooks-and-gates.md) |
 | **Declarative Gates & Traceability** | Extensible YAML gate engine and bi-directional machine-checked matrix. | [Declarative Gate Engine & Traceability Matrix](./docs/topic--declarative-gates-and-traceability.md) |
 
 ## Automation Skills Reference (Grouped by Workflow Phase)
@@ -196,7 +196,7 @@ Along provides **22 singular automation skills** structured across 6 core lifecy
 ### 1. Bootstrap & Repository Protocol Management
 | Skill / Command | Purpose |
 | :--- | :--- |
-| **`along-init`** (`/along-init`) | Scaffold/refresh `AGENTS.md` + `CLAUDE.md` + `.along/` in a folder via the deterministic `along init` engine; a root `VISION.md` moves into `.along/`. |
+| **`along-init`** (`/along-init`) | Scaffold/refresh `AGENTS.md` + `CLAUDE.md` + `.cursor/rules/along.mdc` (at architecture roots) + `.along/` in a folder via the deterministic `along init` engine; a root `VISION.md` moves into `.along/`. |
 | **`along-update`** (`/along-update`) | One-liner update of repository context, protocol, and global skills from GitHub. |
 | **`along-version-bump`** (`/along-version-bump`) | Multi-stack version bump and release orchestrator (Node, Python, Rust, .NET). |
 
@@ -665,6 +665,7 @@ flowchart TD
         CX["Codex (~/.codex)"]
         OC["OpenCode (~/.config/opencode)"]
         AG["Antigravity (~/.gemini/config)"]
+        CR["Cursor (~/.cursor)"]
     end
 
     subgraph MemoryLayer["Repository Persistent Memory (.along/ & docs/)"]
@@ -690,6 +691,7 @@ flowchart TD
     CX --> AGENTS
     OC --> AGENTS
     AG --> AGENTS
+    CR --> AGENTS
 
     AGENTS --> ALONG_DIR
     AGENTS --> DOCS
@@ -714,6 +716,7 @@ Along avoids vendor lock-in by utilizing standard agent discovery paths without 
 | **Codex** | Reads `AGENTS.md` natively on session initialization. | `~/.codex/skills/along-*/` | Native skill execution and prompt injection. |
 | **OpenCode** | Reads `AGENTS.md` and `CLAUDE.md` natively. | `~/.config/opencode/commands/along-*.md` | Flat markdown command declarations. |
 | **Google Antigravity** | Reads `AGENTS.md` (or `GEMINI.md`) natively. | `~/.gemini/config/skills/along-*/` | Slash commands, `/goal` autonomy, and CLI tools. |
+| **Cursor** | Reads `.cursor/rules/along.mdc` (`alwaysApply: true`, pointing to `AGENTS.md`, `.along/`, and `docs/INDEX.md`) and `AGENTS.md`. | `~/.cursor/skills/along-*/` | Skills, `along` CLI workflows, optional `~/.cursor/mcp.json` (`mcpServers` for `code-review-graph` / `along-webdev`), and optional `.cursor/hooks.json` / `~/.cursor/hooks.json` via `GenericCliAdapter` (advisory by default until hooks are installed). |
 
 ---
 
@@ -879,7 +882,11 @@ installers are measured against it end to end, so `install.sh` cannot again ship
 the rule packs the way it did for months. Code intelligence tools (`code-review-graph`)
 execute directly via CLI (`along graph-*`), bypassing stdio IPC serialization overhead
 and IDE authorization dialogs, while legacy MCP registration is decoupled and managed
-via `configure_mcp.py --clean`.
+via `configure_mcp.py --clean`. When opting into MCP registration for existing servers
+(`code-review-graph` via `--register-mcp` or `along-webdev` via `--server along-webdev`),
+Claude Code (`~/.claude.json`) and Cursor (`~/.cursor/mcp.json`) are the verified
+`mcpServers` JSON targets; unverified provider configs are reported unless
+`--include-unverified` is supplied.
 
 ### A migration merges; it does not choose a winner
 
@@ -1541,7 +1548,7 @@ Displays an instant terminal summary of repository health, active in-flight issu
 
 ### `along doctor`
 Validates repository compliance with the Along protocol. Audits `.along/` directory layout, `.gitattributes` merge drivers, and ADR header formatting.
-- **Runtime section**: names the runtime (`claude-code`, `cowork`, `antigravity`, `codex`, ...), the gate enforcement level (`mechanical` only when Along hooks are registered for that runtime, otherwise `advisory`), the Python floor (3.10), a stale `.git/index.lock`, and a cross-OS or VM-mounted repository (worktrees unsafe). See the capability matrix in [Runtime Lifecycle Hooks & Mechanical Gates](./topic--runtime-hooks-and-gates.md).
+- **Runtime section**: names the runtime (`claude-code`, `cowork`, `antigravity`, `codex`, `cursor`, `dsh`, `opencode`, ...), the gate enforcement level (`mechanical` only when Along hooks are registered for that runtime, otherwise `advisory`), installed hook manifest coverage audits and explicit runtime narrowings (such as `RUNTIME_HOOK_NARROWINGS['cursor']`), the Python floor (3.10), a stale `.git/index.lock`, and a cross-OS or VM-mounted repository (worktrees unsafe). See the capability matrix in [Runtime Lifecycle Hooks & Mechanical Gates](./topic--runtime-hooks-and-gates.md).
 - **Vision & root notes**: warns about a root `VISION.md` next to `.along/`, an unresolved `along:imported-vision needs-restructure` section in `.along/VISION.md`, and root notes (`ROADMAP.md`, `ARCHITECTURE.md`, `SPEC.md`, `TODO.md`, `DESIGN.md`) that the agent must route into the Knowledge Base.
 - **Tracked diagnostics**: warns when files under any `.along/diagnostics/` are still tracked in git (committed before the directory ignored itself) and names `along migrate --apply` (or `git rm --cached`) as the fix.
 - **Nested installs**: warns about nested `.along/` contexts that sit in no nested git repository (possibly created per manifest folder by older versions) and lists them. It changes nothing: consolidating them into the root is a manual per-repository task. A deliberate nested context is silenced with `"subproject": {"intentional": true}` in its `.along/config.json`. See ADR `subproject-boundary-is-git-or-explicit-init`.
@@ -1907,9 +1914,9 @@ Multi-stack project version incrementer and release packager.
 ### `along init`
 Deterministic scaffolder behind `/along-init` (`scripts/along_init.py`). Idempotent; existing state is never overwritten.
 - **AGENTS.md**: FULL protocol block at an architecture root; a short REF block (`ref=<relpath>`) in a nested folder whose ancestor inside the same git working tree carries the FULL block. A git repository or submodule root always gets FULL. A hand-written file without markers gets the block on top and keeps its text under `## Project specifics`.
-- **Files**: `CLAUDE.md` import line, `.gitattributes` merge lines, `.along/` skeleton (`ISSUES.md`, `ISSUES/done/`, `DECISIONS/`, `GLOSSARY.md`, `HISTORY.md`, `SESSIONS/<YYYY>/`), `docs/INDEX.md`. A nested context that gets a REF block creates no `GLOSSARY.md` and no `VISION.md` skeleton; they are created on first use.
+- **Files**: `CLAUDE.md` import line, `.cursor/rules/along.mdc` create-only pointer rule (at non-nested architecture roots; never overwrites user edits or unrelated `.cursor/` files), `.gitattributes` merge lines, `.along/` skeleton (`ISSUES.md`, `ISSUES/done/`, `DECISIONS/`, `GLOSSARY.md`, `HISTORY.md`, `SESSIONS/<YYYY>/`), `docs/INDEX.md`. A nested context that gets a REF block creates no `GLOSSARY.md` and no `VISION.md` skeleton; they are created on first use.
 - **VISION**: a root `VISION.md` ends up only in `.along/VISION.md` (moved, deduplicated, or merged under an `along:imported-vision needs-restructure` marker); links to it are repointed (public files -> `docs/INDEX.md`). Otherwise a skeleton with `## Scope`, `## Non-goals`, `## Roadmap` is created (FULL contexts only).
-- **Pipeline**: `along rules attach`, `along git setup` (git roots), `along hook install --runtime all`, `along migrate --apply`.
+- **Pipeline**: `along rules attach`, `along git setup` (git roots), `along hook install --runtime all` (including local `.cursor/hooks.json` unless `--no-hooks`), `along migrate --apply`.
 - **Report**: CREATED / UPDATED / UNTOUCHED files, VISION outcome, repointed links, `AGENT ACTIONS` (imported VISION section, root notes `ROADMAP.md` / `ARCHITECTURE.md` / `SPEC.md` / `TODO.md` / `DESIGN.md`, adopted hand-written `AGENTS.md`) and, when `.along/` already existed, `RE-RUN QUESTIONS` for the user.
 - **Options**: `--dry-run`, `--json`, `--profile <strict|standard|light>`, `--no-rules`, `--no-git`, `--no-hooks`, `--no-migrate`.
 - **Usage**:
@@ -1923,8 +1930,8 @@ Deterministic scaffolder behind `/along-init` (`scripts/along_init.py`). Idempot
 ### `along update`
 Self-update engine for the Along protocol and skills suite.
 - Refreshes the managed protocol block in every context with the same rules as `along init` (FULL/REF, hand-written adoption) and runs the migration, whose heal passes (Step 13: root `VISION.md`; Step 16: legacy risk, spike and checklist records) run even on an up-to-date repository.
-- Reconciles local repository files, managed protocol blocks, and global user skills (`~/.claude/`, `~/.gemini/`, `~/.codex/`) against the latest upstream release from GitHub.
-- Automatically scaffolds and reconciles global runtime lifecycle hooks in user home configurations (`~/.gemini/config/hooks.json`, `~/.claude/settings.json`, and `~/.codex/hooks.json`) and recursively purges legacy local hooks and workaround scripts from consumer repositories.
+- Reconciles local repository files, managed protocol blocks, and global user skills (`~/.claude/`, `~/.gemini/`, `~/.codex/`, `~/.dsh/`, `~/.cursor/`, `~/.config/opencode/`) against the latest upstream release from GitHub.
+- When `--global` is passed, runs the global installer to reconcile skills and global runtime lifecycle hooks (`~/.gemini/config/hooks.json`, `~/.claude/settings.json`, `~/.codex/hooks.json`, `~/.config/opencode/plugins/along-gates.js`, `~/.dsh/profiles/*/cordis.patch.yml`); global Cursor hooks (`~/.cursor/hooks.json`) remain opt-in, while Cursor commit attribution (`~/.cursor/cli-config.json`) is reconciled on every run unless `--no-hooks` is set. Recursively purges legacy local hooks (including `.cursor/hooks.json`) and workaround scripts from consumer repositories.
 - Performs pre-flight hook cleanup and per-context exception isolation so that corrupt or locked files in one subproject do not abort the update for remaining contexts.
 - Refreshes existing contexts only: it never creates a context and never offers a package-manifest folder for `along init` (a manifest is not a subproject). Nested git repositories without a context are listed as a note.
 - **Out-of-Band Recovery**: If an agent session is ever locked due to a broken hook configuration (chicken-and-egg problem), running `along update` from an external OS terminal bypasses agent interception, cleans up broken local hooks, and restores the environment.
@@ -2057,8 +2064,8 @@ Architectural intelligence, community clustering, and coupling hotspot analyzer.
 ### `along hook` (alias `along hooks`)
 Runtime lifecycle hook interceptor and declarative gate evaluation harness.
 - **Subcommands**:
-  - `along hook eval <event> [--runtime {antigravity,claude,codex,generic}]`: Evaluates declarative gates against an incoming event payload passed via stdin or argument.
-  - `along hook install [--runtime {antigravity,claude,codex,cursor,opencode,dsh,all}]`: Scaffolds or updates runtime hook configuration manifests (`.agents/hooks.json`, `.claude/settings.json`, `.codex/hooks.json`, `.dsh/cordis.patch.yml`).
+  - `along hook eval <event> [--runtime {antigravity,claude,codex,cursor,opencode,dsh,generic}]`: Evaluates declarative gates against an incoming event payload passed via stdin or argument (CLI help lists `antigravity`, `claude`, `codex`, `cursor`, `opencode`, `generic`, and the adapter registry also maps `dsh`).
+  - `along hook install [--runtime {antigravity,claude,codex,cursor,opencode,dsh,all}] [--global] [--target-home DIR]`: Scaffolds or updates runtime hook configuration manifests (`.agents/hooks.json` / `~/.gemini/config/hooks.json`, `.claude/settings.json` / `~/.claude/settings.json`, `.codex/hooks.json` / `~/.codex/hooks.json`, `.cursor/hooks.json` / `~/.cursor/hooks.json` with `preToolUse`/`postToolUse`/`stop`/`beforeSubmitPrompt`, `.opencode/plugins/along-gates.js` / `~/.config/opencode/plugins/along-gates.js`, `.dsh/cordis.patch.yml` / `~/.dsh/profiles/*/cordis.patch.yml`).
   - `along hook attribution [--runtime {claude,cursor,all}] [--claude-home DIR] [--cursor-home DIR] [--dry-run]`: Turns off AI commit attribution (`Co-Authored-By:` trailers) in existing runtime homes: `attribution.commit = ""` + `includeCoAuthoredBy = false` in Claude Code `settings.json`, `attribution.attributeCommitsToAgent = false` in Cursor `cli-config.json`. Writes no hooks. Also run by the installers and every `/along-update`.
   - `along hook install --git [--uninstall] [--dry-run]`: Opt-in, never run by init/update. Writes `pre-commit` and `commit-msg` shims into the repository's hooks directory that run `along gates check --hook <name>`. A foreign hook already there is kept as `<hook>.pre-along` and run first (restored on `--uninstall`); with `core.hooksPath` set (husky, lefthook) nothing is written and the commands to add to the manager are printed.
   - `along hook verify [--strict]`: Audits bi-directional traceability between prose badges (`[gate: <id>]`) across `AGENTS.md`, `.along/*.md`, documentation, and skills against declarative YAML gate rules in `default_gates.yaml`, and prints the enforcement matrix (`runtime` / `git` / `ci` per gate). Fails with exit `1` on dangling badges, schema errors, or undocumented gates by default (`--strict` defaults to enabled).
@@ -3915,7 +3922,7 @@ Along purposefully treats STE-CNL as a **writing convention**, not as a runtime 
 
 Passive prose instructions in `AGENTS.md` and `skills/*/SKILL.md` decay as agent conversation transcripts expand. When context windows fill, probabilistic LLMs cut corners, emit forbidden non-ASCII typography (em-dashes, curly quotes, guillemets), write heredocs over shell tools, or attempt to terminate turns prematurely without executing tests.
 
-The Along Runtime Hook and Gate System establishes deterministic, programmatic interception at the agent harness boundary. Rather than relying on fragile in-process monkey-patching or invasive Git-level hooks (`.git/hooks/*`), Along hooks directly into host agent runtime lifecycle events (`PreToolUse`, `PostToolUse`, `Stop`) supported natively by Google Antigravity, Claude Code, and OpenAI Codex.
+The Along Runtime Hook and Gate System establishes deterministic, programmatic interception at the agent harness boundary. Rather than relying on fragile in-process monkey-patching or invasive Git-level hooks (`.git/hooks/*`), Along hooks directly into host agent runtime lifecycle events (`PreToolUse`, `PostToolUse`, `Stop`, `UserPromptSubmit`) supported by Google Antigravity, Claude Code, OpenAI Codex, OpenCode, DeepSeek Harness, and optionally Cursor (`.cursor/hooks.json` / `~/.cursor/hooks.json`).
 
 ```text
 +-------------------------------------------------------------------------+
@@ -3924,6 +3931,7 @@ The Along Runtime Hook and Gate System establishes deterministic, programmatic i
 |       Claude Code (.claude/settings.json)                               |
 |       OpenAI Codex (.codex/hooks.json)                                  |
 |       DeepSeek Harness (.dsh/cordis.patch.yml)                          |
+|       Cursor (.cursor/hooks.json, optional)                             |
 +-------------------------------------------------------------------------+
                                    |
                          stdin (JSON / protojson)
@@ -3951,6 +3959,7 @@ The Along Runtime Hook and Gate System establishes deterministic, programmatic i
 |     - ClaudeCodeAdapter: exit code 0 (allow) / 2 (deny + stderr)        |
 |     - CodexAdapter: exit code 0 (allow) / 2 (deny + stderr)             |
 |     - DeepSeekHarnessAdapter: exit code 0 (allow) / 2 (deny + stderr)   |
+|     - GenericCliAdapter (Cursor / generic): exit 0 (allow) / 2 (deny)   |
 +-------------------------------------------------------------------------+
 ```
 
@@ -3998,7 +4007,7 @@ For full specification and architecture, see [Declarative Gate Engine & Traceabi
 - **Claude Code hook schema**: `along hook install --runtime claude [--global]` writes the nested schema Claude Code reads, `{"matcher": ..., "hooks": [{"type": "command", "command": ..., "timeout": 30}]}`, for `PreToolUse` (all Claude aliases including `Write`, `Edit`, `MultiEdit`, `NotebookEdit`, `Bash`, `PowerShell`, `Read`, `Grep`, `Glob`, `LS`, `Task`, `Agent`, `TodoWrite`, `SendMessage` plus the `default_gates.yaml` runtime union), `PostToolUse` (edits, shells, and `ExitPlanMode`), `Stop` and `UserPromptSubmit` (no matcher; records the time of the user's last message, see 2.8). Legacy flat `{matcher, command}` entries, which Claude Code ignores, are migrated in place; foreign hooks are kept.
 - **`CodexAdapter`**: Translates OpenAI Codex CLI and headless harness JSON payloads to `HookEvent`, mapping write/create/edit/patch, shell/bash/exec, read/list/grep/glob, delete, and subagent tools to canonical tool names. Formats exit code 0 for allow, and exit code 2 with the remediation message written to stderr for gate denials.
 - **`DeepSeekHarnessAdapter`**: Translates DeepSeek Harness (DSH) lifecycle events mounted through `@deepseek-ai/dsh-hooks-claude-code`. Normalizes Windows (`tool-pwsh`) and Unix (`tool-bash`) execution to `run_command`, filesystem mutations (`tool-fs`, `fs_write`, `fs_edit`) to `write_to_file` and `replace_file_content`, and search (`tool-fs-search`) to `find_by_name`. Formats exit code 0 for allow, and exit code 2 with the stderr remediation message for gate denials. Configured via `along hook install --runtime dsh` into `cordis.patch.yml`.
-- **`GenericCliAdapter`**: Translates generic CLI tool invocations, terminal proxy wrappers, Cursor (`.cursor/hooks.json`), and OpenCode to `HookEvent`. Normalizes Cursor's native tool names (`Shell`, `Read`, `Write`, `Edit`, `StrReplace`, `Delete`, `Grep`, `Glob`, `LS`, `Task`, `TodoWrite`, `run_terminal_cmd`, `beforeReadFile`, `workspace_roots`) and arguments across tool types, supports plain command strings as fallback `run_command`, and formats exit code 0 for allow or exit code 2 with stderr remediation message for gate denials. For OpenCode 2.3.2+, read-only tools (`read`, `glob`, `grep`, `webfetch`, `list`) are explicitly allowlisted to canonical read/search tools without `unmapped_tool` audit noise, while non-read-only tools (`skill`, `task`, `todowrite`) map to canonical gated tools (`invoke_subagent`, `Task`, `write_to_file`).
+- **`GenericCliAdapter`**: Translates generic CLI tool invocations, terminal proxy wrappers, Cursor (`.cursor/hooks.json` / `~/.cursor/hooks.json`), and OpenCode to `HookEvent`. Normalizes Cursor's lifecycle events (`preToolUse`, `beforeShellExecution`, `beforeFileEdit`, `beforeReadFile`, `postToolUse`, `afterShellExecution`, `afterFileEdit`, `stop`, `beforeSubmitPrompt`), native tool names (`Shell`, `Read`, `Write`, `Edit`, `StrReplace`, `Delete`, `Grep`, `Glob`, `LS`, `Task`, `TodoWrite`, `run_terminal_cmd`, `beforeReadFile`, `workspace_roots`), and arguments across tool types, supports plain command strings as fallback `run_command`, and formats exit code 0 for allow or exit code 2 with stderr remediation message for gate denials. `get_cursor_hook_manifest` emits `preToolUse`, `postToolUse`, `stop`, and `beforeSubmitPrompt` (invoking `--event UserPromptSubmit`). Cursor's remaining platform limits are recorded in `RUNTIME_HOOK_NARROWINGS['cursor']` (`unexpressible_tools`: `view_image`, `send_message`, `spawn_subagent`, plus IDE editor-tab/`@`-mention reads bypassing hooks; `missing_capabilities`: `ask`, `global_installer_hooks`) and reported by `along doctor`. For OpenCode 2.3.2+, read-only tools (`read`, `glob`, `grep`, `webfetch`, `list`) are explicitly allowlisted to canonical read/search tools without `unmapped_tool` audit noise, while non-read-only tools (`skill`, `task`, `todowrite`) map to canonical gated tools (`invoke_subagent`, `Task`, `write_to_file`).
 - **OpenCode V2 Plugin Contract (2.3.2+)**: `along hook install --runtime opencode` installs the V2 plugin (`{ id: "along-gates", setup }`) using `tool.hook("execute.before"|"execute.after")`, `session.hook("experimental.idle"|"prompt")`, and `shell.hook("create.before")`. `experimental.idle` (excluding `background: true`) serves as the Stop-equivalent signal, deduped per session turn. `along doctor` reports `mechanical` for OpenCode only after validating the installed plugin against the 2.3.2 contract and observing a lifecycle heartbeat (`Stop`/`experimental.idle`/`UserPromptSubmit`).
 
 ### 2.5 Execution Pipeline & Dispatcher (`alongkit.hooks.engine` & `scripts/along_hook.py`)
@@ -4162,8 +4171,8 @@ When an agent emits a tool call, the execution loop flows through the hook harne
    - `~/.along/venv` carries the runtime dependencies only. The repository's own test hook (`.along/scripts/test.py`) first calls `bootstrap.ensure_project_env()`, which re-executes through `uv run --project <repo>` so the suite gets the `dev` group (the dashboard stack); without `uv`, tests that need that stack are skipped with a reason.
    - On Windows, global hook commands use forward slashes only (`python C:/Users/<user>/.along/bin/along_hook.py ...`). Claude Code runs hooks through Git Bash, which strips backslashes; Python then cannot open the script and exits `2`, blocking every tool. Re-running `along update --global` rewrites old entries in place.
 6. **Global Hook Centralization & Recursive Monorepo Purge**:
-   - Since Along v3.9.2, runtime hooks are installed globally in user home configurations (`~/.gemini/config/hooks.json`, `~/.claude/settings.json`, `~/.codex/hooks.json`).
-   - Consumer repositories and all nested subprojects are recursively purged of legacy local hooks during `along update`.
+   - Since Along v3.9.2, runtime hooks are installed globally in user home configurations (`~/.gemini/config/hooks.json`, `~/.claude/settings.json`, `~/.codex/hooks.json`, `~/.config/opencode/plugins/along-gates.js`, `~/.dsh/profiles/*/cordis.patch.yml`), while global Cursor hooks (`~/.cursor/hooks.json`) stay opt-in (`along hook install --runtime cursor --global`).
+   - Consumer repositories and all nested subprojects are recursively purged of legacy local hooks (`.agents/hooks.json`, `.claude/settings.json`, `.codex/hooks.json`, `.cursor/hooks.json`) during `along update`.
    - Out-of-band execution via `along update` in an external OS terminal serves as the canonical disaster recovery path if runtime hooks are ever damaged.
 
 ## 4a. Protocol Rule Enforcement Audit
@@ -4238,12 +4247,12 @@ Gates are mechanical only where the runtime loads Along's `PreToolUse`/`Stop` ho
 | Claude Cowork | not loaded (Cowork reads plugins from the claude.ai account, not `~/.claude`) | no (Cowork ignores `settings.json`; plugin hooks are tracked in `feat--cowork-plugin-skill-packaging`) | advisory |
 | OpenCode | commands (`~/.config/opencode/commands`) | yes (`plugins/along-gates.js`, V2 2.3.2+) | mechanical once `along hook install --runtime opencode` ran, hook names match 2.3.2 contract, and a lifecycle heartbeat is recorded |
 | DeepSeek Harness | auto (`~/.dsh/skills`) | yes (`cordis.patch.yml` via bridge) | mechanical once `along hook install --runtime dsh` ran |
-| Cursor | rules only (opt-in `.cursor/hooks.json`) | optional (`along hook install --runtime cursor`) | advisory by default; when hooks are installed, `along doctor` reports Cursor's explicit narrowing (`view_image`, `send_message`, `spawn_subagent`, no `ASK`) |
+| Cursor | rules (`.cursor/rules/along.mdc`) + auto (`~/.cursor/skills`) | optional (`.cursor/hooks.json` or `~/.cursor/hooks.json` covering `preToolUse`, `postToolUse`, `stop`, `beforeSubmitPrompt` via `along hook install --runtime cursor [--global]`) | advisory by default (project rules remain advisory until hooks are installed); mechanical on hooked tools once installed; `along doctor` reports `RUNTIME_HOOK_NARROWINGS['cursor']` (`view_image`, `send_message`, `spawn_subagent`, IDE editor-tab/`@`-mention bypass, no native `ASK`, opt-in global installer) |
 | plain shell, human | rules only | no | advisory |
 
 Advisory runtimes are still covered at commit time by the portable layer: `along hooks install --git` (opt-in, local) and the CI job `along gates check --ci` enforce the gates whose catalogue entry lists `git` / `ci` (typography, conflict markers, anti-stub on added lines, issue binding, AI co-author trailers, projection freshness, rule pack integrity), regardless of which agent or human made the commit.
 
-Runtime detection (`entities.detect_agent`) honours `--agent` and `ALONG_AGENT` first; Claude Cowork is recognised by `ALONG_RUNTIME=cowork`, or by `CLAUDE_CODE_HOST_HTTP_PROXY_PORT` together with a `/sessions/` home (markers observed 2026-09-27, heuristic).
+Runtime detection (`entities.detect_agent`) honours `--agent` and `ALONG_AGENT` first; Claude Cowork is recognised by `ALONG_RUNTIME=cowork`, or by `CLAUDE_CODE_HOST_HTTP_PROXY_PORT` together with a `/sessions/` home (markers observed 2026-09-27, heuristic); Cursor is recognised when `CURSOR_AGENT`, `CURSOR_TRACE_ID`, or `CURSOR_CLI` is set in the environment (unless a higher-precedence runtime marker such as `CLAUDECODE` is present).
 
 ### Working from Claude Cowork
 
@@ -4421,7 +4430,7 @@ Complete guide for installing Along, configuring repository lifecycle runners, a
 
 ## 1. Installation & Multi-Platform Setup
 
-Along installs globally and configures provider-agnostic agent discoverability across Claude Code, OpenAI Codex, OpenCode, and Google Antigravity.
+Along installs globally and configures provider-agnostic agent discoverability across Claude Code, OpenAI Codex, OpenCode, Google Antigravity, DeepSeek Harness, and Cursor.
 
 ### One-Liner Installation (Recommended)
 
@@ -4445,7 +4454,7 @@ When working from a local clone of the repository:
 
 **Windows**:
 ```powershell
-# Install for all supported agent runtimes (Claude, Codex, Antigravity, OpenCode)
+# Install for all supported agent runtimes (Claude, Codex, Antigravity, OpenCode, DSH, Cursor)
 powershell -NoProfile -ExecutionPolicy Bypass -File install.ps1 -Target all
 
 # Or run the batch installer, which forwards its arguments to install.ps1
@@ -4460,11 +4469,13 @@ chmod +x install.sh
 ```
 
 ### Supported Installation Targets
-- `-Target all`: Deploys skills to `~/.claude/skills/`, `~/.codex/skills/`, `~/.gemini/config/skills/`, and `~/.config/opencode/commands/`.
-- `-Target claude`: Deploys only to Claude Code.
-- `-Target codex`: Deploys only to OpenAI Codex.
-- `-Target antigravity`: Deploys only to Google Antigravity.
-- `-Target opencode`: Deploys only to OpenCode.
+- `-Target all` / `--target=all`: Deploys skills to `~/.claude/skills/`, `~/.codex/skills/`, `~/.gemini/config/skills/`, `~/.dsh/skills/`, `~/.cursor/skills/`, and `~/.config/opencode/commands/`.
+- `-Target claude` / `--target=claude`: Deploys only to Claude Code.
+- `-Target codex` / `--target=codex`: Deploys only to OpenAI Codex.
+- `-Target antigravity` / `--target=antigravity`: Deploys only to Google Antigravity.
+- `-Target dsh` / `--target=dsh`: Deploys only to DeepSeek Harness.
+- `-Target cursor` / `--target=cursor`: Deploys skills to `~/.cursor/skills/` and reconciles Cursor commit attribution (`~/.cursor/cli-config.json` when present). Global Cursor hooks (`~/.cursor/hooks.json`) remain opt-in via `along hook install --runtime cursor --global`.
+- `-Target opencode` / `--target=opencode`: Deploys only to OpenCode.
 
 ### What an Install Writes
 
@@ -4483,12 +4494,16 @@ in `alongkit.install.planned_files`.
 
 Every root is overridable, which is how the tests run a real installer without touching
 your own home: `--along-home=DIR --claude-home=DIR --codex-home=DIR --opencode-home=DIR
---antigravity-home=DIR --cursor-home=DIR` (`-AlongHome DIR`, `-ClaudeHome DIR`, ... in PowerShell).
+--antigravity-home=DIR --dsh-home=DIR --cursor-home=DIR` (`-AlongHome DIR`, `-ClaudeHome DIR`,
+..., `-CursorHome DIR` in PowerShell).
 
 The install also turns off AI commit attribution (`Co-Authored-By:` trailers) in Claude Code
-`settings.json` and, when a Cursor home exists, in Cursor `cli-config.json`.
-`/along-update` repeats this on every run, including when the install is already up to date;
-`python ~/.along/bin/along_hook.py attribution` does it on demand. See
+`settings.json` and, when a Cursor home exists, in Cursor `cli-config.json`. Global hooks are
+registered for Claude Code, Codex, OpenCode, Antigravity, and DeepSeek Harness; global Cursor
+hooks (`~/.cursor/hooks.json`) remain opt-in via `along hook install --runtime cursor --global`,
+so Cursor remains advisory by default unless hooks are explicitly installed.
+`/along-update` repeats attribution reconciliation on every run, including when the install is
+already up to date; `python ~/.along/bin/along_hook.py attribution` does it on demand. See
 [Runtime Hooks & Gates](./topic--runtime-hooks-and-gates.md).
 
 ### Removing an Install
@@ -4508,15 +4523,19 @@ to ship without deleting the directory that holds it. See
 
 Code intelligence capabilities (`code-review-graph`) run on-demand directly via command-line execution (`along graph-impact`, `along graph-arch`, `along graph-sync`, `along graph-check`), eliminating background daemon requirements, JSON-RPC stdio pipe stalls, and IDE security approval dialogs.
 
-Historically, `code-review-graph` was registered as an MCP server. This registration is decoupled and deprecated. To remove legacy `code-review-graph` entries from existing provider configuration files (`~/.claude.json`, `~/.codex/config.toml`, `opencode.json`, `mcp_config.json`), run:
+Historically, `code-review-graph` was registered as an MCP server. By default the installers remove stale `code-review-graph` entries from verified provider configuration files (`~/.claude.json`, `~/.cursor/mcp.json`) and clean any legacy entries from `~/.codex/config.toml` and `opencode.json`. To clean them on demand, run:
 ```bash
 python scripts/configure_mcp.py --clean
+```
+When opting into MCP registration for existing servers (`code-review-graph` via `-RegisterMcp` / `--register-mcp`, or `along-webdev` via `--server along-webdev`), only verified targets (`claude` at `~/.claude.json` and `cursor` at `~/.cursor/mcp.json`, both `verified: True` using the `mcpServers` JSON layout) are written by default; unverified targets (`codex`, `opencode`, `antigravity`, `dsh`) are printed unless `--include-unverified` is passed:
+```bash
+python scripts/configure_mcp.py --provider cursor --cursor-home ~/.cursor --server along-webdev
 ```
 If legacy configuration entries are present, they are inert and can be cleaned without impacting CLI code-intelligence workflows.
 
 ### Windows Git Concurrency & Index Handling
 
-When running rapid AI coding agents (such as Google Antigravity, Claude Code, or Codex) on Windows, tools generate multiple file modifications in quick succession (< 500ms).
+When running rapid AI coding agents (such as Google Antigravity, Claude Code, Codex, or Cursor) on Windows, tools generate multiple file modifications in quick succession (< 500ms).
 
 #### The Problem on Windows NTFS
 By default, Git commands attempt to replace `.git/index` by writing to `.git/index.lock` and atomically replacing `.git/index` via Windows `ReplaceFileW`. If another process (such as Windows Defender, Search Indexer, or an IDE file watcher) has `.git/index` open for reading, NTFS sharing constraints cause `ReplaceFileW` to fail or get interrupted, leaving `.git/index` truncated to 0 bytes:
@@ -4600,10 +4619,11 @@ along init
 1. `AGENTS.md`: Generates the root protocol context with the managed `ALONG-PROTOCOL v4.9.1` block (a short REF block in a nested folder of the same git repository; a hand-written file keeps its text under `## Project specifics`). The block is a small core (state locations, issue anchoring, gates) rendered for the active gate strictness profile.
    - `.along/PROTOCOL.md`: the managed on-demand protocol reference (completion checklist, documentation routing tree, merge rules, along-team routing, full rule wording) the core points to; refreshed on every `along init` / `along update`, written only at a FULL root.
 2. `CLAUDE.md`: Scaffolds the standard `@AGENTS.md` import line.
-3. `.gitattributes`: Configures `merge=union` for `.along/HISTORY.md` and `.along/DECISIONS.md` to prevent merge collisions across branches.
-4. `.along/`: Creates the persistent repository memory skeleton (`ISSUES/`, `DECISIONS/`, `MILESTONES/`, `SESSIONS/`, `docs/`; `GLOSSARY.md` and the `VISION.md` skeleton at the repository root - a nested context under a FULL ancestor creates them on first use).
-5. `VISION.md`: A root `VISION.md` is moved into `.along/VISION.md` (or merged under a `needs-restructure` marker the agent resolves); there is never a second copy.
-6. Pipeline: rule packs, git merge drivers, runtime hooks, migration.
+3. `.cursor/rules/along.mdc` (at non-nested architecture roots; skipped in nested `REF` contexts): Scaffolds a create-only Cursor MDC pointer rule (`description`, `globs: "*"`, `alwaysApply: true`) pointing to `AGENTS.md`, `.along/ISSUES.md`, `.along/CONSTRAINTS.md`, `.along/PROTOCOL.md`, `docs/INDEX.md` / `along kb-search`, and canonical `along` CLI workflows. Re-running `along init` never overwrites an existing `.cursor/rules/along.mdc` or unrelated files under `.cursor/`.
+4. `.gitattributes`: Configures `merge=union` for `.along/HISTORY.md` and `.along/DECISIONS.md` to prevent merge collisions across branches.
+5. `.along/`: Creates the persistent repository memory skeleton (`ISSUES/`, `DECISIONS/`, `MILESTONES/`, `SESSIONS/`, `docs/`; `GLOSSARY.md` and the `VISION.md` skeleton at the repository root - a nested context under a FULL ancestor creates them on first use).
+6. `VISION.md`: A root `VISION.md` is moved into `.along/VISION.md` (or merged under a `needs-restructure` marker the agent resolves); there is never a second copy.
+7. Pipeline: rule packs (`along rules attach`), git merge drivers (`along git setup`), runtime hooks (`along hook install --runtime all`, which writes local `.cursor/hooks.json` alongside the other runtimes unless `--no-hooks` is passed), and migration (`along migrate --apply`).
 
 The agent then works through the report's `AGENT ACTIONS` (imported VISION section, root notes such as `ROADMAP.md`, `## Project specifics`) and, on a re-run, asks the `RE-RUN QUESTIONS`. See [Along CLI Command Reference](./topic--cli-reference.md).
 
@@ -4993,7 +5013,7 @@ this one.
 
 # Skills & Slash Commands Technical Reference
 
-Along provides an integrated suite of **22 singular automation skills** operating across Claude Code, OpenAI Codex, OpenCode, and Google Antigravity.
+Along provides an integrated suite of **22 singular automation skills** operating across Claude Code, OpenAI Codex, OpenCode, Google Antigravity, DeepSeek Harness, and Cursor.
 
 Each skill is built on a domain-first naming pattern (`along-<entity>-<action>`), guarantees clean ASCII output, operates on strongly typed repository entities, and can be invoked either explicitly via slash commands/CLI or automatically via semantic intent recognition.
 
@@ -5054,30 +5074,30 @@ flowchart TD
 ## 1. Bootstrap & Repository Protocol Management
 
 ### `along-init`
-- **What it is**: The foundation bootstrapping engine for Along in any repository. Scaffolds or refreshes root `AGENTS.md` (carrying the managed protocol block), `CLAUDE.md`, `.gitattributes` (with `merge=union`), and the `.along/` directory skeleton (`ISSUES/`, `DECISIONS.md`, `MILESTONES/`, `SESSIONS/`, `docs/`; `GLOSSARY.md` and the `VISION.md` skeleton only where the context is not nested under a FULL ancestor).
+- **What it is**: The foundation bootstrapping engine for Along in any repository. Scaffolds or refreshes root `AGENTS.md` (carrying the managed protocol block), `CLAUDE.md`, a create-only `.cursor/rules/along.mdc` pointer rule at non-nested architecture roots, `.gitattributes` (with `merge=union`), and the `.along/` directory skeleton (`ISSUES/`, `DECISIONS.md`, `MILESTONES/`, `SESSIONS/`, `docs/`; `GLOSSARY.md` and the `VISION.md` skeleton only where the context is not nested under a FULL ancestor).
 - **Architectural Rationale**:
   - *Idempotent Managed Block*: Never overwrites custom human developer instructions in `AGENTS.md`; only refreshes the block between `<!-- BEGIN ALONG-PROTOCOL ... -->` and `<!-- END ALONG-PROTOCOL -->`.
   - *Core + On-Demand Reference*: the block is a small always-loaded core; situational procedure lives in the managed `.along/PROTOCOL.md` (rendered from `skills/along-init/protocol-reference.md` at FULL roots, refreshed only while it carries the managed marker), pulled via `/along-kb-search`. Both are rendered for the active gate strictness profile.
-  - *Non-Destructive Initialization*: Creates directories and template files only if missing, preserving existing project history.
-  - *Deterministic Engine, Judgment by the Agent*: `along init` performs every mechanical step (FULL/REF protocol block bounded by the git working tree, hand-written `AGENTS.md` adoption under `## Project specifics`, root `VISION.md` moved into `.along/VISION.md`, rule packs, merge drivers, hooks, migration). The agent then decomposes an imported VISION section, routes root notes (`ROADMAP.md`, `ARCHITECTURE.md`, ...) and runs the re-run dialog.
+  - *Non-Destructive Initialization*: Creates directories and template files only if missing, preserving existing project history as well as existing `.cursor/rules/along.mdc` edits and unrelated files under `.cursor/`.
+  - *Deterministic Engine, Judgment by the Agent*: `along init` performs every mechanical step (FULL/REF protocol block bounded by the git working tree, hand-written `AGENTS.md` adoption under `## Project specifics`, create-only `.cursor/rules/along.mdc` at architecture roots, root `VISION.md` moved into `.along/VISION.md`, rule packs, merge drivers, hooks, migration). The agent then decomposes an imported VISION section, routes root notes (`ROADMAP.md`, `ARCHITECTURE.md`, ...) and runs the re-run dialog.
 - **Invocation Triggers**:
   - *Explicit*: `/along-init`, `install.ps1`, `install.sh`.
   - *Semantic / Automatic*: Triggered when an agent detects an uninitialized repository, missing `AGENTS.md`, or a user prompt like *"Set up Along in this repo"*, *"Initialize agent instructions"*.
-- **Entities Operated On**: `AGENTS.md`, `CLAUDE.md`, `.gitattributes`, `.along/ISSUES/`, `.along/DECISIONS.md`, `docs/`.
+- **Entities Operated On**: `AGENTS.md`, `CLAUDE.md`, `.cursor/rules/along.mdc`, `.gitattributes`, `.along/ISSUES/`, `.along/DECISIONS.md`, `docs/`.
 - **Ecosystem Chaining**: Followed immediately by `/along-kb-sync` (to ingest `README.md`) and `/along-dep-scan`.
 
 ---
 
 ### `along-update`
-- **What it is**: Automated protocol, skill, and runtime hook synchronizer. Checks and pulls latest Along skills, migrations, and protocol definitions across user home directories (`~/.claude`, `~/.codex`, `~/.gemini`) and local repositories, and automatically reconciles runtime lifecycle hooks across supported agent environments.
+- **What it is**: Automated protocol, skill, and runtime hook synchronizer. Checks and pulls latest Along skills, migrations, and protocol definitions across user home directories (`~/.claude`, `~/.codex`, `~/.gemini`, `~/.dsh`, `~/.cursor`, `~/.config/opencode`) and local repositories, reconciles commit attribution (`~/.claude/settings.json`, `~/.cursor/cli-config.json`), and reconciles global runtime lifecycle hooks across supported agent environments (keeping global Cursor hooks opt-in via `along hook install --runtime cursor --global`).
 - **Architectural Rationale**:
   - Eliminates skill drift across multiple developer machines while isolating updates to the target repository by default (global machine skills update requires an explicit `--global` flag).
   - Automatically executes retroactive migration scripts (`scripts/migrate_protocol.py`) to upgrade legacy front-matter schemas and directory layouts without data loss.
-  - Automatically scaffolds and updates runtime lifecycle hooks (`.agents/hooks.json`, `.claude/settings.json`, `.codex/hooks.json`), guaranteeing that mechanical quality gates and typography invariants are enforced across all active agent tools without manual setup.
+  - Reconciles global runtime lifecycle hooks (`~/.gemini/config/hooks.json`, `~/.claude/settings.json`, `~/.codex/hooks.json`, `~/.config/opencode/plugins/along-gates.js`, `~/.dsh/profiles/*/cordis.patch.yml`), reconciles Claude and Cursor commit attribution (`cli-config.json`), and purges legacy local hooks (including `.cursor/hooks.json`) from consumer repositories while preserving user rules and unrelated keys.
 - **Invocation Triggers**:
   - *Explicit*: `/along-update`, `along update` (fallback: `python ~/.along/bin/along_exec.py update`).
   - *Semantic / Automatic*: Triggered on protocol version mismatch, outdated skills warnings, or prompts like *"Upgrade Along protocol"*, *"Update agents"*.
-- **Entities Operated On**: Global skill folders (`~/.gemini/config/skills/along-*`), target repository `AGENTS.md`, `scripts/`, and runtime hook configurations (`.claude/`, `.codex/`, `.agents/`).
+- **Entities Operated On**: Global skill folders (`~/.gemini/config/skills/along-*`, `~/.claude/skills/along-*`, `~/.codex/skills/along-*`, `~/.dsh/skills/along-*`, `~/.cursor/skills/along-*`, `~/.config/opencode/commands/along-*.md`), target repository `AGENTS.md`, `scripts/`, and runtime hook/attribution configurations (`.claude/`, `.codex/`, `.agents/`, `.cursor/`).
 - **Ecosystem Chaining**: Runs `migrate_protocol.py`, reconciles runtime hooks, and triggers `/along-kb-sync --strict` to validate repository link integrity after updates.
 
 ---

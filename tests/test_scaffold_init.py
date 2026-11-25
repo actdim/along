@@ -30,7 +30,7 @@ for _path in (SCRIPTS_DIR, TESTS_DIR):
         sys.path.insert(0, _path)
 
 import hermetic
-from alongkit import migration, proc, scaffold, textio
+from alongkit import frontmatter, markdown, migration, proc, scaffold, textio
 
 INIT_ENGINE = os.path.join(SCRIPTS_DIR, "along_init.py")
 MIGRATE_ENGINE = os.path.join(SCRIPTS_DIR, "migrate_protocol.py")
@@ -242,6 +242,98 @@ class TestAlongInit(_TempRepo):
         self.assertTrue(os.path.isfile(os.path.join(nested, ".along", "ISSUES.md")))
         self.assertTrue(os.path.isfile(self.path(".along", "GLOSSARY.md")), "the root keeps its glossary")
         self.assertTrue(os.path.isfile(self.path(".along", "VISION.md")), "the root keeps its vision")
+
+    def test_cursor_rule_created_with_valid_frontmatter_and_pointers(self):
+        res = self.run_init(None, *FAST_FLAGS, "--json")
+        self.assertEqual(res.returncode, 0, res.stderr)
+        report = json.loads(res.stdout)
+        self.assertIn(".cursor/rules/along.mdc", report["created"])
+
+        rule_path = self.path(*scaffold.CURSOR_RULE_RELPATH)
+        self.assertTrue(os.path.isfile(rule_path))
+        content = read_fixture(rule_path)
+        self.assertTrue(all(ord(ch) < 128 for ch in content), "rule template must stay pure ASCII")
+        self.assertEqual(frontmatter.lint(content), [])
+
+        fields, body = frontmatter.parse(content)
+        self.assertIs(fields.get("alwaysApply"), True)
+        self.assertTrue(isinstance(fields.get("description"), str) and fields["description"].strip())
+        self.assertEqual(fields.get("globs"), "*")
+
+        for expected in (
+            "../../AGENTS.md",
+            ".along/ISSUES.md",
+            ".along/CONSTRAINTS.md",
+            "../../docs/INDEX.md",
+            "along kb-search",
+            "along start",
+            "along test",
+            "along build",
+            "along commit",
+            "along wrap",
+        ):
+            self.assertIn(expected, body)
+
+        self.assertEqual(
+            os.path.normcase(markdown.resolve_target("../../AGENTS.md", rule_path, self.root)),
+            os.path.normcase(os.path.abspath(self.path("AGENTS.md"))),
+        )
+        self.assertEqual(
+            os.path.normcase(markdown.resolve_target("../../docs/INDEX.md", rule_path, self.root)),
+            os.path.normcase(os.path.abspath(self.path("docs", "INDEX.md"))),
+        )
+
+    def test_cursor_rule_rerun_is_idempotent_and_preserves_custom_files(self):
+        self.assertEqual(self.run_init(None, *FAST_FLAGS).returncode, 0)
+        rule_path = self.path(*scaffold.CURSOR_RULE_RELPATH)
+        original = read_fixture(rule_path)
+
+        rerun_res = self.run_init(None, *FAST_FLAGS, "--json")
+        self.assertEqual(rerun_res.returncode, 0, rerun_res.stderr)
+        rerun_report = json.loads(rerun_res.stdout)
+        self.assertIn(".cursor/rules/along.mdc", rerun_report["untouched"])
+        self.assertEqual(read_fixture(rule_path), original)
+
+        custom_along = "---\ndescription: Custom\nglobs: \"*.py\"\nalwaysApply: false\n---\n\n# Keep user edits\n"
+        custom_other = "---\ndescription: Other\nglobs: \"*.ts\"\nalwaysApply: false\n---\n\n# Custom rule\n"
+        hooks_json = '{"version": 1, "hooks": {}}\n'
+        write_fixture(rule_path, custom_along)
+        other_rule = self.path(".cursor", "rules", "custom.mdc")
+        other_hooks = self.path(".cursor", "hooks.json")
+        write_fixture(other_rule, custom_other)
+        write_fixture(other_hooks, hooks_json)
+
+        custom_res = self.run_init(None, *FAST_FLAGS, "--json")
+        self.assertEqual(custom_res.returncode, 0, custom_res.stderr)
+        custom_report = json.loads(custom_res.stdout)
+        self.assertIn(".cursor/rules/along.mdc", custom_report["untouched"])
+        self.assertNotIn(".cursor/rules/along.mdc", custom_report["created"])
+        self.assertNotIn(".cursor/rules/along.mdc", custom_report["updated"])
+        self.assertEqual(read_fixture(rule_path), custom_along)
+        self.assertEqual(read_fixture(other_rule), custom_other)
+        self.assertEqual(read_fixture(other_hooks), hooks_json)
+
+    def test_cursor_rule_dry_run_does_not_create_cursor_dir(self):
+        res = self.run_init(None, "--dry-run", *FAST_FLAGS, "--json")
+        self.assertEqual(res.returncode, 0, res.stderr)
+        report = json.loads(res.stdout)
+        self.assertTrue(report["dry_run"])
+        self.assertIn(".cursor/rules/along.mdc", report["created"])
+        self.assertFalse(os.path.exists(self.path(".cursor")))
+
+    def test_cursor_rule_skipped_for_nested_subproject(self):
+        os.makedirs(self.path(".git"))
+        self.assertEqual(self.run_init(None, *FAST_FLAGS).returncode, 0)
+        self.assertTrue(os.path.isfile(self.path(*scaffold.CURSOR_RULE_RELPATH)))
+
+        nested = self.path("packages", "lib")
+        os.makedirs(nested)
+        res = self.run_init(nested, *FAST_FLAGS, "--json")
+        self.assertEqual(res.returncode, 0, res.stderr)
+        report = json.loads(res.stdout)
+        self.assertEqual(report["protocol_variant"], "REF")
+        self.assertNotIn(".cursor/rules/along.mdc", report["created"])
+        self.assertFalse(os.path.exists(os.path.join(nested, ".cursor")))
 
 
 class TestMigrationStandalonePass(unittest.TestCase):

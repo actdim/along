@@ -4,8 +4,8 @@ slug: runtime-hooks-and-gates
 title: Runtime Lifecycle Hooks & Mechanical Gates
 type: architecture
 created: 2026-09-11
-updated: 2026-11-15
-tags: [hooks, gates, runtime, enforcement, antigravity, claude, codex, typography, cli-safety, destructive-command, attribution]
+updated: 2026-11-25
+tags: [hooks, gates, runtime, enforcement, antigravity, claude, codex, cursor, typography, cli-safety, destructive-command, attribution]
 sources:
   - path: scripts/alongkit/attribution.py
   - path: scripts/alongkit/repochecks.py
@@ -25,7 +25,7 @@ sources:
 
 Passive prose instructions in `AGENTS.md` and `skills/*/SKILL.md` decay as agent conversation transcripts expand. When context windows fill, probabilistic LLMs cut corners, emit forbidden non-ASCII typography (em-dashes, curly quotes, guillemets), write heredocs over shell tools, or attempt to terminate turns prematurely without executing tests.
 
-The Along Runtime Hook and Gate System establishes deterministic, programmatic interception at the agent harness boundary. Rather than relying on fragile in-process monkey-patching or invasive Git-level hooks (`.git/hooks/*`), Along hooks directly into host agent runtime lifecycle events (`PreToolUse`, `PostToolUse`, `Stop`) supported natively by Google Antigravity, Claude Code, and OpenAI Codex.
+The Along Runtime Hook and Gate System establishes deterministic, programmatic interception at the agent harness boundary. Rather than relying on fragile in-process monkey-patching or invasive Git-level hooks (`.git/hooks/*`), Along hooks directly into host agent runtime lifecycle events (`PreToolUse`, `PostToolUse`, `Stop`, `UserPromptSubmit`) supported by Google Antigravity, Claude Code, OpenAI Codex, OpenCode, DeepSeek Harness, and optionally Cursor (`.cursor/hooks.json` / `~/.cursor/hooks.json`).
 
 ```text
 +-------------------------------------------------------------------------+
@@ -34,6 +34,7 @@ The Along Runtime Hook and Gate System establishes deterministic, programmatic i
 |       Claude Code (.claude/settings.json)                               |
 |       OpenAI Codex (.codex/hooks.json)                                  |
 |       DeepSeek Harness (.dsh/cordis.patch.yml)                          |
+|       Cursor (.cursor/hooks.json, optional)                             |
 +-------------------------------------------------------------------------+
                                    |
                          stdin (JSON / protojson)
@@ -61,6 +62,7 @@ The Along Runtime Hook and Gate System establishes deterministic, programmatic i
 |     - ClaudeCodeAdapter: exit code 0 (allow) / 2 (deny + stderr)        |
 |     - CodexAdapter: exit code 0 (allow) / 2 (deny + stderr)             |
 |     - DeepSeekHarnessAdapter: exit code 0 (allow) / 2 (deny + stderr)   |
+|     - GenericCliAdapter (Cursor / generic): exit 0 (allow) / 2 (deny)   |
 +-------------------------------------------------------------------------+
 ```
 
@@ -108,7 +110,7 @@ For full specification and architecture, see [Declarative Gate Engine & Traceabi
 - **Claude Code hook schema**: `along hook install --runtime claude [--global]` writes the nested schema Claude Code reads, `{"matcher": ..., "hooks": [{"type": "command", "command": ..., "timeout": 30}]}`, for `PreToolUse` (all Claude aliases including `Write`, `Edit`, `MultiEdit`, `NotebookEdit`, `Bash`, `PowerShell`, `Read`, `Grep`, `Glob`, `LS`, `Task`, `Agent`, `TodoWrite`, `SendMessage` plus the `default_gates.yaml` runtime union), `PostToolUse` (edits, shells, and `ExitPlanMode`), `Stop` and `UserPromptSubmit` (no matcher; records the time of the user's last message, see 2.8). Legacy flat `{matcher, command}` entries, which Claude Code ignores, are migrated in place; foreign hooks are kept.
 - **`CodexAdapter`**: Translates OpenAI Codex CLI and headless harness JSON payloads to `HookEvent`, mapping write/create/edit/patch, shell/bash/exec, read/list/grep/glob, delete, and subagent tools to canonical tool names. Formats exit code 0 for allow, and exit code 2 with the remediation message written to stderr for gate denials.
 - **`DeepSeekHarnessAdapter`**: Translates DeepSeek Harness (DSH) lifecycle events mounted through `@deepseek-ai/dsh-hooks-claude-code`. Normalizes Windows (`tool-pwsh`) and Unix (`tool-bash`) execution to `run_command`, filesystem mutations (`tool-fs`, `fs_write`, `fs_edit`) to `write_to_file` and `replace_file_content`, and search (`tool-fs-search`) to `find_by_name`. Formats exit code 0 for allow, and exit code 2 with the stderr remediation message for gate denials. Configured via `along hook install --runtime dsh` into `cordis.patch.yml`.
-- **`GenericCliAdapter`**: Translates generic CLI tool invocations, terminal proxy wrappers, Cursor (`.cursor/hooks.json`), and OpenCode to `HookEvent`. Normalizes Cursor's native tool names (`Shell`, `Read`, `Write`, `Edit`, `StrReplace`, `Delete`, `Grep`, `Glob`, `LS`, `Task`, `TodoWrite`, `run_terminal_cmd`, `beforeReadFile`, `workspace_roots`) and arguments across tool types, supports plain command strings as fallback `run_command`, and formats exit code 0 for allow or exit code 2 with stderr remediation message for gate denials. For OpenCode 2.3.2+, read-only tools (`read`, `glob`, `grep`, `webfetch`, `list`) are explicitly allowlisted to canonical read/search tools without `unmapped_tool` audit noise, while non-read-only tools (`skill`, `task`, `todowrite`) map to canonical gated tools (`invoke_subagent`, `Task`, `write_to_file`).
+- **`GenericCliAdapter`**: Translates generic CLI tool invocations, terminal proxy wrappers, Cursor (`.cursor/hooks.json` / `~/.cursor/hooks.json`), and OpenCode to `HookEvent`. Normalizes Cursor's lifecycle events (`preToolUse`, `beforeShellExecution`, `beforeFileEdit`, `beforeReadFile`, `postToolUse`, `afterShellExecution`, `afterFileEdit`, `stop`, `beforeSubmitPrompt`), native tool names (`Shell`, `Read`, `Write`, `Edit`, `StrReplace`, `Delete`, `Grep`, `Glob`, `LS`, `Task`, `TodoWrite`, `run_terminal_cmd`, `beforeReadFile`, `workspace_roots`), and arguments across tool types, supports plain command strings as fallback `run_command`, and formats exit code 0 for allow or exit code 2 with stderr remediation message for gate denials. `get_cursor_hook_manifest` emits `preToolUse`, `postToolUse`, `stop`, and `beforeSubmitPrompt` (invoking `--event UserPromptSubmit`). Cursor's remaining platform limits are recorded in `RUNTIME_HOOK_NARROWINGS['cursor']` (`unexpressible_tools`: `view_image`, `send_message`, `spawn_subagent`, plus IDE editor-tab/`@`-mention reads bypassing hooks; `missing_capabilities`: `ask`, `global_installer_hooks`) and reported by `along doctor`. For OpenCode 2.3.2+, read-only tools (`read`, `glob`, `grep`, `webfetch`, `list`) are explicitly allowlisted to canonical read/search tools without `unmapped_tool` audit noise, while non-read-only tools (`skill`, `task`, `todowrite`) map to canonical gated tools (`invoke_subagent`, `Task`, `write_to_file`).
 - **OpenCode V2 Plugin Contract (2.3.2+)**: `along hook install --runtime opencode` installs the V2 plugin (`{ id: "along-gates", setup }`) using `tool.hook("execute.before"|"execute.after")`, `session.hook("experimental.idle"|"prompt")`, and `shell.hook("create.before")`. `experimental.idle` (excluding `background: true`) serves as the Stop-equivalent signal, deduped per session turn. `along doctor` reports `mechanical` for OpenCode only after validating the installed plugin against the 2.3.2 contract and observing a lifecycle heartbeat (`Stop`/`experimental.idle`/`UserPromptSubmit`).
 
 ### 2.5 Execution Pipeline & Dispatcher (`alongkit.hooks.engine` & `scripts/along_hook.py`)
@@ -272,8 +274,8 @@ When an agent emits a tool call, the execution loop flows through the hook harne
    - `~/.along/venv` carries the runtime dependencies only. The repository's own test hook (`.along/scripts/test.py`) first calls `bootstrap.ensure_project_env()`, which re-executes through `uv run --project <repo>` so the suite gets the `dev` group (the dashboard stack); without `uv`, tests that need that stack are skipped with a reason.
    - On Windows, global hook commands use forward slashes only (`python C:/Users/<user>/.along/bin/along_hook.py ...`). Claude Code runs hooks through Git Bash, which strips backslashes; Python then cannot open the script and exits `2`, blocking every tool. Re-running `along update --global` rewrites old entries in place.
 6. **Global Hook Centralization & Recursive Monorepo Purge**:
-   - Since Along v3.9.2, runtime hooks are installed globally in user home configurations (`~/.gemini/config/hooks.json`, `~/.claude/settings.json`, `~/.codex/hooks.json`).
-   - Consumer repositories and all nested subprojects are recursively purged of legacy local hooks during `along update`.
+   - Since Along v3.9.2, runtime hooks are installed globally in user home configurations (`~/.gemini/config/hooks.json`, `~/.claude/settings.json`, `~/.codex/hooks.json`, `~/.config/opencode/plugins/along-gates.js`, `~/.dsh/profiles/*/cordis.patch.yml`), while global Cursor hooks (`~/.cursor/hooks.json`) stay opt-in (`along hook install --runtime cursor --global`).
+   - Consumer repositories and all nested subprojects are recursively purged of legacy local hooks (`.agents/hooks.json`, `.claude/settings.json`, `.codex/hooks.json`, `.cursor/hooks.json`) during `along update`.
    - Out-of-band execution via `along update` in an external OS terminal serves as the canonical disaster recovery path if runtime hooks are ever damaged.
 
 ## 4a. Protocol Rule Enforcement Audit
@@ -348,12 +350,12 @@ Gates are mechanical only where the runtime loads Along's `PreToolUse`/`Stop` ho
 | Claude Cowork | not loaded (Cowork reads plugins from the claude.ai account, not `~/.claude`) | no (Cowork ignores `settings.json`; plugin hooks are tracked in `feat--cowork-plugin-skill-packaging`) | advisory |
 | OpenCode | commands (`~/.config/opencode/commands`) | yes (`plugins/along-gates.js`, V2 2.3.2+) | mechanical once `along hook install --runtime opencode` ran, hook names match 2.3.2 contract, and a lifecycle heartbeat is recorded |
 | DeepSeek Harness | auto (`~/.dsh/skills`) | yes (`cordis.patch.yml` via bridge) | mechanical once `along hook install --runtime dsh` ran |
-| Cursor | rules only (opt-in `.cursor/hooks.json`) | optional (`along hook install --runtime cursor`) | advisory by default; when hooks are installed, `along doctor` reports Cursor's explicit narrowing (`view_image`, `send_message`, `spawn_subagent`, no `ASK`) |
+| Cursor | rules (`.cursor/rules/along.mdc`) + auto (`~/.cursor/skills`) | optional (`.cursor/hooks.json` or `~/.cursor/hooks.json` covering `preToolUse`, `postToolUse`, `stop`, `beforeSubmitPrompt` via `along hook install --runtime cursor [--global]`) | advisory by default (project rules remain advisory until hooks are installed); mechanical on hooked tools once installed; `along doctor` reports `RUNTIME_HOOK_NARROWINGS['cursor']` (`view_image`, `send_message`, `spawn_subagent`, IDE editor-tab/`@`-mention bypass, no native `ASK`, opt-in global installer) |
 | plain shell, human | rules only | no | advisory |
 
 Advisory runtimes are still covered at commit time by the portable layer: `along hooks install --git` (opt-in, local) and the CI job `along gates check --ci` enforce the gates whose catalogue entry lists `git` / `ci` (typography, conflict markers, anti-stub on added lines, issue binding, AI co-author trailers, projection freshness, rule pack integrity), regardless of which agent or human made the commit.
 
-Runtime detection (`entities.detect_agent`) honours `--agent` and `ALONG_AGENT` first; Claude Cowork is recognised by `ALONG_RUNTIME=cowork`, or by `CLAUDE_CODE_HOST_HTTP_PROXY_PORT` together with a `/sessions/` home (markers observed 2026-09-27, heuristic).
+Runtime detection (`entities.detect_agent`) honours `--agent` and `ALONG_AGENT` first; Claude Cowork is recognised by `ALONG_RUNTIME=cowork`, or by `CLAUDE_CODE_HOST_HTTP_PROXY_PORT` together with a `/sessions/` home (markers observed 2026-09-27, heuristic); Cursor is recognised when `CURSOR_AGENT`, `CURSOR_TRACE_ID`, or `CURSOR_CLI` is set in the environment (unless a higher-precedence runtime marker such as `CLAUDECODE` is present).
 
 ### Working from Claude Cowork
 

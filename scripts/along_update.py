@@ -103,6 +103,7 @@ def get_global_skill_paths():
         os.path.join(user_home, ".claude", "skills", "along-init", "protocol.md"),
         os.path.join(user_home, ".codex", "skills", "along-init", "protocol.md"),
         os.path.join(dsh_home, "skills", "along-init", "protocol.md"),
+        os.path.join(user_home, ".cursor", "skills", "along-init", "protocol.md"),
         os.path.join(user_home, ".config", "opencode", "actdim-along", "protocol.md"),
         # Legacy fallbacks
         os.path.join(user_home, ".gemini", "config", "skills", "init-agents", "protocol.md"),
@@ -164,6 +165,7 @@ def purge_legacy_global_skills():
         os.path.join(user_home, ".claude", "skills"),
         os.path.join(user_home, ".codex", "skills"),
         os.path.join(dsh_home, "skills"),
+        os.path.join(user_home, ".cursor", "skills"),
         os.path.join(user_home, ".config", "opencode", "skills"),
     ]
     purged = 0

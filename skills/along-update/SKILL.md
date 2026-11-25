@@ -1,17 +1,17 @@
 ---
 name: along-update
-description: Check and update Along protocol and skills to the latest version across local repository, global installation, and GitHub. Automatically reconciles runtime lifecycle hooks (.claude, .codex, .agents), cleans up legacy un-namespaced skills, and optionally runs post-update sync engines. Use when the user asks to update agents/along, upgrade the repository protocol, or invokes /along-update.
+description: Check and update Along protocol and skills to the latest version across local repository, global installation, and GitHub. Reconciles global skills (including ~/.cursor/skills/), commit attribution (.claude/settings.json, .cursor/cli-config.json), and runtime lifecycle hooks (.claude, .codex, .agents, .config/opencode, .dsh; global Cursor hooks stay opt-in), cleans up legacy local hooks and un-namespaced skills, and optionally runs post-update sync engines. Use when the user asks to update agents/along, upgrade the repository protocol, or invokes /along-update.
 ---
 
 # Along Update (`/along-update`)
-Discovers all existing agent contexts across the repository tree and updates them to the latest protocol standard: synchronizing global skill installations, executing versioned migrations, automatically configuring runtime lifecycle hooks for supported agents (Antigravity, Claude Code, OpenAI Codex), rewriting legacy inbound links, and validating repository-wide link integrity.
+Discovers all existing agent contexts across the repository tree and updates them to the latest protocol standard: synchronizing global skill installations (`--global`, including `~/.cursor/skills/`), executing versioned migrations, reconciling commit attribution (`~/.claude/settings.json`, `~/.cursor/cli-config.json`) and global runtime lifecycle hooks for supported agents (Antigravity, Claude Code, OpenAI Codex, OpenCode, DeepSeek Harness; global Cursor hooks remain opt-in via `along hook install --runtime cursor --global`), purging legacy local hooks (including `.cursor/hooks.json`), rewriting legacy inbound links, and validating repository-wide link integrity.
 
 On the git root it also refreshes Git auto-merge protection (`along git setup`): the committed `.gitattributes` `-merge` block for Along markdown and the per-clone merge driver bindings in `.git/info/attributes`.
 
 ## When to use
 - The user requests an update of Along protocol, instructions, or skills (`/along-update`, "update along", "upgrade protocol").
 - Upgrading an existing workspace from an older protocol version.
-- Reconciling global agent environments (Claude, Codex, Gemini, OpenCode).
+- Reconciling global agent environments (Claude, Codex, Gemini, OpenCode, DeepSeek Harness, Cursor).
 
 ## Execution
 

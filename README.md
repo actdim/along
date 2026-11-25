@@ -2,7 +2,7 @@
 
 [![Tests](https://github.com/actdim/along/actions/workflows/tests.yml/badge.svg)](https://github.com/actdim/along/actions/workflows/tests.yml) - Python 3.10-3.13 on Linux and Windows.
 
-ActDim Along is a provider-agnostic context and memory protocol for AI coding agents (`ALONG-PROTOCOL v4.9.1`) that provides persistent in-repo task tracking, an evergreen architecture wiki, and mechanical quality gates across Claude Code, Google Antigravity, OpenAI Codex, and OpenCode.
+ActDim Along is a provider-agnostic context and memory protocol for AI coding agents (`ALONG-PROTOCOL v4.9.1`) that provides persistent in-repo task tracking, an evergreen architecture wiki, and quality gates across Claude Code, Google Antigravity, OpenAI Codex, OpenCode, DeepSeek Harness, and Cursor.
 
 ---
 
@@ -20,7 +20,7 @@ powershell -NoProfile -ExecutionPolicy Bypass -Command "irm https://raw.githubus
 curl -fsSL https://raw.githubusercontent.com/actdim/along/main/install.sh | bash
 ```
 
-The installer bootstraps the repository into `~/.cache/actdim-along/repo` (via shallow `git clone` or archive fallback) and configures skills across Claude Code, OpenAI Codex, Google Antigravity, and OpenCode.
+The installer bootstraps the repository into `~/.cache/actdim-along/repo` (via shallow `git clone` or archive fallback) and configures skills across Claude Code, OpenAI Codex, Google Antigravity, OpenCode, DeepSeek Harness, and Cursor (`~/.cursor/skills/`). Global Cursor hooks remain opt-in (`along hook install --runtime cursor --global`), while `along init` scaffolds a create-only `.cursor/rules/along.mdc` pointer rule at architecture roots.
 
 ### Python Package Installation (Core vs. Extras)
 
@@ -80,7 +80,7 @@ Along addresses these challenges through a dual-tier structure: an evergreen arc
 | **Persistent In-Repo Memory** | Durable, git-tracked memory (`.along/`): DAG issues (spikes and `risk`-tagged blockers included), append-only ADR logs, milestones, and session records that travel with the codebase. |
 | **Autonomous Multi-Agent Teams** | Sequential living-plan state machine (`along-team`): Supervisor -> Scout -> Architect -> Implementer -> Reviewer with session blackboards, retry limits, and single-agent degradation. |
 | **Runtime Worktree Workspace Isolation** | Ephemeral Git worktree isolation (`along worktree`, `/along-team --worktree`) satisfying the 3-part Environment Readiness Contract: NTFS junctions / symlinks for dependencies (`node_modules`, `.venv`), `.env` configuration copying, real-time session blackboard sharing, and Windows file lock resilient teardown. |
-| **Runtime Mechanical Prose Enforcement** | Active agent lifecycle interception (`PreToolUse`, `Stop`) turning markdown guidelines into hard runtime errors across Claude Code, Antigravity, and Codex, with machine-checked bi-directional traceability (`along hook verify`). |
+| **Runtime Mechanical Prose Enforcement** | Active agent lifecycle interception (`PreToolUse`, `Stop`) turning markdown guidelines into hard runtime errors across Claude Code, Antigravity, Codex, OpenCode, DeepSeek Harness, and optionally Cursor (`along hook install --runtime cursor`), with machine-checked bi-directional traceability (`along hook verify`). |
 | **Token-Efficient LLM-Wiki (`docs/`)** | Modular knowledge base with in-place source provenance, SHA-256 drift detection, deterministic `llms.txt` compilation, and targeted snippet search (`along-kb-search`) avoiding full-file context ingestion. |
 | **Stack-Agnostic Lifecycle & Polyglot Hooks** | Unified agent execution contract (`/along-build`, `/along-test`, `/along-dev`, `/along-version-bump`, `/along-dep-scan`) with zero-config stack auto-detection and polyglot repository hooks (`.along/scripts/` in Python, Bash, PowerShell, Batch). |
 | **Zero-Conflict Git Concurrency** | Single Source of Truth (SSOT) atomic files vs compiled projections (`ISSUES.md`, `INDEX.md`), union merges (`merge=union`), and decentralized date-slug ADRs that avoid collisions in parallel branches. |
@@ -160,9 +160,9 @@ This repository follows the **ActDim Along Protocol** for AI agent context, pers
 - **Dual-Tier Memory**: Evergreen LLM-Wiki in `docs/` and living governance memory in `.along/` survive across all AI sessions.
 - **Zero-Vector Unified Retrieval**: Fast local snippet search across architecture, decisions, and issues returning bounded snippets (< 150 tokens) without full-file ingestion or external database dependencies.
 - **Runtime Worktree Isolation**: Autonomous agent tasks execute in isolated Git worktrees with automatic dependency linking, preserving clean developer checkouts.
-- **Mechanical Quality Gates**: Protocol rules, clean typography, and issue bindings are mechanically enforced before tools execute in runtimes that load Along's hooks (Claude Code, Antigravity, Codex); elsewhere they are advisory. The portable baseline for every committer is the CI job `along gates check --ci` plus opt-in git hooks (`along hooks install --git`).
+- **Mechanical Quality Gates**: Protocol rules, clean typography, and issue bindings are mechanically enforced before tools execute in runtimes where Along's hooks are active (Claude Code, Antigravity, Codex, OpenCode, DeepSeek Harness, and optionally Cursor via `along hook install --runtime cursor`); elsewhere (and in Cursor by default before hooks are installed) they are advisory. The portable baseline for every committer is the CI job `along gates check --ci` plus opt-in git hooks (`along hooks install --git`).
 - **Standardized Lifecycle Contract**: Unified commands for build, test, dev, release, and dependency discovery via pluggable `.along/scripts/` hooks.
-- **Provider-Agnostic**: Compatible out of the box with **Claude Code**, **Google Antigravity**, **OpenAI Codex**, and **OpenCode**.
+- **Provider-Agnostic**: Compatible out of the box with **Claude Code**, **Google Antigravity**, **OpenAI Codex**, **OpenCode**, **DeepSeek Harness**, and **Cursor** (`.cursor/rules/along.mdc` + `~/.cursor/skills/`).
 ````
 
 ---
@@ -178,7 +178,7 @@ The repository's complete technical specification is maintained as a living LLM-
 | **Domain Model & Entities** | Machine-parseable schemas for Issues, ADRs, Milestones, and Sessions. | [Domain Model & Entity Ecosystem](./docs/topic--domain-model.md) |
 | **Setup & Workflows** | Installation matrix, repository onboarding, and session lifecycle. | [Setup, Installation & Workflows](./docs/topic--setup-and-workflow.md) |
 | **LLM-Wiki Architecture** | Andrej Karpathy paradigm, source isolation, and token efficiency. | [LLM-Wiki Architecture & Paradigm](./docs/topic--llm-wiki-architecture.md) |
-| **Runtime Hooks & Gates** | Agent lifecycle interception harness across Antigravity, Claude, and Codex, plus the runtime capability matrix: where gates are mechanical and where (Claude Cowork, Cursor, OpenCode) they are advisory. | [Runtime Lifecycle Hooks & Mechanical Gates](./docs/topic--runtime-hooks-and-gates.md) |
+| **Runtime Hooks & Gates** | Agent lifecycle interception harness across Antigravity, Claude, Codex, OpenCode, DeepSeek Harness, and optional Cursor hooks, plus the runtime capability matrix: where gates are mechanical and where (Claude Cowork, Cursor by default) they are advisory. | [Runtime Lifecycle Hooks & Mechanical Gates](./docs/topic--runtime-hooks-and-gates.md) |
 | **Declarative Gates & Traceability** | Extensible YAML gate engine and bi-directional machine-checked matrix. | [Declarative Gate Engine & Traceability Matrix](./docs/topic--declarative-gates-and-traceability.md) |
 
 ## Automation Skills Reference (Grouped by Workflow Phase)
@@ -188,7 +188,7 @@ Along provides **22 singular automation skills** structured across 6 core lifecy
 ### 1. Bootstrap & Repository Protocol Management
 | Skill / Command | Purpose |
 | :--- | :--- |
-| **`along-init`** (`/along-init`) | Scaffold/refresh `AGENTS.md` + `CLAUDE.md` + `.along/` in a folder via the deterministic `along init` engine; a root `VISION.md` moves into `.along/`. |
+| **`along-init`** (`/along-init`) | Scaffold/refresh `AGENTS.md` + `CLAUDE.md` + `.cursor/rules/along.mdc` (at architecture roots) + `.along/` in a folder via the deterministic `along init` engine; a root `VISION.md` moves into `.along/`. |
 | **`along-update`** (`/along-update`) | One-liner update of repository context, protocol, and global skills from GitHub. |
 | **`along-version-bump`** (`/along-version-bump`) | Multi-stack version bump and release orchestrator (Node, Python, Rust, .NET). |
 

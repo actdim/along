@@ -823,7 +823,7 @@ class TestAlongSkillsAndScripts(unittest.TestCase):
     )
 
     #: Tool homes both installers must be able to target.
-    INSTALLER_TARGETS = ("claude", "codex", "opencode", "antigravity")
+    INSTALLER_TARGETS = ("claude", "codex", "opencode", "antigravity", "dsh", "cursor")
 
     def _installer_sources(self):
         sources = {}

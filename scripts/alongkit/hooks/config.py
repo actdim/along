@@ -801,12 +801,24 @@ def hook_entry_commands(item: Any) -> List[str]:
     return commands
 
 
+_HOOK_EVENT_ALIASES: Dict[str, Tuple[str, ...]] = {
+    "beforesubmitprompt": ("userpromptsubmit", "beforesubmitprompt"),
+}
+
+
 def is_along_hook_entry(item: Any, event_name: Optional[str] = None) -> bool:
     """True when a hook entry (either schema) runs along_hook.py, for `event_name` if given."""
+    targets: Optional[Tuple[str, ...]] = None
+    if event_name is not None:
+        key = event_name.lower()
+        targets = tuple(f"--event {name}".lower() for name in _HOOK_EVENT_ALIASES.get(key, (key,)))
     for command in hook_entry_commands(item):
         if "along_hook.py" not in command:
             continue
-        if event_name is None or f"--event {event_name}".lower() in command.lower():
+        if targets is None:
+            return True
+        lowered = command.lower()
+        if any(target in lowered for target in targets):
             return True
     return False
 
@@ -1071,6 +1083,11 @@ def get_cursor_hook_manifest(
                     "command": get_hook_command("cursor", "Stop", is_global=is_global),
                 }
             ],
+            "beforeSubmitPrompt": [
+                {
+                    "command": get_hook_command("cursor", "UserPromptSubmit", is_global=is_global),
+                }
+            ],
         },
     }
 
@@ -1104,15 +1121,16 @@ def install_cursor_hooks(
     spec = get_cursor_hook_manifest(is_global=is_global)
     spec_hooks = spec.get("hooks", {})
 
+    changed = False
     if "version" not in existing:
         existing["version"] = 1
+        changed = True
 
     hooks_container = existing.get("hooks")
     if not isinstance(hooks_container, dict):
         hooks_container = {}
         existing["hooks"] = hooks_container
 
-    changed = False
     for event_name, hook_list in spec_hooks.items():
         cur_list = hooks_container.get(event_name)
         if not isinstance(cur_list, list):

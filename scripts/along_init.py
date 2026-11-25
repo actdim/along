@@ -7,7 +7,7 @@ cannot skip a step:
 - AGENTS.md managed block: FULL at an architecture root, a short REF inside a nested
   folder of the same git working tree; a hand-written file keeps its text below the
   block under `## Project specifics`.
-- CLAUDE.md import line, .gitattributes merge lines.
+- CLAUDE.md import line, .cursor/rules/along.mdc pointer rule, .gitattributes merge lines.
 - `.along/` skeleton (create-only, existing state is never overwritten).
 - Root VISION.md reconciled into `.along/VISION.md` (moved, deduplicated, or merged
   under a `needs-restructure` marker); links to it repointed.
@@ -160,6 +160,14 @@ def scaffold_claude_md(mig, root, report):
         return
     mig.write(path, updated)
     _note(report, "updated" if existing is not None else "created", path, root)
+
+
+def scaffold_cursor_rule(mig, root, report, nested=False):
+    """Create `.cursor/rules/along.mdc` once at a non-nested root; never overwrite user edits."""
+    if nested:
+        return
+    path = os.path.join(root, *scaffold.CURSOR_RULE_RELPATH)
+    write_if_missing(mig, path, scaffold.cursor_rule_template(), report, root)
 
 
 def scaffold_gitattributes(mig, root, report):
@@ -356,8 +364,9 @@ def main(argv=None) -> int:
     scaffold_protocol_reference(mig, root, load_protocol_reference_text(root), report, profile=args.profile)
     scaffold_claude_md(mig, root, report)
     scaffold_gitattributes(mig, root, report)
-    scaffold_merge_protection(root, report, dry_run=args.dry_run)
     nested = is_nested_context(root)
+    scaffold_cursor_rule(mig, root, report, nested=nested)
+    scaffold_merge_protection(root, report, dry_run=args.dry_run)
     scaffold_state_dir(mig, root, report, nested=nested)
     scaffold_vision(mig, root, report, nested=nested)
     write_if_missing(mig, os.path.join(root, "docs", "INDEX.md"),

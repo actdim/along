@@ -1,20 +1,20 @@
 #!/usr/bin/env bash
-# install.sh - install the ALONG skills into Claude Code, Codex, OpenCode and/or Antigravity.
+# install.sh - install the ALONG skills into Claude Code, Codex, OpenCode, Antigravity, DSH and/or Cursor.
 # For Linux / macOS (and Git Bash on Windows).
 #
-# Claude, Codex & Antigravity use the same ~/.<tool>/skills/<name>/SKILL.md format -> the skill folders are copied verbatim.
+# Claude, Codex, Antigravity, DSH & Cursor use the same ~/.<tool>/skills/<name>/SKILL.md format -> the skill folders are copied verbatim.
 # OpenCode uses flat ~/.config/opencode/commands/<name>.md commands -> generated from the same SKILL.md bodies;
 #   along-init's helper files (protocol.md, along_update.py, migrate_protocol.py) are placed in ~/.config/opencode/actdim-along/.
-# The ALONG-PROTOCOL itself is picked up by all four natively via each repo's AGENTS.md.
+# The ALONG-PROTOCOL itself is picked up natively via each repo's AGENTS.md (and .cursor/rules/along.mdc for Cursor).
 #
 # Usage:
 #   ./install.sh                        # all (default), copy
-#   ./install.sh --target=claude        # claude | codex | opencode | antigravity | both (claude+codex) | all
-#   ./install.sh --symlink              # symlink skill folders (claude/codex/antigravity); opencode commands are always generated
+#   ./install.sh --target=claude        # claude | codex | opencode | antigravity | dsh | cursor | both (claude+codex) | all
+#   ./install.sh --symlink              # symlink skill folders (claude/codex/antigravity/dsh/cursor); opencode commands are always generated
 #   ./install.sh --migrate              # also migrate this repository's .along/ structure
 #   ./install.sh --register-mcp         # opt in to code-review-graph MCP registration (default: CLI only)
 #   ./install.sh --uninstall            # remove exactly what the install manifest records
-#   ./install.sh --claude-home=DIR --codex-home=DIR --opencode-home=DIR --antigravity-home=DIR --cursor-home=DIR
+#   ./install.sh --claude-home=DIR --codex-home=DIR --opencode-home=DIR --antigravity-home=DIR --dsh-home=DIR --cursor-home=DIR
 set -euo pipefail
 
 TARGET=all
@@ -152,6 +152,7 @@ HOME_ARGS=(
   --opencode-home "$OPENCODE_HOME"
   --antigravity-home "$ANTIGRAVITY_HOME"
   --dsh-home "$DSH_HOME"
+  --cursor-home "$CURSOR_HOME"
 )
 
 if [ "$UNINSTALL" -eq 1 ]; then
@@ -182,16 +183,17 @@ fi
 src="$SCRIPT_DIR/skills"
 [ -d "$src" ] || { echo "Source skills folder not found: $src" >&2; exit 1; }
 
-do_claude=0; do_codex=0; do_opencode=0; do_antigravity=0; do_dsh=0
+do_claude=0; do_codex=0; do_opencode=0; do_antigravity=0; do_dsh=0; do_cursor=0
 case "$TARGET" in
   claude)      do_claude=1 ;;
   codex)       do_codex=1 ;;
   opencode)    do_opencode=1 ;;
   antigravity) do_antigravity=1 ;;
   dsh)         do_dsh=1 ;;
+  cursor)      do_cursor=1 ;;
   both)        do_claude=1; do_codex=1 ;;
-  all)         do_claude=1; do_codex=1; do_opencode=1; do_antigravity=1; do_dsh=1 ;;
-  *) echo "invalid --target: $TARGET (claude|codex|opencode|antigravity|dsh|both|all)" >&2; exit 1 ;;
+  all)         do_claude=1; do_codex=1; do_opencode=1; do_antigravity=1; do_dsh=1; do_cursor=1 ;;
+  *) echo "invalid --target: $TARGET (claude|codex|opencode|antigravity|dsh|cursor|both|all)" >&2; exit 1 ;;
 esac
 
 purge_legacy_skills() {
@@ -342,6 +344,10 @@ if [ "$do_dsh" -eq 1 ]; then
   install_skillfolders "$DSH_HOME"
   PROVIDER_ARGS+=(dsh)
 fi
+if [ "$do_cursor" -eq 1 ]; then
+  install_skillfolders "$CURSOR_HOME"
+  PROVIDER_ARGS+=(cursor)
+fi
 
 # --- MCP cleanup / optional registration ---
 # By default, code-review-graph executes directly as a CLI engine via uvx (ADR-2026-09-27)
@@ -356,13 +362,15 @@ if [ -n "$PYTHON" ]; then
     "$PYTHON" "$SCRIPT_DIR/scripts/configure_mcp.py" "${mcp_args[@]}" \
       --user-home "$(dirname "$CLAUDE_HOME")" --claude-home "$CLAUDE_HOME" \
       --codex-home "$CODEX_HOME" --opencode-home "$OPENCODE_HOME" \
-      --antigravity-home "$ANTIGRAVITY_HOME" --dsh-home "$DSH_HOME" || true
+      --antigravity-home "$ANTIGRAVITY_HOME" --dsh-home "$DSH_HOME" \
+      --cursor-home "$CURSOR_HOME" || true
   else
     echo "-> code-review-graph MCP cleanup (CLI is default):"
     "$PYTHON" "$SCRIPT_DIR/scripts/configure_mcp.py" --clean "${mcp_args[@]}" \
       --user-home "$(dirname "$CLAUDE_HOME")" --claude-home "$CLAUDE_HOME" \
       --codex-home "$CODEX_HOME" --opencode-home "$OPENCODE_HOME" \
-      --antigravity-home "$ANTIGRAVITY_HOME" --dsh-home "$DSH_HOME" || true
+      --antigravity-home "$ANTIGRAVITY_HOME" --dsh-home "$DSH_HOME" \
+      --cursor-home "$CURSOR_HOME" || true
   fi
 else
   echo "   (skipped: python3 not found, so no provider configuration was touched)"
@@ -384,8 +392,8 @@ if [ -n "$PYTHON" ] && [ -f "$SCRIPT_DIR/scripts/along_hook.py" ]; then
       "$PYTHON" "$SCRIPT_DIR/scripts/along_hook.py" install --runtime "$provider" --global --target-home "$target_home" || true
     fi
   done
-  # Cursor is not a skill target, but it adds its own commit attribution. Only an
-  # existing Cursor home is touched, and only the attribution key is written.
+  # Global Cursor hooks stay opt-in (along hook install --runtime cursor --global).
+  # Only an existing Cursor home is touched here, and only commit attribution is written.
   "$PYTHON" "$SCRIPT_DIR/scripts/along_hook.py" attribution --runtime cursor --cursor-home "$CURSOR_HOME" || true
 fi
 
@@ -421,6 +429,6 @@ if [ -d "$SCRIPT_DIR/.along" ] || [ -d "$SCRIPT_DIR/.agents" ]; then
   fi
 fi
 
-echo "Done. Claude/Codex/Antigravity skills register next session as /along-* (/along-init, /along-update, /along-dash, etc.); OpenCode picks up /commands, and all read AGENTS.md natively."
+echo "Done. Claude/Codex/Antigravity/DSH/Cursor skills register next session as /along-* (/along-init, /along-update, /along-dash, etc.); OpenCode picks up /commands, and all read AGENTS.md natively."
 echo "     MCP cleanup is reported per provider above (CLI execution via uvx is default; --register-mcp to opt in)."
 echo "     To remove Along again: ./install.sh --uninstall  (removes only what the manifest records)."

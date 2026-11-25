@@ -75,7 +75,8 @@ class InstallerCase(unittest.TestCase):
             codex=os.path.join(home, ".codex"),
             opencode=os.path.join(home, ".config", "opencode"),
             antigravity=os.path.join(home, ".gemini", "config"),
-            dsh=os.path.join(home, ".dsh"))
+            dsh=os.path.join(home, ".dsh"),
+            cursor=os.path.join(home, ".cursor"))
 
     def home_arguments(self, home, style):
         """The home overrides in the argument style of one installer."""
@@ -205,6 +206,12 @@ class TestInstalledLayoutPlan(InstallerCase):
         plan = install.planned_files(self.checkout, homes)
         self.assertNotIn(os.path.join(homes.along, "config.json"), plan)
 
+    def test_cursor_gets_skill_folders(self):
+        homes = self.homes_for(self.make_home())
+        plan = install.planned_files(self.checkout, homes, ["cursor"])
+        for skill in install.source_skills(self.checkout):
+            self.assertIn(os.path.join(homes.cursor, "skills", skill, "SKILL.md"), plan)
+
 
 class TestInstallManifestLifecycle(InstallerCase):
 
@@ -289,17 +296,20 @@ class TestMcpRegistrationContract(InstallerCase):
         homes = self.homes_for(home)
         report = {entry["provider"]: entry
                   for entry in install.configure_mcp(install.PROVIDERS, homes)}
-        self.assertEqual(report["claude"]["status"], "registered")
-        for provider in ("codex", "opencode", "antigravity"):
+        for verified_provider in ("claude", "cursor"):
+            self.assertEqual(report[verified_provider]["status"], "registered")
+        for provider in ("codex", "opencode", "antigravity", "dsh"):
             self.assertEqual(report[provider]["status"], "skipped",
                              "an unverified provider must be reported, not written")
             self.assertFalse(os.path.exists(report[provider]["path"]),
                              "nothing may be created at an unverified path")
 
-        with io.open(os.path.join(home, ".claude.json"), "r", encoding="utf-8") as handle:
-            data = json.load(handle)
-        self.assertEqual(data["mcpServers"][install.MCP_SERVER_NAME],
-                         install.MCP_SERVER_ENTRY)
+        for mcp_path in (os.path.join(home, ".claude.json"),
+                         os.path.join(homes.cursor, "mcp.json")):
+            with io.open(mcp_path, "r", encoding="utf-8") as handle:
+                data = json.load(handle)
+            self.assertEqual(data["mcpServers"][install.MCP_SERVER_NAME],
+                             install.MCP_SERVER_ENTRY)
         self.assertEqual(install.MCP_SERVER_ENTRY["args"], [install.MCP_SERVER_PACKAGE])
         self.assertIn("==", install.MCP_SERVER_PACKAGE)
 
@@ -320,6 +330,26 @@ class TestMcpRegistrationContract(InstallerCase):
         again = install.configure_mcp(["claude"], homes)
         self.assertEqual(again[0]["status"], "present")
 
+    def test_cursor_mcp_preserves_existing_and_is_idempotent(self):
+        home = self.make_home()
+        homes = self.homes_for(home)
+        path = os.path.join(homes.cursor, "mcp.json")
+        os.makedirs(homes.cursor, exist_ok=True)
+        with io.open(path, "w", encoding="utf-8") as handle:
+            json.dump({"customTopKey": True, "mcpServers": {"existing-mcp": {"command": "node"}}},
+                      handle)
+
+        first = install.configure_mcp(["cursor"], homes)
+        self.assertEqual(first[0]["status"], "registered")
+        with io.open(path, "r", encoding="utf-8") as handle:
+            data = json.load(handle)
+        self.assertIs(data["customTopKey"], True)
+        self.assertIn("existing-mcp", data["mcpServers"])
+        self.assertEqual(data["mcpServers"][install.MCP_SERVER_NAME], install.MCP_SERVER_ENTRY)
+
+        second = install.configure_mcp(["cursor"], homes)
+        self.assertEqual(second[0]["status"], "present")
+
     def test_an_unparseable_configuration_is_left_alone(self):
         """The previous installer restarted from `{}` and overwrote the whole file."""
         home = self.make_home()
@@ -333,6 +363,62 @@ class TestMcpRegistrationContract(InstallerCase):
         self.assertEqual(report[0]["status"], "failed")
         with io.open(path, "r", encoding="utf-8") as handle:
             self.assertEqual(handle.read(), damaged)
+
+    def test_cursor_unparseable_mcp_json_is_left_alone(self):
+        home = self.make_home()
+        homes = self.homes_for(home)
+        os.makedirs(homes.cursor, exist_ok=True)
+        path = os.path.join(homes.cursor, "mcp.json")
+        damaged = '{"mcpServers": {"other": '
+        with io.open(path, "w", encoding="utf-8") as handle:
+            handle.write(damaged)
+
+        report = install.configure_mcp(["cursor"], homes)
+        self.assertEqual(report[0]["status"], "failed")
+        with io.open(path, "r", encoding="utf-8") as handle:
+            self.assertEqual(handle.read(), damaged)
+
+    def test_cursor_mcp_webdev_and_clean_via_cli(self):
+        home = self.make_home()
+        homes = self.homes_for(home)
+        os.makedirs(homes.cursor, exist_ok=True)
+        path = os.path.join(homes.cursor, "mcp.json")
+        with io.open(path, "w", encoding="utf-8") as handle:
+            json.dump({"mcpServers": {"user-tool": {"command": "echo"}}}, handle)
+
+        configure_script = os.path.join(self.checkout, "scripts", "configure_mcp.py")
+        reg = proc.run_capture([
+            sys.executable, configure_script,
+            "--provider", "cursor",
+            "--server", "along-webdev",
+            "--cursor-home", homes.cursor,
+            "--json",
+        ], cwd=self.checkout)
+        self.assertTrue(reg.ok, reg.stderr)
+        reg_json = json.loads(reg.stdout)
+        self.assertEqual(reg_json["targets"][0]["status"], "registered")
+
+        with io.open(path, "r", encoding="utf-8") as handle:
+            data = json.load(handle)
+        self.assertEqual(data["mcpServers"]["along-webdev"], install.WEBDEV_MCP_SERVER_ENTRY)
+        self.assertEqual(data["mcpServers"]["user-tool"], {"command": "echo"})
+
+        clean = proc.run_capture([
+            sys.executable, configure_script,
+            "--provider", "cursor",
+            "--server", "along-webdev",
+            "--cursor-home", homes.cursor,
+            "--clean",
+            "--json",
+        ], cwd=self.checkout)
+        self.assertTrue(clean.ok, clean.stderr)
+        clean_json = json.loads(clean.stdout)
+        self.assertEqual(clean_json["targets"][0]["status"], "cleaned")
+
+        with io.open(path, "r", encoding="utf-8") as handle:
+            after = json.load(handle)
+        self.assertNotIn("along-webdev", after["mcpServers"])
+        self.assertEqual(after["mcpServers"]["user-tool"], {"command": "echo"})
 
     def test_an_unverified_target_can_be_opted_into_and_is_idempotent(self):
         home = self.make_home()
@@ -414,11 +500,52 @@ class TestInstallerScriptsMatchThePlan(InstallerCase):
         home = self.make_home()
         user_file = self.plant_user_rule(home)
         self.run_ps1(["-Target", "all"] + self.home_arguments(home, "ps1"))
-        self.assert_matches_plan(home, install.PROVIDERS, "install.ps1",
-                                 user_files=[user_file])
+        expected = self.assert_matches_plan(home, install.PROVIDERS, "install.ps1",
+                                            user_files=[user_file])
         self.assertTrue(os.path.isfile(user_file),
                         "install.ps1 deleted a rule file the user wrote; it used to "
                         "start with Remove-Item -Recurse -Force on this directory")
+
+        self.run_ps1(["-Uninstall"] + self.home_arguments(home, "ps1"))
+        self.assertTrue(os.path.isfile(user_file), "-Uninstall removed a user file")
+        still_there = [path for path in expected if os.path.lexists(path)]
+        self.assertEqual(still_there, [], "-Uninstall left installed files behind")
+
+    def test_bash_cursor_target_matches_plan_and_keeps_hooks_opt_in(self):
+        home = self.make_home()
+        homes = self.homes_for(home)
+        self.run_sh(["--target=cursor", "--register-mcp"] + self.home_arguments(home, "sh"))
+        expected = self.assert_matches_plan(home, ["cursor"], "install.sh --target=cursor")
+        self.assertFalse(os.path.exists(os.path.join(homes.cursor, "hooks.json")),
+                         "global Cursor hooks must remain opt-in")
+        with io.open(os.path.join(homes.cursor, "mcp.json"), "r", encoding="utf-8") as handle:
+            mcp_data = json.load(handle)
+        self.assertEqual(mcp_data["mcpServers"][install.MCP_SERVER_NAME], install.MCP_SERVER_ENTRY)
+        with io.open(os.path.join(homes.cursor, "cli-config.json"), "r", encoding="utf-8") as handle:
+            cli_data = json.load(handle)
+        self.assertIs(cli_data["attribution"]["attributeCommitsToAgent"], False)
+
+        self.run_sh(["--uninstall"] + self.home_arguments(home, "sh"))
+        still_there = [path for path in expected if os.path.lexists(path)]
+        self.assertEqual(still_there, [])
+
+    def test_powershell_cursor_target_matches_plan_and_keeps_hooks_opt_in(self):
+        home = self.make_home()
+        homes = self.homes_for(home)
+        self.run_ps1(["-Target", "cursor", "-RegisterMcp"] + self.home_arguments(home, "ps1"))
+        expected = self.assert_matches_plan(home, ["cursor"], "install.ps1 -Target cursor")
+        self.assertFalse(os.path.exists(os.path.join(homes.cursor, "hooks.json")),
+                         "global Cursor hooks must remain opt-in")
+        with io.open(os.path.join(homes.cursor, "mcp.json"), "r", encoding="utf-8") as handle:
+            mcp_data = json.load(handle)
+        self.assertEqual(mcp_data["mcpServers"][install.MCP_SERVER_NAME], install.MCP_SERVER_ENTRY)
+        with io.open(os.path.join(homes.cursor, "cli-config.json"), "r", encoding="utf-8") as handle:
+            cli_data = json.load(handle)
+        self.assertIs(cli_data["attribution"]["attributeCommitsToAgent"], False)
+
+        self.run_ps1(["-Uninstall"] + self.home_arguments(home, "ps1"))
+        still_there = [path for path in expected if os.path.lexists(path)]
+        self.assertEqual(still_there, [])
 
     def test_a_linked_install_records_links_and_uninstalls_without_touching_the_source(self):
         """REQ-5: the junction fallback, on a path with a space, and a safe uninstall."""
