@@ -2,6 +2,19 @@
 
 All notable changes to this project, newest first.
 
+## v4.9.3 - 2026-11-25
+
+- fix(changelog): prioritize primary commit types in deduplicator and rebuild CHANGELOG.md (refs #changelog-deduplicator-priority-and-rebuild)
+- docs: reconcile count claims, phase/rubric parity, snippet unit, along start approval, and provenance drift (refs #count-claim-and-plan-approval-drift)
+- debt(tests): harden structural and AST assertions in test_docs and test_skills_and_scripts (refs #docs-and-skills-test-hardening)
+- feat(runner): wire DeepSeek cache telemetry into wrap/doctor, enforce timeout safety net, and document proxy caching (refs #deepseek-telemetry-and-timeout)
+- feat(cursor): add .cursor/rules/along.mdc scaffolding, installer/MCP/skills support, beforeSubmitPrompt hook, and runtime alignment (refs #cursor-agent-and-rules-integration)
+- fix(gates): scan .along/*.md in traceability, fail on missing badges, and badge commit-time gates (refs #traceability-blind-to-protocol-md-and-unbadged-gates)
+- fix(hooks): enforce commit gates on chained and git -C commits (refs #commit-gates-skip-chained-and-dash-c-commits)
+- fix(hooks): cover full runtime gate union in manifest matchers, adapters, and doctor (refs #antigravity-manifest-matcher-unenforceable-invariants)
+- fix: OpenCode 2.3.2 lifecycle hooks, runner CLI, doctor, and AC gaps (refs #opencode-runtime-integration-defects)
+- chore: Sync .gitattributes after along update (refs #decouple-protocol-and-toolchain-versioning)
+
 ## v4.9.2 - 2026-11-24
 
 - chore: Commit versioning decoupling and pending issue files (refs #decouple-protocol-and-toolchain-versioning)

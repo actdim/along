@@ -29,7 +29,7 @@ CURRENT_PROTOCOL_VERSION = "4.9.1"
 MIN_SUPPORTED_PROTOCOL_VERSION = "4.8.0"
 
 #: Toolchain package SemVer (`actdim-along` distribution, CLI, and engines).
-CURRENT_VERSION = "4.9.2"
+CURRENT_VERSION = "4.9.3"
 __version__ = CURRENT_VERSION
 
 
