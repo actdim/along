@@ -29,7 +29,7 @@ bootstrap.ensure_deps()
 from alongkit import session
 from alongkit.hooks import GateDecision, evaluate_event
 from alongkit.hooks.adapters.claude import ClaudeCodeAdapter
-from alongkit.hooks.shellparse import SUBSTITUTION, split_segments, words
+from alongkit.hooks.shellparse import SUBSTITUTION, git_subcommand, split_segments, words
 
 #: Commands the former classifier held or asked about; none may raise a plan-gate event now.
 SHELL_COMMANDS = (
@@ -75,6 +75,14 @@ class TestSplitSegments(unittest.TestCase):
 
     def test_words_keep_windows_paths(self):
         self.assertEqual(words("rd /s /q C:\\tmp\\x"), ["rd", "/s", "/q", "C:\\tmp\\x"])
+
+    def test_git_subcommand_resolves_dash_c_and_globals(self):
+        cwd, sub = git_subcommand(["git", "-C", "sub", "-c", "user.name=x", "commit", "-m", "hi"], "/repo")
+        self.assertEqual(cwd, os.path.normpath(os.path.join("/repo", "sub")))
+        self.assertEqual(sub, ["commit", "-m", "hi"])
+        cwd2, sub2 = git_subcommand(["git", "-Csub", "--no-pager", "commit"], "/repo")
+        self.assertEqual(cwd2, os.path.normpath(os.path.join("/repo", "sub")))
+        self.assertEqual(sub2, ["commit"])
 
 
 class _GitFixture(unittest.TestCase):

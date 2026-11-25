@@ -396,5 +396,117 @@ class TestStatefulPredicates(unittest.TestCase):
         self.assertEqual(stop_gate.defn.event_type, HookEventType.STOP)
 
 
+class TestCommitGateSharedPatternAndShapes(unittest.TestCase):
+    """Commit gates share GIT_COMMIT_RE and enforce plain, chained, piped, and -C invocations."""
+
+    UNBOUND_SHAPES = (
+        ("plain", 'git commit -m "x"'),
+        ("and_chain", 'cd /tmp && git commit -m "x"'),
+        ("semicolon_chain", 'cd /tmp; git commit -m "x"'),
+        ("pipe", "echo x | git commit -F -"),
+        ("dash_c", 'git -C /tmp commit -m "x"'),
+        ("dash_c_quoted", 'git -C "/tmp/my repo" commit -m "x"'),
+        ("nested_shell", 'bash -c "cd /tmp && git commit -m x"'),
+    )
+
+    BOUND_SHAPES = (
+        ("plain", 'git commit -m "[bug--x] msg"'),
+        ("and_chain", 'cd /tmp && git commit -m "[bug--x] msg"'),
+        ("semicolon_chain", 'cd /tmp; git commit -m "(refs #x) msg"'),
+        ("pipe", 'echo "feat: msg (refs #x)" | git commit -F -'),
+        ("dash_c", 'git -C /tmp commit -m "(refs #x) msg"'),
+        ("dash_c_quoted", 'git -C "/tmp/my repo" commit -m "[bug--x] msg"'),
+    )
+
+    def test_resolve_pattern_imports_shared_ref_and_rejects_bad_ref(self):
+        from alongkit.hooks.declarative import resolve_pattern
+        from alongkit.hooks.predicates import GIT_COMMIT_RE
+
+        self.assertIs(
+            resolve_pattern({"ref": "alongkit.hooks.predicates.GIT_COMMIT_RE"}),
+            GIT_COMMIT_RE,
+        )
+        with self.assertRaises(ValueError):
+            resolve_pattern({"ref": "alongkit.hooks.predicates.DOES_NOT_EXIST"})
+
+    def test_catalogue_commit_gates_share_single_unanchored_pattern(self):
+        from alongkit.hooks.declarative import DEFAULT_GATES_FILE, load_gate_entries
+        from alongkit.hooks.predicates import GIT_COMMIT_RE
+
+        entries = {defn.id: (defn, raw) for defn, raw in load_gate_entries(DEFAULT_GATES_FILE)}
+        for gate_id in ("commit_issue_binding", "commit_no_conflict_markers"):
+            defn, raw = entries[gate_id]
+            self.assertIs(defn.match_args.get("CommandLine"), GIT_COMMIT_RE, gate_id)
+            self.assertEqual(
+                raw["match_args"]["CommandLine"],
+                {"ref": "alongkit.hooks.predicates.GIT_COMMIT_RE"},
+                gate_id,
+            )
+
+        for gid, (defn, _raw) in entries.items():
+            for arg_name, pat in defn.match_args.items():
+                self.assertFalse(
+                    pat.pattern.startswith("^git"),
+                    f"Gate '{gid}' match_args['{arg_name}'] must not reintroduce a ^git anchor",
+                )
+
+    def test_commit_issue_binding_denies_all_unbound_shapes(self):
+        from alongkit.hooks.declarative import DEFAULT_GATES_FILE, load_declarative_gates
+
+        gates = {g.name: g for g in load_declarative_gates(DEFAULT_GATES_FILE)}
+        binding_gate = gates["commit_issue_binding"]
+
+        with tempfile.TemporaryDirectory() as tmp:
+            os.makedirs(os.path.join(tmp, ".along", "ISSUES"), exist_ok=True)
+            engine = HookEngine(repo_root=tmp)
+
+            for label, cmd in self.UNBOUND_SHAPES:
+                event = HookEvent(
+                    event_type=HookEventType.PRE_TOOL_USE,
+                    tool_name="run_command",
+                    tool_args={"CommandLine": cmd},
+                    workspace_root=tmp,
+                    runtime="generic",
+                )
+                with self.subTest(layer="gate", shape=label, cmd=cmd):
+                    res = binding_gate.evaluate(event)
+                    self.assertEqual(res.decision, GateDecision.DENY, f"{label} was admitted: {cmd}")
+                    self.assertIn("commit-issue-binding", res.reason or "")
+
+                with self.subTest(layer="engine", shape=label, cmd=cmd):
+                    res = engine.evaluate(event, repo_root=tmp)
+                    self.assertEqual(res.decision, GateDecision.DENY, f"{label} was admitted: {cmd}")
+                    self.assertIn("commit-issue-binding", res.reason or "")
+
+    def test_commit_issue_binding_allows_bound_shapes_and_non_commit_mentions(self):
+        from alongkit.hooks.declarative import DEFAULT_GATES_FILE, load_declarative_gates
+
+        gates = {g.name: g for g in load_declarative_gates(DEFAULT_GATES_FILE)}
+        binding_gate = gates["commit_issue_binding"]
+
+        for label, cmd in self.BOUND_SHAPES:
+            with self.subTest(bound=label, cmd=cmd):
+                event = HookEvent(
+                    event_type=HookEventType.PRE_TOOL_USE,
+                    tool_name="run_command",
+                    tool_args={"CommandLine": cmd},
+                )
+                self.assertEqual(binding_gate.evaluate(event).decision, GateDecision.ALLOW)
+
+        for cmd in (
+            'rg -n "git commit" docs/',
+            'git log --grep="git commit"',
+            'git commit-tree HEAD^{tree} -m "raw tree"',
+            'python -c "print(\'git commit\')"',
+        ):
+            with self.subTest(non_commit=cmd):
+                event = HookEvent(
+                    event_type=HookEventType.PRE_TOOL_USE,
+                    tool_name="run_command",
+                    tool_args={"CommandLine": cmd},
+                )
+                self.assertEqual(binding_gate.evaluate(event).decision, GateDecision.ALLOW)
+
+
 if __name__ == "__main__":
     unittest.main()

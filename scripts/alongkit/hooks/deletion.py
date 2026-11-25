@@ -36,25 +36,18 @@ _CMD_SWITCH_RE = re.compile(r"^/[a-z](?::\S*)?$", re.IGNORECASE)
 #: PowerShell Remove-Item parameters whose value is not a target.
 _PS_VALUE_PARAMS = frozenset({"-include", "-exclude", "-filter", "-credential", "-stream"})
 _PS_PATH_PARAMS = frozenset({"-path", "-literalpath", "-lp", "-pspath"})
-_GIT_GLOBAL_VALUE_OPTS = frozenset({"-c", "-C", "--git-dir", "--work-tree", "--namespace"})
 
 
 def _strip_git_globals(words: List[str]) -> List[str]:
     """`git -C x -c k=v reset --hard` -> `[reset, --hard]` (words after `git`)."""
-    out = list(words[1:])
-    while out and out[0].startswith("-"):
-        opt = out.pop(0)
-        if opt in _GIT_GLOBAL_VALUE_OPTS and out:
-            out.pop(0)
-    return out
+    _, sub = shellparse.git_subcommand(words)
+    return sub
 
 
 def _git_cwd(words: List[str], cwd: str) -> str:
     """Working directory a `git -C <dir>` command runs in."""
-    for i, word in enumerate(words[1:-1], start=1):
-        if word == "-C":
-            return os.path.normpath(os.path.join(cwd, words[i + 1]))
-    return cwd
+    eff_cwd, _ = shellparse.git_subcommand(words, cwd)
+    return eff_cwd
 
 
 def _short_flags(args: Sequence[str]) -> str:

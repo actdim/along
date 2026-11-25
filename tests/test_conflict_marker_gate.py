@@ -25,7 +25,8 @@ from alongkit import bootstrap
 bootstrap.ensure_deps()
 
 from alongkit import proc
-from alongkit.hooks import HookEvent, HookEventType
+from alongkit.hooks import GateDecision, HookEvent, HookEventType
+from alongkit.hooks.declarative import get_all_declarative_gates
 from alongkit.hooks.predicates import check_staged_conflict_markers, find_added_conflict_markers
 
 MARKED = "a\n<<<<<<< HEAD\nours\n=======\ntheirs\n>>>>>>> branch\n"
@@ -101,6 +102,78 @@ class TestStagedConflictMarkerGate(unittest.TestCase):
         self._write(MARKED)
         _git(self.root, "add", "f.txt")
         self.assertIsNone(check_staged_conflict_markers(_commit_event("git status"), self.root))
+        self.assertIsNone(check_staged_conflict_markers(_commit_event('rg -n "git commit" docs/'), self.root))
+
+    def test_enumerates_all_commit_invocation_shapes_with_staged_markers(self):
+        self._write(MARKED)
+        _git(self.root, "add", "f.txt")
+        gates = {g.name: g for g in get_all_declarative_gates(repo_root=self.root)}
+        conflict_gate = gates["commit_no_conflict_markers"]
+
+        shapes = (
+            ("plain", 'git commit -m "merge"'),
+            ("and_chain", 'cd /tmp && git commit -m "merge"'),
+            ("semicolon_chain", 'cd /tmp; git commit -m "merge"'),
+            ("pipe", "echo merge | git commit -F -"),
+            ("dash_c_dummy", 'git -C /tmp commit -m "merge"'),
+            ("dash_c_repo", f'git -C "{self.root}" commit -m "merge"'),
+            ("cd_repo_chain", f'cd "{self.root}" && git commit -m "merge"'),
+        )
+        for label, cmd in shapes:
+            event = _commit_event(cmd)
+            with self.subTest(check="predicate", shape=label, cmd=cmd):
+                reason = check_staged_conflict_markers(event, self.root)
+                self.assertIsNotNone(reason, f"{label} was admitted: {cmd}")
+                self.assertIn("commit-no-conflict-markers", reason or "")
+            with self.subTest(check="declarative_gate", shape=label, cmd=cmd):
+                res = conflict_gate.evaluate(event)
+                self.assertEqual(res.decision, GateDecision.DENY, f"{label} was admitted: {cmd}")
+                self.assertIn("commit-no-conflict-markers", res.reason or "")
+
+    def test_chained_and_dash_c_commit_all_inspects_unstaged_changes(self):
+        self._write(MARKED)
+        self.assertIsNone(check_staged_conflict_markers(_commit_event("echo -a && git commit -m x"), self.root))
+        self.assertIsNone(check_staged_conflict_markers(_commit_event('git commit -m "fix -a"'), self.root))
+        for cmd in (
+            "cd /tmp && git commit -am x",
+            "cd /tmp; git commit --all -m x",
+            f'git -C "{self.root}" commit -am x',
+            "echo x | git commit -a -F -",
+        ):
+            with self.subTest(cmd=cmd):
+                reason = check_staged_conflict_markers(_commit_event(cmd), self.root)
+                self.assertIsNotNone(reason, f"expected denial for {cmd}")
+                self.assertIn("commit-no-conflict-markers", reason or "")
+
+    def test_dash_c_and_cd_target_separate_repository(self):
+        other = tempfile.mkdtemp(prefix="along-conflict-other-")
+        try:
+            _git(other, "init", "-q")
+            other_file = os.path.join(other, "g.txt")
+            with open(other_file, "w", encoding="utf-8", newline="\n") as f:
+                f.write("clean\n")
+            _git(other, "add", "g.txt")
+            _git(other, "commit", "-q", "-m", "init")
+
+            # Clean self.root, dirty other repo -> caught via -C or cd &&
+            with open(other_file, "w", encoding="utf-8", newline="\n") as f:
+                f.write(MARKED)
+            _git(other, "add", "g.txt")
+            for cmd in (f'git -C "{other}" commit -m "x"', f'cd "{other}" && git commit -m "x"'):
+                with self.subTest(dirty_other=cmd):
+                    reason = check_staged_conflict_markers(_commit_event(cmd), self.root)
+                    self.assertIsNotNone(reason)
+                    self.assertIn("g.txt", reason or "")
+
+            # Dirty self.root, clean other repo -> clean target repo is allowed
+            with open(other_file, "w", encoding="utf-8", newline="\n") as f:
+                f.write("clean\n")
+            _git(other, "add", "g.txt")
+            self._write(MARKED)
+            _git(self.root, "add", "f.txt")
+            self.assertIsNone(check_staged_conflict_markers(_commit_event(f'git -C "{other}" commit -m "x"'), self.root))
+        finally:
+            shutil.rmtree(other, ignore_errors=True)
 
 
 if __name__ == "__main__":

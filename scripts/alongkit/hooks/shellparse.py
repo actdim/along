@@ -17,11 +17,16 @@ each segment. [debt--gate-simplification]
 
 from __future__ import annotations
 
+import os
 import shlex
-from typing import List, Optional, Tuple
+from typing import List, Optional, Sequence, Tuple
 
 #: Placeholder word for a command substitution or arithmetic expansion.
 SUBSTITUTION = "SUBST"
+_GIT_GLOBAL_VALUE_OPTS = frozenset({
+    "-c", "-C", "--git-dir", "--work-tree", "--namespace",
+    "--exec-path", "--super-prefix", "--config-env",
+})
 
 
 def _substitution(command: str, i: int) -> Optional[Tuple[str, int]]:
@@ -161,3 +166,22 @@ def words(segment: str) -> Optional[List[str]]:
     except ValueError:
         return None
     return [t.strip("'\"") for t in raw]
+
+
+def git_subcommand(words_list: Sequence[str], cwd: str = "") -> Tuple[str, List[str]]:
+    """Resolve `git [global-opts] <subcommand> [args...]` to `(effective_cwd, [subcommand, ...])`."""
+    out = list(words_list[1:])
+    eff_cwd = cwd
+    while out and out[0].startswith("-"):
+        opt = out.pop(0)
+        if opt == "-C" and out:
+            c_dir = os.path.expanduser(out.pop(0))
+            if c_dir:
+                eff_cwd = os.path.normpath(os.path.join(eff_cwd, c_dir)) if eff_cwd else os.path.normpath(c_dir)
+        elif opt.startswith("-C") and len(opt) > 2:
+            c_dir = os.path.expanduser(opt[2:])
+            if c_dir:
+                eff_cwd = os.path.normpath(os.path.join(eff_cwd, c_dir)) if eff_cwd else os.path.normpath(c_dir)
+        elif opt in _GIT_GLOBAL_VALUE_OPTS and out:
+            out.pop(0)
+    return eff_cwd, out

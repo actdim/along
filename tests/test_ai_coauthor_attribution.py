@@ -109,9 +109,25 @@ class TestGatePredicate(TemporaryRepoCase):
     def test_ignores_non_commit_commands(self):
         self.assertIsNone(check_ai_coauthor(_command_event(f'echo "{CLAUDE_TRAILER}"'), self.root))
 
-    def test_catches_chained_commit(self):
-        cmd = f'git add -A && git commit -m "x" -m "{CLAUDE_TRAILER}"'
-        self.assertIsNotNone(check_ai_coauthor(_command_event(cmd), self.root))
+    def test_catches_chained_and_dash_c_commits(self):
+        for cmd in (
+            f'git add -A && git commit -m "x" -m "{CLAUDE_TRAILER}"',
+            f'cd /tmp; git commit -m "x" -m "{CLAUDE_TRAILER}"',
+            f'echo "{CLAUDE_TRAILER}" | git commit -F -',
+            f'git -C /tmp commit -m "x" -m "{CLAUDE_TRAILER}"',
+        ):
+            with self.subTest(cmd=cmd):
+                self.assertIsNotNone(check_ai_coauthor(_command_event(cmd), self.root))
+
+    def test_catches_message_file_in_dash_c_subdir(self):
+        subdir = os.path.join(self.root, "sub")
+        os.makedirs(subdir, exist_ok=True)
+        with open(os.path.join(subdir, "msg.txt"), "w", encoding="utf-8") as f:
+            f.write(f"feat: x\n\n{CLAUDE_TRAILER}\n")
+        self.assertIsNotNone(check_ai_coauthor(_command_event('git -C sub commit -F msg.txt'), self.root))
+
+    def test_ignores_non_commit_mentions_even_with_trailer(self):
+        self.assertIsNone(check_ai_coauthor(_command_event(f'rg "git commit" -m "{CLAUDE_TRAILER}"'), self.root))
 
     def test_opt_out_allows_ai_trailer(self):
         self.opt_out()

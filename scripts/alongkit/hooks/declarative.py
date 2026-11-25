@@ -66,18 +66,41 @@ _GATE_KEYS = frozenset((
 ))
 
 
+def _resolve_symbol(dotted_path: str) -> Any:
+    """Import and return an attribute from a dotted module.symbol path."""
+    parts = dotted_path.split(".")
+    if len(parts) < 2:
+        raise ValueError(f"Invalid symbol path: '{dotted_path}'")
+    mod_name = ".".join(parts[:-1])
+    attr_name = parts[-1]
+    mod = importlib.import_module(mod_name)
+    obj = getattr(mod, attr_name, None)
+    if obj is None:
+        raise ValueError(f"Symbol '{attr_name}' not found in '{mod_name}'")
+    return obj
+
+
 def resolve_handler(handler_path: str) -> Callable[..., Optional[str]]:
     """Import and return callable handler from a dotted path."""
-    parts = handler_path.split(".")
-    if len(parts) < 2:
-        raise ValueError(f"Invalid handler path: '{handler_path}'")
-    mod_name = ".".join(parts[:-1])
-    fn_name = parts[-1]
-    mod = importlib.import_module(mod_name)
-    fn = getattr(mod, fn_name, None)
-    if fn is None or not callable(fn):
-        raise ValueError(f"Function '{fn_name}' not found or not callable in '{mod_name}'")
+    fn = _resolve_symbol(handler_path)
+    if not callable(fn):
+        raise ValueError(f"Symbol '{handler_path}' is not callable")
     return fn
+
+
+def resolve_pattern(spec: Any) -> re.Pattern:
+    """Compile a regex string or import a shared re.Pattern from `{ref: dotted.path}`."""
+    if isinstance(spec, re.Pattern):
+        return spec
+    if isinstance(spec, dict) and "ref" in spec:
+        ref_path = str(spec["ref"]).strip()
+        obj = _resolve_symbol(ref_path)
+        if isinstance(obj, re.Pattern):
+            return obj
+        if isinstance(obj, str):
+            return re.compile(obj)
+        raise ValueError(f"Pattern ref '{ref_path}' is not a compiled regex or string")
+    return re.compile(str(spec))
 
 
 class DeclarativeGate(BaseGate):
@@ -188,7 +211,7 @@ def parse_gate_dict(raw: Dict[str, Any]) -> DeclarativeGateDefinition:
     match_args: Dict[str, re.Pattern] = {}
     if isinstance(match_args_raw, dict):
         for k, pat in match_args_raw.items():
-            match_args[str(k)] = re.compile(str(pat))
+            match_args[str(k)] = resolve_pattern(pat)
 
     rules: List[DeclarativeRule] = []
 
@@ -214,7 +237,7 @@ def parse_gate_dict(raw: Dict[str, Any]) -> DeclarativeGateDefinition:
 
         pat = None
         if "pattern" in r_entry:
-            pat = re.compile(str(r_entry["pattern"]))
+            pat = resolve_pattern(r_entry["pattern"])
 
         handler_name = str(r_entry.get("handler", ""))
         handler_fn = None

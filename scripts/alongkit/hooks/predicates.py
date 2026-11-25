@@ -15,7 +15,7 @@ import os
 import posixpath
 import re
 import sys
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Optional, Sequence, Tuple
 
 from .. import attribution, closeout, entities, frontmatter, kb, proc, repo, sanitizer, session, testruns, textio, typography, verify, worktree
 from . import shellparse, shellwrite
@@ -1182,6 +1182,17 @@ def check_entity_deletion_protection(event: HookEvent, repo_root: str, **kwargs:
     return None
 
 
+def _command_base_cwd(event: HookEvent, repo_root: str) -> str:
+    """Resolve the starting working directory for a shell tool event."""
+    from . import containment
+    args = event.tool_args or {}
+    cwd = next((str(args[k]) for k in containment.CWD_ARG_KEYS if args.get(k)), "") \
+        or event.workspace_root or repo_root or ""
+    if cwd and not os.path.isabs(cwd) and repo_root:
+        cwd = os.path.join(repo_root, cwd)
+    return cwd
+
+
 def check_destructive_command(event: HookEvent, repo_root: str, **kwargs: Any) -> Optional[Any]:
     """Hold an explicit recursive delete or history rewrite that git could not undo.
 
@@ -1192,11 +1203,7 @@ def check_destructive_command(event: HookEvent, repo_root: str, **kwargs: Any) -
     if not cmd or not repo_root:
         return None
     from . import containment, deletion
-    args = event.tool_args or {}
-    cwd = next((str(args[k]) for k in containment.CWD_ARG_KEYS if args.get(k)), "") \
-        or event.workspace_root or repo_root
-    if not os.path.isabs(cwd):
-        cwd = os.path.join(repo_root, cwd)
+    cwd = _command_base_cwd(event, repo_root)
     reason = deletion.find_problem(cmd, cwd, repo_root)
     if not reason:
         return None
@@ -1229,8 +1236,153 @@ def check_cli_safety(event: HookEvent, repo_root: str, **kwargs: Any) -> Optiona
     return None
 
 
+#: Shared unanchored, word-bounded command pattern for every commit gate.
+GIT_COMMIT_RE = re.compile(
+    r"""\bgit(?:\.exe)?\s+(?:(?:-[Cc]\s*(?:"[^"]*"|'[^']*'|[^\s"']+)|--(?:git-dir|work-tree|namespace)(?:=|\s+)(?:"[^"]*"|'[^']*'|[^\s"']+)|--(?:no-pager|bare|paginate))\s+)*commit\b(?!-)"""
+)
+
 _CONFLICT_MARKER_LINE = re.compile(r"^(<{7} |={7}$|>{7} |<{7}$|>{7}$)")
 _COMMIT_ALL_FLAG = re.compile(r"(?:^|\s)(?:-[a-zA-Z]*a[a-zA-Z]*|--all)(?:\s|$)")
+_COMMIT_MSG_FILE_RE = re.compile(r"""(?:\s-F\s*|\s--file[=\s]\s*)(?:"([^"]+)"|'([^']+)'|([^\s'"]+))""")
+_COMMIT_VALUE_FLAGS = frozenset({
+    "-m", "--message", "-F", "--file", "-C", "--reuse-message",
+    "-c", "--reedit-message", "--fixup", "--squash", "-t", "--template",
+    "--author", "--date", "--cleanup", "--trailer", "--pathspec-from-file",
+    "-u", "--untracked-files", "-S", "--gpg-sign",
+})
+_COMMIT_SHORT_VALUE_FLAGS = frozenset({"m", "F", "C", "c", "t", "S", "u"})
+_SHELL_LEAD_KEYWORDS = frozenset({
+    "do", "then", "else", "elif", "if", "while", "until", "{", "(", "!",
+    "time", "command", "builtin", "exec", "sudo", "doas", "env", "nohup",
+})
+_SHELL_WRAPPER_NAMES = frozenset({"sh", "bash", "zsh", "dash", "ksh", "pwsh", "powershell", "cmd"})
+_ENV_ASSIGNMENT_RE = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*=")
+_CD_COMMANDS = frozenset({"cd", "chdir", "pushd", "set-location", "sl"})
+
+
+def _has_commit_all_flag(commit_args: Sequence[str]) -> bool:
+    """True when `git commit` options include `-a` / `--all` (outside message/file values)."""
+    skip_next = False
+    for arg in commit_args:
+        if skip_next:
+            skip_next = False
+            continue
+        if arg == "--":
+            break
+        if arg == "--all":
+            return True
+        if arg.startswith("-") and not arg.startswith("--"):
+            chars = arg[1:]
+            for idx, ch in enumerate(chars):
+                if ch == "a":
+                    return True
+                if ch in _COMMIT_SHORT_VALUE_FLAGS:
+                    if idx == len(chars) - 1:
+                        skip_next = True
+                    break
+            continue
+        if arg in _COMMIT_VALUE_FLAGS:
+            skip_next = True
+    return False
+
+
+def _extract_nested_shell_script(exe: str, args: Sequence[str]) -> Optional[str]:
+    """Return inner command string for `sh -c ...`, `pwsh -Command ...`, or `cmd /c ...`."""
+    if exe in ("sh", "bash", "zsh", "dash", "ksh"):
+        for idx, arg in enumerate(args[:-1]):
+            if arg == "--":
+                break
+            if arg.startswith("-") and not arg.startswith("--") and "c" in arg[1:]:
+                return args[idx + 1]
+    elif exe in ("pwsh", "powershell"):
+        for idx, arg in enumerate(args[:-1]):
+            if arg.lower() in ("-c", "-command"):
+                return args[idx + 1]
+    elif exe == "cmd":
+        for idx, arg in enumerate(args[:-1]):
+            if arg.lower() in ("/c", "/k"):
+                return args[idx + 1]
+    return None
+
+
+def _extract_git_commit_invocations(
+    cmd: str, base_cwd: str = "", _depth: int = 0
+) -> List[Tuple[str, bool, str]]:
+    """Return `(commit_cwd, commit_all, segment)` for every real `git commit` in `cmd`."""
+    if not cmd or _depth >= 3 or not GIT_COMMIT_RE.search(cmd):
+        return []
+
+    segments = shellparse.split_segments(cmd)
+    if segments is None:
+        m = GIT_COMMIT_RE.search(cmd)
+        if not m:
+            return []
+        commit_cwd = base_cwd
+        head_words = shellparse.words(m.group(0))
+        if head_words:
+            commit_cwd, _ = shellparse.git_subcommand(head_words, base_cwd)
+        commit_all = bool(_COMMIT_ALL_FLAG.search(cmd[m.end():]))
+        return [(commit_cwd, commit_all, cmd)]
+
+    hits: List[Tuple[str, bool, str]] = []
+    cur_cwd = base_cwd
+
+    for seg in segments:
+        seg_words = shellparse.words(seg)
+        if seg_words is None:
+            m = GIT_COMMIT_RE.search(seg)
+            if m:
+                hits.append((cur_cwd, bool(_COMMIT_ALL_FLAG.search(seg[m.end():])), seg))
+            continue
+        if not seg_words:
+            continue
+
+        head = seg_words[0].lower()
+        if head in _CD_COMMANDS:
+            target_arg = None
+            for arg in seg_words[1:]:
+                low_arg = arg.lower()
+                if low_arg in ("-path", "-literalpath", "-lp", "-pspath", "/d") or arg.startswith("-"):
+                    continue
+                target_arg = arg
+                break
+            if target_arg:
+                expanded = os.path.expanduser(target_arg)
+                cur_cwd = os.path.normpath(os.path.join(cur_cwd, expanded)) if cur_cwd else os.path.normpath(expanded)
+            continue
+
+        if not GIT_COMMIT_RE.search(seg):
+            continue
+
+        idx = 0
+        while idx < len(seg_words):
+            tok = seg_words[idx]
+            low = tok.lower()
+            if low in _SHELL_LEAD_KEYWORDS or _ENV_ASSIGNMENT_RE.match(tok):
+                idx += 1
+                continue
+            break
+        if idx >= len(seg_words):
+            continue
+
+        exe = os.path.basename(seg_words[idx]).lower()
+        if exe.endswith(".exe"):
+            exe = exe[:-4]
+
+        if exe in _SHELL_WRAPPER_NAMES:
+            nested = _extract_nested_shell_script(exe, seg_words[idx + 1:])
+            if nested:
+                hits.extend(_extract_git_commit_invocations(nested, cur_cwd, _depth + 1))
+            continue
+
+        if exe != "git":
+            continue
+
+        git_cwd, sub = shellparse.git_subcommand(seg_words[idx:], cur_cwd)
+        if sub and sub[0] == "commit":
+            hits.append((git_cwd, _has_commit_all_flag(sub[1:]), seg))
+
+    return hits
 
 
 def find_added_conflict_markers(diff_text: str) -> List[str]:
@@ -1250,6 +1402,34 @@ def find_added_conflict_markers(diff_text: str) -> List[str]:
     return hits
 
 
+def _run_git_diff_for_commit(
+    diff_cmd: List[str], commit_cwd: str, repo_root: str
+) -> Optional[proc.CommandResult]:
+    """Run `diff_cmd` in `commit_cwd`, falling back to `repo_root` when `commit_cwd` is not a git repo."""
+    if commit_cwd and os.path.isdir(commit_cwd):
+        result = proc.run_capture(diff_cmd, cwd=commit_cwd)
+        if result.returncode == 0:
+            return result
+        if repo_root and os.path.isdir(repo_root) and not repo._same_path(commit_cwd, repo_root):
+            if not proc.run_capture(["git", "rev-parse", "--git-dir"], cwd=commit_cwd).ok:
+                return proc.run_capture(diff_cmd, cwd=repo_root)
+        return result
+    if repo_root and os.path.isdir(repo_root):
+        return proc.run_capture(diff_cmd, cwd=repo_root)
+    return None
+
+
+def check_commit_issue_binding(event: HookEvent, repo_root: str, **kwargs: Any) -> Optional[GateResult]:
+    """Allow non-commit commands whose text merely mentions `git commit`; pass real commits to regex_match."""
+    cmd = _extract_command(event)
+    if not cmd:
+        return GateResult(decision=GateDecision.ALLOW, gate_name="commit_issue_binding")
+    base_cwd = _command_base_cwd(event, repo_root)
+    if not _extract_git_commit_invocations(cmd, base_cwd):
+        return GateResult(decision=GateDecision.ALLOW, gate_name="commit_issue_binding")
+    return None
+
+
 def check_staged_conflict_markers(event: HookEvent, repo_root: str, **kwargs: Any) -> Optional[str]:
     """Block `git commit` when the content it would record adds conflict markers.
 
@@ -1258,25 +1438,25 @@ def check_staged_conflict_markers(event: HookEvent, repo_root: str, **kwargs: An
     [bug--conflict-marker-gate-wrong-target].
     """
     cmd = _extract_command(event).strip()
-    if not repo_root or not re.match(r"^git\s+commit\b", cmd):
+    if not cmd:
         return None
-    commit_all = bool(_COMMIT_ALL_FLAG.search(cmd[len("git commit"):]))
-    diff_cmd = ["git", "diff", "HEAD" if commit_all else "--cached", "-U0", "--no-color", "--no-ext-diff"]
-    result = proc.run_capture(diff_cmd, cwd=repo_root)
-    if result.returncode != 0:
+    base_cwd = _command_base_cwd(event, repo_root)
+    invocations = _extract_git_commit_invocations(cmd, base_cwd)
+    if not invocations:
         return None
-    hits = find_added_conflict_markers(result.stdout or "")
-    if not hits:
-        return None
-    shown = "; ".join(hits[:5]) + (" ..." if len(hits) > 5 else "")
-    return (
-        "Git commit rejected by [gate: commit-no-conflict-markers]: unresolved merge conflict "
-        f"markers in staged content ({shown}). Resolve the conflicts and stage the files again."
-    )
-
-
-_GIT_COMMIT_RE = re.compile(r"\bgit\s+(?:-C\s+\S+\s+)?commit\b")
-_COMMIT_MSG_FILE_RE = re.compile(r"(?:\s-F\s*|\s--file[=\s]\s*)(['\"]?)([^\s'\"]+)\1")
+    for commit_cwd, commit_all, _seg in invocations:
+        diff_cmd = ["git", "diff", "HEAD" if commit_all else "--cached", "-U0", "--no-color", "--no-ext-diff"]
+        result = _run_git_diff_for_commit(diff_cmd, commit_cwd, repo_root)
+        if result is None or result.returncode != 0:
+            continue
+        hits = find_added_conflict_markers(result.stdout or "")
+        if hits:
+            shown = "; ".join(hits[:5]) + (" ..." if len(hits) > 5 else "")
+            return (
+                "Git commit rejected by [gate: commit-no-conflict-markers]: unresolved merge conflict "
+                f"markers in staged content ({shown}). Resolve the conflicts and stage the files again."
+            )
+    return None
 
 
 def check_ai_coauthor(event: HookEvent, repo_root: str, **kwargs: Any) -> Optional[str]:
@@ -1286,20 +1466,33 @@ def check_ai_coauthor(event: HookEvent, repo_root: str, **kwargs: Any) -> Option
     `-F` / `--file`. Human co-authors pass. See [feat--suppress-ai-coauthor-attribution].
     """
     cmd = _extract_command(event)
-    if not _GIT_COMMIT_RE.search(cmd) or attribution.allow_ai_coauthor(repo_root):
+    base_cwd = _command_base_cwd(event, repo_root)
+    invocations = _extract_git_commit_invocations(cmd, base_cwd)
+    if not invocations or attribution.allow_ai_coauthor(repo_root or invocations[0][0]):
         return None
     trailer = attribution.find_ai_coauthor(cmd)
     if trailer is None:
-        file_match = _COMMIT_MSG_FILE_RE.search(cmd)
-        if file_match and file_match.group(2) != "-":
-            msg_path = file_match.group(2)
-            if not os.path.isabs(msg_path) and repo_root:
-                msg_path = os.path.join(repo_root, msg_path)
-            if os.path.isfile(msg_path):
-                try:
-                    trailer = attribution.find_ai_coauthor(textio.read_text(msg_path, strict=False))
-                except OSError:
-                    trailer = None
+        for commit_cwd, _commit_all, seg in invocations:
+            file_match = _COMMIT_MSG_FILE_RE.search(seg) or _COMMIT_MSG_FILE_RE.search(cmd)
+            if not file_match:
+                continue
+            raw_path = file_match.group(1) or file_match.group(2) or file_match.group(3)
+            if not raw_path or raw_path == "-":
+                continue
+            if os.path.isabs(raw_path):
+                candidates = [raw_path]
+            else:
+                candidates = [os.path.join(p, raw_path) for p in (commit_cwd, repo_root) if p] or [raw_path]
+            for msg_path in candidates:
+                if os.path.isfile(msg_path):
+                    try:
+                        trailer = attribution.find_ai_coauthor(textio.read_text(msg_path, strict=False))
+                    except OSError:
+                        trailer = None
+                    if trailer is not None:
+                        break
+            if trailer is not None:
+                break
     if trailer is None:
         return None
     return (
