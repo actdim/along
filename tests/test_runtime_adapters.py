@@ -823,5 +823,214 @@ class TestRunRecordSynthesis(unittest.TestCase):
         self.assertIn("env_overrides", dry_payload)
 
 
+class TestDeepSeekTimeoutAndTelemetryIntegration(unittest.TestCase):
+    """Verify DeepSeek timeout safety net, headless execution, and wrap/doctor telemetry."""
+
+    def setUp(self) -> None:
+        self.repo = hermetic.make_repo_fixture(prefix="along-test-ds-telemetry-")
+        self.slug = "fixture-sample-task"
+        session.init_session(self.repo, self.slug, title="DeepSeek Telemetry Task")
+
+    def tearDown(self) -> None:
+        shutil.rmtree(self.repo, ignore_errors=True)
+
+    def _make_shim(self, name: str, py_code: str) -> str:
+        script_path = os.path.join(self.repo, f"{name}.py")
+        with open(script_path, "w", encoding="utf-8") as f:
+            f.write(py_code)
+        if os.name == "nt":
+            shim_path = os.path.join(self.repo, f"{name}.cmd")
+            with open(shim_path, "w", encoding="utf-8") as f:
+                f.write(f'@echo off\r\n"{sys.executable}" "{script_path}" %*\r\n')
+        else:
+            shim_path = os.path.join(self.repo, f"{name}.sh")
+            with open(shim_path, "w", encoding="utf-8") as f:
+                f.write(f'#!/bin/sh\nexec "{sys.executable}" "{script_path}" "$@"\n')
+            os.chmod(shim_path, 0o755)
+        return shim_path
+
+    def test_deepseek_timeout_safety_net_defaults_and_validation(self) -> None:
+        runner_default = DeepSeekHarnessRunner(repo_root=self.repo, issue_slug=self.slug)
+        self.assertEqual(runner_default.timeout_seconds, DeepSeekHarnessRunner.DEFAULT_TIMEOUT_SECONDS)
+        self.assertEqual(runner_default.timeout, DeepSeekHarnessRunner.DEFAULT_TIMEOUT_SECONDS)
+
+        runner_custom = DeepSeekHarnessRunner(repo_root=self.repo, issue_slug=self.slug, timeout_seconds=15)
+        self.assertEqual(runner_custom.timeout_seconds, 15)
+        self.assertEqual(runner_custom.timeout, 15)
+
+        with self.assertRaises(ValueError):
+            DeepSeekHarnessRunner(repo_root=self.repo, issue_slug=self.slug, timeout_seconds=0)
+        with self.assertRaises(ValueError):
+            DeepSeekHarnessRunner(repo_root=self.repo, issue_slug=self.slug, timeout=-5)
+        with self.assertRaises(ValueError):
+            runner_default.execute_run(brief="invalid timeout", timeout_seconds=0)
+
+    def test_deepseek_headless_execution_stdin_and_cli_arg(self) -> None:
+        py_code = (
+            "import json, sys\n"
+            "arg = sys.argv[-1]\n"
+            "payload = sys.stdin.read() if arg == '-' else arg\n"
+            "mode = 'stdin' if arg == '-' else 'arg'\n"
+            "print(json.dumps({'type': 'text', 'part': {'type': 'text', 'text': f'{mode}:{payload}'}}))\n"
+            "print(json.dumps({'type': 'step_finish', 'part': {'tokens': {'input': 1000, 'output': 100, 'cache_read': 9000, 'cache_write': 200, 'reasoning': 50}}}))\n"
+            "sys.exit(0)\n"
+        )
+        shim = self._make_shim("fake_dsh_ok", py_code)
+
+        runner_stdin = DeepSeekHarnessRunner(
+            repo_root=self.repo,
+            issue_slug=self.slug,
+            binary_path=shim,
+            brief_via_stdin=True,
+        )
+        rec_stdin = runner_stdin.execute_run(brief="Run stdin brief")
+        self.assertEqual(rec_stdin["outcome"], "done")
+        self.assertEqual(rec_stdin["exit_code"], 0)
+        self.assertIsNotNone(rec_stdin["usage"])
+        self.assertEqual(rec_stdin["usage"]["cache_hit_ratio_pct"], 90.0)
+        self.assertIn("stdin:Run stdin brief", runner_stdin.last_result.stdout)
+
+        runner_arg = DeepSeekHarnessRunner(
+            repo_root=self.repo,
+            issue_slug=self.slug,
+            binary_path=shim,
+            brief_via_stdin=False,
+        )
+        rec_arg = runner_arg.execute_run(brief="Run arg brief")
+        self.assertEqual(rec_arg["outcome"], "done")
+        self.assertEqual(rec_arg["exit_code"], 0)
+        self.assertEqual(rec_arg["usage"]["cache_hit_ratio_pct"], 90.0)
+        self.assertIn("arg:Run arg brief", runner_arg.last_result.stdout)
+
+    def test_deepseek_headless_timeout_safety_net_terminates_hang(self) -> None:
+        import time
+        shim = self._make_shim("fake_dsh_hang", "import time\ntime.sleep(20)\n")
+        runner = DeepSeekHarnessRunner(
+            repo_root=self.repo,
+            issue_slug=self.slug,
+            binary_path=shim,
+            timeout_seconds=1,
+        )
+        start = time.monotonic()
+        record = runner.execute_run(brief="Hanging headless invocation")
+        elapsed = time.monotonic() - start
+        self.assertLess(elapsed, 10.0)
+        self.assertEqual(record["outcome"], "timeout")
+        self.assertEqual(record["exit_code"], 124)
+
+    def test_format_usage_summary_computes_missing_cache_hit_ratio(self) -> None:
+        summary = format_usage_summary({"input_tokens": 200, "output_tokens": 50, "cache_read_tokens": 800})
+        self.assertIn("input: 200", summary)
+        self.assertIn("output: 50", summary)
+        self.assertIn("cache read: 800", summary)
+        self.assertIn("cache hit: 80.0%", summary)
+
+    def test_wrap_and_doctor_surface_usage_telemetry_and_noop_when_absent(self) -> None:
+        import io
+        from contextlib import redirect_stdout
+        from alongkit import entities, lifecycle
+        from alongkit.commands.doctor import handle_doctor_command
+
+        session.record_plan(self.repo, self.slug, "1. Plan telemetry verification.", "test")
+        iso_env = hermetic.isolated_home_env()
+
+        # Graceful no-op in doctor when no usage records exist
+        buf_empty_doc = io.StringIO()
+        with mock.patch.dict(os.environ, iso_env, clear=True):
+            with redirect_stdout(buf_empty_doc):
+                doc_code_empty = handle_doctor_command(self.repo, [])
+        self.assertEqual(doc_code_empty, 0)
+        self.assertNotIn("Runner token usage", buf_empty_doc.getvalue())
+
+        # Graceful no-op in wrap when no usage records exist
+        buf_empty_wrap = io.StringIO()
+        with redirect_stdout(buf_empty_wrap):
+            wrap_code_empty = lifecycle.execute_wrap(
+                self.repo,
+                self.slug,
+                status="done",
+                no_verify=True,
+                no_commit=True,
+                decisions=[],
+            )
+        self.assertEqual(wrap_code_empty, 0)
+        self.assertNotIn("Token usage:", buf_empty_wrap.getvalue())
+        today = entities.today_iso()
+        year = today.split("-")[0]
+        empty_log = os.path.join(self.repo, ".along", "SESSIONS", year, f"{today}--{self.slug}.md")
+        with open(empty_log, "r", encoding="utf-8") as f:
+            self.assertNotIn("### Token Usage", f.read())
+
+        # Populate a fresh fixture with usage records across 2 runs
+        repo2 = hermetic.make_repo_fixture(prefix="along-test-ds-telemetry-pop-")
+        self.addCleanup(shutil.rmtree, repo2, ignore_errors=True)
+        session.init_session(repo2, self.slug, title="Populated Telemetry Task")
+        session.record_plan(repo2, self.slug, "1. Plan populated telemetry.", "test")
+
+        handoff.create_run_record(repo2, self.slug, "run-ds-1", "implementer", "deepseek")
+        handoff.finish_run_record(
+            repo2,
+            self.slug,
+            "run-ds-1",
+            outcome="done",
+            usage={
+                "input_tokens": 1000,
+                "output_tokens": 200,
+                "cache_read_tokens": 3000,
+                "cache_write_tokens": 100,
+                "reasoning_tokens": 50,
+                "cache_hit_ratio_pct": 75.0,
+            },
+        )
+        handoff.create_run_record(repo2, self.slug, "run-oc-2", "reviewer", "opencode")
+        handoff.finish_run_record(
+            repo2,
+            self.slug,
+            "run-oc-2",
+            outcome="done",
+            usage={
+                "input_tokens": 1000,
+                "output_tokens": 100,
+                "cache_read_tokens": 5000,
+                "cache_write_tokens": 0,
+                "cache_hit_ratio_pct": 83.3,
+            },
+        )
+
+        # doctor reports aggregated token usage and cache hit ratio
+        buf_doc = io.StringIO()
+        with mock.patch.dict(os.environ, iso_env, clear=True):
+            with redirect_stdout(buf_doc):
+                doc_code = handle_doctor_command(repo2, [])
+        self.assertEqual(doc_code, 0)
+        doc_out = buf_doc.getvalue()
+        self.assertIn("Runner token usage (2 run(s) across 1 session(s))", doc_out)
+        self.assertIn("input: 2000, output: 300, cache read: 8000, cache write: 100, cache hit: 80.0%, reasoning: 50", doc_out)
+
+        # wrap surfaces token usage in stdout and session log
+        buf_wrap = io.StringIO()
+        with redirect_stdout(buf_wrap):
+            wrap_code = lifecycle.execute_wrap(
+                repo2,
+                self.slug,
+                status="done",
+                no_verify=True,
+                no_commit=True,
+                decisions=[],
+            )
+        self.assertEqual(wrap_code, 0)
+        wrap_out = buf_wrap.getvalue()
+        self.assertIn("Token usage: input: 2000, output: 300, cache read: 8000, cache write: 100, cache hit: 80.0%, reasoning: 50 (2 run(s))", wrap_out)
+
+        log_path = os.path.join(repo2, ".along", "SESSIONS", year, f"{today}--{self.slug}.md")
+        with open(log_path, "r", encoding="utf-8") as f:
+            log_text = f.read()
+        self.assertIn("### Token Usage", log_text)
+        self.assertIn("Total (2 runs)", log_text)
+        self.assertIn("cache hit: 80.0%", log_text)
+        self.assertIn("run-ds-1", log_text)
+        self.assertIn("run-oc-2", log_text)
+
+
 if __name__ == "__main__":
     unittest.main()

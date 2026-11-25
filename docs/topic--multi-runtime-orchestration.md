@@ -4,14 +4,15 @@ slug: multi-runtime-orchestration
 title: Multi-Runtime Orchestration, Named Profiles & OpenObserve Observability
 type: architecture
 created: 2026-11-14
-updated: 2026-11-14
-tags: [orchestration, profiles, opencode, antigravity, claude, codex, openobserve, telemetry, worktree]
+updated: 2026-11-25
+tags: [orchestration, profiles, opencode, antigravity, claude, codex, deepseek, caching, openobserve, telemetry, worktree]
 sources:
   - path: scripts/alongkit/orchestrator.py
   - path: scripts/alongkit/orchestration_profiles.py
   - path: scripts/alongkit/runner/base.py
   - path: scripts/alongkit/runner/claude.py
   - path: scripts/alongkit/runner/codex.py
+  - path: scripts/alongkit/runner/deepseek.py
   - path: scripts/alongkit/runner/opencode.py
   - path: scripts/alongkit/runner/antigravity.py
   - path: scripts/alongkit/telemetry/otlp.py
@@ -146,6 +147,25 @@ The execution lifecycle coordinates across isolated subprocesses:
    - `Reviewer` audits git diff, executes automated tests, and issues a verdict (`PASS` / `FAIL`).
    - On `PASS`, advances to Step N+1. On `FAIL`, increments retry counter and feeds defects back into the prompt.
 4. **Phase 5: Wrap & Closeout**: Reconciles history, synchronizes knowledge base projections, and creates release commit.
+
+### 3.3 OpenAI-Compatible Proxy Prompt Caching & Headless Prompt Delivery
+
+Custom OpenAI-compatible endpoints and headless CLI wrappers introduce two common operational failure modes: silent prompt-cache misses across proxies and process hangs from stdin vs positional argument mismatches.
+
+#### OpenAI-Compatible Proxy Caching Compatibility
+When configuring runtimes such as OpenCode with `@ai-sdk/openai-compatible` or routing requests through a custom OpenAI-compatible proxy, sessions can exhibit 0% prompt cache hits (`cache_read_tokens = 0`) even when native upstream providers achieve high prefix cache reuse:
+- **Response schema mismatch (`prompt_cache_hit_tokens` vs `cached_tokens`)**: DeepSeek-style endpoints report prefix cache hits in `usage.prompt_cache_hit_tokens` (and cache misses in `usage.prompt_cache_miss_tokens`), whereas `@ai-sdk/openai-compatible` and standard OpenAI chat completions expect `usage.prompt_tokens_details.cached_tokens`. Proxies that pass responses through without translating `prompt_cache_hit_tokens` into `prompt_tokens_details.cached_tokens` report zero cached reads downstream.
+- **Upstream prefix affinity**: Intermediate load balancers or stateless proxies that rotate backend workers or strip session/routing affinity break prefix caching on the upstream inference engine.
+- **Prefix stability**: Injecting dynamic timestamps, changing system prompt headers, or reordering tool definitions between turns invalidates the cached prompt prefix.
+
+Recommendations for cache-compatible operation:
+1. Prefer native provider adapters or OpenAI-compatible proxies verified to preserve upstream prefix affinity and translate `prompt_cache_hit_tokens` into `prompt_tokens_details.cached_tokens`.
+2. Keep system prompts, tool schemas, and static instruction prefixes deterministic across turns.
+3. Monitor `cache_hit_ratio_pct` via `format_usage_summary` output surfaced by `along run`, `along wrap`, and `along doctor` (computed as `round(cache_read_tokens / (input_tokens + cache_read_tokens) * 100, 1)`). `DeepSeekHarnessRunner` (`scripts/alongkit/runner/deepseek.py`) and `OpenCodeRunner` (`scripts/alongkit/runner/opencode.py`) normalize `cache_read_tokens`, `prompt_cache_hit_tokens`, and `step_finish.part.tokens.cache.read` automatically.
+
+#### Headless Prompt Delivery (`brief_via_stdin`) & Timeout Safety Net
+- **Stdin vs positional CLI delivery**: `BaseRunner`, `ClaudeCodeRunner`, `CodexRunner`, and `DeepSeekHarnessRunner` default to `brief_via_stdin = True` (passing `"-"` and streaming the prompt over `stdin`) to stay below OS command-line limits such as Windows `cmd.exe` 8191-character limits. `OpenCodeRunner` defaults to `brief_via_stdin = False` because OpenCode 2.3.2+ expects the prompt as a positional CLI argument (`opencode run --format json ... <prompt>`). When wrapping custom DSH-compatible binaries that expect a positional argument rather than stdin, instantiate `DeepSeekHarnessRunner(..., brief_via_stdin=False)`.
+- **Timeout safety net**: If a headless CLI expects positional arguments while receiving stdin (or stalls against an unresponsive endpoint), an unbounded `communicate()` call hangs indefinitely. `DeepSeekHarnessRunner` enforces a positive timeout safety net (`DEFAULT_TIMEOUT_SECONDS = 600`, overridable via `timeout` or `timeout_seconds`), terminating the full child process tree via `proc.kill_process_tree` on `subprocess.TimeoutExpired` and returning a structured `outcome: "timeout"`, `exit_code: 124` run record.
 
 ---
 

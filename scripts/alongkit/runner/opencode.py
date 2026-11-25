@@ -17,7 +17,7 @@ import shutil
 import subprocess
 from typing import Any, Dict, List, Optional, Set, Tuple
 
-from .. import proc, runtime as along_runtime
+from .. import handoff, proc, runtime as along_runtime
 from .base import BaseRunner, merge_args
 
 
@@ -220,8 +220,7 @@ class OpenCodeRunner(BaseRunner):
 
         usage = None
         if total_input_tokens > 0 or total_output_tokens > 0 or total_cache_read_tokens > 0 or total_cost is not None:
-            prompt_total = total_input_tokens + total_cache_read_tokens
-            cache_hit_pct = round((total_cache_read_tokens / prompt_total) * 100, 1) if prompt_total > 0 else 0.0
+            cache_hit_pct = handoff.compute_cache_hit_ratio_pct(total_input_tokens, total_cache_read_tokens)
             usage = {
                 "input_tokens": total_input_tokens,
                 "output_tokens": total_output_tokens,

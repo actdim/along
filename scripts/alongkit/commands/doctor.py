@@ -281,6 +281,42 @@ def _doctor_webdev_checks(repo_root: str, warnings: int) -> int:
     return warnings
 
 
+def _doctor_runner_telemetry_checks(repo_root: str, warnings: int) -> int:
+    """Report runner token usage and cache hit ratio when active run records exist."""
+    sess_root = os.path.join(repo.state_dir(repo_root), ".session")
+    if not os.path.isdir(sess_root):
+        return warnings
+
+    from .. import handoff
+    from ..runner import format_usage_summary
+
+    all_records: List[Dict[str, Any]] = []
+    session_slugs: List[str] = []
+    try:
+        entries = sorted(os.scandir(sess_root), key=lambda e: e.name)
+    except OSError:
+        return warnings
+
+    for entry in entries:
+        if not entry.is_dir() or entry.name.startswith(".") or entry.name in session.RESERVED_SESSION_DIRS:
+            continue
+        recs = handoff.list_run_records(repo_root, entry.name)
+        agg_s, runs_s = handoff.aggregate_run_usage(recs)
+        if agg_s and runs_s:
+            all_records.extend(runs_s)
+            session_slugs.append(entry.name)
+
+    agg_all, runs_all = handoff.aggregate_run_usage(all_records)
+    if not agg_all or not runs_all:
+        return warnings
+
+    print(
+        f"[OK] Runner token usage ({len(runs_all)} run(s) across {len(session_slugs)} session(s)): "
+        f"{format_usage_summary(agg_all)}"
+    )
+    return warnings
+
+
 def handle_doctor_command(repo_root: str, args: List[str]):
     if args and args[0] in ("-h", "--help", "help"):
         print("Usage: along doctor [entities|docs|issues|--entities|--docs|--issues] [--fix]")
@@ -769,6 +805,7 @@ def handle_doctor_command(repo_root: str, args: List[str]):
     warnings = _doctor_webdev_checks(repo_root, warnings)
 
     errors, warnings = _doctor_runtime_checks(repo_root, errors, warnings)
+    warnings = _doctor_runner_telemetry_checks(repo_root, warnings)
 
     print(f"\nDoctor Summary: {errors} errors, {warnings} warnings.")
     return 1 if errors > 0 else 0

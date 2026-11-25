@@ -1825,6 +1825,19 @@ def render_blackboard_markdown(repo_root: str, slug: str, reason: Optional[str] 
             text = _read(os.path.join("reviews", name))
             if name.endswith(".md") and text:
                 out.append(f"### Review {name[:-3]}\n\n{_demote(text)}\n")
+    from . import handoff
+    from .runner import format_usage_summary
+    agg_usage, usage_runs = handoff.aggregate_run_usage(handoff.list_run_records(repo_root, slug))
+    if agg_usage and usage_runs:
+        out.append("### Token Usage\n")
+        if len(usage_runs) > 1:
+            out.append(f"- **Total ({len(usage_runs)} runs)**: {format_usage_summary(agg_usage)}")
+        for rec in usage_runs:
+            rid = rec.get("run_id") or "unknown"
+            rt = rec.get("runtime") or "unknown"
+            role = rec.get("role") or "unknown"
+            out.append(f"- `{rid}` ({rt}/{role}): {format_usage_summary(rec.get('usage'))}")
+        out.append("")
     bb = load_blackboard(repo_root, slug)
     if bb and any(bb.get(k) for k in ALLOWED_BLACKBOARD_KEYS):
         out.append("### Structured Working Context\n")

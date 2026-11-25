@@ -14,9 +14,9 @@ import json
 import os
 import shutil
 import subprocess
-from typing import Any, Dict, List, Optional, Set, Tuple
+from typing import Any, Dict, List, Optional, Set, Tuple, Union
 
-from .. import proc
+from .. import handoff, proc
 from .base import BaseRunner, merge_args
 
 
@@ -30,6 +30,7 @@ class DeepSeekHarnessRunner(BaseRunner):
     version_verified: bool = False
     brief_via_stdin: bool = True
     supports_base_url: bool = False
+    DEFAULT_TIMEOUT_SECONDS: int = 600
 
     RUNTIME_ENV_ALLOW: Set[str] = {
         "DEEPSEEK_API_KEY",
@@ -52,12 +53,40 @@ class DeepSeekHarnessRunner(BaseRunner):
 
     def __init__(
         self,
-        *args: Any,
+        repo_root: Optional[str] = None,
+        issue_slug: Optional[str] = None,
+        run_id: Optional[str] = None,
+        model: Optional[str] = None,
+        timeout: Optional[Union[int, float]] = None,
+        binary_path: Optional[str] = None,
+        dry_run: bool = False,
+        extra_args: Optional[List[str]] = None,
+        env_overrides: Optional[Dict[str, str]] = None,
+        role: Optional[str] = None,
+        env_passthrough: Optional[List[str]] = None,
         brief_via_stdin: bool = True,
-        **kwargs: Any,
+        timeout_seconds: Optional[Union[int, float]] = None,
     ) -> None:
-        super().__init__(*args, **kwargs)
+        raw_timeout = timeout if timeout is not None else timeout_seconds
+        if raw_timeout is None:
+            raw_timeout = self.DEFAULT_TIMEOUT_SECONDS
+        if float(raw_timeout) <= 0:
+            raise ValueError(f"DeepSeekHarnessRunner timeout must be positive, got {raw_timeout!r}")
+        super().__init__(
+            repo_root=repo_root,
+            issue_slug=issue_slug,
+            run_id=run_id,
+            model=model,
+            timeout=raw_timeout,  # type: ignore[arg-type]
+            binary_path=binary_path,
+            dry_run=dry_run,
+            extra_args=extra_args,
+            env_overrides=env_overrides,
+            role=role,
+            env_passthrough=env_passthrough,
+        )
         self.brief_via_stdin = bool(brief_via_stdin)
+        self.timeout_seconds = raw_timeout
 
     @classmethod
     def role_args(cls, role: str) -> List[str]:
@@ -143,6 +172,37 @@ class DeepSeekHarnessRunner(BaseRunner):
         if "DSH_PERMISSION_MODE" not in env:
             env["DSH_PERMISSION_MODE"] = "danger-full-access"
         return env
+
+    def execute_run(
+        self,
+        brief: str,
+        role: str = "implementer",
+        model: Optional[str] = None,
+        timeout: Optional[Union[int, float]] = None,
+        step: Optional[int] = None,
+        run_id: Optional[str] = None,
+        handoff_note: Optional[str] = None,
+        dry_run: Optional[bool] = None,
+        timeout_seconds: Optional[Union[int, float]] = None,
+    ) -> Dict[str, Any]:
+        """Launch headless DSH process with a mandatory timeout safety net."""
+        eff_timeout = timeout if timeout is not None else (
+            timeout_seconds if timeout_seconds is not None else self.timeout_seconds
+        )
+        if eff_timeout is None:
+            eff_timeout = self.DEFAULT_TIMEOUT_SECONDS
+        if float(eff_timeout) <= 0:
+            raise ValueError(f"DeepSeekHarnessRunner timeout must be positive, got {eff_timeout!r}")
+        return super().execute_run(
+            brief=brief,
+            role=role,
+            model=model,
+            timeout=eff_timeout,  # type: ignore[arg-type]
+            step=step,
+            run_id=run_id,
+            handoff_note=handoff_note,
+            dry_run=dry_run,
+        )
 
     def parse_output(self, stdout: str, stderr: str, exit_code: int) -> Dict[str, Any]:
         """Parse structured NDJSON or JSON events emitted by DSH headless."""
@@ -253,8 +313,7 @@ class DeepSeekHarnessRunner(BaseRunner):
 
         usage = None
         if total_input_tokens > 0 or total_output_tokens > 0 or total_cache_read_tokens > 0:
-            prompt_total = total_input_tokens + total_cache_read_tokens
-            cache_hit_pct = round((total_cache_read_tokens / prompt_total) * 100, 1) if prompt_total > 0 else 0.0
+            cache_hit_pct = handoff.compute_cache_hit_ratio_pct(total_input_tokens, total_cache_read_tokens)
             usage = {
                 "input_tokens": total_input_tokens,
                 "output_tokens": total_output_tokens,
@@ -285,12 +344,15 @@ def format_usage_summary(usage: Optional[Dict[str, Any]]) -> str:
     """Format token and cache usage dictionary into human-readable summary."""
     if not usage:
         return "No token usage recorded."
-    in_tok = usage.get("input_tokens", 0)
-    out_tok = usage.get("output_tokens", 0)
-    c_read = usage.get("cache_read_tokens", 0)
-    c_write = usage.get("cache_write_tokens", 0)
-    ratio = usage.get("cache_hit_ratio_pct", 0.0)
-    reasoning = usage.get("reasoning_tokens", 0)
+    in_tok = int(usage.get("input_tokens") or usage.get("prompt_tokens") or 0)
+    out_tok = int(usage.get("output_tokens") or usage.get("completion_tokens") or 0)
+    c_read = int(usage.get("cache_read_tokens") or usage.get("prompt_cache_hit_tokens") or 0)
+    c_write = int(usage.get("cache_write_tokens") or usage.get("prompt_cache_miss_tokens") or 0)
+    if "cache_hit_ratio_pct" in usage and usage["cache_hit_ratio_pct"] is not None:
+        ratio = usage["cache_hit_ratio_pct"]
+    else:
+        ratio = handoff.compute_cache_hit_ratio_pct(in_tok, c_read)
+    reasoning = int(usage.get("reasoning_tokens") or 0)
     parts = [
         f"input: {in_tok}",
         f"output: {out_tok}",

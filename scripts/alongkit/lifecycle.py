@@ -1500,6 +1500,15 @@ def execute_wrap(
     done_dir = os.path.join(repo.state_dir(repo_root), "ISSUES", "done")
     dest_file = os.path.join(done_dir, os.path.basename(src_file))
 
+    from . import handoff
+    from .runner import format_usage_summary
+    agg_usage, usage_runs = handoff.aggregate_run_usage(handoff.list_run_records(repo_root, clean_slug))
+    usage_line = (
+        f"{format_usage_summary(agg_usage)} ({len(usage_runs)} run(s))"
+        if agg_usage and usage_runs
+        else None
+    )
+
     # 3. Dry-run mode
     if dry_run:
         print(f"-> [Dry-Run] Wrap plan for issue '{slug}':")
@@ -1515,6 +1524,8 @@ def execute_wrap(
         print("   - Recompile .along/ISSUES.md projection board")
         print("   - Synchronize Knowledge Base (docs/INDEX.md)")
         print(f"   - Purge session blackboard: .along/.session/{clean_slug}/")
+        if usage_line:
+            print(f"   - Token usage summary: {usage_line}")
         try:
             issue_raw = textio.read_text(src_file)
         except OSError:
@@ -1674,6 +1685,8 @@ def execute_wrap(
                     except OSError as exc:
                         print(f"[Notice] Worktree not removed: {exc}. Run 'along worktree remove {clean_slug}'.")
         print(f"-> [OK] Successfully wrapped up '{clean_slug}'.")
+        if usage_line:
+            print(f"-> Token usage: {usage_line}")
         if no_commit:
             _warn_uncommitted_work(repo_root, clean_slug, attributed_map, dest_file, log_path)
             return 0

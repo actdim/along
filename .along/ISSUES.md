@@ -63,14 +63,13 @@
 - [ ] `(feat)` [webdev-nl-local-runner](ISSUES/feat--webdev-nl-local-runner.md)
 - [ ] `(feat)` [workspace-activity-tracking](ISSUES/feat--workspace-activity-tracking.md)
 - [ ] `(feat)` [zero-step-state-recovery-and-drift-detection](ISSUES/feat--zero-step-state-recovery-and-drift-detection.md)
-- [ ] `(task)` [deepseek-telemetry-and-timeout](ISSUES/task--deepseek-telemetry-and-timeout.md)
 - [ ] `(task)` [gate-event-remeasure](ISSUES/task--gate-event-remeasure.md)
 - [ ] `(task)` [reconcile-dashboard-ui-core-conventions](ISSUES/task--reconcile-dashboard-ui-core-conventions.md)
 
 ## Done (recent)
+- [x] `(task)` [deepseek-telemetry-and-timeout](ISSUES/done/task--deepseek-telemetry-and-timeout.md)
 - [x] `(feat)` [cursor-agent-and-rules-integration](ISSUES/done/feat--cursor-agent-and-rules-integration.md)
 - [x] `(bug)` [traceability-blind-to-protocol-md-and-unbadged-gates](ISSUES/done/bug--traceability-blind-to-protocol-md-and-unbadged-gates.md)
 - [x] `(bug)` [opencode-runtime-integration-defects](ISSUES/done/bug--opencode-runtime-integration-defects.md)
 - [x] `(bug)` [commit-gates-skip-chained-and-dash-c-commits](ISSUES/done/bug--commit-gates-skip-chained-and-dash-c-commits.md)
-- [x] `(bug)` [antigravity-manifest-matcher-unenforceable-invariants](ISSUES/done/bug--antigravity-manifest-matcher-unenforceable-invariants.md)
-<!-- 365 older completed issue(s) archived in .along/ISSUES/done/ -->
+<!-- 366 older completed issue(s) archived in .along/ISSUES/done/ -->

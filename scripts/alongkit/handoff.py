@@ -187,6 +187,54 @@ def finish_run_record(
     return record
 
 
+def compute_cache_hit_ratio_pct(input_tokens: int, cache_read_tokens: int) -> float:
+    """Compute prompt cache hit ratio percentage rounded to one decimal place."""
+    prompt_total = int(input_tokens or 0) + int(cache_read_tokens or 0)
+    if prompt_total <= 0:
+        return 0.0
+    return round((int(cache_read_tokens or 0) / prompt_total) * 100, 1)
+
+
+def aggregate_run_usage(records: List[Dict[str, Any]]) -> Tuple[Optional[Dict[str, Any]], List[Dict[str, Any]]]:
+    """Aggregate token and cache usage across run records that carry usage telemetry.
+
+    Returns (aggregated_usage_or_none, runs_with_usage).
+    """
+    runs_with_usage = [r for r in records if isinstance(r.get("usage"), dict) and r["usage"]]
+    if not runs_with_usage:
+        return None, []
+    if len(runs_with_usage) == 1:
+        single = dict(runs_with_usage[0]["usage"])
+        in_tok = int(single.get("input_tokens") or single.get("prompt_tokens") or 0)
+        c_read = int(single.get("cache_read_tokens") or single.get("prompt_cache_hit_tokens") or 0)
+        if "cache_hit_ratio_pct" not in single or single["cache_hit_ratio_pct"] is None:
+            single["cache_hit_ratio_pct"] = compute_cache_hit_ratio_pct(in_tok, c_read)
+        return single, runs_with_usage
+
+    total_in = 0
+    total_out = 0
+    total_c_read = 0
+    total_c_write = 0
+    total_reasoning = 0
+    for rec in runs_with_usage:
+        u = rec["usage"]
+        total_in += int(u.get("input_tokens") or u.get("prompt_tokens") or 0)
+        total_out += int(u.get("output_tokens") or u.get("completion_tokens") or 0)
+        total_c_read += int(u.get("cache_read_tokens") or u.get("prompt_cache_hit_tokens") or 0)
+        total_c_write += int(u.get("cache_write_tokens") or u.get("prompt_cache_miss_tokens") or 0)
+        total_reasoning += int(u.get("reasoning_tokens") or 0)
+    agg: Dict[str, Any] = {
+        "input_tokens": total_in,
+        "output_tokens": total_out,
+        "cache_read_tokens": total_c_read,
+        "cache_write_tokens": total_c_write,
+        "reasoning_tokens": total_reasoning,
+        "total_tokens": total_in + total_out,
+        "cache_hit_ratio_pct": compute_cache_hit_ratio_pct(total_in, total_c_read),
+    }
+    return agg, runs_with_usage
+
+
 # ---------------------------------------------------------------------------
 # 2. Machine-Readable Review Verdicts (reviews/step-N.md)
 # ---------------------------------------------------------------------------

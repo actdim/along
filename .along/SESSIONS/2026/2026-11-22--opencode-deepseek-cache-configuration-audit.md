@@ -6,7 +6,7 @@ slug: opencode-deepseek-cache-configuration-audit
 agent: antigravity
 branch: main
 commit: 001330e
-summary: Audit OpenCode DeepSeek-A configuration, add configurable prompt delivery (stdin vs CLI arg), and support token cache hit ratio observability
+summary: Audit OpenCode custom OpenAI-compatible provider configuration, add configurable prompt delivery (stdin vs CLI arg), and support token cache hit ratio observability
 milestone: v5.0.0-agent-run-protocol-and-observability
 issues_advanced: []
 issues_completed: [task--opencode-deepseek-cache-configuration-audit]
@@ -16,7 +16,7 @@ decisions: []
 # Session: Opencode deepseek cache configuration audit
 
 ## Summary
-Audit OpenCode DeepSeek-A configuration, add configurable prompt delivery (stdin vs CLI arg), and support token cache hit ratio observability
+Audit OpenCode custom OpenAI-compatible provider configuration, add configurable prompt delivery (stdin vs CLI arg), and support token cache hit ratio observability
 
 ## Decisions
 - None (confirmed at wrap: no architectural decisions).

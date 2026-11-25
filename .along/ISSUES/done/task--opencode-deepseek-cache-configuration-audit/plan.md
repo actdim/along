@@ -1,11 +1,11 @@
-# Plan: Audit OpenCode DeepSeek-A caching efficiency and runner prompt delivery resilience
+# Plan: Audit OpenCode custom OpenAI-compatible provider caching efficiency and runner prompt delivery resilience
 
 ## Execution Mode
 Direct
 
 ## Context and Scope
-Diagnostics during session `ses_dfc310340ffepAqPS7atpNzg8z` revealed critical performance and resilience gaps in the OpenCode / DeepSeek integration:
-1. Zero prompt cache hits: OpenCode provider `DeepSeek-A` (`deepseek-v4.1-flash-1017`) processed 222k input tokens with 0 cache hits, whereas the default OpenCode free provider achieved 38.3M cache read tokens.
+Diagnostics during an OpenCode session revealed critical performance and resilience gaps in the OpenCode / DeepSeek integration:
+1. Zero prompt cache hits: A custom OpenAI-compatible OpenCode provider processed 222k input tokens with 0 cache hits, whereas the default OpenCode free provider achieved 38.3M cache read tokens.
 2. DSH headless runner prompt delivery: `DeepSeekHarnessRunner` defaults to stdin piping (`-`), which can hang headless runners if CLI arguments are expected.
 3. Telemetry: Cache hit ratios and breakdown metrics are not currently summarized in Along tooling.
 
@@ -14,9 +14,9 @@ Milestone: `v5.0.0-agent-run-protocol-and-observability`
 
 ## Step-by-Step Implementation Plan
 
-### Step 1: OpenCode DeepSeek-A Provider Configuration Audit
+### Step 1: OpenCode Custom Provider Configuration Audit
 - Document findings from `~/.config/opencode/opencode.jsonc`:
-  - `DeepSeek-A` uses `@ai-sdk/openai-compatible` pointing to proxy `https://aeth.hvmforum.space/v1`.
+  - The custom OpenAI-compatible provider uses `@ai-sdk/openai-compatible` pointing to an external proxy endpoint.
   - The proxy does not map DeepSeek `prompt_cache_hit_tokens` into OpenAI `prompt_tokens_details.cached_tokens`, or the proxy upstream does not maintain prompt prefix caches.
   - Document recommendations for cache-compatible configuration.
 
