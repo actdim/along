@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import io
 import os
+import re
 import subprocess
 import sys
 import tempfile
@@ -93,6 +94,107 @@ class TestDeduplicateLogEntries(unittest.TestCase):
             deduped[2],
             "fix(opencode): guard undefined output in shell hooks and align runner CLI contract (refs #opencode-shell-env-runner-fix)",
         )
+
+    def test_type_tier_beats_scoped_docs_or_chore(self):
+        entries = [
+            "docs(adr): record decision for per-clone merge driver (refs #merge-driver)",
+            "feat: preventive git auto-merge protection (refs #merge-driver)",
+            "fix: fix stop gate false positive (refs #stop-gate)",
+            "chore(along): sync projections after stop gate fix (refs #stop-gate)",
+            "test(unit): add extra tests for config (refs #config-refactor)",
+            "refactor: simplify config loader (refs #config-refactor)",
+            "chore(sync): update index after doc sweep (refs #doc-sweep)",
+            "docs: align setup guide with current CLI (refs #doc-sweep)",
+        ]
+        deduped = deduplicate_log_entries(entries)
+        self.assertEqual(
+            deduped,
+            [
+                "feat: preventive git auto-merge protection (refs #merge-driver)",
+                "fix: fix stop gate false positive (refs #stop-gate)",
+                "refactor: simplify config loader (refs #config-refactor)",
+                "docs: align setup guide with current CLI (refs #doc-sweep)",
+            ],
+        )
+
+    def test_same_tier_prefers_scope_then_longer_subject(self):
+        entries = [
+            "feat: short feature (refs #perf-slug)",
+            "perf(cache): fast (refs #perf-slug)",
+            "feat(ui): short (refs #ui-slug)",
+            "fix(ui): much longer descriptive summary (refs #ui-slug)",
+            "chore: same len aaa (refs #tie-slug)",
+            "test: same len bbb (refs #tie-slug)",
+        ]
+        deduped = deduplicate_log_entries(entries)
+        self.assertEqual(
+            deduped,
+            [
+                "perf(cache): fast (refs #perf-slug)",
+                "fix(ui): much longer descriptive summary (refs #ui-slug)",
+                "chore: same len aaa (refs #tie-slug)",
+            ],
+        )
+
+    def test_normalizes_double_prefixes_across_types(self):
+        entries = [
+            "feat: feat: opencode runtime hooks integration (refs #opencode-runtime)",
+            "chore: fix(hooks)!: strict guard (refs #strict-guard)",
+        ]
+        deduped = deduplicate_log_entries(entries)
+        self.assertEqual(
+            deduped,
+            [
+                "feat: opencode runtime hooks integration (refs #opencode-runtime)",
+                "fix(hooks)!: strict guard (refs #strict-guard)",
+            ],
+        )
+
+    def test_changelog_sections_have_no_duplicate_issue_refs(self):
+        changelog_path = os.path.join(REPO_ROOT, "CHANGELOG.md")
+        with open(changelog_path, "r", encoding="utf-8") as handle:
+            content = handle.read()
+
+        sections = re.split(r"(?m)^(?=## v\d+\.\d+\.\d+)", content)
+        checked_v460_plus = []
+        for section in sections[1:]:
+            lines = section.splitlines()
+            header = lines[0]
+            ver_match = re.match(r"^## v(\d+)\.(\d+)\.(\d+)\b", header)
+            self.assertIsNotNone(ver_match, f"Malformed section header: {header}")
+            ver_tuple = tuple(int(p) for p in ver_match.groups())
+            if ver_tuple >= (4, 6, 0):
+                checked_v460_plus.append(header)
+
+            seen_slugs = {}
+            for line in lines[1:]:
+                if not line.startswith("- "):
+                    continue
+                entry = line[2:]
+                self.assertIsNone(
+                    re.match(
+                        r"^(?:feat|fix|perf|refactor|debt|docs|test|chore|style|ci|build|task):\s*"
+                        r"(?:feat|fix|perf|refactor|debt|docs|test|chore|style|ci|build|task)(?:\([^)]+\))?!?:",
+                        entry,
+                        re.I,
+                    ),
+                    f"Double prefix remaining in {header}: {entry}",
+                )
+                ref_match = re.search(r"\((?:refs\s+)?#([a-z0-9\-]+)(?=[,\s)])", entry, re.I)
+                if ref_match:
+                    slug = ref_match.group(1).lower()
+                    self.assertNotIn(
+                        slug,
+                        seen_slugs,
+                        f"Duplicate (refs #{slug}) in {header}: {entry} vs {seen_slugs.get(slug)}",
+                    )
+                    seen_slugs[slug] = entry
+
+        self.assertTrue(
+            any(h.startswith("## v4.6.0 ") for h in checked_v460_plus),
+            "Expected v4.6.0 section in CHANGELOG.md",
+        )
+        self.assertGreaterEqual(len(checked_v460_plus), 8)
 
 
 def _write_fixture_file(root, rel_path, content):

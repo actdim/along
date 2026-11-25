@@ -70,4 +70,4 @@
 - [x] `(docs)` [count-claim-and-plan-approval-drift](ISSUES/done/docs--count-claim-and-plan-approval-drift.md)
 - [x] `(debt)` [docs-and-skills-test-hardening](ISSUES/done/debt--docs-and-skills-test-hardening.md)
 - [x] `(bug)` [traceability-blind-to-protocol-md-and-unbadged-gates](ISSUES/done/bug--traceability-blind-to-protocol-md-and-unbadged-gates.md)
-<!-- 368 older completed issue(s) archived in .along/ISSUES/done/ -->
+<!-- 369 older completed issue(s) archived in .along/ISSUES/done/ -->

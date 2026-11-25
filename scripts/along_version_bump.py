@@ -671,30 +671,60 @@ def update_along_milestones(repo_root, new_version, tx, carry_over=None):
     return updated
 
 
+_CHANGELOG_TYPE_TIERS = {
+    "feat": 3,
+    "fix": 3,
+    "perf": 3,
+    "refactor": 3,
+    "debt": 3,
+    "docs": 2,
+    "test": 1,
+    "chore": 1,
+    "style": 1,
+    "ci": 1,
+    "build": 1,
+}
+_DOUBLE_PREFIX_RE = re.compile(
+    r"^(feat|fix|perf|refactor|debt|docs|test|chore|style|ci|build|task):\s*"
+    r"(feat|fix|perf|refactor|debt|docs|test|chore|style|ci|build|task)"
+    r"(?:\(([^)]+)\))?(!)?:\s*(.*)",
+    re.I,
+)
+_CONVENTIONAL_PREFIX_RE = re.compile(r"^([a-z]+)(?:\(([^)]+)\))?!?:\s*", re.I)
+_ISSUE_REF_RE = re.compile(r"\((?:refs\s+)?#([a-z0-9\-]+)(?=[,\s)])", re.I)
+
+
+def _entry_priority(line):
+    """Rank a changelog entry by (type_tier, has_scope, subject_length)."""
+    match = _CONVENTIONAL_PREFIX_RE.match(line)
+    if not match:
+        return (0, 0, len(line))
+    commit_type, scope = match.group(1).lower(), match.group(2)
+    return (_CHANGELOG_TYPE_TIERS.get(commit_type, 0), 1 if scope else 0, len(line))
+
+
 def deduplicate_log_entries(lines):
     """Deduplicate commit subjects sharing the same issue reference.
 
-    Normalizes accidental repeated prefixes (e.g. 'fix: fix(scope):') and
-    when multiple commits reference the same issue slug (refs #<slug>),
-    prefers the more specific scoped commit subject.
+    Normalizes accidental repeated prefixes (e.g. 'fix: fix(scope):') and,
+    when multiple commits share the same primary issue slug (refs #<slug>),
+    prefers higher commit type tier, then scoped over unscoped prefix, then
+    longer subject string.
     """
     cleaned_lines = []
     for line in lines:
-        m_dup = re.match(
-            r'^(feat|fix|docs|debt|chore|refactor|test):\s*(feat|fix|docs|debt|chore|refactor|test)(?:\(([^)]+)\))?:\s*(.*)',
-            line,
-            re.I,
-        )
+        m_dup = _DOUBLE_PREFIX_RE.match(line)
         if m_dup:
-            _, p2, scope, rest = m_dup.groups()
+            _, p2, scope, bang, rest = m_dup.groups()
             scope_part = f"({scope})" if scope else ""
-            line = f"{p2.lower()}{scope_part}: {rest}"
+            bang_part = bang or ""
+            line = f"{p2.lower()}{scope_part}{bang_part}: {rest}"
         cleaned_lines.append(line)
 
     seen_refs = {}
     deduped = []
     for line in cleaned_lines:
-        ref_match = re.search(r'\((?:refs\s+)?#([a-z0-9\-]+)\)', line)
+        ref_match = _ISSUE_REF_RE.search(line)
         if not ref_match:
             deduped.append(line)
             continue
@@ -702,24 +732,22 @@ def deduplicate_log_entries(lines):
         if slug not in seen_refs:
             seen_refs[slug] = len(deduped)
             deduped.append(line)
-        else:
-            prev_idx = seen_refs[slug]
-            prev_line = deduped[prev_idx]
-            has_scope = bool(re.match(r'^[a-z]+\([^)]+\):', line))
-            prev_has_scope = bool(re.match(r'^[a-z]+\([^)]+\):', prev_line))
-            if (has_scope and not prev_has_scope) or (has_scope == prev_has_scope and len(line) > len(prev_line)):
-                deduped[prev_idx] = line
+            continue
+        prev_idx = seen_refs[slug]
+        if _entry_priority(line) > _entry_priority(deduped[prev_idx]):
+            deduped[prev_idx] = line
 
     return deduped
 
 
-def release_log_entries(repo_root, limit=200):
-    """Commit subjects since the most recent tag, newest first; empty when git cannot say."""
+def release_log_entries(repo_root, limit=200, span=None):
+    """Commit subjects for `span` (default: since the most recent tag), newest first."""
     if not os.path.exists(os.path.join(repo_root, ".git")):
         return []
 
-    described = proc.git(["describe", "--tags", "--abbrev=0"], cwd=repo_root)
-    span = f"{described.out}..HEAD" if described.ok and described.out else "HEAD"
+    if span is None:
+        described = proc.git(["describe", "--tags", "--abbrev=0"], cwd=repo_root)
+        span = f"{described.out}..HEAD" if described.ok and described.out else "HEAD"
     log = proc.git(["log", span, "--no-merges", f"--max-count={limit}",
                     "--pretty=format:%s"], cwd=repo_root)
     if not log.ok:

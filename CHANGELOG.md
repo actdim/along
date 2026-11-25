@@ -21,142 +21,96 @@ All notable changes to this project, newest first.
 
 ## v4.9.1 - 2026-11-21
 
-- fix(webdev): Fix interactive session browser creation, Playwright greenlet thread affinity, tempfile directory helper, and doctor status checks (refs #webdev-session-create-browser-helper)
-- fix(opencode): Guard undefined output in shell hooks, resolve V2 hook crash, and align runner CLI contract (refs #opencode-shell-env-runner-fix)
-- feat(webdev): Self-contained webdev and browser execution substrate, MCP server, interactive session daemon, scenario runner, and diagnostics capture (refs #along-webdev-runner)
-- feat(kb-sync): Doc provenance drift CLI and commit-time verification gate (refs #provenance-drift-gate)
-- docs(adr): Record decision for per-clone merge driver binding (refs #git-automerge-protection-and-semantic-merge)
+- fix(webdev): session browser creation, thread affinity, and doctor checks (refs #webdev-session-create-browser-helper)
+- fix(opencode): guard undefined output in shell hooks and align runner CLI contract (refs #opencode-shell-env-runner-fix)
+- feat(webdev): browser engine, semantic locators, redaction, in-page probes, and diagnostics capture (refs #along-webdev-runner)
+- feat(kb-sync): doc provenance drift CLI and commit-time verification gate (refs #provenance-drift-gate)
 - feat: Preventive Git auto-merge protection, update propagation and stage-aware conflict resolution (refs #git-automerge-protection-and-semantic-merge)
-- fix(gates): Stop plan gate applies one rule: untraced changes always count, closing bypass through hook-invisible writes (refs #stop-gate-empty-writes-fallback)
-- fix(ci): Normalize line endings in opencode hooks and configure gitattributes text defaults (refs #windows-ci-line-endings)
+- fix(gates): count untraced changes at Stop with one rule (refs #stop-gate-empty-writes-fallback)
+- fix(ci): normalize line endings in opencode hooks and configure gitattributes text defaults (refs #windows-ci-line-endings)
 
 ## v4.9.0 - 2026-11-14
 
-- fix(gates): Resolve Stop gate false positives and add trace-backed denials (refs #stop-gate-false-positives)
-- feat: Implement named orchestration profiles, OpenObserve OTLP telemetry sink, and orchestrator tracing (refs #openobserve-telemetry-sink)
-- docs(decisions): Record ADR for issue-level test scoping and verify policy (refs #issue-test-scoping-policy)
+- fix(gates): resolve Stop gate false positives and add trace-backed denials (refs #stop-gate-false-positives)
+- feat: implement named orchestration profiles, OpenObserve OTLP telemetry sink, and orchestrator tracing (refs #openobserve-telemetry-sink)
 - feat: Implement issue-scoped verify policy with plan-approval snapshots and coverage-aware test reuse (refs #issue-test-scoping-policy)
-- docs(kb): Align kb-search docs with engine; add authoring and progressive-disclosure sections (refs #kb-search-docs-accuracy)
-- docs(comparisons): Align LLM-Wiki stance and kb-search latency claim with measured behavior (refs #system-comparisons)
-- feat(feedback): Implement GitHub PR feedback transport with gh CLI and web fallback (refs #feedback-github-pr-transport)
-- refactor: Point budget.py comment at .along/PROTOCOL.md (refs #stale-protocol-path-comment)
-- fix(opencode): V2 plugin definition, complete lifecycle coverage and argument normalization (refs #opencode-runtime-v2-hardening)
-- feat(opencode): OpenCode runtime hooks integration and multi-subproject issue discovery (refs #opencode-runtime-integration)
-- chore(docs): Sync index projections after v4.8.1 release (refs #bump-minor-version-and-reconcile-protocol-references)
+- docs(issues): file provenance drift gate issue with approved plan (refs #provenance-drift-gate)
+- docs(issues): file DITA topic paragraph and stale provenance hash review (refs #dita-topics-and-drift)
+- docs(kb): align kb-search docs with engine; add authoring and progressive-disclosure sections (refs #kb-search-docs-accuracy)
+- docs(comparisons): align LLM-Wiki stance and kb-search latency claim with measured behavior (refs #system-comparisons)
+- feat(feedback): implement GitHub PR transport with gh CLI and web fallback (refs #feedback-github-pr-transport)
+- refactor: Point budget.py comment at .along/PROTOCOL.md (leftover from bug--protocol-leaks-into-docs) (refs #stale-protocol-path-comment)
+- fix(opencode): v2 plugin definition, complete lifecycle coverage and argument normalization (refs #opencode-runtime-v2-hardening)
+- feat: opencode runtime hooks integration and multi-subproject issue discovery (refs #opencode-runtime-integration)
+- chore(docs): sync index projections after v4.8.1 release (refs #bump-minor-version-and-reconcile-protocol-references)
 
 ## v4.8.1 - 2026-11-11
 
-- fix(ci): Hermetic sys.path in test_cli_chdir for uv no-project (refs #ci-test-matrix-workflow)
-- feat(drafts): First-class untracked issue drafts with seamless start promotion, promotion command, and doctor hygiene (refs #issue-drafts-lifecycle)
-- feat(hooks): Emit early PreToolUse notice when a raw test runner is invoked in a repository with lifecycle test hook (refs #early-raw-runner-warning)
-- feat(lint): Validate existence of specified paths in along lint and return code 2 on missing files (refs #lint-arbitrary-paths)
-- feat(planscope): Approved plan grants Files to change as write scope outside subproject (refs #plan-grants-write-scope)
-- feat(worktree): Harden worktree lifecycle with wrap guards, automatic teardown, doctor audits, and commit notice (refs #worktree-lifecycle-hardening)
-- feat(subproject): Add top-down umbrella children binding and cross-context authorization (refs #top-down-umbrella-subproject-binding)
-- fix(lifecycle): Do not blame dirty working tree files claimed by in-progress issues on wrapped issues (refs #start-dirty-check-misattribution)
-- fix(subproject): Map issue folder files to issue key in subproject boundary, allowing edits inside umbrella issue folders (refs #subproject-boundary-issue-folder-files)
-- fix(gates): Fix cross-issue denial resolution and ack in rebound sessions (refs #gates-ack-cross-issue-denials)
-- docs: Finalize knowledge base index and llms-full synchronization (refs #release-v4-8-0)
-- chore: Release v4.8.0, synchronize dependency registry and milestones, and update global installation (refs #release-v4-8-0)
+- fix(ci): hermetic sys.path in test_cli_chdir for uv no-project (refs #ci-test-matrix-workflow)
+- feat(drafts): first-class untracked issue drafts with promotion and doctor hygiene (refs #issue-drafts-lifecycle)
+- feat(hooks): emit early PreToolUse notice for raw test runners when lifecycle hook exists (refs #early-raw-runner-warning)
+- feat(lint): validate existence of specified paths and return code 2 on missing files (refs #lint-arbitrary-paths)
+- feat(planscope): approved plan grants Files to change as write scope (refs #plan-grants-write-scope)
+- feat(worktree): harden lifecycle with wrap guards, teardown, and doctor audits (refs #worktree-lifecycle-hardening)
+- feat(subproject): support top-down children binding and cross-context authorization (refs #top-down-umbrella-subproject-binding)
+- fix(lifecycle): do not blame dirty files claimed by in-progress issues on wrapped issues (refs #start-dirty-check-misattribution)
+- fix(subproject): map issue folder files to issue key in subproject boundary (refs #subproject-boundary-issue-folder-files)
+- fix(gates): resolve retried denials and ack across issues (refs #gates-ack-cross-issue-denials)
+- docs: finalize knowledge base index and llms-full synchronization (refs #release-v4-8-0)
 
 ## v4.8.0 - 2026-11-10
 
 - chore: synchronize dependency registry, milestones, and issue tracking (refs #release-v4-8-0)
-- chore: Integrate @actdim/ui-core runtime, tokens, and component tests (refs #integrate-actdim-ui-core-runtime)
 - feat(dashboard): integrate @actdim/ui-core runtime dependencies, tokens and component tests (refs #integrate-actdim-ui-core-runtime)
-- chore: Centralize domain exceptions hierarchy and eliminate sys.exit from command modules (refs #domain-exceptions-and-error-flow)
 - refactor(errors): centralize domain exceptions hierarchy and error boundary (refs #domain-exceptions-and-error-flow)
-- chore: Add integration test registry and parallel xdist execution support to test runners (refs #optimize-test-suite-execution-time)
 - perf(test): add integration test registry and parallel xdist execution support (refs #optimize-test-suite-execution-time)
-- chore: Classify working tree changes by content digest to distinguish git stat-cache flips from real mutations (refs #hermetic-suite-flaky-git-cache)
 - fix(test): harden hermetic suite against windows git stat-cache flips (refs #hermetic-suite-flaky-git-cache)
-- chore: Fix heredoc detection false positives, add venv-awareness to pip install checks, and close global npm/system-package manager gaps (refs #simplify-cli-safety-gate-and-predicates)
 - fix(hooks): resolve cli_safety false positives and detection gaps (refs #simplify-cli-safety-gate-and-predicates)
-- chore: Relocate _handle_chdir_options to alongkit.cliargs and deduplicate import in along_exec.py (refs #refactor-cli-chdir-common)
 - refactor(cli): move _handle_chdir_options into dependency-free cliargs module (refs #refactor-cli-chdir-common)
-- chore: Enable pytest execution and IDE explorer integration via conftest.py/pyproject.toml, add -k filtering and path normalization to test.py with zero-test safeguard (refs #pytest-support-and-test-runner-filtering)
 - feat(test): add pytest runner support and fine-grained test runner filtering (refs #pytest-support-and-test-runner-filtering)
 - fix(worktree): handle POSIX and root-relative paths in inspect_git_dir on Windows under Python 3.13 (refs #ci-worktree-python313-posix-path)
-- fix: Fix worktree inspect_git_dir POSIX path handling on Windows in Python 3.13 (refs #ci-worktree-python313-posix-path)
 
 ## v4.7.0 - 2026-11-06
 
 - fix(lifecycle): prevent UnboundLocalError when updating already-done issue in wrap (refs #verify-worktree-env-readiness-hardening)
-- chore: Harden worktree readiness against POSIX paths, child workspaces, and Python flags (refs #verify-worktree-env-readiness-hardening)
-- fix(worktree): harden path normalization and command classification (refs #verify-worktree-env-readiness-hardening)
-- chore: Harden worktree environment readiness and path preservation in inspect_git_dir (refs #verify-worktree-env-readiness-hardening)
 - fix(lifecycle): make --phase imply --keep-open and support flexible phase formats (refs #partial-session-wrap) (refs #verify-worktree-env-readiness-hardening)
 - fix(cli): support global -C and --chdir options in alongkit.cli entrypoint (refs #cli-global-chdir)
-- test(worktree): configure git author in nested fixture for CI runners (refs #gate-denials-subagent-attribution)
 - feat(gates): support subagent attribution for gate denials and unresolved reporting (refs #gate-denials-subagent-attribution)
-- feat: Support subagent attribution for gate denials and unresolved denial reporting (refs #gate-denials-subagent-attribution)
 - feat(gates): support unstaged linting and subproject protocol version skew doctor audit (refs #lint-worktree-and-doctor-subprojects)
-- feat: Support unstaged linting and subproject protocol version skew doctor audit (refs #lint-worktree-and-doctor-subprojects)
 - feat(entities): implement cross-repo and submodule entity references with path qualifiers (refs #cross-repo-entity-references)
-- feat: Support cross-repo and submodule entity references with path qualifiers (refs #cross-repo-entity-references)
-- feat(lifecycle): add --keep-open and --phase options for partial session wrap (refs #partial-session-wrap)
-- feat: Support partial session wrap with --keep-open and --phase options (refs #partial-session-wrap)
 - feat(lifecycle): implement batch plan approval and status: draft rejection (refs #plan-approve-batch)
-- feat: Add batch plan approval command and status: draft rejection header (refs #plan-approve-batch)
-- feat(cli): support global -C and --chdir options in Along CLI router (refs #cli-global-chdir)
-- feat: Add global -C / --chdir option to Along CLI router (refs #cli-global-chdir)
 - fix(gates): narrow entity-deletion-protection to canonical entity paths and plan.md (refs #entity-deletion-protection-path-scope)
-- fix: Scope entity deletion protection to canonical entity files and allow draft/attachment deletions (refs #entity-deletion-protection-path-scope)
 - fix(hooks): prevent worktree-env-readiness false positives on submodules and allow recovery commands (refs #worktree-env-readiness-submodules)
-- fix: Fix worktree-env-readiness false positives on Git submodules, target path evaluation, and recovery deadlocks (refs #worktree-env-readiness-submodules)
 
 ## v4.6.1 - 2026-11-05
 
 - fix: Relocate agent protocol to .along/PROTOCOL.md and exclude from public docs (refs #protocol-leaks-into-docs)
-- fix: Relocate agent protocol reference from docs/ to .along/PROTOCOL.md (refs #protocol-leaks-into-docs)
 - fix(ci): fix executable permissions in docker test harness and update node to 24 (refs #autonomous-container-build-and-firewall)
 
 ## v4.6.0 - 2026-11-01
 
 - docs(entities): register autonomous execution, team worktree, and diagnostics roadmap issues
 - docs(dashboard-ui): sync topic index date header
-- feat: Support test-inert paths and ignore_paths in test_before_stop, name modified files in Stop rejection message, record HEAD baseline for failing test runs, and define scope containment rule in protocol (refs #test-gate-scope)
 - feat(gates): test-inert path classification, ignore_paths, and pre-existing failure baseline (refs #test-gate-scope)
-- fix: Remove unused telemetry extra, unify Telegram settings and client, remove daemon port placeholder, eliminate env dead code and subprocess calls, ensure unique question IDs, and harden brief exit codes (refs #autonomous-mvp-minor-defects)
 - fix(autonomous): packaging cleanup, unified telegram helper, and env/brief hardening (refs #autonomous-mvp-minor-defects)
-- fix: Fix autonomous container build, fail-closed firewall, safe YAML generation, and add hermetic and real Docker integration tests (refs #autonomous-container-build-and-firewall)
 - fix(env): autonomous container build and fail-closed firewall (refs #autonomous-container-build-and-firewall)
-- fix: Grounded claude, codex, and opencode runners in real CLI help and schema fixtures, enforced process-tree kill on timeout, allowlisted child environments, and fixed porcelain parsing. (refs #runtime-adapters-invented-cli-contracts)
 - fix(runner): ground runtime adapters in verified CLI contracts and harden supervisor (refs #runtime-adapters-invented-cli-contracts)
-- chore: Classified Telegram Bot API poll errors (409 conflict window, 429 retry_after, jittered backoff, token redaction) (refs #telegram-poll-error-classification)
 - fix(daemon): classify telegram poll errors, jitter backoff and bound 409 conflict window (refs #telegram-poll-error-classification)
 - chore(along): update dashboard-ui docs index projection
-- fix: Close autonomous gate residual holes and escalation override bypasses (refs #autonomous-gate-residual-holes)
 - fix(hooks): close autonomous gate residual holes and escalation overrides (refs #autonomous-gate-residual-holes)
-- docs(issues): approve ahead the plan for autonomous MVP minor defects (refs #autonomous-mvp-minor-defects)
-- docs(issues): approve ahead the plan for the autonomous container build and firewall (refs #autonomous-container-build-and-firewall)
-- docs(issues): approve ahead the plan for runtime adapter CLI contracts (refs #runtime-adapters-invented-cli-contracts)
-- docs(issues): approve ahead the plan for Telegram poll error classification (refs #telegram-poll-error-classification)
-- docs(issues): approve ahead the plan for autonomous gate residual holes; move REQ-5 to the Telegram gateway feature (refs #autonomous-gate-residual-holes)
 - docs: record Telegram bot ownership and update transport design (refs #agent-execution-gate-telegram)
 
 ## v4.5.4 - 2026-10-28
 
-- chore(kb): refresh dashboard-ui INDEX projection date (refs #runner-daemon-lifecycle-safety)
-- fix: Runner daemon: worktree teardown keeps the along/<slug> branch (dirty worktrees are kept whole); the Telegram offset is persisted before each update runs; commands older than max_command_age are ignored with a reply; PID file holds a start-time identity, is created exclusively, and stop/status never act on an unverified PID; tasks run on a worker thread so /status, busy replies and SIGTERM (20 s grace) work during a run; poll errors back off exponentially, a rejected token exits 78 (RestartPreventExitStatus=78); background start uses the engine script and fails when the child exits; daemon.log rotates at 5 MB. 10 new regression tests, all failing on the old code. (refs #runner-daemon-lifecycle-safety)
 - fix(daemon): keep worktree branches, persist the Telegram offset, verify PID identity, run tasks off the poll loop (refs #runner-daemon-lifecycle-safety)
-- fix: Orchestrator fails closed: a step passes only on a valid review verdict (missing, unparseable or inconsistent verdicts and failed implementer runs are failed attempts with a blocking defect); claims are exclusive under claim.lock, renewed before each run and released only by their owner; dry run is a read-only preview; handoff rejects unsafe slug/run_id/question ids; runner timeout defaults to DEFAULT_TIMEOUT. 13 new regression tests, all failing on the old code. (refs #orchestrator-review-fail-open)
 - fix(orchestrator): fail closed on missing or invalid reviews; exclusive claims; read-only dry run; safe handoff ids (refs #orchestrator-review-fail-open)
-- chore(issues): file six bug issues from the autonomous MVP review (refs #orchestrator-review-fail-open)
 
 ## v4.5.3 - 2026-10-23
 
-- fix: CI code-fence-language gate failed on docs/topic--autonomous-environment.md:37; the isolation diagram fence now declares text. gates check --ci, typography and link checks pass locally. (refs #ci-fence-language-missing)
 - fix(docs): declare text language on the isolation diagram fence (CI code-fence-language gate) (refs #ci-fence-language-missing)
-- fix: ExitPlanMode PostToolUse capture now reads the accepted plan from tool_input.plan, tool_response.plan, or the plan file (planFilePath / filePath); current Claude Code sends an empty tool_input. Regression tests with the real payload shape; replayed the real payload through the repo hook to record this issue's plan. (refs #exit-plan-text-not-captured)
 - fix(hooks): ExitPlanMode capture reads the plan from tool_response.plan or the plan file, not only tool_input.plan (refs #exit-plan-text-not-captured)
-- fix: along wrap auto-commit and its uncommitted-work warning now include the issue folder moved to done/ and the ticket's old path; regression tests 16c/16d. (refs #wrap-misses-moved-issue-folder)
 - fix(wrap): auto-commit and uncommitted-work warning include the moved issue folder and the ticket's old path (refs #wrap-misses-moved-issue-folder)
-- chore(along): commit the issue plan moved to done/ by wrap (refs #pre-approved-plans)
-- feat: Issue plans live in .along/ISSUES/<key>/plan.md and can be approved ahead of along start; plan_status approved is set only by along plan approve (machine-local approval log, file-tool guard, Stop check); along plan revise/rework; the orchestrator runs an approved plan instead of its architect. (refs #pre-approved-plans)
 - feat(plans): issue plans live with the ticket and can be approved ahead of along start; plan_status approved is set only by the CLI (approval log, gate guard, Stop check); along plan revise/rework; orchestrator runs an approved plan instead of its architect (refs #pre-approved-plans)
-- chore: drop the pre-wrap copy of the issue moved to done/ (refs #plan-approval-self-approval-bypass)
-- fix: Removed agent-writable approval markers (plan.md text, issue front-matter, state.json role keys) from is_plan_approved; restored the session ownership check in every profile; require-plan-approval now denies file-tool writes to session bindings and blackboard state.json; 7 regression tests (13 checks fail on the old code). (refs #plan-approval-self-approval-bypass)
 - fix(gates): plan gate accepts only CLI-written approval; restore session ownership check (refs #plan-approval-self-approval-bypass)
 - feat(daemon): implement VPS runner daemon and Telegram ingress loop (refs #vps-runner-daemon)
 - feat(orchestration): implement cross-runtime supervisor orchestrator for tiered multi-agent loops (refs #cross-runtime-supervisor-orchestrator)
@@ -169,49 +123,38 @@ All notable changes to this project, newest first.
 
 ## v4.5.2 - 2026-10-23
 
-- feat: Anti-silent-fallback gate: gate denials are ledger events settled by retry, plan approval or a user-verified ack; Stop gate unresolved_gate_denial; along gates denials/ack; closeout, wrap and issue done refuse unsettled denials (--force-reason under bypass rules). (refs #anti-silent-fallback-gate)
 - feat: Gate denials are ledger events settled by retry, approval or user-verified ack; Stop gate unresolved_gate_denial; along gates denials/ack; closeout, wrap and issue done refuse unsettled denials (--force-reason under bypass rules); ADR-2026-10-23--gate-denials-are-ledger-events (refs #anti-silent-fallback-gate)
 - chore: Supersede automated-ui-screenshots with along-webdev-runner, add along-report-engine and along-storage-providers issues, refresh milestone progress (refs #along-webdev-runner)
 - feat(ste): implement Controlled Natural Language specification engine and issue scaffold (refs #ste-cnl-specification-engine)
-- feat: Implement STE-CNL specification format convention and issue scaffold (refs #ste-cnl-specification-engine)
 - docs: reconcile v4.5.1 release history, milestone, and Step 16 migration scope
 
 ## v4.5.1 - 2026-10-21
 
 - chore: setup v4.5.1 hotfix milestone and carry over v4.5.2
-- fix: Quote description string in along-issue-sync frontmatter (refs #along-issue-sync-frontmatter-quotes)
 - fix: Quote description string in along-issue-sync frontmatter to fix YAML parsing in Antigravity (refs #along-issue-sync-frontmatter-quotes)
-- refactor: Entity model slimmed: spike is an issue type, risk and checklist types retired via migration Step 16, session logs keep files: front matter without plan/file-table copies, session gc archives closed-issue blackboards, nested contexts get no empty VISION/GLOSSARY (refs #entity-model-slimming)
 - refactor: Slim the entity model: spike becomes an issue type, risk and checklist types retire (migration Step 16 converts RISKS/SPIKES/CHECKLISTS with backup and reference rewrite), session logs keep attributed paths as files: front matter without plan or file-table copies, session gc archives blackboards of closed issues, nested contexts get no empty VISION/GLOSSARY, ADR-2026-10-19--entity-model-slimmed (refs #entity-model-slimming)
-- chore: Refresh dashboard-ui KB index projection (refs #wrap-misses-engine-writes)
 - fix: Wrap and session close commit engine-refreshed files (docs/topic--along-protocol.md, AGENTS.md changed only inside managed blocks); migration Step 15 removes retired circuit-breaker and tool-classifier artifacts with backup (refs #wrap-misses-engine-writes)
 - chore: Doc sweep for the AGENTS.md core + protocol reference split, kb-sync per-context slug fix, global reinstall, release v4.5.0 tagged and pushed (refs #release-v4-5-0)
 
 ## v4.5.0 - 2026-10-18
 
 - fix(kb-sync): treat engine-written per-context slugs (dependencies, along-protocol) as standard so strict release gate does not flag them as cross-project collisions; repin reviewed source hashes; hermetic rule now points to the protocol reference (refs #release-v4-5-0)
-- docs: Describe the AGENTS.md core + managed docs/topic--along-protocol.md reference in setup guide, skills reference and along-init/along-update skills; include pending roadmap edits (STE CNL issue, v4.6.0/v5.0.0 milestones) (refs #release-v4-5-0)
-- chore: Regenerate AGENTS.md core block and docs/topic--along-protocol.md projection from protocol sources (refs #agents-md-core-slimming)
 - refactor: Slim AGENTS.md managed block to a 4.9 KB core (state locations, issue anchoring, gate list, judgment rules); full procedure moved to managed on-demand docs/topic--along-protocol.md rendered by along init/update; marker-based profile sections; update honours active profile (refs #agents-md-core-slimming)
 - refactor: DECISIONS.md board as a sliding window of the newest active ADRs with compact superseded lines (refs #decisions-board-sliding-window)
 - refactor: Gates judge results, not commands: remove tool-nature classifier, circuit breaker and fast_retrieval; plan gate checks file targets and end-of-turn git status; narrow destructive_command gate; content rules commit-time via along lint; audit target field and loop stats (refs #gate-simplification)
 - docs: Plan autonomous multi-runtime MVP: epic, headless-runtimes spike, Docker-now gVisor-later ADR, gate and entity simplification debts, handoff entities, re-scoped daemon/Telegram/orchestrator issues (refs #autonomous-multi-runtime-mvp)
 - refactor: Prune and limit migration backups in .along (refs #migration-backup-retention-and-cleanup)
-- refactor: remove monolithic scripts/alongkit/entities.py in favor of alongkit/entities package (refs #split-along-exec-and-entities)
 - refactor: Decomposed along_exec.py (2128 to 394 lines) and alongkit/entities.py (2453 lines) into modular command and entity subsystems with full backward compatibility (refs #split-along-exec-and-entities)
 - fix: Improve session-record-append-only gate for deletions, renames, and subproject consolidation (refs #session-record-gate-lifecycle-resilience)
 - chore: sync dependency registry and dashboard KB projections (refs #migrate-to-actdim-ui-core)
-- chore: Migrate dashboard UI foundations to @actdim/ui-core (refs #migrate-to-actdim-ui-core)
 - docs: Sync recent features documentation across CLI reference and lifecycle guides (refs #sync-recent-features-documentation)
-- task(issues): Track bug--session-record-gate-lifecycle-resilience (refs #session-record-gate-lifecycle-resilience)
-- task(issues): Track missing migrate-to-actdim-ui-core and ste-cnl-specification-engine issues (refs #migrate-to-actdim-ui-core)
 - docs: Document Monorepo Workspaces vs Git Submodules in release cycles (refs #monorepo-submodule-release-workflow)
 
 ## v4.4.16 - 2026-10-16
 
 - feat: Implement issue stub validation, lifecycle quality gates, and doctor audit (refs #issue-stub-validation-and-lifecycle-gates)
 - debt(dashboard-ui): consolidate subproject context into root repository (refs #consolidate-dashboard-ui-subproject)
-- feat: feat: atomic wrap commit, clean start guard, and CLI black-box invariance (refs #atomic-wrap-commit-and-start-guard)
+- feat: atomic wrap commit, clean start guard, and CLI black-box invariance (refs #atomic-wrap-commit-and-start-guard)
 
 ## v4.4.15 - 2026-10-16
 
@@ -224,20 +167,15 @@ All notable changes to this project, newest first.
 
 - fix(ci): cross-os toolnature paths, code-fence tag and secret pragma (refs #ci-linux-toolnature-and-secrets)
 - chore(dashboard-ui): sync dashboard dependencies and milestone projections (refs #bump-dashboard-deps)
-- chore(along): projections after closing out bug--along-dash-missing-dashboard, bug--session-scanner-prompts-dir-leak, debt--decouple-static-data-json-fallback, debt--remove-static-dashboard-data-json-export, feat--bounded-prompt-footprint-gate, feat--doc-routing-compliance-gate, task--bump-dashboard-deps, task--dashboard-docs-kb-alignment, task--update-overlay-conventions (refs #along-dash-missing-dashboard) (refs #session-scanner-prompts-dir-leak) (refs #decouple-static-data-json-fallback) (refs #remove-static-dashboard-data-json-export) (refs #bounded-prompt-footprint-gate) (refs #doc-routing-compliance-gate) (refs #bump-dashboard-deps) (refs #dashboard-docs-kb-alignment) (refs #update-overlay-conventions)
-- chore: changes shared by bug--session-scanner-prompts-dir-leak, feat--bounded-prompt-footprint-gate, feat--doc-routing-compliance-gate (refs #session-scanner-prompts-dir-leak) (refs #bounded-prompt-footprint-gate) (refs #doc-routing-compliance-gate)
-- chore: changes shared by feat--bounded-prompt-footprint-gate, feat--doc-routing-compliance-gate (refs #bounded-prompt-footprint-gate) (refs #doc-routing-compliance-gate)
-- chore: changes shared by bug--along-dash-missing-dashboard, debt--remove-static-dashboard-data-json-export (refs #along-dash-missing-dashboard) (refs #remove-static-dashboard-data-json-export)
+- fix: along-dash-missing-dashboard (refs #along-dash-missing-dashboard)
+- fix: session-scanner-prompts-dir-leak (refs #session-scanner-prompts-dir-leak)
+- feat: bounded-prompt-footprint-gate (refs #bounded-prompt-footprint-gate)
 - chore: dashboard-docs-kb-alignment (refs #dashboard-docs-kb-alignment)
 - feat: doc-routing-compliance-gate (refs #doc-routing-compliance-gate)
-- feat: bounded-prompt-footprint-gate (refs #bounded-prompt-footprint-gate)
 - refactor: remove-static-dashboard-data-json-export (refs #remove-static-dashboard-data-json-export)
-- fix: session-scanner-prompts-dir-leak (refs #session-scanner-prompts-dir-leak)
-- fix: along-dash-missing-dashboard (refs #along-dash-missing-dashboard)
 
 ## v4.4.13 - 2026-10-14
 
-- chore(along): projections after closing out feat--gate-strictness-profiles (refs #gate-strictness-profiles)
 - feat: gate-strictness-profiles (refs #gate-strictness-profiles)
 - feat(session): structured blackboard state machine and deterministic patch merging (refs #structured-blackboard-state-machine)
 
@@ -281,30 +219,18 @@ All notable changes to this project, newest first.
 
 ## v4.4.9 - 2026-10-10
 
-- chore(decisions): update ADR projections and dashboard docs (refs #constraints-superseded-adr-filtering)
+- refactor: constraints-superseded-adr-filtering (refs #constraints-superseded-adr-filtering)
 - chore(along): projections after closing out bug--along-install-marker-ambiguous, bug--archive-drops-research-md, bug--breaker-trips-on-test-output, bug--ci-windows-closeout-short-paths, bug--cli-entity-sync-defects, bug--inquiry-readonly-commands-blocked, bug--lexical-path-root-resolution, bug--lifecycle-test-false-pass, bug--plan-gate-blocks-help, bug--runtime-plan-dir-containment, bug--subcommand-help-as-argument, bug--subproject-model-overdetection, bug--update-maintenance-friction, bug--wrapped-work-left-uncommitted, debt--canonical-windows-paths, debt--constraints-superseded-adr-filtering, feat--docs-semantic-conflict-resolution, feat--test-gate-cost-reduction (refs #along-install-marker-ambiguous) (refs #archive-drops-research-md) (refs #breaker-trips-on-test-output) (refs #ci-windows-closeout-short-paths) (refs #cli-entity-sync-defects) (refs #inquiry-readonly-commands-blocked) (refs #lexical-path-root-resolution) (refs #lifecycle-test-false-pass) (refs #plan-gate-blocks-help) (refs #runtime-plan-dir-containment) (refs #subcommand-help-as-argument) (refs #subproject-model-overdetection) (refs #update-maintenance-friction) (refs #wrapped-work-left-uncommitted) (refs #canonical-windows-paths) (refs #constraints-superseded-adr-filtering) (refs #docs-semantic-conflict-resolution) (refs #test-gate-cost-reduction)
-- chore: changes shared by bug--along-install-marker-ambiguous, bug--archive-drops-research-md, bug--cli-entity-sync-defects, bug--lifecycle-test-false-pass, bug--subcommand-help-as-argument, bug--subproject-model-overdetection, bug--wrapped-work-left-uncommitted, debt--constraints-superseded-adr-filtering, feat--docs-semantic-conflict-resolution (refs #along-install-marker-ambiguous) (refs #archive-drops-research-md) (refs #cli-entity-sync-defects) (refs #lifecycle-test-false-pass) (refs #subcommand-help-as-argument) (refs #subproject-model-overdetection) (refs #wrapped-work-left-uncommitted) (refs #constraints-superseded-adr-filtering) (refs #docs-semantic-conflict-resolution)
-- chore: changes shared by bug--along-install-marker-ambiguous, bug--breaker-trips-on-test-output, bug--inquiry-readonly-commands-blocked, bug--lifecycle-test-false-pass, bug--subproject-model-overdetection, bug--update-maintenance-friction, bug--wrapped-work-left-uncommitted, feat--test-gate-cost-reduction (refs #along-install-marker-ambiguous) (refs #breaker-trips-on-test-output) (refs #inquiry-readonly-commands-blocked) (refs #lifecycle-test-false-pass) (refs #subproject-model-overdetection) (refs #update-maintenance-friction) (refs #wrapped-work-left-uncommitted) (refs #test-gate-cost-reduction)
-- chore: changes shared by bug--along-install-marker-ambiguous, bug--breaker-trips-on-test-output, bug--cli-entity-sync-defects, bug--lifecycle-test-false-pass, bug--subcommand-help-as-argument, bug--subproject-model-overdetection, bug--wrapped-work-left-uncommitted, feat--docs-semantic-conflict-resolution (refs #along-install-marker-ambiguous) (refs #breaker-trips-on-test-output) (refs #cli-entity-sync-defects) (refs #lifecycle-test-false-pass) (refs #subcommand-help-as-argument) (refs #subproject-model-overdetection) (refs #wrapped-work-left-uncommitted) (refs #docs-semantic-conflict-resolution)
 - chore: changes shared by bug--breaker-trips-on-test-output, bug--lexical-path-root-resolution, bug--lifecycle-test-false-pass, bug--subproject-model-overdetection, bug--wrapped-work-left-uncommitted, debt--canonical-windows-paths, feat--test-gate-cost-reduction (refs #breaker-trips-on-test-output) (refs #lexical-path-root-resolution) (refs #lifecycle-test-false-pass) (refs #subproject-model-overdetection) (refs #wrapped-work-left-uncommitted) (refs #canonical-windows-paths) (refs #test-gate-cost-reduction)
-- chore: changes shared by bug--along-install-marker-ambiguous, bug--archive-drops-research-md, bug--lexical-path-root-resolution, bug--lifecycle-test-false-pass, bug--wrapped-work-left-uncommitted, debt--canonical-windows-paths (refs #along-install-marker-ambiguous) (refs #archive-drops-research-md) (refs #lexical-path-root-resolution) (refs #lifecycle-test-false-pass) (refs #wrapped-work-left-uncommitted) (refs #canonical-windows-paths)
 - chore: changes shared by bug--lifecycle-test-false-pass, bug--runtime-plan-dir-containment, bug--subproject-model-overdetection, bug--wrapped-work-left-uncommitted, feat--test-gate-cost-reduction (refs #lifecycle-test-false-pass) (refs #runtime-plan-dir-containment) (refs #subproject-model-overdetection) (refs #wrapped-work-left-uncommitted) (refs #test-gate-cost-reduction)
 - chore: changes shared by bug--cli-entity-sync-defects, bug--subproject-model-overdetection, bug--update-maintenance-friction, debt--canonical-windows-paths, debt--constraints-superseded-adr-filtering (refs #cli-entity-sync-defects) (refs #subproject-model-overdetection) (refs #update-maintenance-friction) (refs #canonical-windows-paths) (refs #constraints-superseded-adr-filtering)
-- chore: changes shared by bug--cli-entity-sync-defects, bug--inquiry-readonly-commands-blocked, bug--subcommand-help-as-argument (refs #cli-entity-sync-defects) (refs #inquiry-readonly-commands-blocked) (refs #subcommand-help-as-argument)
 - chore: changes shared by bug--ci-windows-closeout-short-paths, bug--wrapped-work-left-uncommitted, debt--canonical-windows-paths (refs #ci-windows-closeout-short-paths) (refs #wrapped-work-left-uncommitted) (refs #canonical-windows-paths)
-- chore: changes shared by bug--archive-drops-research-md, bug--ci-windows-closeout-short-paths, debt--canonical-windows-paths (refs #archive-drops-research-md) (refs #ci-windows-closeout-short-paths) (refs #canonical-windows-paths)
+- fix: archive-drops-research-md (refs #archive-drops-research-md)
 - chore: changes shared by debt--canonical-windows-paths, feat--docs-semantic-conflict-resolution (refs #canonical-windows-paths) (refs #docs-semantic-conflict-resolution)
-- chore: changes shared by bug--inquiry-readonly-commands-blocked, bug--update-maintenance-friction (refs #inquiry-readonly-commands-blocked) (refs #update-maintenance-friction)
-- chore: changes shared by bug--ci-windows-closeout-short-paths, bug--wrapped-work-left-uncommitted (refs #ci-windows-closeout-short-paths) (refs #wrapped-work-left-uncommitted)
-- chore: changes shared by bug--archive-drops-research-md, bug--wrapped-work-left-uncommitted (refs #archive-drops-research-md) (refs #wrapped-work-left-uncommitted)
-- chore: changes shared by bug--along-install-marker-ambiguous, debt--constraints-superseded-adr-filtering (refs #along-install-marker-ambiguous) (refs #constraints-superseded-adr-filtering)
-- chore: changes shared by bug--along-install-marker-ambiguous, bug--wrapped-work-left-uncommitted (refs #along-install-marker-ambiguous) (refs #wrapped-work-left-uncommitted)
+- fix: inquiry-readonly-commands-blocked (refs #inquiry-readonly-commands-blocked)
 - feat: docs-semantic-conflict-resolution (refs #docs-semantic-conflict-resolution)
-- refactor: constraints-superseded-adr-filtering (refs #constraints-superseded-adr-filtering)
 - fix: wrapped-work-left-uncommitted (refs #wrapped-work-left-uncommitted)
 - fix: plan-gate-blocks-help (refs #plan-gate-blocks-help)
-- fix: inquiry-readonly-commands-blocked (refs #inquiry-readonly-commands-blocked)
-- fix: archive-drops-research-md (refs #archive-drops-research-md)
 - feat(gates): reduce test gate cost via tree-hash reuse and scoped doc tests (refs #test-gate-cost-reduction)
 
 ## v4.4.8 - 2026-10-08
@@ -313,7 +239,6 @@ All notable changes to this project, newest first.
 - fix: preserve lexical path form in root discovery and installation while maintaining semantic canonicalization (refs #lexical-path-root-resolution)
 - debt: enforce canonical path resolution across repository engines and test fixtures (refs #canonical-windows-paths)
 - fix(ci): resolve windows 8.3 short paths against canonical git top in closeout engine (refs #ci-windows-closeout-short-paths)
-- chore(along): wrap file-v4-5-fixes-update: session log, history, board (drops the stray temp plan line), dashboard-ui protocol version 4.4.7 after the global update; refine bug--history-append-blocked-after-wrap (wrap appends only with --summary) (refs #file-v4-5-fixes-update)
 - docs(issues): file v4.5.0 fixes from the 2026-10-07 closeout: archive-drops-research-md, wrapped-work-left-uncommitted, history-append-blocked-after-wrap, uncommitted-issue-deleted-without-trace, plan-gate-blocks-help, inquiry-readonly-commands-blocked, release-ci-precondition-check, protocol-friction-cleanup; test-gate-cost-reduction gains REQ-6 (version-only changes keep a green run) and moves to v4.5.0 (refs #file-v4-5-fixes-update)
 - chore(release): wrap release-v4-4-7 closeout: session log, task moved to done, board (refs #release-v4-4-7)
 
@@ -343,11 +268,9 @@ All notable changes to this project, newest first.
 ## v4.4.5 - 2026-10-05
 
 - fix(hooks): forward-slash global hook paths on Windows, fail open on missing deps, cached ~/.along/venv runtime (refs #cached-runtime-venv) (refs #windows-hook-fail-open)
-
 ## v4.4.4 - 2026-10-04
 
 - fix(init): restore root VISION.md reconcile, FULL/REF blocks and hand-written AGENTS.md adoption via deterministic along init; migration Step 13; wrap and kb-sync onboarding checks (refs #init-onboarding-regressions)
-- docs(session): wrap ci-matrix-gate-session-fixes session log (refs #ci-matrix-gate-session-fixes) (refs #init-onboarding-regressions)
 - fix(ci): fix gates argparse on python <= 3.12 and windows short path traversal (refs #ci-matrix-gate-session-fixes) (refs #init-onboarding-regressions)
 
 ## v4.4.3 - 2026-10-03
@@ -414,7 +337,6 @@ All notable changes to this project, newest first.
 
 ## v3.9.4 - 2026-09-21
 
-- chore(milestone): update v4.0.0 progress (refs #windows-hook-command-quote-escaping)
 - fix(hooks): omit quotes on windows hook commands (refs #windows-hook-command-quote-escaping)
 
 ## v3.9.3 - 2026-09-21
@@ -502,7 +424,6 @@ All notable changes to this project, newest first.
 - feat: programmatic integrity gates, AST patcher, and git guard (refs #programmatic-integrity-gates-and-git-guard)
 - chore(audit): wrap session, record session log, and close quality audit remediation epic (refs #protocol-quality-audit-remediation)
 - feat(kb-search): token-based IDF ranking, exact phrases, snippet extraction, and close debt--kb-search-ranking-and-snippet-quality (refs #kb-search-ranking-and-snippet-quality)
-- chore(git): renormalize line endings, add regression test, and close debt--line-ending-churn-vs-gitattributes (refs #line-ending-churn-vs-gitattributes)
 - fix(line-endings): enforce declared newlines across generator writers and add newline_for_path (refs #line-ending-churn-vs-gitattributes)
 - chore: close debt--unpinned-mcp-and-ghost-wiki-query-tool (6/6 criteria met) (refs #unpinned-mcp-and-ghost-wiki-query-tool)
 - docs(lifecycle): pluggable lifecycle hooks showcase and docs sync (refs #pluggable-lifecycle-hooks-showcase)
@@ -525,7 +446,6 @@ All notable changes to this project, newest first.
 
 ## v2.2.24 - 2026-09-07
 
-- docs: record commit hash in session log (refs #remove-git-locking-workarounds)
 - fix: revert broken git locking workarounds and restore stat cache (refs #remove-git-locking-workarounds)
 
 ## v2.2.23 - 2026-09-07
@@ -534,10 +454,8 @@ All notable changes to this project, newest first.
 
 ## v2.2.22 - 2026-09-07
 
-- feat: fix git index lock resilience, kb sync atomic writes, and issue milestones (refs #programmatic-integrity-gates-and-git-guard)
 - fix: git index self-healing, committer selective staging, and kb-sync idempotency (refs #programmatic-integrity-gates-and-git-guard)
 - docs(issues): translate worktree isolation issue to English and eliminate Cyrillic across all issues (refs #runtime-worktree-isolation)
-- docs(issues): document semantic intent routing and false positive guards for worktree isolation (refs #runtime-worktree-isolation)
 - feat: add issue for deterministic kb pipeline and ast grounding (refs #deterministic-kb-pipeline-and-ast-grounding)
 
 ## v2.2.21 - 2026-09-06
@@ -551,11 +469,9 @@ All notable changes to this project, newest first.
 ## v2.2.19 - 2026-09-04
 
 - fix(alongkit): clean up syntax and deduplicate rules.py logic (refs #recent-features-defects-and-guard-messages)
-- fix: resolve quality defects in rules engine and execution guards (refs #recent-features-defects-and-guard-messages, #kb-source-provenance-and-reconstruction, #well-known-llms-and-context-discovery)
 
 ## v2.2.18 - 2026-09-02
 
-- docs: update dependency registry with actdim 1.5.13 (refs #runtime-enforcement-of-prose-rules)
 - refactor(dashboard-ui): upgrade actdim packages to 1.5.13 and refactor EntityDrawer to Dynstruct (refs #runtime-enforcement-of-prose-rules)
 
 ## v2.2.17 - 2026-09-02
@@ -600,13 +516,10 @@ All notable changes to this project, newest first.
 
 ## v2.2.7 - 2026-09-01
 
-- bump version to v2.2.7, knowledge base overhaul, and requirement traceability gates (refs #automated-ui-screenshots-and-visual-verification)
 - feat(protocol): integrate documentation blast radius and llm-wiki synchronization (refs #automated-ui-screenshots-and-visual-verification)
 
 ## v2.2.6 - 2026-09-01
 
-- bump release to v2.2.6 with Step 8 retroactive migration (refs #automated-ui-screenshots-and-visual-verification)
-- fix(migrate): add Step 8 for explicit v2.2.3/v2.2.4 to v2.2.5 link rewriting (refs #automated-ui-screenshots-and-visual-verification)
 - fix(update): add retroactive link rewriting, ~/.along/bin script discovery, and interactive prompts (refs #automated-ui-screenshots-and-visual-verification)
 
 ## v2.2.5 - 2026-08-31
@@ -615,7 +528,6 @@ All notable changes to this project, newest first.
 
 ## v2.2.3 - 2026-08-31
 
-- feat: automated KB migration to docs/ and .archive/, recursive monorepo context updates, and release v2.2.3 (refs #automated-ui-screenshots-and-visual-verification)
 - feat(dashboard): integrate knowledge base and ADR decisions into graph visualization v2.2.2 (refs #automated-ui-screenshots-and-visual-verification)
 - feat(protocol): bump to v2.2.1, concurrency projections, decentralized ADRs, and remove CONTEXT.md [feat--concurrency-projections-and-context-deprecation]
 
@@ -673,36 +585,22 @@ All notable changes to this project, newest first.
 
 ## v2.0.8 - 2026-08-27
 
-- v2.0.8 - bump version, fix bumper variable re.sub bug, and release reconciliation (refs #external-issue-trackers-sync-and-import)
-- docs(dash): configure automatic background web server startup with 1-click live link (refs #external-issue-trackers-sync-and-import)
-- docs(dash): refresh executive dashboard metrics and reports (refs #external-issue-trackers-sync-and-import)
-- chore(session): wrap session, log unit test gates, and sync protocol v2.0.7 state (refs #external-issue-trackers-sync-and-import)
 - feat(tests): add comprehensive unit test suite and enforce pre-commit testing gate (refs #external-issue-trackers-sync-and-import)
-- feat: -m fix(release): restore clean migrate_protocol and along_update scripts for v2.0.7 release -p (refs #external-issue-trackers-sync-and-import)
 
 ## v2.0.7 - 2026-08-27
 
-- feat: -m fix(dash): bundle along_dash.py inside skills/along-dash and clarify server controls -p (refs #external-issue-trackers-sync-and-import)
-- feat: -m fix(scripts): restore complete along_update.py engine across scripts and skills -p (refs #external-issue-trackers-sync-and-import)
 - fix(scripts): ensure clean 707-line migrate_protocol.py across scripts and skills/along-init -p (refs #external-issue-trackers-sync-and-import)
 
 ## v2.0.6 - 2026-08-27
 
-- docs(dash): standardize agent workflow for /along-dash in SKILL.md -p (refs #external-issue-trackers-sync-and-import)
 - fix(dash): ensure defensive Cytoscape graph edge validation and add v2.0.0 milestone -p (refs #external-issue-trackers-sync-and-import)
-- fix(dash): auto-refresh reports on launch and recommend uv run with fastapi/uvicorn -p (refs #external-issue-trackers-sync-and-import)
-- fix(scripts): ensure full 707-line migrate_protocol.py with v2.0.5 sync -p (refs #external-issue-trackers-sync-and-import)
 
 ## v2.0.5 - 2026-08-27
 
 - fix(protocol): bump CURRENT_PROTOCOL_VERSION to 2.0.4 in migrate_protocol.py -p (refs #external-issue-trackers-sync-and-import)
-- fix(scripts): clean encoding for migrate_protocol and along_update -p (refs #external-issue-trackers-sync-and-import)
 
 ## v2.0.4 - 2026-08-27
 
-- docs(readme): document CI/CD deployment best practices and rationale (refs #external-issue-trackers-sync-and-import)
-- feat(commit): support -p and --push flags in along_commit.py (refs #external-issue-trackers-sync-and-import)
-- feat(bump-version): add short flags -c, -p, -cp for commit and push (refs #external-issue-trackers-sync-and-import)
 - feat(skills): unify along-wrap, add along-commit, and deploy lifecycle suite (refs #external-issue-trackers-sync-and-import)
 - fix(scripts): ensure clean migrate_protocol.py and universal bump version engine
 
