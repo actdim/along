@@ -70,6 +70,9 @@ jobs:
       - name: Typography gate (check mode)
         run: uv run --python 3.12 --no-project --with "ruamel.yaml>=0.18" python scripts/sanitize_typography.py . --check
 
+      - name: Gate traceability check (along hook verify --strict)
+        run: uv run --python 3.12 --no-project --with "ruamel.yaml>=0.18" python scripts/along_exec.py hook verify --strict
+
       - name: Markdown link report
         # Report-only until docs/topic--dependencies.md stops linking into node_modules.
         continue-on-error: true

@@ -47,7 +47,7 @@ Also, when relevant: `.along/VISION.md`, `.along/GLOSSARY.md`. These reflect the
 - **Exemptions**: Read-only Q&A does not require an issue. Every repository edit, including a 1-line typo or comment fix, needs an in-progress issue and an approved plan.
 - **Inquiry Read-Only Invariance (Zero-Mutation Rule on Questions)** [gate: require-plan-approval]: On interrogative prompts ("is X done?", "why did Y fail?"), write/modify tools are STRICTLY PROHIBITED. Return a read-only audit report and ask for confirmation before modifying anything.
 - **Commit Binding** [gate: commit-issue-binding]: Every commit via `/along-commit` MUST bind to the active issue slug.
-- **No AI Co-Authors**: Commit messages MUST NOT carry `Co-Authored-By:` trailers naming an AI agent (GitHub lists the vendor as a contributor). `along hook install` turns runtime attribution off; opt out via `.along/config.json` `commits.allow_ai_coauthor: true`.
+- **No AI Co-Authors** [gate: commit-no-ai-coauthor]: Commit messages MUST NOT carry `Co-Authored-By:` trailers naming an AI agent (GitHub lists the vendor as a contributor). `along hook install` turns runtime attribution off; opt out via `.along/config.json` `commits.allow_ai_coauthor: true`.
 
 ## Issue Plans & Approving Ahead
 
@@ -70,15 +70,17 @@ Also, when relevant: `.along/VISION.md`, `.along/GLOSSARY.md`. These reflect the
 - **ADRs**: Modular records in `.along/DECISIONS/ADR-YYYY-MM-DD--<slug>.md` (with legacy fallback to monolithic `DECISIONS.md`). Never edit past entries - mark superseded. Recompile projections (`.along/DECISIONS.md` board and `.along/CONSTRAINTS.md`) via `/along-decision-sync` or `along decision sync`. Create new ADRs via `/along-decision-sync` or `along decision create <slug> --title "..."`. Add terms to `.along/GLOSSARY.md`.
 - **Issue lifecycle** [gate: issue-lifecycle]: Complete active issues via `along wrap <slug>` (or `along issue done <slug> --status cancelled|superseded`). Closing as done requires `validate_issue_completion` (no scaffold placeholders, mandatory Acceptance Criteria, all `- [x]` closed).
 - **Entity references** [gate: entity-reference-integrity] [gate: entity-deletion-protection]: Never delete an entity other entities reference; use `along issue rename` / `along issue supersede`.
+- **Session Record Append-Only** [gate: session-record-append-only]: Committed session logs under `.along/SESSIONS/` never lose or rewrite lines inside `## Blackboard Record`; `## Summary` stays editable.
 - **Auto-entity creation**: Agents MUST automatically detect user intent (build/fix/refactor -> Issue, blocked/rate-limit -> Issue tagged `risk`, compare/benchmark -> `spike` Issue, release/sprint -> Milestone) and create entities without prompting the user.
 
 ## Knowledge Base & Documentation
 
-- **Stable Entry Point**: `README.md` and `docs/` never link into `.along/`; route through `docs/INDEX.md` or `docs/topic--<slug>.md`.
-- **Portable Links**: Relative Markdown links only.
+- **Stable Entry Point** [gate: stable-entry-point]: `README.md` and `docs/` never link into `.along/`; route through `docs/INDEX.md` or `docs/topic--<slug>.md`.
+- **Portable Links** [gate: portable-links]: Relative Markdown links only.
 - **Fact Grounding**: Agents MUST extract facts from actual code, `README.md`, `docs/`, and `package.json`. Generic LLM placeholders are strictly prohibited.
 - **Fast Retrieval**: Agents SHOULD query `/along-kb-search` before reading whole documentation files.
 - **Doc Blast Radius**: After non-trivial code changes, agents MUST map affected symbols to `docs/topic--*.md` articles and update them before completing the task.
+- **Provenance Drift** [gate: provenance_drift]: Staged edits to tracked doc sources require updated topic provenance hashes or explicit settlement via `along kb-sync --accept-drift <topic> <source> (--reviewed | --no-doc-impact "<reason>")`.
 - **Manual Document Lock** [gate: doc-manual-lock]: Documents marked with `write_policy: manual` (or `locked: true`) are protected from automated agent modification during blast radius sweeps. Modifications require an explicit documentation issue (`docs--<slug>`).
 - **Managed Rule Packs** [gate: rule-pack-protection]: Never edit `.along/rules/**/*.md`; `along rules attach` owns them. Project guidelines go to `docs/topic--<slug>.md` or "Project specifics"; revert with `along rules restore`. `.along/rules/gates.yaml` and `.along/scripts/` stay repo-owned.
 
@@ -129,10 +131,10 @@ When a stage or session completes, agents MUST execute in this order:
 - **File Modification & Anti-Deletion**:
   - Never delete, truncate, or overwrite existing documentation, comments, or code unless explicitly instructed.
   - After batch edits or migrations, agents MUST run `git diff --stat` and inspect unexpected size reductions.
-  - No stubs or skeletons in place of populated code.
+  - No stubs or skeletons in place of populated code [gate: anti-stub-injection].
   - Anchor edits on minimal unique chunks. Restore unintended deletions immediately.
-- **Clean ASCII**: ASCII punctuation only (no typographic dashes, quotes, ellipsis, bullets, NBSP/zero-width chars or BOM); `along sanitize --write` fixes them.
-- **Markdown**: Every code fence names a language.
+- **Clean ASCII** [gate: typography]: ASCII punctuation only (no typographic dashes, quotes, ellipsis, bullets, NBSP/zero-width chars or BOM); `along sanitize --write` fixes them.
+- **Markdown** [gate: code-fence-language]: Every code fence names a language.
 - **Commit-time checks**: typography, code fences, links, filenames, secrets, stubs and AI co-authors are checked by `along lint` (pre-commit and CI), not while you work.
 - **Bypass Is The User's Call**: `-n`, `--force-reason`, `scratch fallback` need `--reason` and the user's reply after the failure; each bypass is recorded (`along gates stats`).
 - **File Content Via Tools Only** [gate: cli_safety]: Create/edit files with the agent's file tools. NEVER carry content in heredocs, `python -c`, or inline shell. Write scripts to a file first.
@@ -140,9 +142,9 @@ When a stage or session completes, agents MUST execute in this order:
 - **CLI Black-Box Invariance**: Agents MUST treat the Along CLI and development tools as strict opaque black-box executables. Reading Along engine source code (`.along/bin/*.py`, `~/.along/bin/`, `alongkit/**`, `along_*.py`) to inspect internals, arguments, or data structures is STRICTLY FORBIDDEN unless working on the Along repository itself. Always use `along <command> --help` or official documentation in `docs/`. If an Along command returns an error or fails validation, report the exact CLI error output to the user immediately. Do not attempt to reverse-engineer or debug the Along engine.
 - **Verify Written Files**: After writing/patching, confirm parsing (`python -m compileall -q`, `bash -n`, etc.) before moving on.
 - **Hermetic Tests**: Tests MUST target throwaway fixtures (`tempfile.mkdtemp()`), never the live repository. Read-only access to live state is allowed. Keep a meta-test that verifies `git status --porcelain -u` stays clean.
-- Windows-safe filenames: dates `YYYY-MM-DD`, date first.
+- Windows-safe filenames [gate: windows-safe-filenames]: dates `YYYY-MM-DD`, date first.
 - Keep `ISSUES.md` compact: `along context-budget --check` enforces the limit.
-- Never write secrets into tracked files.
+- Never write secrets into tracked files [gate: no-tracked-secrets].
 
 ## Testing Invariants
 

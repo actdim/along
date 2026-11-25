@@ -4,7 +4,6 @@
 - [ ] `(debt)` [decouple-protocol-and-toolchain-versioning](ISSUES/debt--decouple-protocol-and-toolchain-versioning.md) - plan approved
 
 ## Backlog
-- [ ] `(bug)` [traceability-blind-to-protocol-md-and-unbadged-gates](ISSUES/bug--traceability-blind-to-protocol-md-and-unbadged-gates.md)
 - [ ] `(debt)` [autonomous-non-elevation-invariants](ISSUES/debt--autonomous-non-elevation-invariants.md)
 - [ ] `(debt)` [canonical-path-gate-expansion](ISSUES/debt--canonical-path-gate-expansion.md)
 - [ ] `(debt)` [dashboard-retire-risk-spike-views](ISSUES/debt--dashboard-retire-risk-spike-views.md)
@@ -70,9 +69,9 @@
 - [ ] `(task)` [reconcile-dashboard-ui-core-conventions](ISSUES/task--reconcile-dashboard-ui-core-conventions.md)
 
 ## Done (recent)
+- [x] `(bug)` [traceability-blind-to-protocol-md-and-unbadged-gates](ISSUES/done/bug--traceability-blind-to-protocol-md-and-unbadged-gates.md)
 - [x] `(bug)` [opencode-runtime-integration-defects](ISSUES/done/bug--opencode-runtime-integration-defects.md)
 - [x] `(bug)` [commit-gates-skip-chained-and-dash-c-commits](ISSUES/done/bug--commit-gates-skip-chained-and-dash-c-commits.md)
 - [x] `(bug)` [antigravity-manifest-matcher-unenforceable-invariants](ISSUES/done/bug--antigravity-manifest-matcher-unenforceable-invariants.md)
 - [x] `(docs)` [changelog-deduplication](ISSUES/done/docs--changelog-deduplication.md)
-- [x] `(bug)` [dsh-tool-name-map-and-ask-capability](ISSUES/done/bug--dsh-tool-name-map-and-ask-capability.md)
-<!-- 363 older completed issue(s) archived in .along/ISSUES/done/ -->
+<!-- 364 older completed issue(s) archived in .along/ISSUES/done/ -->

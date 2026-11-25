@@ -240,7 +240,12 @@ def main() -> int:
             description="Verify bi-directional traceability between prose rules and runtime gates.",
         )
         parser.add_argument("--repo-root", default=None, help="Path to repository root")
-        parser.add_argument("--strict", action="store_true", help="Fail if any gate is undocumented")
+        parser.add_argument(
+            "--strict",
+            action="store_true",
+            default=True,
+            help="Fail if any gate is undocumented (enabled by default)",
+        )
         args = parser.parse_args(sys.argv[2:])
 
         repo_root = args.repo_root or repo.find_repo_root()

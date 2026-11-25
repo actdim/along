@@ -25,7 +25,7 @@ The Along Declarative Gate Engine and Bi-Directional Traceability Matrix bridges
 ```text
 +-------------------------------------------------------------------------+
 |                  Prose Specifications & Skill Manifests                 |
-|  AGENTS.md, skills/along-init/protocol.md, skills/along-commit/SKILL.md |
+|  AGENTS.md, .along/*.md, skills/, docs/, .along/rules/                  |
 |  Embedded Badges: [gate: <id>] (e.g. [gate: commit_issue_binding])      |
 +-------------------------------------------------------------------------+
                                     |
@@ -143,12 +143,12 @@ While regex gates evaluate single tool calls in isolation, complex invariants re
 ### 2.3 Bi-Directional Traceability Scanner (`alongkit.hooks.traceability`)
 
 The traceability engine guarantees zero drift between written instructions and active enforcement:
-- `scan_prose_anchors()`: Parses Markdown files across `AGENTS.md` and `skills/*/SKILL.md` using regex `r"\[gate:\s*([a-zA-Z0-9_-]+)\]"`.
+- `scan_prose_anchors()`: Parses Markdown files across `AGENTS.md`, `CLAUDE.md`, `README.md`, `.along/*.md` (including `.along/PROTOCOL.md`, `.along/VISION.md`, `.along/CONSTRAINTS.md`, `.along/GLOSSARY.md`), `.along/rules/**/*.md`, `skills/**/*.md`, and `docs/**/*.md` using regex `r"(?:\[gate:\s*([a-zA-Z0-9_-]+)\]|<!--\s*gate:\s*([a-zA-Z0-9_-]+)\s*-->)"`.
 - `audit_traceability()`: Correlates prose anchors against active gates loaded from YAML.
   - Reports missing anchors (gates defined in YAML with no prose badge).
   - Reports dangling badges (badges in prose with no corresponding YAML gate).
-  - Returns boolean pass/fail status.
-- CLI verification: `along hook verify` (or `python scripts/along_hook.py verify`) runs the audit and outputs a structured matrix report.
+  - `TraceabilityReport.is_clean` requires zero dangling references, zero schema errors, and zero undocumented gates.
+- CLI verification: `along hook verify` (or `python scripts/along_hook.py verify`) runs the audit and outputs a structured matrix report, exiting with code `1` by default when any gate lacks a prose badge (`--strict` defaults to enabled).
 
 ---
 
@@ -197,7 +197,8 @@ The traceability engine guarantees zero drift between written instructions and a
           /                           \
          v                             v
 [Parse Prose Badges]          [Load Declarative Gates]
-AGENTS.md, skills/*/SKILL.md   default_gates.yaml + gates.yaml
+AGENTS.md, .along/*.md,        default_gates.yaml + gates.yaml
+skills/, docs/, .along/rules/
          \                             /
           v                           v
          [Cross-Reference Badges <-> Gate IDs]
@@ -216,9 +217,9 @@ Exit Code: 0                  Exit Code: 1 (lists missing/dangling)
 ## 4. Invariants & Failure Modes
 
 1. **Strict Bi-Directional Traceability Invariant**:
-   - Every active gate in `default_gates.yaml` MUST have at least one corresponding `[gate: <id>]` badge in prose documentation (`AGENTS.md` or `skills/`).
-   - Every `[gate: <id>]` badge in documentation MUST map to an active gate in the catalogue.
-   - `along hook verify` MUST exit with code 0 in CI and local test suites (`tests/test_gates_traceability.py`).
+   - Every active gate in `default_gates.yaml` MUST have at least one corresponding `[gate: <id>]` badge in scanned prose documentation (`AGENTS.md`, `.along/*.md`, `skills/`, `docs/`, or `.along/rules/`).
+   - Every `[gate: <id>]` badge in documentation MUST map to an active gate in the catalogue, and every badge emitted in a gate error message MUST match its catalogue gate id.
+   - `along hook verify` (and `along hook verify --strict`) MUST exit with code 0 in CI and local test suites (`tests/test_gates_traceability.py`).
 2. **Deterministic Isolation**:
    - Predicate handlers and file parsers use narrow exception handling `(OSError, UnicodeDecodeError, ValueError)`. Generic exceptions (`except Exception:`) and unhandled crashes are forbidden.
 3. **Repository Extensibility**:

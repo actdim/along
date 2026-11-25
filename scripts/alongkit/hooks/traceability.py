@@ -2,9 +2,10 @@
 """
 alongkit.hooks.traceability - Bi-directional Prose-to-Gate Traceability Scanner.
 
-Scans AGENTS.md, skills/*/SKILL.md, .along/rules/*.md, and docs/ for [gate: <id>]
-badges, verifying that every documented rule maps to an active runtime gate and
-every gate in default_gates.yaml is anchored in prose.
+Scans AGENTS.md, CLAUDE.md, README.md, .along/*.md, .along/rules/**/*.md,
+skills/**/*.md, and docs/**/*.md for [gate: <id>] badges, verifying that
+every documented rule maps to an active runtime gate and every gate in
+default_gates.yaml is anchored in prose.
 """
 
 from __future__ import annotations
@@ -56,7 +57,11 @@ class TraceabilityReport:
 
     @property
     def is_clean(self) -> bool:
-        return not self.dangling_references and not self.schema_errors
+        return (
+            not self.dangling_references
+            and not self.schema_errors
+            and not self.undocumented_gates
+        )
 
 
 def _canonical_id(raw_id: str) -> str:
@@ -67,21 +72,33 @@ def _canonical_id(raw_id: str) -> str:
 def scan_prose_anchors(repo_root: str) -> List[ProseAnchor]:
     """Scan all markdown files in repo root for gate badges."""
     anchors: List[ProseAnchor] = []
+    state_dir = repo.state_dir(repo_root)
     target_dirs = [
         os.path.join(repo_root, "skills"),
         os.path.join(repo_root, "docs"),
-        os.path.join(repo.state_dir(repo_root), "rules"),
+        os.path.join(state_dir, "rules"),
     ]
 
     files_to_scan: List[str] = []
 
-    # 1. Root AGENTS.md and CLAUDE.md
+    # 1. Root AGENTS.md, CLAUDE.md, and README.md
     for root_file in ("AGENTS.md", "CLAUDE.md", "README.md"):
         full_path = os.path.join(repo_root, root_file)
         if os.path.isfile(full_path):
             files_to_scan.append(full_path)
 
-    # 2. Directory targets
+    # 2. Top-level state markdown files (.along/*.md: PROTOCOL.md, VISION.md, CONSTRAINTS.md, GLOSSARY.md, ...)
+    if os.path.isdir(state_dir):
+        try:
+            for fname in os.listdir(state_dir):
+                if fname.endswith(".md"):
+                    full_path = os.path.join(state_dir, fname)
+                    if os.path.isfile(full_path):
+                        files_to_scan.append(full_path)
+        except OSError:
+            pass
+
+    # 3. Directory targets
     for target in target_dirs:
         if os.path.isdir(target):
             for root, _dirs, files in os.walk(target):
@@ -89,7 +106,7 @@ def scan_prose_anchors(repo_root: str) -> List[ProseAnchor]:
                     if f.endswith(".md"):
                         files_to_scan.append(os.path.join(root, f))
 
-    for path in sorted(files_to_scan):
+    for path in sorted(set(files_to_scan)):
         try:
             content = textio.read_text(path, strict=False)
         except (OSError, UnicodeDecodeError):

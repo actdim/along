@@ -2061,7 +2061,7 @@ Runtime lifecycle hook interceptor and declarative gate evaluation harness.
   - `along hook install [--runtime {antigravity,claude,codex,cursor,opencode,dsh,all}]`: Scaffolds or updates runtime hook configuration manifests (`.agents/hooks.json`, `.claude/settings.json`, `.codex/hooks.json`, `.dsh/cordis.patch.yml`).
   - `along hook attribution [--runtime {claude,cursor,all}] [--claude-home DIR] [--cursor-home DIR] [--dry-run]`: Turns off AI commit attribution (`Co-Authored-By:` trailers) in existing runtime homes: `attribution.commit = ""` + `includeCoAuthoredBy = false` in Claude Code `settings.json`, `attribution.attributeCommitsToAgent = false` in Cursor `cli-config.json`. Writes no hooks. Also run by the installers and every `/along-update`.
   - `along hook install --git [--uninstall] [--dry-run]`: Opt-in, never run by init/update. Writes `pre-commit` and `commit-msg` shims into the repository's hooks directory that run `along gates check --hook <name>`. A foreign hook already there is kept as `<hook>.pre-along` and run first (restored on `--uninstall`); with `core.hooksPath` set (husky, lefthook) nothing is written and the commands to add to the manager are printed.
-  - `along hook verify [--strict]`: Audits bi-directional traceability between prose badges (`[gate: <id>]`) across documentation/skills and declarative YAML gate rules in `default_gates.yaml`, and prints the enforcement matrix (`runtime` / `git` / `ci` per gate).
+  - `along hook verify [--strict]`: Audits bi-directional traceability between prose badges (`[gate: <id>]`) across `AGENTS.md`, `.along/*.md`, documentation, and skills against declarative YAML gate rules in `default_gates.yaml`, and prints the enforcement matrix (`runtime` / `git` / `ci` per gate). Fails with exit `1` on dangling badges, schema errors, or undocumented gates by default (`--strict` defaults to enabled).
 - **Usage**:
   ```bash
   along hook verify --strict
@@ -2268,7 +2268,7 @@ The Along Declarative Gate Engine and Bi-Directional Traceability Matrix bridges
 ```text
 +-------------------------------------------------------------------------+
 |                  Prose Specifications & Skill Manifests                 |
-|  AGENTS.md, skills/along-init/protocol.md, skills/along-commit/SKILL.md |
+|  AGENTS.md, .along/*.md, skills/, docs/, .along/rules/                  |
 |  Embedded Badges: [gate: <id>] (e.g. [gate: commit_issue_binding])      |
 +-------------------------------------------------------------------------+
                                     |
@@ -2386,12 +2386,12 @@ While regex gates evaluate single tool calls in isolation, complex invariants re
 ### 2.3 Bi-Directional Traceability Scanner (`alongkit.hooks.traceability`)
 
 The traceability engine guarantees zero drift between written instructions and active enforcement:
-- `scan_prose_anchors()`: Parses Markdown files across `AGENTS.md` and `skills/*/SKILL.md` using regex `r"\[gate:\s*([a-zA-Z0-9_-]+)\]"`.
+- `scan_prose_anchors()`: Parses Markdown files across `AGENTS.md`, `CLAUDE.md`, `README.md`, `.along/*.md` (including `.along/PROTOCOL.md`, `.along/VISION.md`, `.along/CONSTRAINTS.md`, `.along/GLOSSARY.md`), `.along/rules/**/*.md`, `skills/**/*.md`, and `docs/**/*.md` using regex `r"(?:\[gate:\s*([a-zA-Z0-9_-]+)\]|<!--\s*gate:\s*([a-zA-Z0-9_-]+)\s*-->)"`.
 - `audit_traceability()`: Correlates prose anchors against active gates loaded from YAML.
   - Reports missing anchors (gates defined in YAML with no prose badge).
   - Reports dangling badges (badges in prose with no corresponding YAML gate).
-  - Returns boolean pass/fail status.
-- CLI verification: `along hook verify` (or `python scripts/along_hook.py verify`) runs the audit and outputs a structured matrix report.
+  - `TraceabilityReport.is_clean` requires zero dangling references, zero schema errors, and zero undocumented gates.
+- CLI verification: `along hook verify` (or `python scripts/along_hook.py verify`) runs the audit and outputs a structured matrix report, exiting with code `1` by default when any gate lacks a prose badge (`--strict` defaults to enabled).
 
 ---
 
@@ -2440,7 +2440,8 @@ The traceability engine guarantees zero drift between written instructions and a
           /                           \
          v                             v
 [Parse Prose Badges]          [Load Declarative Gates]
-AGENTS.md, skills/*/SKILL.md   default_gates.yaml + gates.yaml
+AGENTS.md, .along/*.md,        default_gates.yaml + gates.yaml
+skills/, docs/, .along/rules/
          \                             /
           v                           v
          [Cross-Reference Badges <-> Gate IDs]
@@ -2459,9 +2460,9 @@ Exit Code: 0                  Exit Code: 1 (lists missing/dangling)
 ## 4. Invariants & Failure Modes
 
 1. **Strict Bi-Directional Traceability Invariant**:
-   - Every active gate in `default_gates.yaml` MUST have at least one corresponding `[gate: <id>]` badge in prose documentation (`AGENTS.md` or `skills/`).
-   - Every `[gate: <id>]` badge in documentation MUST map to an active gate in the catalogue.
-   - `along hook verify` MUST exit with code 0 in CI and local test suites (`tests/test_gates_traceability.py`).
+   - Every active gate in `default_gates.yaml` MUST have at least one corresponding `[gate: <id>]` badge in scanned prose documentation (`AGENTS.md`, `.along/*.md`, `skills/`, `docs/`, or `.along/rules/`).
+   - Every `[gate: <id>]` badge in documentation MUST map to an active gate in the catalogue, and every badge emitted in a gate error message MUST match its catalogue gate id.
+   - `along hook verify` (and `along hook verify --strict`) MUST exit with code 0 in CI and local test suites (`tests/test_gates_traceability.py`).
 2. **Deterministic Isolation**:
    - Predicate handlers and file parsers use narrow exception handling `(OSError, UnicodeDecodeError, ValueError)`. Generic exceptions (`except Exception:`) and unhandled crashes are forbidden.
 3. **Repository Extensibility**:
@@ -4013,7 +4014,7 @@ For full specification and architecture, see [Declarative Gate Engine & Traceabi
   State then resolves to `<root>/.along/` (`repo.state_dir`), while gates keep evaluating paths against the declaring directory; paths inside the state directory are matched as `.along/...`.
 - Subcommand `along hook install`: Scaffolds runtime hook configurations (`.agents/hooks.json` for Antigravity, `.claude/settings.json` for Claude Code, `.codex/hooks.json` for OpenAI Codex, `plugins/along-gates.js` for OpenCode, `.dsh/cordis.patch.yml` for DeepSeek Harness, `.cursor/hooks.json` for Cursor). Accepts `--runtime {antigravity,claude,codex,cursor,opencode,dsh,all}`. Also turns off AI commit attribution where the runtime documents a key for it (see 2.7).
 - Subcommand `along run <cmd...>` (and `along_hook.py run <cmd...>`): Command proxy wrapper evaluating `run_command` through `HookEngine` prior to execution. Provides mechanical gate enforcement in environments without native PreToolUse lifecycle hooks (CI and external terminals).
-- Subcommand `along hook verify`: Audits bi-directional traceability between prose badges and YAML gates.
+- Subcommand `along hook verify`: Audits bi-directional traceability between prose badges and YAML gates (failing by default on missing badges or dangling references).
 
 ### 2.6 End-of-Turn Result Check (`alongkit.hooks.turnstate`)
 Gates do not predict harm from command text: whether a shell command writes is not decidable before it runs (`debt--gate-simplification`). `require_plan_approval` (catalogue `event: [PreToolUse, Stop]`) judges facts instead:
@@ -4167,7 +4168,7 @@ When an agent emits a tool call, the execution loop flows through the hook harne
 
 ## 4a. Protocol Rule Enforcement Audit
 
-Every rule of the managed `AGENTS.md` block, classified: **a** enforced by a gate or test, **b** mechanically checkable but not yet enforced, **c** judgment-only. Layers come from the catalogue `enforcement` field (`along hook verify` prints the full matrix). Class-a rules are one line in `AGENTS.md` with a gate tag; the gate's error message carries the detail. Commit-time checks (typography, anti-stub, AI co-author, code fences, links, entry point, filenames, secrets) carry no tag: `AGENTS.md` lists them on one line as checked by `along lint` (pre-commit and CI), not while you work.
+Every rule of the managed `AGENTS.md` block, classified: **a** enforced by a gate or test, **b** mechanically checkable but not yet enforced, **c** judgment-only. Layers come from the catalogue `enforcement` field (`along hook verify` prints the full matrix). Class-a rules are one line in `AGENTS.md` with a gate tag; the gate's error message carries the detail. Commit-time checks (typography, anti-stub, AI co-author, code fences, links, entry point, filenames, secrets) carry no tag in the `AGENTS.md` core: `AGENTS.md` lists them on one line as checked by `along lint` (pre-commit and CI), not while you work, while their `[gate: <id>]` traceability badges live in `.along/PROTOCOL.md`.
 
 Since `debt--agents-md-core-slimming` the managed block is a core of at most 6 KB: where state lives, issue anchoring, every gate tag with one line, and class-c rules as one-liners. The full wording of every rule below, plus situational procedure (completion checklist, documentation routing tree, concurrency and merge, parallel closeout, along-team routing, tool-use rules), lives in Along Protocol Reference (`.along/PROTOCOL.md`). Its source is `skills/along-init/protocol-reference.md`; `along init` / `along update` render it into each FULL root's `.along/`. `tests/test_scaffold_profiles.py` checks that no gate tag leaves the core and no named rule leaves the reference.
 

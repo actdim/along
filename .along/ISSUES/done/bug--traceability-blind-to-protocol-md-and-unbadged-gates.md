@@ -4,14 +4,16 @@ protocol_version: "4.9.1"
 slug: traceability-blind-to-protocol-md-and-unbadged-gates
 title: "Gate traceability does not scan .along/PROTOCOL.md and ignores undocumented gates"
 type: bug
-status: open
+status: done
+completed: 2026-11-25
 priority: high
 created: 2026-11-24
-updated: 2026-11-24
+updated: 2026-11-25
 agent: dsh
 tags: [gates, traceability, verify, protocol, documentation]
 blocked_by: []
 related: []
+plan_status: approved
 ---
 
 # Gate traceability does not scan .along/PROTOCOL.md and ignores undocumented gates
@@ -68,11 +70,11 @@ dangling.
 
 ## Acceptance Criteria
 
-- [ ] `along hook verify` lists the five gates above and exits non-zero before any fix.
-- [ ] `.along/PROTOCOL.md` badges are counted in the report.
-- [ ] After badges are added, `along hook verify` exits zero without `--strict`.
-- [ ] The YAML error badge for `typography` equals the gate id.
-- [ ] A test fails if `.along/*.md` drops out of the scan set.
+- [x] `along hook verify` lists the five gates above and exits non-zero before any fix.
+- [x] `.along/PROTOCOL.md` badges are counted in the report.
+- [x] After badges are added, `along hook verify` exits zero without `--strict`.
+- [x] The YAML error badge for `typography` equals the gate id.
+- [x] A test fails if `.along/*.md` drops out of the scan set.
 
 ## Evidence
 
@@ -80,3 +82,11 @@ dangling.
 - Verdict: `:58-59`; report printing: `:214-226`.
 - Exit code: `scripts/along_hook.py:243`, `:252`.
 - Badges in the new protocol file: `.along/PROTOCOL.md` (22 matches).
+
+## Resolution Notes
+
+- `scan_prose_anchors` (`scripts/alongkit/hooks/traceability.py`) now scans top-level `.along/*.md` files (`PROTOCOL.md`, `VISION.md`, `CONSTRAINTS.md`, `GLOSSARY.md`, etc.) without descending into entity subdirs (`ISSUES/`, `SESSIONS/`, `DECISIONS/`).
+- `TraceabilityReport.is_clean` requires `not self.undocumented_gates`, and `scripts/along_hook.py verify` flips `--strict` to `default=True` (CI `.github/workflows/tests.yml` runs `python scripts/along_exec.py hook verify --strict`).
+- Fixed `scripts/alongkit/hooks/default_gates.yaml` so `typography` emits `[gate: typography]` instead of `[gate: clean-ascii-typography]`.
+- Added `[gate: ...]` badges in `skills/along-init/protocol-reference.md` (and regenerated `.along/PROTOCOL.md` via `along update --local-only --no-hooks`) for all 10 undocumented commit-time gates: the 5 listed above plus the 5 remaining unbadged `[git, ci]` gates (`anti_stub_injection`, `code_fence_language`, `commit_no_ai_coauthor`, `portable_links`, `stable_entry_point`), bringing `along hook verify` to `35 / 35` anchored (`EXIT=0`).
+- Added regression tests in `tests/test_gates_traceability.py` and updated `docs/topic--declarative-gates-and-traceability.md`, `docs/topic--runtime-hooks-and-gates.md`, and `docs/topic--cli-reference.md`.

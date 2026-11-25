@@ -161,7 +161,7 @@ gates:
     rule:
       type: predicate
       handler: alongkit.hooks.predicates.check_typography
-      error: "Typography violation detected by [gate: clean-ascii-typography]."
+      error: "Typography violation detected by [gate: typography]."
 
   - id: require_active_issue
     profiles:

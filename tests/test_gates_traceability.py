@@ -19,7 +19,10 @@ if SCRIPTS_DIR not in sys.path:
 from alongkit import bootstrap
 bootstrap.ensure_deps()
 
+from alongkit.hooks.declarative import DEFAULT_GATES_FILE, load_gate_entries
 from alongkit.hooks.traceability import (
+    GATE_BADGE_PATTERN,
+    _canonical_id,
     audit_traceability,
     format_traceability_report,
     scan_prose_anchors,
@@ -39,6 +42,11 @@ class TestRepositoryGateTraceability(unittest.TestCase):
             f"Expected at least 11 default gates, found {report.total_gates}\n{report_output}",
         )
         self.assertEqual(
+            report.undocumented_gates,
+            [],
+            f"Undocumented gates found (missing [gate: <id>] in prose):\n{report_output}",
+        )
+        self.assertEqual(
             report.dangling_references,
             [],
             f"Dangling gate references found in prose:\n{report_output}",
@@ -49,6 +57,43 @@ class TestRepositoryGateTraceability(unittest.TestCase):
             f"Gate schema or predicate handler errors found:\n{report_output}",
         )
         self.assertTrue(report.is_clean, f"Traceability report failed:\n{report_output}")
+
+    def test_protocol_md_contributes_distinct_badges(self):
+        """REQ-4: .along/PROTOCOL.md must contribute distinct badges to the scan set."""
+        anchors = scan_prose_anchors(REPO_ROOT)
+        protocol_anchors = [a for a in anchors if a.file_path == ".along/PROTOCOL.md"]
+        distinct_ids = {_canonical_id(a.gate_id) for a in protocol_anchors}
+        self.assertGreater(
+            len(distinct_ids),
+            0,
+            "Expected distinct [gate: ...] badges in .along/PROTOCOL.md",
+        )
+        report = audit_traceability(REPO_ROOT)
+        self.assertGreaterEqual(report.total_prose_anchors, len(protocol_anchors))
+
+    def test_catalogue_error_badges_match_gate_ids(self):
+        """REQ-3: Every [gate: <id>] badge in default_gates.yaml error messages must equal its gate id."""
+        entries = load_gate_entries(DEFAULT_GATES_FILE)
+        by_id = {defn.id: raw for defn, raw in entries}
+        self.assertIn("typography", by_id)
+        self.assertEqual(
+            by_id["typography"]["rule"]["error"],
+            "Typography violation detected by [gate: typography].",
+        )
+
+        for defn, raw in entries:
+            raw_rules = raw.get("rules") or ([raw["rule"]] if raw.get("rule") else [])
+            for rule in raw_rules:
+                if not isinstance(rule, dict):
+                    continue
+                err = str(rule.get("error") or "")
+                for m in GATE_BADGE_PATTERN.finditer(err):
+                    badge = m.group(1) or m.group(2)
+                    self.assertEqual(
+                        _canonical_id(badge),
+                        _canonical_id(defn.id),
+                        f"Gate '{defn.id}' error badge '[gate: {badge}]' does not match gate id",
+                    )
 
 
 class TestHermeticTraceabilityScanner(unittest.TestCase):
@@ -72,6 +117,109 @@ class TestHermeticTraceabilityScanner(unittest.TestCase):
         self.assertFalse(report.is_clean)
         self.assertEqual(len(report.dangling_references), 1)
         self.assertEqual(report.dangling_references[0].gate_id, "ghost-gate-not-in-yaml")
+
+    def test_scan_prose_anchors_includes_state_markdown_files(self):
+        """REQ-1: scan_prose_anchors scans top-level .along/*.md without descending into ISSUES/."""
+        state_dir = os.path.join(self.tmp, ".along")
+        issues_dir = os.path.join(state_dir, "ISSUES")
+        os.makedirs(issues_dir, exist_ok=True)
+
+        expected = {
+            ".along/PROTOCOL.md": "require-active-issue",
+            ".along/VISION.md": "typography",
+            ".along/CONSTRAINTS.md": "no-tracked-secrets",
+            ".along/GLOSSARY.md": "provenance_drift",
+        }
+        for rel, gid in expected.items():
+            full = os.path.join(self.tmp, *rel.split("/"))
+            with open(full, "w", encoding="utf-8") as f:
+                f.write(f"# {rel}\nRule [gate: {gid}].\n")
+
+        # Historical issues must NOT be scanned as active protocol prose
+        with open(os.path.join(issues_dir, "feat--old.md"), "w", encoding="utf-8") as f:
+            f.write("# Old\n[gate: retired-gate-ignore]\n")
+
+        anchors = scan_prose_anchors(self.tmp)
+        by_file = {a.file_path: a.gate_id for a in anchors}
+        for rel, gid in expected.items():
+            self.assertEqual(by_file.get(rel), gid, f"Missing anchor from {rel}")
+        self.assertNotIn(".along/ISSUES/feat--old.md", by_file)
+
+    def test_undocumented_gate_fails_default_check_and_state_drop_detected(self):
+        """REQ-2 & AC-5: Missing badges fail by default, and dropping .along/*.md fails verification."""
+        import io
+        from unittest import mock
+        import along_hook
+
+        gates_yaml = os.path.join(self.tmp, "gates.yaml")
+        with open(gates_yaml, "w", encoding="utf-8") as f:
+            f.write(
+                "version: 1\n"
+                "gates:\n"
+                "  - id: alpha_gate\n"
+                "    event: PreToolUse\n"
+                "    tools: [run_command]\n"
+                "    rule:\n"
+                "      type: regex_match\n"
+                "      field: CommandLine\n"
+                "      pattern: '^ok'\n"
+                "      error: 'Violation [gate: alpha-gate]'\n"
+                "  - id: beta_gate\n"
+                "    event: PreToolUse\n"
+                "    tools: [run_command]\n"
+                "    rule:\n"
+                "      type: regex_match\n"
+                "      field: CommandLine\n"
+                "      pattern: '^ok'\n"
+                "      error: 'Violation [gate: beta-gate]'\n"
+            )
+
+        with open(os.path.join(self.tmp, "AGENTS.md"), "w", encoding="utf-8") as f:
+            f.write("# Core\n- [gate: alpha-gate]\n")
+        state_dir = os.path.join(self.tmp, ".along")
+        os.makedirs(state_dir, exist_ok=True)
+        proto_path = os.path.join(state_dir, "PROTOCOL.md")
+        with open(proto_path, "w", encoding="utf-8") as f:
+            f.write("# Reference\n- [gate: beta-gate]\n")
+
+        with mock.patch("alongkit.hooks.traceability.DEFAULT_GATES_FILE", gates_yaml):
+            clean_report = audit_traceability(self.tmp)
+            self.assertTrue(clean_report.is_clean)
+            self.assertEqual(clean_report.undocumented_gates, [])
+            self.assertEqual(clean_report.total_prose_anchors, 2)
+
+            buf = io.StringIO()
+            with mock.patch.object(sys, "argv", ["along_hook.py", "verify", "--repo-root", self.tmp]), \
+                    mock.patch("sys.stdout", buf):
+                exit_clean = along_hook.main()
+            self.assertEqual(exit_clean, 0, buf.getvalue())
+
+            # Remove .along/PROTOCOL.md -> beta_gate becomes undocumented and default verify fails
+            os.remove(proto_path)
+            dirty_report = audit_traceability(self.tmp)
+            self.assertFalse(dirty_report.is_clean)
+            self.assertEqual(dirty_report.undocumented_gates, ["beta_gate"])
+            self.assertIn("Verdict: FAILED", format_traceability_report(dirty_report))
+
+            buf_fail = io.StringIO()
+            with mock.patch.object(sys, "argv", ["along_hook.py", "verify", "--repo-root", self.tmp]), \
+                    mock.patch("sys.stdout", buf_fail):
+                exit_dirty = along_hook.main()
+            self.assertEqual(exit_dirty, 1, buf_fail.getvalue())
+            self.assertIn("beta_gate", buf_fail.getvalue())
+
+    def test_cli_verify_passes_without_strict_flag_on_live_repo(self):
+        """AC-3: along hook verify exits zero on the live repository without --strict."""
+        import io
+        from unittest import mock
+        import along_hook
+
+        buf = io.StringIO()
+        with mock.patch.object(sys, "argv", ["along_hook.py", "verify", "--repo-root", REPO_ROOT]), \
+                mock.patch("sys.stdout", buf):
+            exit_code = along_hook.main()
+        self.assertEqual(exit_code, 0, buf.getvalue())
+        self.assertIn("Verdict: PASSED", buf.getvalue())
 
 
 class TestCompiledProjections(unittest.TestCase):
