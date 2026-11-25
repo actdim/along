@@ -16,11 +16,12 @@ import json
 import os
 import re
 import sys
-from typing import Any, Callable, Dict, List, Optional, Tuple
+from typing import Any, Callable, Dict, FrozenSet, List, Optional, Sequence, Tuple
 
 from .. import attribution, repo, textio
 from ..telemetry.redactor import Redactor
-from .models import GateResult, HookEvent
+from .adapters.normalize import SHELL_TOOLS, WRITE_TOOLS
+from .models import GateResult, HookEvent, HookEventType
 
 
 class HookMode:
@@ -340,13 +341,375 @@ def get_hook_command(runtime: str, event: str, is_global: bool = False) -> str:
     return f"python {formatted_path} --runtime {runtime} --event {event}"
 
 
-def get_antigravity_hook_manifest(is_global: bool = False) -> Dict[str, Any]:
+_RUNTIME_TOOL_UNION_CACHE: Dict[Tuple[str, int, Optional[str]], Tuple[str, ...]] = {}
+
+#: Claude Code capitalised tool spellings that never appear in DeepSeek Harness and are
+#: explicitly excluded from DSH matchers (see tests/test_hooks_dsh.py).
+_DSH_FORBIDDEN_CLAUDE_NAMES: FrozenSet[str] = frozenset((
+    "Write", "Edit", "Bash", "Read", "Glob", "Grep",
+))
+
+#: Native tool-name aliases per runtime, merged with the catalogue runtime gate union when
+#: generating PreToolUse / PostToolUse manifest matchers.
+CLAUDE_PRE_TOOL_ALIASES: Tuple[str, ...] = (
+    "Write", "WriteFile", "write_file", "Edit", "EditFile", "edit_file",
+    "MultiEdit", "NotebookEdit", "Bash", "bash", "PowerShell", "powershell",
+    "Read", "Grep", "Glob", "LS", "Task", "Agent", "TodoWrite", "SendMessage",
+)
+CLAUDE_POST_TOOL_ALIASES: Tuple[str, ...] = (
+    "Write", "WriteFile", "write_file", "Edit", "EditFile", "edit_file",
+    "MultiEdit", "NotebookEdit", "ExitPlanMode", "Bash", "bash", "PowerShell", "powershell",
+)
+CODEX_PRE_TOOL_ALIASES: Tuple[str, ...] = (
+    "write_file", "WriteFile", "Write", "create_file", "CreateFile",
+    "edit_file", "EditFile", "Edit", "patch", "patch_file", "apply_patch",
+    "shell", "exec", "execute", "bash", "Bash", "powershell", "PowerShell", "cmd",
+    "read_file", "ReadFile", "Read", "view_image", "ViewImage",
+    "list_dir", "ListDir", "list_directory", "ListDirectory", "LS",
+    "grep_search", "GrepSearch", "grep", "Grep",
+    "find_by_name", "find_files", "FindFiles", "file_search", "FileSearch", "Glob",
+    "delete_file", "DeleteFile", "remove_file", "RemoveFile", "unlink", "Unlink",
+    "delete", "Delete", "file_delete", "FileDelete", "remove", "Remove",
+    "Task", "Agent", "TodoWrite", "SendMessage",
+)
+CODEX_POST_TOOL_ALIASES: Tuple[str, ...] = (
+    "write_file", "WriteFile", "Write", "create_file", "CreateFile",
+    "edit_file", "EditFile", "Edit", "patch", "patch_file", "apply_patch",
+    "shell", "exec", "execute", "bash", "Bash", "powershell", "PowerShell", "cmd",
+)
+CURSOR_PRE_TOOL_ALIASES: Tuple[str, ...] = (
+    "Shell", "Read", "Write", "Edit", "StrReplace", "str_replace",
+    "MultiEdit", "NotebookEdit", "edit_notebook", "search_replace", "apply_patch",
+    "Delete", "Grep", "GrepSearch", "ripgrep", "codebase_search",
+    "Glob", "glob_file_search", "FileSearch",
+    "LS", "ListDir", "ListDirectory",
+    "Task", "Agent", "Subagent", "subagent", "TodoWrite", "SendMessage",
+    "WebFetch", "WebSearch",
+    "run_terminal_cmd", "RunTerminalCmd",
+    "ReadFile", "ViewFile", "ViewImage", "read_image", "CreateFile",
+    "FileDelete", "ExecuteCommand", "FindFiles",
+    "write_file", "WriteFile", "edit_file", "EditFile",
+    "delete_file", "DeleteFile", "remove_file", "RemoveFile", "unlink", "Unlink",
+    "delete", "remove", "Remove",
+    "bash", "Bash", "shell", "powershell", "PowerShell", "cmd", "run", "exec", "execute",
+    "patch", "patch_file", "write", "edit",
+)
+CURSOR_POST_TOOL_ALIASES: Tuple[str, ...] = (
+    "Shell", "Write", "Edit", "StrReplace", "str_replace",
+    "MultiEdit", "NotebookEdit", "edit_notebook", "search_replace", "apply_patch",
+    "write_file", "WriteFile", "CreateFile", "edit_file", "EditFile", "patch", "write", "edit",
+    "run_terminal_cmd", "RunTerminalCmd", "ExecuteCommand",
+    "powershell", "PowerShell", "cmd", "run", "exec", "execute",
+)
+DSH_PRE_TOOL_ALIASES: Tuple[str, ...] = (
+    "read", "write", "edit", "glob", "grep", "pwsh", "bash", "read_image",
+    "web_fetch", "web_search", "todo_write", "subagent", "subagent_fork",
+    "send_message", "ask_user_question", "exit_plan_mode",
+    "tool-pwsh", "tool_pwsh", "tool-bash", "tool_bash",
+    "tool-fs", "tool_fs", "tool-fs/write", "tool-fs/edit", "tool-fs/create",
+    "fs", "fs_write", "fs_edit", "tool-fs-search", "tool_fs_search", "fs_search",
+    "tool-web", "tool_web", "tool-subagent", "tool_subagent",
+    "PowerShell", "powershell", "WriteFile", "EditFile", "LS",
+)
+DSH_POST_TOOL_ALIASES: Tuple[str, ...] = (
+    "write", "edit", "pwsh", "bash", "exit_plan_mode",
+    "tool-pwsh", "tool_pwsh", "tool-bash", "tool_bash",
+    "tool-fs", "tool_fs", "tool-fs/write", "tool-fs/edit", "tool-fs/create",
+    "fs", "fs_write", "fs_edit", "PowerShell", "powershell", "WriteFile", "EditFile",
+)
+
+#: Explicit runtime narrowing records for runtimes whose native tool surface or hook
+#: support cannot express the full canonical catalogue [bug--antigravity-manifest-matcher-unenforceable-invariants].
+RUNTIME_HOOK_NARROWINGS: Dict[str, Dict[str, Any]] = {
+    "cursor": {
+        "unexpressible_tools": ("view_image", "send_message", "spawn_subagent"),
+        "missing_capabilities": ("ask", "global_installer_hooks"),
+        "notes": (
+            "Cursor preToolUse has no dedicated native tool names for view_image, send_message, "
+            "or spawn_subagent (and IDE editor-tab/@-mention reads bypass hooks); GenericCliAdapter "
+            "cannot prompt ASK natively, and global installers do not register Cursor hooks by default."
+        ),
+    },
+}
+
+
+def get_runtime_hook_narrowing(runtime_name: str) -> Optional[Dict[str, Any]]:
+    """Return explicit narrowing metadata for `runtime_name`, or None if full-coverage."""
+    key = (runtime_name or "").strip().lower()
+    entry = RUNTIME_HOOK_NARROWINGS.get(key)
+    return dict(entry) if entry else None
+
+
+def runtime_gate_tool_union(
+    gates_file: Optional[str] = None,
+    event_type: Optional[HookEventType] = None,
+) -> Tuple[str, ...]:
+    """Ordered union of `tools:` across every enabled `runtime`-enforced gate in the catalogue."""
+    from . import declarative
+
+    target = os.path.abspath(gates_file or declarative.DEFAULT_GATES_FILE)
+    try:
+        mtime_ns = os.stat(target).st_mtime_ns
+    except OSError:
+        mtime_ns = -1
+    ev_key = event_type.value if event_type is not None else None
+    cache_key = (target, mtime_ns, ev_key)
+    cached = _RUNTIME_TOOL_UNION_CACHE.get(cache_key)
+    if cached is not None:
+        return cached
+
+    ordered: List[str] = []
+    seen = set()
+    for defn in declarative.load_gate_definitions(target):
+        if not defn.enabled or "runtime" not in defn.enforcement:
+            continue
+        if event_type is not None:
+            if event_type != defn.event_type and event_type not in defn.extra_events:
+                continue
+        for tool in defn.tools:
+            if tool and tool not in seen:
+                seen.add(tool)
+                ordered.append(tool)
+    result = tuple(ordered)
+    _RUNTIME_TOOL_UNION_CACHE[cache_key] = result
+    return result
+
+
+def _merge_matcher_tokens(
+    *groups: Sequence[str],
+    exclude: FrozenSet[str] = frozenset(),
+) -> str:
+    ordered: List[str] = []
+    seen = set()
+    for group in groups:
+        for item in group:
+            tok = str(item or "").strip()
+            if tok and tok not in exclude and tok not in seen:
+                seen.add(tok)
+                ordered.append(tok)
+    return "|".join(ordered)
+
+
+def build_pre_tool_matcher(
+    runtime_aliases: Sequence[str] = (),
+    gates_file: Optional[str] = None,
+    exclude: FrozenSet[str] = frozenset(),
+) -> str:
+    """Build a PreToolUse matcher covering `runtime_aliases` and all runtime gate tools."""
+    gate_tools = runtime_gate_tool_union(gates_file=gates_file, event_type=HookEventType.PRE_TOOL_USE)
+    return _merge_matcher_tokens(runtime_aliases, gate_tools, exclude=exclude)
+
+
+def build_post_tool_matcher(
+    runtime_aliases: Sequence[str] = (),
+    gates_file: Optional[str] = None,
+    exclude: FrozenSet[str] = frozenset(),
+) -> str:
+    """Build a PostToolUse matcher covering writes, shells, `runtime_aliases`, and PostToolUse gates."""
+    post_gate_tools = runtime_gate_tool_union(gates_file=gates_file, event_type=HookEventType.POST_TOOL_USE)
+    return _merge_matcher_tokens(runtime_aliases, WRITE_TOOLS, SHELL_TOOLS, post_gate_tools, exclude=exclude)
+
+
+def _matcher_matches_tool(matcher: Optional[str], tool: str) -> bool:
+    """True if a manifest `matcher` string admits `tool`."""
+    if matcher is None:
+        return True
+    pat = str(matcher).strip()
+    if not pat or pat in ("*", ".*"):
+        return True
+    tokens = {part.strip() for part in pat.split("|") if part.strip()}
+    if tool in tokens:
+        return True
+    # Only fall back to regex fullmatch when a token uses regex syntax (e.g. `mcp__.*`),
+    # never substring search so `"write"` cannot falsely claim `"write_to_file"`.
+    if any(ch in pat for ch in (".", "*", "+", "?", "[", "]", "(", ")", "^", "$")):
+        try:
+            return re.fullmatch(pat, tool) is not None
+        except re.error:
+            return False
+    return False
+
+
+def _extract_pre_tool_matchers(runtime_name: str, manifest: Any) -> Tuple[bool, List[Optional[str]]]:
+    """Return (has_along_hook, list_of_pre_tool_matchers) for a parsed manifest."""
+    rt = (runtime_name or "").strip().lower()
+    if rt == "opencode":
+        if isinstance(manifest, str):
+            has_before = bool(re.search(r'tool\.hook\(\s*["\']execute\.before["\']', manifest))
+            return has_before, ["*"] if has_before else []
+        if isinstance(manifest, dict):
+            has_before = "tool.execute.before" not in (manifest.get("missing_hooks") or []) and bool(manifest.get("valid", True))
+            return has_before, ["*"] if has_before else []
+        return False, []
+
+    if not isinstance(manifest, dict):
+        return False, []
+
+    entries: List[Any] = []
+    if rt == "antigravity":
+        gate_block = manifest.get("along-runtime-gates")
+        if isinstance(gate_block, dict):
+            entries = list(gate_block.get("PreToolUse") or [])
+    elif rt == "claude":
+        container = manifest.get("hooks") if isinstance(manifest.get("hooks"), dict) else manifest
+        if isinstance(container, dict):
+            entries = list(container.get("PreToolUse") or [])
+    elif rt in ("codex", "dsh"):
+        container = manifest.get("hooks") if isinstance(manifest.get("hooks"), dict) else manifest
+        if isinstance(container, dict):
+            entries = list(container.get("PreToolUse") or [])
+    elif rt == "cursor":
+        container = manifest.get("hooks") if isinstance(manifest.get("hooks"), dict) else manifest
+        if isinstance(container, dict):
+            entries = list(container.get("preToolUse") or container.get("PreToolUse") or [])
+
+    matchers: List[Optional[str]] = []
+    found = False
+    for item in entries:
+        if not isinstance(item, dict):
+            continue
+        if is_along_hook_entry(item, "PreToolUse") or rt == "antigravity":
+            if rt == "antigravity" and not hook_entry_commands(item):
+                continue
+            found = True
+            matchers.append(item.get("matcher"))
+    return found, matchers
+
+
+def audit_manifest_coverage(
+    runtime_name: str,
+    manifest: Any = None,
+    gates_file: Optional[str] = None,
+) -> Dict[str, Any]:
+    """Compare `runtime_name`'s manifest matcher(s) against the catalogue runtime gate union."""
+    rt = (runtime_name or "").strip().lower()
+    if rt == "claude-code":
+        rt = "claude"
+    if manifest is None:
+        if rt == "antigravity":
+            manifest = get_antigravity_hook_manifest(gates_file=gates_file)
+        elif rt == "claude":
+            manifest = get_claude_hook_manifest(gates_file=gates_file)
+        elif rt == "codex":
+            manifest = get_codex_hook_manifest(gates_file=gates_file)
+        elif rt == "cursor":
+            manifest = get_cursor_hook_manifest(gates_file=gates_file)
+        elif rt == "dsh":
+            manifest = get_dsh_hook_manifest(gates_file=gates_file)
+        elif rt == "opencode":
+            src = os.path.join(os.path.dirname(__file__), "opencode_plugin.js")
+            manifest = textio.read_text(src, strict=False) if os.path.isfile(src) else ""
+
+    required = runtime_gate_tool_union(gates_file=gates_file, event_type=HookEventType.PRE_TOOL_USE)
+    has_hook, matchers = _extract_pre_tool_matchers(rt, manifest)
+    if not has_hook:
+        missing = list(required)
+    else:
+        missing = [
+            tool for tool in required
+            if not any(_matcher_matches_tool(m, tool) for m in matchers)
+        ]
+
+    # Also verify runtime-native aliases in the adapter map are matched for non-OpenCode manifests
+    unmatched_aliases: List[str] = []
+    if has_hook and rt in ("claude", "codex", "cursor", "dsh"):
+        required_set = set(required)
+        alias_source: Sequence[str] = ()
+        if rt == "claude":
+            from .adapters.claude import TOOL_NAME_MAP as _CLAUDE_MAP
+            alias_source = [k for k, v in _CLAUDE_MAP.items() if v in required_set]
+        elif rt == "codex":
+            from .adapters.codex import TOOL_NAME_MAP as _CODEX_MAP
+            alias_source = [k for k, v in _CODEX_MAP.items() if v in required_set]
+        elif rt == "cursor":
+            alias_source = CURSOR_PRE_TOOL_ALIASES
+        elif rt == "dsh":
+            alias_source = DSH_PRE_TOOL_ALIASES
+        for alias in alias_source:
+            if not any(_matcher_matches_tool(m, alias) for m in matchers):
+                unmatched_aliases.append(alias)
+
+    narrowing = get_runtime_hook_narrowing(rt)
+    explicit_missing_matcher = (rt == "cursor" and has_hook and any(m is None for m in matchers))
+    return {
+        "runtime": rt,
+        "has_hook": has_hook,
+        "required_tools": list(required),
+        "missing_tools": missing,
+        "unmatched_aliases": unmatched_aliases,
+        "explicit_missing_matcher": explicit_missing_matcher,
+        "is_superset": has_hook and not missing and not unmatched_aliases and not explicit_missing_matcher,
+        "narrowing": narrowing,
+    }
+
+
+def audit_installed_hook_manifests(
+    repo_root: Optional[str] = None,
+    gates_file: Optional[str] = None,
+) -> List[Dict[str, Any]]:
+    """Inspect every installed Along hook manifest (global and local) for stale/narrow matchers."""
+    home = os.path.expanduser("~")
+    candidates: List[Tuple[str, str, str]] = [
+        ("antigravity", os.path.join(home, ".gemini", "config", "hooks.json"), "along hook install --runtime antigravity --global"),
+        ("claude", os.path.join(home, ".claude", "settings.json"), "along hook install --runtime claude --global"),
+        ("codex", os.path.join(home, ".codex", "hooks.json"), "along hook install --runtime codex --global"),
+        ("cursor", os.path.join(home, ".cursor", "hooks.json"), "along hook install --runtime cursor --global"),
+    ]
+    dsh_base = os.environ.get("DSH_HOME") or os.path.join(home, ".dsh")
+    dsh_profiles = os.path.join(dsh_base, "profiles")
+    if os.path.isdir(dsh_profiles):
+        try:
+            for entry in sorted(os.listdir(dsh_profiles)):
+                cand = os.path.join(dsh_profiles, entry, DSH_HOOKS_FILE_NAME)
+                if os.path.isfile(cand):
+                    candidates.append(("dsh", cand, "along hook install --runtime dsh --global"))
+        except OSError:
+            pass
+    if repo_root:
+        candidates.extend([
+            ("antigravity", os.path.join(repo_root, ".agents", "hooks.json"), "along hook install --runtime antigravity"),
+            ("claude", os.path.join(repo_root, ".claude", "settings.json"), "along hook install --runtime claude"),
+            ("claude", os.path.join(repo_root, ".claude", "settings.local.json"), "along hook install --runtime claude"),
+            ("codex", os.path.join(repo_root, ".codex", "hooks.json"), "along hook install --runtime codex"),
+            ("cursor", os.path.join(repo_root, ".cursor", "hooks.json"), "along hook install --runtime cursor"),
+            ("dsh", os.path.join(repo_root, ".dsh", DSH_HOOKS_FILE_NAME), "along hook install --runtime dsh"),
+        ])
+
+    results: List[Dict[str, Any]] = []
+    seen_paths = set()
+    for rt, path, remediation in candidates:
+        norm = os.path.normcase(os.path.abspath(path))
+        if norm in seen_paths or not os.path.isfile(path):
+            continue
+        seen_paths.add(norm)
+        try:
+            content = textio.read_text(path, strict=False)
+            if not content.strip():
+                continue
+            data = json.loads(content)
+        except (OSError, ValueError):
+            continue
+        audit = audit_manifest_coverage(rt, data, gates_file=gates_file)
+        if not audit["has_hook"]:
+            continue
+        audit["path"] = path
+        audit["remediation"] = remediation
+        results.append(audit)
+    return results
+
+
+def get_antigravity_hook_manifest(
+    is_global: bool = False,
+    gates_file: Optional[str] = None,
+) -> Dict[str, Any]:
     """Canonical hook configuration dictionary for Google Antigravity."""
+    pre_matcher = build_pre_tool_matcher(gates_file=gates_file)
+    post_matcher = build_post_tool_matcher(gates_file=gates_file)
     return {
         "along-runtime-gates": {
             "PreToolUse": [
                 {
-                    "matcher": "write_to_file|replace_file_content|run_command",
+                    "matcher": pre_matcher,
                     "hooks": [
                         {
                             "type": "command",
@@ -358,7 +721,7 @@ def get_antigravity_hook_manifest(is_global: bool = False) -> Dict[str, Any]:
             ],
             "PostToolUse": [
                 {
-                    "matcher": "write_to_file|replace_file_content|run_command",
+                    "matcher": post_matcher,
                     "hooks": [
                         {
                             "type": "command",
@@ -415,12 +778,12 @@ def install_antigravity_hooks(
 #: Seconds Claude Code waits for one Along hook process before it gives up on it.
 CLAUDE_HOOK_TIMEOUT: int = 30
 
-#: Claude Code tools the PreToolUse gates inspect: writes, shells, and the read/search tools
-#: that workspace_containment and fast_retrieval govern.
-CLAUDE_PRE_TOOL_MATCHER: str = "Write|Edit|MultiEdit|NotebookEdit|Bash|PowerShell|Read|Grep|Glob"
+#: Claude Code tools the PreToolUse gates inspect: Claude aliases plus the catalogue
+#: runtime gate tool union.
+CLAUDE_PRE_TOOL_MATCHER: str = build_pre_tool_matcher(CLAUDE_PRE_TOOL_ALIASES)
 
-#: PostToolUse: edits (activity trace) and ExitPlanMode (the user accepted a plan).
-CLAUDE_POST_TOOL_MATCHER: str = "Write|Edit|MultiEdit|NotebookEdit|ExitPlanMode|Bash|PowerShell"
+#: PostToolUse: edits, shells, and ExitPlanMode (the user accepted a plan).
+CLAUDE_POST_TOOL_MATCHER: str = build_post_tool_matcher(CLAUDE_POST_TOOL_ALIASES)
 
 
 def hook_entry_commands(item: Any) -> List[str]:
@@ -480,15 +843,20 @@ def _claude_entry(event: str, matcher: Optional[str], is_global: bool) -> Dict[s
     return entry
 
 
-def get_claude_hook_manifest(is_global: bool = False) -> Dict[str, Any]:
+def get_claude_hook_manifest(
+    is_global: bool = False,
+    gates_file: Optional[str] = None,
+) -> Dict[str, Any]:
     """Canonical hook configuration for Anthropic Claude Code (.claude/settings.json).
 
     Claude Code reads only the nested schema `{matcher, hooks: [{type, command, timeout}]}`;
     a flat `{matcher, command}` entry is ignored. See [bug--claude-hook-manifest-flat-schema].
     """
+    pre_matcher = build_pre_tool_matcher(CLAUDE_PRE_TOOL_ALIASES, gates_file=gates_file) if gates_file else CLAUDE_PRE_TOOL_MATCHER
+    post_matcher = build_post_tool_matcher(CLAUDE_POST_TOOL_ALIASES, gates_file=gates_file) if gates_file else CLAUDE_POST_TOOL_MATCHER
     return {
-        "PreToolUse": [_claude_entry("PreToolUse", CLAUDE_PRE_TOOL_MATCHER, is_global)],
-        "PostToolUse": [_claude_entry("PostToolUse", CLAUDE_POST_TOOL_MATCHER, is_global)],
+        "PreToolUse": [_claude_entry("PreToolUse", pre_matcher, is_global)],
+        "PostToolUse": [_claude_entry("PostToolUse", post_matcher, is_global)],
         "Stop": [_claude_entry("Stop", None, is_global)],
         # Timestamp of the user's last message: CLI plan approval and gate bypasses are
         # checked against it. [bug--plan-approval-self-and-lost]
@@ -567,19 +935,24 @@ def install_claude_hooks(
 
 
 
-def get_codex_hook_manifest(is_global: bool = False) -> Dict[str, Any]:
+def get_codex_hook_manifest(
+    is_global: bool = False,
+    gates_file: Optional[str] = None,
+) -> Dict[str, Any]:
     """Canonical hook configuration dictionary for OpenAI Codex (.codex/hooks.json)."""
+    pre_matcher = build_pre_tool_matcher(CODEX_PRE_TOOL_ALIASES, gates_file=gates_file)
+    post_matcher = build_post_tool_matcher(CODEX_POST_TOOL_ALIASES, gates_file=gates_file)
     return {
         "hooks": {
             "PreToolUse": [
                 {
-                    "matcher": "write_file|WriteFile|Write|create_file|edit_file|EditFile|Edit|patch|patch_file|shell|exec|execute|bash|Bash|run_command",
+                    "matcher": pre_matcher,
                     "command": get_hook_command("codex", "PreToolUse", is_global=is_global),
                 }
             ],
             "PostToolUse": [
                 {
-                    "matcher": "write_file|WriteFile|Write|create_file|edit_file|EditFile|Edit|patch|patch_file",
+                    "matcher": post_matcher,
                     "command": get_hook_command("codex", "PostToolUse", is_global=is_global),
                 }
             ],
@@ -665,18 +1038,31 @@ def install_codex_hooks(
     return "installed", f"updated {hooks_file} with Along hooks"
 
 
-def get_cursor_hook_manifest(is_global: bool = False) -> Dict[str, Any]:
-    """Canonical hook configuration dictionary for Cursor (.cursor/hooks.json)."""
+def get_cursor_hook_manifest(
+    is_global: bool = False,
+    gates_file: Optional[str] = None,
+) -> Dict[str, Any]:
+    """Canonical hook configuration dictionary for Cursor (.cursor/hooks.json).
+
+    Includes explicit `preToolUse`/`postToolUse` matchers covering Cursor's native tool
+    names and the catalogue runtime gate union. Remaining Cursor platform narrowings
+    (unexpressible tools, no native ASK, advisory installer default) are recorded in
+    `RUNTIME_HOOK_NARROWINGS['cursor']` and reported by `along doctor`.
+    """
+    pre_matcher = build_pre_tool_matcher(CURSOR_PRE_TOOL_ALIASES, gates_file=gates_file)
+    post_matcher = build_post_tool_matcher(CURSOR_POST_TOOL_ALIASES, gates_file=gates_file)
     return {
         "version": 1,
         "hooks": {
             "preToolUse": [
                 {
+                    "matcher": pre_matcher,
                     "command": get_hook_command("cursor", "PreToolUse", is_global=is_global),
                 }
             ],
             "postToolUse": [
                 {
+                    "matcher": post_matcher,
                     "command": get_hook_command("cursor", "PostToolUse", is_global=is_global),
                 }
             ],
@@ -846,15 +1232,19 @@ def install_opencode_hooks(
 
 #: DeepSeek Harness tool names the PreToolUse gates inspect. The bridge reads a
 #: pipe-separated pattern as literal alternatives matched against the harness tool name, so
-#: these must be the model-facing names (`read`, `write`, `pwsh`, ...), never the Claude Code
-#: ones (`Read`, `Write`, `Bash`), which match nothing there.
-DSH_PRE_TOOL_MATCHER: str = (
-    "read|write|edit|glob|grep|pwsh|bash|read_image|web_fetch|web_search|todo_write|subagent|"
-    "subagent_fork|send_message|ask_user_question|exit_plan_mode"
+#: these must be the model-facing names (`read`, `write`, `pwsh`, ...) plus the catalogue
+#: runtime gate tool union, never the Claude Code capitalised ones (`Read`, `Write`, `Bash`),
+#: which match nothing there.
+DSH_PRE_TOOL_MATCHER: str = build_pre_tool_matcher(
+    DSH_PRE_TOOL_ALIASES,
+    exclude=_DSH_FORBIDDEN_CLAUDE_NAMES,
 )
 
-#: PostToolUse: mutations plus the plan-exit signal.
-DSH_POST_TOOL_MATCHER: str = "write|edit|pwsh|bash|exit_plan_mode"
+#: PostToolUse: mutations, shells, and the plan-exit signal.
+DSH_POST_TOOL_MATCHER: str = build_post_tool_matcher(
+    DSH_POST_TOOL_ALIASES,
+    exclude=_DSH_FORBIDDEN_CLAUDE_NAMES,
+)
 
 #: File the bridge mounts: inside the profile for a global install, `<repo>/.dsh` locally.
 DSH_HOOKS_FILE_NAME: str = "along-hooks.json"
@@ -872,17 +1262,28 @@ def _dsh_entry(event: str, matcher: Optional[str], is_global: bool) -> Dict[str,
     return entry
 
 
-def get_dsh_hook_manifest(is_global: bool = False) -> Dict[str, Any]:
+def get_dsh_hook_manifest(
+    is_global: bool = False,
+    gates_file: Optional[str] = None,
+) -> Dict[str, Any]:
     """Hooks file mounted into DeepSeek Harness by the Claude-dialect bridge.
 
     A DSH-specific matcher list, not the Claude one: the harness matches the pattern against
     its own tool names, so a Claude Code manifest admits nothing.
     See [bug--dsh-tool-name-map-and-ask-capability].
     """
+    pre_matcher = (
+        build_pre_tool_matcher(DSH_PRE_TOOL_ALIASES, gates_file=gates_file, exclude=_DSH_FORBIDDEN_CLAUDE_NAMES)
+        if gates_file else DSH_PRE_TOOL_MATCHER
+    )
+    post_matcher = (
+        build_post_tool_matcher(DSH_POST_TOOL_ALIASES, gates_file=gates_file, exclude=_DSH_FORBIDDEN_CLAUDE_NAMES)
+        if gates_file else DSH_POST_TOOL_MATCHER
+    )
     return {
         "hooks": {
-            "PreToolUse": [_dsh_entry("PreToolUse", DSH_PRE_TOOL_MATCHER, is_global)],
-            "PostToolUse": [_dsh_entry("PostToolUse", DSH_POST_TOOL_MATCHER, is_global)],
+            "PreToolUse": [_dsh_entry("PreToolUse", pre_matcher, is_global)],
+            "PostToolUse": [_dsh_entry("PostToolUse", post_matcher, is_global)],
             "Stop": [_dsh_entry("Stop", None, is_global)],
             "UserPromptSubmit": [_dsh_entry("UserPromptSubmit", None, is_global)],
         }

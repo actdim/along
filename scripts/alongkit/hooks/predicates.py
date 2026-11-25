@@ -1107,7 +1107,10 @@ _DELETE_TOOL_NAMES = frozenset({"delete_file", "remove_file", "unlink", "delete"
 def _extract_all_target_paths(event: HookEvent) -> List[str]:
     args = event.tool_args or {}
     paths: List[str] = []
-    for k in ("TargetFile", "target_file", "path", "FilePath", "file_path", "filename", "file"):
+    for k in (
+        "TargetFile", "target_file", "path", "FilePath", "file_path",
+        "AbsolutePath", "TargetPath", "target_path", "filename", "file",
+    ):
         val = args.get(k)
         if val:
             if isinstance(val, str):

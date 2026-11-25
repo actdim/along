@@ -42,8 +42,15 @@ READ_TOOLS: frozenset = frozenset({
 _CWD_KEYS = ("cwd", "workspace_root", "workspaceRoot", "workdir")
 
 #: Tool argument keys naming the path a read or search targets.
-_PATH_KEYS = ("file_path", "path", "notebook_path", "TargetFile", "SearchPath", "SearchDirectory",
-              "AbsolutePath", "DirectoryPath")
+_PATH_KEYS = (
+    "TargetFile", "target_file", "file_path", "FilePath", "notebook_path", "path",
+    "AbsolutePath", "DirectoryPath", "SearchDirectory", "SearchPath", "Directory", "filename",
+)
+
+#: Search tools whose `pattern`/`Pattern` may carry an absolute or `~` glob prefix.
+_SEARCH_TOOLS: frozenset = frozenset({
+    "Grep", "Glob", "grep_search", "grep", "find_by_name", "find_files", "file_search",
+})
 
 
 def _parse(raw_input: str) -> Optional[Dict[str, Any]]:
@@ -58,9 +65,10 @@ def payload_cwd(payload: Dict[str, Any]) -> str:
     for key in _CWD_KEYS:
         if payload.get(key):
             return str(payload[key])
-    paths = payload.get("workspacePaths")
-    if isinstance(paths, list) and paths:
-        return str(paths[0])
+    for list_key in ("workspacePaths", "workspace_roots"):
+        paths = payload.get(list_key)
+        if isinstance(paths, list) and paths:
+            return str(paths[0])
     return ""
 
 
@@ -101,7 +109,12 @@ def is_workspace_read(payload: Dict[str, Any], root: str, cwd: str) -> bool:
     name, args = _tool(payload)
     if name not in READ_TOOLS or _is_or_above_home(root):
         return False
+    if name in _SEARCH_TOOLS:
+        pattern = str(args.get("pattern") or args.get("Pattern") or "")
+        if pattern and os.path.isabs(os.path.expanduser(pattern)):
+            return False
     target = next((str(args[k]) for k in _PATH_KEYS if args.get(k)), "") or cwd or root
+    target = os.path.expanduser(target)
     if not os.path.isabs(target):
         target = os.path.join(cwd or root, target)
     if not _inside(target, root):

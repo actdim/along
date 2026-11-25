@@ -57,16 +57,23 @@ class AntigravityAdapter(BaseAdapter):
         tool_name = ""
         tool_args: Dict[str, Any] = {}
         tool_call = payload.get("toolCall", {})
-        if isinstance(tool_call, dict):
+        if isinstance(tool_call, dict) and (tool_call.get("name") or tool_call.get("args")):
             tool_name = tool_call.get("name", "")
             tool_args = tool_call.get("args", {})
             if not isinstance(tool_args, dict):
                 tool_args = {}
+        elif payload:
+            tool_name = str(payload.get("tool_name") or payload.get("tool") or "")
+            raw_args = payload.get("tool_input") or payload.get("tool_args") or payload.get("args")
+            if isinstance(raw_args, dict):
+                tool_args = dict(raw_args)
 
         workspace_root = ""
         ws_paths = payload.get("workspacePaths", [])
         if isinstance(ws_paths, list) and ws_paths:
             workspace_root = str(ws_paths[0])
+        elif payload.get("cwd") or payload.get("workspace_root"):
+            workspace_root = str(payload.get("cwd") or payload.get("workspace_root") or "")
 
         subagent_id: Optional[str] = None
         subagent_role: Optional[str] = None

@@ -41,6 +41,40 @@ def _doctor_runtime_checks(repo_root: str, errors: int, warnings: int) -> Tuple[
         if oc_audit["stale_paths"]:
             print(f"[WARN] Stale OpenCode along-gates plugin copy differs from template: {', '.join(oc_audit['stale_paths'])}")
             warnings += 1
+
+    from alongkit.hooks import config as hook_config
+    manifest_audits = report.get("manifest_audits") or []
+    cursor_manifest_present = False
+    for audit in manifest_audits:
+        if audit.get("runtime") == "cursor":
+            cursor_manifest_present = True
+        if audit.get("explicit_missing_matcher"):
+            print(f"[WARN] {audit['runtime']} hook manifest at {audit['path']} has no preToolUse matcher. "
+                  f"Run '{audit['remediation']}'.")
+            warnings += 1
+        elif audit.get("missing_tools"):
+            missing = audit["missing_tools"]
+            sample = ", ".join(missing[:6]) + ("..." if len(missing) > 6 else "")
+            print(f"[WARN] {audit['runtime']} hook matcher in {audit['path']} excludes {len(missing)} "
+                  f"runtime gate tool(s) ({sample}). Run '{audit['remediation']}'.")
+            warnings += 1
+        elif audit.get("unmatched_aliases"):
+            aliases = audit["unmatched_aliases"]
+            sample = ", ".join(aliases[:6]) + ("..." if len(aliases) > 6 else "")
+            print(f"[WARN] {audit['runtime']} hook matcher in {audit['path']} excludes {len(aliases)} "
+                  f"runtime tool alias(es) ({sample}). Run '{audit['remediation']}'.")
+            warnings += 1
+
+    narrowing = report.get("narrowing") or (
+        hook_config.get_runtime_hook_narrowing("cursor") if cursor_manifest_present else None
+    )
+    if narrowing:
+        narrow_rt = "cursor" if (cursor_manifest_present and not report.get("narrowing")) else agent
+        unexpressible = ", ".join(narrowing.get("unexpressible_tools") or ())
+        print(f"[WARN] Runtime hook narrowing ({narrow_rt}): unexpressible tools [{unexpressible}]. "
+              f"{narrowing.get('notes', '')}")
+        warnings += 1
+
     if report["enforcement"] != runtime.MECHANICAL:
         warnings += 1
     else:

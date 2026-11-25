@@ -25,15 +25,21 @@ EVENT_TYPE_MAP: Dict[str, HookEventType] = {
 }
 
 TOOL_NAME_MAP: Dict[str, str] = {
+    "write_to_file": "write_to_file",
     "write_file": "write_to_file",
     "WriteFile": "write_to_file",
     "Write": "write_to_file",
     "create_file": "write_to_file",
+    "CreateFile": "write_to_file",
+    "replace_file_content": "replace_file_content",
     "edit_file": "replace_file_content",
     "EditFile": "replace_file_content",
     "Edit": "replace_file_content",
     "patch": "replace_file_content",
     "patch_file": "replace_file_content",
+    "apply_patch": "replace_file_content",
+    "run_command": "run_command",
+    "execute_command": "execute_command",
     "shell": "run_command",
     "exec": "run_command",
     "execute": "run_command",
@@ -42,9 +48,47 @@ TOOL_NAME_MAP: Dict[str, str] = {
     "powershell": "run_command",
     "PowerShell": "run_command",
     "cmd": "run_command",
+    "view_file": "view_file",
+    "read_file": "read_file",
+    "ReadFile": "read_file",
+    "Read": "view_file",
+    "view_image": "view_image",
+    "ViewImage": "view_image",
+    "list_dir": "list_dir",
+    "ListDir": "list_dir",
+    "list_directory": "list_directory",
+    "ListDirectory": "list_directory",
+    "LS": "list_dir",
+    "grep_search": "grep_search",
+    "GrepSearch": "grep_search",
+    "grep": "grep_search",
+    "Grep": "grep_search",
+    "find_by_name": "find_by_name",
+    "find_files": "find_files",
+    "FindFiles": "find_files",
+    "file_search": "file_search",
+    "FileSearch": "file_search",
+    "Glob": "find_by_name",
     "delete_file": "delete_file",
+    "DeleteFile": "delete_file",
     "remove_file": "remove_file",
+    "RemoveFile": "remove_file",
     "unlink": "unlink",
+    "Unlink": "unlink",
+    "delete": "delete",
+    "Delete": "delete",
+    "file_delete": "file_delete",
+    "FileDelete": "file_delete",
+    "remove": "remove",
+    "Remove": "remove",
+    "invoke_subagent": "invoke_subagent",
+    "spawn_subagent": "spawn_subagent",
+    "Task": "Task",
+    "Agent": "manage_task",
+    "send_message": "send_message",
+    "SendMessage": "send_message",
+    "manage_task": "manage_task",
+    "TodoWrite": "manage_task",
 }
 
 
@@ -122,7 +166,9 @@ class CodexAdapter(BaseAdapter):
         # Fallback if arguments were passed directly in root payload
         if not tool_args and isinstance(payload, dict):
             for k in (
-                "file_path", "path", "filePath", "content", "text", "code", "file_text",
+                "TargetFile", "target_file", "file_path", "path", "filePath", "FilePath",
+                "AbsolutePath", "DirectoryPath", "SearchPath", "SearchDirectory", "Directory",
+                "filename", "content", "text", "code", "file_text",
                 "new_string", "replacement", "new_content", "patch", "command", "cmd", "script",
             ):
                 if k in payload:
@@ -130,8 +176,11 @@ class CodexAdapter(BaseAdapter):
                     break
 
         # Normalize arguments:
-        # file_path, path, filePath -> TargetFile
-        for key in ("file_path", "path", "filePath"):
+        # file_path, path, filePath, AbsolutePath, ... -> TargetFile
+        for key in (
+            "file_path", "path", "filePath", "FilePath", "target_file",
+            "AbsolutePath", "DirectoryPath", "filename",
+        ):
             if key in tool_args and tool_args[key] is not None:
                 tool_args.setdefault("TargetFile", tool_args[key])
                 break

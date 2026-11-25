@@ -48,6 +48,7 @@ TOOL_NAME_MAP: Dict[str, str] = {
     "TodoWrite": "manage_task",
     "Task": "manage_task",
     "Agent": "manage_task",
+    "SendMessage": "send_message",
     "ExitPlanMode": "ask_question",
     "AskUserQuestion": "ask_question",
 }

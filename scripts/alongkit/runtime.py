@@ -35,7 +35,11 @@ RUNTIME_MATRIX: Dict[str, Dict[str, Any]] = {
     "cowork": {"skills": "not loaded (account plugins only)", "runtime_hooks": False},
     "opencode": {"skills": "auto (~/.config/opencode)", "runtime_hooks": True},
     "dsh": {"skills": "auto (~/.dsh/skills)", "runtime_hooks": True},
-    "cursor": {"skills": "rules only", "runtime_hooks": False},
+    "cursor": {
+        "skills": "rules only",
+        "runtime_hooks": False,
+        "unexpressible_tools": ["view_image", "send_message", "spawn_subagent"],
+    },
     "unknown": {"skills": "unknown", "runtime_hooks": False},
 }
 
@@ -562,11 +566,15 @@ def is_cross_os_mount(repo_root: str, fs_type: Optional[str] = None,
 
 def runtime_report(repo_root: str, agent: str) -> Dict[str, Any]:
     """Facts `along doctor` prints for the current runtime."""
+    from .hooks import config as hook_config
+
     level, why = enforcement_level(agent, repo_root)
     return {
         "runtime": agent,
         "enforcement": level,
         "explanation": why,
+        "narrowing": hook_config.get_runtime_hook_narrowing(agent),
+        "manifest_audits": hook_config.audit_installed_hook_manifests(repo_root),
         "python": ".".join(str(p) for p in sys.version_info[:3]),
         "python_supported": python_supported(),
         "stale_index_lock": stale_index_lock(repo_root),

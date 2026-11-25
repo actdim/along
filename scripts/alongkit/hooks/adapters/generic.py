@@ -22,6 +22,7 @@ EVENT_TYPE_MAP: Dict[str, HookEventType] = {
     "preToolUse": HookEventType.PRE_TOOL_USE,
     "beforeShellExecution": HookEventType.PRE_TOOL_USE,
     "beforeFileEdit": HookEventType.PRE_TOOL_USE,
+    "beforeReadFile": HookEventType.PRE_TOOL_USE,
     "PostToolUse": HookEventType.POST_TOOL_USE,
     "post_tool_use": HookEventType.POST_TOOL_USE,
     "postToolUse": HookEventType.POST_TOOL_USE,
@@ -41,22 +42,70 @@ TOOL_NAME_MAP: Dict[str, str] = {
     "grep": "grep_search",
     "webfetch": "read_url_content",
     "list": "list_dir",
-    # Non-read-only OpenCode/generic tools -> canonical gated tools
+    # Cursor and canonical read / list / search tools
+    "Read": "view_file",
+    "ReadFile": "read_file",
+    "read_file": "read_file",
+    "view_file": "view_file",
+    "ViewFile": "view_file",
+    "view_image": "view_image",
+    "ViewImage": "view_image",
+    "read_image": "view_image",
+    "LS": "list_dir",
+    "list_dir": "list_dir",
+    "ListDir": "list_dir",
+    "list_directory": "list_directory",
+    "ListDirectory": "list_directory",
+    "Grep": "grep_search",
+    "grep_search": "grep_search",
+    "GrepSearch": "grep_search",
+    "ripgrep": "grep_search",
+    "codebase_search": "grep_search",
+    "Glob": "find_by_name",
+    "find_by_name": "find_by_name",
+    "find_files": "find_files",
+    "FindFiles": "find_files",
+    "file_search": "file_search",
+    "FileSearch": "file_search",
+    "glob_file_search": "file_search",
+    "WebFetch": "read_url_content",
+    "WebSearch": "search_web",
+    # Non-read-only OpenCode/Cursor/generic tools -> canonical gated tools
     "task": "Task",
+    "Task": "Task",
+    "Agent": "manage_task",
+    "Subagent": "invoke_subagent",
+    "subagent": "invoke_subagent",
+    "invoke_subagent": "invoke_subagent",
+    "spawn_subagent": "spawn_subagent",
+    "send_message": "send_message",
+    "SendMessage": "send_message",
+    "manage_task": "manage_task",
+    "TodoWrite": "manage_task",
     "skill": "invoke_subagent",
     "todowrite": "write_to_file",
+    "write_to_file": "write_to_file",
     "write_file": "write_to_file",
     "WriteFile": "write_to_file",
     "Write": "write_to_file",
     "write": "write_to_file",
     "create_file": "write_to_file",
+    "CreateFile": "write_to_file",
     "edit_file": "replace_file_content",
     "EditFile": "replace_file_content",
     "Edit": "replace_file_content",
     "edit": "replace_file_content",
+    "StrReplace": "replace_file_content",
+    "str_replace": "replace_file_content",
+    "MultiEdit": "replace_file_content",
+    "NotebookEdit": "replace_file_content",
+    "edit_notebook": "replace_file_content",
+    "search_replace": "replace_file_content",
+    "apply_patch": "replace_file_content",
     "patch": "replace_file_content",
     "patch_file": "replace_file_content",
     "replace_file_content": "replace_file_content",
+    "Shell": "run_command",
     "shell": "run_command",
     "exec": "run_command",
     "execute": "run_command",
@@ -67,10 +116,16 @@ TOOL_NAME_MAP: Dict[str, str] = {
     "cmd": "run_command",
     "run": "run_command",
     "run_command": "run_command",
+    "run_terminal_cmd": "run_command",
+    "RunTerminalCmd": "run_command",
+    "execute_command": "execute_command",
+    "ExecuteCommand": "execute_command",
     "delete_file": "delete_file",
     "DeleteFile": "delete_file",
     "delete": "delete",
     "Delete": "delete",
+    "file_delete": "file_delete",
+    "FileDelete": "file_delete",
     "remove_file": "remove_file",
     "RemoveFile": "remove_file",
     "remove": "remove",
@@ -179,12 +234,20 @@ class GenericCliAdapter(BaseAdapter):
             tool_args = {"raw_input": raw_params}
         else:
             # Check if arguments are in root payload
-            for k in ("CommandLine", "command", "cmd", "TargetFile", "file_path", "path", "file", "CodeContent", "content", "ReplacementContent", "new_string", "patch"):
+            for k in (
+                "CommandLine", "command", "cmd", "TargetFile", "target_file", "file_path",
+                "FilePath", "AbsolutePath", "DirectoryPath", "SearchPath", "SearchDirectory",
+                "Directory", "filename", "path", "file", "CodeContent", "content",
+                "ReplacementContent", "new_string", "patch",
+            ):
                 if k in payload:
                     tool_args[k] = payload[k]
 
         # Normalize file targets
-        for key in ("file_path", "filePath", "path", "file", "target", "target_file"):
+        for key in (
+            "file_path", "filePath", "FilePath", "target_file", "AbsolutePath",
+            "DirectoryPath", "path", "file", "target", "filename",
+        ):
             if key in tool_args and "TargetFile" not in tool_args:
                 tool_args["TargetFile"] = tool_args[key]
                 break
@@ -217,9 +280,14 @@ class GenericCliAdapter(BaseAdapter):
                     tool_args["CommandLine"] = tool_args[key]
                     break
 
-        # Fallback tool name detection based on normalized arguments
+        # Fallback tool name detection based on event or normalized arguments
         if not tool_name:
-            if "CommandLine" in tool_args:
+            raw_ev_lower = str(raw_event_name or "").lower()
+            if raw_ev_lower == "beforereadfile":
+                tool_name = "view_file"
+            elif raw_ev_lower == "beforeshellexecution":
+                tool_name = "run_command"
+            elif "CommandLine" in tool_args:
                 tool_name = "run_command"
             elif "ReplacementContent" in tool_args:
                 tool_name = "replace_file_content"
@@ -235,7 +303,7 @@ class GenericCliAdapter(BaseAdapter):
             or ""
         )
         if not workspace_root:
-            ws_paths = payload.get("workspacePaths", [])
+            ws_paths = payload.get("workspacePaths") or payload.get("workspace_roots") or []
             if isinstance(ws_paths, list) and ws_paths:
                 workspace_root = str(ws_paths[0])
 
