@@ -4,14 +4,16 @@ protocol_version: "4.9.1"
 slug: commit-gates-skip-chained-and-dash-c-commits
 title: "Commit gates anchored to ^git commit miss chained and git -C invocations"
 type: bug
-status: open
+status: done
+completed: 2026-11-25
 priority: medium
 created: 2026-11-24
-updated: 2026-11-24
+updated: 2026-11-25
 agent: dsh
 tags: [gates, hooks, commit, regex, runtime]
 blocked_by: []
 related: []
+plan_status: approved
 ---
 
 # Commit gates anchored to ^git commit miss chained and git -C invocations
@@ -58,11 +60,11 @@ whole guarantee.
 
 ## Acceptance Criteria
 
-- [ ] `cd /tmp && git commit -m "x"` is denied by `commit_issue_binding`.
-- [ ] `git -C /tmp commit -m "x"` is denied by `commit_issue_binding`.
-- [ ] An unresolved conflict marker staged through either form is denied by
+- [x] `cd /tmp && git commit -m "x"` is denied by `commit_issue_binding`.
+- [x] `git -C /tmp commit -m "x"` is denied by `commit_issue_binding`.
+- [x] An unresolved conflict marker staged through either form is denied by
       `commit_no_conflict_markers`.
-- [ ] A test enumerates the four invocation shapes and fails if any is admitted.
+- [x] A test enumerates the four invocation shapes and fails if any is admitted.
 
 ## Evidence
 
