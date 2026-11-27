@@ -1,7 +1,7 @@
 # Active Issues
 
 ## Active
-- [ ] `(debt)` [decouple-protocol-and-toolchain-versioning](ISSUES/debt--decouple-protocol-and-toolchain-versioning.md) - plan approved
+<!-- No active issues -->
 
 ## Backlog
 - [ ] `(debt)` [autonomous-non-elevation-invariants](ISSUES/debt--autonomous-non-elevation-invariants.md)
@@ -65,9 +65,9 @@
 - [ ] `(task)` [reconcile-dashboard-ui-core-conventions](ISSUES/task--reconcile-dashboard-ui-core-conventions.md)
 
 ## Done (recent)
+- [x] `(debt)` [decouple-protocol-and-toolchain-versioning](ISSUES/done/debt--decouple-protocol-and-toolchain-versioning.md)
 - [x] `(task)` [deepseek-telemetry-and-timeout](ISSUES/done/task--deepseek-telemetry-and-timeout.md)
 - [x] `(feat)` [cursor-agent-and-rules-integration](ISSUES/done/feat--cursor-agent-and-rules-integration.md)
 - [x] `(docs)` [count-claim-and-plan-approval-drift](ISSUES/done/docs--count-claim-and-plan-approval-drift.md)
 - [x] `(debt)` [docs-and-skills-test-hardening](ISSUES/done/debt--docs-and-skills-test-hardening.md)
-- [x] `(bug)` [traceability-blind-to-protocol-md-and-unbadged-gates](ISSUES/done/bug--traceability-blind-to-protocol-md-and-unbadged-gates.md)
-<!-- 369 older completed issue(s) archived in .along/ISSUES/done/ -->
+<!-- 370 older completed issue(s) archived in .along/ISSUES/done/ -->

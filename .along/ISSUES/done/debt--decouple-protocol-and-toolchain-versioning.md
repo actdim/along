@@ -3,10 +3,11 @@ protocol: along
 protocol_version: "4.9.1"
 slug: decouple-protocol-and-toolchain-versioning
 type: debt
-status: in-progress
+status: done
+completed: 2026-11-27
 priority: high
 created: 2026-11-24
-updated: 2026-11-24
+updated: 2026-11-27
 agent: antigravity
 tags: [version, protocol, toolchain, release, packaging, debt]
 blocked_by: []
